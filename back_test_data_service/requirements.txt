@@ -1,0 +1,32 @@
+# Mac Mini数据服务依赖
+
+# 数据获取
+tushare>=1.2.89
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Parquet文件存储
+pyarrow>=14.0.0
+
+# 数据库（可选，已改用Parquet存储）
+# PyMySQL>=1.1.0
+
+# Redis（可选，已改用Parquet存储）
+# redis>=5.0.0
+
+# 定时任务
+APScheduler>=3.10.0
+
+# Web框架
+Flask>=2.3.0
+
+# 日志
+loguru>=0.7.0
+
+# 工具
+python-dateutil>=2.8.2
+pytz>=2023.3
+
+# SSH连接（用于远程Parquet文件复制）
+paramiko>=3.0.0
+

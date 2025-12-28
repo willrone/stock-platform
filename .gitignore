@@ -1,0 +1,442 @@
+# 股票预测平台 - Git忽略文件配置
+
+# ================================
+# 操作系统相关文件
+# ================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ================================
+# IDE和编辑器配置
+# ================================
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# Vim
+*.swp
+*.swo
+*.tmp
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ================================
+# Python后端相关
+# ================================
+# Python字节码
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 分发/打包
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# 单元测试/覆盖率报告
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# 翻译
+*.mo
+*.pot
+
+# Django相关
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask相关
+instance/
+.webassets-cache
+
+# Scrapy相关
+.scrapy
+
+# Sphinx文档
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# celery beat调度文件
+celerybeat-schedule
+
+# SageMath解析文件
+*.sage.py
+
+# 虚拟环境
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+backend/venv/
+backend/env/
+
+# Spyder项目设置
+.spyderproject
+.spyproject
+
+# Rope项目设置
+.ropeproject
+
+# mkdocs文档
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre类型检查器
+.pyre/
+
+# ================================
+# Node.js前端相关
+# ================================
+# 依赖目录
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 运行时数据
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# 覆盖率目录
+lib-cov
+
+# nyc测试覆盖率
+.nyc_output
+
+# Grunt中间存储
+.grunt
+
+# Bower依赖目录
+bower_components
+
+# node-waf配置
+.lock-wscript
+
+# 编译的二进制插件
+build/Release
+
+# 依赖目录
+node_modules/
+jspm_packages/
+
+# TypeScript v1声明文件
+typings/
+
+# TypeScript缓存
+*.tsbuildinfo
+
+# 可选的npm缓存目录
+.npm
+
+# 可选的eslint缓存
+.eslintcache
+
+# Microbundle缓存
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# 可选的REPL历史
+.node_repl_history
+
+# yarn完整性文件
+.yarn-integrity
+
+# dotenv环境变量文件
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# parcel-bundler缓存
+.cache
+.parcel-cache
+
+# Next.js构建输出
+.next/
+out/
+
+# Nuxt.js构建/生成输出
+.nuxt
+dist
+
+# Gatsby文件
+.cache/
+public
+
+# Storybook构建输出
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# ================================
+# 项目特定文件
+# ================================
+# 环境配置文件
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+backend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.test
+frontend/.env.production
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+backend/app.db
+backend/database.db
+
+# 日志文件
+*.log
+logs/
+backend/logs/
+frontend/logs/
+
+# 数据文件
+data/
+backend/data/
+!backend/data/.gitkeep
+!data/.gitkeep
+
+# 模型文件
+models/
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+*.onnx
+backend/models/
+!backend/models/.gitkeep
+
+# 缓存文件
+cache/
+.cache/
+backend/cache/
+frontend/.cache/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 上传文件
+uploads/
+backend/uploads/
+
+# 配置文件（包含敏感信息）
+config.ini
+config.json
+secrets.json
+backend/config.ini
+backend/secrets.json
+
+# SSL证书
+*.pem
+*.key
+*.crt
+*.csr
+
+# ================================
+# 机器学习和数据科学相关
+# ================================
+# Jupyter Notebook检查点
+.ipynb_checkpoints/
+
+# 数据文件
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.h5
+*.hdf5
+!sample_data.csv
+!test_data.csv
+
+# 模型检查点
+checkpoints/
+*.ckpt
+
+# TensorBoard日志
+runs/
+tensorboard_logs/
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Weights & Biases
+wandb/
+
+# ================================
+# 测试相关
+# ================================
+# 测试覆盖率
+.coverage
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+# 测试输出
+test-results/
+test_output/
+
+# ================================
+# 构建和部署相关
+# ================================
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Kubernetes
+*.kubeconfig
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# ================================
+# 其他
+# ================================
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器临时文件
+*~
+*.swp
+*.swo
+
+# 本地配置文件
+local_config.py
+local_settings.py
+
+# API密钥和令牌
+api_keys.txt
+tokens.txt
+credentials.json
+
+# 性能分析文件
+*.prof
+
+# 内存转储
+*.dump
+*.dmp
+
+# 调试文件
+debug.log
+debug_output/
+
+# 自定义忽略（项目特定）
+# 添加项目特定的忽略规则
+custom_ignore/
+private/
+personal/
