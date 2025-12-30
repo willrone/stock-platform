@@ -13,28 +13,23 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card,
-  AutoComplete,
-  Button,
-  Tag,
-  Space,
-  Typography,
-  Row,
-  Col,
+  CardHeader,
+  CardBody,
   Input,
-  Divider,
-  message,
+  Button,
+  Chip,
+  Autocomplete,
+  AutocompleteItem,
   Tooltip,
-} from 'antd';
+} from '@heroui/react';
 import {
-  PlusOutlined,
-  DeleteOutlined,
-  StarOutlined,
-  SearchOutlined,
-  ClearOutlined,
-} from '@ant-design/icons';
+  Plus,
+  X,
+  Star,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { DataService } from '../../services/dataService';
-
-const { Text } = Typography;
 
 interface StockOption {
   code: string;
@@ -124,12 +119,12 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   // 添加股票
   const handleAddStock = (stockCode: string) => {
     if (value.includes(stockCode)) {
-      message.warning('股票已存在');
+      console.log('股票已存在');
       return;
     }
 
     if (value.length >= maxCount) {
-      message.warning(`最多只能选择 ${maxCount} 只股票`);
+      console.log(`最多只能选择 ${maxCount} 只股票`);
       return;
     }
 
@@ -157,19 +152,19 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
       .slice(0, Math.min(5, maxCount - value.length));
 
     if (availableStocks.length === 0) {
-      message.warning('没有可添加的热门股票');
+      console.log('没有可添加的热门股票');
       return;
     }
 
     const newValue = [...value, ...availableStocks.map(stock => stock.code)];
     onChange?.(newValue);
-    message.success(`已添加 ${availableStocks.length} 只热门股票`);
+    console.log(`已添加 ${availableStocks.length} 只热门股票`);
   };
 
   // 清空所有股票
   const handleClearAll = () => {
     onChange?.([]);
-    message.success('已清空所有股票');
+    console.log('已清空所有股票');
   };
 
   // 获取股票显示名称
@@ -179,139 +174,157 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       {/* 搜索框 */}
-      <Row gutter={8} style={{ marginBottom: 16 }}>
-        <Col flex={1}>
-          <AutoComplete
-            value={searchValue}
-            placeholder={placeholder}
-            onSearch={handleSearch}
-            onSelect={handleAddStock}
-            options={stockOptions.map(stock => ({
-              value: stock.code,
-              label: (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <Text strong>{stock.code}</Text>
-                    <Text style={{ marginLeft: 8 }}>{stock.name}</Text>
-                    <Tag style={{ marginLeft: 8 }}>
-                      {stock.market}
-                    </Tag>
-                  </div>
-                  {stock.change_percent !== undefined && (
-                    <Text
-                      style={{
-                        color: stock.change_percent > 0 ? '#52c41a' : stock.change_percent < 0 ? '#ff4d4f' : undefined
-                      }}
-                    >
-                      {stock.change_percent > 0 ? '+' : ''}{stock.change_percent.toFixed(2)}%
-                    </Text>
-                  )}
+      <div className="flex gap-2">
+        <Autocomplete
+          placeholder={placeholder}
+          startContent={<Search className="w-4 h-4" />}
+          value={searchValue}
+          onInputChange={handleSearch}
+          onSelectionChange={(key) => {
+            if (key) {
+              handleAddStock(key as string);
+            }
+          }}
+          isLoading={searching}
+          className="flex-1"
+        >
+          {stockOptions.map((stock) => (
+            <AutocompleteItem key={stock.code}>
+              <div className="flex justify-between items-center w-full">
+                <div className="flex items-center space-x-2">
+                  <span className="font-medium">{stock.code}</span>
+                  <span className="text-default-500">{stock.name}</span>
+                  <Chip size="sm" variant="flat">{stock.market}</Chip>
                 </div>
-              ),
-            }))}
-            style={{ width: '100%' }}
-          />
-        </Col>
-        <Col>
-          <Button
-            icon={<StarOutlined />}
-            onClick={handleAddPopularBatch}
-            loading={loadingPopular}
-            disabled={value.length >= maxCount}
-          >
-            添加热门
-          </Button>
-        </Col>
-      </Row>
+                {stock.change_percent !== undefined && (
+                  <span className={
+                    stock.change_percent > 0 
+                      ? 'text-success' 
+                      : stock.change_percent < 0 
+                        ? 'text-danger' 
+                        : 'text-default-500'
+                  }>
+                    {stock.change_percent > 0 ? '+' : ''}{stock.change_percent.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            </AutocompleteItem>
+          ))}
+        </Autocomplete>
+        
+        <Button
+          startContent={<Star className="w-4 h-4" />}
+          onPress={handleAddPopularBatch}
+          isLoading={loadingPopular}
+          isDisabled={value.length >= maxCount}
+          variant="light"
+        >
+          添加热门
+        </Button>
+      </div>
 
       {/* 已选股票 */}
-      <Card
-        title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>已选股票 ({value.length}/{maxCount})</span>
-            {value.length > 0 && (
-              <Button
-                type="text"
-                size="small"
-                icon={<ClearOutlined />}
-                onClick={handleClearAll}
-                danger
-              >
-                清空
-              </Button>
+      <Card>
+        <CardHeader className="flex justify-between items-center">
+          <span>已选股票 ({value.length}/{maxCount})</span>
+          {value.length > 0 && (
+            <Button
+              size="sm"
+              variant="light"
+              color="danger"
+              startContent={<Trash2 className="w-3 h-3" />}
+              onPress={handleClearAll}
+            >
+              清空
+            </Button>
+          )}
+        </CardHeader>
+        <CardBody>
+          <div className="min-h-16">
+            {value.length === 0 ? (
+              <p className="text-default-500 text-center py-4">请搜索并选择股票</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {value.map(code => (
+                  <Chip
+                    key={code}
+                    onClose={() => handleRemoveStock(code)}
+                    variant="flat"
+                  >
+                    {getStockDisplayName(code)}
+                  </Chip>
+                ))}
+              </div>
             )}
           </div>
-        }
-        size="small"
-        style={{ marginBottom: 16 }}
-      >
-        <div style={{ minHeight: 60 }}>
-          {value.length === 0 ? (
-            <Text type="secondary">请搜索并选择股票</Text>
-          ) : (
-            <Space wrap>
-              {value.map(code => (
-                <Tag
-                  key={code}
-                  closable
-                  onClose={() => handleRemoveStock(code)}
-                  style={{ marginBottom: 4 }}
-                >
-                  {getStockDisplayName(code)}
-                </Tag>
-              ))}
-            </Space>
-          )}
-        </div>
+        </CardBody>
       </Card>
 
       {/* 热门股票推荐 */}
-      <Card title="热门股票" size="small" loading={loadingPopular}>
-        <Row gutter={[8, 8]}>
-          {popularStocks.map(stock => (
-            <Col key={stock.code}>
-              <Tooltip
-                title={
-                  <div>
-                    <div>{stock.name}</div>
-                    <div>市场: {stock.market}</div>
-                    {stock.change_percent !== undefined && (
-                      <div>涨跌幅: {stock.change_percent > 0 ? '+' : ''}{stock.change_percent.toFixed(2)}%</div>
-                    )}
-                    {stock.volume && (
-                      <div>成交量: {(stock.volume / 10000).toFixed(1)}万</div>
-                    )}
-                  </div>
-                }
-              >
-                <Button
-                  size="small"
-                  type={value.includes(stock.code) ? 'primary' : 'default'}
-                  disabled={value.includes(stock.code) || value.length >= maxCount}
-                  onClick={() => handleAddPopularStock(stock)}
-                  style={{
-                    borderColor: stock.change_percent && stock.change_percent > 0 ? '#52c41a' : 
-                                stock.change_percent && stock.change_percent < 0 ? '#ff4d4f' : undefined
-                  }}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center space-x-2">
+            <Star className="w-4 h-4" />
+            <span>热门股票</span>
+          </div>
+        </CardHeader>
+        <CardBody>
+          {loadingPopular ? (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {popularStocks.map(stock => (
+                <Tooltip
+                  key={stock.code}
+                  content={
+                    <div className="p-2">
+                      <div className="font-medium">{stock.name}</div>
+                      <div className="text-sm">市场: {stock.market}</div>
+                      {stock.change_percent !== undefined && (
+                        <div className="text-sm">
+                          涨跌幅: {stock.change_percent > 0 ? '+' : ''}{stock.change_percent.toFixed(2)}%
+                        </div>
+                      )}
+                      {stock.volume && (
+                        <div className="text-sm">
+                          成交量: {(stock.volume / 10000).toFixed(1)}万
+                        </div>
+                      )}
+                    </div>
+                  }
                 >
-                  {stock.code}
-                  {stock.change_percent !== undefined && (
-                    <span
-                      style={{
-                        marginLeft: 4,
-                        color: stock.change_percent > 0 ? '#52c41a' : stock.change_percent < 0 ? '#ff4d4f' : undefined
-                      }}
-                    >
-                      {stock.change_percent > 0 ? '+' : ''}{stock.change_percent.toFixed(1)}%
-                    </span>
-                  )}
-                </Button>
-              </Tooltip>
-            </Col>
-          ))}
-        </Row>
+                  <Button
+                    size="sm"
+                    variant={value.includes(stock.code) ? "solid" : "light"}
+                    color={value.includes(stock.code) ? "primary" : "default"}
+                    isDisabled={value.includes(stock.code) || value.length >= maxCount}
+                    onPress={() => handleAddPopularStock(stock)}
+                    className="w-full justify-start"
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-xs">{stock.code}</span>
+                      {stock.change_percent !== undefined && (
+                        <span className={`text-xs ${
+                          stock.change_percent > 0 
+                            ? 'text-success' 
+                            : stock.change_percent < 0 
+                              ? 'text-danger' 
+                              : 'text-default-500'
+                        }`}>
+                          {stock.change_percent > 0 ? '+' : ''}{stock.change_percent.toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  </Button>
+                </Tooltip>
+              ))}
+            </div>
+          )}
+        </CardBody>
       </Card>
     </div>
   );

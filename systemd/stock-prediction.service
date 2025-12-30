@@ -1,0 +1,16 @@
+[Unit]
+Description=股票预测平台
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/stock-prediction-platform
+ExecStart=/opt/stock-prediction-platform/scripts/start.sh production
+ExecStop=/opt/stock-prediction-platform/scripts/stop.sh production
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

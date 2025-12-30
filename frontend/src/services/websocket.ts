@@ -8,9 +8,6 @@
  * - 连接管理和重连
  */
 
-import { io, Socket } from 'socket.io-client';
-import { message } from 'antd';
-
 // WebSocket事件类型
 export interface WebSocketEvents {
   // 任务相关事件
@@ -30,7 +27,7 @@ export interface WebSocketEvents {
 
 // WebSocket管理类
 export class WebSocketService {
-  private socket: Socket | null = null;
+  private socket: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -44,15 +41,15 @@ export class WebSocketService {
    * 建立WebSocket连接
    */
   private connect(): void {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
     
-    this.socket = io(wsUrl, {
-      transports: ['websocket'],
-      timeout: 10000,
-      forceNew: true,
-    });
-
-    this.setupEventListeners();
+    try {
+      this.socket = new WebSocket(wsUrl);
+      this.setupEventListeners();
+    } catch (error) {
+      console.error('[WebSocket] 连接创建失败:', error);
+      this.handleReconnect();
+    }
   }
 
   /**
@@ -62,85 +59,118 @@ export class WebSocketService {
     if (!this.socket) return;
 
     // 连接成功
-    this.socket.on('connect', () => {
+    this.socket.onopen = () => {
       console.log('[WebSocket] 连接成功');
       this.reconnectAttempts = 0;
-      message.success('实时连接已建立');
-    });
+      console.log('实时连接已建立');
+    };
 
     // 连接断开
-    this.socket.on('disconnect', (reason) => {
-      console.log('[WebSocket] 连接断开:', reason);
-      message.warning('实时连接已断开');
+    this.socket.onclose = (event) => {
+      console.log('[WebSocket] 连接断开:', event.code, event.reason);
+      console.log('实时连接已断开');
       
-      // 自动重连
-      if (reason === 'io server disconnect') {
-        // 服务器主动断开，不重连
-        return;
+      // 自动重连（除非是正常关闭）
+      if (event.code !== 1000) {
+        this.handleReconnect();
       }
-      
-      this.handleReconnect();
-    });
+    };
 
     // 连接错误
-    this.socket.on('connect_error', (error) => {
+    this.socket.onerror = (error) => {
       console.error('[WebSocket] 连接错误:', error);
       this.handleReconnect();
-    });
+    };
 
-    // 任务相关事件
-    this.socket.on('task:created', (data) => {
-      console.log('[WebSocket] 任务创建:', data);
-      this.emit('task:created', data);
-    });
-
-    this.socket.on('task:progress', (data) => {
-      console.log('[WebSocket] 任务进度:', data);
-      this.emit('task:progress', data);
-    });
-
-    this.socket.on('task:completed', (data) => {
-      console.log('[WebSocket] 任务完成:', data);
-      this.emit('task:completed', data);
-      message.success(`任务 ${data.task_id} 已完成`);
-    });
-
-    this.socket.on('task:failed', (data) => {
-      console.log('[WebSocket] 任务失败:', data);
-      this.emit('task:failed', data);
-      message.error(`任务 ${data.task_id} 执行失败: ${data.error}`);
-    });
-
-    // 系统状态事件
-    this.socket.on('system:status', (data) => {
-      this.emit('system:status', data);
-    });
-
-    this.socket.on('system:alert', (data) => {
-      this.emit('system:alert', data);
-      
-      // 显示系统警告
-      switch (data.level) {
-        case 'info':
-          message.info(data.message);
-          break;
-        case 'warning':
-          message.warning(data.message);
-          break;
-        case 'error':
-          message.error(data.message);
-          break;
+    // 接收消息
+    this.socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        this.handleMessage(data);
+      } catch (error) {
+        console.error('[WebSocket] 消息解析失败:', error);
       }
-    });
+    };
+  }
 
-    // 数据更新事件
-    this.socket.on('data:updated', (data) => {
-      this.emit('data:updated', data);
-    });
+  /**
+   * 处理接收到的消息
+   */
+  private handleMessage(data: any): void {
+    const { type } = data;
+    
+    switch (type) {
+      case 'connection':
+        console.log('[WebSocket] 连接确认:', data.message);
+        break;
+        
+      case 'task:created':
+        console.log('[WebSocket] 任务创建:', data);
+        this.emit('task:created', data);
+        break;
 
-    this.socket.on('prediction:result', (data) => {
-      this.emit('prediction:result', data);
-    });
+      case 'task:progress':
+        console.log('[WebSocket] 任务进度:', data);
+        this.emit('task:progress', data);
+        break;
+
+      case 'task:completed':
+        console.log('[WebSocket] 任务完成:', data);
+        this.emit('task:completed', data);
+        console.log(`任务 ${data.task_id} 已完成`);
+        break;
+
+      case 'task:failed':
+        console.log('[WebSocket] 任务失败:', data);
+        this.emit('task:failed', data);
+        console.error(`任务 ${data.task_id} 执行失败: ${data.error}`);
+        break;
+
+      case 'system:status':
+        this.emit('system:status', data);
+        break;
+
+      case 'system:alert':
+        this.emit('system:alert', data);
+        
+        // 显示系统警告
+        switch (data.level) {
+          case 'info':
+            console.info(data.message);
+            break;
+          case 'warning':
+            console.warn(data.message);
+            break;
+          case 'error':
+            console.error(data.message);
+            break;
+        }
+        break;
+
+      case 'data:updated':
+        this.emit('data:updated', data);
+        break;
+
+      case 'prediction:result':
+        this.emit('prediction:result', data);
+        break;
+        
+      case 'subscription':
+      case 'unsubscription':
+        console.log('[WebSocket] 订阅状态:', data.message);
+        break;
+        
+      case 'pong':
+        // 心跳响应
+        break;
+        
+      case 'error':
+        console.error('[WebSocket] 服务器错误:', data.message);
+        break;
+        
+      default:
+        console.warn('[WebSocket] 未知消息类型:', type, data);
+    }
   }
 
   /**
@@ -149,7 +179,7 @@ export class WebSocketService {
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('[WebSocket] 重连次数已达上限');
-      message.error('无法建立实时连接，请刷新页面重试');
+      console.error('无法建立实时连接，请刷新页面重试');
       return;
     }
 
@@ -212,8 +242,12 @@ export class WebSocketService {
    * 发送消息到服务器
    */
   public send(event: string, data?: any): void {
-    if (this.socket && this.socket.connected) {
-      this.socket.emit(event, data);
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      const message = {
+        type: event,
+        ...data
+      };
+      this.socket.send(JSON.stringify(message));
     } else {
       console.warn('[WebSocket] 连接未建立，无法发送消息');
     }
@@ -251,7 +285,7 @@ export class WebSocketService {
    * 检查连接状态
    */
   public isConnected(): boolean {
-    return this.socket?.connected || false;
+    return this.socket?.readyState === WebSocket.OPEN;
   }
 
   /**
@@ -259,7 +293,7 @@ export class WebSocketService {
    */
   public reconnect(): void {
     if (this.socket) {
-      this.socket.disconnect();
+      this.socket.close();
     }
     this.reconnectAttempts = 0;
     this.connect();
@@ -270,7 +304,7 @@ export class WebSocketService {
    */
   public disconnect(): void {
     if (this.socket) {
-      this.socket.disconnect();
+      this.socket.close(1000, 'Client disconnect');
       this.socket = null;
     }
     this.eventHandlers.clear();

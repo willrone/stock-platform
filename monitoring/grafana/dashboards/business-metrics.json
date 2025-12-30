@@ -1,0 +1,218 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "股票预测平台 - 业务指标",
+    "tags": ["stock-prediction", "business"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "每日预测任务数",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(prediction_tasks_total[24h])",
+            "legendFormat": "{{ status }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "green", "value": 50}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "预测成功率",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(prediction_tasks_total{status=\"completed\"}[1h]) / rate(prediction_tasks_total[1h]) * 100",
+            "legendFormat": "成功率"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 80},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "数据同步成功率",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(data_sync_total{status=\"success\"}[1h]) / rate(data_sync_total[1h]) * 100",
+            "legendFormat": "同步成功率"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 98}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "平均预测时间",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(model_prediction_duration_seconds_bucket[1h]))",
+            "legendFormat": "中位数预测时间"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 30},
+                {"color": "red", "value": 60}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "id": 5,
+        "title": "预测任务趋势",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "increase(prediction_tasks_total{status=\"completed\"}[1h])",
+            "legendFormat": "完成任务"
+          },
+          {
+            "expr": "increase(prediction_tasks_total{status=\"failed\"}[1h])",
+            "legendFormat": "失败任务"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "模型使用分布",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (model_type) (increase(model_prediction_duration_seconds_count[24h]))",
+            "legendFormat": "{{ model_type }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 7,
+        "title": "API端点使用排行",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (endpoint) (increase(http_requests_total[24h])))",
+            "legendFormat": "{{ endpoint }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "错误类型分布",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (error_type) (increase(errors_total[24h]))",
+            "legendFormat": "{{ error_type }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 9,
+        "title": "数据同步量趋势",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "increase(data_sync_total{source=\"remote\"}[1h])",
+            "legendFormat": "远程同步"
+          },
+          {
+            "expr": "increase(data_sync_total{source=\"local\"}[1h])",
+            "legendFormat": "本地处理"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "5m"
+  }
+}

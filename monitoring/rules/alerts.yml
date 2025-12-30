@@ -1,0 +1,83 @@
+# Prometheus告警规则
+groups:
+  - name: stock-prediction-alerts
+    rules:
+      # 服务可用性告警
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "服务 {{ $labels.job }} 不可用"
+          description: "服务 {{ $labels.job }} 在实例 {{ $labels.instance }} 上已经停止运行超过1分钟"
+
+      # 高CPU使用率告警
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "高CPU使用率"
+          description: "实例 {{ $labels.instance }} 的CPU使用率超过80%，当前值: {{ $value }}%"
+
+      # 高内存使用率告警
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "高内存使用率"
+          description: "实例 {{ $labels.instance }} 的内存使用率超过85%，当前值: {{ $value }}%"
+
+      # 磁盘空间不足告警
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "磁盘空间不足"
+          description: "实例 {{ $labels.instance }} 的磁盘 {{ $labels.mountpoint }} 使用率超过90%，当前值: {{ $value }}%"
+
+      # API响应时间过长告警
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API响应时间过长"
+          description: "API {{ $labels.method }} {{ $labels.endpoint }} 的95%分位响应时间超过2秒，当前值: {{ $value }}秒"
+
+      # 错误率过高告警
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "错误率过高"
+          description: "API错误率超过5%，当前值: {{ $value }}%"
+
+      # 数据库连接数过多告警
+      - alert: HighDatabaseConnections
+        expr: database_connections_active > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库连接数过多"
+          description: "数据库活跃连接数超过80，当前值: {{ $value }}"
+
+      # 任务队列积压告警
+      - alert: TaskQueueBacklog
+        expr: task_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "任务队列积压"
+          description: "任务队列中待处理任务数超过100，当前值: {{ $value }}"

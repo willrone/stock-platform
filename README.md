@@ -69,38 +69,83 @@ stock-prediction-platform/
 ### 环境要求
 
 - **Python**: 3.9+
-- **Node.js**: 18+
+- **Node.js**: 18+ (可选，仅前端需要)
 - **Git**: 最新版本
 
-### 1. 克隆项目
+### 🎯 超简单启动（推荐）⭐
 
 ```bash
+# 1. 克隆项目
 git clone <repository-url>
 cd stock-prediction-platform
+
+# 2. 一键启动（自动安装依赖并启动服务）
+./start.sh
+
+# 3. 停止服务
+./stop.sh
 ```
 
-### 2. 后端设置
+**就这么简单！** 脚本会自动：
+- ✅ 创建Python虚拟环境
+- ✅ 安装最小化依赖（快速启动）
+- ✅ 配置环境变量
+- ✅ 启动后端和前端服务
+- ✅ 使用国内镜像源加速下载
+
+### 🔧 启动选项
+
+```bash
+# 仅启动后端服务（如果没有Node.js）
+./start.sh backend-only
+
+# 查看帮助
+./start.sh help
+```
+
+### 📱 访问应用
+
+启动成功后访问：
+- **前端界面**: http://localhost:3000
+- **API文档**: http://localhost:8000/api/v1/docs
+- **API管理**: http://localhost:8000/api/v1/redoc
+
+### 🐳 Docker启动（完整功能）
+
+如果需要完整功能（包括机器学习模型），可以使用Docker：
+
+```bash
+# 快速启动（最小化依赖）
+./scripts/quick-start.sh
+
+# 完整启动
+./scripts/start.sh
+
+# 开发模式
+./scripts/start.sh dev
+```
+
+### 🛠️ 手动启动（高级用户）
+
+#### 后端设置
 
 ```bash
 cd backend
 
 # 创建虚拟环境
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
 # 或 venv\Scripts\activate  # Windows
 
-# 安装依赖
-pip install -r requirements.txt
-
-# 复制环境配置
-cp .env.example .env
-# 编辑 .env 文件配置数据库等信息
+# 安装依赖（选择一种）
+pip install -r requirements-minimal.txt  # 快速启动
+pip install -r requirements.txt          # 完整功能
 
 # 运行后端服务
 python run.py
 ```
 
-### 3. 前端设置
+#### 前端设置
 
 ```bash
 cd frontend
@@ -108,19 +153,9 @@ cd frontend
 # 安装依赖
 npm install
 
-# 复制环境配置
-cp .env.example .env.local
-# 编辑 .env.local 文件配置API地址
-
 # 启动开发服务器
 npm run dev
 ```
-
-### 4. 访问应用
-
-- **前端界面**: http://localhost:3000
-- **API文档**: http://localhost:8000/docs
-- **API管理**: http://localhost:8000/redoc
 
 ## 🔧 开发指南
 

@@ -25,6 +25,7 @@ export interface Task {
     total_stocks: number;
     successful_predictions: number;
     average_confidence: number;
+    backtest_results?: any;
     predictions: Array<{
       stock_code: string;
       predicted_direction: number;

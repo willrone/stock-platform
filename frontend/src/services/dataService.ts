@@ -243,4 +243,96 @@ export class DataService {
   }> {
     return apiRequest.get('/health');
   }
+
+  // 数据管理相关方法
+
+  /**
+   * 获取数据服务状态
+   */
+  static async getDataServiceStatus(): Promise<{
+    service_url: string;
+    is_connected: boolean;
+    last_check: string;
+    response_time: number;
+    error_message?: string;
+  }> {
+    return apiRequest.get('/data/status');
+  }
+
+  /**
+   * 获取本地数据文件列表
+   */
+  static async getLocalDataFiles(params?: {
+    stock_code?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    files: Array<{
+      stock_code: string;
+      file_path: string;
+      file_size: number;
+      last_updated: string;
+      record_count: number;
+      date_range: {
+        start: string;
+        end: string;
+      };
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    return apiRequest.get('/data/files', params);
+  }
+
+  /**
+   * 获取数据统计信息
+   */
+  static async getDataStatistics(): Promise<{
+    total_files: number;
+    total_size: number;
+    total_records: number;
+    stock_count: number;
+    last_sync: string;
+    date_range: {
+      start: string;
+      end: string;
+    };
+  }> {
+    return apiRequest.get('/data/stats');
+  }
+
+  /**
+   * 同步数据
+   */
+  static async syncDataFromRemote(params: {
+    stock_codes: string[];
+    start_date?: string;
+    end_date?: string;
+    force_update?: boolean;
+  }): Promise<{
+    success: boolean;
+    synced_stocks: string[];
+    failed_stocks: string[];
+    total_records: number;
+    sync_duration: string;
+    message: string;
+  }> {
+    return apiRequest.post('/data/sync', params);
+  }
+
+  /**
+   * 删除数据文件
+   */
+  static async deleteDataFiles(stockCodes: string[]): Promise<{
+    deleted_files: string[];
+    failed_files: string[];
+    total_deleted: number;
+  }> {
+    // 将股票代码作为查询参数传递
+    const params = new URLSearchParams();
+    stockCodes.forEach(code => params.append('stock_codes', code));
+    
+    return apiRequest.delete(`/data/files?${params.toString()}`);
+  }
 }

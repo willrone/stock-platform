@@ -11,9 +11,11 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.api import api_router
+from app.websocket import ws_router
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.logging import setup_logging
+from app.core.metrics import setup_metrics_collection, MetricsMiddleware, metrics_endpoint
 from app.middleware.rate_limiting import RateLimitMiddleware, RateLimitConfig
 from app.middleware.error_handling import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 启动时初始化
     setup_logging()
     await init_db()
+    setup_metrics_collection()
     
     yield
     
@@ -90,13 +93,16 @@ def create_application() -> FastAPI:
 
     # 添加中间件（注意顺序很重要）
     
-    # 1. 请求日志中间件（最外层）
+    # 1. 指标收集中间件（最外层）
+    app.add_middleware(MetricsMiddleware)
+    
+    # 2. 请求日志中间件
     app.add_middleware(RequestLoggingMiddleware)
     
-    # 2. 错误处理中间件
+    # 3. 错误处理中间件
     app.add_middleware(ErrorHandlingMiddleware)
     
-    # 3. 限流中间件
+    # 4. 限流中间件
     rate_limit_config = RateLimitConfig(
         requests_per_minute=120,  # 增加到120次/分钟
         requests_per_hour=2000,   # 增加到2000次/小时
@@ -104,14 +110,14 @@ def create_application() -> FastAPI:
     )
     app.add_middleware(RateLimitMiddleware, config=rate_limit_config)
     
-    # 4. GZIP压缩中间件
+    # 5. GZIP压缩中间件
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     
-    # 5. CORS中间件（最内层）
+    # 6. CORS中间件（最内层）
     if settings.CORS_ORIGINS:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=settings.CORS_ORIGINS,
+            allow_origins=settings.cors_origins_list,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -119,6 +125,10 @@ def create_application() -> FastAPI:
 
     # 包含路由
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(ws_router)  # WebSocket路由不需要前缀
+    
+    # 添加指标端点
+    app.get("/metrics")(metrics_endpoint)
 
     # 添加异常处理器
     @app.exception_handler(HTTPException)

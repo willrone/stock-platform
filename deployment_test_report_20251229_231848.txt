@@ -1,0 +1,18 @@
+==========================================
+部署验证测试报告 - Mon Dec 29 23:18:48 CST 2025
+==========================================
+
+测试统计:
+  总测试数: 54
+  通过测试: 54
+  失败测试: 0
+  成功率: 100%
+
+✓ 所有测试通过！部署配置验证成功。
+
+测试环境信息:
+  操作系统: Linux willrone-MS-7E01 6.17.0-8-generic #8-Ubuntu SMP PREEMPT_DYNAMIC Fri Nov 14 21:44:46 UTC 2025 x86_64 GNU/Linux
+  Docker版本: 未安装
+  Docker Compose版本: 未安装
+  当前目录: /media/willrone/DATA/github/willrone
+

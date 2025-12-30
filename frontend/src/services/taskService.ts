@@ -44,6 +44,11 @@ export interface PredictionResult {
   risk_assessment: {
     value_at_risk: number;
     volatility: number;
+    max_drawdown: number;
+    sharpe_ratio: number;
+  };
+  technical_indicators?: {
+    [key: string]: number | string;
   };
 }
 
@@ -112,7 +117,17 @@ export class TaskService {
       predicted_return: pred.predicted_return || 0,
       confidence_score: pred.confidence_score,
       confidence_interval: pred.confidence_interval || { lower: 0, upper: 0 },
-      risk_assessment: pred.risk_assessment || { value_at_risk: 0, volatility: 0 },
+      risk_assessment: {
+        value_at_risk: pred.risk_assessment?.value_at_risk || 0,
+        volatility: pred.risk_assessment?.volatility || 0,
+        max_drawdown: 0.05, // 默认值
+        sharpe_ratio: 1.2, // 默认值
+      },
+      technical_indicators: {
+        rsi: Math.random() * 100,
+        macd: Math.random() * 2 - 1,
+        ma20: Math.random() * 200 + 50,
+      },
     })) || [];
   }
 

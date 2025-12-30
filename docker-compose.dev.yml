@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # 后端开发服务
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stock-prediction-backend-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///app/data/stock_prediction_dev.db
+      - DATA_SERVICE_URL=http://192.168.3.62:8080
+      - LOG_LEVEL=DEBUG
+      - CORS_ORIGINS=http://localhost:3000
+      - RELOAD=true
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+      - ./backend/logs:/app/logs
+    networks:
+      - stock-prediction-dev-network
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # 前端开发服务
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: stock-prediction-frontend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend-dev
+    networks:
+      - stock-prediction-dev-network
+    restart: unless-stopped
+
+networks:
+  stock-prediction-dev-network:
+    driver: bridge

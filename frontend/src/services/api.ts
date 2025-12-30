@@ -9,7 +9,6 @@
  */
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
-import { message } from 'antd';
 
 // 标准响应格式
 export interface ApiResponse<T = any> {
@@ -55,7 +54,7 @@ const createApiInstance = (): AxiosInstance => {
       // 检查业务逻辑错误
       if (!data.success) {
         console.error('[API] 业务错误:', data.message);
-        message.error(data.message || '请求失败');
+        console.error(data.message || '请求失败');
         return Promise.reject(new Error(data.message || '请求失败'));
       }
       
@@ -71,33 +70,33 @@ const createApiInstance = (): AxiosInstance => {
         
         switch (status) {
           case 400:
-            message.error(data?.message || '请求参数错误');
+            console.error(data?.message || '请求参数错误');
             break;
           case 401:
-            message.error('未授权访问，请重新登录');
+            console.error('未授权访问，请重新登录');
             // 清除token并跳转到登录页
             localStorage.removeItem('auth_token');
             window.location.href = '/login';
             break;
           case 403:
-            message.error('权限不足');
+            console.error('权限不足');
             break;
           case 404:
-            message.error('请求的资源不存在');
+            console.error('请求的资源不存在');
             break;
           case 429:
-            message.error('请求过于频繁，请稍后再试');
+            console.error('请求过于频繁，请稍后再试');
             break;
           case 500:
-            message.error(data?.message || '服务器内部错误');
+            console.error(data?.message || '服务器内部错误');
             break;
           default:
-            message.error(`请求失败 (${status})`);
+            console.error(`请求失败 (${status})`);
         }
       } else if (error.request) {
-        message.error('网络连接失败，请检查网络设置');
+        console.error('网络连接失败，请检查网络设置');
       } else {
-        message.error('请求配置错误');
+        console.error('请求配置错误');
       }
       
       return Promise.reject(error);

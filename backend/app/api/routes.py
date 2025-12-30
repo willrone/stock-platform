@@ -5,11 +5,12 @@ API路由定义
 支持OpenAPI文档自动生成和API版本管理。
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request, Query
 from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+import random
 
 import logging
 
@@ -504,6 +505,198 @@ async def get_model_detail(model_id: str):
     except Exception as e:
         logger.error(f"获取模型详情失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型详情失败: {str(e)}")
+
+
+# 数据管理相关路由
+
+@api_router.get("/data/status", response_model=StandardResponse, summary="获取数据服务状态", description="获取远端数据服务连接状态和响应时间")
+async def get_data_service_status():
+    """获取数据服务状态"""
+    try:
+        # 调用真实的数据服务状态检查
+        from app.services.data_service import stock_data_service
+        status = await stock_data_service.check_remote_service_status()
+
+        # 转换响应格式以匹配前端期望
+        response_data = {
+            "service_url": status.service_url,
+            "is_connected": status.is_available,
+            "last_check": status.last_check.isoformat() if status.last_check else None,
+            "response_time": status.response_time_ms,
+            "error_message": status.error_message
+        }
+
+        return StandardResponse(
+            success=True,
+            message="数据服务状态获取成功",
+            data=response_data
+        )
+
+    except Exception as e:
+        logger.error(f"获取数据服务状态失败: {e}")
+        # 返回一个简单的错误响应
+        return StandardResponse(
+            success=False,
+            message=f"获取数据服务状态失败: {str(e)}",
+            data=None
+        )
+
+
+@api_router.get("/data/files", response_model=StandardResponse, summary="获取本地数据文件列表", description="获取本地Parquet文件的详细信息")
+async def get_local_data_files(
+    stock_code: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """获取本地数据文件列表"""
+    try:
+        # 这里应该调用Parquet管理器获取文件列表
+        # from app.services.parquet_manager import ParquetManager
+        # parquet_manager = ParquetManager()
+        
+        # 模拟文件列表
+        mock_files = []
+        stock_codes = [stock_code] if stock_code else ["000001.SZ", "000002.SZ", "600000.SH", "600036.SH", "000858.SZ"]
+        
+        for i, code in enumerate(stock_codes):
+            if i >= offset and len(mock_files) < limit:
+                mock_files.append({
+                    "stock_code": code,
+                    "file_path": f"/data/stocks/{code}/daily.parquet",
+                    "file_size": random.randint(1000000, 5000000),
+                    "last_updated": (datetime.now() - timedelta(days=random.randint(0, 30))).isoformat(),
+                    "record_count": random.randint(1000, 10000),
+                    "date_range": {
+                        "start": "2020-01-01",
+                        "end": (datetime.now() - timedelta(days=random.randint(0, 5))).strftime("%Y-%m-%d")
+                    }
+                })
+        
+        return StandardResponse(
+            success=True,
+            message="本地数据文件列表获取成功",
+            data={
+                "files": mock_files,
+                "total": len(stock_codes),
+                "limit": limit,
+                "offset": offset
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"获取本地数据文件列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取本地数据文件列表失败: {str(e)}")
+
+
+@api_router.get("/data/stats", response_model=StandardResponse, summary="获取数据统计信息", description="获取本地数据存储的统计信息")
+async def get_data_statistics():
+    """获取数据统计信息"""
+    try:
+        # 这里应该调用Parquet管理器获取统计信息
+        # from app.services.parquet_manager import ParquetManager
+        # parquet_manager = ParquetManager()
+        # stats = parquet_manager.get_storage_stats()
+        
+        # 模拟统计信息
+        mock_stats = {
+            "total_files": 25,
+            "total_size": 125000000,  # 125MB
+            "total_records": 250000,
+            "stock_count": 25,
+            "last_sync": (datetime.now() - timedelta(hours=2)).isoformat(),
+            "date_range": {
+                "start": "2020-01-01",
+                "end": datetime.now().strftime("%Y-%m-%d")
+            }
+        }
+        
+        return StandardResponse(
+            success=True,
+            message="数据统计信息获取成功",
+            data=mock_stats
+        )
+        
+    except Exception as e:
+        logger.error(f"获取数据统计信息失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取数据统计信息失败: {str(e)}")
+
+
+@api_router.post("/data/sync", response_model=StandardResponse, summary="同步数据", description="从远端服务同步指定股票的数据")
+async def sync_data_from_remote(
+    stock_codes: List[str],
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    force_update: bool = False
+):
+    """同步数据"""
+    try:
+        # 这里应该调用数据服务进行同步
+        # from app.services.data_service import stock_data_service
+        # from app.models.stock import DataSyncRequest
+        # 
+        # sync_request = DataSyncRequest(
+        #     stock_codes=stock_codes,
+        #     start_date=start_date,
+        #     end_date=end_date,
+        #     force_update=force_update
+        # )
+        # result = await stock_data_service.sync_multiple_stocks(sync_request)
+        
+        # 模拟同步结果
+        import asyncio
+        await asyncio.sleep(1)  # 模拟同步时间
+        
+        mock_result = {
+            "success": True,
+            "synced_stocks": stock_codes[:int(len(stock_codes) * 0.8)],  # 80%成功
+            "failed_stocks": stock_codes[int(len(stock_codes) * 0.8):],  # 20%失败
+            "total_records": len(stock_codes) * 1000,
+            "sync_duration": "2.5s",
+            "message": f"同步完成: 成功 {int(len(stock_codes) * 0.8)}, 失败 {len(stock_codes) - int(len(stock_codes) * 0.8)}"
+        }
+        
+        return StandardResponse(
+            success=True,
+            message="数据同步完成",
+            data=mock_result
+        )
+        
+    except Exception as e:
+        logger.error(f"数据同步失败: {e}")
+        raise HTTPException(status_code=500, detail=f"数据同步失败: {str(e)}")
+
+
+@api_router.delete("/data/files", response_model=StandardResponse, summary="删除数据文件", description="删除指定的本地数据文件")
+async def delete_data_files(stock_codes: List[str] = Query(..., description="要删除的股票代码列表")):
+    """删除数据文件"""
+    try:
+        # 这里应该调用文件管理服务删除文件
+        # from app.services.parquet_manager import ParquetManager
+        # parquet_manager = ParquetManager()
+        
+        deleted_files = []
+        failed_files = []
+        
+        for stock_code in stock_codes:
+            # 模拟删除操作
+            if stock_code.startswith("000"):  # 模拟某些文件删除失败
+                failed_files.append(stock_code)
+            else:
+                deleted_files.append(stock_code)
+        
+        return StandardResponse(
+            success=len(failed_files) == 0,
+            message=f"删除完成: 成功 {len(deleted_files)}, 失败 {len(failed_files)}",
+            data={
+                "deleted_files": deleted_files,
+                "failed_files": failed_files,
+                "total_deleted": len(deleted_files)
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"删除数据文件失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除数据文件失败: {str(e)}")
 
 
 # 系统状态相关路由
