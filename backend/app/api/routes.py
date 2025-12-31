@@ -623,6 +623,48 @@ async def get_data_service_status(data_service: StockDataService = Depends(get_d
         )
 
 
+@api_router.get("/data/remote/stocks", response_model=StandardResponse, summary="获取远端服务股票列表", description="从远端数据服务获取可用的股票列表")
+async def get_remote_stock_list(data_service: StockDataService = Depends(get_data_service)):
+    """获取远端服务的股票列表"""
+    try:
+        stocks = await data_service.get_remote_stock_list()
+        
+        if stocks is None:
+            return StandardResponse(
+                success=False,
+                message="无法从远端服务获取股票列表",
+                data={
+                    "stocks": [],
+                    "total_stocks": 0
+                }
+            )
+        
+        # 提取股票代码列表
+        stock_codes = [stock.get("ts_code", "") for stock in stocks if stock.get("ts_code")]
+        
+        return StandardResponse(
+            success=True,
+            message=f"成功获取远端股票列表: {len(stocks)} 只股票",
+            data={
+                "stocks": stocks,
+                "stock_codes": stock_codes,
+                "total_stocks": len(stocks)
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"获取远端股票列表失败: {e}")
+        return StandardResponse(
+            success=False,
+            message=f"获取远端股票列表失败: {str(e)}",
+            data={
+                "stocks": [],
+                "stock_codes": [],
+                "total_stocks": 0
+            }
+        )
+
+
 @api_router.get("/data/files", response_model=StandardResponse, summary="获取本地数据文件列表", description="获取本地Parquet文件的详细信息")
 async def get_local_data_files(
     stock_code: Optional[str] = None,

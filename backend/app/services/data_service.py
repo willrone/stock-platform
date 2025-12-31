@@ -444,6 +444,75 @@ class StockDataService:
                 error_message=str(e)
             )
     
+    async def get_remote_stock_list(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        从远端服务获取股票列表
+        
+        注意：使用 /api/data/stock_data_status 端点，虽然这个端点主要用于获取状态信息，
+        但它返回的 stocks 数组中包含了所有股票的 ts_code 和 name，可以用于获取股票列表。
+        如果远端服务有专门的股票列表API，应该优先使用那个API。
+        """
+        async def _fetch_stock_list():
+            # 使用连接池发送请求
+            if hasattr(self, 'http_pool') and self.http_pool:
+                async with self.http_pool.request(
+                    'GET', 
+                    f"{self.remote_url}/api/data/stock_data_status"
+                ) as response:
+                    if response.status_code != 200:
+                        raise Exception(f"HTTP {response.status_code}: {response.text}")
+                    return response
+            else:
+                # 后备方案：使用默认客户端
+                if not hasattr(self, 'client'):
+                    self.client = httpx.AsyncClient(
+                        timeout=httpx.Timeout(self.timeout),
+                        limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                    )
+                response = await self.client.get(f"{self.remote_url}/api/data/stock_data_status")
+                
+                if response.status_code != 200:
+                    raise Exception(f"HTTP {response.status_code}: {response.text}")
+                
+                return response
+        
+        try:
+            # 使用重试机制获取数据
+            response = await self._execute_with_retry(_fetch_stock_list)
+            
+            data = response.json()
+            
+            # 检查是否有错误
+            if "error" in data:
+                logger.error(f"远端服务返回错误: {data['error']}")
+                return None
+            
+            if not data or "stocks" not in data:
+                logger.warning("远端服务返回空股票列表")
+                return []
+            
+            stocks = data.get("stocks", [])
+            
+            # 提取股票代码和名称，忽略状态信息（因为这只是用于获取股票列表）
+            stock_list = []
+            for stock in stocks:
+                if "ts_code" in stock:
+                    stock_list.append({
+                        "ts_code": stock["ts_code"],
+                        "name": stock.get("name", ""),
+                        # 可选：保留一些有用的状态信息
+                        "status": stock.get("status", "unknown"),
+                        "data_range": stock.get("data_range")
+                    })
+            
+            logger.info(f"从远端获取股票列表成功: {len(stock_list)} 只股票")
+            
+            return stock_list
+        
+        except Exception as e:
+            logger.error(f"从远端获取股票列表失败: {e}")
+            return None
+    
     def get_local_parquet_path(self, stock_code: str, year: int) -> Path:
         """获取本地Parquet文件路径"""
         stock_dir = self.data_path / "daily" / stock_code

@@ -322,6 +322,27 @@ export class DataService {
   }
 
   /**
+   * 获取远端服务的股票列表
+   */
+  static async getRemoteStockList(): Promise<{
+    stocks: Array<{
+      ts_code: string;
+      name?: string;
+      data_range?: {
+        start_date: string;
+        end_date: string;
+        total_days: number;
+      };
+      last_update?: string;
+      status?: string;
+    }>;
+    stock_codes: string[];
+    total_stocks: number;
+  }> {
+    return apiRequest.get('/data/remote/stocks');
+  }
+
+  /**
    * 删除数据文件
    */
   static async deleteDataFiles(filePaths: string[]): Promise<{
