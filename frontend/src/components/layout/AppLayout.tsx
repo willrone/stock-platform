@@ -67,6 +67,11 @@ const menuItems = [
     label: '数据管理',
   },
   {
+    key: '/monitoring',
+    icon: BarChart3,
+    label: '系统监控',
+  },
+  {
     key: '/predictions',
     icon: TrendingUp,
     label: '预测分析',

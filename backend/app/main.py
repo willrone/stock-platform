@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.logging import setup_logging
 from app.core.metrics import setup_metrics_collection, MetricsMiddleware, metrics_endpoint
+from app.core.container import get_container, cleanup_container
 from app.middleware.rate_limiting import RateLimitMiddleware, RateLimitConfig
 from app.middleware.error_handling import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
@@ -28,10 +29,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     setup_metrics_collection()
     
+    # 初始化服务容器
+    await get_container()
+    
     yield
     
     # 关闭时清理
-    pass
+    await cleanup_container()
 
 
 def create_application() -> FastAPI:

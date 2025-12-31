@@ -324,15 +324,168 @@ export class DataService {
   /**
    * 删除数据文件
    */
-  static async deleteDataFiles(stockCodes: string[]): Promise<{
+  static async deleteDataFiles(filePaths: string[]): Promise<{
+    success: boolean;
     deleted_files: string[];
-    failed_files: string[];
+    failed_files: Array<{
+      file_path: string;
+      error: string;
+    }>;
     total_deleted: number;
+    freed_space_bytes: number;
+    freed_space_mb: number;
+    message: string;
   }> {
-    // 将股票代码作为查询参数传递
+    // 将文件路径作为查询参数传递
     const params = new URLSearchParams();
-    stockCodes.forEach(code => params.append('stock_codes', code));
+    filePaths.forEach(path => params.append('file_paths', path));
     
     return apiRequest.delete(`/data/files?${params.toString()}`);
+  }
+
+  /**
+   * 获取同步进度
+   */
+  static async getSyncProgress(syncId: string): Promise<{
+    sync_id: string;
+    total_stocks: number;
+    completed_stocks: number;
+    failed_stocks: number;
+    current_stock: string | null;
+    progress_percentage: number;
+    estimated_remaining_time_seconds: number | null;
+    start_time: string;
+    status: string;
+    last_update: string;
+  }> {
+    return apiRequest.get(`/data/sync/${syncId}/progress`);
+  }
+
+  /**
+   * 获取同步历史
+   */
+  static async getSyncHistory(limit: number = 50): Promise<{
+    history: Array<{
+      sync_id: string;
+      request: {
+        stock_codes: string[];
+        start_date: string | null;
+        end_date: string | null;
+        force_update: boolean;
+        sync_mode: string;
+        max_concurrent: number;
+        retry_count: number;
+      };
+      result: {
+        success: boolean;
+        total_stocks: number;
+        success_count: number;
+        failure_count: number;
+        total_records: number;
+        message: string;
+      };
+      created_at: string;
+    }>;
+    total: number;
+    limit: number;
+  }> {
+    return apiRequest.get('/data/sync/history', { limit });
+  }
+
+  /**
+   * 重试失败的同步
+   */
+  static async retrySyncFailed(syncId: string): Promise<{
+    sync_id: string;
+    retried_stocks: string[];
+    retry_results: Array<{
+      stock_code: string;
+      success: boolean;
+      records_synced: number;
+      error_message: string | null;
+    }>;
+    success: boolean;
+    message: string;
+  }> {
+    return apiRequest.post(`/data/sync/${syncId}/retry`);
+  }
+
+  /**
+   * 获取系统健康状态
+   */
+  static async getSystemHealth(): Promise<{
+    overall_healthy: boolean;
+    services: Record<string, {
+      healthy: boolean;
+      response_time_ms: number;
+      last_check: string;
+      error_message: string | null;
+    }>;
+    check_time: string;
+  }> {
+    return apiRequest.get('/monitoring/health');
+  }
+
+  /**
+   * 获取性能指标
+   */
+  static async getPerformanceMetrics(serviceName?: string): Promise<{
+    services?: Record<string, any>;
+    summary?: {
+      total_services: number;
+      avg_response_time: number;
+      total_requests: number;
+      total_errors: number;
+    };
+  }> {
+    const params = serviceName ? { service_name: serviceName } : {};
+    return apiRequest.get('/monitoring/metrics', params);
+  }
+
+  /**
+   * 获取系统概览
+   */
+  static async getSystemOverview(): Promise<any> {
+    return apiRequest.get('/monitoring/overview');
+  }
+
+  /**
+   * 获取错误统计
+   */
+  static async getErrorStatistics(hours: number = 24): Promise<{
+    time_range_hours: number;
+    total_error_types: number;
+    total_errors: number;
+    error_statistics: Array<{
+      error_type: string;
+      count: number;
+      last_occurrence: string;
+      sample_message: string;
+    }>;
+  }> {
+    return apiRequest.get('/monitoring/errors', { hours });
+  }
+
+  /**
+   * 获取数据质量检查结果
+   */
+  static async getDataQuality(): Promise<any> {
+    return apiRequest.get('/monitoring/quality');
+  }
+
+  /**
+   * 获取异常检测结果
+   */
+  static async getAnomalies(): Promise<{
+    total_anomalies: number;
+    by_severity: {
+      high: number;
+      medium: number;
+      low: number;
+    };
+    anomalies: Array<any>;
+    detection_time: string;
+  }> {
+    return apiRequest.get('/monitoring/anomalies');
   }
 }

@@ -12,6 +12,10 @@ import logging
 from dataclasses import dataclass
 
 from app.models.stock_simple import StockData
+from app.models.file_management import (
+    DetailedFileInfo, ComprehensiveStats, FilterCriteria, 
+    ValidationResult, DeletionResult, FileFilters, IntegrityStatus
+)
 
 
 @dataclass
@@ -423,6 +427,540 @@ class ParquetManager:
             ))
         
         return stock_data
+    
+    def get_detailed_file_list(self, filters: FileFilters) -> List[DetailedFileInfo]:
+        """
+        获取详细文件列表
+        
+        Args:
+            filters: 文件过滤条件
+        
+        Returns:
+            List[DetailedFileInfo]: 详细文件信息列表
+        """
+        detailed_files = []
+        
+        try:
+            # 确定搜索范围
+            if filters.stock_code:
+                stock_dirs = [self.base_path / filters.stock_code]
+            else:
+                stock_dirs = [d for d in self.base_path.iterdir() if d.is_dir()]
+            
+            for stock_dir in stock_dirs:
+                if not stock_dir.exists():
+                    continue
+                
+                stock_code = stock_dir.name
+                
+                # 遍历所有Parquet文件
+                for file_path in stock_dir.rglob("*.parquet"):
+                    try:
+                        # 获取文件统计信息
+                        stat = file_path.stat()
+                        file_size = stat.st_size
+                        last_modified = datetime.fromtimestamp(stat.st_mtime)
+                        created_at = datetime.fromtimestamp(stat.st_ctime)
+                        
+                        # 应用大小过滤
+                        if filters.min_size and file_size < filters.min_size:
+                            continue
+                        if filters.max_size and file_size > filters.max_size:
+                            continue
+                        
+                        # 读取文件获取数据信息
+                        try:
+                            df = pd.read_parquet(file_path)
+                            if df.empty:
+                                continue
+                            
+                            record_count = len(df)
+                            start_date = df['date'].min()
+                            end_date = df['date'].max()
+                            
+                            # 应用日期过滤
+                            if filters.start_date and end_date < filters.start_date:
+                                continue
+                            if filters.end_date and start_date > filters.end_date:
+                                continue
+                            
+                            # 验证文件完整性
+                            integrity_status = self._check_file_integrity(file_path, df)
+                            
+                            # 应用完整性过滤
+                            if filters.integrity_status and integrity_status != filters.integrity_status:
+                                continue
+                            
+                            # 计算压缩比（估算）
+                            uncompressed_size = record_count * 8 * 8  # 估算未压缩大小
+                            compression_ratio = file_size / uncompressed_size if uncompressed_size > 0 else 0
+                            
+                            detailed_info = DetailedFileInfo(
+                                file_path=str(file_path),
+                                stock_code=stock_code,
+                                date_range=(start_date, end_date),
+                                record_count=record_count,
+                                file_size=file_size,
+                                last_modified=last_modified,
+                                integrity_status=integrity_status,
+                                compression_ratio=compression_ratio,
+                                created_at=created_at
+                            )
+                            
+                            detailed_files.append(detailed_info)
+                        
+                        except Exception as e:
+                            self.logger.warning(f"读取文件失败 {file_path}: {e}")
+                            # 创建基本信息，标记为损坏
+                            detailed_info = DetailedFileInfo(
+                                file_path=str(file_path),
+                                stock_code=stock_code,
+                                date_range=(datetime.min, datetime.min),
+                                record_count=0,
+                                file_size=file_size,
+                                last_modified=last_modified,
+                                integrity_status=IntegrityStatus.CORRUPTED,
+                                compression_ratio=0.0,
+                                created_at=created_at
+                            )
+                            detailed_files.append(detailed_info)
+                    
+                    except Exception as e:
+                        self.logger.warning(f"获取文件信息失败 {file_path}: {e}")
+            
+            # 排序
+            detailed_files.sort(key=lambda x: x.last_modified, reverse=True)
+            
+            # 应用分页
+            start_idx = filters.offset
+            end_idx = start_idx + filters.limit
+            return detailed_files[start_idx:end_idx]
+        
+        except Exception as e:
+            self.logger.error(f"获取详细文件列表失败: {e}")
+            return []
+    
+    def get_comprehensive_stats(self) -> ComprehensiveStats:
+        """
+        获取综合统计信息
+        
+        Returns:
+            ComprehensiveStats: 综合统计信息
+        """
+        try:
+            total_files = 0
+            total_size = 0
+            total_records = 0
+            stock_count = 0
+            all_dates = []
+            stocks_by_size = []
+            monthly_distribution = {}
+            
+            for stock_dir in self.base_path.iterdir():
+                if not stock_dir.is_dir():
+                    continue
+                
+                stock_code = stock_dir.name
+                stock_size = 0
+                stock_records = 0
+                stock_files = 0
+                stock_dates = []
+                
+                for file_path in stock_dir.rglob("*.parquet"):
+                    try:
+                        stat = file_path.stat()
+                        file_size = stat.st_size
+                        
+                        df = pd.read_parquet(file_path)
+                        if not df.empty:
+                            record_count = len(df)
+                            file_dates = pd.to_datetime(df['date']).tolist()
+                            
+                            # 统计月份分布
+                            for date in file_dates:
+                                month_key = date.strftime("%Y-%m")
+                                monthly_distribution[month_key] = monthly_distribution.get(month_key, 0) + 1
+                            
+                            stock_dates.extend(file_dates)
+                            all_dates.extend(file_dates)
+                            stock_records += record_count
+                            total_records += record_count
+                        
+                        stock_size += file_size
+                        total_size += file_size
+                        stock_files += 1
+                        total_files += 1
+                    
+                    except Exception as e:
+                        self.logger.warning(f"统计文件失败 {file_path}: {e}")
+                
+                if stock_files > 0:
+                    stocks_by_size.append((stock_code, stock_size))
+                    stock_count += 1
+            
+            # 排序股票按大小
+            stocks_by_size.sort(key=lambda x: x[1], reverse=True)
+            
+            # 计算统计指标
+            average_file_size = total_size / total_files if total_files > 0 else 0
+            storage_efficiency = total_records / (total_size / 1024 / 1024) if total_size > 0 else 0  # 记录数/MB
+            
+            date_range = (min(all_dates), max(all_dates)) if all_dates else (datetime.min, datetime.min)
+            
+            # 获取最后同步时间（最新文件的修改时间）
+            last_sync_time = None
+            try:
+                latest_file = max(
+                    self.base_path.rglob("*.parquet"),
+                    key=lambda p: p.stat().st_mtime,
+                    default=None
+                )
+                if latest_file:
+                    last_sync_time = datetime.fromtimestamp(latest_file.stat().st_mtime)
+            except Exception:
+                pass
+            
+            return ComprehensiveStats(
+                total_files=total_files,
+                total_size_bytes=total_size,
+                total_records=total_records,
+                stock_count=stock_count,
+                date_range=date_range,
+                average_file_size=average_file_size,
+                storage_efficiency=storage_efficiency,
+                last_sync_time=last_sync_time,
+                stocks_by_size=stocks_by_size[:10],  # 前10个最大的
+                monthly_distribution=monthly_distribution
+            )
+        
+        except Exception as e:
+            self.logger.error(f"获取综合统计失败: {e}")
+            return ComprehensiveStats(
+                total_files=0,
+                total_size_bytes=0,
+                total_records=0,
+                stock_count=0,
+                date_range=(datetime.min, datetime.min),
+                average_file_size=0.0,
+                storage_efficiency=0.0,
+                last_sync_time=None,
+                stocks_by_size=[],
+                monthly_distribution={}
+            )
+    
+    def validate_file_integrity(self, file_path: str) -> ValidationResult:
+        """
+        验证文件完整性
+        
+        Args:
+            file_path: 文件路径
+        
+        Returns:
+            ValidationResult: 验证结果
+        """
+        validation_time = datetime.now()
+        error_messages = []
+        
+        try:
+            path = Path(file_path)
+            
+            # 检查文件是否存在
+            if not path.exists():
+                return ValidationResult(
+                    file_path=file_path,
+                    is_valid=False,
+                    integrity_status=IntegrityStatus.CORRUPTED,
+                    error_messages=["文件不存在"],
+                    validation_time=validation_time
+                )
+            
+            # 获取文件大小
+            file_size = path.stat().st_size
+            if file_size == 0:
+                return ValidationResult(
+                    file_path=file_path,
+                    is_valid=False,
+                    integrity_status=IntegrityStatus.CORRUPTED,
+                    error_messages=["文件为空"],
+                    file_size=file_size,
+                    validation_time=validation_time
+                )
+            
+            # 尝试读取Parquet文件
+            try:
+                df = pd.read_parquet(path)
+            except Exception as e:
+                return ValidationResult(
+                    file_path=file_path,
+                    is_valid=False,
+                    integrity_status=IntegrityStatus.CORRUPTED,
+                    error_messages=[f"无法读取Parquet文件: {str(e)}"],
+                    file_size=file_size,
+                    validation_time=validation_time
+                )
+            
+            record_count = len(df)
+            
+            # 检查数据完整性
+            integrity_status = self._check_file_integrity(path, df)
+            
+            if integrity_status == IntegrityStatus.CORRUPTED:
+                error_messages.append("数据格式不正确")
+            elif integrity_status == IntegrityStatus.INCOMPLETE:
+                error_messages.append("数据不完整")
+            
+            is_valid = integrity_status == IntegrityStatus.VALID
+            
+            return ValidationResult(
+                file_path=file_path,
+                is_valid=is_valid,
+                integrity_status=integrity_status,
+                error_messages=error_messages,
+                record_count=record_count,
+                file_size=file_size,
+                validation_time=validation_time
+            )
+        
+        except Exception as e:
+            return ValidationResult(
+                file_path=file_path,
+                is_valid=False,
+                integrity_status=IntegrityStatus.UNKNOWN,
+                error_messages=[f"验证过程出错: {str(e)}"],
+                validation_time=validation_time
+            )
+    
+    def delete_files_safely(self, file_paths: List[str]) -> DeletionResult:
+        """
+        安全删除文件
+        
+        Args:
+            file_paths: 要删除的文件路径列表
+        
+        Returns:
+            DeletionResult: 删除结果
+        """
+        deleted_files = []
+        failed_files = []
+        freed_space = 0
+        
+        try:
+            for file_path in file_paths:
+                try:
+                    path = Path(file_path)
+                    
+                    if not path.exists():
+                        failed_files.append((file_path, "文件不存在"))
+                        continue
+                    
+                    # 获取文件大小
+                    file_size = path.stat().st_size
+                    
+                    # 创建备份（可选，这里简化处理）
+                    # backup_path = path.with_suffix(path.suffix + '.backup')
+                    # shutil.copy2(path, backup_path)
+                    
+                    # 删除文件
+                    path.unlink()
+                    
+                    deleted_files.append(file_path)
+                    freed_space += file_size
+                    
+                    self.logger.info(f"成功删除文件: {file_path}")
+                
+                except Exception as e:
+                    error_msg = f"删除失败: {str(e)}"
+                    failed_files.append((file_path, error_msg))
+                    self.logger.error(f"删除文件失败 {file_path}: {e}")
+            
+            # 清理空目录
+            self._cleanup_empty_directories()
+            
+            success = len(failed_files) == 0
+            total_deleted = len(deleted_files)
+            
+            if success:
+                message = f"成功删除 {total_deleted} 个文件，释放空间 {freed_space / 1024 / 1024:.2f} MB"
+            else:
+                message = f"删除完成: 成功 {total_deleted}, 失败 {len(failed_files)}"
+            
+            return DeletionResult(
+                success=success,
+                deleted_files=deleted_files,
+                failed_files=failed_files,
+                total_deleted=total_deleted,
+                freed_space_bytes=freed_space,
+                message=message
+            )
+        
+        except Exception as e:
+            self.logger.error(f"批量删除文件失败: {e}")
+            return DeletionResult(
+                success=False,
+                deleted_files=deleted_files,
+                failed_files=failed_files + [(f"批量操作", str(e))],
+                total_deleted=len(deleted_files),
+                freed_space_bytes=freed_space,
+                message=f"批量删除失败: {str(e)}"
+            )
+    
+    def filter_files(self, criteria: FilterCriteria) -> List[DetailedFileInfo]:
+        """
+        根据条件筛选文件
+        
+        Args:
+            criteria: 筛选条件
+        
+        Returns:
+            List[DetailedFileInfo]: 筛选后的文件列表
+        """
+        try:
+            all_files = []
+            
+            # 确定搜索范围
+            if criteria.stock_codes:
+                stock_dirs = [self.base_path / code for code in criteria.stock_codes if (self.base_path / code).exists()]
+            else:
+                stock_dirs = [d for d in self.base_path.iterdir() if d.is_dir()]
+            
+            for stock_dir in stock_dirs:
+                stock_code = stock_dir.name
+                
+                for file_path in stock_dir.rglob("*.parquet"):
+                    try:
+                        stat = file_path.stat()
+                        file_size = stat.st_size
+                        last_modified = datetime.fromtimestamp(stat.st_mtime)
+                        
+                        # 应用大小过滤
+                        if criteria.min_file_size and file_size < criteria.min_file_size:
+                            continue
+                        if criteria.max_file_size and file_size > criteria.max_file_size:
+                            continue
+                        
+                        # 读取文件信息
+                        df = pd.read_parquet(file_path)
+                        if df.empty:
+                            continue
+                        
+                        record_count = len(df)
+                        start_date = df['date'].min()
+                        end_date = df['date'].max()
+                        
+                        # 应用记录数过滤
+                        if criteria.min_records and record_count < criteria.min_records:
+                            continue
+                        if criteria.max_records and record_count > criteria.max_records:
+                            continue
+                        
+                        # 应用日期过滤
+                        if criteria.date_range:
+                            range_start, range_end = criteria.date_range
+                            if end_date < range_start or start_date > range_end:
+                                continue
+                        
+                        # 检查完整性
+                        integrity_status = self._check_file_integrity(file_path, df)
+                        if criteria.integrity_status and integrity_status != criteria.integrity_status:
+                            continue
+                        
+                        # 计算压缩比
+                        uncompressed_size = record_count * 8 * 8
+                        compression_ratio = file_size / uncompressed_size if uncompressed_size > 0 else 0
+                        
+                        file_info = DetailedFileInfo(
+                            file_path=str(file_path),
+                            stock_code=stock_code,
+                            date_range=(start_date, end_date),
+                            record_count=record_count,
+                            file_size=file_size,
+                            last_modified=last_modified,
+                            integrity_status=integrity_status,
+                            compression_ratio=compression_ratio,
+                            created_at=datetime.fromtimestamp(stat.st_ctime)
+                        )
+                        
+                        all_files.append(file_info)
+                    
+                    except Exception as e:
+                        self.logger.warning(f"处理文件失败 {file_path}: {e}")
+            
+            # 排序
+            reverse = criteria.sort_order == "desc"
+            if criteria.sort_by == "file_size":
+                all_files.sort(key=lambda x: x.file_size, reverse=reverse)
+            elif criteria.sort_by == "record_count":
+                all_files.sort(key=lambda x: x.record_count, reverse=reverse)
+            elif criteria.sort_by == "stock_code":
+                all_files.sort(key=lambda x: x.stock_code, reverse=reverse)
+            else:  # last_modified
+                all_files.sort(key=lambda x: x.last_modified, reverse=reverse)
+            
+            return all_files
+        
+        except Exception as e:
+            self.logger.error(f"筛选文件失败: {e}")
+            return []
+    
+    def _check_file_integrity(self, file_path: Path, df: pd.DataFrame) -> IntegrityStatus:
+        """
+        检查文件完整性
+        
+        Args:
+            file_path: 文件路径
+            df: 数据框
+        
+        Returns:
+            IntegrityStatus: 完整性状态
+        """
+        try:
+            # 检查必需的列
+            required_columns = ['stock_code', 'date', 'open', 'high', 'low', 'close', 'volume']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
+                return IntegrityStatus.CORRUPTED
+            
+            # 检查数据类型
+            if not pd.api.types.is_datetime64_any_dtype(df['date']):
+                return IntegrityStatus.CORRUPTED
+            
+            # 检查数值列
+            numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+            for col in numeric_columns:
+                if not pd.api.types.is_numeric_dtype(df[col]):
+                    return IntegrityStatus.CORRUPTED
+            
+            # 检查数据逻辑
+            invalid_rows = df[
+                (df['high'] < df['low']) |
+                (df['open'] <= 0) |
+                (df['high'] <= 0) |
+                (df['low'] <= 0) |
+                (df['close'] <= 0) |
+                (df['volume'] < 0)
+            ]
+            
+            if len(invalid_rows) > 0:
+                # 如果无效数据比例超过5%，认为文件损坏
+                if len(invalid_rows) / len(df) > 0.05:
+                    return IntegrityStatus.CORRUPTED
+                else:
+                    return IntegrityStatus.INCOMPLETE
+            
+            # 检查日期连续性（简单检查）
+            df_sorted = df.sort_values('date')
+            date_diffs = df_sorted['date'].diff().dt.days
+            
+            # 如果有超过7天的间隔，可能数据不完整
+            if date_diffs.max() > 7:
+                return IntegrityStatus.INCOMPLETE
+            
+            return IntegrityStatus.VALID
+        
+        except Exception as e:
+            self.logger.warning(f"检查文件完整性失败 {file_path}: {e}")
+            return IntegrityStatus.UNKNOWN
     
     def _cleanup_empty_directories(self):
         """清理空目录"""

@@ -6,6 +6,8 @@
  * - 系统状态监控
  * - 模型信息
  * - 数据服务状态
+ * - 同步进度跟踪
+ * - 监控数据缓存
  */
 
 import { create } from 'zustand';
@@ -20,6 +22,7 @@ export interface StockData {
     low: number;
     close: number;
     volume: number;
+    adj_close?: number;
   }>;
   indicators?: {
     ma_5?: number;
@@ -63,6 +66,48 @@ export interface SystemStatus {
   remote_data_service: { status: string; url: string };
 }
 
+export interface DataServiceStatus {
+  service_url: string;
+  is_connected: boolean;
+  last_check: string;
+  response_time: number;
+  error_message?: string;
+}
+
+export interface SyncProgress {
+  sync_id: string;
+  total_stocks: number;
+  completed_stocks: number;
+  failed_stocks: number;
+  current_stock: string | null;
+  progress_percentage: number;
+  estimated_remaining_time_seconds: number | null;
+  start_time: string;
+  status: string;
+  last_update: string;
+}
+
+export interface SystemHealth {
+  overall_healthy: boolean;
+  services: Record<string, {
+    healthy: boolean;
+    response_time_ms: number;
+    last_check: string;
+    error_message: string | null;
+  }>;
+  check_time: string;
+}
+
+export interface PerformanceMetrics {
+  services?: Record<string, any>;
+  summary?: {
+    total_services: number;
+    avg_response_time: number;
+    total_requests: number;
+    total_errors: number;
+  };
+}
+
 interface DataState {
   // 股票数据
   stockDataCache: Map<string, StockData>;
@@ -73,11 +118,21 @@ interface DataState {
   
   // 系统状态
   systemStatus: SystemStatus | null;
+  dataServiceStatus: DataServiceStatus | null;
+  
+  // 监控数据
+  systemHealth: SystemHealth | null;
+  performanceMetrics: PerformanceMetrics | null;
+  
+  // 同步状态
+  activeSyncs: Map<string, SyncProgress>;
   
   // 加载状态
   loadingStockData: boolean;
   loadingModels: boolean;
   loadingSystemStatus: boolean;
+  loadingHealth: boolean;
+  loadingMetrics: boolean;
   
   // Actions
   setStockData: (stockCode: string, data: StockData) => void;
@@ -85,9 +140,16 @@ interface DataState {
   setModels: (models: Model[]) => void;
   setSelectedModel: (model: Model | null) => void;
   setSystemStatus: (status: SystemStatus) => void;
+  setDataServiceStatus: (status: DataServiceStatus) => void;
+  setSystemHealth: (health: SystemHealth) => void;
+  setPerformanceMetrics: (metrics: PerformanceMetrics) => void;
+  setSyncProgress: (syncId: string, progress: SyncProgress) => void;
+  removeSyncProgress: (syncId: string) => void;
   setLoadingStockData: (loading: boolean) => void;
   setLoadingModels: (loading: boolean) => void;
   setLoadingSystemStatus: (loading: boolean) => void;
+  setLoadingHealth: (loading: boolean) => void;
+  setLoadingMetrics: (loading: boolean) => void;
   clearStockDataCache: () => void;
 }
 
@@ -99,9 +161,15 @@ export const useDataStore = create<DataState>()(
       models: [],
       selectedModel: null,
       systemStatus: null,
+      dataServiceStatus: null,
+      systemHealth: null,
+      performanceMetrics: null,
+      activeSyncs: new Map(),
       loadingStockData: false,
       loadingModels: false,
       loadingSystemStatus: false,
+      loadingHealth: false,
+      loadingMetrics: false,
 
       // Actions
       setStockData: (stockCode, data) => set((state) => {
@@ -128,6 +196,32 @@ export const useDataStore = create<DataState>()(
         loadingSystemStatus: false,
       }, false, 'setSystemStatus'),
 
+      setDataServiceStatus: (dataServiceStatus) => set({
+        dataServiceStatus,
+      }, false, 'setDataServiceStatus'),
+
+      setSystemHealth: (systemHealth) => set({
+        systemHealth,
+        loadingHealth: false,
+      }, false, 'setSystemHealth'),
+
+      setPerformanceMetrics: (performanceMetrics) => set({
+        performanceMetrics,
+        loadingMetrics: false,
+      }, false, 'setPerformanceMetrics'),
+
+      setSyncProgress: (syncId, progress) => set((state) => {
+        const newSyncs = new Map(state.activeSyncs);
+        newSyncs.set(syncId, progress);
+        return { activeSyncs: newSyncs };
+      }, false, 'setSyncProgress'),
+
+      removeSyncProgress: (syncId) => set((state) => {
+        const newSyncs = new Map(state.activeSyncs);
+        newSyncs.delete(syncId);
+        return { activeSyncs: newSyncs };
+      }, false, 'removeSyncProgress'),
+
       setLoadingStockData: (loadingStockData) => set({
         loadingStockData,
       }, false, 'setLoadingStockData'),
@@ -139,6 +233,14 @@ export const useDataStore = create<DataState>()(
       setLoadingSystemStatus: (loadingSystemStatus) => set({
         loadingSystemStatus,
       }, false, 'setLoadingSystemStatus'),
+
+      setLoadingHealth: (loadingHealth) => set({
+        loadingHealth,
+      }, false, 'setLoadingHealth'),
+
+      setLoadingMetrics: (loadingMetrics) => set({
+        loadingMetrics,
+      }, false, 'setLoadingMetrics'),
 
       clearStockDataCache: () => set({
         stockDataCache: new Map(),
