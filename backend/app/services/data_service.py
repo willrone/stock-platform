@@ -277,6 +277,7 @@ class StockDataService:
             try:
                 if strategy == FallbackStrategy.LOCAL_DATA:
                     logger.info(f"尝试本地数据降级策略: {stock_code}")
+                    logger.debug(f"数据路径: {self.data_path}")
                     df = await self.load_from_local(stock_code, start_date, end_date)
                     if df is not None and not df.empty:
                         logger.info(f"本地数据降级成功: {stock_code}")
@@ -519,7 +520,7 @@ class StockDataService:
             if hasattr(self, 'http_pool') and self.http_pool:
                 async with self.http_pool.request(
                     'GET', 
-                    f"{self.remote_url}/api/stock/daily",
+                    f"{self.remote_url}/api/data/stock/{stock_code}/daily",
                     params=params
                 ) as response:
                     if response.status_code != 200:
@@ -533,7 +534,7 @@ class StockDataService:
                         limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
                     )
                 response = await self.client.get(
-                    f"{self.remote_url}/api/stock/daily",
+                    f"{self.remote_url}/api/data/stock/{stock_code}/daily",
                     params=params
                 )
                 
@@ -566,9 +567,10 @@ class StockDataService:
             return df
         
         except Exception as e:
-            logger.error(f"从远端获取数据失败 {stock_code}: {e}")
+            logger.warning(f"从远端获取数据失败 {stock_code}: {e}")
+            logger.info(f"远端API可能需要重启以加载新端点，直接使用降级策略")
             
-            # 尝试降级策略
+            # 直接尝试降级策略，不再重试远程请求
             fallback_data = await self._try_fallback_strategies(stock_code, start_date, end_date)
             if fallback_data is not None:
                 logger.info(f"降级策略成功获取数据: {stock_code}")
@@ -723,7 +725,6 @@ class StockDataService:
         end_date: datetime
     ) -> Optional[pd.DataFrame]:
         """从本地Parquet文件加载数据"""
-        return self.load_from_parquet(stock_code, start_date, end_date)
         try:
             years = list(range(start_date.year, end_date.year + 1))
             dfs = []
@@ -735,6 +736,7 @@ class StockDataService:
                     continue
                 
                 # 读取Parquet文件
+                import pyarrow.parquet as pq
                 table = pq.read_table(parquet_path)
                 year_df = table.to_pandas()
                 
@@ -752,12 +754,19 @@ class StockDataService:
                     dfs.append(year_df)
             
             if not dfs:
+                logger.debug(f"本地未找到数据: {stock_code}")
                 return None
             
             # 合并所有年份的数据
             df = pd.concat(dfs, ignore_index=True)
             df = df.sort_values('date')
             
+            logger.info(f"从本地加载数据成功: {stock_code}, {len(df)} 条记录")
+            return df
+            
+        except Exception as e:
+            logger.error(f"从本地加载数据失败: {stock_code}, {e}")
+            return None
             logger.info(f"从本地加载数据成功: {stock_code}, {len(df)} 条记录")
             return df
         

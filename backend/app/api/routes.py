@@ -752,13 +752,7 @@ async def get_data_statistics(parquet_manager: ParquetManager = Depends(get_parq
 
 @api_router.post("/data/sync", response_model=StandardResponse, summary="同步数据", description="从远端服务同步指定股票的数据")
 async def sync_data_from_remote(
-    stock_codes: List[str],
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    force_update: bool = False,
-    sync_mode: str = "incremental",
-    max_concurrent: int = 3,
-    retry_count: int = 3,
+    request: DataSyncRequest,
     sync_engine: 'DataSyncEngine' = Depends(get_data_sync_engine)
 ):
     """同步数据"""
@@ -767,13 +761,13 @@ async def sync_data_from_remote(
         
         # 构建批量同步请求
         sync_request = BatchSyncRequest(
-            stock_codes=stock_codes,
-            start_date=start_date,
-            end_date=end_date,
-            force_update=force_update,
-            sync_mode=SyncMode(sync_mode),
-            max_concurrent=max_concurrent,
-            retry_count=retry_count
+            stock_codes=request.stock_codes,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            force_update=request.force_update,
+            sync_mode=SyncMode(request.sync_mode or "incremental"),
+            max_concurrent=request.max_concurrent or 3,
+            retry_count=request.retry_count or 3
         )
         
         # 调用数据同步引擎

@@ -363,6 +363,98 @@ def manual_data_fetch():
         logger.error(f"启动手动数据获取失败: {e}")
         return jsonify({'error': f'服务器内部错误: {str(e)}'}), 500
 
+@data_bp.route('/stock/<ts_code>/daily', methods=['GET'])
+def get_stock_daily_data(ts_code):
+    """
+    获取股票日线数据
+    
+    Args:
+        ts_code: 股票代码
+        
+    Query Parameters:
+        start_date: 开始日期 (YYYY-MM-DD格式)
+        end_date: 结束日期 (YYYY-MM-DD格式)
+    
+    Returns:
+        {
+            "success": true,
+            "data": [
+                {
+                    "date": "2024-01-01",
+                    "open": 10.0,
+                    "high": 11.0,
+                    "low": 9.5,
+                    "close": 10.5,
+                    "volume": 1000000
+                }
+            ]
+        }
+    """
+    init_dao()
+    if not dao:
+        return jsonify({'success': False, 'error': '数据存储初始化失败'}), 500
+
+    try:
+        from flask import request
+        
+        # 获取查询参数
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            return jsonify({
+                'success': False, 
+                'error': '缺少必需参数: start_date, end_date'
+            }), 400
+        
+        # 转换日期格式 (YYYY-MM-DD -> YYYYMMDD)
+        try:
+            start_date_formatted = start_date.replace('-', '')
+            end_date_formatted = end_date.replace('-', '')
+        except Exception as e:
+            return jsonify({
+                'success': False, 
+                'error': f'日期格式错误，应为YYYY-MM-DD: {e}'
+            }), 400
+        
+        # 从Parquet文件获取数据
+        df = dao.get_stock_data(ts_code, start_date_formatted, end_date_formatted)
+        
+        if df is None or df.empty:
+            return jsonify({
+                'success': False,
+                'error': f'未找到股票 {ts_code} 在 {start_date} 至 {end_date} 期间的数据'
+            }), 404
+        
+        # 转换为API响应格式
+        data_list = []
+        for date, row in df.iterrows():
+            data_list.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'open': float(row['open']),
+                'high': float(row['high']),
+                'low': float(row['low']),
+                'close': float(row['close']),
+                'volume': int(row['volume'])
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': data_list,
+            'total_records': len(data_list),
+            'stock_code': ts_code,
+            'start_date': start_date,
+            'end_date': end_date
+        })
+        
+    except Exception as e:
+        logger.error(f"获取股票数据失败: {ts_code}, 错误: {e}")
+        return jsonify({
+            'success': False, 
+            'error': f'服务器内部错误: {str(e)}'
+        }), 500
+
+
 @data_bp.route('/manual_sync', methods=['POST'])
 def manual_sync():
     """手动触发数据同步（已废弃，Parquet存储无需同步）"""
