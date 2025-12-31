@@ -1,61 +1,33 @@
 """
 数据服务配置
+独立运行的数据服务，提供股票数据获取能力
 """
 import os
-import sys
 from typing import Optional
 from pathlib import Path
-
-
-def _get_tushare_token_from_backend():
-    """从backend配置中获取TUSHARE_TOKEN"""
-    try:
-        # 获取项目根目录
-        current_file = Path(__file__)
-        project_root = current_file.parent.parent.parent  # back_test_data_service -> back_test -> project_root
-
-        # 添加backend路径到Python路径
-        backend_config_path = project_root / "backend" / "app" / "config"
-        if backend_config_path.exists():
-            sys.path.insert(0, str(backend_config_path.parent.parent))
-
-            # 动态导入backend配置
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("backend_config", backend_config_path / "__init__.py")
-            if spec and spec.loader:
-                backend_config = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(backend_config)
-
-                # 获取TUSHARE_TOKEN
-                token = getattr(backend_config, 'TUSHARE_TOKEN', None)
-                if token:
-                    return token
-    except Exception as e:
-        pass  # 静默失败，使用默认值
-
-    return ''  # 返回空字符串作为默认值
 
 
 class Config:
     """数据服务配置管理"""
     
     # Tushare配置
-    TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN', _get_tushare_token_from_backend())
+    # 优先从环境变量获取，如果没有则使用默认token
+    TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN', '3bb09d7c81ac1f83a90e57b505626391739a93bd02c717bdcb987da4')
     
-    # MySQL配置
+    # MySQL配置（已废弃，使用Parquet存储）
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
     MYSQL_PORT = int(os.getenv('MYSQL_PORT', 3306))
     MYSQL_USER = os.getenv('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', '10161877')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', '')
     MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', 'stock_data')
     
-    # Redis配置
+    # Redis配置（已废弃，使用Parquet存储）
     REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
     REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
     REDIS_DB = int(os.getenv('REDIS_DB', 0))
     REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
     
-    # 缓存配置
+    # 缓存配置（已废弃）
     CACHE_EXPIRY_HOURS = int(os.getenv('CACHE_EXPIRY_HOURS', 24))
     CACHE_EXPIRY_SECONDS = CACHE_EXPIRY_HOURS * 3600
     

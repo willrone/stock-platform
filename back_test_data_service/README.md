@@ -1,14 +1,18 @@
-# Parquet股票数据服务
+# 股票数据服务
 
-独立的数据获取和存储服务，负责从Tushare获取股票数据并存储到Parquet文件中。
+**独立运行的数据服务，提供股票数据获取能力**
+
+这是一个完全独立的数据服务，负责从Tushare获取股票数据并存储到Parquet文件中。服务不依赖任何外部系统，可以独立部署和运行。
 
 ## 功能特性
 
-- 定期从Tushare获取股票数据
-- 存储到Parquet文件格式（高效的列式存储）
-- 支持增量更新和全量更新
-- 自动定时任务调度
-- 提供数据状态查询API
+- ✅ **独立运行**：不依赖backend或其他服务，可独立部署
+- ✅ **数据获取**：从Tushare API获取股票日线数据
+- ✅ **高效存储**：使用Parquet文件格式（列式存储，查询高效）
+- ✅ **增量更新**：支持增量更新和全量更新
+- ✅ **定时任务**：自动定时任务调度，定期更新数据
+- ✅ **RESTful API**：提供数据状态查询和数据获取API
+- ✅ **开箱即用**：已配置默认Tushare Token，可直接使用
 
 ## 项目结构
 
@@ -61,17 +65,22 @@ source venv/bin/activate
 python3 -c "from data_service.parquet_dao import create_dao; dao = create_dao(); print('✅ Parquet DAO创建成功')"
 ```
 
-### 3. 配置环境变量
+### 3. 配置（可选）
 
-创建 `.env` 文件或设置环境变量：
+服务已内置默认的Tushare Token，可以直接使用。如果需要自定义配置，可以通过环境变量设置：
 
 ```bash
-# Tushare配置（必需）
+# 方式1：使用环境变量（推荐）
 export TUSHARE_TOKEN="your_tushare_token"
+export PARQUET_DATA_DIR="/path/to/custom/parquet/dir"
 
-# Parquet存储配置（可选，默认使用 data/parquet/）
-# export PARQUET_DATA_DIR="/path/to/custom/parquet/dir"
+# 方式2：创建 .env 文件（需要安装python-dotenv）
+# 复制 .env.example 为 .env 并修改配置
+cp .env.example .env
+# 编辑 .env 文件
 ```
+
+**注意**：服务已内置默认Token，无需配置即可直接运行。
 
 ## 使用方法
 
@@ -224,17 +233,63 @@ tail -f logs/data_service.log
 2. 检查网络连接
 3. 检查API调用频率限制
 
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 2. 启动服务
+
+```bash
+# 启动数据获取服务（定时任务）
+python scripts/run_data_service.py
+
+# 或启动API服务（数据查询接口）
+python scripts/run_data_api.py
+
+# 或使用统一启动脚本
+./start.sh
+```
+
+### 3. 使用API
+
+```bash
+# 健康检查
+curl http://localhost:5002/api/data/health
+
+# 获取股票数据
+curl "http://localhost:5002/api/data/stock/000001.SZ/daily?start_date=2024-01-01&end_date=2024-12-31"
+
+# 获取数据状态
+curl http://localhost:5002/api/data/stock_data_status
+```
+
 ## 开发说明
 
-这是一个独立的Git仓库，可以单独开发和部署。
+这是一个完全独立的数据服务，可以单独开发和部署。
 
-### 初始化Git仓库
+### 独立运行特性
+
+- ✅ 不依赖backend服务
+- ✅ 不依赖MySQL/Redis（使用Parquet文件存储）
+- ✅ 内置默认配置，开箱即用
+- ✅ 支持环境变量配置，灵活部署
+
+### 初始化Git仓库（可选）
 
 ```bash
 cd back_test_data_service
 git init
 git add .
-git commit -m "Initial commit: 数据服务"
+git commit -m "Initial commit: 独立股票数据服务"
 ```
 
 ## 许可证
