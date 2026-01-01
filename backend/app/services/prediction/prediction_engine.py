@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from loguru import logger
 
-from ..feature_extractor import FeatureExtractor, FeatureConfig
+from .feature_extractor import FeatureExtractor, FeatureConfig
 from app.models.task_models import PredictionResult, RiskMetrics
 from app.core.error_handler import PredictionError, ErrorSeverity, ErrorContext, RecoveryAction
 

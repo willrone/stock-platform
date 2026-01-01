@@ -91,6 +91,7 @@ def setup_logging() -> None:
         retention="30 days",
         compression="zip",
         enqueue=True,  # 异步写入
+        colorize=False,  # 文件日志禁用颜色
     )
     
     # 错误日志文件
@@ -104,6 +105,7 @@ def setup_logging() -> None:
         enqueue=True,
         backtrace=True,
         diagnose=True,
+        colorize=False,  # 文件日志禁用颜色
     )
     
     # 性能日志文件
@@ -116,6 +118,7 @@ def setup_logging() -> None:
         compression="zip",
         filter=lambda record: record["extra"].get("log_type") == "performance",
         enqueue=True,
+        colorize=False,  # 文件日志禁用颜色
     )
     
     # 审计日志文件
@@ -128,6 +131,7 @@ def setup_logging() -> None:
         compression="zip",
         filter=lambda record: record["extra"].get("log_type") == "audit",
         enqueue=True,
+        colorize=False,  # 文件日志禁用颜色
     )
     
     # API访问日志文件
@@ -140,6 +144,7 @@ def setup_logging() -> None:
         compression="zip",
         filter=lambda record: record["extra"].get("log_type") == "access",
         enqueue=True,
+        colorize=False,  # 文件日志禁用颜色
     )
     
     # 数据同步日志文件
@@ -152,6 +157,7 @@ def setup_logging() -> None:
         compression="zip",
         filter=lambda record: record["extra"].get("log_type") == "data_sync",
         enqueue=True,
+        colorize=False,  # 文件日志禁用颜色
     )
     
     # 任务执行日志文件
@@ -164,6 +170,7 @@ def setup_logging() -> None:
         compression="zip",
         filter=lambda record: record["extra"].get("log_type") == "task",
         enqueue=True,
+        colorize=False,  # 文件日志禁用颜色
     )
 
 

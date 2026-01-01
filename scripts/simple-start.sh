@@ -163,7 +163,9 @@ start_backend() {
     source venv/bin/activate
     
     # 后台启动后端服务
-    nohup python run.py > ../data/logs/backend.log 2>&1 &
+    # 注意：不要重定向stdout，让loguru自己管理日志文件
+    # 如果需要查看实时日志，可以使用: tail -f ../data/logs/app.log
+    nohup python run.py > /dev/null 2>&1 &
     backend_pid=$!
     echo $backend_pid > ../data/backend.pid
     
