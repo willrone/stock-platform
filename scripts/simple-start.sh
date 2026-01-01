@@ -162,22 +162,53 @@ start_backend() {
     cd "$PROJECT_ROOT/backend"
     source venv/bin/activate
     
-    # 后台启动后端服务
-    # 注意：不要重定向stdout，让loguru自己管理日志文件
-    # 如果需要查看实时日志，可以使用: tail -f ../data/logs/app.log
-    nohup python run.py > /dev/null 2>&1 &
+    # 确保日志目录存在
+    mkdir -p ../data/logs
+    
+    # 后台启动后端服务，将启动错误捕获到backend.log
+    # 注意：启动阶段的错误（如导入错误、配置错误）会写入backend.log
+    # 运行时的日志由loguru管理，写入app.log
+    nohup python run.py > ../data/logs/backend.log 2>&1 &
     backend_pid=$!
     echo $backend_pid > ../data/backend.pid
     
-    # 等待服务启动
-    sleep 5
+    # 等待服务启动（增加到10秒，给服务更多启动时间）
+    log_info "等待服务启动..."
+    sleep 10
     
-    # 检查服务是否启动成功
-    if curl -f http://localhost:8000/api/v1/health &> /dev/null; then
+    # 检查进程是否还在运行
+    if ! ps -p $backend_pid > /dev/null 2>&1; then
+        log_error "后端进程已退出，请查看日志: data/logs/backend.log"
+        log_info "最后几行日志："
+        tail -20 ../data/logs/backend.log 2>/dev/null || echo "无法读取日志文件"
+        return 1
+    fi
+    
+    # 检查服务是否启动成功（尝试多次）
+    local max_attempts=3
+    local attempt=1
+    local health_check_passed=false
+    
+    while [ $attempt -le $max_attempts ]; do
+        if curl -f http://localhost:8000/api/v1/health &> /dev/null; then
+            health_check_passed=true
+            break
+        fi
+        log_info "健康检查失败，重试 $attempt/$max_attempts..."
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+    
+    if [ "$health_check_passed" = true ]; then
         log_success "后端服务启动成功 (PID: $backend_pid)"
         log_info "API文档: http://localhost:8000/api/v1/docs"
     else
-        log_error "后端服务启动失败，请查看日志: data/logs/backend.log"
+        log_error "后端服务启动失败，健康检查未通过"
+        log_error "请查看日志: data/logs/backend.log 和 data/logs/app.log"
+        log_info "最后几行backend.log："
+        tail -20 ../data/logs/backend.log 2>/dev/null || echo "无法读取backend.log"
+        log_info "最后几行app.log："
+        tail -20 ../data/logs/app.log 2>/dev/null || echo "无法读取app.log"
         return 1
     fi
 }

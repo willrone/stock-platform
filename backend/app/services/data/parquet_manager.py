@@ -313,7 +313,18 @@ class ParquetManager:
         try:
             all_dates = []
             
-            for stock_dir in self.base_path.iterdir():
+            # 确定搜索路径：检查是否有 daily 子目录
+            search_path = self.base_path
+            daily_dir = self.base_path / "daily"
+            if daily_dir.exists() and daily_dir.is_dir():
+                # 如果存在 daily 目录，则在 daily 目录下查找股票代码目录
+                search_path = daily_dir
+                self.logger.debug(f"在 daily 子目录下查找数据文件: {search_path}")
+            else:
+                # 否则直接在 base_path 下查找股票代码目录
+                self.logger.debug(f"在基础路径下查找数据文件: {search_path}")
+            
+            for stock_dir in search_path.iterdir():
                 if not stock_dir.is_dir():
                     continue
                 
@@ -327,6 +338,7 @@ class ParquetManager:
                 
                 stock_dates = []
                 
+                # 递归查找所有 parquet 文件
                 for file_path in stock_dir.rglob("*.parquet"):
                     try:
                         stat = file_path.stat()
@@ -556,7 +568,19 @@ class ParquetManager:
             stocks_by_size = []
             monthly_distribution = {}
             
-            for stock_dir in self.base_path.iterdir():
+            # 确定搜索路径：检查是否有 daily 子目录
+            search_path = self.base_path
+            daily_dir = self.base_path / "daily"
+            if daily_dir.exists() and daily_dir.is_dir():
+                # 如果存在 daily 目录，则在 daily 目录下查找股票代码目录
+                search_path = daily_dir
+                self.logger.debug(f"在 daily 子目录下查找数据文件: {search_path}")
+            else:
+                # 否则直接在 base_path 下查找股票代码目录
+                self.logger.debug(f"在基础路径下查找数据文件: {search_path}")
+            
+            # 遍历股票代码目录
+            for stock_dir in search_path.iterdir():
                 if not stock_dir.is_dir():
                     continue
                 
@@ -566,6 +590,7 @@ class ParquetManager:
                 stock_files = 0
                 stock_dates = []
                 
+                # 递归查找所有 parquet 文件
                 for file_path in stock_dir.rglob("*.parquet"):
                     try:
                         stat = file_path.stat()
@@ -610,14 +635,16 @@ class ParquetManager:
             # 获取最后同步时间（最新文件的修改时间）
             last_sync_time = None
             try:
+                # 使用 search_path 查找最新文件
                 latest_file = max(
-                    self.base_path.rglob("*.parquet"),
+                    search_path.rglob("*.parquet"),
                     key=lambda p: p.stat().st_mtime,
                     default=None
                 )
                 if latest_file:
                     last_sync_time = datetime.fromtimestamp(latest_file.stat().st_mtime)
-            except Exception:
+            except Exception as e:
+                self.logger.warning(f"获取最新文件时间失败: {e}")
                 pass
             
             return ComprehensiveStats(
@@ -817,11 +844,22 @@ class ParquetManager:
         try:
             all_files = []
             
+            # 确定搜索路径：检查是否有 daily 子目录
+            search_path = self.base_path
+            daily_dir = self.base_path / "daily"
+            if daily_dir.exists() and daily_dir.is_dir():
+                # 如果存在 daily 目录，则在 daily 目录下查找股票代码目录
+                search_path = daily_dir
+                self.logger.debug(f"在 daily 子目录下查找数据文件: {search_path}")
+            else:
+                # 否则直接在 base_path 下查找股票代码目录
+                self.logger.debug(f"在基础路径下查找数据文件: {search_path}")
+            
             # 确定搜索范围
             if criteria.stock_codes:
-                stock_dirs = [self.base_path / code for code in criteria.stock_codes if (self.base_path / code).exists()]
+                stock_dirs = [search_path / code for code in criteria.stock_codes if (search_path / code).exists()]
             else:
-                stock_dirs = [d for d in self.base_path.iterdir() if d.is_dir()]
+                stock_dirs = [d for d in search_path.iterdir() if d.is_dir()]
             
             for stock_dir in stock_dirs:
                 stock_code = stock_dir.name

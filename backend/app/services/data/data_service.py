@@ -225,10 +225,14 @@ class StockDataService:
         if success:
             self.consecutive_failures = 0
             if self.health_level != ServiceHealthLevel.HEALTHY:
-                logger.info("服务健康状态恢复正常")
+                logger.info(
+                    f"远端数据服务健康状态恢复正常 "
+                    f"(URL: {self.remote_url})"
+                )
                 self.health_level = ServiceHealthLevel.HEALTHY
         else:
             self.consecutive_failures += 1
+            old_level = self.health_level
             
             if self.consecutive_failures >= 10:
                 self.health_level = ServiceHealthLevel.CRITICAL
@@ -237,7 +241,13 @@ class StockDataService:
             elif self.consecutive_failures >= 2:
                 self.health_level = ServiceHealthLevel.DEGRADED
             
-            logger.warning(f"服务健康等级: {self.health_level.value}, 连续失败: {self.consecutive_failures}")
+            # 只在健康等级变化时记录警告，避免重复日志
+            if old_level != self.health_level:
+                logger.warning(
+                    f"远端数据服务健康等级降级: {old_level.value} -> {self.health_level.value}, "
+                    f"连续失败: {self.consecutive_failures}次 "
+                    f"(URL: {self.remote_url})"
+                )
     
     async def _execute_with_retry(self, func, *args, **kwargs):
         """带重试的执行函数"""
@@ -262,12 +272,22 @@ class StockDataService:
                 self.circuit_breaker.record_failure()
                 self._update_health_level(False)
                 
+                # 格式化异常信息，确保完整显示
+                error_msg = str(e) if str(e) else repr(e)
+                error_type = type(e).__name__
+                
                 if attempt < self.retry_config.max_retries:
                     delay = self.retry_config.get_delay(attempt)
-                    logger.warning(f"请求失败，{delay:.2f}秒后重试 (第{attempt + 1}次): {e}")
+                    logger.warning(
+                        f"请求失败，{delay:.2f}秒后重试 (第{attempt + 1}次): "
+                        f"[{error_type}] {error_msg}"
+                    )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(f"重试次数已用完，最终失败: {e}")
+                    logger.error(
+                        f"重试次数已用完，最终失败: [{error_type}] {error_msg}",
+                        exc_info=True  # 包含完整的堆栈跟踪
+                    )
         
         raise last_exception
     
@@ -397,10 +417,17 @@ class StockDataService:
         start_time = datetime.now()
         
         async def _check_health():
+            health_url = f"{self.remote_url}/api/data/health"
             # 使用连接池发送请求
             if hasattr(self, 'http_pool') and self.http_pool:
-                async with self.http_pool.request('GET', f"{self.remote_url}/api/data/health") as response:
-                    return response
+                try:
+                    async with self.http_pool.request('GET', health_url) as response:
+                        return response
+                except Exception as e:
+                    # 添加URL信息到异常
+                    raise ConnectionError(
+                        f"连接远端数据服务失败 (URL: {health_url}): {str(e)}"
+                    ) from e
             else:
                 # 后备方案：使用默认客户端
                 if not hasattr(self, 'client'):
@@ -408,8 +435,14 @@ class StockDataService:
                         timeout=httpx.Timeout(self.timeout),
                         limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
                     )
-                response = await self.client.get(f"{self.remote_url}/api/data/health")
-                return response
+                try:
+                    response = await self.client.get(health_url)
+                    return response
+                except Exception as e:
+                    # 添加URL信息到异常
+                    raise ConnectionError(
+                        f"连接远端数据服务失败 (URL: {health_url}): {str(e)}"
+                    ) from e
         
         try:
             response = await self._execute_with_retry(_check_health)
@@ -434,7 +467,13 @@ class StockDataService:
         
         except Exception as e:
             response_time = (datetime.now() - start_time).total_seconds() * 1000
-            logger.error(f"远端数据服务检查失败: {e}")
+            error_msg = str(e) if str(e) else repr(e)
+            error_type = type(e).__name__
+            logger.error(
+                f"远端数据服务检查失败 (URL: {self.remote_url}): "
+                f"[{error_type}] {error_msg}",
+                exc_info=True  # 包含完整的堆栈跟踪
+            )
             
             return DataServiceStatus(
                 service_url=self.remote_url,
