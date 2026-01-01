@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func
 from loguru import logger
 
-from backend.app.models.task_models import (
+from app.models.task_models import (
     Task, TaskType, TaskStatus, PredictionResult, BacktestResult, ModelInfo,
     PredictionTaskConfig, BacktestTaskConfig, TrainingTaskConfig
 )
-from backend.app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
-from backend.app.core.logging_config import AuditLogger
+from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
+from app.core.logging_config import AuditLogger
 
 
 class TaskRepository:

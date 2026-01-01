@@ -135,13 +135,22 @@ class ModelStorage:
                     context=ErrorContext(model_id=model_id)
                 )
             
+            # 清理model_id，移除不允许的文件名字符
+            import re
+            safe_model_id = re.sub(r'[<>:"/\\|?*]', '_', model_id)  # 替换不允许的字符为下划线
+            safe_model_id = re.sub(r'\s+', '_', safe_model_id)  # 替换空格为下划线
+            
             # 生成文件路径
-            model_file_path = self.models_dir / f"{model_id}.joblib"
-            metadata_file_path = self.metadata_dir / f"{model_id}.json"
+            model_file_path = self.models_dir / f"{safe_model_id}.joblib"
+            metadata_file_path = self.metadata_dir / f"{safe_model_id}.json"
+            
+            # 确保目录存在
+            model_file_path.parent.mkdir(parents=True, exist_ok=True)
+            metadata_file_path.parent.mkdir(parents=True, exist_ok=True)
             
             # 备份现有模型（如果存在）
             if overwrite and model_file_path.exists():
-                self._backup_model(model_id)
+                self._backup_model(safe_model_id)
             
             # 保存模型文件
             if JOBLIB_AVAILABLE:

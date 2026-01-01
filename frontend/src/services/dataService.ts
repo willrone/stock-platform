@@ -164,7 +164,15 @@ export class DataService {
     name: string;
     market: string;
   }>> {
-    return apiRequest.get('/stocks/search', { keyword });
+    const response = await apiRequest.get<{
+      stocks: Array<{
+        code: string;
+        name: string;
+        market: string;
+      }>;
+      total: number;
+    }>('/stocks/search', { keyword });
+    return response?.stocks ?? [];
   }
 
   /**
@@ -173,10 +181,57 @@ export class DataService {
   static async getPopularStocks(): Promise<Array<{
     code: string;
     name: string;
+    market?: string;
     change_percent: number;
     volume: number;
   }>> {
-    return apiRequest.get('/stocks/popular');
+    try {
+      console.log('[DataService] 开始调用 /stocks/popular API...');
+      const response = await apiRequest.get<{
+        stocks: Array<{
+          code: string;
+          name: string;
+          market?: string;
+          change_percent: number;
+          volume: number;
+        }>;
+        total: number;
+      }>('/stocks/popular');
+      
+      console.log('[DataService] API响应:', response);
+      console.log('[DataService] response类型:', typeof response);
+      console.log('[DataService] response是否为数组:', Array.isArray(response));
+      console.log('[DataService] response.stocks:', response?.stocks);
+      
+      if (!response) {
+        console.warn('[DataService] 响应为空');
+        return [];
+      }
+      
+      // 处理响应可能是数组的情况
+      if (Array.isArray(response)) {
+        console.log('[DataService] 响应是数组，直接返回');
+        return response;
+      }
+      
+      // 处理响应是对象的情况
+      if (response && typeof response === 'object' && 'stocks' in response) {
+        const stocks = response.stocks;
+        if (!stocks || !Array.isArray(stocks)) {
+          console.warn('[DataService] stocks字段不存在或不是数组:', stocks);
+          return [];
+        }
+        console.log(`[DataService] 成功获取 ${stocks.length} 只热门股票`);
+        return stocks;
+      }
+      
+      console.warn('[DataService] 响应格式不符合预期:', response);
+      return [];
+    } catch (error) {
+      console.error('[DataService] 获取热门股票列表失败:', error);
+      console.error('[DataService] 错误详情:', error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }
 
   /**
@@ -212,6 +267,33 @@ export class DataService {
    */
   static async getModelDetail(modelId: string): Promise<Model> {
     return apiRequest.get<Model>(`/models/${modelId}`);
+  }
+
+  /**
+   * 删除模型
+   */
+  static async deleteModel(modelId: string): Promise<void> {
+    return apiRequest.delete(`/models/${modelId}`);
+  }
+
+  /**
+   * 创建模型训练任务
+   */
+  static async createModel(request: {
+    model_name: string;
+    model_type?: string;
+    stock_codes: string[];
+    start_date: string;
+    end_date: string;
+    hyperparameters?: Record<string, any>;
+    description?: string;
+    parent_model_id?: string;
+  }): Promise<{
+    model_id: string;
+    model_name: string;
+    status: string;
+  }> {
+    return apiRequest.post('/models/train', request);
   }
 
   /**

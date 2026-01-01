@@ -138,7 +138,7 @@ def create_application() -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request, exc):
         """HTTP异常处理"""
-        from app.api.routes import StandardResponse
+        from app.api.v1.schemas import StandardResponse
         return JSONResponse(
             status_code=exc.status_code,
             content=StandardResponse(
@@ -155,14 +155,15 @@ def create_application() -> FastAPI:
         logger = logging.getLogger(__name__)
         logger.error(f"API异常: {exc}")
         
-        from app.api.routes import StandardResponse
+        from app.api.v1.schemas import StandardResponse
+        response = StandardResponse(
+            success=False,
+            message="服务器内部错误",
+            data=None
+        )
         return JSONResponse(
             status_code=500,
-            content=StandardResponse(
-                success=False,
-                message="服务器内部错误",
-                data=None
-            ).model_dump()
+            content=response.model_dump(mode='json')
         )
 
     return app

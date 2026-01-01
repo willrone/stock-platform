@@ -13,7 +13,7 @@ import asyncio
 from enum import Enum
 from loguru import logger
 
-from ..model_storage import ModelStorage, ModelMetadata, ModelStatus, ModelType
+from .model_storage import ModelStorage, ModelMetadata, ModelStatus, ModelType
 from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
 from app.core.logging_config import PerformanceLogger, AuditLogger
 

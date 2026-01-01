@@ -72,6 +72,12 @@ export default function TasksPage() {
   const [searchText, setSearchText] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    running: 0,
+    completed: 0,
+    failed: 0,
+  });
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   const { isOpen: isBatchDeleteOpen, onOpen: onBatchDeleteOpen, onClose: onBatchDeleteClose } = useDisclosure();
 
@@ -89,10 +95,45 @@ export default function TasksPage() {
     }
   };
 
+  // 加载任务统计信息
+  const loadStats = async () => {
+    try {
+      const statsData = await TaskService.getTaskStats();
+      setStats({
+        total: statsData.total,
+        running: statsData.running,
+        completed: statsData.completed,
+        failed: statsData.failed,
+      });
+    } catch (error) {
+      console.error('加载任务统计失败:', error);
+      // 如果API失败，使用本地计算作为后备
+      setStats({
+        total: tasks.length,
+        running: tasks.filter(t => t.status === 'running').length,
+        completed: tasks.filter(t => t.status === 'completed').length,
+        failed: tasks.filter(t => t.status === 'failed').length,
+      });
+    }
+  };
+
   // 初始化加载
   useEffect(() => {
     loadTasks();
+    loadStats();
   }, []);
+
+  // 当任务列表更新时，也更新统计（作为后备）
+  useEffect(() => {
+    if (tasks.length > 0 && stats.total === 0) {
+      setStats({
+        total: tasks.length,
+        running: tasks.filter(t => t.status === 'running').length,
+        completed: tasks.filter(t => t.status === 'completed').length,
+        failed: tasks.filter(t => t.status === 'failed').length,
+      });
+    }
+  }, [tasks]);
 
   // WebSocket实时更新
   useEffect(() => {
@@ -218,13 +259,6 @@ export default function TasksPage() {
     }
   };
 
-  // 计算统计数据
-  const stats = {
-    total: tasks.length,
-    running: tasks.filter(t => t.status === 'running').length,
-    completed: tasks.filter(t => t.status === 'completed').length,
-    failed: tasks.filter(t => t.status === 'failed').length,
-  };
 
   if (loading && tasks.length === 0) {
     return <LoadingSpinner text="加载任务列表..." />;

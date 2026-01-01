@@ -11,8 +11,8 @@ from pathlib import Path
 import joblib
 from loguru import logger
 
-from ..model_storage import ModelStorage, ModelMetadata, ModelType, ModelStatus
-from ..feature_extractor import FeatureExtractor, FeatureConfig
+from .model_storage import ModelStorage, ModelMetadata, ModelType, ModelStatus
+from ..prediction.feature_extractor import FeatureExtractor, FeatureConfig
 from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
 from app.core.logging_config import PerformanceLogger
 
@@ -214,8 +214,13 @@ class ModelTrainingService:
         try:
             self.training_stats["total_trainings"] += 1
             
+            # 清理模型名称，移除不允许的文件名字符
+            import re
+            safe_model_name = re.sub(r'[<>:"/\\|?*]', '_', model_name)  # 替换不允许的字符为下划线
+            safe_model_name = re.sub(r'\s+', '_', safe_model_name)  # 替换空格为下划线
+            
             # 生成模型ID
-            model_id = f"{model_name}_{model_type.value}_{training_start_time.strftime('%Y%m%d_%H%M%S')}"
+            model_id = f"{safe_model_name}_{model_type.value}_{training_start_time.strftime('%Y%m%d_%H%M%S')}"
             
             logger.info(f"开始训练模型: {model_id}")
             
@@ -400,17 +405,50 @@ class ModelTrainingService:
             # 计算基本指标
             mse = np.mean((y - y_pred) ** 2)
             mae = np.mean(np.abs(y - y_pred))
+            rmse = float(np.sqrt(mse))
             
             # 计算R²
             ss_res = np.sum((y - y_pred) ** 2)
             ss_tot = np.sum((y - np.mean(y)) ** 2)
             r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
             
+            # 对于回归模型，计算方向准确率（预测涨跌方向的准确率）
+            # 如果y是价格变化率或收益率
+            if len(y) > 1:
+                # 计算实际方向
+                y_direction = np.sign(np.diff(y.values) if hasattr(y, 'values') else np.diff(y))
+                # 计算预测方向
+                y_pred_direction = np.sign(np.diff(y_pred) if len(y_pred) > 1 else y_pred - np.mean(y_pred))
+                
+                # 对齐长度
+                min_len = min(len(y_direction), len(y_pred_direction))
+                if min_len > 0:
+                    direction_accuracy = np.mean(y_direction[:min_len] == y_pred_direction[:min_len])
+                else:
+                    direction_accuracy = 0.0
+            else:
+                direction_accuracy = 0.0
+            
+            # 对于准确率指标：
+            # 1. 优先使用方向准确率（更符合股票预测的实际需求）
+            # 2. 如果R²为正，也可以使用R²，但方向准确率更直观
+            # 3. 如果R²为负，说明模型比简单均值还差，设为0
+            if direction_accuracy > 0:
+                accuracy_metric = direction_accuracy
+            elif r2 > 0:
+                # R²为正时，可以转换为0-1范围（R²通常在0-1之间，但可能超过1）
+                accuracy_metric = min(1.0, max(0.0, r2))
+            else:
+                # R²为负或为0时，使用方向准确率（如果计算成功）或设为0
+                accuracy_metric = max(0.0, direction_accuracy)
+            
             metrics = {
                 'mse': float(mse),
                 'mae': float(mae),
                 'r2': float(r2),
-                'rmse': float(np.sqrt(mse))
+                'rmse': rmse,
+                'accuracy': float(accuracy_metric),  # 使用方向准确率或R²（取较大值，且R²负值设为0）
+                'direction_accuracy': float(direction_accuracy)  # 方向准确率
             }
             
             return metrics

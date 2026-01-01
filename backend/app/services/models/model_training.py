@@ -57,16 +57,38 @@ except ImportError:
     QLIB_AVAILABLE = False
 
 # 导入其他依赖
-from ..core.logging import logger as app_logger
-from ..models.database import DatabaseManager
-from .technical_indicators import TechnicalIndicatorCalculator
-from .data_service import StockDataService
-from .modern_models import TimesNet, PatchTST, Informer
-from .model_evaluation import ModelEvaluator, ModelVersionManager, BacktestMetrics
-from .advanced_training import AdvancedTrainingService, EnsembleConfig, OnlineLearningConfig, EnsembleMethod
+import logging
+from ..data.data_service import StockDataService
+try:
+    from .modern_models import TimesNet, PatchTST, Informer
+    MODERN_MODELS_AVAILABLE = True
+except ImportError:
+    MODERN_MODELS_AVAILABLE = False
+    TimesNet = None
+    PatchTST = None
+    Informer = None
 
-# 使用应用日志记录器
-logger = app_logger.bind(module="model_training")
+try:
+    from .model_evaluation import ModelEvaluator, ModelVersionManager, BacktestMetrics
+    MODEL_EVALUATION_AVAILABLE = True
+except ImportError:
+    MODEL_EVALUATION_AVAILABLE = False
+    ModelEvaluator = None
+    ModelVersionManager = None
+    BacktestMetrics = None
+
+try:
+    from .advanced_training import AdvancedTrainingService, EnsembleConfig, OnlineLearningConfig, EnsembleMethod
+    ADVANCED_TRAINING_AVAILABLE = True
+except ImportError:
+    ADVANCED_TRAINING_AVAILABLE = False
+    AdvancedTrainingService = None
+    EnsembleConfig = None
+    OnlineLearningConfig = None
+    EnsembleMethod = None
+
+# 使用标准日志记录器
+logger = logging.getLogger(__name__)
 
 
 class ModelType(Enum):
@@ -230,20 +252,25 @@ class ModelTrainingService:
         self.data_provider = None
         self.models_dir = Path("backend/data/models")
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.evaluator = ModelEvaluator()
-        self.version_manager = ModelVersionManager()
+        self.evaluator = ModelEvaluator() if ModelEvaluator is not None else None
+        self.version_manager = ModelVersionManager() if ModelVersionManager is not None else None
         self.advanced_training = None  # 高级训练服务
         
     async def initialize(self):
         """初始化服务"""
         data_service = StockDataService()
-        await data_service.initialize()
+        # StockDataService 不需要显式初始化，它在 __init__ 中已经初始化了
         
         self.data_provider = QlibDataProvider(data_service)
-        await self.data_provider.initialize_qlib()
+        # QlibDataProvider 的初始化在需要时进行，不需要提前初始化
         
         # 初始化高级训练服务
-        self.advanced_training = AdvancedTrainingService()
+        if ADVANCED_TRAINING_AVAILABLE and AdvancedTrainingService is not None:
+            self.advanced_training = AdvancedTrainingService()
+            if hasattr(self.advanced_training, 'initialize'):
+                await self.advanced_training.initialize()
+        
+        logger.info("模型训练服务初始化完成")
         await self.advanced_training.initialize()
         
         logger.info("模型训练服务初始化完成")
@@ -297,19 +324,38 @@ class ModelTrainingService:
         
         # 全面评估模型
         logger.info("开始模型评估...")
-        metrics = await self.evaluator.evaluate_model(
-            model, X, y, actual_prices, config.model_type.value
-        )
+        if self.evaluator is not None:
+            metrics = await self.evaluator.evaluate_model(
+                model, X, y, actual_prices, config.model_type.value
+            )
+        else:
+            # 如果评估器不可用，创建基本的评估指标
+            logger.warning("ModelEvaluator不可用，使用基本评估指标")
+            from dataclasses import dataclass
+            @dataclass
+            class BasicMetrics:
+                accuracy: float = 0.0
+                precision: float = 0.0
+                recall: float = 0.0
+                f1_score: float = 0.0
+                total_return: float = 0.0
+                sharpe_ratio: float = 0.0
+                max_drawdown: float = 0.0
+            metrics = BasicMetrics()
         
         # 保存模型版本
-        model_version = self.version_manager.save_model_version(
-            model_id=model_id,
-            model=model,
-            model_type=config.model_type.value,
-            parameters=config.__dict__,
-            metrics=metrics,
-            training_data=(X, y)
-        )
+        if self.version_manager is not None:
+            model_version = self.version_manager.save_model_version(
+                model_id=model_id,
+                model=model,
+                model_type=config.model_type.value,
+                parameters=config.__dict__,
+                metrics=metrics,
+                training_data=(X, y)
+            )
+        else:
+            logger.warning("ModelVersionManager不可用，跳过版本保存")
+            model_version = None
         
         logger.info(f"模型 {model_id} 训练完成")
         logger.info(f"评估结果 - 准确率: {metrics.accuracy:.4f}, 夏普比率: {metrics.sharpe_ratio:.4f}")

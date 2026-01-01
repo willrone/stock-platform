@@ -259,16 +259,18 @@ export default function CreateTaskPage() {
                 errorMessage={errors.model_id}
                 isRequired
               >
-                {models.map(model => (
-                  <SelectItem key={model.model_id}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{model.model_name}</span>
-                      <span className="text-xs text-default-500">
-                        准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {models
+                  .filter(model => model.status === 'ready' || model.status === 'active' || model.status === 'deployed')
+                  .map(model => (
+                    <SelectItem key={model.model_id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.model_name}</span>
+                        <span className="text-xs text-default-500">
+                          准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
               </Select>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

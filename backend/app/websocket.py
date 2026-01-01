@@ -129,6 +129,14 @@ class ConnectionManager:
         self.task_subscriptions[task_id].add(websocket)
         logger.info(f"客户端订阅任务 {task_id}")
     
+    def subscribe_to_model_training(self, websocket: WebSocket, model_id: str):
+        """订阅模型训练更新"""
+        # 使用任务订阅机制，但用model_id作为key
+        if model_id not in self.task_subscriptions:
+            self.task_subscriptions[model_id] = set()
+        self.task_subscriptions[model_id].add(websocket)
+        logger.info(f"客户端订阅模型训练 {model_id}")
+    
     def unsubscribe_from_task(self, websocket: WebSocket, task_id: str):
         """取消订阅任务更新"""
         if task_id in self.task_subscriptions:
@@ -243,6 +251,18 @@ async def handle_websocket_message(websocket: WebSocket, message: Dict[str, Any]
             "timestamp": datetime.now().isoformat()
         })
     
+    elif message_type == "subscribe:model_training":
+        # 订阅模型训练更新
+        model_id = message.get("model_id")
+        if model_id:
+            manager.subscribe_to_model_training(websocket, model_id)
+            await manager.send_personal_message(websocket, {
+                "type": "subscription",
+                "message": f"已订阅模型训练 {model_id}",
+                "model_id": model_id,
+                "timestamp": datetime.now().isoformat()
+            })
+    
     elif message_type == "ping":
         # 心跳检测
         await manager.send_personal_message(websocket, {
@@ -333,6 +353,45 @@ async def notify_data_updated(stock_code: str):
     })
 
 
+async def notify_model_training_progress(
+    model_id: str,
+    progress: float,
+    stage: str,
+    message: str = None,
+    metrics: Dict[str, Any] = None
+):
+    """通知模型训练进度"""
+    await manager.send_to_task_subscribers(model_id, {
+        "type": "model:training:progress",
+        "model_id": model_id,
+        "progress": progress,
+        "stage": stage,
+        "message": message,
+        "metrics": metrics or {},
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+async def notify_model_training_completed(model_id: str, metrics: Dict[str, Any]):
+    """通知模型训练完成"""
+    await manager.send_to_task_subscribers(model_id, {
+        "type": "model:training:completed",
+        "model_id": model_id,
+        "metrics": metrics,
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+async def notify_model_training_failed(model_id: str, error: str):
+    """通知模型训练失败"""
+    await manager.send_to_task_subscribers(model_id, {
+        "type": "model:training:failed",
+        "model_id": model_id,
+        "error": error,
+        "timestamp": datetime.now().isoformat()
+    })
+
+
 # 导出主要组件
 __all__ = [
     'manager',
@@ -343,5 +402,8 @@ __all__ = [
     'notify_task_failed',
     'notify_system_status',
     'notify_system_alert',
-    'notify_data_updated'
+    'notify_data_updated',
+    'notify_model_training_progress',
+    'notify_model_training_completed',
+    'notify_model_training_failed'
 ]

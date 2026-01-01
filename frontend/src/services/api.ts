@@ -111,20 +111,56 @@ export const api = createApiInstance();
 
 // 通用请求方法
 export const apiRequest = {
-  get: <T = any>(url: string, params?: any): Promise<T> =>
-    api.get<ApiResponse<T>>(url, { params }).then(res => res.data.data!),
+  get: <T = any>(url: string, params?: any): Promise<T> => {
+    return api.get<ApiResponse<T>>(url, { params }).then(res => {
+      console.log(`[API] GET ${url} 响应:`, res.data);
+      if (!res.data || !res.data.success) {
+        console.error(`[API] GET ${url} 失败:`, res.data?.message || '未知错误');
+        throw new Error(res.data?.message || '请求失败');
+      }
+      if (res.data.data === undefined || res.data.data === null) {
+        console.warn(`[API] GET ${url} 返回的data字段为空`);
+        return null as T;
+      }
+      return res.data.data;
+    });
+  },
     
-  post: <T = any>(url: string, data?: any): Promise<T> =>
-    api.post<ApiResponse<T>>(url, data).then(res => res.data.data!),
+  post: <T = any>(url: string, data?: any): Promise<T> => {
+    return api.post<ApiResponse<T>>(url, data).then(res => {
+      if (!res.data || !res.data.success) {
+        throw new Error(res.data?.message || '请求失败');
+      }
+      return res.data.data as T;
+    });
+  },
     
-  put: <T = any>(url: string, data?: any): Promise<T> =>
-    api.put<ApiResponse<T>>(url, data).then(res => res.data.data!),
+  put: <T = any>(url: string, data?: any): Promise<T> => {
+    return api.put<ApiResponse<T>>(url, data).then(res => {
+      if (!res.data || !res.data.success) {
+        throw new Error(res.data?.message || '请求失败');
+      }
+      return res.data.data as T;
+    });
+  },
     
-  delete: <T = any>(url: string): Promise<T> =>
-    api.delete<ApiResponse<T>>(url).then(res => res.data.data!),
+  delete: <T = any>(url: string): Promise<T> => {
+    return api.delete<ApiResponse<T>>(url).then(res => {
+      if (!res.data || !res.data.success) {
+        throw new Error(res.data?.message || '请求失败');
+      }
+      return res.data.data as T;
+    });
+  },
     
-  patch: <T = any>(url: string, data?: any): Promise<T> =>
-    api.patch<ApiResponse<T>>(url, data).then(res => res.data.data!),
+  patch: <T = any>(url: string, data?: any): Promise<T> => {
+    return api.patch<ApiResponse<T>>(url, data).then(res => {
+      if (!res.data || !res.data.success) {
+        throw new Error(res.data?.message || '请求失败');
+      }
+      return res.data.data as T;
+    });
+  },
 };
 
 // 文件上传

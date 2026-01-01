@@ -7,11 +7,10 @@ from enum import Enum
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from sqlalchemy import Column, Integer, String, DateTime, Float, Text, JSON, Boolean
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-Base = declarative_base()
+from app.core.database import Base
 
 
 class TaskType(Enum):
@@ -169,12 +168,16 @@ class ModelInfo(Base):
     model_name = Column(String(255), nullable=False)
     model_type = Column(String(100), nullable=False)
     version = Column(String(50), nullable=False)
+    parent_model_id = Column(String, nullable=True)  # 父模型ID，用于版本管理
     file_path = Column(String(500), nullable=False)
     training_data_start = Column(DateTime, nullable=True)
     training_data_end = Column(DateTime, nullable=True)
     performance_metrics = Column(JSON, nullable=True)
     hyperparameters = Column(JSON, nullable=True)
     status = Column(String(50), nullable=False, default="training")
+    training_progress = Column(Float, nullable=True, default=0.0)  # 训练进度 0-100
+    training_stage = Column(String(100), nullable=True)  # 当前训练阶段
+    evaluation_report = Column(JSON, nullable=True)  # 评估报告
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     deployed_at = Column(DateTime, nullable=True)
     
@@ -184,6 +187,7 @@ class ModelInfo(Base):
             "model_name": self.model_name,
             "model_type": self.model_type,
             "version": self.version,
+            "parent_model_id": self.parent_model_id,
             "file_path": self.file_path,
             "training_data_period": {
                 "start": self.training_data_start.isoformat() if self.training_data_start else None,
@@ -192,6 +196,9 @@ class ModelInfo(Base):
             "performance_metrics": self.performance_metrics,
             "hyperparameters": self.hyperparameters,
             "status": self.status,
+            "training_progress": self.training_progress,
+            "training_stage": self.training_stage,
+            "evaluation_report": self.evaluation_report,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "deployed_at": self.deployed_at.isoformat() if self.deployed_at else None
         }

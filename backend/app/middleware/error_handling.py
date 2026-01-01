@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import StandardResponse
+from app.api.v1.schemas import StandardResponse
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 success=False,
                 message=str(exc.detail),
                 data=None
-            ).dict()
+            ).model_dump(mode='json')
         )
     
     async def _handle_validation_error(
@@ -98,7 +98,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 success=False,
                 message=f"数据验证失败: {str(exc)}",
                 data=None
-            ).dict()
+            ).model_dump(mode='json')
         )
     
     async def _handle_connection_error(
@@ -123,7 +123,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 success=False,
                 message="服务暂时不可用，请稍后重试",
                 data=None
-            ).dict()
+            ).model_dump(mode='json')
         )
     
     async def _handle_timeout_error(
@@ -148,7 +148,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 success=False,
                 message="请求超时，请稍后重试",
                 data=None
-            ).dict()
+            ).model_dump(mode='json')
         )
     
     async def _handle_general_error(
@@ -169,13 +169,14 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
         self._record_error("internal_error")
         
         # 在生产环境中不暴露详细错误信息
+        response = StandardResponse(
+            success=False,
+            message="服务器内部错误",
+            data=None
+        )
         return JSONResponse(
             status_code=500,
-            content=StandardResponse(
-                success=False,
-                message="服务器内部错误",
-                data=None
-            ).dict()
+            content=response.model_dump(mode='json')
         )
     
     def _record_error(self, error_type: str):

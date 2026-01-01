@@ -94,7 +94,7 @@ class LoggingConfig:
         # 应用日志文件
         logger.add(
             self.log_dir / "app.log",
-            format=self.formatter.format,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
             level="INFO",
             rotation="100 MB",
             retention="30 days",
@@ -107,7 +107,7 @@ class LoggingConfig:
         # 错误日志文件
         logger.add(
             self.log_dir / "error.log",
-            format=self.formatter.format,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message} | {exception}",
             level="ERROR",
             rotation="50 MB",
             retention="90 days",
@@ -120,7 +120,7 @@ class LoggingConfig:
         # 任务日志文件
         logger.add(
             self.log_dir / "tasks.log",
-            format=self.formatter.format,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
             level="INFO",
             rotation="50 MB",
             retention="60 days",
@@ -132,7 +132,7 @@ class LoggingConfig:
         # 审计日志文件
         logger.add(
             self.log_dir / "audit.log",
-            format=self.formatter.format,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
             level="INFO",
             rotation="100 MB",
             retention="365 days",  # 审计日志保留一年
@@ -144,7 +144,7 @@ class LoggingConfig:
         # 性能日志文件
         logger.add(
             self.log_dir / "performance.log",
-            format=self.formatter.format,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
             level="INFO",
             rotation="50 MB",
             retention="30 days",

@@ -30,17 +30,29 @@ from .model_training_service import (
     TrainingResult
 )
 
-# 模型训练（深度学习）
-from .model_training import (
-    ModelTrainingService as DeepModelTrainingService,
-    QlibDataProvider,
-    LSTMModel,
-    TransformerModel,
-    PositionalEncoding,
-    ModelType,
-    TrainingConfig as DeepTrainingConfig,
-    ModelMetrics
-)
+# 模型训练（深度学习）- 可选导入
+try:
+    from .model_training import (
+        ModelTrainingService as DeepModelTrainingService,
+        QlibDataProvider,
+        LSTMModel,
+        TransformerModel,
+        PositionalEncoding,
+        ModelType,
+        TrainingConfig as DeepTrainingConfig,
+        ModelMetrics
+    )
+    DEEP_LEARNING_AVAILABLE = True
+except ImportError as e:
+    DEEP_LEARNING_AVAILABLE = False
+    DeepModelTrainingService = None
+    QlibDataProvider = None
+    LSTMModel = None
+    TransformerModel = None
+    PositionalEncoding = None
+    ModelType = None
+    DeepTrainingConfig = None
+    ModelMetrics = None
 
 # 模型存储
 from .model_storage import (
@@ -63,39 +75,73 @@ from .model_deployment_service import (
     DeploymentRecord
 )
 
-# 模型评估
-from .model_evaluation import (
-    ModelEvaluator,
-    ModelVersionManager as EvaluationVersionManager,
-    TimeSeriesValidator,
-    FinancialMetricsCalculator,
-    BacktestMetrics,
-    ModelVersion,
-    ModelStatus as EvaluationModelStatus
-)
+# 模型评估 - 可选导入
+try:
+    from .model_evaluation import (
+        ModelEvaluator,
+        ModelVersionManager as EvaluationVersionManager,
+        TimeSeriesValidator,
+        FinancialMetricsCalculator,
+        BacktestMetrics,
+        ModelVersion,
+        ModelStatus as EvaluationModelStatus
+    )
+    MODEL_EVALUATION_AVAILABLE = True
+except ImportError as e:
+    MODEL_EVALUATION_AVAILABLE = False
+    ModelEvaluator = None
+    EvaluationVersionManager = None
+    TimeSeriesValidator = None
+    FinancialMetricsCalculator = None
+    BacktestMetrics = None
+    ModelVersion = None
+    EvaluationModelStatus = None
 
-# 高级训练
-from .advanced_training import (
-    AdvancedTrainingService,
-    EnsembleModelManager,
-    OnlineLearningManager,
-    EnsembleMethod,
-    EnsembleConfig,
-    OnlineLearningConfig,
-    ModelType as AdvancedModelType
-)
+# 高级训练 - 可选导入
+try:
+    from .advanced_training import (
+        AdvancedTrainingService,
+        EnsembleModelManager,
+        OnlineLearningManager,
+        EnsembleMethod,
+        EnsembleConfig,
+        OnlineLearningConfig,
+        ModelType as AdvancedModelType
+    )
+    ADVANCED_TRAINING_AVAILABLE = True
+except ImportError as e:
+    ADVANCED_TRAINING_AVAILABLE = False
+    AdvancedTrainingService = None
+    EnsembleModelManager = None
+    OnlineLearningManager = None
+    EnsembleMethod = None
+    EnsembleConfig = None
+    OnlineLearningConfig = None
+    AdvancedModelType = None
 
-# 现代模型
-from .modern_models import (
-    TimesNet,
-    TimesBlock,
-    Inception_Block_V1,
-    PatchTST,
-    Informer,
-    InformerEncoderLayer,
-    ProbAttention,
-    PositionalEncoding as ModernPositionalEncoding
-)
+# 现代模型 - 可选导入
+try:
+    from .modern_models import (
+        TimesNet,
+        TimesBlock,
+        Inception_Block_V1,
+        PatchTST,
+        Informer,
+        InformerEncoderLayer,
+        ProbAttention,
+        PositionalEncoding as ModernPositionalEncoding
+    )
+    MODERN_MODELS_AVAILABLE = True
+except ImportError as e:
+    MODERN_MODELS_AVAILABLE = False
+    TimesNet = None
+    TimesBlock = None
+    Inception_Block_V1 = None
+    PatchTST = None
+    Informer = None
+    InformerEncoderLayer = None
+    ProbAttention = None
+    ModernPositionalEncoding = None
 
 __all__ = [
     # 模型训练服务

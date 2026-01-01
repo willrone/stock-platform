@@ -40,6 +40,7 @@ import {
   WifiOff,
   Home,
   Activity,
+  Brain,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore } from '../../stores/useAppStore';
@@ -60,6 +61,11 @@ const menuItems = [
     key: '/tasks',
     icon: Bot,
     label: '任务管理',
+  },
+  {
+    key: '/models',
+    icon: Brain,
+    label: '模型管理',
   },
   {
     key: '/data',

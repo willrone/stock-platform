@@ -20,10 +20,10 @@ import torch
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-from ..core.logging import logger
-from ..models.database import DatabaseManager
+from app.core.logging import logger as app_logger
+from app.core.database import SessionLocal
 
-logger = logger.bind(module="model_evaluation")
+logger = app_logger
 
 
 class ModelStatus(Enum):
