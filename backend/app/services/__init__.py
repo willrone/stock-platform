@@ -28,26 +28,10 @@ def __getattr__(name: str) -> Any:
     """动态导入以支持向后兼容性"""
     
     # 数据管理服务
-    if name == 'DataService':
-        _deprecated_import_warning('DataService', 'data.DataService')
-        from .data import DataService
-        return DataService
-    elif name == 'SimpleDataService':
+    if name == 'SimpleDataService':
         _deprecated_import_warning('SimpleDataService', 'data.SimpleDataService')
         from .data import SimpleDataService
         return SimpleDataService
-    elif name == 'DataSyncEngine':
-        _deprecated_import_warning('DataSyncEngine', 'data.DataSyncEngine')
-        from .data import DataSyncEngine
-        return DataSyncEngine
-    elif name == 'ParquetManager':
-        _deprecated_import_warning('ParquetManager', 'data.ParquetManager')
-        from .data import ParquetManager
-        return ParquetManager
-    elif name == 'DataLifecycleManager':
-        _deprecated_import_warning('DataLifecycleManager', 'data.DataLifecycleManager')
-        from .data import DataLifecycleManager
-        return DataLifecycleManager
     
     # 模型管理服务
     elif name == 'ModelTrainingService':
@@ -174,11 +158,7 @@ def get_modern_models():
 # 为了支持 from app.services import * 的用法，定义 __all__
 __all__ = [
     # 数据管理
-    'DataService',
     'SimpleDataService',
-    'DataSyncEngine',
-    'ParquetManager',
-    'DataLifecycleManager',
     
     # 模型管理
     'ModelTrainingService',
