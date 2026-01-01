@@ -11,7 +11,7 @@ from enum import Enum
 import time
 from loguru import logger
 
-from backend.app.core.error_handler import (
+from app.core.error_handler import (
     PredictionError, ErrorSeverity, ErrorContext, RecoveryAction
 )
 

@@ -12,9 +12,9 @@ import json
 from pathlib import Path
 from loguru import logger
 
-from backend.app.services.feature_extractor import FeatureExtractor, FeatureConfig
-from backend.app.models.task_models import PredictionResult, RiskMetrics
-from backend.app.core.error_handler import PredictionError, ErrorSeverity, ErrorContext, RecoveryAction
+from ..feature_extractor import FeatureExtractor, FeatureConfig
+from app.models.task_models import PredictionResult, RiskMetrics
+from app.core.error_handler import PredictionError, ErrorSeverity, ErrorContext, RecoveryAction
 
 
 @dataclass

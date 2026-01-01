@@ -13,9 +13,9 @@ import asyncio
 from enum import Enum
 from loguru import logger
 
-from backend.app.services.model_storage import ModelStorage, ModelMetadata, ModelStatus, ModelType
-from backend.app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
-from backend.app.core.logging_config import PerformanceLogger, AuditLogger
+from ..model_storage import ModelStorage, ModelMetadata, ModelStatus, ModelType
+from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
+from app.core.logging_config import PerformanceLogger, AuditLogger
 
 
 class DeploymentStatus(Enum):

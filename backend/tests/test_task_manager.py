@@ -12,7 +12,7 @@ import pytest
 
 from app.models.database import DatabaseManager, TaskStatus
 from app.models.stock_simple import StockData
-from app.services.task_manager import (
+from app.services.tasks import (
     TaskManager, TaskCreateRequest, TaskUpdateRequest, TaskQuery
 )
 

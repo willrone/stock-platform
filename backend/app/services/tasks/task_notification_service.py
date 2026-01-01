@@ -9,9 +9,9 @@ from datetime import datetime
 from dataclasses import dataclass, asdict
 from loguru import logger
 
-from backend.app.services.websocket_manager import websocket_manager, WebSocketMessage
-from backend.app.models.task_models import TaskStatus, TaskType
-from backend.app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
+from app.services.infrastructure import websocket_manager, WebSocketMessage
+from app.models.task_models import TaskStatus, TaskType
+from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
 
 
 @dataclass

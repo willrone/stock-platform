@@ -10,12 +10,12 @@ from dataclasses import dataclass
 import threading
 from loguru import logger
 
-from backend.app.models.task_models import TaskType, TaskStatus, PredictionTaskConfig, BacktestTaskConfig, TrainingTaskConfig
-from backend.app.services.task_queue import QueuedTask, TaskExecutionContext, TaskPriority
-from backend.app.services.prediction_engine import PredictionEngine, PredictionConfig
-from backend.app.repositories.task_repository import TaskRepository, PredictionResultRepository
-from backend.app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
-from backend.app.core.logging_config import PerformanceLogger, set_log_context
+from app.models.task_models import TaskType, TaskStatus, PredictionTaskConfig, BacktestTaskConfig, TrainingTaskConfig
+from .task_queue import QueuedTask, TaskExecutionContext, TaskPriority
+from app.services.prediction import PredictionEngine, PredictionConfig
+from app.repositories.task_repository import TaskRepository, PredictionResultRepository
+from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
+from app.core.logging_config import PerformanceLogger, set_log_context
 
 
 @dataclass

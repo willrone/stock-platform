@@ -11,10 +11,10 @@ from pathlib import Path
 import joblib
 from loguru import logger
 
-from backend.app.services.model_storage import ModelStorage, ModelMetadata, ModelType, ModelStatus
-from backend.app.services.feature_extractor import FeatureExtractor, FeatureConfig
-from backend.app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
-from backend.app.core.logging_config import PerformanceLogger
+from ..model_storage import ModelStorage, ModelMetadata, ModelType, ModelStatus
+from ..feature_extractor import FeatureExtractor, FeatureConfig
+from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
+from app.core.logging_config import PerformanceLogger
 
 
 @dataclass

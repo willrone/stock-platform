@@ -6,14 +6,15 @@
 import asyncio
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from collections import defaultdict, deque
 import logging
 from dataclasses import dataclass
 
-from app.services.data_service import StockDataService
-from app.services.technical_indicators import TechnicalIndicatorCalculator
-from app.services.parquet_manager import ParquetManager
+# 使用TYPE_CHECKING避免循环导入
+if TYPE_CHECKING:
+    from app.services.data import StockDataService, ParquetManager, DataSyncEngine
+    from app.services.prediction import TechnicalIndicatorCalculator
 
 
 @dataclass
@@ -53,9 +54,9 @@ class DataMonitoringService:
     
     def __init__(
         self,
-        data_service: StockDataService,
-        indicators_service: TechnicalIndicatorCalculator,
-        parquet_manager: ParquetManager,
+        data_service: 'StockDataService',
+        indicators_service: 'TechnicalIndicatorCalculator',
+        parquet_manager: 'ParquetManager',
         sync_engine: Optional['DataSyncEngine'] = None
     ):
         self.data_service = data_service

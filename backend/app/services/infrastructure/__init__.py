@@ -24,7 +24,8 @@ from .cache_service import (
     CachePolicy,
     CacheEntry,
     CacheStats,
-    cached  # 装饰器函数
+    cached,  # 装饰器函数
+    cache_manager  # 全局缓存管理器实例
 )
 
 # 连接池
@@ -34,7 +35,8 @@ from .connection_pool import (
     DatabaseConnectionPool,
     ConnectionStatus,
     ConnectionStats,
-    PoolConfig
+    PoolConfig,
+    connection_pool_manager  # 全局连接池管理器实例
 )
 
 # 监控服务
@@ -76,6 +78,7 @@ __all__ = [
     'CacheEntry',
     'CacheStats',
     'cached',
+    'cache_manager',  # 全局缓存管理器实例
     
     # 连接池
     'ConnectionPoolManager',
@@ -84,6 +87,7 @@ __all__ = [
     'ConnectionStatus',
     'ConnectionStats',
     'PoolConfig',
+    'connection_pool_manager',  # 全局连接池管理器实例
     
     # 监控服务
     'DataMonitoringService',

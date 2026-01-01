@@ -21,8 +21,12 @@ from .data_lifecycle import DataLifecycleManager
 from .parquet_manager import ParquetManager
 from .stream_processor import StreamProcessor
 
+# 为了向后兼容，提供别名
+DataService = StockDataService
+
 __all__ = [
     'StockDataService',
+    'DataService',  # 别名
     'SimpleStockDataService', 
     'DataSyncEngine',
     'DataValidator',

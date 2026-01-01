@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 import talib
 from loguru import logger
-from backend.app.core.error_handler import DataError, ErrorSeverity, ErrorContext
+from app.core.error_handler import DataError, ErrorSeverity, ErrorContext
 
 
 @dataclass

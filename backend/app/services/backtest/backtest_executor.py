@@ -9,12 +9,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
 
-from backend.app.services.backtest_engine import (
+from ..backtest_engine import (
     BaseStrategy, StrategyFactory, PortfolioManager, BacktestConfig,
     TradingSignal, Trade, Position
 )
-from backend.app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
-from backend.app.models.task_models import BacktestResult
+from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
+from app.models.task_models import BacktestResult
 
 
 class DataLoader:

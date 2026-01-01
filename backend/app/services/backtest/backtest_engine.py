@@ -12,8 +12,8 @@ from enum import Enum
 import talib
 from loguru import logger
 
-from backend.app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
-from backend.app.models.task_models import BacktestResult
+from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
+from app.models.task_models import BacktestResult
 
 
 class SignalType(Enum):

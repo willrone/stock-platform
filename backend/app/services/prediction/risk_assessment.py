@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from scipy import stats
 from loguru import logger
 
-from backend.app.models.task_models import RiskMetrics
-from backend.app.core.error_handler import PredictionError, ErrorSeverity, ErrorContext
+from app.models.task_models import RiskMetrics
+from app.core.error_handler import PredictionError, ErrorSeverity, ErrorContext
 
 
 @dataclass

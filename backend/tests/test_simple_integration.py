@@ -13,11 +13,11 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
-from app.services.data_service import StockDataService
-from app.services.parquet_manager import ParquetManager
-from app.services.monitoring_service import DataMonitoringService
-from app.services.data_validator import DataValidator
-from app.services.cache_service import cache_manager
+from app.services.data import StockDataService
+from app.services.data import ParquetManager
+from app.services.infrastructure import DataMonitoringService
+from app.services.data import DataValidator
+from app.services.infrastructure import cache_manager
 
 
 class TestSimpleIntegration:
@@ -34,7 +34,7 @@ class TestSimpleIntegration:
         self.data_validator = DataValidator()
         
         # 创建技术指标计算器（监控服务需要）
-        from app.services.technical_indicators import TechnicalIndicatorCalculator
+        from app.services.prediction import TechnicalIndicatorCalculator
         self.indicators_service = TechnicalIndicatorCalculator()
         
         # 创建监控服务

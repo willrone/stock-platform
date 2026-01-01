@@ -14,9 +14,9 @@ from queue import PriorityQueue, Empty
 import threading
 from loguru import logger
 
-from backend.app.models.task_models import Task, TaskType, TaskStatus
-from backend.app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
-from backend.app.core.logging_config import PerformanceLogger
+from app.models.task_models import Task, TaskType, TaskStatus
+from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
+from app.core.logging_config import PerformanceLogger
 
 
 class TaskPriority(Enum):

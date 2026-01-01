@@ -4,7 +4,7 @@
 
 import tempfile
 from datetime import datetime
-from app.services.data_service_simple import SimpleStockDataService
+from app.services.data import SimpleStockDataService
 
 # 创建临时目录和服务
 with tempfile.TemporaryDirectory() as temp_dir:

@@ -20,8 +20,8 @@ except ImportError:
 
 from loguru import logger
 
-from backend.app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
-from backend.app.core.logging_config import AuditLogger
+from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
+from app.core.logging_config import AuditLogger
 
 
 class ModelStatus(Enum):
