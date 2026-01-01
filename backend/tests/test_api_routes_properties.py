@@ -12,8 +12,8 @@ from hypothesis.strategies import composite
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.data_service import StockDataService
-from app.services.technical_indicators import TechnicalIndicatorCalculator
+from app.services.data import DataService as StockDataService
+from app.services.prediction import TechnicalIndicatorCalculator
 from app.models.stock import StockData, DataServiceStatus
 
 

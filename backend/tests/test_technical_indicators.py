@@ -9,12 +9,12 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.models.stock_simple import StockData
-from app.services.technical_indicators import (
+from app.services.prediction import (
     TechnicalIndicatorCalculator,
     BatchIndicatorRequest,
     TechnicalIndicatorResult
 )
-from app.services.data_service_simple import SimpleStockDataService
+from app.services.data import SimpleDataService as SimpleStockDataService
 
 
 class TestTechnicalIndicatorCalculator:

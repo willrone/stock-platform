@@ -12,7 +12,7 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
 from app.models.database import DatabaseManager, TaskStatus
-from app.services.task_manager import TaskManager, TaskCreateRequest, TaskUpdateRequest, TaskQuery
+from app.services.tasks import TaskManager, TaskCreateRequest, TaskUpdateRequest, TaskQuery
 
 
 @composite

@@ -288,13 +288,13 @@ backend/logs/
 frontend/logs/
 
 # 数据文件
-data/
+/data/
 backend/data/
 !backend/data/.gitkeep
-!data/.gitkeep
+!/data/.gitkeep
 
 # 模型文件
-models/
+/models/
 *.pkl
 *.joblib
 *.h5
@@ -440,3 +440,35 @@ debug_output/
 custom_ignore/
 private/
 personal/
+
+# ================================
+# 服务重构相关
+# ================================
+# Python编译缓存（服务模块）
+backend/app/services/**/__pycache__/
+backend/app/services/**/*.pyc
+backend/app/services/**/*.pyo
+
+# 服务模块测试缓存
+backend/tests/__pycache__/
+backend/tests/*.pyc
+
+# 迁移脚本生成的备份文件
+*.migration_backup
+migrate_imports_backup/
+
+# 服务重构临时文件
+services_refactor_temp/
+refactor_backup/
+
+# 模块导入测试文件
+import_test_*.py
+module_test_*.py
+
+# 服务依赖分析文件
+dependency_analysis.json
+service_mapping.json
+
+# 重构日志文件
+refactor.log
+migration.log

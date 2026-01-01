@@ -13,16 +13,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
-from app.services.data_service import (
-    StockDataService, 
+from app.services.data import (
+    DataService as StockDataService, 
     RetryStrategy, 
     FallbackStrategy, 
     ServiceHealthLevel,
     RetryConfig,
     CircuitBreaker
 )
-from app.services.data_validator import DataValidator, ValidationLevel, ValidationRule
-from app.services.enhanced_logger import EnhancedLogger, LogLevel, LogCategory
+from app.services.data import DataValidator, ValidationLevel, ValidationRule
+from app.services.infrastructure import EnhancedLogger, LogLevel, LogCategory
 from app.models.stock import StockData
 
 

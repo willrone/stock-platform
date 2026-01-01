@@ -22,9 +22,9 @@ from app.core.container import (
     get_data_sync_engine,
     get_monitoring_service
 )
-from app.services.data_service import StockDataService
-from app.services.technical_indicators import TechnicalIndicatorCalculator
-from app.services.parquet_manager import ParquetManager
+from app.services.data import DataService as StockDataService
+from app.services.prediction import TechnicalIndicatorCalculator
+from app.services.data import ParquetManager
 from app.models.stock import DataSyncRequest
 
 logger = logging.getLogger(__name__)

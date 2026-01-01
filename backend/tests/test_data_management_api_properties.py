@@ -14,8 +14,8 @@ from hypothesis.strategies import composite
 from fastapi.testclient import TestClient
 
 from app.main import create_application
-from app.services.parquet_manager import ParquetManager
-from app.services.data_sync_engine import DataSyncEngine
+from app.services.data import ParquetManager
+from app.services.data import DataSyncEngine
 from app.models.file_management import FileFilters, IntegrityStatus
 from app.models.sync_models import BatchSyncRequest, SyncMode
 

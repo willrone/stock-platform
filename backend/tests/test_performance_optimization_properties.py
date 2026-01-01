@@ -15,9 +15,9 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 from pathlib import Path
 
-from app.services.cache_service import LRUCache, CacheManager, cache_manager
-from app.services.stream_processor import StreamProcessor, ChunkedDataReader, MemoryMonitor
-from app.services.connection_pool import (
+from app.services.infrastructure import LRUCache, CacheManager, cache_manager
+from app.services.data import StreamProcessor, ChunkedDataReader, MemoryMonitor
+from app.services.infrastructure import (
     HTTPConnectionPool, DatabaseConnectionPool, ConnectionPoolManager,
     PoolConfig, connection_pool_manager
 )

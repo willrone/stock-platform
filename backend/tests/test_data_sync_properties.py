@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
-from app.services.data_sync_engine import DataSyncEngine, SyncProgressTracker
-from app.services.data_service import StockDataService
-from app.services.parquet_manager import ParquetManager
+from app.services.data import DataSyncEngine, SyncProgressTracker
+from app.services.data import DataService as StockDataService
+from app.services.data import ParquetManager
 from app.models.stock_simple import StockData
 from app.models.sync_models import (
     BatchSyncRequest, SyncOptions, SyncMode, SyncStatus

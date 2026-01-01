@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
-from app.services.monitoring_service import DataMonitoringService, ServiceHealthStatus, PerformanceMetrics, ErrorStatistics
-from app.services.data_service import StockDataService
-from app.services.technical_indicators import TechnicalIndicatorCalculator
-from app.services.parquet_manager import ParquetManager
-from app.services.data_sync_engine import DataSyncEngine
+from app.services.infrastructure import DataMonitoringService, ServiceHealthStatus, PerformanceMetrics, ErrorStatistics
+from app.services.data import DataService as StockDataService
+from app.services.prediction import TechnicalIndicatorCalculator
+from app.services.data import ParquetManager
+from app.services.data import DataSyncEngine
 
 
 @composite

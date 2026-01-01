@@ -9,9 +9,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 from unittest.mock import Mock, AsyncMock, patch
 
-from app.services.model_training import (
-    ModelTrainingService, 
-    TrainingConfig, 
+from app.services.models import (
+    DeepModelTrainingService as ModelTrainingService, 
+    DeepTrainingConfig as TrainingConfig, 
     ModelType, 
     QlibDataProvider,
     ModelMetrics
@@ -175,7 +175,7 @@ class TestModelTrainingService:
     @patch('torch.cuda.get_device_name')
     def test_get_device_rocm(self, mock_get_device_name, mock_cuda_available):
         """测试ROCm设备检测"""
-        from app.services.model_training import get_device
+        from app.services.models import get_device
         
         mock_cuda_available.return_value = True
         mock_get_device_name.return_value = "AMD Radeon RX 7900 XTX"
@@ -189,7 +189,7 @@ class TestModelTrainingService:
     @patch('torch.cuda.get_device_name')
     def test_get_device_nvidia(self, mock_get_device_name, mock_cuda_available):
         """测试NVIDIA GPU设备检测"""
-        from app.services.model_training import get_device
+        from app.services.models import get_device
         
         mock_cuda_available.return_value = True
         mock_get_device_name.return_value = "NVIDIA GeForce RTX 4090"

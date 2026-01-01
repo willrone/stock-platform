@@ -7,9 +7,9 @@ from typing import Optional
 import asyncio
 from contextlib import asynccontextmanager
 
-from app.services.data_service import StockDataService
-from app.services.technical_indicators import TechnicalIndicatorCalculator
-from app.services.parquet_manager import ParquetManager
+from app.services.data import DataService as StockDataService
+from app.services.prediction import TechnicalIndicatorCalculator
+from app.services.data import ParquetManager
 from app.core.config import settings
 
 
@@ -35,8 +35,8 @@ class ServiceContainer:
         self._parquet_manager = ParquetManager(settings.PARQUET_DATA_PATH)
         
         # 延迟导入避免循环依赖
-        from app.services.data_sync_engine import DataSyncEngine
-        from app.services.monitoring_service import DataMonitoringService
+        from app.services.data import DataSyncEngine
+        from app.services.infrastructure import DataMonitoringService
         
         # 初始化复合服务
         self._data_sync_engine = DataSyncEngine(

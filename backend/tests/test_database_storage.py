@@ -12,8 +12,8 @@ import pytest
 
 from app.models.database import DatabaseManager, Task, TaskResult, ModelMetadata, SystemConfig, TaskStatus
 from app.models.stock_simple import StockData
-from app.services.parquet_manager import ParquetManager
-from app.services.data_lifecycle import DataLifecycleManager, RetentionPolicy
+from app.services.data import ParquetManager
+from app.services.data import DataLifecycleManager, RetentionPolicy
 
 
 class TestDatabaseManager:
