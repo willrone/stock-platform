@@ -6,10 +6,7 @@ from datetime import datetime
 import logging
 from app.core.container import (
     get_data_service, 
-    get_indicators_service, 
-    get_parquet_manager,
-    get_data_sync_engine,
-    get_monitoring_service
+    get_indicators_service
 )
 from app.core.database import SessionLocal
 from app.repositories.task_repository import TaskRepository, PredictionResultRepository, ModelInfoRepository

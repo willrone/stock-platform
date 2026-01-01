@@ -58,7 +58,7 @@ except ImportError:
 
 # 导入其他依赖
 import logging
-from ..data.data_service import StockDataService
+from ..data.simple_data_service import SimpleDataService
 try:
     from .modern_models import TimesNet, PatchTST, Informer
     MODERN_MODELS_AVAILABLE = True
@@ -150,7 +150,7 @@ class ModelMetrics:
 class QlibDataProvider:
     """Qlib数据提供器，集成本地Parquet数据"""
     
-    def __init__(self, data_service: StockDataService):
+    def __init__(self, data_service: SimpleDataService):
         self.data_service = data_service
         self.indicator_calculator = TechnicalIndicatorCalculator()
         
@@ -186,13 +186,25 @@ class QlibDataProvider:
         for stock_code in stock_codes:
             try:
                 # 获取基础价格数据
-                stock_data = await self.data_service.get_stock_data(
+                stock_data_list = await self.data_service.get_stock_data(
                     stock_code, start_date, end_date
                 )
                 
-                if stock_data.empty:
+                if not stock_data_list or len(stock_data_list) == 0:
                     logger.warning(f"股票 {stock_code} 无数据")
                     continue
+                
+                # 转换为DataFrame格式
+                import pandas as pd
+                stock_data = pd.DataFrame([{
+                    'date': item.date,
+                    'open': item.open,
+                    'high': item.high,
+                    'low': item.low,
+                    'close': item.close,
+                    'volume': item.volume
+                } for item in stock_data_list])
+                stock_data = stock_data.set_index('date')
                 
                 # 计算技术指标
                 indicators = await self.indicator_calculator.calculate_all_indicators(
@@ -258,8 +270,8 @@ class ModelTrainingService:
         
     async def initialize(self):
         """初始化服务"""
-        data_service = StockDataService()
-        # StockDataService 不需要显式初始化，它在 __init__ 中已经初始化了
+        from ..data.simple_data_service import SimpleDataService
+        data_service = SimpleDataService()
         
         self.data_provider = QlibDataProvider(data_service)
         # QlibDataProvider 的初始化在需要时进行，不需要提前初始化

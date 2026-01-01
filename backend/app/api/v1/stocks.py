@@ -9,10 +9,8 @@ import logging
 
 from app.api.v1.schemas import StandardResponse
 from app.core.container import get_data_service, get_indicators_service
-from app.services.data import DataService as StockDataService
+from app.services.data import SimpleDataService
 from app.services.prediction import TechnicalIndicatorCalculator
-from app.core.config import settings
-from app.services.data import ParquetManager
 
 router = APIRouter(prefix="/stocks", tags=["股票数据"])
 logger = logging.getLogger(__name__)
@@ -28,7 +26,7 @@ async def get_stock_data(
     stock_code: str,
     start_date: datetime,
     end_date: datetime,
-    data_service: StockDataService = Depends(get_data_service)
+    data_service: SimpleDataService = Depends(get_data_service)
 ):
     """
     获取股票历史数据
@@ -84,7 +82,7 @@ async def get_technical_indicators(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     indicators: Optional[str] = Query(default="MA5,MA10,MA20,RSI,MACD", description="指标列表，逗号分隔"),
-    data_service: StockDataService = Depends(get_data_service),
+    data_service: SimpleDataService = Depends(get_data_service),
     indicators_service: TechnicalIndicatorCalculator = Depends(get_indicators_service)
 ):
     """获取技术指标"""
@@ -150,28 +148,15 @@ async def get_technical_indicators(
 @router.get("/popular", response_model=StandardResponse)
 async def get_popular_stocks(
     limit: int = 20,
-    data_service: StockDataService = Depends(get_data_service)
+    data_service: SimpleDataService = Depends(get_data_service)
 ):
     """获取热门股票列表"""
     try:
         # 从远端数据服务获取股票列表
         stocks = await data_service.get_remote_stock_list()
         
-        if not stocks or len(stocks) == 0:
-            # 如果远端服务不可用，尝试从本地数据文件获取
-            try:
-                parquet_manager = ParquetManager(settings.PARQUET_DATA_PATH)
-                stats = parquet_manager.get_comprehensive_stats()
-                stocks = []
-                if hasattr(stats, 'stocks_by_size') and stats.stocks_by_size:
-                    for stock_code, _ in stats.stocks_by_size[:limit]:
-                        stocks.append({
-                            "ts_code": stock_code,
-                            "name": stock_code
-                        })
-            except Exception as e:
-                logger.warning(f"无法从本地数据获取股票列表: {e}")
-                stocks = []
+        if not stocks:
+            stocks = []
         
         # 转换为前端期望的格式
         popular_stocks = []
@@ -207,7 +192,7 @@ async def get_popular_stocks(
 async def search_stocks(
     keyword: str = Query(..., description="搜索关键词（股票代码或名称）"),
     limit: int = 50,
-    data_service: StockDataService = Depends(get_data_service)
+    data_service: SimpleDataService = Depends(get_data_service)
 ):
     """搜索股票"""
     try:

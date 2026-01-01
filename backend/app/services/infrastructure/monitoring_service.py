@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 # 使用TYPE_CHECKING避免循环导入
 if TYPE_CHECKING:
-    from app.services.data import StockDataService, ParquetManager, DataSyncEngine
+    from app.services.data import SimpleDataService, ParquetManager
     from app.services.prediction import TechnicalIndicatorCalculator
 
 
@@ -54,15 +54,13 @@ class DataMonitoringService:
     
     def __init__(
         self,
-        data_service: 'StockDataService',
+        data_service: 'SimpleDataService',
         indicators_service: 'TechnicalIndicatorCalculator',
-        parquet_manager: 'ParquetManager',
-        sync_engine: Optional['DataSyncEngine'] = None
+        parquet_manager: 'ParquetManager'
     ):
         self.data_service = data_service
         self.indicators_service = indicators_service
         self.parquet_manager = parquet_manager
-        self.sync_engine = sync_engine
         self.logger = logging.getLogger(__name__)
         
         # 性能监控数据
@@ -158,10 +156,6 @@ class DataMonitoringService:
                 if stats is None:
                     is_healthy = False
                     error_message = "存储统计获取失败"
-            elif service_name == "sync_engine" and self.sync_engine:
-                # 检查同步引擎
-                history = self.sync_engine.get_sync_history(1)
-                # 同步引擎健康检查通过（能获取历史记录即可）
             else:
                 raise ValueError(f"未知服务: {service_name}")
                 
