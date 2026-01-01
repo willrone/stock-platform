@@ -282,39 +282,16 @@ class ModelEvaluator:
     
     def _load_stock_data(self, stock_code: str, start_date, end_date) -> pd.DataFrame:
         """加载股票数据"""
-        stock_data_dir = self.data_dir / "daily" / stock_code
+        # 使用统一的数据加载器
+        from app.services.data.stock_data_loader import StockDataLoader
+        loader = StockDataLoader(data_root=str(self.data_dir))
         
-        if not stock_data_dir.exists():
-            return pd.DataFrame()
+        # 转换日期格式
+        start = pd.Timestamp(start_date) if not isinstance(start_date, datetime) else start_date
+        end = pd.Timestamp(end_date) if not isinstance(end_date, datetime) else end_date
         
-        # 加载数据文件
-        data_files = list(stock_data_dir.glob("*.parquet"))
-        if not data_files:
-            return pd.DataFrame()
-        
-        # 合并数据
-        all_data = []
-        for file_path in data_files:
-            try:
-                df = pd.read_parquet(file_path)
-                if 'date' in df.columns:
-                    df = df.set_index('date')
-                all_data.append(df)
-            except Exception as e:
-                logger.warning(f"加载数据文件失败: {file_path}, 错误: {e}")
-                continue
-        
-        if not all_data:
-            return pd.DataFrame()
-        
-        data = pd.concat(all_data, axis=0)
-        data = data.sort_index()
-        data = data[~data.index.duplicated(keep='first')]
-        
-        # 过滤日期范围
-        data = data[(data.index >= pd.Timestamp(start_date)) & (data.index <= pd.Timestamp(end_date))]
-        
-        return data
+        # 加载数据
+        return loader.load_stock_data(stock_code, start_date=start, end_date=end)
     
     def _evaluate_performance(self, model: Any, test_data: pd.DataFrame, 
                             metadata: ModelMetadata) -> Dict[str, float]:

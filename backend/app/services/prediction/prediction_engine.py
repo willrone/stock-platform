@@ -349,35 +349,22 @@ class PredictionEngine:
                         days_back: int = 252) -> pd.DataFrame:
         """加载股票历史数据"""
         try:
-            # 构建数据文件路径
-            data_path = self.data_dir / "daily" / stock_code
+            # 使用统一的数据加载器
+            from app.services.data.stock_data_loader import StockDataLoader
+            loader = StockDataLoader(data_root=str(self.data_dir))
             
-            if not data_path.exists():
-                raise PredictionError(
-                    message=f"股票数据目录不存在: {data_path}",
-                    severity=ErrorSeverity.HIGH,
-                    context=ErrorContext(stock_code=stock_code)
-                )
+            # 计算开始日期（确保有足够的历史数据）
+            start_date = None  # 不限制开始日期，让加载器返回所有数据
             
-            # 加载最近的数据文件
-            data_files = list(data_path.glob("*.parquet"))
-            if not data_files:
+            # 加载数据
+            data = loader.load_stock_data(stock_code, start_date=start_date, end_date=end_date)
+            
+            if data.empty:
                 raise PredictionError(
                     message=f"未找到股票数据文件: {stock_code}",
                     severity=ErrorSeverity.HIGH,
                     context=ErrorContext(stock_code=stock_code)
                 )
-            
-            # 加载最新的数据文件
-            latest_file = max(data_files, key=lambda x: x.stem)
-            data = pd.read_parquet(latest_file)
-            
-            # 确保数据有正确的列名
-            if 'date' in data.columns:
-                data = data.set_index('date')
-            
-            # 过滤到指定日期
-            data = data[data.index <= end_date]
             
             # 获取最近的交易日数据
             data = data.tail(days_back)

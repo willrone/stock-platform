@@ -38,8 +38,57 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
   const equityChartInstance = useRef<echarts.ECharts | null>(null);
   const drawdownChartInstance = useRef<echarts.ECharts | null>(null);
 
+  // 处理回测数据（优先使用真实数据，否则生成模拟数据）
+  const processBacktestData = () => {
+    // 如果提供了真实回测数据，使用真实数据
+    if (backtestData && backtestData.portfolio && backtestData.risk_metrics) {
+      const portfolio = backtestData.portfolio;
+      const riskMetrics = backtestData.risk_metrics;
+      const tradingStats = backtestData.trading_stats || {};
+      const tradeHistory = backtestData.trade_history || [];
+      
+      // 从真实数据构建图表数据
+      const equityCurve = backtestData.equity_curve || [];
+      const drawdownCurve = backtestData.drawdown_curve || [];
+      const dates = backtestData.dates || [];
+      
+      // 转换交易记录格式
+      const trades: TradeRecord[] = tradeHistory.map((trade: any) => ({
+        date: trade.date || trade.trade_date,
+        action: trade.action || (trade.side === 'buy' ? 'buy' : 'sell'),
+        price: trade.price || trade.execution_price || 0,
+        quantity: trade.quantity || trade.shares || 0,
+        pnl: trade.pnl || trade.profit_loss || 0,
+      }));
+      
+      const metrics: BacktestMetrics = {
+        total_return: (portfolio.total_return || 0) * 100,
+        sharpe_ratio: riskMetrics.sharpe_ratio || 0,
+        max_drawdown: (riskMetrics.max_drawdown || 0) * 100,
+        win_rate: (tradingStats.win_rate || 0) * 100,
+        total_trades: tradingStats.total_trades || 0,
+        profit_factor: tradingStats.profit_factor || 0,
+      };
+      
+      return {
+        dates: dates.length > 0 ? dates : equityCurve.map((_: any, i: number) => {
+          const date = new Date();
+          date.setDate(date.getDate() - (equityCurve.length - i));
+          return date.toISOString().split('T')[0];
+        }),
+        equityCurve: equityCurve.length > 0 ? equityCurve : [portfolio.initial_cash || 100000],
+        drawdownCurve: drawdownCurve.length > 0 ? drawdownCurve : [0],
+        trades: trades.slice(-10), // 最近10笔交易
+        metrics
+      };
+    }
+    
+    // 否则生成模拟回测数据
+    return generateMockBacktestData();
+  };
+
   // 生成模拟回测数据
-  const generateBacktestData = () => {
+  const generateMockBacktestData = () => {
     const days = 252; // 一年交易日
     const initialCapital = 100000;
     const equityCurve = [initialCapital];
@@ -151,7 +200,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
   };
 
   useEffect(() => {
-    const data = generateBacktestData();
+    const data = processBacktestData();
     
     // 权益曲线图表
     if (equityChartRef.current) {
@@ -332,9 +381,9 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         drawdownChartInstance.current.dispose();
       }
     };
-  }, [stockCode]);
+  }, [stockCode, backtestData]);
 
-  const data = generateBacktestData();
+  const data = processBacktestData();
 
   if (!backtestData && !data) {
     return (

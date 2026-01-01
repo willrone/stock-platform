@@ -17,6 +17,9 @@ numpy>=1.26.0
 # HTTP 客户端
 httpx>=0.27.0
 
+# SFTP 客户端
+paramiko>=3.4.0
+
 # 配置和环境
 pydantic>=2.8.0
 pydantic-settings>=2.4.0

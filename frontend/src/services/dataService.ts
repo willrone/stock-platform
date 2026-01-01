@@ -425,6 +425,28 @@ export class DataService {
   }
 
   /**
+   * 获取本地股票列表
+   */
+  static async getLocalStockList(): Promise<{
+    stocks: Array<{
+      ts_code: string;
+      name?: string;
+      data_range?: {
+        start_date: string;
+        end_date: string;
+        total_days: number;
+      };
+      file_count?: number;
+      total_size?: number;
+      record_count?: number;
+    }>;
+    stock_codes: string[];
+    total_stocks: number;
+  }> {
+    return apiRequest.get('/data/local/stocks');
+  }
+
+  /**
    * 删除数据文件
    */
   static async deleteDataFiles(filePaths: string[]): Promise<{
@@ -590,5 +612,22 @@ export class DataService {
     detection_time: string;
   }> {
     return apiRequest.get('/monitoring/anomalies');
+  }
+
+  /**
+   * 同步远端数据（通过SFTP）
+   */
+  static async syncRemoteData(stockCodes?: string[]): Promise<{
+    success: boolean;
+    total_files: number;
+    synced_files: number;
+    failed_files: string[];
+    total_size: number;
+    total_size_mb: number;
+    message: string;
+  }> {
+    return apiRequest.post('/data/sync/remote', {
+      stock_codes: stockCodes || null,
+    });
   }
 }

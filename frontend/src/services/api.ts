@@ -22,7 +22,7 @@ export interface ApiResponse<T = any> {
 const createApiInstance = (): AxiosInstance => {
   const instance = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
-    timeout: 30000,
+    timeout: 300000, // 增加到5分钟，用于长时间操作如数据同步
     headers: {
       'Content-Type': 'application/json',
     },

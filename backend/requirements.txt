@@ -17,7 +17,10 @@ polars==0.19.19
 scipy>=1.11.0  # 科学计算库，用于统计分析和风险计算
 
 # 量化金融和机器学习
-# qlib>=0.0.2.dev20  # 暂时注释掉，因为Python 3.13兼容性问题
+# Qlib需要从GitHub安装（Python 3.13兼容）:
+# pip install git+https://github.com/microsoft/qlib.git
+# 注意：这会安装pyqlib包（Microsoft Qlib量化投资平台）
+pyqlib>=0.9.8.dev18  # Microsoft Qlib量化投资平台，从GitHub安装
 vectorbt>=0.26.0
 # ta-lib==0.4.28  # 暂时注释掉，因为编译问题，使用pandas-ta替代
 pandas-ta>=0.4.0  # 技术分析库，纯Python实现，无需编译
@@ -33,6 +36,9 @@ xgboost==2.0.2
 # HTTP 客户端
 httpx==0.25.2
 aiohttp==3.9.1
+
+# SFTP 客户端
+paramiko==3.4.0
 
 # 配置和环境
 pydantic==2.5.0

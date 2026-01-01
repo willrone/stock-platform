@@ -8,6 +8,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from app.services.data import SimpleDataService
+from app.services.data.sftp_sync_service import SFTPSyncService
 from app.services.prediction import TechnicalIndicatorCalculator
 
 
@@ -17,6 +18,7 @@ class ServiceContainer:
     def __init__(self):
         self._data_service: Optional[SimpleDataService] = None
         self._indicators_service: Optional[TechnicalIndicatorCalculator] = None
+        self._sftp_sync_service: Optional[SFTPSyncService] = None
         self._initialized = False
     
     async def initialize(self):
@@ -27,6 +29,7 @@ class ServiceContainer:
         # 初始化基础服务 - 使用简化的数据服务
         self._data_service = SimpleDataService()
         self._indicators_service = TechnicalIndicatorCalculator()
+        self._sftp_sync_service = SFTPSyncService()
         
         self._initialized = True
     
@@ -50,6 +53,13 @@ class ServiceContainer:
         if not self._initialized:
             raise RuntimeError("服务容器未初始化")
         return self._indicators_service
+    
+    @property
+    def sftp_sync_service(self) -> SFTPSyncService:
+        """获取SFTP同步服务"""
+        if not self._initialized:
+            raise RuntimeError("服务容器未初始化")
+        return self._sftp_sync_service
 
 
 # 全局服务容器实例
@@ -94,3 +104,9 @@ async def get_indicators_service() -> TechnicalIndicatorCalculator:
     """获取技术指标服务依赖"""
     container = await get_container()
     return container.indicators_service
+
+
+async def get_sftp_sync_service() -> SFTPSyncService:
+    """获取SFTP同步服务依赖"""
+    container = await get_container()
+    return container.sftp_sync_service

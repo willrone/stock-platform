@@ -5,17 +5,15 @@
 """
 
 import traceback
-import logging
 from typing import Any, Dict
 from datetime import datetime
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from loguru import logger
 
 from app.api.v1.schemas import StandardResponse
-
-logger = logging.getLogger(__name__)
 
 
 class ErrorHandlingMiddleware(BaseHTTPMiddleware):
@@ -212,6 +210,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             "user_agent": request.headers.get("user-agent", "unknown"),
             "start_time": start_time.isoformat()
         }
+        
+        # 对于同步请求，特别记录
+        if "/sync/remote" in str(request.url):
+            print(f"[REQUEST] {request.method} {request.url} - 开始处理")
+            logger.info(f"[SYNC REQUEST] 请求开始: {request_info}")
         
         logger.info(f"请求开始: {request_info}")
         

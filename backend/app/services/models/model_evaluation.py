@@ -83,6 +83,21 @@ class ModelVersion:
         result['created_at'] = self.created_at.isoformat()
         result['status'] = self.status.value
         result['metrics'] = self.metrics.to_dict()
+        
+        # 递归转换parameters中的枚举类型
+        def convert_enums(obj):
+            if isinstance(obj, dict):
+                return {k: convert_enums(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_enums(item) for item in obj]
+            elif hasattr(obj, 'value'):  # 枚举类型
+                return obj.value
+            else:
+                return obj
+        
+        if 'parameters' in result:
+            result['parameters'] = convert_enums(result['parameters'])
+        
         return result
 
 
@@ -263,10 +278,13 @@ class ModelEvaluator:
                 # PyTorch模型
                 model.eval()
                 with torch.no_grad():
+                    # 获取模型所在的设备
+                    device = next(model.parameters()).device
+                    
                     if isinstance(X_test, np.ndarray):
-                        X_test_tensor = torch.FloatTensor(X_test)
+                        X_test_tensor = torch.FloatTensor(X_test).to(device)
                     else:
-                        X_test_tensor = X_test
+                        X_test_tensor = X_test.to(device) if hasattr(X_test, 'to') else X_test
                     
                     outputs = model(X_test_tensor)
                     predictions = torch.argmax(outputs, dim=1).cpu().numpy()
@@ -356,14 +374,41 @@ class ModelVersionManager:
     def _load_versions(self) -> Dict[str, List[Dict]]:
         """加载版本信息"""
         if self.versions_file.exists():
-            with open(self.versions_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                with open(self.versions_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"版本文件格式错误，将备份并重新创建: {e}")
+                # 备份损坏的文件
+                backup_file = self.versions_file.with_suffix('.json.bak')
+                try:
+                    import shutil
+                    shutil.copy2(self.versions_file, backup_file)
+                    logger.info(f"已备份损坏的版本文件到: {backup_file}")
+                except Exception as backup_error:
+                    logger.error(f"备份文件失败: {backup_error}")
+                # 返回空字典，让系统重新创建
+                return {}
         return {}
     
     def _save_versions(self, versions: Dict[str, List[Dict]]):
         """保存版本信息"""
+        # 递归转换不可序列化的对象（如枚举）
+        def convert_to_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: convert_to_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_serializable(item) for item in obj]
+            elif hasattr(obj, 'value'):  # 枚举类型
+                return obj.value
+            elif hasattr(obj, '__dict__'):  # 其他对象
+                return str(obj)
+            else:
+                return obj
+        
+        serializable_versions = convert_to_serializable(versions)
         with open(self.versions_file, 'w', encoding='utf-8') as f:
-            json.dump(versions, f, indent=2, ensure_ascii=False)
+            json.dump(serializable_versions, f, indent=2, ensure_ascii=False)
     
     def _generate_data_hash(self, X: np.ndarray, y: np.ndarray) -> str:
         """生成训练数据的哈希值"""

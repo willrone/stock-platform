@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
 import { Card, CardBody, Button, ButtonGroup, Spinner } from '@heroui/react';
 import { Calendar, TrendingUp, BarChart3 } from 'lucide-react';
+import { DataService } from '@/services/dataService';
 
 interface TradingViewChartProps {
   stockCode: string;
@@ -37,54 +38,118 @@ export default function TradingViewChart({ stockCode, height = 400 }: TradingVie
 
   // 获取股票数据
   const fetchStockData = async () => {
+    if (!stockCode) {
+      setPriceData([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      // 这里应该调用实际的API获取股票数据
-      // 暂时使用模拟数据
-      const mockData: PriceData[] = generateMockData(stockCode, timeframe);
-      setPriceData(mockData);
+      // 获取完整的数据范围：从2020年1月1日到现在
+      const endDate = new Date();
+      const startDate = new Date('2020-01-01');
+      
+      // 调用真实API获取数据
+      const response = await DataService.getStockData(
+        stockCode,
+        startDate.toISOString().split('T')[0],
+        endDate.toISOString().split('T')[0]
+      );
+      
+      // 转换数据格式
+      // DataService.getStockData返回的格式: { stock_code, data: { stock_code, start_date, end_date, data_points, data: [...] }, last_updated }
+      // 所以实际数据在 response.data.data 中
+      const apiData = response.data;
+      const dataArray = (apiData?.data && Array.isArray(apiData.data)) 
+        ? apiData.data 
+        : (Array.isArray(apiData) ? apiData : []);
+      
+      if (dataArray.length > 0) {
+        let formattedData: PriceData[] = dataArray.map((item: any) => ({
+          time: item.date ? item.date.split('T')[0] : item.date, // 只取日期部分
+          open: Number(item.open) || 0,
+          high: Number(item.high) || 0,
+          low: Number(item.low) || 0,
+          close: Number(item.close) || 0,
+          volume: Number(item.volume) || 0,
+        })).filter((item: PriceData) => item.time); // 过滤掉无效数据
+        
+        // 根据timeframe进行数据采样
+        if (timeframe === '1W' && formattedData.length > 0) {
+          // 周线：每周取最后一个交易日的数据
+          const weeklyData: PriceData[] = [];
+          let currentWeek = '';
+          let lastItem: PriceData | null = null;
+          
+          for (const item of formattedData) {
+            const date = new Date(item.time);
+            const weekKey = `${date.getFullYear()}-W${getWeekNumber(date)}`;
+            
+            if (weekKey !== currentWeek) {
+              if (currentWeek && lastItem) {
+                // 保存上一周的最后一条数据
+                weeklyData.push(lastItem);
+              }
+              currentWeek = weekKey;
+            }
+            lastItem = item;
+          }
+          // 添加最后一周的数据
+          if (lastItem) {
+            weeklyData.push(lastItem);
+          }
+          formattedData = weeklyData;
+        } else if (timeframe === '1M' && formattedData.length > 0) {
+          // 月线：每月取最后一个交易日的数据
+          const monthlyData: PriceData[] = [];
+          let currentMonth = '';
+          let lastItem: PriceData | null = null;
+          
+          for (const item of formattedData) {
+            const date = new Date(item.time);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            
+            if (monthKey !== currentMonth) {
+              if (currentMonth && lastItem) {
+                // 保存上一月的最后一条数据
+                monthlyData.push(lastItem);
+              }
+              currentMonth = monthKey;
+            }
+            lastItem = item;
+          }
+          // 添加最后一月的数据
+          if (lastItem) {
+            monthlyData.push(lastItem);
+          }
+          formattedData = monthlyData;
+        }
+        
+        // 按时间排序（确保数据按时间顺序）
+        formattedData.sort((a, b) => a.time.localeCompare(b.time));
+        
+        console.log(`成功加载 ${formattedData.length} 条${timeframe === '1D' ? '日' : timeframe === '1W' ? '周' : '月'}线数据，时间范围: ${formattedData[0]?.time} 至 ${formattedData[formattedData.length - 1]?.time}`);
+        setPriceData(formattedData);
+      } else {
+        console.warn('未获取到股票数据，返回空数据');
+        setPriceData([]);
+      }
     } catch (error) {
       console.error('获取股票数据失败:', error);
+      setPriceData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // 生成模拟数据
-  const generateMockData = (code: string, tf: string): PriceData[] => {
-    const data: PriceData[] = [];
-    const basePrice = 100 + Math.random() * 50;
-    const days = tf === '1D' ? 30 : tf === '1W' ? 52 : 12;
-    
-    for (let i = 0; i < days; i++) {
-      const date = new Date();
-      if (tf === '1D') {
-        date.setDate(date.getDate() - (days - i));
-      } else if (tf === '1W') {
-        date.setDate(date.getDate() - (days - i) * 7);
-      } else {
-        date.setMonth(date.getMonth() - (days - i));
-      }
-      
-      const prevClose = i === 0 ? basePrice : data[i - 1].close;
-      const change = (Math.random() - 0.5) * 0.1;
-      const open = prevClose * (1 + change * 0.5);
-      const close = open * (1 + change);
-      const high = Math.max(open, close) * (1 + Math.random() * 0.05);
-      const low = Math.min(open, close) * (1 - Math.random() * 0.05);
-      const volume = Math.floor(Math.random() * 1000000) + 100000;
-      
-      data.push({
-        time: date.toISOString().split('T')[0],
-        open: Number(open.toFixed(2)),
-        high: Number(high.toFixed(2)),
-        low: Number(low.toFixed(2)),
-        close: Number(close.toFixed(2)),
-        volume,
-      });
-    }
-    
-    return data;
+  // 获取ISO周数
+  const getWeekNumber = (date: Date): number => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
   };
 
   // 初始化图表

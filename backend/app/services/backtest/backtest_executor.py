@@ -27,51 +27,19 @@ class DataLoader:
                        end_date: datetime) -> pd.DataFrame:
         """加载股票历史数据"""
         try:
-            # 构建数据文件路径
-            stock_data_dir = self.data_dir / "daily" / stock_code
+            # 使用统一的数据加载器
+            from app.services.data.stock_data_loader import StockDataLoader
+            loader = StockDataLoader(data_root=str(self.data_dir))
             
-            if not stock_data_dir.exists():
-                raise TaskError(
-                    message=f"股票数据目录不存在: {stock_data_dir}",
-                    severity=ErrorSeverity.HIGH,
-                    context=ErrorContext(stock_code=stock_code)
-                )
+            # 加载数据
+            data = loader.load_stock_data(stock_code, start_date=start_date, end_date=end_date)
             
-            # 查找相关的数据文件
-            data_files = list(stock_data_dir.glob("*.parquet"))
-            if not data_files:
+            if data.empty:
                 raise TaskError(
                     message=f"未找到股票数据文件: {stock_code}",
                     severity=ErrorSeverity.HIGH,
                     context=ErrorContext(stock_code=stock_code)
                 )
-            
-            # 加载所有相关文件并合并
-            all_data = []
-            for file_path in data_files:
-                try:
-                    df = pd.read_parquet(file_path)
-                    if 'date' in df.columns:
-                        df = df.set_index('date')
-                    all_data.append(df)
-                except Exception as e:
-                    logger.warning(f"加载数据文件失败: {file_path}, 错误: {e}")
-                    continue
-            
-            if not all_data:
-                raise TaskError(
-                    message=f"无法加载任何数据文件: {stock_code}",
-                    severity=ErrorSeverity.HIGH,
-                    context=ErrorContext(stock_code=stock_code)
-                )
-            
-            # 合并数据
-            data = pd.concat(all_data, axis=0)
-            data = data.sort_index()
-            data = data[~data.index.duplicated(keep='first')]  # 去重
-            
-            # 过滤日期范围
-            data = data[(data.index >= start_date) & (data.index <= end_date)]
             
             if len(data) == 0:
                 raise TaskError(

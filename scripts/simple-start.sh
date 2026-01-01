@@ -104,6 +104,12 @@ install_minimal_deps() {
     # 使用最小化依赖文件
     pip install -r requirements-minimal.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
     
+    # 确保paramiko已安装（用于SFTP同步功能）
+    if ! python -c "import paramiko" 2>/dev/null; then
+        log_info "安装paramiko（SFTP客户端）..."
+        pip install paramiko>=3.4.0 -i https://pypi.tuna.tsinghua.edu.cn/simple/
+    fi
+    
     log_success "Python依赖安装完成"
 }
 
@@ -155,9 +161,57 @@ create_dirs() {
     log_success "目录创建完成"
 }
 
+# 停止已存在的后端服务
+stop_existing_backend() {
+    log_info "检查并停止已存在的后端服务..."
+    
+    cd "$PROJECT_ROOT"
+    
+    # 方法1: 通过PID文件停止
+    if [ -f "data/backend.pid" ]; then
+        backend_pid=$(cat data/backend.pid)
+        if kill -0 $backend_pid 2>/dev/null; then
+            log_info "停止已存在的后端服务 (PID: $backend_pid)..."
+            kill $backend_pid 2>/dev/null || true
+            sleep 2
+            rm -f data/backend.pid
+        fi
+    fi
+    
+    # 方法2: 通过端口查找并停止
+    local port_process=$(lsof -ti :8000 2>/dev/null || true)
+    if [ -n "$port_process" ]; then
+        log_info "发现占用端口8000的进程 (PID: $port_process)，正在停止..."
+        kill $port_process 2>/dev/null || true
+        sleep 2
+    fi
+    
+    # 方法3: 通过进程名查找并停止
+    pkill -f "python.*run.py" 2>/dev/null || true
+    
+    # 等待端口释放
+    local max_wait=5
+    local waited=0
+    while lsof -ti :8000 >/dev/null 2>&1 && [ $waited -lt $max_wait ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    
+    if lsof -ti :8000 >/dev/null 2>&1; then
+        log_warning "端口8000仍被占用，尝试强制停止..."
+        lsof -ti :8000 | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+    
+    log_success "后端服务清理完成"
+}
+
 # 启动后端服务
 start_backend() {
     log_info "启动后端服务..."
+    
+    # 先停止已存在的服务
+    stop_existing_backend
     
     cd "$PROJECT_ROOT/backend"
     source venv/bin/activate

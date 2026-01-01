@@ -89,3 +89,8 @@ class ModelTrainingRequest(BaseModel):
     hyperparameter_search_strategy: str = Field(default="random_search", description="超参数搜索策略")
     hyperparameter_search_trials: int = Field(default=10, description="超参数搜索试验次数")
 
+
+class RemoteDataSyncRequest(BaseModel):
+    """远端数据同步请求"""
+    stock_codes: Optional[List[str]] = Field(default=None, description="要同步的股票代码列表，如果为空则同步所有股票")
+

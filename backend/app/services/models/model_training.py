@@ -59,6 +59,7 @@ except ImportError:
 # 导入其他依赖
 import logging
 from ..data.simple_data_service import SimpleDataService
+from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 try:
     from .modern_models import TimesNet, PatchTST, Informer
     MODERN_MODELS_AVAILABLE = True
@@ -185,35 +186,61 @@ class QlibDataProvider:
         
         for stock_code in stock_codes:
             try:
-                # 获取基础价格数据
-                stock_data_list = await self.data_service.get_stock_data(
-                    stock_code, start_date, end_date
-                )
+                # 优先从本地文件加载数据
+                from app.services.data.stock_data_loader import StockDataLoader
+                from app.core.config import settings
                 
-                if not stock_data_list or len(stock_data_list) == 0:
+                loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
+                stock_data = loader.load_stock_data(stock_code, start_date=start_date, end_date=end_date)
+                
+                # 如果本地没有数据，尝试从远端服务获取
+                if stock_data.empty:
+                    logger.info(f"本地无数据，从远端服务获取: {stock_code}")
+                    stock_data_list = await self.data_service.get_stock_data(
+                        stock_code, start_date, end_date
+                    )
+                    
+                    if not stock_data_list or len(stock_data_list) == 0:
+                        logger.warning(f"股票 {stock_code} 无数据")
+                        continue
+                    
+                    # 转换为DataFrame格式
+                    stock_data = pd.DataFrame([{
+                        'date': item.date,
+                        'open': item.open,
+                        'high': item.high,
+                        'low': item.low,
+                        'close': item.close,
+                        'volume': item.volume
+                    } for item in stock_data_list])
+                    stock_data = stock_data.set_index('date')
+                
+                # 确保数据有正确的列名
+                if stock_data.empty:
                     logger.warning(f"股票 {stock_code} 无数据")
                     continue
-                
-                # 转换为DataFrame格式
-                import pandas as pd
-                stock_data = pd.DataFrame([{
-                    'date': item.date,
-                    'open': item.open,
-                    'high': item.high,
-                    'low': item.low,
-                    'close': item.close,
-                    'volume': item.volume
-                } for item in stock_data_list])
-                stock_data = stock_data.set_index('date')
                 
                 # 计算技术指标
                 indicators = await self.indicator_calculator.calculate_all_indicators(
                     stock_data
                 )
                 
-                # 合并数据
-                features = stock_data.merge(indicators, on=['date'], how='left')
+                # 合并数据（使用索引合并，因为两者都使用日期作为索引）
+                if not indicators.empty:
+                    features = stock_data.merge(indicators, left_index=True, right_index=True, how='left')
+                else:
+                    features = stock_data.copy()
                 features['stock_code'] = stock_code
+                # 确保有date列用于后续排序（如果索引是日期，将其作为列）
+                if 'date' not in features.columns and isinstance(features.index, pd.DatetimeIndex):
+                    features = features.reset_index()
+                    features.rename(columns={'index': 'date'}, inplace=True)
+                elif 'date' not in features.columns:
+                    # 如果索引不是日期，尝试从索引名称推断
+                    features = features.reset_index()
+                    if 'date' not in features.columns:
+                        # 如果还是没有date列，使用索引作为date
+                        features['date'] = features.index
                 
                 # 添加基本面特征（暂时使用简单的价格衍生特征）
                 features = self._add_fundamental_features(features)
@@ -262,8 +289,23 @@ class ModelTrainingService:
     
     def __init__(self):
         self.data_provider = None
-        self.models_dir = Path("backend/data/models")
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+        # 修复路径问题：使用配置中的路径
+        from app.core.config import settings
+        models_dir_path = Path(settings.MODEL_STORAGE_PATH)
+        if not models_dir_path.is_absolute():
+            # 如果是相对路径，从backend目录解析
+            backend_dir = Path(__file__).parent.parent.parent
+            self.models_dir = (backend_dir / models_dir_path).resolve()
+        else:
+            self.models_dir = models_dir_path
+        try:
+            self.models_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"创建模型目录失败: {e}, 使用默认路径")
+            # 如果失败，使用默认路径
+            backend_dir = Path(__file__).parent.parent.parent
+            self.models_dir = (backend_dir / "data" / "models").resolve()
+            self.models_dir.mkdir(parents=True, exist_ok=True)
         self.evaluator = ModelEvaluator() if ModelEvaluator is not None else None
         self.version_manager = ModelVersionManager() if ModelVersionManager is not None else None
         self.advanced_training = None  # 高级训练服务
@@ -276,14 +318,11 @@ class ModelTrainingService:
         self.data_provider = QlibDataProvider(data_service)
         # QlibDataProvider 的初始化在需要时进行，不需要提前初始化
         
-        # 初始化高级训练服务
+        # 初始化高级训练服务（传入self避免循环依赖）
         if ADVANCED_TRAINING_AVAILABLE and AdvancedTrainingService is not None:
-            self.advanced_training = AdvancedTrainingService()
+            self.advanced_training = AdvancedTrainingService(self)
             if hasattr(self.advanced_training, 'initialize'):
                 await self.advanced_training.initialize()
-        
-        logger.info("模型训练服务初始化完成")
-        await self.advanced_training.initialize()
         
         logger.info("模型训练服务初始化完成")
     
@@ -399,7 +438,7 @@ class ModelTrainingService:
         feature_cols = [col for col in config.feature_columns if col in features_df.columns]
         
         # 填充缺失值
-        features_df[feature_cols] = features_df[feature_cols].fillna(method='ffill').fillna(0)
+        features_df[feature_cols] = features_df[feature_cols].ffill().fillna(0)
         
         # 为每只股票创建序列数据
         X_list, y_list = [], []

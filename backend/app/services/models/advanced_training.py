@@ -35,7 +35,13 @@ import xgboost as xgb
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
+# 可选导入ModelEvaluator
+try:
+    from .model_evaluation import ModelEvaluator
+    MODEL_EVALUATOR_AVAILABLE = True
+except ImportError:
+    MODEL_EVALUATOR_AVAILABLE = False
+    ModelEvaluator = None
 
 
 class EnsembleMethod(Enum):
@@ -70,9 +76,27 @@ class EnsembleModelManager:
     
     def __init__(self, model_training_service: "ModelTrainingService"):
         self.training_service = model_training_service
-        self.evaluator = ModelEvaluator()
-        self.ensemble_dir = Path("backend/data/ensembles")
-        self.ensemble_dir.mkdir(parents=True, exist_ok=True)
+        # 可选创建ModelEvaluator
+        if MODEL_EVALUATOR_AVAILABLE and ModelEvaluator is not None:
+            self.evaluator = ModelEvaluator()
+        else:
+            self.evaluator = None
+            logger.warning("ModelEvaluator不可用，集成模型评估功能可能受限")
+        # 修复路径问题
+        from app.core.config import settings
+        ensemble_dir_path = Path(settings.MODEL_STORAGE_PATH).parent / "ensembles"
+        if not ensemble_dir_path.is_absolute():
+            backend_dir = Path(__file__).parent.parent.parent
+            self.ensemble_dir = (backend_dir / ensemble_dir_path).resolve()
+        else:
+            self.ensemble_dir = ensemble_dir_path
+        try:
+            self.ensemble_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"创建集成模型目录失败: {e}, 使用默认路径")
+            backend_dir = Path(__file__).parent.parent.parent
+            self.ensemble_dir = (backend_dir / "data" / "ensembles").resolve()
+            self.ensemble_dir.mkdir(parents=True, exist_ok=True)
     
     async def create_ensemble(
         self,
@@ -696,17 +720,24 @@ class OnlineLearningManager:
 class AdvancedTrainingService:
     """高级训练服务主类"""
     
-    def __init__(self):
-        self.model_training_service = None
+    def __init__(self, model_training_service=None):
+        """
+        初始化高级训练服务
+        
+        Args:
+            model_training_service: ModelTrainingService实例，如果为None则不创建（避免循环依赖）
+        """
+        self.model_training_service = model_training_service
         self.ensemble_manager = None
         self.online_learning_manager = None
     
     async def initialize(self):
         """初始化服务"""
-        # 延迟导入避免循环导入
-        from .model_training import ModelTrainingService
-        self.model_training_service = ModelTrainingService()
-        await self.model_training_service.initialize()
+        # 如果已经有model_training_service实例，直接使用
+        # 如果没有，则不初始化（避免循环依赖）
+        if self.model_training_service is None:
+            logger.warning("ModelTrainingService未提供，高级训练功能可能受限")
+            return
         
         self.ensemble_manager = EnsembleModelManager(self.model_training_service)
         self.online_learning_manager = OnlineLearningManager(self.model_training_service)

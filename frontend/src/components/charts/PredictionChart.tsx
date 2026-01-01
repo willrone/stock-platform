@@ -5,11 +5,12 @@
 
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
-import { Card, CardBody, Chip } from '@heroui/react';
+import { Card, CardBody, Chip, Spinner } from '@heroui/react';
 import { TrendingUp, TrendingDown, Target, AlertCircle } from 'lucide-react';
 import { PredictionResult } from '../../services/taskService';
+import { DataService } from '../../services/dataService';
 
 interface PredictionChartProps {
   stockCode: string;
@@ -19,9 +20,62 @@ interface PredictionChartProps {
 export default function PredictionChart({ stockCode, prediction }: PredictionChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [historicalData, setHistoricalData] = useState<Array<{date: string; close: number}>>([]);
+
+  // 获取历史价格数据
+  useEffect(() => {
+    const fetchHistoricalData = async () => {
+      if (!stockCode) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // 获取最近60天的历史数据用于显示
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 60);
+        
+        const response = await DataService.getStockData(
+          stockCode,
+          startDate.toISOString().split('T')[0],
+          endDate.toISOString().split('T')[0]
+        );
+        
+        // 解析数据
+        const apiData = response.data;
+        const dataArray = (apiData?.data && Array.isArray(apiData.data)) 
+          ? apiData.data 
+          : (Array.isArray(apiData) ? apiData : []);
+        
+        if (dataArray.length > 0) {
+          const formatted = dataArray
+            .map((item: any) => ({
+              date: item.date ? item.date.split('T')[0] : item.date,
+              close: Number(item.close) || 0,
+            }))
+            .filter((item: any) => item.date && item.close > 0)
+            .sort((a: any, b: any) => a.date.localeCompare(b.date));
+          
+          setHistoricalData(formatted);
+        }
+      } catch (error) {
+        console.error('获取历史价格数据失败:', error);
+        setHistoricalData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (stockCode) {
+      fetchHistoricalData();
+    }
+  }, [stockCode]);
 
   useEffect(() => {
-    if (!chartRef.current || !prediction) return;
+    if (!chartRef.current || !prediction || loading) return;
 
     // 初始化图表
     if (chartInstance.current) {
@@ -30,30 +84,36 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
     
     chartInstance.current = echarts.init(chartRef.current);
 
-    // 生成模拟的历史价格和预测数据
+    // 生成图表数据（使用真实历史数据和预测数据）
     const generateChartData = () => {
-      const historicalDays = 30;
-      const predictionDays = 5;
-      const basePrice = 100 + Math.random() * 50;
+      const predictionDays = 5; // 预测未来5天
       
-      // 历史数据
-      const historicalData = [];
-      const dates = [];
+      // 使用真实历史数据
+      const historicalPrices = historicalData.map(item => item.close);
+      const historicalDates = historicalData.map(item => item.date);
       
-      for (let i = historicalDays; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        dates.push(date.toISOString().split('T')[0]);
-        
-        const price = basePrice * (1 + (Math.random() - 0.5) * 0.02 * i);
-        historicalData.push(Number(price.toFixed(2)));
+      // 如果没有历史数据，使用最近30天的模拟数据作为后备
+      let dates = [...historicalDates];
+      let historical = [...historicalPrices];
+      
+      if (historical.length === 0) {
+        const basePrice = 100;
+        for (let i = 30; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          dates.push(date.toISOString().split('T')[0]);
+          historical.push(basePrice);
+        }
       }
+      
+      // 获取当前价格（历史数据的最后一个）
+      const currentPrice = historical.length > 0 ? historical[historical.length - 1] : 100;
+      const splitIndex = historical.length - 1;
       
       // 预测数据
       const predictionData = [];
       const upperBound = [];
       const lowerBound = [];
-      const currentPrice = historicalData[historicalData.length - 1];
       
       for (let i = 1; i <= predictionDays; i++) {
         const date = new Date();
@@ -72,11 +132,11 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
       
       return {
         dates,
-        historical: historicalData,
+        historical,
         prediction: predictionData,
         upperBound,
         lowerBound,
-        splitIndex: historicalDays
+        splitIndex
       };
     };
 
@@ -257,7 +317,7 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
         chartInstance.current.dispose();
       }
     };
-  }, [stockCode, prediction]);
+  }, [stockCode, prediction, historicalData, loading]);
 
   if (!prediction) {
     return (
@@ -316,7 +376,9 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
         <Card>
           <CardBody className="text-center">
             <p className="text-2xl font-bold text-danger">
-              {(prediction.risk_assessment.value_at_risk * 100).toFixed(2)}%
+              {prediction.risk_assessment?.value_at_risk 
+                ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2) 
+                : '--'}%
             </p>
             <p className="text-sm text-default-500">风险价值(VaR)</p>
           </CardBody>
@@ -326,10 +388,16 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
       {/* 预测图表 */}
       <Card>
         <CardBody>
-          <div
-            ref={chartRef}
-            style={{ height: '400px', width: '100%' }}
-          />
+          {loading ? (
+            <div className="flex items-center justify-center h-96">
+              <Spinner size="lg" />
+            </div>
+          ) : (
+            <div
+              ref={chartRef}
+              style={{ height: '400px', width: '100%' }}
+            />
+          )}
         </CardBody>
       </Card>
 
@@ -364,19 +432,25 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
             <div className="flex justify-between items-center">
               <span className="text-default-600">风险价值 (VaR)</span>
               <span className="font-medium text-danger">
-                {(prediction.risk_assessment.value_at_risk * 100).toFixed(2)}%
+                {prediction.risk_assessment?.value_at_risk 
+                  ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2) 
+                  : '--'}%
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-default-600">最大回撤</span>
               <span className="font-medium text-warning">
-                {(prediction.risk_assessment.max_drawdown * 100).toFixed(2)}%
+                {prediction.risk_assessment?.max_drawdown 
+                  ? (prediction.risk_assessment.max_drawdown * 100).toFixed(2) 
+                  : '--'}%
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-default-600">夏普比率</span>
               <span className="font-medium text-success">
-                {prediction.risk_assessment.sharpe_ratio.toFixed(3)}
+                {prediction.risk_assessment?.sharpe_ratio 
+                  ? prediction.risk_assessment.sharpe_ratio.toFixed(3) 
+                  : '--'}
               </span>
             </div>
           </div>

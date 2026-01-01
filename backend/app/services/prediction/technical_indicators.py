@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 import math
 from dataclasses import dataclass
+import pandas as pd
 
 from app.models.stock_simple import StockData
 
@@ -309,6 +310,63 @@ class TechnicalIndicatorCalculator:
                 ))
         
         return results
+    
+    async def calculate_all_indicators(self, stock_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        计算所有支持的技术指标，返回包含指标列的DataFrame
+        
+        Args:
+            stock_data: 包含 open, high, low, close, volume 列的DataFrame，索引为日期
+            
+        Returns:
+            包含所有技术指标的DataFrame，索引为日期
+        """
+        if stock_data.empty:
+            return pd.DataFrame()
+        
+        # 确保有必要的列
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        if not all(col in stock_data.columns for col in required_cols):
+            raise ValueError(f"DataFrame必须包含以下列: {required_cols}")
+        
+        # 创建结果DataFrame，使用相同的索引
+        result_df = pd.DataFrame(index=stock_data.index)
+        
+        # 转换为StockData列表以便使用现有方法
+        stock_data_list = []
+        for date, row in stock_data.iterrows():
+            stock_data_list.append(StockData(
+                stock_code='',  # 不需要stock_code
+                date=date if isinstance(date, datetime) else pd.to_datetime(date),
+                open=float(row['open']),
+                high=float(row['high']),
+                low=float(row['low']),
+                close=float(row['close']),
+                volume=float(row['volume'])
+            ))
+        
+        # 计算所有支持的指标
+        all_indicators = list(self.supported_indicators)
+        indicator_results = self.calculate_indicators(stock_data_list, all_indicators)
+        
+        # 将结果转换为DataFrame
+        if indicator_results:
+            # 按日期组织指标
+            indicators_dict = {}
+            for result in indicator_results:
+                date_key = result.date
+                if date_key not in indicators_dict:
+                    indicators_dict[date_key] = {}
+                indicators_dict[date_key].update(result.indicators)
+            
+            # 转换为DataFrame
+            for date, indicators in indicators_dict.items():
+                for indicator_name, value in indicators.items():
+                    if indicator_name not in result_df.columns:
+                        result_df[indicator_name] = None
+                    result_df.loc[date, indicator_name] = value
+        
+        return result_df
     
     async def calculate_batch_indicators(
         self, 
