@@ -21,30 +21,51 @@ async def create_task(
     request: TaskCreateRequest, 
     background_tasks: BackgroundTasks
 ):
-    """创建预测任务"""
+    """创建任务（支持预测和回测）"""
     session = SessionLocal()
     try:
         task_repository = TaskRepository(session)
         
+        # 确定任务类型
+        task_type_str = request.task_type.lower() if request.task_type else "prediction"
+        if task_type_str == "backtest":
+            task_type = TaskType.BACKTEST
+        else:
+            task_type = TaskType.PREDICTION
+        
         # 构建任务配置
-        config = {
-            "stock_codes": request.stock_codes,
-            "model_id": request.model_id,
-            **request.prediction_config
-        }
+        if task_type == TaskType.PREDICTION:
+            if not request.model_id:
+                raise HTTPException(status_code=400, detail="预测任务需要提供model_id")
+            config = {
+                "stock_codes": request.stock_codes,
+                "model_id": request.model_id,
+                **(request.prediction_config or {})
+            }
+        else:  # BACKTEST
+            if not request.backtest_config:
+                raise HTTPException(status_code=400, detail="回测任务需要提供backtest_config")
+            config = {
+                "stock_codes": request.stock_codes,
+                **(request.backtest_config or {})
+            }
         
         # 创建任务
         task = task_repository.create_task(
             task_name=request.task_name,
-            task_type=TaskType.PREDICTION,
+            task_type=task_type,
             user_id="default_user",  # TODO: 从认证中获取真实用户ID
             config=config
         )
         
         # 将任务加入后台执行
         try:
-            background_tasks.add_task(execute_prediction_task_simple, task.task_id)
-            logger.info(f"任务已加入后台执行: {task.task_id}")
+            if task_type == TaskType.PREDICTION:
+                background_tasks.add_task(execute_prediction_task_simple, task.task_id)
+            else:  # BACKTEST
+                from app.api.v1.dependencies import execute_backtest_task_simple
+                background_tasks.add_task(execute_backtest_task_simple, task.task_id)
+            logger.info(f"任务已加入后台执行: {task.task_id}, 类型: {task_type.value}")
         except Exception as bg_error:
             logger.error(f"将任务加入后台执行时出错: {bg_error}", exc_info=True)
         
@@ -52,6 +73,7 @@ async def create_task(
         task_data = {
             "task_id": task.task_id,
             "task_name": task.task_name,
+            "task_type": task.task_type,
             "status": task.status,
             "progress": task.progress,
             "stock_codes": request.stock_codes,
@@ -66,6 +88,8 @@ async def create_task(
             message="任务创建成功",
             data=task_data
         )
+    except HTTPException:
+        raise
     except Exception as e:
         session.rollback()
         logger.error(f"创建任务失败: {e}", exc_info=True)
@@ -189,10 +213,46 @@ async def get_task_detail(task_id: str):
         # 计算平均置信度
         average_confidence = total_confidence / len(prediction_results) if prediction_results else 0.0
         
+        # 获取回测结果（如果任务类型是回测，或者结果中包含回测数据）
+        backtest_results = None
+        if task.task_type == "backtest" or (task.result and isinstance(task.result, (dict, str))):
+            logger.info(f"处理任务结果: task_id={task_id}, task_type={task.task_type}, result存在={task.result is not None}, result类型={type(task.result)}")
+            if task.result:
+                try:
+                    import json
+                    if isinstance(task.result, str):
+                        parsed_result = json.loads(task.result)
+                    else:
+                        parsed_result = task.result
+                    
+                    # 检查是否包含回测相关的字段
+                    is_backtest_data = False
+                    if isinstance(parsed_result, dict):
+                        # 检查是否包含回测相关的关键字段
+                        backtest_keys = ['equity_curve', 'drawdown_curve', 'portfolio', 'risk_metrics', 'trade_history', 'dates']
+                        is_backtest_data = any(key in parsed_result for key in backtest_keys)
+                    
+                    # 如果是回测任务，或者结果中包含回测数据，则使用该结果
+                    if task.task_type == "backtest" or is_backtest_data:
+                        backtest_results = parsed_result
+                        logger.info(f"回测结果解析成功: task_id={task_id}, 包含字段={list(backtest_results.keys())[:20] if isinstance(backtest_results, dict) else '非字典类型'}")
+                        if isinstance(backtest_results, dict):
+                            logger.info(f"回测结果关键字段: equity_curve={len(backtest_results.get('equity_curve', []))}, "
+                                       f"portfolio={backtest_results.get('portfolio') is not None}, "
+                                       f"risk_metrics={backtest_results.get('risk_metrics') is not None}")
+                    else:
+                        logger.debug(f"任务结果不包含回测数据: task_id={task_id}")
+                except Exception as e:
+                    logger.warning(f"解析回测结果失败: {e}", exc_info=True)
+            else:
+                if task.task_type == "backtest":
+                    logger.warning(f"回测任务但无结果数据: task_id={task_id}, result={task.result}")
+        
         # 构建任务详情
         task_detail = {
             "task_id": task.task_id,
             "task_name": task.task_name,
+            "task_type": task.task_type,
             "status": task.status,
             "progress": task.progress,
             "stock_codes": stock_codes if isinstance(stock_codes, list) else [],
@@ -204,9 +264,19 @@ async def get_task_detail(task_id: str):
                 "total_stocks": len(stock_codes) if isinstance(stock_codes, list) else 0,
                 "successful_predictions": len(prediction_results),
                 "average_confidence": average_confidence,
-                "predictions": predictions
-            }
+                "predictions": predictions,
+                "backtest_results": backtest_results  # 添加回测结果
+            },
+            # 如果有回测结果，直接将回测结果放在顶层，方便前端访问
+            "backtest_results": backtest_results if backtest_results is not None else None
         }
+        
+        # 添加调试日志
+        if backtest_results is not None:
+            logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}, backtest_results存在={backtest_results is not None}, "
+                       f"results.backtest_results存在={backtest_results is not None}")
+            if backtest_results:
+                logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20] if isinstance(backtest_results, dict) else '非字典'}")
         
         return StandardResponse(
             success=True,

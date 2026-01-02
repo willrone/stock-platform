@@ -268,51 +268,129 @@ class BacktestTaskExecutor:
                 
                 # 步骤2: 加载历史数据
                 progress_tracker.update_step("加载历史数据")
-                time.sleep(2)  # 模拟数据加载时间
                 
                 # 步骤3: 执行回测策略
                 progress_tracker.update_step("执行回测策略")
-                time.sleep(5)  # 模拟策略执行时间
+                
+                # 使用真实的回测执行器
+                from app.services.backtest import BacktestExecutor, BacktestConfig
+                from app.core.config import settings
+                
+                executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+                
+                # 创建回测配置
+                strategy_config = config_dict.get('strategy_config', {})
+                backtest_config = BacktestConfig(
+                    initial_cash=initial_cash,
+                    commission_rate=strategy_config.get("commission_rate", 0.0003),
+                    slippage_rate=strategy_config.get("slippage_rate", 0.0001)
+                )
+                
+                # 执行回测
+                backtest_report = executor.run_backtest(
+                    strategy_name=strategy_name,
+                    stock_codes=stock_codes,
+                    start_date=start_date,
+                    end_date=end_date,
+                    strategy_config=strategy_config,
+                    backtest_config=backtest_config
+                )
                 
                 # 步骤4: 计算回测结果
                 progress_tracker.update_step("计算回测结果")
                 
-                # 模拟回测结果
-                import random
-                random.seed(42)
+                # 转换数据格式
+                portfolio_history = backtest_report.get("portfolio_history", [])
+                dates = [snapshot["date"] for snapshot in portfolio_history]
+                equity_curve = [snapshot["portfolio_value"] for snapshot in portfolio_history]
                 
-                final_value = initial_cash * (1 + random.uniform(-0.2, 0.3))
-                total_return = (final_value - initial_cash) / initial_cash
-                annualized_return = total_return * (365 / (end_date - start_date).days)
+                # 计算回撤曲线
+                drawdown_curve = []
+                peak = initial_cash
+                for value in equity_curve:
+                    if value > peak:
+                        peak = value
+                    drawdown = (value - peak) / peak * 100 if peak > 0 else 0
+                    drawdown_curve.append(drawdown)
+                
+                # 格式化交易记录
+                trade_history = []
+                for trade in backtest_report.get("trade_history", []):
+                    trade_history.append({
+                        "date": trade.get("timestamp", ""),
+                        "action": "buy" if trade.get("action") == "BUY" else "sell",
+                        "price": trade.get("price", 0),
+                        "quantity": trade.get("quantity", 0),
+                        "pnl": trade.get("pnl", 0)
+                    })
                 
                 task_result = {
-                    "strategy_name": strategy_name,
+                    "strategy_name": backtest_report.get("strategy_name", strategy_name),
                     "stock_codes": stock_codes,
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
                     "initial_cash": initial_cash,
-                    "final_value": final_value,
-                    "total_return": total_return,
-                    "annualized_return": annualized_return,
-                    "volatility": random.uniform(0.1, 0.3),
-                    "sharpe_ratio": random.uniform(-1, 2),
-                    "max_drawdown": random.uniform(-0.3, -0.05),
-                    "win_rate": random.uniform(0.4, 0.7),
-                    "profit_factor": random.uniform(0.8, 2.5),
-                    "total_trades": random.randint(50, 200),
-                    "execution_time": (datetime.utcnow() - context.start_time).total_seconds()
+                    "final_value": backtest_report.get("final_value", initial_cash),
+                    "total_return": backtest_report.get("total_return", 0),
+                    "annualized_return": backtest_report.get("annualized_return", 0),
+                    "volatility": backtest_report.get("volatility", 0),
+                    "sharpe_ratio": backtest_report.get("sharpe_ratio", 0),
+                    "max_drawdown": backtest_report.get("max_drawdown", 0),
+                    "win_rate": backtest_report.get("win_rate", 0),
+                    "profit_factor": backtest_report.get("profit_factor", 0),
+                    "total_trades": backtest_report.get("total_trades", 0),
+                    "execution_time": (datetime.utcnow() - context.start_time).total_seconds(),
+                    # 添加前端需要的图表数据
+                    "equity_curve": equity_curve,
+                    "drawdown_curve": drawdown_curve,
+                    "dates": dates,
+                    "trade_history": trade_history,
+                    # 保留原始报告数据
+                    "portfolio": {
+                        "initial_cash": backtest_report.get("initial_cash", initial_cash),
+                        "final_value": backtest_report.get("final_value", initial_cash),
+                        "total_return": backtest_report.get("total_return", 0),
+                        "annualized_return": backtest_report.get("annualized_return", 0)
+                    },
+                    "risk_metrics": {
+                        "volatility": backtest_report.get("volatility", 0),
+                        "sharpe_ratio": backtest_report.get("sharpe_ratio", 0),
+                        "max_drawdown": backtest_report.get("max_drawdown", 0)
+                    },
+                    "trading_stats": {
+                        "total_trades": backtest_report.get("total_trades", 0),
+                        "win_rate": backtest_report.get("win_rate", 0),
+                        "profit_factor": backtest_report.get("profit_factor", 0)
+                    }
                 }
                 
                 # 步骤5: 完成回测
+                total_return = backtest_report.get("total_return", 0)
+                final_value = backtest_report.get("final_value", initial_cash)
                 progress_tracker.update_step("完成回测任务", {
                     "total_return": f"{total_return:.2%}",
                     "final_value": final_value
                 })
                 
                 # 更新任务状态为完成
+                logger.info(f"保存回测结果: task_id={task_id}, result包含字段={list(task_result.keys())[:20]}")
+                logger.info(f"回测结果数据: equity_curve长度={len(task_result.get('equity_curve', []))}, "
+                           f"drawdown_curve长度={len(task_result.get('drawdown_curve', []))}, "
+                           f"dates长度={len(task_result.get('dates', []))}, "
+                           f"portfolio存在={task_result.get('portfolio') is not None}, "
+                           f"risk_metrics存在={task_result.get('risk_metrics') is not None}")
+                
                 self.task_repository.update_task_status(
                     task_id, TaskStatus.COMPLETED, progress=100.0, result=task_result
                 )
+                
+                # 验证保存后的数据
+                saved_task = self.task_repository.get_task_by_id(task_id)
+                if saved_task and saved_task.result:
+                    logger.info(f"验证保存结果: task_id={task_id}, result类型={type(saved_task.result)}, "
+                               f"result是否为None={saved_task.result is None}")
+                    if isinstance(saved_task.result, dict):
+                        logger.info(f"保存后的result包含字段={list(saved_task.result.keys())[:20]}")
                 
                 logger.info(f"回测任务完成: {task_id}, 总收益: {total_return:.2%}")
                 return task_result

@@ -142,6 +142,57 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
 
     const chartData = generateChartData();
 
+    // 生成买卖信号
+    const generateTradingSignals = () => {
+      const signals: Array<{date: string; price: number; type: 'buy' | 'sell'; reason: string}> = [];
+      
+      // 买入信号条件：
+      // 1. 预测方向为上涨 (predicted_direction > 0)
+      // 2. 预测收益率 > 2%
+      // 3. 置信度 > 60%
+      const buyThreshold = 0.02; // 2%收益率阈值
+      const confidenceThreshold = 0.6; // 60%置信度阈值
+      
+      if (prediction.predicted_direction > 0 && 
+          prediction.predicted_return > buyThreshold && 
+          prediction.confidence_score > confidenceThreshold) {
+        // 在当前价格点标注买入
+        const currentDate = chartData.dates[chartData.splitIndex];
+        const currentPrice = chartData.historical[chartData.splitIndex];
+        signals.push({
+          date: currentDate,
+          price: currentPrice,
+          type: 'buy',
+          reason: `预测上涨 ${(prediction.predicted_return * 100).toFixed(2)}%`
+        });
+      }
+      
+      // 卖出信号条件：
+      // 1. 预测方向为下跌 (predicted_direction < 0)
+      // 2. 预测收益率 < -2%
+      // 3. 置信度 > 60%
+      if (prediction.predicted_direction < 0 && 
+          prediction.predicted_return < -buyThreshold && 
+          prediction.confidence_score > confidenceThreshold) {
+        // 在当前价格点标注卖出
+        const currentDate = chartData.dates[chartData.splitIndex];
+        const currentPrice = chartData.historical[chartData.splitIndex];
+        signals.push({
+          date: currentDate,
+          price: currentPrice,
+          type: 'sell',
+          reason: `预测下跌 ${(Math.abs(prediction.predicted_return) * 100).toFixed(2)}%`
+        });
+      }
+      
+      // 在预测的未来价格点，如果预测收益率足够大，也可以标注
+      // 这里我们只在当前点标注，未来点可以根据需要添加
+      
+      return signals;
+    };
+
+    const tradingSignals = generateTradingSignals();
+
     // 图表配置
     const option = {
       title: {
@@ -297,6 +348,32 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
             }
           }
         ]
+      },
+      // 添加买卖点标注
+      markPoint: {
+        data: tradingSignals.map(signal => {
+          const dataIndex = chartData.dates.findIndex(d => d === signal.date);
+          return {
+            name: signal.type === 'buy' ? '买入' : '卖出',
+            coord: [dataIndex, signal.price],
+            value: signal.price,
+            symbol: signal.type === 'buy' ? 'triangle' : 'pin',
+            symbolSize: 50,
+            itemStyle: {
+              color: signal.type === 'buy' ? '#10b981' : '#ef4444'
+            },
+            label: {
+              formatter: signal.type === 'buy' ? '买入\n' + signal.reason : '卖出\n' + signal.reason,
+              position: signal.type === 'buy' ? 'bottom' : 'top',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 'bold',
+              backgroundColor: signal.type === 'buy' ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)',
+              padding: [4, 8],
+              borderRadius: 4
+            }
+          };
+        })
       }
     };
 

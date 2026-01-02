@@ -11,9 +11,12 @@ import { Card, CardBody, Button, ButtonGroup, Spinner } from '@heroui/react';
 import { Calendar, TrendingUp, BarChart3 } from 'lucide-react';
 import { DataService } from '@/services/dataService';
 
+import { PredictionResult } from '../../services/taskService';
+
 interface TradingViewChartProps {
   stockCode: string;
   height?: number;
+  prediction?: PredictionResult;
 }
 
 interface PriceData {
@@ -25,7 +28,7 @@ interface PriceData {
   volume: number;
 }
 
-export default function TradingViewChart({ stockCode, height = 400 }: TradingViewChartProps) {
+export default function TradingViewChart({ stockCode, height = 400, prediction }: TradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -152,6 +155,44 @@ export default function TradingViewChart({ stockCode, height = 400 }: TradingVie
     return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
   };
 
+  // 添加买卖标记的辅助函数
+  const addTradingMarkers = () => {
+    if (!prediction || !candlestickSeriesRef.current || priceData.length === 0) return;
+    
+    const buyThreshold = 0.02; // 2%收益率阈值
+    const confidenceThreshold = 0.6; // 60%置信度阈值
+    
+    // 买入信号
+    if (prediction.predicted_direction > 0 && 
+        prediction.predicted_return > buyThreshold && 
+        prediction.confidence_score > confidenceThreshold) {
+      const lastData = priceData[priceData.length - 1];
+      candlestickSeriesRef.current.createPriceLine({
+        price: lastData.close,
+        color: '#10b981',
+        lineWidth: 2,
+        lineStyle: 0, // 实线
+        axisLabelVisible: true,
+        title: `买入 - 预测上涨${(prediction.predicted_return * 100).toFixed(2)}%`,
+      });
+    }
+    
+    // 卖出信号
+    if (prediction.predicted_direction < 0 && 
+        prediction.predicted_return < -buyThreshold && 
+        prediction.confidence_score > confidenceThreshold) {
+      const lastData = priceData[priceData.length - 1];
+      candlestickSeriesRef.current.createPriceLine({
+        price: lastData.close,
+        color: '#ef4444',
+        lineWidth: 2,
+        lineStyle: 0, // 实线
+        axisLabelVisible: true,
+        title: `卖出 - 预测下跌${(Math.abs(prediction.predicted_return) * 100).toFixed(2)}%`,
+      });
+    }
+  };
+
   // 初始化图表
   const initChart = () => {
     if (!chartContainerRef.current) return;
@@ -218,6 +259,9 @@ export default function TradingViewChart({ stockCode, height = 400 }: TradingVie
 
     // 设置数据
     updateChartData();
+    
+    // 添加买卖标记
+    addTradingMarkers();
 
     // 响应式调整
     const handleResize = () => {
@@ -274,7 +318,11 @@ export default function TradingViewChart({ stockCode, height = 400 }: TradingVie
 
   useEffect(() => {
     updateChartData();
-  }, [priceData, chartType]);
+    // 当数据或预测结果更新时，重新添加买卖标记
+    if (priceData.length > 0 && candlestickSeriesRef.current) {
+      addTradingMarkers();
+    }
+  }, [priceData, chartType, prediction]);
 
   return (
     <Card>

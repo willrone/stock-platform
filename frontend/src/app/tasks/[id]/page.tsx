@@ -91,15 +91,37 @@ export default function TaskDetailPage() {
   const loadTaskDetail = async () => {
     try {
       const task = await TaskService.getTaskDetail(taskId);
+      console.log('加载的任务详情:', {
+        task_id: task.task_id,
+        task_type: task.task_type,
+        status: task.status,
+        results: task.results,
+        backtest_results: task.backtest_results,
+        result: task.result
+      });
       setCurrentTask(task);
       
       // 如果任务已完成，加载预测结果
       if (task.status === 'completed' && task.results) {
-        const results = await TaskService.getTaskResults(taskId);
-        setPredictions(results);
-        // 默认选择第一个股票
-        if (results.length > 0) {
-          setSelectedStock(results[0].stock_code);
+        // 如果是预测任务，加载预测结果
+        if (task.task_type === 'prediction') {
+          const results = await TaskService.getTaskResults(taskId);
+          setPredictions(results);
+          // 默认选择第一个股票
+          if (results.length > 0) {
+            setSelectedStock(results[0].stock_code);
+          }
+        } else if (task.task_type === 'backtest') {
+          // 如果是回测任务，确保回测结果已加载
+          console.log('回测任务详情:', {
+            'results.backtest_results': task.results?.backtest_results,
+            'backtest_results': task.backtest_results,
+            'result': task.result
+          });
+          // 如果没有股票代码，使用任务配置中的股票代码
+          if (!selectedStock && task.stock_codes && task.stock_codes.length > 0) {
+            setSelectedStock(task.stock_codes[0]);
+          }
         }
       }
     } catch (error) {
@@ -145,26 +167,32 @@ export default function TaskDetailPage() {
 
     const handleTaskCompleted = async (data: { task_id: string; results: any }) => {
       if (data.task_id === taskId) {
-        const updatedTask = {
-          ...currentTask!,
-          status: 'completed' as const,
-          progress: 100,
-          results: data.results,
-          completed_at: new Date().toISOString(),
-        };
-        
-        setCurrentTask(updatedTask);
-        updateTask(data.task_id, updatedTask);
-        
-        // 加载预测结果
+        // 重新加载任务详情以获取完整数据
         try {
-          const results = await TaskService.getTaskResults(taskId);
-          setPredictions(results);
-          if (results.length > 0) {
-            setSelectedStock(results[0].stock_code);
+          const task = await TaskService.getTaskDetail(taskId);
+          const updatedTask = {
+            ...task,
+            status: 'completed' as const,
+            progress: 100,
+            completed_at: new Date().toISOString(),
+          };
+          
+          setCurrentTask(updatedTask);
+          updateTask(data.task_id, updatedTask);
+          
+          // 如果是预测任务，加载预测结果
+          if (task.task_type === 'prediction') {
+            const results = await TaskService.getTaskResults(taskId);
+            setPredictions(results);
+            if (results.length > 0) {
+              setSelectedStock(results[0].stock_code);
+            }
+          } else if (task.task_type === 'backtest') {
+            // 回测任务，确保回测结果已加载
+            console.log('回测任务完成，回测结果:', task.results?.backtest_results);
           }
         } catch (error) {
-          console.error('加载预测结果失败:', error);
+          console.error('加载任务详情失败:', error);
         }
         
         console.log('任务执行完成');
@@ -453,7 +481,10 @@ export default function TaskDetailPage() {
                     </div>
                   }>
                     {selectedStock && (
-                      <TradingViewChart stockCode={selectedStock} />
+                      <TradingViewChart 
+                        stockCode={selectedStock}
+                        prediction={predictions.find(p => p.stock_code === selectedStock)}
+                      />
                     )}
                   </Tab>
                   
@@ -477,12 +508,22 @@ export default function TaskDetailPage() {
                       <span>回测结果</span>
                     </div>
                   }>
-                    {selectedStock && (
-                      <BacktestChart 
-                        stockCode={selectedStock}
-                        backtestData={currentTask.results?.backtest_results}
-                      />
-                    )}
+                    <BacktestChart 
+                      stockCode={selectedStock || (currentTask?.stock_codes?.[0] || '')}
+                      backtestData={(() => {
+                        // 尝试从多个位置获取回测数据
+                        const data = currentTask?.results?.backtest_results || 
+                                   currentTask?.backtest_results ||
+                                   (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
+                        console.log('回测数据来源检查:', {
+                          'results.backtest_results': currentTask?.results?.backtest_results,
+                          'backtest_results': currentTask?.backtest_results,
+                          'result': currentTask?.result,
+                          '最终数据': data
+                        });
+                        return data;
+                      })()}
+                    />
                   </Tab>
                   
                   <Tab key="table" title="数据表格">

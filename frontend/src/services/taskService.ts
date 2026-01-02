@@ -14,12 +14,22 @@ import { Task } from '../stores/useTaskStore';
 // 任务创建请求
 export interface CreateTaskRequest {
   task_name: string;
+  task_type?: 'prediction' | 'backtest';
   stock_codes: string[];
-  model_id: string;
+  model_id?: string;
   prediction_config?: {
     horizon?: 'intraday' | 'short_term' | 'medium_term';
     confidence_level?: number;
     risk_assessment?: boolean;
+  };
+  backtest_config?: {
+    strategy_name?: string;
+    start_date: string;
+    end_date: string;
+    initial_cash?: number;
+    commission_rate?: number;
+    slippage_rate?: number;
+    strategy_config?: Record<string, any>;
   };
 }
 

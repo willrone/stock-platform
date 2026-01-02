@@ -32,6 +32,7 @@ import {
   TrendingUp,
   Shield,
   Info,
+  Activity,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useDataStore } from '../../../stores/useDataStore';
@@ -50,6 +51,8 @@ export default function CreateTaskPage() {
 
   const [loading, setLoading] = useState(false);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
+  const [taskType, setTaskType] = useState<'prediction' | 'backtest'>('prediction');
+  const [availableStrategies, setAvailableStrategies] = useState<Array<{key: string; name: string; description: string}>>([]);
   const [formData, setFormData] = useState({
     task_name: '',
     description: '',
@@ -57,6 +60,13 @@ export default function CreateTaskPage() {
     horizon: 'short_term' as 'intraday' | 'short_term' | 'medium_term',
     confidence_level: 95,
     risk_assessment: true,
+    // 回测配置
+    strategy_name: 'moving_average',
+    start_date: '',
+    end_date: '',
+    initial_cash: 100000,
+    commission_rate: 0.0003,
+    slippage_rate: 0.0001,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -78,6 +88,29 @@ export default function CreateTaskPage() {
     loadModels();
   }, [setModels, setSelectedModel, selectedModel]);
 
+  // 加载可用策略列表
+  useEffect(() => {
+    const loadStrategies = async () => {
+      if (taskType === 'backtest') {
+        try {
+          const response = await fetch('/api/v1/backtest/strategies');
+          const data = await response.json();
+          if (data.success && data.data) {
+            setAvailableStrategies(data.data);
+            // 如果当前策略不在列表中，设置为第一个策略
+            if (data.data.length > 0 && !data.data.find((s: any) => s.key === formData.strategy_name)) {
+              updateFormData('strategy_name', data.data[0].key);
+            }
+          }
+        } catch (error) {
+          console.error('加载策略列表失败:', error);
+        }
+      }
+    };
+
+    loadStrategies();
+  }, [taskType]);
+
   // 表单验证
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -90,8 +123,20 @@ export default function CreateTaskPage() {
       newErrors.stock_codes = '请至少选择一只股票';
     }
     
-    if (!formData.model_id) {
-      newErrors.model_id = '请选择预测模型';
+    if (taskType === 'prediction') {
+      if (!formData.model_id) {
+        newErrors.model_id = '请选择预测模型';
+      }
+    } else {  // backtest
+      if (!formData.start_date) {
+        newErrors.start_date = '请选择回测开始日期';
+      }
+      if (!formData.end_date) {
+        newErrors.end_date = '请选择回测结束日期';
+      }
+      if (formData.start_date && formData.end_date && formData.start_date >= formData.end_date) {
+        newErrors.end_date = '结束日期必须晚于开始日期';
+      }
     }
     
     setErrors(newErrors);
@@ -110,13 +155,25 @@ export default function CreateTaskPage() {
     try {
       const request: CreateTaskRequest = {
         task_name: formData.task_name,
+        task_type: taskType,
         stock_codes: selectedStocks,
-        model_id: formData.model_id,
-        prediction_config: {
-          horizon: formData.horizon,
-          confidence_level: formData.confidence_level / 100,
-          risk_assessment: formData.risk_assessment,
-        },
+        ...(taskType === 'prediction' ? {
+          model_id: formData.model_id,
+          prediction_config: {
+            horizon: formData.horizon,
+            confidence_level: formData.confidence_level / 100,
+            risk_assessment: formData.risk_assessment,
+          },
+        } : {
+          backtest_config: {
+            strategy_name: formData.strategy_name,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            initial_cash: formData.initial_cash,
+            commission_rate: formData.commission_rate,
+            slippage_rate: formData.slippage_rate,
+          },
+        }),
       };
 
       const task = await TaskService.createTask(request);
@@ -156,8 +213,8 @@ export default function CreateTaskPage() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">创建预测任务</h1>
-          <p className="text-default-500">配置股票预测任务参数</p>
+          <h1 className="text-2xl font-bold">创建任务</h1>
+          <p className="text-default-500">配置股票预测或回测任务参数</p>
         </div>
       </div>
 
@@ -173,6 +230,19 @@ export default function CreateTaskPage() {
               </div>
             </CardHeader>
             <CardBody className="space-y-4">
+              <Select
+                label="任务类型"
+                selectedKeys={[taskType]}
+                onSelectionChange={(keys) => {
+                  const type = Array.from(keys)[0] as 'prediction' | 'backtest';
+                  setTaskType(type);
+                }}
+                isRequired
+              >
+                <SelectItem key="prediction">预测任务</SelectItem>
+                <SelectItem key="backtest">回测任务</SelectItem>
+              </Select>
+              
               <Input
                 label="任务名称"
                 placeholder="请输入任务名称"
@@ -236,91 +306,177 @@ export default function CreateTaskPage() {
             </CardBody>
           </Card>
 
-          {/* 模型和参数 */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">模型和参数</h3>
-              </div>
-            </CardHeader>
-            <CardBody className="space-y-6">
-              <Select
-                label="预测模型"
-                placeholder="请选择预测模型"
-                selectedKeys={formData.model_id ? [formData.model_id] : []}
-                onSelectionChange={(keys) => {
-                  const modelId = Array.from(keys)[0] as string;
-                  updateFormData('model_id', modelId);
-                  const model = models.find(m => m.model_id === modelId);
-                  setSelectedModel(model || null);
-                }}
-                isInvalid={!!errors.model_id}
-                errorMessage={errors.model_id}
-                isRequired
-              >
-                {models
-                  .filter(model => model.status === 'ready' || model.status === 'active')
-                  .map(model => (
-                    <SelectItem key={model.model_id}>
+          {/* 模型和参数 / 回测配置 */}
+          {taskType === 'prediction' ? (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="w-5 h-5" />
+                  <h3 className="text-lg font-semibold">模型和参数</h3>
+                </div>
+              </CardHeader>
+              <CardBody className="space-y-6">
+                <Select
+                  label="预测模型"
+                  placeholder="请选择预测模型"
+                  selectedKeys={formData.model_id ? [formData.model_id] : []}
+                  onSelectionChange={(keys) => {
+                    const modelId = Array.from(keys)[0] as string;
+                    updateFormData('model_id', modelId);
+                    const model = models.find(m => m.model_id === modelId);
+                    setSelectedModel(model || null);
+                  }}
+                  isInvalid={!!errors.model_id}
+                  errorMessage={errors.model_id}
+                  isRequired
+                >
+                  {models
+                    .filter(model => model.status === 'ready' || model.status === 'active')
+                    .map(model => (
+                      <SelectItem key={model.model_id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{model.model_name}</span>
+                          <span className="text-xs text-default-500">
+                            准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                </Select>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    label="预测时间维度"
+                    selectedKeys={[formData.horizon]}
+                    onSelectionChange={(keys) => {
+                      const horizon = Array.from(keys)[0] as string;
+                      updateFormData('horizon', horizon);
+                    }}
+                  >
+                    <SelectItem key="intraday">
+                      日内 (1-4小时)
+                    </SelectItem>
+                    <SelectItem key="short_term">
+                      短期 (1-5天)
+                    </SelectItem>
+                    <SelectItem key="medium_term">
+                      中期 (1-4周)
+                    </SelectItem>
+                  </Select>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">置信水平: {formData.confidence_level}%</label>
+                    <Slider
+                      value={formData.confidence_level}
+                      onChange={(value) => updateFormData('confidence_level', Array.isArray(value) ? value[0] : value)}
+                      minValue={80}
+                      maxValue={99}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Shield className="w-5 h-5 text-primary" />
+                    <div>
+                      <p className="font-medium">风险评估</p>
+                      <p className="text-sm text-default-500">启用风险评估和VaR计算</p>
+                    </div>
+                  </div>
+                  <Switch
+                    isSelected={formData.risk_assessment}
+                    onValueChange={(value) => updateFormData('risk_assessment', value)}
+                  />
+                </div>
+              </CardBody>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-5 h-5" />
+                  <h3 className="text-lg font-semibold">回测配置</h3>
+                </div>
+              </CardHeader>
+              <CardBody className="space-y-6">
+                <Select
+                  label="交易策略"
+                  placeholder="请选择交易策略"
+                  selectedKeys={formData.strategy_name ? [formData.strategy_name] : []}
+                  onSelectionChange={(keys) => {
+                    const strategyKey = Array.from(keys)[0] as string;
+                    updateFormData('strategy_name', strategyKey);
+                  }}
+                  isRequired
+                  isDisabled={availableStrategies.length === 0}
+                >
+                  {availableStrategies.map(strategy => (
+                    <SelectItem key={strategy.key}>
                       <div className="flex flex-col">
-                        <span className="font-medium">{model.model_name}</span>
-                        <span className="text-xs text-default-500">
-                          准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
-                        </span>
+                        <span className="font-medium">{strategy.name}</span>
+                        <span className="text-xs text-default-500">{strategy.description}</span>
                       </div>
                     </SelectItem>
                   ))}
-              </Select>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Select
-                  label="预测时间维度"
-                  selectedKeys={[formData.horizon]}
-                  onSelectionChange={(keys) => {
-                    const horizon = Array.from(keys)[0] as string;
-                    updateFormData('horizon', horizon);
-                  }}
-                >
-                  <SelectItem key="intraday">
-                    日内 (1-4小时)
-                  </SelectItem>
-                  <SelectItem key="short_term">
-                    短期 (1-5天)
-                  </SelectItem>
-                  <SelectItem key="medium_term">
-                    中期 (1-4周)
-                  </SelectItem>
                 </Select>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">置信水平: {formData.confidence_level}%</label>
-                  <Slider
-                    value={formData.confidence_level}
-                    onChange={(value) => updateFormData('confidence_level', Array.isArray(value) ? value[0] : value)}
-                    minValue={80}
-                    maxValue={99}
-                    step={1}
-                    className="w-full"
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    type="date"
+                    label="回测开始日期"
+                    value={formData.start_date}
+                    onValueChange={(value) => updateFormData('start_date', value)}
+                    isInvalid={!!errors.start_date}
+                    errorMessage={errors.start_date}
+                    isRequired
+                  />
+                  
+                  <Input
+                    type="date"
+                    label="回测结束日期"
+                    value={formData.end_date}
+                    onValueChange={(value) => updateFormData('end_date', value)}
+                    isInvalid={!!errors.end_date}
+                    errorMessage={errors.end_date}
+                    isRequired
                   />
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">风险评估</p>
-                    <p className="text-sm text-default-500">启用风险评估和VaR计算</p>
-                  </div>
-                </div>
-                <Switch
-                  isSelected={formData.risk_assessment}
-                  onValueChange={(value) => updateFormData('risk_assessment', value)}
+                
+                <Input
+                  type="number"
+                  label="初始资金"
+                  value={formData.initial_cash.toString()}
+                  onValueChange={(value) => updateFormData('initial_cash', parseFloat(value) || 100000)}
+                  min={1000}
+                  step={1000}
                 />
-              </div>
-            </CardBody>
-          </Card>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    type="number"
+                    label="手续费率"
+                    value={formData.commission_rate.toString()}
+                    onValueChange={(value) => updateFormData('commission_rate', parseFloat(value) || 0.0003)}
+                    min={0}
+                    max={0.01}
+                    step={0.0001}
+                  />
+                  
+                  <Input
+                    type="number"
+                    label="滑点率"
+                    value={formData.slippage_rate.toString()}
+                    onValueChange={(value) => updateFormData('slippage_rate', parseFloat(value) || 0.0001)}
+                    min={0}
+                    max={0.01}
+                    step={0.0001}
+                  />
+                </div>
+              </CardBody>
+            </Card>
+          )}
 
           {/* 提交按钮 */}
           <div className="flex space-x-4">

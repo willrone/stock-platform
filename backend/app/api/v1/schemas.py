@@ -61,9 +61,11 @@ class PredictionRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     """任务创建请求"""
     task_name: str = Field(..., description="任务名称")
+    task_type: str = Field(default="prediction", description="任务类型: prediction 或 backtest")
     stock_codes: List[str] = Field(..., description="股票代码列表")
-    model_id: str = Field(..., description="使用的模型ID")
-    prediction_config: Dict[str, Any] = Field(default={}, description="预测配置")
+    model_id: Optional[str] = Field(None, description="使用的模型ID（预测任务必需）")
+    prediction_config: Optional[Dict[str, Any]] = Field(default=None, description="预测配置")
+    backtest_config: Optional[Dict[str, Any]] = Field(default=None, description="回测配置")
 
 
 class BacktestRequest(BaseModel):

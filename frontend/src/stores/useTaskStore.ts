@@ -14,6 +14,7 @@ import { devtools } from 'zustand/middleware';
 export interface Task {
   task_id: string;
   task_name: string;
+  task_type?: string;  // 添加任务类型字段
   status: 'created' | 'running' | 'completed' | 'failed';
   progress: number;
   stock_codes: string[];
@@ -21,6 +22,8 @@ export interface Task {
   created_at: string;
   completed_at?: string;
   error_message?: string;
+  result?: any;  // 添加原始结果字段
+  backtest_results?: any;  // 添加顶层回测结果字段
   results?: {
     total_stocks: number;
     successful_predictions: number;

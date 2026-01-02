@@ -145,3 +145,99 @@ def execute_prediction_task_simple(task_id: str):
     finally:
         session.close()
 
+
+def execute_backtest_task_simple(task_id: str):
+    """简化的回测任务执行函数（后台任务）"""
+    session = SessionLocal()
+    try:
+        from app.services.backtest import BacktestExecutor, BacktestConfig
+        from app.core.config import settings
+        from datetime import datetime
+        
+        task_repository = TaskRepository(session)
+        
+        # 获取任务
+        task = task_repository.get_task_by_id(task_id)
+        if not task:
+            logger.error(f"任务不存在: {task_id}")
+            return
+        
+        # 更新任务状态为运行中
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            progress=10.0
+        )
+        
+        # 解析任务配置
+        config = task.config or {}
+        stock_codes = config.get('stock_codes', [])
+        strategy_name = config.get('strategy_name', 'default_strategy')
+        start_date_str = config.get('start_date')
+        end_date_str = config.get('end_date')
+        initial_cash = config.get('initial_cash', 100000.0)
+        
+        if not start_date_str or not end_date_str:
+            raise ValueError("回测任务需要提供start_date和end_date")
+        
+        start_date = datetime.fromisoformat(start_date_str) if isinstance(start_date_str, str) else start_date_str
+        end_date = datetime.fromisoformat(end_date_str) if isinstance(end_date_str, str) else end_date_str
+        
+        logger.info(f"开始执行回测任务: {task_id}, 股票数量: {len(stock_codes)}, 期间: {start_date} - {end_date}")
+        
+        # 创建回测执行器
+        executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+        
+        # 创建回测配置
+        backtest_config = BacktestConfig(
+            initial_cash=initial_cash,
+            commission_rate=config.get('commission_rate', 0.0003),
+            slippage_rate=config.get('slippage_rate', 0.0001)
+        )
+        
+        # 执行回测
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            progress=30.0
+        )
+        
+        backtest_report = executor.run_backtest(
+            strategy_name=strategy_name,
+            stock_codes=stock_codes,
+            start_date=start_date,
+            end_date=end_date,
+            strategy_config=config.get('strategy_config', {}),
+            backtest_config=backtest_config
+        )
+        
+        # 更新进度
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            progress=90.0
+        )
+        
+        # 保存回测结果
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.COMPLETED,
+            progress=100.0,
+            result=backtest_report
+        )
+        
+        logger.info(f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}")
+        
+    except Exception as e:
+        logger.error(f"执行回测任务失败: {task_id}, 错误: {e}", exc_info=True)
+        try:
+            task_repository.update_task_status(
+                task_id=task_id,
+                status=TaskStatus.FAILED,
+                error_message=str(e)
+            )
+        except:
+            pass
+    finally:
+        session.close()
+

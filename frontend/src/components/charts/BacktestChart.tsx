@@ -40,11 +40,40 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
 
   // 处理回测数据（优先使用真实数据，否则生成模拟数据）
   const processBacktestData = () => {
+    // 调试日志
+    console.log('BacktestChart - backtestData:', backtestData);
+    
     // 如果提供了真实回测数据，使用真实数据
-    if (backtestData && backtestData.portfolio && backtestData.risk_metrics) {
-      const portfolio = backtestData.portfolio;
-      const riskMetrics = backtestData.risk_metrics;
-      const tradingStats = backtestData.trading_stats || {};
+    // 检查多种可能的数据格式
+    const hasRealData = backtestData && (
+      (backtestData.portfolio && backtestData.risk_metrics) ||
+      (backtestData.equity_curve && backtestData.equity_curve.length > 0) ||
+      (backtestData.total_return !== undefined) ||
+      (backtestData.sharpe_ratio !== undefined)
+    );
+    
+    if (hasRealData) {
+      console.log('BacktestChart - 使用真实回测数据');
+      // 兼容多种数据格式
+      const portfolio = backtestData.portfolio || {
+        initial_cash: backtestData.initial_cash || 100000,
+        final_value: backtestData.final_value || backtestData.initial_cash || 100000,
+        total_return: backtestData.total_return || 0,
+        annualized_return: backtestData.annualized_return || 0
+      };
+      
+      const riskMetrics = backtestData.risk_metrics || {
+        volatility: backtestData.volatility || 0,
+        sharpe_ratio: backtestData.sharpe_ratio || 0,
+        max_drawdown: backtestData.max_drawdown || 0
+      };
+      
+      const tradingStats = backtestData.trading_stats || {
+        total_trades: backtestData.total_trades || 0,
+        win_rate: backtestData.win_rate || 0,
+        profit_factor: backtestData.profit_factor || 0
+      };
+      
       const tradeHistory = backtestData.trade_history || [];
       
       // 从真实数据构建图表数据
@@ -84,6 +113,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
     }
     
     // 否则生成模拟回测数据
+    console.log('BacktestChart - 未找到真实数据，生成模拟数据');
     return generateMockBacktestData();
   };
 

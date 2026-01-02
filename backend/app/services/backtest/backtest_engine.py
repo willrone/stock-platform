@@ -9,8 +9,15 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from enum import Enum
-import talib
 from loguru import logger
+
+# 尝试导入talib，如果不存在则使用pandas实现
+try:
+    import talib
+    TALIB_AVAILABLE = True
+except ImportError:
+    TALIB_AVAILABLE = False
+    logger.warning("TA-Lib未安装，将使用pandas实现技术指标")
 
 from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
 from app.models.task_models import BacktestResult
@@ -215,9 +222,17 @@ class RSIStrategy(BaseStrategy):
         """计算RSI指标"""
         close_prices = data['close']
         
-        # 使用talib计算RSI
-        rsi = pd.Series(talib.RSI(close_prices.values, timeperiod=self.rsi_period), 
-                       index=close_prices.index)
+        # 使用talib或pandas计算RSI
+        if TALIB_AVAILABLE:
+            rsi = pd.Series(talib.RSI(close_prices.values, timeperiod=self.rsi_period), 
+                           index=close_prices.index)
+        else:
+            # 使用pandas实现RSI
+            delta = close_prices.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
         
         return {
             'rsi': rsi,
@@ -287,18 +302,29 @@ class MACDStrategy(BaseStrategy):
         """计算MACD指标"""
         close_prices = data['close']
         
-        # 使用talib计算MACD
-        macd, macd_signal, macd_hist = talib.MACD(
-            close_prices.values, 
-            fastperiod=self.fast_period,
-            slowperiod=self.slow_period, 
-            signalperiod=self.signal_period
-        )
+        # 使用talib或pandas计算MACD
+        if TALIB_AVAILABLE:
+            macd, macd_signal, macd_hist = talib.MACD(
+                close_prices.values, 
+                fastperiod=self.fast_period,
+                slowperiod=self.slow_period, 
+                signalperiod=self.signal_period
+            )
+            macd = pd.Series(macd, index=close_prices.index)
+            macd_signal = pd.Series(macd_signal, index=close_prices.index)
+            macd_hist = pd.Series(macd_hist, index=close_prices.index)
+        else:
+            # 使用pandas实现MACD
+            ema_fast = close_prices.ewm(span=self.fast_period, adjust=False).mean()
+            ema_slow = close_prices.ewm(span=self.slow_period, adjust=False).mean()
+            macd = ema_fast - ema_slow
+            macd_signal = macd.ewm(span=self.signal_period, adjust=False).mean()
+            macd_hist = macd - macd_signal
         
         return {
-            'macd': pd.Series(macd, index=close_prices.index),
-            'macd_signal': pd.Series(macd_signal, index=close_prices.index),
-            'macd_hist': pd.Series(macd_hist, index=close_prices.index),
+            'macd': macd,
+            'macd_signal': macd_signal,
+            'macd_hist': macd_hist,
             'price': close_prices
         }
     

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
 
-from ..backtest_engine import (
+from .backtest_engine import (
     BaseStrategy, StrategyFactory, PortfolioManager, BacktestConfig,
     TradingSignal, Trade, Position
 )
