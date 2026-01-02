@@ -29,6 +29,8 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
+  Progress,
+  Tooltip,
 } from '@heroui/react';
 import {
   Plus,
@@ -39,10 +41,17 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
+import {
+  Accordion,
+  AccordionItem,
+  Checkbox,
+} from '@heroui/react';
 import { DataService } from '../../services/dataService';
-import { useDataStore } from '../../stores/useDataStore';
+import { useDataStore, Model } from '../../stores/useDataStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { StockSelector } from '../../components/tasks/StockSelector';
+import { TrainingReportModal } from '../../components/models/TrainingReportModal';
+import { getTrainingProgressWebSocket, cleanupTrainingProgressWebSocket } from '../../services/TrainingProgressWebSocket';
 
 export default function ModelsPage() {
   const router = useRouter();
@@ -50,38 +59,170 @@ export default function ModelsPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
-  const [selectedModel, setSelectedModel] = useState<Model | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
-  const [retrainingModelId, setRetrainingModelId] = useState<string | null>(null);
-  const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const { isOpen: isTrainingReportOpen, onOpen: onTrainingReportOpen, onClose: onTrainingReportClose } = useDisclosure();
+  const { isOpen: isLiveTrainingOpen, onOpen: onLiveTrainingOpen, onClose: onLiveTrainingClose } = useDisclosure();
+  const [trainingReportModelId, setTrainingReportModelId] = useState<string | null>(null);
+  const [liveTrainingModelId, setLiveTrainingModelId] = useState<string | null>(null);
+  
+  // WebSocket连接状态
+  const [wsConnected, setWsConnected] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState<Record<string, any>>({});
   
   const [formData, setFormData] = useState({
     model_name: '',
-    model_type: 'random_forest',
+    model_type: 'lightgbm',
     stock_codes: [] as string[],
     start_date: '',
     end_date: '',
     description: '',
+    hyperparameters: {} as Record<string, any>,
+    enable_hyperparameter_tuning: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // 加载模型列表
-  useEffect(() => {
-    loadModels();
-  }, []);
-
   const loadModels = async () => {
-    setLoading(true);
     try {
-      const result = await DataService.getModels();
-      setModels(result.models);
+      setLoading(true);
+      const data = await DataService.getModels();
+      setModels(data.models || data);
     } catch (error) {
       console.error('加载模型列表失败:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 设置WebSocket连接
+  const setupWebSocketConnection = async () => {
+    try {
+      const wsClient = getTrainingProgressWebSocket();
+      
+      // 连接WebSocket
+      await wsClient.connect();
+      setWsConnected(true);
+      
+      // 订阅所有训练进度更新
+      const unsubscribe = wsClient.subscribeToAll((data) => {
+        handleWebSocketMessage(data);
+      });
+      
+      // 保存取消订阅函数以便清理
+      (window as any).unsubscribeTrainingProgress = unsubscribe;
+      
+    } catch (error) {
+      console.error('设置WebSocket连接失败:', error);
+      setWsConnected(false);
+    }
+  };
+
+  // 处理WebSocket消息
+  const handleWebSocketMessage = (data: any) => {
+    if (data.type === 'model:training:progress') {
+      setTrainingProgress(prev => ({
+        ...prev,
+        [data.model_id]: {
+          progress: data.progress,
+          stage: data.stage,
+          message: data.message,
+          metrics: data.metrics || {},
+          timestamp: data.timestamp
+        }
+      }));
+      
+      // 更新模型列表中的进度
+      const updatedModels = models.map((model: Model): Model => 
+        model.model_id === data.model_id 
+          ? { 
+              ...model, 
+              training_progress: data.progress,
+              training_stage: data.stage,
+              status: (data.progress >= 100 ? 'ready' : 'training') as Model['status']
+            }
+          : model
+      );
+      setModels(updatedModels);
+    } else if (data.type === 'model:training:completed') {
+      // 训练完成，刷新模型列表
+      loadModels();
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        delete updated[data.model_id];
+        return updated;
+      });
+    } else if (data.type === 'model:training:failed') {
+      // 训练失败，更新状态
+      const updatedModels = models.map((model: Model): Model => 
+        model.model_id === data.model_id 
+          ? { ...model, status: 'failed', training_stage: 'failed' }
+          : model
+      );
+      setModels(updatedModels);
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        delete updated[data.model_id];
+        return updated;
+      });
+    }
+  };
+
+  // 获取状态颜色
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'ready':
+        return 'success';
+      case 'active':
+        return 'primary';
+      case 'deployed':
+        return 'secondary';
+      case 'training':
+        return 'warning';
+      case 'failed':
+        return 'danger';
+      default:
+        return 'default';
+    }
+  };
+
+  // 获取状态文本
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'ready': '就绪',
+      'active': '活跃',
+      'deployed': '已部署',
+      'training': '训练中',
+      'failed': '失败',
+    };
+    return statusMap[status] || status;
+  };
+
+  // 获取训练阶段文本
+  const getStageText = (stage: string) => {
+    const stageMap: Record<string, string> = {
+      'initializing': '初始化中',
+      'preparing': '准备数据',
+      'configuring': '配置模型',
+      'preprocessing': '数据预处理',
+      'training': '模型训练',
+      'evaluating': '模型评估',
+      'saving': '保存模型',
+      'completed': '训练完成',
+      'failed': '训练失败',
+      'hyperparameter_tuning': '超参数调优'
+    };
+    return stageMap[stage] || stage;
+  };
+
+  // 显示实时训练详情
+  const showLiveTrainingDetails = (modelId: string) => {
+    setLiveTrainingModelId(modelId);
+    onLiveTrainingOpen();
+  };
+
+  // 显示训练报告
+  const showTrainingReport = (modelId: string) => {
+    setTrainingReportModelId(modelId);
+    onTrainingReportOpen();
   };
 
   // 验证表单
@@ -112,157 +253,52 @@ export default function ModelsPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // 创建模型
-  const handleCreateModel = async () => {
+  // 提交创建模型表单
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }
 
     setCreating(true);
     try {
-      const result = await DataService.createModel({
-        model_name: formData.model_name,
-        model_type: formData.model_type,
-        stock_codes: formData.stock_codes,
-        start_date: formData.start_date,
-        end_date: formData.end_date,
-        description: formData.description,
-      });
-      
+      const result = await DataService.createModel(formData);
       console.log('模型创建成功:', result);
+      
+      // 重置表单
+      setFormData({
+        model_name: '',
+        model_type: 'lightgbm',
+        stock_codes: [],
+        start_date: '',
+        end_date: '',
+        description: '',
+        hyperparameters: {},
+        enable_hyperparameter_tuning: false,
+      });
+      setErrors({});
+      
+      // 关闭对话框并刷新列表
       onClose();
-      resetForm();
       await loadModels();
-    } catch (error) {
+      
+      alert('模型创建成功！训练任务已开始，您可以在模型列表中查看进度。');
+    } catch (error: any) {
       console.error('创建模型失败:', error);
-      setErrors({ submit: '创建模型失败，请稍后重试' });
+      alert(error?.message || '创建模型失败，请稍后重试');
     } finally {
       setCreating(false);
     }
   };
 
-  // 重置表单
-  const resetForm = () => {
-    setFormData({
-      model_name: '',
-      model_type: 'random_forest',
-      stock_codes: [],
-      start_date: '',
-      end_date: '',
-      description: '',
-    });
-    setErrors({});
-  };
-
-  // 获取状态颜色
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ready':
-      case 'active':
-      case 'deployed':
-        return 'success';
-      case 'training':
-        return 'warning';
-      case 'failed':
-        return 'danger';
-      default:
-        return 'default';
-    }
-  };
-
-  // 获取状态文本
-  const getStatusText = (status: string) => {
-    const statusMap: Record<string, string> = {
-      'ready': '就绪',
-      'active': '活跃',
-      'deployed': '已部署',
-      'training': '训练中',
-      'failed': '失败',
+  useEffect(() => {
+    loadModels();
+    setupWebSocketConnection();
+    
+    return () => {
+      // 清理WebSocket连接
+      cleanupTrainingProgressWebSocket();
     };
-    return statusMap[status] || status;
-  };
-
-  // 重建模型任务
-  const handleRetrainModel = async (model: Model) => {
-    if (!confirm(`确定要重新训练模型 "${model.model_name}" 吗？这将创建一个新的训练任务。`)) {
-      return;
-    }
-
-    setRetrainingModelId(model.model_id);
-    try {
-      // 获取模型详情以获取训练参数
-      const detail = await DataService.getModelDetail(model.model_id);
-      
-      // 从详情中提取训练参数
-      const trainingInfo = (detail as any).training_info || {};
-      const trainingDataPeriod = trainingInfo.training_data_period || {};
-      const stockCodes = trainingInfo.stock_codes || [];
-      
-      if (!stockCodes || stockCodes.length === 0) {
-        alert('无法获取模型的训练股票代码，无法重建任务');
-        return;
-      }
-
-      if (!trainingDataPeriod.start || !trainingDataPeriod.end) {
-        alert('无法获取模型的训练日期范围，无法重建任务');
-        return;
-      }
-
-      // 创建新的训练任务，使用相同的参数
-      // 清理模型名称，移除不允许的字符
-      const timestamp = new Date().toLocaleString('zh-CN', { 
-        month: '2-digit', 
-        day: '2-digit', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }).replace(/\//g, '-').replace(/:/g, '-'); // 替换斜杠和冒号为横线
-      
-      const result = await DataService.createModel({
-        model_name: `${model.model_name}_重建_${timestamp}`,
-        model_type: model.model_type,
-        stock_codes: stockCodes,
-        start_date: trainingDataPeriod.start.split('T')[0], // 只取日期部分
-        end_date: trainingDataPeriod.end.split('T')[0],
-        description: `重建自模型: ${model.model_name}`,
-        hyperparameters: trainingInfo.hyperparameters || {},
-        parent_model_id: model.model_id, // 标记为原模型的子版本
-      });
-      
-      console.log('模型重建任务创建成功:', result);
-      alert('模型重建任务已创建，正在后台训练中');
-      await loadModels();
-    } catch (error) {
-      console.error('重建模型失败:', error);
-      alert('重建模型失败，请稍后重试');
-    } finally {
-      setRetrainingModelId(null);
-    }
-  };
-
-  // 删除模型
-  const handleDeleteModel = async (model: Model) => {
-    if (!confirm(`确定要删除模型 "${model.model_name}" 吗？此操作不可恢复。`)) {
-      return;
-    }
-
-    // 不能删除正在训练中的模型
-    if (model.status === 'training') {
-      alert('无法删除正在训练中的模型，请等待训练完成或取消训练');
-      return;
-    }
-
-    setDeletingModelId(model.model_id);
-    try {
-      await DataService.deleteModel(model.model_id);
-      alert('模型删除成功');
-      await loadModels();
-    } catch (error: any) {
-      console.error('删除模型失败:', error);
-      alert(error?.message || '删除模型失败，请稍后重试');
-    } finally {
-      setDeletingModelId(null);
-    }
-  };
+  }, []);
 
   if (loading && models.length === 0) {
     return <LoadingSpinner text="加载模型列表..." />;
@@ -319,7 +355,6 @@ export default function ModelsPage() {
                 <TableColumn>模型名称</TableColumn>
                 <TableColumn>类型</TableColumn>
                 <TableColumn>准确率</TableColumn>
-                <TableColumn>版本</TableColumn>
                 <TableColumn>状态</TableColumn>
                 <TableColumn>创建时间</TableColumn>
                 <TableColumn>操作</TableColumn>
@@ -343,7 +378,6 @@ export default function ModelsPage() {
                         {(model.accuracy * 100).toFixed(1)}%
                       </span>
                     </TableCell>
-                    <TableCell>{model.version}</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Chip
@@ -353,14 +387,58 @@ export default function ModelsPage() {
                         >
                           {getStatusText(model.status)}
                         </Chip>
-                        {model.status === 'training' && model.training_progress !== undefined && (
-                          <span className="text-xs text-default-500">
-                            进度: {model.training_progress.toFixed(0)}%
-                          </span>
+                        
+                        {/* 训练进度显示 */}
+                        {model.status === 'training' && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Progress 
+                                value={trainingProgress[model.model_id]?.progress || model.training_progress || 0}
+                                size="sm"
+                                className="flex-1"
+                                color="primary"
+                              />
+                              <span className="text-xs text-default-500 min-w-[40px]">
+                                {(trainingProgress[model.model_id]?.progress || model.training_progress || 0).toFixed(0)}%
+                              </span>
+                            </div>
+                            
+                            {/* 训练阶段和消息 */}
+                            <div className="text-xs text-default-400">
+                              {trainingProgress[model.model_id]?.message || 
+                               getStageText(trainingProgress[model.model_id]?.stage || model.training_stage)}
+                            </div>
+                            
+                            {/* 实时指标 */}
+                            {trainingProgress[model.model_id]?.metrics && Object.keys(trainingProgress[model.model_id].metrics).length > 0 && (
+                              <div className="flex gap-2 text-xs">
+                                {Object.entries(trainingProgress[model.model_id].metrics).slice(0, 2).map(([key, value]) => (
+                                  <Tooltip key={key} content={key}>
+                                    <span className="text-default-500">
+                                      {key}: {typeof value === 'number' ? value.toFixed(3) : String(value)}
+                                    </span>
+                                  </Tooltip>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* 查看实时详情按钮 */}
+                            <Button
+                              size="sm"
+                              variant="light"
+                              color="primary"
+                              className="text-xs h-6"
+                              onPress={() => showLiveTrainingDetails(model.model_id)}
+                            >
+                              查看实时详情
+                            </Button>
+                          </div>
                         )}
-                        {model.training_stage && (
+                        
+                        {/* 非训练状态的简单显示 */}
+                        {model.status !== 'training' && model.training_stage && (
                           <span className="text-xs text-default-400">
-                            {model.training_stage}
+                            {getStageText(model.training_stage)}
                           </span>
                         )}
                       </div>
@@ -370,50 +448,16 @@ export default function ModelsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="light"
-                          onPress={async () => {
-                            setLoadingModelId(model.model_id);
-                            setDetailLoading(true);
-                            try {
-                              const detail = await DataService.getModelDetail(model.model_id);
-                              setSelectedModel(detail);
-                              onDetailOpen();
-                            } catch (error) {
-                              console.error('加载模型详情失败:', error);
-                              alert('加载模型详情失败，请稍后重试');
-                            } finally {
-                              setDetailLoading(false);
-                              setLoadingModelId(null);
-                            }
-                          }}
-                          isLoading={detailLoading && loadingModelId === model.model_id}
-                        >
-                          查看
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="light"
-                          color="primary"
-                          startContent={<RefreshCw className="w-4 h-4" />}
-                          onPress={() => handleRetrainModel(model)}
-                          isLoading={retrainingModelId === model.model_id}
-                          isDisabled={model.status === 'training'}
-                        >
-                          重建
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="light"
-                          color="danger"
-                          startContent={<Trash2 className="w-4 h-4" />}
-                          onPress={() => handleDeleteModel(model)}
-                          isLoading={deletingModelId === model.model_id}
-                          isDisabled={model.status === 'training'}
-                        >
-                          删除
-                        </Button>
+                        {model.status === 'ready' && (
+                          <Button
+                            size="sm"
+                            variant="light"
+                            color="primary"
+                            onPress={() => showTrainingReport(model.model_id)}
+                          >
+                            查看报告
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -454,18 +498,31 @@ export default function ModelsPage() {
                   const type = Array.from(keys)[0] as string;
                   setFormData((prev) => ({ ...prev, model_type: type }));
                 }}
-                description="选择要训练的模型类型"
+                description="选择要训练的模型类型（基于Qlib框架统一训练）"
               >
-                <SelectItem key="random_forest" description="传统机器学习模型">随机森林</SelectItem>
-                <SelectItem key="linear_regression" description="传统机器学习模型">线性回归</SelectItem>
-                <SelectItem key="xgboost" description="传统机器学习模型">XGBoost</SelectItem>
-                <SelectItem key="lightgbm" description="传统机器学习模型">LightGBM</SelectItem>
-                <SelectItem key="lstm" description="深度学习模型">LSTM</SelectItem>
-                <SelectItem key="transformer" description="深度学习模型">Transformer</SelectItem>
-                <SelectItem key="timesnet" description="深度学习模型">TimesNet</SelectItem>
-                <SelectItem key="patchtst" description="深度学习模型">PatchTST</SelectItem>
-                <SelectItem key="informer" description="深度学习模型">Informer</SelectItem>
+                <SelectItem key="lightgbm" description="推荐：高效的梯度提升模型，适合表格数据">
+                  LightGBM (推荐)
+                </SelectItem>
+                <SelectItem key="xgboost" description="经典的梯度提升模型，性能稳定">
+                  XGBoost
+                </SelectItem>
+                <SelectItem key="linear_regression" description="简单的线性回归模型，训练快速">
+                  线性回归
+                </SelectItem>
+                <SelectItem key="transformer" description="Transformer模型，适合复杂时序模式">
+                  Transformer
+                </SelectItem>
               </Select>
+
+              <StockSelector
+                value={formData.stock_codes}
+                onChange={(codes) =>
+                  setFormData((prev) => ({ ...prev, stock_codes: codes }))
+                }
+              />
+              {errors.stock_codes && (
+                <p className="text-danger text-sm mt-1">{errors.stock_codes}</p>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <Input
@@ -492,25 +549,6 @@ export default function ModelsPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  训练股票选择 <span className="text-danger">*</span>
-                </label>
-                <StockSelector
-                  value={formData.stock_codes}
-                  onChange={(stocks) => {
-                    setFormData((prev) => ({ ...prev, stock_codes: stocks }));
-                    if (errors.stock_codes) {
-                      setErrors((prev) => ({ ...prev, stock_codes: '' }));
-                    }
-                  }}
-                  placeholder="搜索股票代码或名称"
-                />
-                {errors.stock_codes && (
-                  <p className="text-danger text-sm mt-1">{errors.stock_codes}</p>
-                )}
-              </div>
-
               <Input
                 label="模型描述（可选）"
                 placeholder="请输入模型描述"
@@ -520,9 +558,14 @@ export default function ModelsPage() {
                 }
               />
 
-              {errors.submit && (
-                <div className="text-danger text-sm">{errors.submit}</div>
-              )}
+              <Checkbox
+                isSelected={formData.enable_hyperparameter_tuning}
+                onValueChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, enable_hyperparameter_tuning: checked }))
+                }
+              >
+                启用自动超参数调优
+              </Checkbox>
             </div>
           </ModalBody>
           <ModalFooter>
@@ -531,158 +574,126 @@ export default function ModelsPage() {
             </Button>
             <Button
               color="primary"
-              onPress={handleCreateModel}
+              onPress={handleSubmit}
               isLoading={creating}
+              startContent={!creating ? <Plus className="w-4 h-4" /> : undefined}
             >
-              创建模型
+              {creating ? '创建中...' : '创建模型'}
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* 模型详情对话框 */}
-      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="3xl" scrollBehavior="inside">
+      {/* 训练报告详情弹窗 */}
+      <TrainingReportModal
+        isOpen={isTrainingReportOpen}
+        onClose={onTrainingReportClose}
+        modelId={trainingReportModelId}
+      />
+
+      {/* 实时训练监控弹窗 */}
+      <Modal isOpen={isLiveTrainingOpen} onClose={onLiveTrainingClose} size="5xl" scrollBehavior="inside">
         <ModalContent>
           <ModalHeader>
             <div className="flex items-center space-x-2">
-              <Brain className="w-5 h-5" />
-              <span>模型详情</span>
+              <TrendingUp className="w-5 h-5" />
+              <span>实时训练监控</span>
+              {liveTrainingModelId && (
+                <Chip size="sm" color="primary" variant="flat">
+                  {models.find(m => m.model_id === liveTrainingModelId)?.model_name || '未知模型'}
+                </Chip>
+              )}
             </div>
           </ModalHeader>
           <ModalBody>
-            {selectedModel ? (
+            {liveTrainingModelId && trainingProgress[liveTrainingModelId] ? (
               <div className="space-y-6">
-                {/* 基本信息 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">基本信息</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-default-500">模型名称</p>
-                      <p className="text-base font-medium">{selectedModel.model_name}</p>
+                {/* 顶部：实时指标概览 */}
+                <div className="grid grid-cols-2 gap-6">
+                  {/* 左侧：实时指标 */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">实时指标</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {trainingProgress[liveTrainingModelId].metrics && Object.entries(trainingProgress[liveTrainingModelId].metrics).map(([key, value]) => (
+                        <Card key={key} className="p-3">
+                          <div className="text-sm text-default-500">{key}</div>
+                          <div className="text-lg font-semibold">
+                            {typeof value === 'number' ? value.toFixed(4) : String(value)}
+                          </div>
+                        </Card>
+                      ))}
                     </div>
-                    <div>
-                      <p className="text-sm text-default-500">模型类型</p>
-                      <p className="text-base font-medium">{selectedModel.model_type}</p>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>总体进度</span>
+                        <span>{trainingProgress[liveTrainingModelId].progress?.toFixed(1)}%</span>
+                      </div>
+                      <Progress value={trainingProgress[liveTrainingModelId].progress || 0} />
+                      <div className="text-xs text-default-500">
+                        当前阶段: {getStageText(trainingProgress[liveTrainingModelId].stage)}
+                      </div>
+                      {trainingProgress[liveTrainingModelId].message && (
+                        <div className="text-xs text-default-400">
+                          {trainingProgress[liveTrainingModelId].message}
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-sm text-default-500">版本</p>
-                      <p className="text-base font-medium">{selectedModel.version}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-default-500">状态</p>
-                      <Chip
-                        size="sm"
-                        color={
-                          selectedModel.status === 'ready' || selectedModel.status === 'active' || selectedModel.status === 'deployed'
-                            ? 'success'
-                            : selectedModel.status === 'training'
-                            ? 'warning'
-                            : selectedModel.status === 'failed'
-                            ? 'danger'
-                            : 'default'
-                        }
-                        variant="flat"
-                      >
-                        {selectedModel.status === 'ready' ? '就绪' :
-                         selectedModel.status === 'active' ? '活跃' :
-                         selectedModel.status === 'deployed' ? '已部署' :
-                         selectedModel.status === 'training' ? '训练中' :
-                         selectedModel.status === 'failed' ? '失败' :
-                         selectedModel.status}
-                      </Chip>
-                    </div>
-                    <div>
-                      <p className="text-sm text-default-500">准确率</p>
-                      <p className="text-base font-medium">{(selectedModel.accuracy * 100).toFixed(2)}%</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-default-500">创建时间</p>
-                      <p className="text-base font-medium">
-                        {new Date(selectedModel.created_at).toLocaleString('zh-CN')}
-                      </p>
+                  </div>
+                  
+                  {/* 右侧：训练曲线占位符 */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">训练曲线</h4>
+                    <div className="h-64 bg-default-50 rounded-lg flex items-center justify-center">
+                      <div className="text-center text-default-500">
+                        <TrendingUp className="w-8 h-8 mx-auto mb-2" />
+                        <p>训练曲线图</p>
+                        <p className="text-sm">(开发中)</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                {/* 性能指标 */}
-                {selectedModel.performance_metrics && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">性能指标</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                      {selectedModel.performance_metrics.accuracy !== undefined && (
-                        <div>
-                          <p className="text-sm text-default-500">准确率</p>
-                          <p className="text-base font-medium">
-                            {typeof selectedModel.performance_metrics.accuracy === 'number' 
-                              ? (selectedModel.performance_metrics.accuracy * 100).toFixed(2) + '%'
-                              : String(selectedModel.performance_metrics.accuracy)}
-                          </p>
-                        </div>
-                      )}
-                      {(selectedModel.performance_metrics as any).rmse !== undefined && (
-                        <div>
-                          <p className="text-sm text-default-500">RMSE</p>
-                          <p className="text-base font-medium">
-                            {typeof (selectedModel.performance_metrics as any).rmse === 'number'
-                              ? (selectedModel.performance_metrics as any).rmse.toFixed(4)
-                              : String((selectedModel.performance_metrics as any).rmse)}
-                          </p>
-                        </div>
-                      )}
-                      {(selectedModel.performance_metrics as any).mae !== undefined && (
-                        <div>
-                          <p className="text-sm text-default-500">MAE</p>
-                          <p className="text-base font-medium">
-                            {typeof (selectedModel.performance_metrics as any).mae === 'number'
-                              ? (selectedModel.performance_metrics as any).mae.toFixed(4)
-                              : String((selectedModel.performance_metrics as any).mae)}
-                          </p>
-                        </div>
-                      )}
-                      {selectedModel.performance_metrics.sharpe_ratio !== undefined && (
-                        <div>
-                          <p className="text-sm text-default-500">夏普比率</p>
-                          <p className="text-base font-medium">
-                            {typeof selectedModel.performance_metrics.sharpe_ratio === 'number'
-                              ? selectedModel.performance_metrics.sharpe_ratio.toFixed(4)
-                              : String(selectedModel.performance_metrics.sharpe_ratio)}
-                          </p>
-                        </div>
-                      )}
-                      {selectedModel.performance_metrics.max_drawdown !== undefined && (
-                        <div>
-                          <p className="text-sm text-default-500">最大回撤</p>
-                          <p className="text-base font-medium">
-                            {typeof selectedModel.performance_metrics.max_drawdown === 'number'
-                              ? (selectedModel.performance_metrics.max_drawdown * 100).toFixed(2) + '%'
-                              : String(selectedModel.performance_metrics.max_drawdown)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                
+                {/* 训练日志占位符 */}
+                <div>
+                  <h4 className="font-semibold mb-2">训练日志</h4>
+                  <div className="bg-gray-900 text-green-400 p-4 rounded-lg h-32 overflow-y-auto text-sm font-mono">
+                    <div>[{new Date().toLocaleTimeString()}] 训练进度: {trainingProgress[liveTrainingModelId].progress?.toFixed(1)}%</div>
+                    <div>[{new Date().toLocaleTimeString()}] 当前阶段: {getStageText(trainingProgress[liveTrainingModelId].stage)}</div>
+                    {trainingProgress[liveTrainingModelId].message && (
+                      <div>[{new Date().toLocaleTimeString()}] {trainingProgress[liveTrainingModelId].message}</div>
+                    )}
+                    <div className="text-gray-500">更多日志功能开发中...</div>
                   </div>
-                )}
-
-                {/* 描述 */}
-                {selectedModel.description && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">描述</h3>
-                    <p className="text-base text-default-600">{selectedModel.description}</p>
-                  </div>
-                )}
+                </div>
               </div>
             ) : (
-              <LoadingSpinner />
+              <div className="text-center py-8">
+                <div className="text-default-500">
+                  {liveTrainingModelId ? '暂无训练数据' : '请选择一个训练中的模型'}
+                </div>
+              </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button variant="light" onPress={onDetailClose}>
+            <Button variant="light" onPress={onLiveTrainingClose}>
               关闭
             </Button>
+            {liveTrainingModelId && trainingProgress[liveTrainingModelId] && (
+              <Button 
+                color="danger" 
+                variant="light"
+                onPress={() => {
+                  // TODO: 实现停止训练功能
+                  alert('停止训练功能开发中...');
+                }}
+              >
+                停止训练
+              </Button>
+            )}
           </ModalFooter>
         </ModalContent>
       </Modal>
     </div>
   );
 }
-

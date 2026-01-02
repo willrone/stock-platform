@@ -45,7 +45,7 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
         );
         
         // 解析数据
-        const apiData = response.data;
+        const apiData: any = response.data;
         const dataArray = (apiData?.data && Array.isArray(apiData.data)) 
           ? apiData.data 
           : (Array.isArray(apiData) ? apiData : []);

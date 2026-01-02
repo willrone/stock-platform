@@ -288,6 +288,9 @@ export class DataService {
     hyperparameters?: Record<string, any>;
     description?: string;
     parent_model_id?: string;
+    enable_hyperparameter_tuning?: boolean;
+    hyperparameter_search_strategy?: string;
+    hyperparameter_search_trials?: number;
   }): Promise<{
     model_id: string;
     model_name: string;

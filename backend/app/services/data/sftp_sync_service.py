@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from loguru import logger
 from app.core.config import settings
+from ..events.data_sync_events import get_data_sync_event_manager, DataSyncEventType
 
 # 绑定日志类型为数据同步
 logger = logger.bind(log_type="data_sync")
@@ -65,6 +66,9 @@ class SFTPSyncService:
             self.local_data_dir = Path(local_data_dir)
         
         self.local_data_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 获取事件管理器
+        self.event_manager = get_data_sync_event_manager()
         
         logger.info(f"SFTP同步服务初始化: {host}, 本地目录: {self.local_data_dir}")
     
@@ -226,6 +230,8 @@ class SFTPSyncService:
         Returns:
             同步结果
         """
+        import asyncio
+        
         sync_start_time = datetime.now()
         ssh = None
         sftp = None
@@ -269,6 +275,22 @@ class SFTPSyncService:
             
             for i, stock_code in enumerate(stock_codes, 1):
                 try:
+                    # 发出同步开始事件
+                    try:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(
+                            self.event_manager.emit_sync_started(
+                                stock_code=stock_code,
+                                date_range=(sync_start_time, datetime.now()),
+                                sync_type="sftp_sync",
+                                metadata={"batch_index": i, "total_files": total_files}
+                            )
+                        )
+                        loop.close()
+                    except Exception as e:
+                        logger.warning(f"发出同步开始事件失败 {stock_code}: {e}")
+                    
                     file_start_time = datetime.now()
                     success, file_size = self.sync_stock_file(stock_code, sftp)
                     file_duration = (datetime.now() - file_start_time).total_seconds()
@@ -277,9 +299,50 @@ class SFTPSyncService:
                         synced_files += 1
                         total_size += file_size
                         logger.debug(f"[{i}/{total_files}] {stock_code}: 成功, 大小: {file_size} 字节, 耗时: {file_duration:.2f}秒")
+                        
+                        # 发出同步完成事件
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(
+                                self.event_manager.emit_sync_completed(
+                                    stock_code=stock_code,
+                                    date_range=(file_start_time, datetime.now()),
+                                    sync_type="sftp_sync",
+                                    metadata={
+                                        "file_size": file_size,
+                                        "duration_seconds": file_duration,
+                                        "batch_index": i,
+                                        "total_files": total_files
+                                    }
+                                )
+                            )
+                            loop.close()
+                        except Exception as e:
+                            logger.warning(f"发出同步完成事件失败 {stock_code}: {e}")
                     else:
                         failed_files.append(stock_code)
                         logger.warning(f"[{i}/{total_files}] {stock_code}: 失败")
+                        
+                        # 发出同步失败事件
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(
+                                self.event_manager.emit_sync_failed(
+                                    stock_code=stock_code,
+                                    date_range=(file_start_time, datetime.now()),
+                                    sync_type="sftp_sync",
+                                    error_message="文件同步失败",
+                                    metadata={
+                                        "batch_index": i,
+                                        "total_files": total_files
+                                    }
+                                )
+                            )
+                            loop.close()
+                        except Exception as e:
+                            logger.warning(f"发出同步失败事件失败 {stock_code}: {e}")
                     
                     # 每10个文件记录一次进度
                     if i % 10 == 0:

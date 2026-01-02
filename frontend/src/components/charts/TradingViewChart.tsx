@@ -60,7 +60,7 @@ export default function TradingViewChart({ stockCode, height = 400 }: TradingVie
       // 转换数据格式
       // DataService.getStockData返回的格式: { stock_code, data: { stock_code, start_date, end_date, data_points, data: [...] }, last_updated }
       // 所以实际数据在 response.data.data 中
-      const apiData = response.data;
+      const apiData: any = response.data;
       const dataArray = (apiData?.data && Array.isArray(apiData.data)) 
         ? apiData.data 
         : (Array.isArray(apiData) ? apiData : []);

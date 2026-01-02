@@ -48,13 +48,30 @@ class BatchIndicatorResponse:
 
 
 class TechnicalIndicatorCalculator:
-    """技术指标计算器"""
+    """技术指标计算器 - MLOps优化版本"""
     
     def __init__(self):
+        # 扩展支持的技术指标
         self.supported_indicators = {
-            'MA5', 'MA10', 'MA20', 'MA60',  # 移动平均线
-            'RSI', 'MACD', 'BOLLINGER'      # 其他技术指标
+            # 移动平均线
+            'MA5', 'MA10', 'MA20', 'MA60', 'SMA', 'EMA', 'WMA',
+            # 动量指标
+            'RSI', 'STOCH', 'WILLIAMS_R', 'CCI', 'MOMENTUM', 'ROC',
+            # 趋势指标
+            'MACD', 'BOLLINGER', 'SAR', 'ADX', 'ICHIMOKU',
+            # 成交量指标
+            'VWAP', 'OBV', 'AD_LINE', 'VOLUME_RSI',
+            # 波动率指标
+            'ATR', 'VOLATILITY', 'HISTORICAL_VOLATILITY',
+            # 复合指标
+            'KDJ'
         }
+        
+        # 指标计算缓存
+        self._calculation_cache = {}
+        
+        # 增量更新支持
+        self._incremental_data = {}
     
     def validate_data(self, data: List[StockData]) -> bool:
         """验证输入数据"""
@@ -80,6 +97,363 @@ class TechnicalIndicatorCalculator:
         return True
     
     def calculate_moving_average(self, data: List[StockData], period: int) -> List[Optional[float]]:
+        """计算移动平均线"""
+        if len(data) < period:
+            return [None] * len(data)
+        
+        ma_values = []
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                ma_values.append(None)
+            else:
+                # 计算过去period天的平均收盘价
+                sum_close = sum(data[j].close for j in range(i - period + 1, i + 1))
+                ma_values.append(round(sum_close / period, 4))
+        
+        return ma_values
+    
+    def calculate_ema(self, data: List[StockData], period: int) -> List[Optional[float]]:
+        """计算指数移动平均线(EMA)"""
+        if len(data) < period:
+            return [None] * len(data)
+        
+        ema_values = []
+        multiplier = 2 / (period + 1)
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                ema_values.append(None)
+            elif i == period - 1:
+                # 第一个EMA值使用简单平均
+                sma = sum(data[j].close for j in range(i - period + 1, i + 1)) / period
+                ema_values.append(round(sma, 4))
+            else:
+                # EMA = (当前价格 * 乘数) + (前一日EMA * (1 - 乘数))
+                ema = (data[i].close * multiplier) + (ema_values[i-1] * (1 - multiplier))
+                ema_values.append(round(ema, 4))
+        
+        return ema_values
+    
+    def calculate_wma(self, data: List[StockData], period: int) -> List[Optional[float]]:
+        """计算加权移动平均线(WMA)"""
+        if len(data) < period:
+            return [None] * len(data)
+        
+        wma_values = []
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                wma_values.append(None)
+            else:
+                # 计算加权平均
+                weighted_sum = 0
+                weight_sum = 0
+                
+                for j in range(period):
+                    weight = j + 1  # 权重从1开始递增
+                    weighted_sum += data[i - period + 1 + j].close * weight
+                    weight_sum += weight
+                
+                wma = weighted_sum / weight_sum
+                wma_values.append(round(wma, 4))
+        
+        return wma_values
+    
+    def calculate_stochastic(self, data: List[StockData], k_period: int = 14, d_period: int = 3) -> Dict[str, List[Optional[float]]]:
+        """计算随机指标(Stochastic)"""
+        if len(data) < k_period:
+            return {
+                'stoch_k': [None] * len(data),
+                'stoch_d': [None] * len(data)
+            }
+        
+        stoch_k = []
+        
+        for i in range(len(data)):
+            if i < k_period - 1:
+                stoch_k.append(None)
+            else:
+                # 获取过去k_period天的最高价和最低价
+                high_values = [data[j].high for j in range(i - k_period + 1, i + 1)]
+                low_values = [data[j].low for j in range(i - k_period + 1, i + 1)]
+                
+                highest_high = max(high_values)
+                lowest_low = min(low_values)
+                current_close = data[i].close
+                
+                if highest_high == lowest_low:
+                    k_value = 50  # 避免除零
+                else:
+                    k_value = ((current_close - lowest_low) / (highest_high - lowest_low)) * 100
+                
+                stoch_k.append(round(k_value, 4))
+        
+        # 计算%D（%K的移动平均）
+        stoch_d = []
+        for i in range(len(data)):
+            if i < k_period - 1 + d_period - 1:
+                stoch_d.append(None)
+            else:
+                # 计算过去d_period天%K的平均值
+                k_values = [stoch_k[j] for j in range(i - d_period + 1, i + 1) if stoch_k[j] is not None]
+                if k_values:
+                    d_value = sum(k_values) / len(k_values)
+                    stoch_d.append(round(d_value, 4))
+                else:
+                    stoch_d.append(None)
+        
+        return {
+            'stoch_k': stoch_k,
+            'stoch_d': stoch_d
+        }
+    
+    def calculate_williams_r(self, data: List[StockData], period: int = 14) -> List[Optional[float]]:
+        """计算威廉指标(Williams %R)"""
+        if len(data) < period:
+            return [None] * len(data)
+        
+        williams_r = []
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                williams_r.append(None)
+            else:
+                # 获取过去period天的最高价和最低价
+                high_values = [data[j].high for j in range(i - period + 1, i + 1)]
+                low_values = [data[j].low for j in range(i - period + 1, i + 1)]
+                
+                highest_high = max(high_values)
+                lowest_low = min(low_values)
+                current_close = data[i].close
+                
+                if highest_high == lowest_low:
+                    wr_value = -50  # 避免除零
+                else:
+                    wr_value = ((highest_high - current_close) / (highest_high - lowest_low)) * -100
+                
+                williams_r.append(round(wr_value, 4))
+        
+        return williams_r
+    
+    def calculate_cci(self, data: List[StockData], period: int = 20) -> List[Optional[float]]:
+        """计算商品通道指数(CCI)"""
+        if len(data) < period:
+            return [None] * len(data)
+        
+        cci_values = []
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                cci_values.append(None)
+            else:
+                # 计算典型价格(TP)
+                typical_prices = []
+                for j in range(i - period + 1, i + 1):
+                    tp = (data[j].high + data[j].low + data[j].close) / 3
+                    typical_prices.append(tp)
+                
+                # 计算典型价格的移动平均
+                sma_tp = sum(typical_prices) / period
+                
+                # 计算平均偏差
+                mean_deviation = sum(abs(tp - sma_tp) for tp in typical_prices) / period
+                
+                # 计算CCI
+                current_tp = (data[i].high + data[i].low + data[i].close) / 3
+                if mean_deviation == 0:
+                    cci = 0
+                else:
+                    cci = (current_tp - sma_tp) / (0.015 * mean_deviation)
+                
+                cci_values.append(round(cci, 4))
+        
+        return cci_values
+    
+    def calculate_atr(self, data: List[StockData], period: int = 14) -> List[Optional[float]]:
+        """计算平均真实波幅(ATR)"""
+        if len(data) < period + 1:
+            return [None] * len(data)
+        
+        # 计算真实波幅(TR)
+        true_ranges = []
+        for i in range(1, len(data)):
+            high_low = data[i].high - data[i].low
+            high_close_prev = abs(data[i].high - data[i-1].close)
+            low_close_prev = abs(data[i].low - data[i-1].close)
+            
+            tr = max(high_low, high_close_prev, low_close_prev)
+            true_ranges.append(tr)
+        
+        # 计算ATR
+        atr_values = [None]  # 第一个值为None
+        
+        for i in range(len(true_ranges)):
+            if i < period - 1:
+                atr_values.append(None)
+            elif i == period - 1:
+                # 第一个ATR值使用简单平均
+                atr = sum(true_ranges[:period]) / period
+                atr_values.append(round(atr, 4))
+            else:
+                # 后续ATR值使用指数平滑
+                prev_atr = atr_values[-1]
+                current_tr = true_ranges[i]
+                atr = (prev_atr * (period - 1) + current_tr) / period
+                atr_values.append(round(atr, 4))
+        
+        return atr_values
+    
+    def calculate_vwap(self, data: List[StockData]) -> List[Optional[float]]:
+        """计算成交量加权平均价格(VWAP)"""
+        vwap_values = []
+        cumulative_volume = 0
+        cumulative_pv = 0
+        
+        for item in data:
+            typical_price = (item.high + item.low + item.close) / 3
+            pv = typical_price * item.volume
+            
+            cumulative_pv += pv
+            cumulative_volume += item.volume
+            
+            if cumulative_volume > 0:
+                vwap = cumulative_pv / cumulative_volume
+                vwap_values.append(round(vwap, 4))
+            else:
+                vwap_values.append(None)
+        
+        return vwap_values
+    
+    def calculate_obv(self, data: List[StockData]) -> List[Optional[float]]:
+        """计算能量潮(OBV)"""
+        if len(data) < 2:
+            return [None] * len(data)
+        
+        obv_values = [0]  # 第一个值设为0
+        
+        for i in range(1, len(data)):
+            prev_obv = obv_values[-1]
+            
+            if data[i].close > data[i-1].close:
+                # 价格上涨，加上成交量
+                obv = prev_obv + data[i].volume
+            elif data[i].close < data[i-1].close:
+                # 价格下跌，减去成交量
+                obv = prev_obv - data[i].volume
+            else:
+                # 价格不变，OBV不变
+                obv = prev_obv
+            
+            obv_values.append(obv)
+        
+        return obv_values
+    
+    def calculate_kdj(self, data: List[StockData], k_period: int = 9, d_period: int = 3, j_period: int = 3) -> Dict[str, List[Optional[float]]]:
+        """计算KDJ指标"""
+        if len(data) < k_period:
+            return {
+                'kdj_k': [None] * len(data),
+                'kdj_d': [None] * len(data),
+                'kdj_j': [None] * len(data)
+            }
+        
+        # 计算RSV (Raw Stochastic Value)
+        rsv_values = []
+        for i in range(len(data)):
+            if i < k_period - 1:
+                rsv_values.append(None)
+            else:
+                # 获取过去k_period天的最高价和最低价
+                high_values = [data[j].high for j in range(i - k_period + 1, i + 1)]
+                low_values = [data[j].low for j in range(i - k_period + 1, i + 1)]
+                
+                highest_high = max(high_values)
+                lowest_low = min(low_values)
+                current_close = data[i].close
+                
+                if highest_high == lowest_low:
+                    rsv = 50  # 避免除零
+                else:
+                    rsv = ((current_close - lowest_low) / (highest_high - lowest_low)) * 100
+                
+                rsv_values.append(rsv)
+        
+        # 计算K值
+        k_values = []
+        for i in range(len(data)):
+            if rsv_values[i] is None:
+                k_values.append(None)
+            elif i == 0 or k_values[i-1] is None:
+                k_values.append(rsv_values[i])
+            else:
+                # K = (2/3) * 前一日K值 + (1/3) * 当日RSV
+                k = (2/3) * k_values[i-1] + (1/3) * rsv_values[i]
+                k_values.append(round(k, 4))
+        
+        # 计算D值
+        d_values = []
+        for i in range(len(data)):
+            if k_values[i] is None:
+                d_values.append(None)
+            elif i == 0 or d_values[i-1] is None:
+                d_values.append(k_values[i])
+            else:
+                # D = (2/3) * 前一日D值 + (1/3) * 当日K值
+                d = (2/3) * d_values[i-1] + (1/3) * k_values[i]
+                d_values.append(round(d, 4))
+        
+        # 计算J值
+        j_values = []
+        for i in range(len(data)):
+            if k_values[i] is None or d_values[i] is None:
+                j_values.append(None)
+            else:
+                # J = 3K - 2D
+                j = 3 * k_values[i] - 2 * d_values[i]
+                j_values.append(round(j, 4))
+        
+        return {
+            'kdj_k': k_values,
+            'kdj_d': d_values,
+            'kdj_j': j_values
+        }
+    
+    def calculate_incremental_indicators(
+        self, 
+        new_data: List[StockData], 
+        existing_results: Dict[str, List[Optional[float]]],
+        indicators: List[str]
+    ) -> Dict[str, List[Optional[float]]]:
+        """增量计算技术指标"""
+        # 这是一个简化的增量更新实现
+        # 实际应用中需要根据具体指标的计算特性来优化
+        
+        # 合并新旧数据
+        if not hasattr(self, '_cached_data'):
+            self._cached_data = {}
+        
+        stock_code = new_data[0].stock_code if new_data else None
+        if stock_code not in self._cached_data:
+            self._cached_data[stock_code] = []
+        
+        # 添加新数据
+        self._cached_data[stock_code].extend(new_data)
+        
+        # 重新计算指标（简化版本，实际可以优化为只计算新增部分）
+        updated_results = self.calculate_indicators(self._cached_data[stock_code], indicators)
+        
+        # 转换为字典格式
+        result_dict = {}
+        for indicator in indicators:
+            result_dict[indicator] = []
+            for result in updated_results:
+                if indicator in result.indicators:
+                    result_dict[indicator].append(result.indicators[indicator])
+                else:
+                    result_dict[indicator].append(None)
+        
+        return result_dict
         """计算移动平均线"""
         if len(data) < period:
             return [None] * len(data)
@@ -248,7 +622,7 @@ class TechnicalIndicatorCalculator:
         }
     
     def calculate_indicators(self, data: List[StockData], indicators: List[str]) -> List[TechnicalIndicatorResult]:
-        """计算指定的技术指标"""
+        """计算指定的技术指标 - 增强版本"""
         if not self.validate_data(data):
             raise ValueError("输入数据验证失败")
         
@@ -275,12 +649,26 @@ class TechnicalIndicatorCalculator:
             calculated_indicators['MA20'] = self.calculate_moving_average(data, 20)
         if 'MA60' in indicators:
             calculated_indicators['MA60'] = self.calculate_moving_average(data, 60)
+        if 'SMA' in indicators:
+            calculated_indicators['SMA'] = self.calculate_moving_average(data, 20)  # 默认20日
+        if 'EMA' in indicators:
+            calculated_indicators['EMA'] = self.calculate_ema(data, 20)  # 默认20日
+        if 'WMA' in indicators:
+            calculated_indicators['WMA'] = self.calculate_wma(data, 20)  # 默认20日
         
-        # RSI
+        # 动量指标
         if 'RSI' in indicators:
             calculated_indicators['RSI'] = self.calculate_rsi(data)
+        if 'STOCH' in indicators:
+            stoch_result = self.calculate_stochastic(data)
+            calculated_indicators['STOCH_K'] = stoch_result['stoch_k']
+            calculated_indicators['STOCH_D'] = stoch_result['stoch_d']
+        if 'WILLIAMS_R' in indicators:
+            calculated_indicators['WILLIAMS_R'] = self.calculate_williams_r(data)
+        if 'CCI' in indicators:
+            calculated_indicators['CCI'] = self.calculate_cci(data)
         
-        # MACD
+        # 趋势指标
         if 'MACD' in indicators:
             macd_result = self.calculate_macd(data)
             calculated_indicators['MACD'] = macd_result['macd']
@@ -293,6 +681,23 @@ class TechnicalIndicatorCalculator:
             calculated_indicators['BOLLINGER_UPPER'] = bollinger_result['upper']
             calculated_indicators['BOLLINGER_MIDDLE'] = bollinger_result['middle']
             calculated_indicators['BOLLINGER_LOWER'] = bollinger_result['lower']
+        
+        # 波动率指标
+        if 'ATR' in indicators:
+            calculated_indicators['ATR'] = self.calculate_atr(data)
+        
+        # 成交量指标
+        if 'VWAP' in indicators:
+            calculated_indicators['VWAP'] = self.calculate_vwap(data)
+        if 'OBV' in indicators:
+            calculated_indicators['OBV'] = self.calculate_obv(data)
+        
+        # 复合指标
+        if 'KDJ' in indicators:
+            kdj_result = self.calculate_kdj(data)
+            calculated_indicators['KDJ_K'] = kdj_result['kdj_k']
+            calculated_indicators['KDJ_D'] = kdj_result['kdj_d']
+            calculated_indicators['KDJ_J'] = kdj_result['kdj_j']
         
         # 组装结果
         for i, stock_data in enumerate(data):
@@ -373,14 +778,15 @@ class TechnicalIndicatorCalculator:
         request: BatchIndicatorRequest,
         data_service
     ) -> BatchIndicatorResponse:
-        """批量计算多只股票的技术指标"""
+        """批量计算多只股票的技术指标 - 优化版本"""
         print(f"开始批量计算技术指标: {len(request.stock_codes)} 只股票")
         
         results = {}
         failed_stocks = []
         
-        # 并发控制
-        semaphore = asyncio.Semaphore(3)  # 最多3个并发任务
+        # 并发控制 - 根据系统资源调整
+        max_concurrent = min(5, len(request.stock_codes))  # 最多5个并发任务
+        semaphore = asyncio.Semaphore(max_concurrent)
         
         async def calculate_single_stock(stock_code: str):
             async with semaphore:
@@ -422,3 +828,67 @@ class TechnicalIndicatorCalculator:
             failed_stocks=failed_stocks,
             message=message
         )
+    
+    def get_supported_indicators_info(self) -> Dict[str, Dict[str, str]]:
+        """获取支持的技术指标信息"""
+        return {
+            # 移动平均线
+            'MA5': {'category': '趋势指标', 'description': '5日移动平均线'},
+            'MA10': {'category': '趋势指标', 'description': '10日移动平均线'},
+            'MA20': {'category': '趋势指标', 'description': '20日移动平均线'},
+            'MA60': {'category': '趋势指标', 'description': '60日移动平均线'},
+            'SMA': {'category': '趋势指标', 'description': '简单移动平均线'},
+            'EMA': {'category': '趋势指标', 'description': '指数移动平均线'},
+            'WMA': {'category': '趋势指标', 'description': '加权移动平均线'},
+            
+            # 动量指标
+            'RSI': {'category': '动量指标', 'description': '相对强弱指数'},
+            'STOCH': {'category': '动量指标', 'description': '随机指标'},
+            'WILLIAMS_R': {'category': '动量指标', 'description': '威廉指标'},
+            'CCI': {'category': '动量指标', 'description': '商品通道指数'},
+            'MOMENTUM': {'category': '动量指标', 'description': '动量指标'},
+            'ROC': {'category': '动量指标', 'description': '变化率'},
+            
+            # 趋势指标
+            'MACD': {'category': '趋势指标', 'description': 'MACD指标'},
+            'BOLLINGER': {'category': '趋势指标', 'description': '布林带'},
+            'SAR': {'category': '趋势指标', 'description': '抛物线SAR'},
+            'ADX': {'category': '趋势指标', 'description': '平均趋向指数'},
+            
+            # 成交量指标
+            'VWAP': {'category': '成交量指标', 'description': '成交量加权平均价格'},
+            'OBV': {'category': '成交量指标', 'description': '能量潮'},
+            'AD_LINE': {'category': '成交量指标', 'description': '累积/派发线'},
+            'VOLUME_RSI': {'category': '成交量指标', 'description': '成交量相对强弱指数'},
+            
+            # 波动率指标
+            'ATR': {'category': '波动率指标', 'description': '平均真实波幅'},
+            'VOLATILITY': {'category': '波动率指标', 'description': '波动率'},
+            'HISTORICAL_VOLATILITY': {'category': '波动率指标', 'description': '历史波动率'},
+            
+            # 复合指标
+            'KDJ': {'category': '复合指标', 'description': 'KDJ指标'},
+        }
+    
+    def validate_indicator_parameters(self, indicator: str, parameters: Dict[str, Any]) -> bool:
+        """验证指标参数"""
+        # 基本参数验证
+        if indicator in ['MA5', 'MA10', 'MA20', 'MA60']:
+            return True  # 这些指标有固定参数
+        
+        if indicator == 'RSI':
+            period = parameters.get('period', 14)
+            return isinstance(period, int) and 1 <= period <= 100
+        
+        if indicator == 'MACD':
+            fast = parameters.get('fast_period', 12)
+            slow = parameters.get('slow_period', 26)
+            signal = parameters.get('signal_period', 9)
+            return all(isinstance(p, int) and p > 0 for p in [fast, slow, signal]) and fast < slow
+        
+        if indicator == 'BOLLINGER':
+            period = parameters.get('period', 20)
+            std_dev = parameters.get('std_dev', 2.0)
+            return isinstance(period, int) and period > 0 and isinstance(std_dev, (int, float)) and std_dev > 0
+        
+        return True  # 默认通过验证

@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.services.data import SimpleDataService
 from app.services.data.sftp_sync_service import SFTPSyncService
 from app.services.data.parquet_manager import ParquetManager
+from app.services.events.data_sync_events import get_data_sync_event_manager, DataSyncEventType
 
 router = APIRouter(prefix="/data", tags=["数据管理"])
 
@@ -391,3 +392,91 @@ async def sync_remote_data(
                 "duration_seconds": round(duration, 2)
             }
         )
+
+
+@router.get("/events/history", response_model=StandardResponse, summary="获取数据同步事件历史", description="获取数据同步事件的历史记录")
+async def get_sync_event_history(
+    stock_code: Optional[str] = None,
+    event_type: Optional[str] = None,
+    limit: int = 50
+):
+    """获取数据同步事件历史"""
+    try:
+        event_manager = get_data_sync_event_manager()
+        
+        # 转换事件类型
+        event_type_enum = None
+        if event_type:
+            try:
+                event_type_enum = DataSyncEventType(event_type)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"无效的事件类型: {event_type}。有效类型: {[e.value for e in DataSyncEventType]}"
+                )
+        
+        # 获取事件历史
+        events = event_manager.get_event_history(
+            stock_code=stock_code,
+            event_type=event_type_enum,
+            limit=min(limit, 200)  # 限制最大返回数量
+        )
+        
+        # 转换为字典格式
+        events_data = [event.to_dict() for event in events]
+        
+        return StandardResponse(
+            success=True,
+            message=f"成功获取事件历史: {len(events_data)} 条记录",
+            data={
+                "events": events_data,
+                "total_events": len(events_data),
+                "filters": {
+                    "stock_code": stock_code,
+                    "event_type": event_type,
+                    "limit": limit
+                }
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取事件历史失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取事件历史失败: {str(e)}")
+
+
+@router.get("/events/stats", response_model=StandardResponse, summary="获取数据同步事件统计", description="获取数据同步事件的统计信息")
+async def get_sync_event_stats():
+    """获取数据同步事件统计"""
+    try:
+        event_manager = get_data_sync_event_manager()
+        stats = event_manager.get_stats()
+        
+        return StandardResponse(
+            success=True,
+            message="成功获取事件统计信息",
+            data=stats
+        )
+        
+    except Exception as e:
+        logger.error(f"获取事件统计失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取事件统计失败: {str(e)}")
+
+
+@router.delete("/events/history", response_model=StandardResponse, summary="清空事件历史", description="清空所有数据同步事件历史记录")
+async def clear_sync_event_history():
+    """清空事件历史"""
+    try:
+        event_manager = get_data_sync_event_manager()
+        event_manager.clear_history()
+        
+        return StandardResponse(
+            success=True,
+            message="事件历史已清空",
+            data={}
+        )
+        
+    except Exception as e:
+        logger.error(f"清空事件历史失败: {e}")
+        raise HTTPException(status_code=500, detail=f"清空事件历史失败: {str(e)}")

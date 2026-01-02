@@ -1,0 +1,229 @@
+# MLOps配置文件模板
+# 用于配置MLOps流程的各个组件
+
+# 特征工程配置
+feature_engineering:
+  # 技术指标配置
+  technical_indicators:
+    enabled: true
+    indicators:
+      - name: "RSI"
+        period: 14
+        enabled: true
+      - name: "MACD"
+        fast_period: 12
+        slow_period: 26
+        signal_period: 9
+        enabled: true
+      - name: "Bollinger_Bands"
+        period: 20
+        std_dev: 2
+        enabled: true
+      - name: "SMA"
+        periods: [5, 10, 20, 50]
+        enabled: true
+      - name: "EMA"
+        periods: [12, 26]
+        enabled: true
+  
+  # 特征存储配置
+  feature_store:
+    cache_enabled: true
+    cache_ttl: 3600  # 1小时
+    batch_size: 1000
+    parallel_workers: 4
+
+# Qlib集成配置
+qlib_integration:
+  # 数据提供者配置
+  data_provider:
+    cache_enabled: true
+    cache_dir: "backend/data/qlib_cache"
+    alpha_factors_enabled: true
+    
+  # 模型配置
+  models:
+    lightgbm:
+      default_params:
+        objective: "regression"
+        metric: "rmse"
+        boosting_type: "gbdt"
+        num_leaves: 31
+        learning_rate: 0.05
+        feature_fraction: 0.9
+        bagging_fraction: 0.8
+        bagging_freq: 5
+        verbose: 0
+    
+    xgboost:
+      default_params:
+        objective: "reg:squarederror"
+        eval_metric: "rmse"
+        max_depth: 6
+        learning_rate: 0.1
+        n_estimators: 100
+        subsample: 0.8
+        colsample_bytree: 0.8
+    
+    transformer:
+      default_params:
+        d_model: 64
+        n_heads: 8
+        n_layers: 3
+        dropout: 0.1
+        seq_len: 60
+
+# 训练配置
+training:
+  # 默认训练参数
+  default_config:
+    validation_split: 0.2
+    test_split: 0.1
+    random_seed: 42
+    early_stopping_patience: 10
+    
+  # 超参数优化
+  hyperparameter_optimization:
+    enabled: true
+    strategy: "random_search"  # random_search, grid_search, bayesian
+    max_trials: 20
+    timeout: 3600  # 1小时
+    
+  # 进度跟踪
+  progress_tracking:
+    websocket_enabled: true
+    update_interval: 5  # 秒
+    save_interval: 60   # 秒
+
+# 模型管理配置
+model_management:
+  # 存储配置
+  storage:
+    base_path: "backend/data/models"
+    versioning_enabled: true
+    compression_enabled: true
+    
+  # 生命周期管理
+  lifecycle:
+    auto_transition: true
+    stages:
+      - "development"
+      - "testing"
+      - "staging"
+      - "production"
+      - "deprecated"
+      - "archived"
+    
+  # 血缘追踪
+  lineage_tracking:
+    enabled: true
+    track_data_dependencies: true
+    track_feature_dependencies: true
+    track_config_dependencies: true
+
+# 监控配置
+monitoring:
+  # 性能监控
+  performance:
+    enabled: true
+    metrics_collection_interval: 60  # 秒
+    retention_days: 30
+    
+  # 数据漂移检测
+  drift_detection:
+    enabled: true
+    detection_interval: 3600  # 1小时
+    threshold: 0.1
+    methods: ["ks_test", "chi2_test"]
+    
+  # 告警配置
+  alerting:
+    enabled: true
+    channels: ["email", "websocket"]
+    thresholds:
+      accuracy_drop: 0.05
+      latency_increase: 2.0
+      error_rate: 0.01
+
+# A/B测试配置
+ab_testing:
+  enabled: true
+  default_split_ratio: 0.5
+  min_sample_size: 1000
+  significance_level: 0.05
+  
+  # 流量分割
+  traffic_splitting:
+    method: "hash_based"  # hash_based, random
+    sticky_sessions: true
+
+# 数据版本控制配置
+data_versioning:
+  enabled: true
+  storage_backend: "local"  # local, s3, gcs
+  compression: true
+  deduplication: true
+  
+  # 版本保留策略
+  retention_policy:
+    max_versions: 10
+    max_age_days: 90
+
+# 部署配置
+deployment:
+  # 部署策略
+  strategy: "blue_green"  # blue_green, canary, rolling
+  
+  # 健康检查
+  health_check:
+    enabled: true
+    endpoint: "/health"
+    timeout: 30
+    interval: 60
+    
+  # 自动回滚
+  auto_rollback:
+    enabled: true
+    failure_threshold: 0.05
+    monitoring_duration: 300  # 5分钟
+
+# 系统配置
+system:
+  # 性能优化
+  performance:
+    parallel_workers: 4
+    batch_size: 1000
+    cache_size: 10000
+    
+  # 错误处理
+  error_handling:
+    max_retries: 3
+    retry_delay: 1.0
+    circuit_breaker_enabled: true
+    
+  # 资源监控
+  resource_monitoring:
+    enabled: true
+    cpu_threshold: 80
+    memory_threshold: 85
+    disk_threshold: 90
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_path: "backend/logs/mlops.log"
+  max_file_size: "10MB"
+  backup_count: 5
+
+# 安全配置
+security:
+  # API安全
+  api_security:
+    rate_limiting: true
+    max_requests_per_minute: 100
+    
+  # 数据安全
+  data_security:
+    encryption_enabled: false
+    anonymization_enabled: false

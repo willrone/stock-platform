@@ -335,7 +335,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
           {
             name: '回撤',
             type: 'line',
-            data: data.drawdownCurve.map(d => -d),
+            data: data.drawdownCurve.map((d: number) => -d),
             lineStyle: {
               color: '#ef4444',
               width: 2

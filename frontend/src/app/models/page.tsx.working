@@ -1,0 +1,657 @@
+/**
+ * 模型管理页面
+ * 
+ * 提供模型创建、查看和管理功能
+ */
+
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Card,
+  CardHeader,
+  CardBody,
+  Button,
+  Input,
+  Select,
+  SelectItem,
+  Table,
+  TableHeader,
+  TableColumn,
+  TableBody,
+  TableRow,
+  TableCell,
+  Chip,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+  Progress,
+  Tooltip,
+} from '@heroui/react';
+import {
+  Plus,
+  Brain,
+  TrendingUp,
+  Calendar,
+  Settings,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
+import {
+  Accordion,
+  AccordionItem,
+  Checkbox,
+} from '@heroui/react';
+import { DataService } from '../../services/dataService';
+import { useDataStore, Model } from '../../stores/useDataStore';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { StockSelector } from '../../components/tasks/StockSelector';
+import { TrainingReportModal } from '../../components/models/TrainingReportModal';
+import { getTrainingProgressWebSocket, cleanupTrainingProgressWebSocket } from '../../services/TrainingProgressWebSocket';
+
+export default function ModelsPage() {
+  const router = useRouter();
+  const { models, setModels } = useDataStore();
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
+  const { isOpen: isLiveTrainingOpen, onOpen: onLiveTrainingOpen, onClose: onLiveTrainingClose } = useDisclosure();
+  const { isOpen: isTrainingReportOpen, onOpen: onTrainingReportOpen, onClose: onTrainingReportClose } = useDisclosure();
+  const [selectedModel, setSelectedModel] = useState<Model | null>(null);
+  const [liveTrainingModelId, setLiveTrainingModelId] = useState<string | null>(null);
+  const [trainingReportModelId, setTrainingReportModelId] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
+  const [retrainingModelId, setRetrainingModelId] = useState<string | null>(null);
+  const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  
+  // WebSocket连接状态
+  const [wsConnected, setWsConnected] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState<Record<string, any>>({});
+  
+  const [formData, setFormData] = useState({
+    model_name: '',
+    model_type: 'lightgbm',
+    stock_codes: [] as string[],
+    start_date: '',
+    end_date: '',
+    description: '',
+    hyperparameters: {} as Record<string, any>,
+    enable_hyperparameter_tuning: false,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 加载模型列表
+  const loadModels = async () => {
+    try {
+      setLoading(true);
+      const data = await DataService.getModels();
+      setModels(data.models || data);
+    } catch (error) {
+      console.error('加载模型列表失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 设置WebSocket连接
+  const setupWebSocketConnection = async () => {
+    try {
+      const wsClient = getTrainingProgressWebSocket();
+      
+      // 连接WebSocket
+      await wsClient.connect();
+      setWsConnected(true);
+      
+      // 订阅所有训练进度更新
+      const unsubscribe = wsClient.subscribeToAll((data) => {
+        handleWebSocketMessage(data);
+      });
+      
+      // 保存取消订阅函数以便清理
+      (window as any).unsubscribeTrainingProgress = unsubscribe;
+      
+    } catch (error) {
+      console.error('设置WebSocket连接失败:', error);
+      setWsConnected(false);
+    }
+  };
+
+  // 处理WebSocket消息
+  const handleWebSocketMessage = (data: any) => {
+    if (data.type === 'model:training:progress') {
+      setTrainingProgress(prev => ({
+        ...prev,
+        [data.model_id]: {
+          progress: data.progress,
+          stage: data.stage,
+          message: data.message,
+          metrics: data.metrics || {},
+          timestamp: data.timestamp
+        }
+      }));
+      
+      // 更新模型列表中的进度
+      const updatedModels = models.map((model: Model): Model => 
+        model.model_id === data.model_id 
+          ? { 
+              ...model, 
+              training_progress: data.progress,
+              training_stage: data.stage,
+              status: (data.progress >= 100 ? 'ready' : 'training') as Model['status']
+            }
+          : model
+      );
+      setModels(updatedModels);
+    } else if (data.type === 'model:training:completed') {
+      // 训练完成，刷新模型列表
+      loadModels();
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        delete updated[data.model_id];
+        return updated;
+      });
+    } else if (data.type === 'model:training:failed') {
+      // 训练失败，更新状态
+      const updatedModels = models.map((model: Model): Model => 
+        model.model_id === data.model_id 
+          ? { ...model, status: 'failed', training_stage: 'failed' }
+          : model
+      );
+      setModels(updatedModels);
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        delete updated[data.model_id];
+        return updated;
+      });
+    }
+  };
+
+  // 获取状态颜色
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'ready':
+        return 'success';
+      case 'active':
+        return 'primary';
+      case 'deployed':
+        return 'secondary';
+      case 'training':
+        return 'warning';
+      case 'failed':
+        return 'danger';
+      default:
+        return 'default';
+    }
+  };
+
+  // 获取状态文本
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'ready': '就绪',
+      'active': '活跃',
+      'deployed': '已部署',
+      'training': '训练中',
+      'failed': '失败',
+    };
+    return statusMap[status] || status;
+  };
+
+  // 获取训练阶段文本
+  const getStageText = (stage: string) => {
+    const stageMap: Record<string, string> = {
+      'initializing': '初始化中',
+      'preparing': '准备数据',
+      'configuring': '配置模型',
+      'preprocessing': '数据预处理',
+      'training': '模型训练',
+      'evaluating': '模型评估',
+      'saving': '保存模型',
+      'completed': '训练完成',
+      'failed': '训练失败',
+      'hyperparameter_tuning': '超参数调优'
+    };
+    return stageMap[stage] || stage;
+  };
+
+  // 显示实时训练详情
+  const showLiveTrainingDetails = (modelId: string) => {
+    setLiveTrainingModelId(modelId);
+    onLiveTrainingOpen();
+  };
+
+  // 显示训练报告
+  const showTrainingReport = (modelId: string) => {
+    setTrainingReportModelId(modelId);
+    onTrainingReportOpen();
+  };
+
+  // 验证表单
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.model_name.trim()) {
+      newErrors.model_name = '请输入模型名称';
+    }
+    
+    if (formData.stock_codes.length === 0) {
+      newErrors.stock_codes = '请至少选择一只股票用于训练';
+    }
+    
+    if (!formData.start_date) {
+      newErrors.start_date = '请选择训练数据开始日期';
+    }
+    
+    if (!formData.end_date) {
+      newErrors.end_date = '请选择训练数据结束日期';
+    }
+    
+    if (formData.start_date && formData.end_date && formData.start_date >= formData.end_date) {
+      newErrors.end_date = '结束日期必须晚于开始日期';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // 提交创建模型表单
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const result = await DataService.createModel(formData);
+      console.log('模型创建成功:', result);
+      
+      // 重置表单
+      setFormData({
+        model_name: '',
+        model_type: 'lightgbm',
+        stock_codes: [],
+        start_date: '',
+        end_date: '',
+        description: '',
+        hyperparameters: {},
+        enable_hyperparameter_tuning: false,
+      });
+      setErrors({});
+      
+      // 关闭对话框并刷新列表
+      onClose();
+      await loadModels();
+      
+      alert('模型创建成功！训练任务已开始，您可以在模型列表中查看进度。');
+    } catch (error: any) {
+      console.error('创建模型失败:', error);
+      alert(error?.message || '创建模型失败，请稍后重试');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  useEffect(() => {
+    loadModels();
+    setupWebSocketConnection();
+    
+    return () => {
+      // 清理WebSocket连接
+      cleanupTrainingProgressWebSocket();
+    };
+  }, []);
+
+  if (loading && models.length === 0) {
+    return <LoadingSpinner text="加载模型列表..." />;
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Brain className="w-8 h-8" />
+            模型管理
+          </h1>
+          <p className="text-default-500 mt-2">创建和管理预测模型</p>
+        </div>
+        <Button
+          color="primary"
+          startContent={<Plus className="w-4 h-4" />}
+          onPress={onOpen}
+        >
+          创建模型
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center space-x-2">
+            <TrendingUp className="w-5 h-5" />
+            <h2 className="text-lg font-semibold">模型列表</h2>
+            <span className="text-default-500">({models.length} 个)</span>
+          </div>
+        </CardHeader>
+        <CardBody>
+          {models.length === 0 ? (
+            <div className="text-center py-12">
+              <Brain className="w-16 h-16 mx-auto text-default-300 mb-4" />
+              <p className="text-default-500 text-lg mb-2">暂无模型</p>
+              <p className="text-default-400 text-sm mb-4">
+                创建您的第一个预测模型开始使用
+              </p>
+              <Button
+                color="primary"
+                startContent={<Plus className="w-4 h-4" />}
+                onPress={onOpen}
+              >
+                创建模型
+              </Button>
+            </div>
+          ) : (
+            <Table aria-label="模型列表">
+              <TableHeader>
+                <TableColumn>模型名称</TableColumn>
+                <TableColumn>类型</TableColumn>
+                <TableColumn>准确率</TableColumn>
+                <TableColumn>版本</TableColumn>
+                <TableColumn>状态</TableColumn>
+                <TableColumn>创建时间</TableColumn>
+                <TableColumn>操作</TableColumn>
+              </TableHeader>
+              <TableBody>
+                {models.map((model) => (
+                  <TableRow key={model.model_id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.model_name}</span>
+                        {model.description && (
+                          <span className="text-xs text-default-500">
+                            {model.description}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{model.model_type}</TableCell>
+                    <TableCell>
+                      <span className="font-medium">
+                        {(model.accuracy * 100).toFixed(1)}%
+                      </span>
+                    </TableCell>
+                    <TableCell>{model.version}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Chip
+                          size="sm"
+                          color={getStatusColor(model.status)}
+                          variant="flat"
+                        >
+                          {getStatusText(model.status)}
+                        </Chip>
+                        
+                        {/* 训练进度显示 */}
+                        {model.status === 'training' && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Progress 
+                                value={trainingProgress[model.model_id]?.progress || model.training_progress || 0}
+                                size="sm"
+                                className="flex-1"
+                                color="primary"
+                              />
+                              <span className="text-xs text-default-500 min-w-[40px]">
+                                {(trainingProgress[model.model_id]?.progress || model.training_progress || 0).toFixed(0)}%
+                              </span>
+                            </div>
+                            
+                            {/* 训练阶段和消息 */}
+                            <div className="text-xs text-default-400">
+                              {trainingProgress[model.model_id]?.message || 
+                               getStageText(trainingProgress[model.model_id]?.stage || model.training_stage)}
+                            </div>
+                            
+                            {/* 实时指标 */}
+                            {trainingProgress[model.model_id]?.metrics && Object.keys(trainingProgress[model.model_id].metrics).length > 0 && (
+                              <div className="flex gap-2 text-xs">
+                                {Object.entries(trainingProgress[model.model_id].metrics).slice(0, 2).map(([key, value]) => (
+                                  <Tooltip key={key} content={key}>
+                                    <span className="text-default-500">
+                                      {key}: {typeof value === 'number' ? value.toFixed(3) : String(value)}
+                                    </span>
+                                  </Tooltip>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* 查看实时详情按钮 */}
+                            <Button
+                              size="sm"
+                              variant="light"
+                              color="primary"
+                              className="text-xs h-6"
+                              onPress={() => showLiveTrainingDetails(model.model_id)}
+                            >
+                              查看实时详情
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {/* 非训练状态的简单显示 */}
+                        {model.status !== 'training' && model.training_stage && (
+                          <span className="text-xs text-default-400">
+                            {getStageText(model.training_stage)}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(model.created_at).toLocaleDateString('zh-CN')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="light"
+                          onPress={async () => {
+                            setLoadingModelId(model.model_id);
+                            setDetailLoading(true);
+                            try {
+                              const detail = await DataService.getModelDetail(model.model_id);
+                              setSelectedModel(detail);
+                              onDetailOpen();
+                            } catch (error) {
+                              console.error('加载模型详情失败:', error);
+                              alert('加载模型详情失败，请稍后重试');
+                            } finally {
+                              setDetailLoading(false);
+                              setLoadingModelId(null);
+                            }
+                          }}
+                          isLoading={detailLoading && loadingModelId === model.model_id}
+                        >
+                          查看
+                        </Button>
+                        {model.status === 'ready' && (
+                          <Button
+                            size="sm"
+                            variant="light"
+                            color="primary"
+                            onPress={() => showTrainingReport(model.model_id)}
+                          >
+                            报告
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* 创建模型对话框 */}
+      <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
+        <ModalContent>
+          <ModalHeader>
+            <div className="flex items-center space-x-2">
+              <Plus className="w-5 h-5" />
+              <span>创建新模型</span>
+            </div>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="模型名称"
+                placeholder="请输入模型名称"
+                value={formData.model_name}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, model_name: value }))
+                }
+                isInvalid={!!errors.model_name}
+                errorMessage={errors.model_name}
+                isRequired
+              />
+
+              {/* 模型推荐助手 */}
+              <Card className="bg-blue-50 border-blue-200">
+                <CardBody className="py-3">
+                  <div className="flex items-start gap-3">
+                    <div className="text-blue-600 mt-1">
+                      <Brain className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-blue-900 mb-1">模型选择建议</h4>
+                      <div className="text-xs text-blue-700 space-y-1">
+                        <p><strong>新手推荐：</strong> LightGBM - 效果好，训练快，易调参</p>
+                        <p><strong>数据量大（>10万条）：</strong> Transformer、Informer - 深度学习优势明显</p>
+                        <p><strong>数据量小（<5万条）：</strong> LightGBM、XGBoost - 传统ML更稳定</p>
+                        <p><strong>长期预测：</strong> Informer、TimesNet - 专为长序列设计</p>
+                        <p><strong>快速验证：</strong> 线性回归 - 几分钟完成训练</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Select
+                label="模型类型"
+                selectedKeys={[formData.model_type]}
+                onSelectionChange={(keys) => {
+                  const type = Array.from(keys)[0] as string;
+                  setFormData((prev) => ({ ...prev, model_type: type }));
+                }}
+                description="选择要训练的模型类型（基于Qlib框架统一训练）"
+              >
+                {/* 传统机器学习模型 - 推荐新手使用 */}
+                <SelectItem key="lightgbm" description="🌟 推荐：高效的梯度提升模型，适合表格数据，训练速度快，效果稳定">
+                  LightGBM (推荐新手)
+                </SelectItem>
+                <SelectItem key="xgboost" description="经典的梯度提升模型，性能稳定，可解释性强，适合结构化数据">
+                  XGBoost
+                </SelectItem>
+                <SelectItem key="linear_regression" description="简单的线性回归模型，训练快速，高可解释性，适合基线模型">
+                  线性回归
+                </SelectItem>
+                <SelectItem key="random_forest" description="传统随机森林模型（已优化为LightGBM实现）">
+                  随机森林
+                </SelectItem>
+
+                {/* 深度学习模型 - 适合大数据量 */}
+                <SelectItem key="transformer" description="🚀 Transformer模型，适合复杂时序模式，需要大量数据">
+                  Transformer (深度学习)
+                </SelectItem>
+                <SelectItem key="informer" description="专为长序列预测设计的Transformer变体，内存效率高">
+                  Informer (长序列专用)
+                </SelectItem>
+                <SelectItem key="timesnet" description="最新的时序预测模型，多周期建模能力强">
+                  TimesNet (最新)
+                </SelectItem>
+                <SelectItem key="patchtst" description="基于Patch的Transformer，在多个时序任务上表现优异">
+                  PatchTST (高性能)
+                </SelectItem>
+              </Select>
+
+              <StockSelector
+                selectedStocks={formData.stock_codes}
+                onSelectionChange={(codes) =>
+                  setFormData((prev) => ({ ...prev, stock_codes: codes }))
+                }
+                error={errors.stock_codes}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  type="date"
+                  label="训练数据开始日期"
+                  value={formData.start_date}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, start_date: value }))
+                  }
+                  isInvalid={!!errors.start_date}
+                  errorMessage={errors.start_date}
+                  isRequired
+                />
+                <Input
+                  type="date"
+                  label="训练数据结束日期"
+                  value={formData.end_date}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, end_date: value }))
+                  }
+                  isInvalid={!!errors.end_date}
+                  errorMessage={errors.end_date}
+                  isRequired
+                />
+              </div>
+
+              <Input
+                label="模型描述（可选）"
+                placeholder="请输入模型描述"
+                value={formData.description}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, description: value }))
+                }
+              />
+
+              <Checkbox
+                isSelected={formData.enable_hyperparameter_tuning}
+                onValueChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, enable_hyperparameter_tuning: checked }))
+                }
+              >
+                启用自动超参数调优（增加训练时间但可能提升效果）
+              </Checkbox>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={onClose}>
+              取消
+            </Button>
+            <Button
+              color="primary"
+              onPress={handleSubmit}
+              isLoading={creating}
+              startContent={!creating ? <Plus className="w-4 h-4" /> : undefined}
+            >
+              {creating ? '创建中...' : '创建模型'}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 训练报告详情弹窗 */}
+      <TrainingReportModal
+        isOpen={isTrainingReportOpen}
+        onClose={onTrainingReportClose}
+        modelId={trainingReportModelId}
+      />
+    </div>
+  );
+}

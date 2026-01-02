@@ -24,7 +24,7 @@ pyqlib>=0.9.8.dev18  # Microsoft Qlib量化投资平台，从GitHub安装
 vectorbt>=0.26.0
 # ta-lib==0.4.28  # 暂时注释掉，因为编译问题，使用pandas-ta替代
 pandas-ta>=0.4.0  # 技术分析库，纯Python实现，无需编译
-scikit-learn==1.3.2
+scikit-learn>=1.4.0
 joblib>=1.3.0  # scikit-learn的依赖，用于模型序列化
 # PyTorch - 支持ROCm和CUDA
 torch>=2.1.0
@@ -62,3 +62,4 @@ mypy==1.7.1
 loguru==0.7.2
 prometheus-client==0.19.0
 psutil==5.9.6
+GPUtil==1.4.0  # GPU监控库

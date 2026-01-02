@@ -8,7 +8,7 @@ from sqlalchemy import or_
 import logging
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from app.api.v1.schemas import StandardResponse, ModelTrainingRequest
 from app.core.database import SessionLocal
@@ -25,6 +25,8 @@ from app.services.models.hyperparameter_tuning import (
     HyperparameterSpace
 )
 from app.services.models.evaluation_report import EvaluationReportGenerator
+from app.services.models.model_lifecycle_manager import model_lifecycle_manager
+from app.services.models.lineage_tracker import lineage_tracker
 
 router = APIRouter(prefix="/models", tags=["模型管理"])
 logger = logging.getLogger(__name__)
@@ -146,7 +148,7 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
 async def train_model_task(model_id: str, model_name: str, model_type: str,
                            stock_codes: list, start_date: datetime, end_date: datetime,
                            hyperparameters: dict, enable_hyperparameter_tuning: bool = False):
-    """后台训练任务"""
+    """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
     report_generator = EvaluationReportGenerator()
     
@@ -160,363 +162,198 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
             return
         
         try:
-            # 发送训练开始通知
-            await notify_model_training_progress(model_id, 0.0, "initializing", "开始初始化训练")
-            model_info.training_stage = "initializing"
-            model_info.training_progress = 0.0
-            session.commit()
+            # 导入统一Qlib训练引擎
+            from app.services.qlib.unified_qlib_training_engine import (
+                UnifiedQlibTrainingEngine, 
+                QlibTrainingConfig, 
+                QlibModelType
+            )
             
-            # 根据模型类型选择训练服务
-            if model_type in ['transformer', 'lstm', 'timesnet', 'patchtst', 'informer']:
-                # 使用深度学习训练服务
-                if not DEEP_TRAINING_AVAILABLE:
-                    raise ValueError("深度学习训练服务不可用")
+            # 创建训练引擎
+            training_engine = UnifiedQlibTrainingEngine()
+            
+            # 定义进度回调函数
+            async def progress_callback(model_id: str, progress: float, stage: str, message: str, metrics: dict = None):
+                await notify_model_training_progress(model_id, progress, stage, message, metrics)
+                model_info.training_stage = stage
+                model_info.training_progress = progress
+                session.commit()
+            
+            # 发送训练开始通知
+            await progress_callback(model_id, 0.0, "initializing", "开始初始化训练")
+            
+            # 映射模型类型到Qlib模型类型 - 支持所有模型类型
+            model_type_mapping = {
+                # 传统机器学习模型
+                'lightgbm': QlibModelType.LIGHTGBM,
+                'xgboost': QlibModelType.XGBOOST,
+                'random_forest': QlibModelType.LIGHTGBM,  # 使用LightGBM替代随机森林
+                'linear_regression': QlibModelType.LINEAR,
                 
-                training_service = get_deep_training_service()
-                await training_service.initialize()
+                # 深度学习模型
+                'mlp': QlibModelType.MLP,
+                'lstm': QlibModelType.MLP,  # 暂时使用MLP替代，后续可扩展
+                'transformer': QlibModelType.TRANSFORMER,
+                'informer': QlibModelType.INFORMER,
+                'timesnet': QlibModelType.TIMESNET,
+                'patchtst': QlibModelType.PATCHTST
+            }
+            
+            qlib_model_type = model_type_mapping.get(model_type, QlibModelType.LIGHTGBM)
+            
+            # 超参数调优（如果启用）
+            final_hyperparameters = hyperparameters.copy()
+            if enable_hyperparameter_tuning:
+                await progress_callback(model_id, 5.0, "hyperparameter_tuning", "开始超参数搜索")
                 
-                # 转换模型类型
-                model_type_map = {
-                    'transformer': DeepModelType.TRANSFORMER,
-                    'lstm': DeepModelType.LSTM,
-                    'timesnet': DeepModelType.TIMESNET,
-                    'patchtst': DeepModelType.PATCHTST,
-                    'informer': DeepModelType.INFORMER,
+                # 定义超参数搜索空间
+                param_space = {
+                    'learning_rate': HyperparameterSpace(
+                        name='learning_rate',
+                        param_type='float',
+                        min_value=0.01,
+                        max_value=0.3,
+                        step=0.01
+                    ),
+                    'max_depth': HyperparameterSpace(
+                        name='max_depth',
+                        param_type='int',
+                        min_value=3,
+                        max_value=15,
+                        step=1
+                    ),
+                    'num_leaves': HyperparameterSpace(
+                        name='num_leaves',
+                        param_type='int',
+                        min_value=31,
+                        max_value=300,
+                        step=10
+                    )
                 }
-                deep_model_type = model_type_map.get(model_type, DeepModelType.LSTM)
                 
-                # 超参数调优
-                if enable_hyperparameter_tuning:
-                    await notify_model_training_progress(model_id, 5.0, "hyperparameter_tuning", "开始超参数搜索")
-                    model_info.training_stage = "hyperparameter_tuning"
-                    model_info.training_progress = 5.0
-                    session.commit()
+                # 创建调优器
+                tuner = HyperparameterTuner(SearchStrategy.RANDOM_SEARCH)
+                
+                # 定义训练函数
+                async def train_with_params(params):
+                    config = QlibTrainingConfig(
+                        model_type=qlib_model_type,
+                        hyperparameters={**hyperparameters, **params},
+                        validation_split=0.2,
+                        use_alpha_factors=True
+                    )
                     
-                    # 定义超参数搜索空间
-                    param_space = {
-                        'learning_rate': HyperparameterSpace(
-                            name='learning_rate',
-                            param_type='float',
-                            min_value=0.0001,
-                            max_value=0.01,
-                            step=0.001
-                        ),
-                        'batch_size': HyperparameterSpace(
-                            name='batch_size',
-                            param_type='choice',
-                            choices=[16, 32, 64, 128]
-                        ),
-                        'epochs': HyperparameterSpace(
-                            name='epochs',
-                            param_type='int',
-                            min_value=50,
-                            max_value=200,
-                            step=50
-                        )
-                    }
-                    
-                    # 创建调优器
-                    tuner = HyperparameterTuner(SearchStrategy.RANDOM_SEARCH)
-                    
-                    # 定义训练函数
-                    async def train_with_params(params):
-                        config = DeepTrainingConfig(
-                            model_type=deep_model_type,
-                            sequence_length=hyperparameters.get('sequence_length', 60),
-                            prediction_horizon=hyperparameters.get('prediction_horizon', 5),
-                            batch_size=params['batch_size'],
-                            epochs=params['epochs'],
-                            learning_rate=params['learning_rate'],
-                            validation_split=hyperparameters.get('validation_split', 0.2),
-                        )
-                        _, metrics = await training_service.train_model(
+                    try:
+                        result = await training_engine.train_model(
                             model_id=f"{model_id}_trial",
-                            stock_codes=stock_codes,
-                            config=config,
-                            start_date=start_date,
-                            end_date=end_date
-                        )
-                        return {
-                            'score': getattr(metrics, 'accuracy', 0.0),
-                            'accuracy': getattr(metrics, 'accuracy', 0.0),
-                            'sharpe_ratio': getattr(metrics, 'sharpe_ratio', 0.0)
-                        }
-                    
-                    # 执行超参数搜索
-                    best_trial = tuner.random_search(param_space, train_with_params, n_trials=10)
-                    if best_trial:
-                        hyperparameters.update(best_trial.hyperparameters)
-                        await notify_model_training_progress(
-                            model_id, 10.0, "hyperparameter_tuning",
-                            f"超参数搜索完成，最佳得分: {best_trial.score:.4f}",
-                            {"best_score": best_trial.score, "best_params": best_trial.hyperparameters}
-                        )
-                
-                # 创建训练配置
-                await notify_model_training_progress(model_id, 15.0, "preparing", "准备训练数据")
-                model_info.training_stage = "preparing"
-                model_info.training_progress = 15.0
-                session.commit()
-                
-                config = DeepTrainingConfig(
-                    model_type=deep_model_type,
-                    sequence_length=hyperparameters.get('sequence_length', 60),
-                    prediction_horizon=hyperparameters.get('prediction_horizon', 5),
-                    batch_size=hyperparameters.get('batch_size', 32),
-                    epochs=hyperparameters.get('epochs', 100),
-                    learning_rate=hyperparameters.get('learning_rate', 0.001),
-                    validation_split=hyperparameters.get('validation_split', 0.2),
-                )
-                
-                # 训练模型（这里需要修改训练服务以支持进度回调）
-                await notify_model_training_progress(model_id, 20.0, "training", "开始训练模型")
-                model_info.training_stage = "training"
-                model_info.training_progress = 20.0
-                session.commit()
-                
-                model_file_path, metrics = await training_service.train_model(
-                    model_id=model_id,
-                    stock_codes=stock_codes,
-                    config=config,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                
-                # 生成评估报告
-                await notify_model_training_progress(model_id, 90.0, "evaluating", "生成评估报告")
-                model_info.training_stage = "evaluating"
-                model_info.training_progress = 90.0
-                session.commit()
-                
-                report = report_generator.generate_report(
-                    model_id=model_id,
-                    model_name=model_name,
-                    model_type=model_type,
-                    version=model_info.version,
-                    training_summary={
-                        'duration': 0.0,  # TODO: 从训练服务获取
-                        'total_samples': 0,
-                        'train_samples': 0,
-                        'validation_samples': 0,
-                        'test_samples': 0,
-                        'epochs': config.epochs,
-                        'batch_size': config.batch_size,
-                        'learning_rate': config.learning_rate
-                    },
-                    performance_metrics={
-                        'accuracy': getattr(metrics, 'accuracy', 0.75),
-                        'sharpe_ratio': getattr(metrics, 'sharpe_ratio', 0.0),
-                        'total_return': getattr(metrics, 'total_return', 0.0),
-                        'max_drawdown': getattr(metrics, 'max_drawdown', 0.0),
-                    },
-                    feature_importance=[],
-                    training_history=[],
-                    hyperparameters=hyperparameters,
-                    training_data_info={
-                        'stock_codes': stock_codes,
-                        'start_date': start_date.isoformat(),
-                        'end_date': end_date.isoformat()
-                    }
-                )
-                
-                # 更新模型信息
-                model_info.status = "ready"
-                model_info.file_path = model_file_path
-                model_info.training_progress = 100.0
-                model_info.training_stage = "completed"
-                model_info.performance_metrics = {
-                    "accuracy": getattr(metrics, 'accuracy', 0.75),
-                    "sharpe_ratio": getattr(metrics, 'sharpe_ratio', 0.0),
-                    "total_return": getattr(metrics, 'total_return', 0.0),
-                    "max_drawdown": getattr(metrics, 'max_drawdown', 0.0),
-                }
-                model_info.evaluation_report = report_generator.to_dict(report)
-                model_info.hyperparameters = hyperparameters
-                session.commit()
-                
-                # 发送完成通知
-                await notify_model_training_completed(model_id, model_info.performance_metrics)
-                
-            elif model_type in ['random_forest', 'linear_regression', 'xgboost', 'lightgbm']:
-                # 使用传统ML训练服务
-                if not ML_TRAINING_AVAILABLE:
-                    raise ValueError("传统ML训练服务不可用")
-                
-                training_service = get_ml_training_service()
-                
-                # 超参数调优
-                if enable_hyperparameter_tuning:
-                    await notify_model_training_progress(model_id, 5.0, "hyperparameter_tuning", "开始超参数搜索")
-                    model_info.training_stage = "hyperparameter_tuning"
-                    model_info.training_progress = 5.0
-                    session.commit()
-                    
-                    # 定义超参数搜索空间
-                    param_space = {
-                        'n_estimators': HyperparameterSpace(
-                            name='n_estimators',
-                            param_type='int',
-                            min_value=50,
-                            max_value=300,
-                            step=50
-                        ),
-                        'max_depth': HyperparameterSpace(
-                            name='max_depth',
-                            param_type='int',
-                            min_value=3,
-                            max_value=20,
-                            step=2
-                        )
-                    }
-                    
-                    tuner = HyperparameterTuner(SearchStrategy.RANDOM_SEARCH)
-                    
-                    def train_with_params(params):
-                        config = MLTrainingConfig(
-                            model_type=MLModelType.RANDOM_FOREST,
-                            hyperparameters={**hyperparameters, **params},
-                            validation_split=hyperparameters.get('validation_split', 0.2),
-                        )
-                        result = training_service.train_model(
                             model_name=f"{model_name}_trial",
-                            model_type=MLModelType.RANDOM_FOREST,
                             stock_codes=stock_codes,
                             start_date=start_date,
                             end_date=end_date,
-                            config=config,
-                            created_by="system"
+                            config=config
                         )
-                        # 安全地获取test_metrics
-                        test_metrics = result.test_metrics
-                        if not isinstance(test_metrics, dict):
-                            test_metrics = {}
-                        
                         return {
-                            'score': test_metrics.get("accuracy", test_metrics.get("r2", 0.0)),
-                            'accuracy': test_metrics.get("accuracy", test_metrics.get("r2", 0.0)),
-                            'rmse': test_metrics.get("rmse", 0.0)
+                            'score': result.validation_metrics.get('accuracy', 0.0),
+                            'accuracy': result.validation_metrics.get('accuracy', 0.0),
+                            'r2': result.validation_metrics.get('r2', 0.0)
                         }
-                    
-                    best_trial = tuner.random_search(param_space, train_with_params, n_trials=10)
-                    if best_trial:
-                        hyperparameters.update(best_trial.hyperparameters)
-                        await notify_model_training_progress(
-                            model_id, 10.0, "hyperparameter_tuning",
-                            f"超参数搜索完成，最佳得分: {best_trial.score:.4f}",
-                            {"best_score": best_trial.score, "best_params": best_trial.hyperparameters}
-                        )
+                    except Exception as e:
+                        logger.warning(f"超参数试验失败: {e}")
+                        return {'score': 0.0, 'accuracy': 0.0, 'r2': 0.0}
                 
-                await notify_model_training_progress(model_id, 15.0, "preparing", "准备训练数据")
-                model_info.training_stage = "preparing"
-                model_info.training_progress = 15.0
-                session.commit()
-                
-                # 转换模型类型
-                ml_model_type_map = {
-                    'random_forest': MLModelType.RANDOM_FOREST,
-                    'linear_regression': MLModelType.LINEAR_REGRESSION,
-                }
-                ml_model_type = ml_model_type_map.get(model_type, MLModelType.RANDOM_FOREST)
-                
-                # 创建训练配置
-                config = MLTrainingConfig(
-                    model_type=ml_model_type,
-                    hyperparameters=hyperparameters,
-                    validation_split=hyperparameters.get('validation_split', 0.2),
-                )
-                
-                await notify_model_training_progress(model_id, 20.0, "training", "开始训练模型")
-                model_info.training_stage = "training"
-                model_info.training_progress = 20.0
-                session.commit()
-                
-                # 训练模型
-                result = training_service.train_model(
-                    model_name=model_name,
-                    model_type=ml_model_type,
-                    stock_codes=stock_codes,
-                    start_date=start_date,
-                    end_date=end_date,
-                    config=config,
-                    created_by="system"
-                )
-                
-                # 生成评估报告
-                await notify_model_training_progress(model_id, 90.0, "evaluating", "生成评估报告")
-                model_info.training_stage = "evaluating"
-                model_info.training_progress = 90.0
-                session.commit()
-                
-                report = report_generator.generate_report(
-                    model_id=model_id,
-                    model_name=model_name,
-                    model_type=model_type,
-                    version=model_info.version,
-                    training_summary={
-                        'duration': result.training_time,
-                        'total_samples': 0,
-                        'train_samples': 0,
-                        'validation_samples': 0,
-                        'test_samples': 0,
-                        'epochs': 0,
-                        'batch_size': 0,
-                        'learning_rate': 0.0
-                    },
-                    performance_metrics=_normalize_performance_metrics_for_report(
-                        result.test_metrics if isinstance(result.test_metrics, dict) else {}
-                    ),
-                    feature_importance=_format_feature_importance_for_report(result.feature_importance),
-                    training_history=result.training_history or [],
-                    hyperparameters=hyperparameters,
-                    training_data_info={
-                        'stock_codes': stock_codes,
-                        'start_date': start_date.isoformat(),
-                        'end_date': end_date.isoformat()
-                    }
-                )
-                
-                # 更新模型信息
-                model_info.status = "ready"
-                model_info.training_progress = 100.0
-                model_info.training_stage = "completed"
-                # 安全地获取test_metrics
-                test_metrics = result.test_metrics
-                if not isinstance(test_metrics, dict):
-                    test_metrics = {}
-                
-                # 对于回归模型，优先使用direction_accuracy，如果没有则使用r2（但确保不为负）
-                accuracy_value = test_metrics.get("accuracy")
-                if accuracy_value is None:
-                    # 尝试获取方向准确率
-                    accuracy_value = test_metrics.get("direction_accuracy")
-                if accuracy_value is None:
-                    # 使用R²，但如果是负数则设为0
-                    r2_value = test_metrics.get("r2", 0.0)
-                    accuracy_value = max(0.0, r2_value)
-                
-                model_info.performance_metrics = {
-                    "accuracy": float(accuracy_value),
-                    "rmse": test_metrics.get("rmse", 0.0),
-                    "mae": test_metrics.get("mae", 0.0),
-                    "r2": test_metrics.get("r2", 0.0),
-                    "direction_accuracy": test_metrics.get("direction_accuracy")
-                }
-                model_info.evaluation_report = report_generator.to_dict(report)
-                model_info.hyperparameters = hyperparameters
-                session.commit()
-                
-                await notify_model_training_completed(model_id, model_info.performance_metrics)
-            else:
-                raise ValueError(f"不支持的模型类型: {model_type}")
+                # 执行超参数搜索
+                best_trial = tuner.random_search(param_space, train_with_params, n_trials=5)
+                if best_trial and best_trial.score > 0:
+                    final_hyperparameters.update(best_trial.hyperparameters)
+                    await progress_callback(
+                        model_id, 10.0, "hyperparameter_tuning",
+                        f"超参数搜索完成，最佳得分: {best_trial.score:.4f}",
+                        {"best_score": best_trial.score, "best_params": best_trial.hyperparameters}
+                    )
+                else:
+                    await progress_callback(
+                        model_id, 10.0, "hyperparameter_tuning",
+                        "超参数搜索完成，使用默认参数"
+                    )
             
+            # 创建Qlib训练配置
+            config = QlibTrainingConfig(
+                model_type=qlib_model_type,
+                hyperparameters=final_hyperparameters,
+                validation_split=hyperparameters.get('validation_split', 0.2),
+                use_alpha_factors=True,
+                cache_features=True
+            )
+            
+            # 使用统一Qlib训练引擎训练模型
+            result = await training_engine.train_model(
+                model_id=model_id,
+                model_name=model_name,
+                stock_codes=stock_codes,
+                start_date=start_date,
+                end_date=end_date,
+                config=config,
+                progress_callback=progress_callback
+            )
+            
+            # 生成评估报告
+            await progress_callback(model_id, 95.0, "generating_report", "生成评估报告")
+            
+            report = report_generator.generate_report(
+                model_id=model_id,
+                model_name=model_name,
+                model_type=model_type,
+                version=model_info.version,
+                training_summary={
+                    'duration': result.training_duration,
+                    'total_samples': 0,  # TODO: 从结果中获取
+                    'train_samples': 0,
+                    'validation_samples': 0,
+                    'test_samples': 0,
+                    'epochs': 0,
+                    'batch_size': 0,
+                    'learning_rate': final_hyperparameters.get('learning_rate', 0.0)
+                },
+                performance_metrics=_normalize_performance_metrics_for_report(result.validation_metrics),
+                feature_importance=_format_feature_importance_for_report(result.feature_importance),
+                training_history=result.training_history,
+                hyperparameters=final_hyperparameters,
+                training_data_info={
+                    'stock_codes': stock_codes,
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat()
+                }
+            )
+            
+            # 更新模型信息
+            model_info.status = "ready"
+            model_info.file_path = result.model_path
+            model_info.training_progress = 100.0
+            model_info.training_stage = "completed"
+            
+            # 规范化准确率
+            accuracy = result.validation_metrics.get('accuracy', 0.0)
+            if accuracy < 0:
+                accuracy = max(0.0, result.validation_metrics.get('r2', 0.0))
+            
+            model_info.performance_metrics = {
+                "accuracy": float(accuracy),
+                "mse": result.validation_metrics.get("mse", 0.0),
+                "mae": result.validation_metrics.get("mae", 0.0),
+                "r2": result.validation_metrics.get("r2", 0.0)
+            }
+            model_info.evaluation_report = report_generator.to_dict(report)
+            model_info.hyperparameters = final_hyperparameters
             session.commit()
-            logger.info(f"模型训练完成: {model_id}")
+            
+            # 发送完成通知
+            await notify_model_training_completed(model_id, model_info.performance_metrics)
+            logger.info(f"统一Qlib模型训练完成: {model_id}")
             
         except Exception as e:
-            logger.error(f"模型训练失败: {model_id}, 错误: {e}", exc_info=True)
+            logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
             model_info.status = "failed"
             model_info.training_stage = "failed"
-            # 将错误信息保存到performance_metrics中
             model_info.performance_metrics = {
                 "error": str(e),
                 "status": "failed"
@@ -791,10 +628,12 @@ async def create_training_task(
     
     session = SessionLocal()
     try:
-        # 验证模型类型
+        # 验证模型类型 - 支持所有Qlib模型类型
         valid_model_types = [
-            'random_forest', 'linear_regression', 'xgboost', 'lightgbm',
-            'transformer', 'lstm', 'timesnet', 'patchtst', 'informer'
+            # 传统机器学习模型
+            'lightgbm', 'xgboost', 'linear_regression', 'random_forest',
+            # 深度学习模型
+            'mlp', 'lstm', 'transformer', 'informer', 'timesnet', 'patchtst'
         ]
         if request.model_type not in valid_model_types:
             raise HTTPException(
@@ -872,3 +711,377 @@ async def create_training_task(
     finally:
         session.close()
 
+
+@router.get("/{model_id}/lifecycle", response_model=StandardResponse)
+async def get_model_lifecycle(model_id: str):
+    """获取模型生命周期信息"""
+    try:
+        lifecycle_info = model_lifecycle_manager.get_model_lifecycle(model_id)
+        
+        if not lifecycle_info:
+            raise HTTPException(status_code=404, detail=f"模型生命周期信息不存在: {model_id}")
+        
+        return StandardResponse(
+            success=True,
+            message="模型生命周期信息获取成功",
+            data=lifecycle_info.to_dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取模型生命周期信息失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}")
+
+
+@router.get("/{model_id}/lineage", response_model=StandardResponse)
+async def get_model_lineage(model_id: str):
+    """获取模型血缘信息"""
+    try:
+        lineage_info = lineage_tracker.get_model_lineage(model_id)
+        
+        if not lineage_info:
+            raise HTTPException(status_code=404, detail=f"模型血缘信息不存在: {model_id}")
+        
+        return StandardResponse(
+            success=True,
+            message="模型血缘信息获取成功",
+            data=lineage_info.to_dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取模型血缘信息失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取模型血缘信息失败: {str(e)}")
+
+
+@router.get("/{model_id}/dependencies", response_model=StandardResponse)
+async def get_model_dependencies(model_id: str):
+    """获取模型依赖关系"""
+    try:
+        # 获取血缘信息
+        lineage_info = lineage_tracker.get_model_lineage(model_id)
+        
+        if not lineage_info:
+            raise HTTPException(status_code=404, detail=f"模型依赖信息不存在: {model_id}")
+        
+        # 提取依赖关系
+        dependencies = {
+            "data_dependencies": lineage_info.data_dependencies,
+            "feature_dependencies": lineage_info.feature_dependencies,
+            "model_dependencies": lineage_info.model_dependencies,
+            "config_dependencies": lineage_info.config_dependencies
+        }
+        
+        return StandardResponse(
+            success=True,
+            message="模型依赖关系获取成功",
+            data=dependencies
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取模型依赖关系失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取模型依赖关系失败: {str(e)}")
+
+
+@router.post("/{model_id}/lifecycle/transition", response_model=StandardResponse)
+async def transition_model_lifecycle(
+    model_id: str,
+    new_stage: str,
+    notes: Optional[str] = None
+):
+    """转换模型生命周期阶段"""
+    try:
+        # 验证阶段
+        valid_stages = [
+            "development", "testing", "staging", "production", 
+            "deprecated", "archived", "failed"
+        ]
+        
+        if new_stage not in valid_stages:
+            raise HTTPException(
+                status_code=400,
+                detail=f"无效的生命周期阶段: {new_stage}。有效阶段: {', '.join(valid_stages)}"
+            )
+        
+        # 执行阶段转换
+        success = model_lifecycle_manager.transition_stage(
+            model_id=model_id,
+            new_stage=new_stage,
+            notes=notes
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="生命周期阶段转换失败")
+        
+        # 获取更新后的生命周期信息
+        updated_lifecycle = model_lifecycle_manager.get_model_lifecycle(model_id)
+        
+        return StandardResponse(
+            success=True,
+            message=f"模型生命周期已转换到: {new_stage}",
+            data=updated_lifecycle.to_dict() if updated_lifecycle else {}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"转换模型生命周期失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"转换模型生命周期失败: {str(e)}")
+
+
+@router.get("/{model_id}/performance-history", response_model=StandardResponse)
+async def get_model_performance_history(
+    model_id: str,
+    time_range: str = "30d"
+):
+    """获取模型性能历史"""
+    try:
+        # 解析时间范围
+        from datetime import timedelta
+        time_ranges = {
+            "7d": timedelta(days=7),
+            "30d": timedelta(days=30),
+            "90d": timedelta(days=90),
+            "1y": timedelta(days=365)
+        }
+        
+        if time_range not in time_ranges:
+            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
+        
+        end_time = datetime.now()
+        start_time = end_time - time_ranges[time_range]
+        
+        # 获取性能历史（这里需要从监控系统获取）
+        try:
+            from app.services.monitoring.performance_monitor import performance_monitor
+            performance_history = performance_monitor.get_model_performance_history(
+                model_id=model_id,
+                start_time=start_time,
+                end_time=end_time
+            )
+        except ImportError:
+            # 如果监控服务不可用，返回空历史
+            performance_history = []
+        
+        return StandardResponse(
+            success=True,
+            message=f"模型性能历史获取成功: {time_range}",
+            data={
+                "model_id": model_id,
+                "time_range": time_range,
+                "performance_history": performance_history,
+                "summary": {
+                    "total_records": len(performance_history),
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat()
+                }
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取模型性能历史失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取模型性能历史失败: {str(e)}")
+
+
+@router.get("/search", response_model=StandardResponse)
+async def search_models(
+    query: Optional[str] = None,
+    model_type: Optional[str] = None,
+    status: Optional[str] = None,
+    min_accuracy: Optional[float] = None,
+    tags: Optional[str] = None,
+    limit: int = 50
+):
+    """搜索模型"""
+    session = SessionLocal()
+    try:
+        # 构建查询
+        query_filter = session.query(ModelInfo)
+        
+        # 文本搜索
+        if query:
+            query_filter = query_filter.filter(
+                or_(
+                    ModelInfo.model_name.contains(query),
+                    ModelInfo.model_type.contains(query)
+                )
+            )
+        
+        # 模型类型过滤
+        if model_type:
+            query_filter = query_filter.filter(ModelInfo.model_type == model_type)
+        
+        # 状态过滤
+        if status:
+            query_filter = query_filter.filter(ModelInfo.status == status)
+        
+        # 准确率过滤
+        if min_accuracy is not None:
+            # 这里需要处理JSON字段的查询，简化处理
+            models = query_filter.all()
+            filtered_models = []
+            for model in models:
+                performance_metrics = model.performance_metrics or {}
+                if isinstance(performance_metrics, str):
+                    try:
+                        import json
+                        performance_metrics = json.loads(performance_metrics)
+                    except:
+                        performance_metrics = {}
+                
+                accuracy = performance_metrics.get("accuracy", 0.0)
+                if isinstance(accuracy, dict):
+                    accuracy = accuracy.get("value", 0.0)
+                
+                if float(accuracy) >= min_accuracy:
+                    filtered_models.append(model)
+            
+            models = filtered_models
+        else:
+            models = query_filter.limit(limit).all()
+        
+        # 转换为返回格式
+        model_list = []
+        for model in models[:limit]:
+            performance_metrics = model.performance_metrics or {}
+            if isinstance(performance_metrics, str):
+                try:
+                    import json
+                    performance_metrics = json.loads(performance_metrics)
+                except:
+                    performance_metrics = {}
+            
+            accuracy = performance_metrics.get("accuracy", 0.0)
+            if isinstance(accuracy, dict):
+                accuracy = accuracy.get("value", 0.0)
+            
+            model_data = {
+                "model_id": model.model_id,
+                "model_name": model.model_name,
+                "model_type": model.model_type,
+                "version": model.version,
+                "accuracy": float(accuracy) if accuracy else 0.0,
+                "status": model.status,
+                "created_at": model.created_at.isoformat() if model.created_at else None,
+                "performance_metrics": performance_metrics
+            }
+            model_list.append(model_data)
+        
+        return StandardResponse(
+            success=True,
+            message=f"模型搜索完成，找到 {len(model_list)} 个结果",
+            data={
+                "models": model_list,
+                "total_count": len(model_list),
+                "search_params": {
+                    "query": query,
+                    "model_type": model_type,
+                    "status": status,
+                    "min_accuracy": min_accuracy,
+                    "tags": tags,
+                    "limit": limit
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"模型搜索失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"模型搜索失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.post("/{model_id}/tags", response_model=StandardResponse)
+async def add_model_tags(
+    model_id: str,
+    tags: List[str]
+):
+    """为模型添加标签"""
+    session = SessionLocal()
+    try:
+        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        if not model:
+            raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
+        
+        # 获取现有标签
+        existing_tags = model.hyperparameters.get("tags", []) if model.hyperparameters else []
+        
+        # 合并标签（去重）
+        all_tags = list(set(existing_tags + tags))
+        
+        # 更新模型标签
+        if not model.hyperparameters:
+            model.hyperparameters = {}
+        model.hyperparameters["tags"] = all_tags
+        
+        session.commit()
+        
+        return StandardResponse(
+            success=True,
+            message=f"成功为模型添加标签: {', '.join(tags)}",
+            data={
+                "model_id": model_id,
+                "tags": all_tags,
+                "added_tags": tags
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"添加模型标签失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"添加模型标签失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.delete("/{model_id}/tags", response_model=StandardResponse)
+async def remove_model_tags(
+    model_id: str,
+    tags: List[str]
+):
+    """移除模型标签"""
+    session = SessionLocal()
+    try:
+        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        if not model:
+            raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
+        
+        # 获取现有标签
+        existing_tags = model.hyperparameters.get("tags", []) if model.hyperparameters else []
+        
+        # 移除指定标签
+        remaining_tags = [tag for tag in existing_tags if tag not in tags]
+        
+        # 更新模型标签
+        if not model.hyperparameters:
+            model.hyperparameters = {}
+        model.hyperparameters["tags"] = remaining_tags
+        
+        session.commit()
+        
+        return StandardResponse(
+            success=True,
+            message=f"成功移除模型标签: {', '.join(tags)}",
+            data={
+                "model_id": model_id,
+                "tags": remaining_tags,
+                "removed_tags": tags
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"移除模型标签失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"移除模型标签失败: {str(e)}")
+    finally:
+        session.close()

@@ -162,7 +162,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-background">
       {/* 顶部导航栏 */}
       <Navbar isBordered className="bg-background/70 backdrop-blur-md">
-        <NavbarContent justify="start">
+        <NavbarContent justify="start" className="flex-shrink-0">
           <NavbarItem>
             <Button
               isIconOnly
@@ -180,27 +180,29 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           </NavbarBrand>
         </NavbarContent>
 
-        <NavbarContent justify="center" className="hidden lg:flex">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.key;
-            return (
-              <NavbarItem key={item.key}>
-                <Button
-                  variant={isActive ? "solid" : "light"}
-                  color={isActive ? "primary" : "default"}
-                  startContent={<Icon className="w-4 h-4" />}
-                  onPress={() => handleMenuClick(item.key)}
-                  className="font-medium"
-                >
-                  {item.label}
-                </Button>
-              </NavbarItem>
-            );
-          })}
+        <NavbarContent justify="center" className="hidden lg:flex flex-1 justify-center">
+          <div className="flex items-center space-x-1">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.key;
+              return (
+                <NavbarItem key={item.key}>
+                  <Button
+                    variant={isActive ? "solid" : "light"}
+                    color={isActive ? "primary" : "default"}
+                    startContent={<Icon className="w-4 h-4" />}
+                    onPress={() => handleMenuClick(item.key)}
+                    className="font-medium"
+                  >
+                    {item.label}
+                  </Button>
+                </NavbarItem>
+              );
+            })}
+          </div>
         </NavbarContent>
 
-        <NavbarContent justify="end">
+        <NavbarContent justify="end" className="flex-shrink-0">
           {/* 连接状态指示器 */}
           <NavbarItem className="hidden sm:flex">
             <Chip

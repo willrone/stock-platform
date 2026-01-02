@@ -309,7 +309,7 @@ export function SyncProgressModal({
             
             <ModalFooter>
               <div className="flex items-center space-x-2 w-full">
-                {progressData?.failed_stocks > 0 && progressData?.status !== 'running' && (
+                {(progressData?.failed_stocks || 0) > 0 && progressData?.status !== 'running' && (
                   <Button
                     color="warning"
                     variant="light"

@@ -179,6 +179,7 @@ class ModelInfo(Base):
     training_stage = Column(String(100), nullable=True)  # 当前训练阶段
     evaluation_report = Column(JSON, nullable=True)  # 评估报告
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     deployed_at = Column(DateTime, nullable=True)
     
     def to_dict(self):
@@ -200,7 +201,32 @@ class ModelInfo(Base):
             "training_stage": self.training_stage,
             "evaluation_report": self.evaluation_report,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "deployed_at": self.deployed_at.isoformat() if self.deployed_at else None
+        }
+
+
+class ModelLifecycleEvent(Base):
+    """模型生命周期事件表"""
+    __tablename__ = "model_lifecycle_events"
+    
+    event_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    model_id = Column(String, nullable=False)
+    from_status = Column(String(50), nullable=False)
+    to_status = Column(String(50), nullable=False)
+    reason = Column(Text, nullable=True)
+    event_metadata = Column(JSON, nullable=True)  # 附加元数据
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            "event_id": self.event_id,
+            "model_id": self.model_id,
+            "from_status": self.from_status,
+            "to_status": self.to_status,
+            "reason": self.reason,
+            "event_metadata": self.event_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None
         }
 
 

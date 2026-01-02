@@ -45,8 +45,10 @@ export interface Model {
   version: string;
   accuracy: number;
   created_at: string;
-  status: 'active' | 'inactive' | 'training';
+  status: 'active' | 'inactive' | 'training' | 'ready' | 'failed';
   description?: string;
+  training_progress?: number;
+  training_stage?: string;
   performance_metrics?: {
     accuracy: number;
     precision: number;

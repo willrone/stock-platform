@@ -2,7 +2,7 @@
 API v1 模块
 """
 
-from . import health, stocks, predictions, tasks, models, backtest, data, system
+from . import health, stocks, predictions, tasks, models, backtest, data, system, qlib
 
 __all__ = [
     'health',
@@ -12,5 +12,6 @@ __all__ = [
     'models',
     'backtest',
     'data',
-    'system'
+    'system',
+    'qlib'
 ]

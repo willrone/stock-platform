@@ -580,3 +580,4 @@ class TaskManager:
             
             self.logger.error(f"任务执行失败 {task_id}: {e}")
             raise
+# 全局任务管理器实例将在应用启动时初始化

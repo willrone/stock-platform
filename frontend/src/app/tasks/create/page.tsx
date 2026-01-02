@@ -260,7 +260,7 @@ export default function CreateTaskPage() {
                 isRequired
               >
                 {models
-                  .filter(model => model.status === 'ready' || model.status === 'active' || model.status === 'deployed')
+                  .filter(model => model.status === 'ready' || model.status === 'active')
                   .map(model => (
                     <SelectItem key={model.model_id}>
                       <div className="flex flex-col">

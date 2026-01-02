@@ -32,9 +32,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 初始化服务容器
     await get_container()
     
+    # 注册特征管道回调
+    try:
+        from app.services.events.data_sync_events import register_feature_pipeline_callbacks
+        register_feature_pipeline_callbacks()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"注册特征管道回调失败: {e}")
+    
+    # 启动资源监控和任务调度器
+    try:
+        from app.services.infrastructure.resource_monitor import resource_monitor
+        from app.services.infrastructure.task_scheduler import task_scheduler
+        
+        # 启动资源监控（30秒间隔）
+        await resource_monitor.start_monitoring(30.0)
+        
+        # 启动任务调度器
+        await task_scheduler.start()
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("资源监控和任务调度器已启动")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"启动资源监控和任务调度器失败: {e}")
+    
     yield
     
     # 关闭时清理
+    try:
+        from app.services.infrastructure.resource_monitor import resource_monitor
+        from app.services.infrastructure.task_scheduler import task_scheduler
+        
+        # 停止资源监控和任务调度器
+        await resource_monitor.stop_monitoring()
+        await task_scheduler.stop()
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("资源监控和任务调度器已停止")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"停止资源监控和任务调度器失败: {e}")
+    
     await cleanup_container()
 
 
