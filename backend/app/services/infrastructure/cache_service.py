@@ -14,9 +14,7 @@ from enum import Enum
 import weakref
 import gc
 import psutil
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class CachePolicy(Enum):

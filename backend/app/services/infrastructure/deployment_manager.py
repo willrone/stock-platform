@@ -3,7 +3,6 @@
 支持蓝绿部署、金丝雀发布和自动回滚机制
 """
 import asyncio
-import logging
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
@@ -12,8 +11,7 @@ import json
 import shutil
 from pathlib import Path
 import hashlib
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class DeploymentStrategy(Enum):
     """部署策略类型"""

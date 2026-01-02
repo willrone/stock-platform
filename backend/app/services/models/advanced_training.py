@@ -7,13 +7,13 @@
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass
 from enum import Enum
 import pickle
+from loguru import logger
 
 import numpy as np
 import pandas as pd
@@ -32,8 +32,6 @@ import torch.nn as nn
 from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 import xgboost as xgb
-
-logger = logging.getLogger(__name__)
 
 # 可选导入ModelEvaluator
 try:

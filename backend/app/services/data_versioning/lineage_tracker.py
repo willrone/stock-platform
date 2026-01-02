@@ -2,7 +2,6 @@
 数据血缘追踪器
 追踪从原始数据到特征的转换，记录特征计算依赖关系
 """
-import logging
 import json
 from typing import Dict, List, Optional, Any, Set, Tuple
 from dataclasses import dataclass, field
@@ -11,8 +10,7 @@ from enum import Enum
 import networkx as nx
 from pathlib import Path
 import threading
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class TransformationType(Enum):
     """转换类型"""

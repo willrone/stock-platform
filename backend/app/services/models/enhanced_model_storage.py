@@ -13,9 +13,9 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 import json
-import logging
 import os
 from pathlib import Path
+from loguru import logger
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, or_, func, desc
@@ -26,8 +26,6 @@ from ...models.task_models import ModelInfo, ModelLifecycleEvent
 from ...core.config import settings
 from .model_lifecycle_manager import model_lifecycle_manager, ModelStatus
 from .lineage_tracker import lineage_tracker
-
-logger = logging.getLogger(__name__)
 
 
 class EnhancedModelStorage:

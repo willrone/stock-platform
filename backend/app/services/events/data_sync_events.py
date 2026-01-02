@@ -5,13 +5,11 @@
 """
 
 import asyncio
-import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class DataSyncEventType(Enum):

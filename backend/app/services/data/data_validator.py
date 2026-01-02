@@ -9,9 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ValidationLevel(Enum):

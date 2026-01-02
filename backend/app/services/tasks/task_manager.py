@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
-import logging
+from loguru import logger
 
 from app.models.database import DatabaseManager, Task, TaskResult, TaskStatus
 from app.models.stock_simple import StockData
@@ -79,8 +79,9 @@ class TaskManager:
     """任务管理器"""
     
     def __init__(self, db_manager: DatabaseManager):
+        from loguru import logger
         self.db_manager = db_manager
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
         
         # 任务状态变更回调
         self.status_change_callbacks = []

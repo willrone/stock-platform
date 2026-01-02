@@ -9,13 +9,11 @@
 - 模型对比
 """
 
-import logging
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass, asdict
 import json
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @dataclass

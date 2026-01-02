@@ -5,18 +5,16 @@
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
+from loguru import logger
 
 import pandas as pd
 
 from .feature_store import FeatureStore, FeatureType, FeatureMetadata
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 from ..data.simple_data_service import SimpleDataService
-
-logger = logging.getLogger(__name__)
 
 
 class FeaturePipeline:

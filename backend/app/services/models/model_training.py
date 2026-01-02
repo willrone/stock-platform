@@ -8,12 +8,12 @@
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass
 from enum import Enum
+from loguru import logger
 
 import numpy as np
 import pandas as pd
@@ -22,9 +22,6 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.model_selection import TimeSeriesSplit
 import xgboost as xgb
-
-# 设置日志
-logger = logging.getLogger(__name__)
 
 # 检测可用的计算设备
 def get_device():
@@ -57,7 +54,6 @@ except ImportError:
     QLIB_AVAILABLE = False
 
 # 导入其他依赖
-import logging
 from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 try:
@@ -88,8 +84,7 @@ except ImportError:
     OnlineLearningConfig = None
     EnsembleMethod = None
 
-# 使用标准日志记录器
-logger = logging.getLogger(__name__)
+# 使用 loguru 日志记录器（已在文件顶部导入）
 
 
 class ModelType(Enum):

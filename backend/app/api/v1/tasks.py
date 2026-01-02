@@ -5,7 +5,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Optional
 from datetime import datetime
-import logging
+from loguru import logger
 
 from app.api.v1.schemas import StandardResponse, TaskCreateRequest
 from app.core.database import SessionLocal
@@ -14,7 +14,6 @@ from app.models.task_models import TaskStatus, TaskType
 from app.api.v1.dependencies import execute_prediction_task_simple
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
-logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=StandardResponse)

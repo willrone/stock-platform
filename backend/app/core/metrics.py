@@ -9,9 +9,7 @@ from typing import Dict, Any
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST
 from fastapi import Request, Response
 from fastapi.responses import Response as FastAPIResponse
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # 定义Prometheus指标
 

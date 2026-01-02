@@ -3,7 +3,6 @@
 提供部署后的自动验证和性能基准测试
 """
 import asyncio
-import logging
 import time
 import statistics
 from typing import Dict, List, Optional, Any, Callable, Tuple
@@ -13,8 +12,7 @@ from enum import Enum
 import json
 import numpy as np
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class HealthStatus(Enum):
     """健康状态"""

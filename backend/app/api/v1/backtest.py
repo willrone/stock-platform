@@ -3,12 +3,11 @@
 """
 
 from fastapi import APIRouter, HTTPException
-import logging
+from loguru import logger
 
 from app.api.v1.schemas import StandardResponse, BacktestRequest
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
-logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=StandardResponse)

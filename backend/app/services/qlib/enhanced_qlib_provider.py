@@ -7,15 +7,13 @@
 import asyncio
 import hashlib
 import json
-import logging
+from loguru import logger
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Union
 
 import numpy as np
 import pandas as pd
-
-logger = logging.getLogger(__name__)
 
 # 检测Qlib可用性
 try:
@@ -351,8 +349,19 @@ class EnhancedQlibDataProvider:
             except Exception as e:
                 logger.error(f"Alpha因子计算失败: {e}")
         
-        logger.info(f"Qlib数据集准备完成: {len(qlib_data)} 条记录, {len(qlib_data.columns)} 个特征")
-        logger.info(f"数据集形状: {qlib_data.shape}, 特征列表: {list(qlib_data.columns[:20])}{'...' if len(qlib_data.columns) > 20 else ''}")
+        logger.info(f"========== Qlib数据集准备完成 ==========")
+        logger.info(f"记录数: {len(qlib_data)}")
+        logger.info(f"特征数: {len(qlib_data.columns)}")
+        logger.info(f"数据集形状: {qlib_data.shape}")
+        logger.info(f"数据维度数: {qlib_data.ndim}")
+        logger.info(f"索引类型: {type(qlib_data.index).__name__}")
+        if isinstance(qlib_data.index, pd.MultiIndex):
+            logger.info(f"MultiIndex级别数: {qlib_data.index.nlevels}")
+            logger.info(f"MultiIndex级别名称: {qlib_data.index.names}")
+        logger.info(f"特征列表: {list(qlib_data.columns[:20])}{'...' if len(qlib_data.columns) > 20 else ''}")
+        logger.info(f"缺失值总数: {qlib_data.isnull().sum().sum()}")
+        logger.info(f"数据类型统计: {qlib_data.dtypes.value_counts().to_dict()}")
+        logger.info(f"==========================================")
         if not qlib_data.empty:
             logger.info(f"数据统计: 缺失值={qlib_data.isnull().sum().sum()}, 数据类型={qlib_data.dtypes.value_counts().to_dict()}")
         return qlib_data

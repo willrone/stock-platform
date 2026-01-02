@@ -2,7 +2,6 @@
 技术指标影响分析器
 分析RSI、MACD等指标对预测的影响，提供指标重要性排序
 """
-import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple, Union
@@ -16,8 +15,7 @@ from scipy import stats
 from sklearn.feature_selection import mutual_info_regression, f_regression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.inspection import permutation_importance
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class TechnicalIndicator(Enum):
     """技术指标类型"""

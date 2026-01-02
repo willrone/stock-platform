@@ -3,7 +3,7 @@ API依赖注入和共享函数
 """
 
 from datetime import datetime
-import logging
+from loguru import logger
 from app.core.container import (
     get_data_service, 
     get_indicators_service
@@ -12,8 +12,6 @@ from app.core.database import SessionLocal
 from app.repositories.task_repository import TaskRepository, PredictionResultRepository, ModelInfoRepository
 from app.models.task_models import TaskStatus
 from app.services.tasks import TaskQueueManager
-
-logger = logging.getLogger(__name__)
 
 # 全局任务队列管理器实例
 task_queue_manager = TaskQueueManager()

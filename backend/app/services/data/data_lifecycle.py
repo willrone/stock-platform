@@ -4,11 +4,11 @@
 """
 
 import os
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from pathlib import Path
 from dataclasses import dataclass
+from loguru import logger
 
 from app.models.database import DatabaseManager, TaskStatus
 from .parquet_manager import ParquetManager
@@ -71,7 +71,8 @@ class DataLifecycleManager:
         self.parquet_manager = parquet_manager
         self.retention_policy = retention_policy or RetentionPolicy()
         self.base_path = Path(base_path)
-        self.logger = logging.getLogger(__name__)
+        from loguru import logger
+        self.logger = logger
         
         # 确保基础目录存在
         self.base_path.mkdir(parents=True, exist_ok=True)

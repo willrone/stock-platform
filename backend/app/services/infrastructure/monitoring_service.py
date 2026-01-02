@@ -8,8 +8,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from collections import defaultdict, deque
-import logging
 from dataclasses import dataclass
+from loguru import logger
 
 # 使用TYPE_CHECKING避免循环导入
 if TYPE_CHECKING:
@@ -61,7 +61,8 @@ class DataMonitoringService:
         self.data_service = data_service
         self.indicators_service = indicators_service
         self.parquet_manager = parquet_manager
-        self.logger = logging.getLogger(__name__)
+        from loguru import logger
+        self.logger = logger
         
         # 性能监控数据
         self._response_times: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))

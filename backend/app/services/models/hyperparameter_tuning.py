@@ -7,14 +7,12 @@
 - 贝叶斯优化
 """
 
-import logging
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 from itertools import product
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class SearchStrategy(Enum):

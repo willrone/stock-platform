@@ -2,7 +2,6 @@
 业务指标收集器
 收集关键业务指标数据，支持实时指标计算
 """
-import logging
 import asyncio
 from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
@@ -14,8 +13,7 @@ import numpy as np
 from collections import defaultdict, deque
 import threading
 import uuid
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class MetricType(Enum):
     """指标类型"""

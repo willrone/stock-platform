@@ -12,13 +12,11 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime
-import logging
 import psutil
 import gc
 from concurrent.futures import ThreadPoolExecutor
 import threading
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @dataclass

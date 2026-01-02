@@ -4,19 +4,17 @@
 """
 import asyncio
 import psutil
-import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 import json
+from loguru import logger
 
 try:
     import GPUtil
     GPU_AVAILABLE = True
 except ImportError:
     GPU_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
 
 @dataclass
 class ResourceUsage:

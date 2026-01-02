@@ -3,7 +3,6 @@
 基于资源使用情况和任务优先级进行智能调度
 """
 import asyncio
-import logging
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
@@ -11,10 +10,9 @@ from enum import Enum
 import heapq
 import json
 from uuid import uuid4
+from loguru import logger
 
 from .resource_monitor import ResourceMonitor, resource_monitor
-
-logger = logging.getLogger(__name__)
 
 class TaskPriority(Enum):
     """任务优先级"""

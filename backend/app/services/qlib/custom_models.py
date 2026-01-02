@@ -5,15 +5,13 @@
 与Qlib框架兼容的模型接口
 """
 
-import logging
 import math
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Tuple
+from loguru import logger
 
 import numpy as np
 import pandas as pd
-
-logger = logging.getLogger(__name__)
 
 # 检测PyTorch可用性
 try:

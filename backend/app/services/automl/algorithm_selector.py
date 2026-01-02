@@ -14,15 +14,13 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 import json
-import logging
 from dataclasses import dataclass
 from enum import Enum
+from loguru import logger
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import mutual_info_regression
 from scipy import stats
-
-logger = logging.getLogger(__name__)
 
 
 class DataCharacteristic(Enum):

@@ -8,7 +8,6 @@
 
 import asyncio
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Union
@@ -17,8 +16,7 @@ from enum import Enum
 
 import numpy as np
 import pandas as pd
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # 检测Qlib可用性
 try:
@@ -205,10 +203,24 @@ class UnifiedQlibTrainingEngine:
             if dataset.empty:
                 raise ValueError("无法获取训练数据")
             
-            logger.info(f"数据集准备完成: {dataset.shape}")
-            logger.info(f"数据集详细信息: 样本数={dataset.shape[0]}, 特征数={dataset.shape[1] if len(dataset.shape) > 1 else 0}")
+            # 详细记录数据集维度信息
+            logger.info(f"========== 数据集维度信息 ==========")
+            logger.info(f"数据集形状: {dataset.shape}")
+            logger.info(f"样本数: {dataset.shape[0]}")
+            logger.info(f"特征数: {dataset.shape[1] if len(dataset.shape) > 1 else 0}")
+            logger.info(f"数据维度数: {dataset.ndim}")
             if len(dataset.columns) > 0:
-                logger.info(f"特征列名: {list(dataset.columns[:10])}{'...' if len(dataset.columns) > 10 else ''}")
+                logger.info(f"特征列数: {len(dataset.columns)}")
+                logger.info(f"前20个特征列名: {list(dataset.columns[:20])}")
+                if len(dataset.columns) > 20:
+                    logger.info(f"... 还有 {len(dataset.columns) - 20} 个特征列")
+            logger.info(f"索引类型: {type(dataset.index).__name__}")
+            if isinstance(dataset.index, pd.MultiIndex):
+                logger.info(f"MultiIndex级别数: {dataset.index.nlevels}")
+                logger.info(f"MultiIndex级别名称: {dataset.index.names}")
+            logger.info(f"缺失值总数: {dataset.isnull().sum().sum()}")
+            logger.info(f"数据类型统计: {dataset.dtypes.value_counts().to_dict()}")
+            logger.info(f"=====================================")
             
             # 3. 创建Qlib模型配置
             if progress_callback:
@@ -229,6 +241,13 @@ class UnifiedQlibTrainingEngine:
             train_dataset, val_dataset = await self._prepare_training_datasets(
                 dataset, config.validation_split
             )
+            
+            # 记录数据集分割信息
+            logger.info(f"数据集分割完成: 训练集样本数={len(train_dataset)}, 验证集样本数={len(val_dataset)}")
+            if hasattr(train_dataset, 'data') and isinstance(train_dataset.data, pd.DataFrame):
+                logger.info(f"训练集数据形状: {train_dataset.data.shape}, 特征数={len(train_dataset.data.columns)}")
+            if hasattr(val_dataset, 'data') and isinstance(val_dataset.data, pd.DataFrame):
+                logger.info(f"验证集数据形状: {val_dataset.data.shape}, 特征数={len(val_dataset.data.columns)}")
             
             # 5. 训练模型
             if progress_callback:
@@ -263,6 +282,18 @@ class UnifiedQlibTrainingEngine:
             training_metrics, validation_metrics = await self._evaluate_model(
                 model, train_dataset, val_dataset, model_id
             )
+            
+            # 使用评估得到的准确率更新训练历史
+            train_accuracy = training_metrics.get('accuracy', 0.0)
+            val_accuracy = validation_metrics.get('accuracy', 0.0)
+            
+            # 更新训练历史中的准确率（如果历史记录存在）
+            if training_history:
+                for hist_entry in training_history:
+                    if 'train_accuracy' not in hist_entry or hist_entry.get('train_accuracy', 0.0) == 0.0:
+                        hist_entry['train_accuracy'] = round(train_accuracy, 4)
+                    if 'val_accuracy' not in hist_entry or hist_entry.get('val_accuracy', 0.0) == 0.0:
+                        hist_entry['val_accuracy'] = round(val_accuracy, 4)
             
             # 发送详细的评估结果
             if progress_callback:
@@ -364,151 +395,200 @@ class UnifiedQlibTrainingEngine:
         # 创建DatasetH适配器，使DataFrame具有qlib DatasetH的接口
         class DataFrameDatasetAdapter:
             """将DataFrame适配为qlib DatasetH格式"""
-            def __init__(self, data: pd.DataFrame):
-                self.data = data.copy()
-                self.segments = {"train": self.data}  # qlib模型期望有segments属性
+            def __init__(self, train_data: pd.DataFrame, val_data: pd.DataFrame = None):
+                self.train_data = train_data.copy()
+                self.val_data = val_data.copy() if val_data is not None else None
+                # qlib模型期望有segments属性，包含train和valid
+                self.segments = {"train": self.train_data}
+                if self.val_data is not None:
+                    self.segments["valid"] = self.val_data
+                # 为了兼容性，也设置data属性为训练集
+                self.data = self.train_data
                 
-                # 如果没有label列，从收盘价创建标签（未来收益率）
-                if "label" not in self.data.columns:
+                # 处理训练集和验证集的标签
+                def _create_label_for_data(data, data_name):
+                    """为数据集创建标签"""
+                    if data is None or "label" in data.columns:
+                        return
+                    
                     # 尝试找到收盘价列
                     close_col = None
                     for col in ["$close", "close", "Close", "CLOSE"]:
-                        if col in self.data.columns:
+                        if col in data.columns:
                             close_col = col
                             break
                     
                     if close_col is not None:
                         # 计算未来收益率作为标签
-                        # 假设是MultiIndex (instrument, datetime) 或单索引
-                        if isinstance(self.data.index, pd.MultiIndex):
-                            # 按instrument分组计算
-                            label_values = self.data.groupby(level=0)[close_col].pct_change(periods=1).shift(-1)
+                        if isinstance(data.index, pd.MultiIndex):
+                            label_values = data.groupby(level=0)[close_col].pct_change(periods=1).shift(-1)
                         else:
-                            # 单索引，直接计算
-                            label_values = self.data[close_col].pct_change(periods=1).shift(-1)
+                            label_values = data[close_col].pct_change(periods=1).shift(-1)
                         
-                        # 确保是1D Series，填充NaN值
                         if isinstance(label_values, pd.Series):
-                            self.data["label"] = label_values.fillna(0)
+                            data["label"] = label_values.fillna(0)
                         else:
-                            # 如果是DataFrame，取第一列
-                            self.data["label"] = pd.Series(
+                            data["label"] = pd.Series(
                                 label_values.iloc[:, 0].values if hasattr(label_values, 'iloc') else label_values,
-                                index=self.data.index
+                                index=data.index
                             ).fillna(0)
-                        logger.info("自动创建标签列（未来收益率）")
+                        logger.info(f"{data_name}自动创建标签列（未来收益率），标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]")
                     else:
                         # 如果没有收盘价，使用最后一列作为标签
-                        last_col = self.data.iloc[:, -1]
+                        last_col = data.iloc[:, -1]
                         if isinstance(last_col, pd.Series):
-                            self.data["label"] = last_col
+                            data["label"] = last_col
                         else:
-                            # 如果是DataFrame，取第一列
-                            self.data["label"] = pd.Series(
+                            data["label"] = pd.Series(
                                 last_col.iloc[:, 0].values if hasattr(last_col, 'iloc') else last_col,
-                                index=self.data.index
+                                index=data.index
                             )
-                        logger.warning("未找到收盘价列，使用最后一列作为标签")
+                        logger.warning(f"{data_name}未找到收盘价列，使用最后一列作为标签，标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]")
+                
+                _create_label_for_data(self.train_data, "训练集")
+                _create_label_for_data(self.val_data, "验证集")
+                
+                # 记录数据维度信息
+                logger.info(f"DataFrameDatasetAdapter初始化: 训练集形状={self.train_data.shape}, 验证集形状={self.val_data.shape if self.val_data is not None else 'N/A'}, 列数={len(self.train_data.columns)}")
+                if "label" in self.train_data.columns:
+                    label_stats = self.train_data["label"].describe()
+                    logger.info(f"训练集标签统计: {label_stats.to_dict()}")
+                if self.val_data is not None and "label" in self.val_data.columns:
+                    val_label_stats = self.val_data["label"].describe()
+                    logger.info(f"验证集标签统计: {val_label_stats.to_dict()}")
                 
             def __len__(self):
                 return len(self.data)
                 
             def __getitem__(self, key):
                 if key == "train":
-                    return self.data
-                return self.data
+                    return self.train_data
+                elif key == "valid" and self.val_data is not None:
+                    return self.val_data
+                return self.train_data
             
-            def prepare(self, key: str, col_set: List[str] = None, data_key: str = None):
+            def prepare(self, key: str, col_set: Union[List[str], str] = None, data_key: str = None):
                 """实现qlib DatasetH的prepare方法"""
                 if col_set is None:
                     col_set = ["feature", "label"]
                 
-                # 分离特征和标签
-                feature_cols = [col for col in self.data.columns if col != "label"]
+                # 处理col_set可能是字符串的情况（Qlib的predict传入"feature"字符串）
+                if isinstance(col_set, str):
+                    col_set = [col_set]
                 
-                result = pd.DataFrame(index=self.data.index)
+                # 根据key选择对应的数据集
+                if key == "train":
+                    data = self.train_data
+                elif key == "valid" and self.val_data is not None:
+                    data = self.val_data
+                else:
+                    data = self.train_data
+                
+                # 定义LabelSeries类（需要在方法开始处定义，以便在整个方法中可用）
+                class LabelSeries:
+                    """包装Series，使values返回2D数组以满足qlib的要求"""
+                    def __init__(self, values_1d, values_2d, index):
+                        self._series = pd.Series(values_1d, index=index)
+                        self._values_2d = values_2d
+                        self._index = index
+                    
+                    @property
+                    def values(self):
+                        # 返回2D数组，满足qlib的检查: ndim == 2 and shape[1] == 1
+                        return self._values_2d
+                    
+                    @property
+                    def index(self):
+                        return self._index
+                    
+                    def __len__(self):
+                        return len(self._series)
+                    
+                    def __getitem__(self, key):
+                        return self._series[key]
+                    
+                    def __iter__(self):
+                        return iter(self._series)
+                    
+                    def __array__(self, dtype=None):
+                        # 支持numpy数组转换
+                        return self._values_2d if dtype is None else self._values_2d.astype(dtype)
+                    
+                    def __getattr__(self, name):
+                        # 转发其他所有属性到内部的Series
+                        return getattr(self._series, name)
+                
+                # 分离特征和标签
+                feature_cols = [col for col in data.columns if col != "label"]
+                
+                # 创建一个包装类，使Series的values返回2D数组
+                class FeatureSeries:
+                    """包装Series，使values返回2D数组"""
+                    def __init__(self, feature_array_2d, index):
+                        self._feature_array_2d = feature_array_2d
+                        self._index = index
+                    
+                    @property
+                    def values(self):
+                        # 返回2D数组，满足LightGBM的要求
+                        return self._feature_array_2d
+                    
+                    @property
+                    def index(self):
+                        return self._index
+                    
+                    def __len__(self):
+                        return len(self._feature_array_2d)
+                    
+                    def __getitem__(self, key):
+                        # 直接返回数组的对应行
+                        if isinstance(key, (int, np.integer)):
+                            return self._feature_array_2d[key]
+                        elif isinstance(key, slice):
+                            return self._feature_array_2d[key]
+                        else:
+                            # 如果是索引标签，需要查找位置
+                            if hasattr(self._index, 'get_loc'):
+                                loc = self._index.get_loc(key)
+                                return self._feature_array_2d[loc]
+                            return self._feature_array_2d[key]
+                    
+                    def __iter__(self):
+                        # 迭代返回每一行
+                        return iter(self._feature_array_2d)
+                    
+                    def __array__(self, dtype=None):
+                        return self._feature_array_2d if dtype is None else self._feature_array_2d.astype(dtype)
+                    
+                    def __getattr__(self, name):
+                        # 对于其他属性，尝试从数组获取
+                        if hasattr(self._feature_array_2d, name):
+                            return getattr(self._feature_array_2d, name)
+                        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+                
+                # 先创建空的DataFrame，然后使用CustomDataFrame包装
+                result_base = pd.DataFrame(index=data.index)
+                feature_obj_final = None
+                label_obj_final = None
                 
                 if "feature" in col_set:
                     # qlib期望feature是一个Series，但values属性返回2D数组
                     # LightGBM需要2D数组 shape (n_samples, n_features)
                     if len(feature_cols) > 0:
                         # 直接获取特征数据为2D数组
-                        feature_array = self.data[feature_cols].values  # shape: (n_samples, n_features)
-                        
-                        # 创建一个包装类，使Series的values返回2D数组
-                        class FeatureSeries:
-                            """包装Series，使values返回2D数组"""
-                            def __init__(self, feature_array_2d, index):
-                                self._feature_array_2d = feature_array_2d
-                                self._index = index
-                                # 创建一个Series用于其他操作
-                                self._series = pd.Series(
-                                    [feature_array_2d[i] for i in range(len(feature_array_2d))],
-                                    index=index
-                                )
-                            
-                            @property
-                            def values(self):
-                                # 返回2D数组，满足LightGBM的要求
-                                return self._feature_array_2d
-                            
-                            @property
-                            def index(self):
-                                return self._index
-                            
-                            def __len__(self):
-                                return len(self._feature_array_2d)
-                            
-                            def __getitem__(self, key):
-                                return self._series[key]
-                            
-                            def __iter__(self):
-                                return iter(self._series)
-                            
-                            def __array__(self, dtype=None):
-                                return self._feature_array_2d if dtype is None else self._feature_array_2d.astype(dtype)
-                            
-                            def __getattr__(self, name):
-                                return getattr(self._series, name)
-                        
-                        result["feature"] = FeatureSeries(feature_array, self.data.index)
+                        feature_array = data[feature_cols].values  # shape: (n_samples, n_features)
+                        feature_obj_final = FeatureSeries(feature_array, data.index)
+                        # 不直接赋值，而是使用占位符，在CustomDataFrame中处理
+                        result_base["feature"] = pd.Series([None] * len(data.index), index=data.index)
                     else:
                         # 空特征
-                        empty_array = np.zeros((len(self.data), 0))
-                        class FeatureSeries:
-                            def __init__(self, feature_array_2d, index):
-                                self._feature_array_2d = feature_array_2d
-                                self._index = index
-                                self._series = pd.Series([np.array([])] * len(feature_array_2d), index=index)
-                            
-                            @property
-                            def values(self):
-                                return self._feature_array_2d
-                            
-                            @property
-                            def index(self):
-                                return self._index
-                            
-                            def __len__(self):
-                                return len(self._feature_array_2d)
-                            
-                            def __getitem__(self, key):
-                                return self._series[key]
-                            
-                            def __iter__(self):
-                                return iter(self._series)
-                            
-                            def __array__(self, dtype=None):
-                                return self._feature_array_2d if dtype is None else self._feature_array_2d.astype(dtype)
-                            
-                            def __getattr__(self, name):
-                                return getattr(self._series, name)
-                        
-                        result["feature"] = FeatureSeries(empty_array, self.data.index)
+                        empty_array = np.zeros((len(data), 0))
+                        feature_obj_final = FeatureSeries(empty_array, data.index)
+                        result_base["feature"] = pd.Series([None] * len(data.index), index=data.index)
                 
                 if "label" in col_set:
-                    if "label" in self.data.columns:
-                        label_series = self.data["label"]
+                    if "label" in data.columns:
+                        label_series = data["label"]
                         # 获取原始values
                         label_values = label_series.values if isinstance(label_series, pd.Series) else np.array(label_series)
                         
@@ -533,65 +613,35 @@ class UnifiedQlibTrainingEngine:
                             label_values_2d = label_values_flat.reshape(-1, 1)
                             label_values_1d = label_values_flat
                         
-                        # 创建一个包装类，实现Series接口但values返回2D数组
-                        # 由于pandas的values属性可能被缓存，我们需要创建一个完全自定义的类
-                        class LabelSeries:
-                            """包装Series，使values返回2D数组以满足qlib的要求"""
-                            def __init__(self, values_1d, values_2d, index):
-                                self._series = pd.Series(values_1d, index=index)
-                                self._values_2d = values_2d
-                                self._index = index
-                            
-                            @property
-                            def values(self):
-                                # 返回2D数组，满足qlib的检查: ndim == 2 and shape[1] == 1
-                                return self._values_2d
-                            
-                            @property
-                            def index(self):
-                                return self._index
-                            
-                            def __len__(self):
-                                return len(self._series)
-                            
-                            def __getitem__(self, key):
-                                return self._series[key]
-                            
-                            def __iter__(self):
-                                return iter(self._series)
-                            
-                            def __array__(self, dtype=None):
-                                # 支持numpy数组转换
-                                return self._values_2d if dtype is None else self._values_2d.astype(dtype)
-                            
-                            def __getattr__(self, name):
-                                # 转发其他所有属性到内部的Series
-                                return getattr(self._series, name)
-                        
+                        # 使用在方法开始处定义的LabelSeries类
                         label_obj = LabelSeries(
                             label_values_1d,
                             label_values_2d,
-                            label_series.index if isinstance(label_series, pd.Series) else self.data.index
+                            label_series.index if isinstance(label_series, pd.Series) else data.index
                         )
                     else:
                         # 创建默认标签
-                        default_values_1d = np.zeros(len(self.data))
+                        default_values_1d = np.zeros(len(data))
                         default_values_2d = default_values_1d.reshape(-1, 1)
                         
-                        label_obj = LabelSeries(default_values_1d, default_values_2d, self.data.index)
+                        label_obj = LabelSeries(default_values_1d, default_values_2d, data.index)
                     
-                    # 将LabelSeries赋值给DataFrame
-                    # 注意：pandas可能会转换，所以我们需要在赋值后检查并修复
-                    result["label"] = label_obj
-                    
-                    # 如果pandas转换了LabelSeries为普通Series，我们需要重新设置
-                    # 通过直接修改DataFrame的内部结构
-                    if hasattr(result["label"], 'values') and not hasattr(result["label"], '_values_2d'):
-                        # pandas转换了，我们需要手动替换
-                        # 使用_constructor_sliced来创建新的Series，但这样还是会被转换
-                        # 更好的方法是直接修改DataFrame的列访问
-                        # 或者使用一个自定义的DataFrame子类
-                        pass  # 暂时保留，看看是否能工作
+                    # 保存label对象，不直接赋值给DataFrame
+                    label_obj_final = label_obj
+                    result_base["label"] = pd.Series([None] * len(data.index), index=data.index)
+                else:
+                    # 创建默认标签
+                    default_values_1d = np.zeros(len(data))
+                    default_values_2d = default_values_1d.reshape(-1, 1)
+                    label_obj_final = LabelSeries(default_values_1d, default_values_2d, data.index)
+                    result_base["label"] = pd.Series([None] * len(data.index), index=data.index)
+                
+                if "label" not in col_set:
+                    # 如果没有请求label，创建默认的
+                    default_values_1d = np.zeros(len(data))
+                    default_values_2d = default_values_1d.reshape(-1, 1)
+                    label_obj_final = LabelSeries(default_values_1d, default_values_2d, data.index)
+                    result_base["label"] = pd.Series([None] * len(data.index), index=data.index)
                 
                 # 创建一个自定义的DataFrame类，重写__getitem__以返回自定义Series对象
                 class CustomDataFrame(pd.DataFrame):
@@ -602,130 +652,56 @@ class UnifiedQlibTrainingEngine:
                         self._feature_series_obj = feature_series_obj
                     
                     def __getitem__(self, key):
-                        result = super().__getitem__(key)
                         # 如果访问label列，返回我们的LabelSeries对象
                         if key == "label" and self._label_series_obj is not None:
                             return self._label_series_obj
                         # 如果访问feature列，返回我们的FeatureSeries对象
                         if key == "feature" and self._feature_series_obj is not None:
                             return self._feature_series_obj
-                        return result
+                        # 其他情况使用默认行为
+                        return super().__getitem__(key)
                 
-                # 如果创建了label或feature，使用自定义DataFrame包装
-                label_obj_final = None
-                feature_obj_final = None
+                # 如果只请求feature，直接返回FeatureSeries（Qlib的predict期望这样）
+                if col_set == ["feature"] or (isinstance(col_set, str) and col_set == "feature"):
+                    if feature_obj_final is not None:
+                        return feature_obj_final
+                    else:
+                        # 如果没有特征，返回空的FeatureSeries
+                        empty_array = np.zeros((len(data), 0))
+                        return FeatureSeries(empty_array, data.index)
                 
-                if "label" in result.columns:
-                    # 获取label对象（可能在赋值时被转换了）
-                    label_obj_final = result["label"]
-                    # 如果被转换了，重新创建LabelSeries
-                    if not hasattr(label_obj_final, '_values_2d'):
-                        label_values_current = label_obj_final.values
-                        if label_values_current.ndim == 1:
-                            label_values_2d_final = label_values_current.reshape(-1, 1)
-                            label_values_1d_final = label_values_current
-                        elif label_values_current.ndim == 2:
-                            if label_values_current.shape[1] == 1:
-                                label_values_2d_final = label_values_current
-                                label_values_1d_final = label_values_current.flatten()
-                            else:
-                                label_values_2d_final = label_values_current[:, 0:1]
-                                label_values_1d_final = label_values_current[:, 0]
-                        else:
-                            label_values_flat = np.array(label_values_current).flatten()
-                            label_values_2d_final = label_values_flat.reshape(-1, 1)
-                            label_values_1d_final = label_values_flat
-                        
-                        label_obj_final = LabelSeries(
-                            label_values_1d_final,
-                            label_values_2d_final,
-                            label_obj_final.index
-                        )
+                # 如果只请求label，直接返回LabelSeries
+                if col_set == ["label"] or (isinstance(col_set, str) and col_set == "label"):
+                    if label_obj_final is not None:
+                        return label_obj_final
+                    else:
+                        # 如果没有标签，返回空的LabelSeries
+                        default_values_1d = np.zeros(len(data))
+                        default_values_2d = default_values_1d.reshape(-1, 1)
+                        return LabelSeries(default_values_1d, default_values_2d, data.index)
                 
-                if "feature" in result.columns:
-                    # 获取feature对象
-                    feature_obj_final = result["feature"]
-                    # 如果被转换了，需要重新创建FeatureSeries
-                    if not hasattr(feature_obj_final, '_feature_array_2d'):
-                        # 检查是否是Series of arrays
-                        if isinstance(feature_obj_final, pd.Series):
-                            # 尝试从Series中提取2D数组
-                            try:
-                                # 如果每个元素是数组，尝试堆叠
-                                feature_arrays = [np.array(x) for x in feature_obj_final.values]
-                                if len(feature_arrays) > 0 and feature_arrays[0].ndim > 0:
-                                    feature_array_2d = np.stack(feature_arrays)
-                                else:
-                                    # 如果已经是2D，直接使用
-                                    feature_array_2d = np.array(feature_obj_final.values)
-                                    if feature_array_2d.ndim == 1:
-                                        # 1D数组，需要reshape
-                                        feature_array_2d = feature_array_2d.reshape(-1, 1)
-                            except:
-                                # 如果无法堆叠，尝试直接转换
-                                feature_array_2d = np.array(feature_obj_final.values)
-                                if feature_array_2d.ndim == 1:
-                                    feature_array_2d = feature_array_2d.reshape(-1, 1)
-                        else:
-                            # 尝试转换为数组
-                            feature_array_2d = np.array(feature_obj_final)
-                            if feature_array_2d.ndim == 1:
-                                feature_array_2d = feature_array_2d.reshape(-1, 1)
-                        
-                        # 重新创建FeatureSeries
-                        class FeatureSeries:
-                            def __init__(self, feature_array_2d, index):
-                                self._feature_array_2d = feature_array_2d
-                                self._index = index
-                                self._series = pd.Series(
-                                    [feature_array_2d[i] for i in range(len(feature_array_2d))],
-                                    index=index
-                                )
-                            
-                            @property
-                            def values(self):
-                                return self._feature_array_2d
-                            
-                            @property
-                            def index(self):
-                                return self._index
-                            
-                            def __len__(self):
-                                return len(self._feature_array_2d)
-                            
-                            def __getitem__(self, key):
-                                return self._series[key]
-                            
-                            def __iter__(self):
-                                return iter(self._series)
-                            
-                            def __array__(self, dtype=None):
-                                return self._feature_array_2d if dtype is None else self._feature_array_2d.astype(dtype)
-                            
-                            def __getattr__(self, name):
-                                return getattr(self._series, name)
-                        
-                        feature_obj_final = FeatureSeries(feature_array_2d, feature_obj_final.index)
-                
-                # 如果有自定义对象，使用自定义DataFrame包装
+                # 如果请求多个列（feature和label），返回CustomDataFrame
                 if label_obj_final is not None or feature_obj_final is not None:
                     custom_result = CustomDataFrame(
-                        result, 
+                        result_base, 
                         label_series_obj=label_obj_final,
                         feature_series_obj=feature_obj_final
                     )
                     return custom_result
-                
-                return result
+                else:
+                    return result_base
             
             def __getattr__(self, name):
                 # 转发其他属性到DataFrame
                 return getattr(self.data, name)
         
-        train_dataset = DataFrameDatasetAdapter(train_data)
-        val_dataset = DataFrameDatasetAdapter(val_data)
+        # 创建包含训练集和验证集的适配器
+        combined_adapter = DataFrameDatasetAdapter(train_data, val_data if len(val_data) > 0 else None)
+        # 为了兼容现有代码，也返回单独的适配器引用
+        train_dataset = combined_adapter
+        val_dataset = combined_adapter  # 使用同一个适配器，因为它已经包含了验证集
         
-        logger.info(f"数据分割完成 - 训练集: {len(train_data)}, 验证集: {len(val_data)}")
+        logger.info(f"数据分割完成 - 训练集: {len(train_data)}, 验证集: {len(val_data)}, segments={list(combined_adapter.segments.keys())}")
         return train_dataset, val_dataset
     
     async def _train_qlib_model(
@@ -772,8 +748,27 @@ class UnifiedQlibTrainingEngine:
             best_epoch = 0
             early_stopping_reason = None
             
+            # 记录数据集信息
+            logger.info(f"准备训练模型: 训练集类型={type(train_dataset)}, 长度={len(train_dataset) if hasattr(train_dataset, '__len__') else 'N/A'}")
+            logger.info(f"准备训练模型: 验证集类型={type(val_dataset)}, 长度={len(val_dataset) if hasattr(val_dataset, '__len__') else 'N/A'}")
+            if hasattr(val_dataset, 'data'):
+                logger.info(f"验证集数据: {val_dataset.data.shape if hasattr(val_dataset.data, 'shape') else 'N/A'}")
+            
+            # 检查模型fit方法的参数
+            fit_params = []
+            if hasattr(model, 'fit'):
+                try:
+                    import inspect
+                    sig = inspect.signature(model.fit)
+                    fit_params = list(sig.parameters.keys())
+                    logger.info(f"模型fit方法参数: {fit_params}")
+                except:
+                    if hasattr(model.fit, '__code__'):
+                        fit_params = list(model.fit.__code__.co_varnames)
+                        logger.info(f"模型fit方法参数(通过co_varnames): {fit_params}")
+            
             # 对于支持验证集的模型，传入验证数据
-            if hasattr(model, 'fit') and 'valid_set' in model.fit.__code__.co_varnames:
+            if hasattr(model, 'fit') and ('valid_set' in fit_params or 'valid_data' in fit_params or 'validation_set' in fit_params):
                 # 创建训练进度回调
                 async def training_progress_callback(epoch, train_loss, val_loss=None, val_metrics=None):
                     nonlocal early_stopped, stopped_epoch, best_epoch, early_stopping_reason
@@ -799,6 +794,8 @@ class UnifiedQlibTrainingEngine:
                             "epoch": epoch,
                             "train_loss": round(train_loss, 4),
                             "val_loss": round(val_loss, 4) if val_loss else None,
+                            "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
+                            "val_accuracy": 0.0,
                             "learning_rate": config.hyperparameters.get("learning_rate", 0.001)
                         }
                         
@@ -806,6 +803,9 @@ class UnifiedQlibTrainingEngine:
                         if val_metrics:
                             for key, value in val_metrics.items():
                                 history_entry[f"val_{key}"] = round(value, 4)
+                                # 如果val_metrics中有accuracy，更新val_accuracy
+                                if key == "accuracy":
+                                    history_entry["val_accuracy"] = round(value, 4)
                         
                         training_history.append(history_entry)
                         
@@ -869,7 +869,16 @@ class UnifiedQlibTrainingEngine:
                     if hasattr(model, 'set_early_stopping_callback') and early_stopping_manager:
                         model.set_early_stopping_callback(lambda: early_stopped)
                     
-                    model.fit(train_dataset, valid_set=val_dataset)
+                    # Qlib的LGBModel.fit()只接受一个dataset参数，验证集通过dataset.segments["valid"]传递
+                    # 如果train_dataset和val_dataset是同一个对象（包含segments），直接使用
+                    # 否则，使用train_dataset（它应该已经包含了valid segment）
+                    dataset_to_fit = train_dataset
+                    if hasattr(train_dataset, 'segments') and 'valid' in train_dataset.segments:
+                        logger.info(f"使用包含验证集的dataset进行训练，segments: {list(train_dataset.segments.keys())}")
+                    else:
+                        logger.warning(f"dataset不包含验证集segment，仅使用训练集")
+                    
+                    model.fit(dataset_to_fit)
                     
                     # 训练完成后，尝试从模型获取真实训练历史（LightGBM等模型可能支持）
                     try:
@@ -914,6 +923,8 @@ class UnifiedQlibTrainingEngine:
                                                 "epoch": epoch,
                                                 "train_loss": round(loss, 4),
                                                 "val_loss": None,
+                                                "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
+                                                "val_accuracy": 0.0,
                                                 "learning_rate": config.hyperparameters.get("learning_rate", 0.001)
                                             })
                                         
@@ -928,7 +939,14 @@ class UnifiedQlibTrainingEngine:
                         model, train_dataset, val_dataset, config, 
                         early_stopping_manager, training_progress_callback
                     )
-                    model.fit(train_dataset, valid_set=val_dataset)
+                    # Qlib的LGBModel.fit()只接受一个dataset参数，验证集通过dataset.segments["valid"]传递
+                    dataset_to_fit = train_dataset
+                    if hasattr(train_dataset, 'segments') and 'valid' in train_dataset.segments:
+                        logger.info(f"使用包含验证集的dataset进行训练，segments: {list(train_dataset.segments.keys())}")
+                    else:
+                        logger.warning(f"dataset不包含验证集segment，仅使用训练集")
+                    
+                    model.fit(dataset_to_fit)
                     
                     # 训练完成后，尝试从模型获取真实训练历史
                     try:
@@ -973,6 +991,8 @@ class UnifiedQlibTrainingEngine:
                                                 "epoch": epoch,
                                                 "train_loss": round(loss, 4),
                                                 "val_loss": None,
+                                                "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
+                                                "val_accuracy": 0.0,
                                                 "learning_rate": config.hyperparameters.get("learning_rate", 0.001)
                                             })
                                         
@@ -1000,6 +1020,8 @@ class UnifiedQlibTrainingEngine:
                                             "epoch": epoch,
                                             "train_loss": round(loss, 4),
                                             "val_loss": None,
+                                            "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
+                                            "val_accuracy": 0.0,
                                             "learning_rate": config.hyperparameters.get("learning_rate", 0.001)
                                         })
                                     
@@ -1019,6 +1041,8 @@ class UnifiedQlibTrainingEngine:
                             "epoch": epoch,
                             "train_loss": round(train_loss, 4),
                             "val_loss": round(val_loss, 4),
+                            "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
+                            "val_accuracy": 0.0,
                             "learning_rate": config.hyperparameters.get("learning_rate", 0.001)
                         }
                         training_history.append(history_entry)
@@ -1102,12 +1126,12 @@ class UnifiedQlibTrainingEngine:
             elif isinstance(val_dataset, pd.DataFrame):
                 logger.info(f"验证集数据维度: {val_dataset.shape}, 列: {list(val_dataset.columns[:10]) if len(val_dataset.columns) > 0 else 'N/A'}")
             
-            # 训练集预测
-            train_pred = model.predict(train_dataset)
+            # 训练集预测 - 使用正确的segment
+            train_pred = model.predict(train_dataset, segment="train")
             logger.info(f"训练集预测结果: 类型={type(train_pred)}, 形状={train_pred.shape if hasattr(train_pred, 'shape') else len(train_pred) if hasattr(train_pred, '__len__') else 'N/A'}")
             
-            # 验证集预测
-            val_pred = model.predict(val_dataset)
+            # 验证集预测 - 使用正确的segment
+            val_pred = model.predict(val_dataset, segment="valid")
             logger.info(f"验证集预测结果: 类型={type(val_pred)}, 形状={val_pred.shape if hasattr(val_pred, 'shape') else len(val_pred) if hasattr(val_pred, '__len__') else 'N/A'}")
             
             # 计算训练集指标（使用真实标签）
@@ -1133,34 +1157,64 @@ class UnifiedQlibTrainingEngine:
             # 从数据集中获取真实标签
             y_true = None
             
+            # 首先确定应该使用哪个segment
+            segment = "train" if "训练" in dataset_name else "valid" if "验证" in dataset_name else "train"
+            
             # 尝试多种方式获取标签
             if hasattr(dataset, 'data') and isinstance(dataset.data, pd.DataFrame):
-                # DataFrameDatasetAdapter
-                if "label" in dataset.data.columns:
+                # DataFrameDatasetAdapter - 根据segment获取对应的数据
+                if hasattr(dataset, 'segments') and segment in dataset.segments:
+                    segment_data = dataset.segments[segment]
+                    if isinstance(segment_data, pd.DataFrame) and "label" in segment_data.columns:
+                        label_series = segment_data["label"]
+                        # 如果是LabelSeries，获取其内部的Series
+                        if hasattr(label_series, '_series'):
+                            y_true = label_series._series.values
+                        else:
+                            y_true = label_series.values
+                        logger.debug(f"{dataset_name} 从segment {segment}获取标签，形状: {y_true.shape if hasattr(y_true, 'shape') else len(y_true)}")
+                elif "label" in dataset.data.columns:
                     y_true = dataset.data["label"].values
                 elif hasattr(dataset, 'prepare'):
                     # 尝试通过prepare方法获取
                     try:
-                        prepared = dataset.prepare("train", col_set=["label"])
+                        prepared = dataset.prepare(segment, col_set=["label"])
                         if isinstance(prepared, pd.DataFrame) and "label" in prepared.columns:
                             label_col = prepared["label"]
-                            if hasattr(label_col, 'values'):
+                            # 如果是LabelSeries，获取其内部的Series
+                            if hasattr(label_col, '_series'):
+                                y_true = label_col._series.values
+                            elif hasattr(label_col, 'values'):
                                 label_values = label_col.values
                                 if label_values.ndim == 2:
                                     y_true = label_values.flatten()
                                 else:
                                     y_true = label_values
+                            else:
+                                y_true = np.array(label_col).flatten()
+                        logger.debug(f"{dataset_name} 通过prepare方法获取标签，形状: {y_true.shape if hasattr(y_true, 'shape') else len(y_true)}")
                     except Exception as e:
                         logger.debug(f"通过prepare方法获取标签失败: {e}")
             
             if y_true is None and isinstance(dataset, pd.DataFrame):
                 # 直接是DataFrame
                 if "label" in dataset.columns:
-                    y_true = dataset["label"].values
+                    label_col = dataset["label"]
+                    # 如果是LabelSeries，获取其内部的Series
+                    if hasattr(label_col, '_series'):
+                        y_true = label_col._series.values
+                    else:
+                        y_true = label_col.values
             
             if y_true is None:
                 logger.warning(f"数据集 {dataset_name} 中没有找到label列，使用默认指标")
+                logger.warning(f"数据集类型: {type(dataset)}, 是否有data属性: {hasattr(dataset, 'data')}, 是否有segments属性: {hasattr(dataset, 'segments')}")
+                if hasattr(dataset, 'segments'):
+                    logger.warning(f"可用segments: {list(dataset.segments.keys()) if hasattr(dataset.segments, 'keys') else 'N/A'}")
                 return self._get_default_metrics()
+            
+            # 记录标签统计信息
+            logger.info(f"{dataset_name} 标签统计 - 样本数: {len(y_true)}, 非零值: {np.count_nonzero(y_true)}, 零值: {np.sum(np.abs(y_true) < 1e-6)}, 范围: [{np.min(y_true):.6f}, {np.max(y_true):.6f}]")
             
             # 处理预测值
             if isinstance(predictions, pd.Series):
@@ -1202,7 +1256,9 @@ class UnifiedQlibTrainingEngine:
             # 记录方向分布信息
             unique_true = np.unique(y_true_direction)
             unique_pred = np.unique(y_pred_direction)
-            logger.debug(f"{dataset_name} 方向分布 - 真实: {unique_true}, 预测: {unique_pred}, 样本数: {len(y_true_direction)}")
+            true_counts = {val: np.sum(y_true_direction == val) for val in unique_true}
+            pred_counts = {val: np.sum(y_pred_direction == val) for val in unique_pred}
+            logger.info(f"{dataset_name} 方向分布 - 真实: {true_counts}, 预测: {pred_counts}, 样本数: {len(y_true_direction)}")
             
             # 如果所有方向都相同，准确率计算会有问题
             if len(unique_true) == 1 and len(unique_pred) == 1:

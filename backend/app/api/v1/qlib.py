@@ -4,9 +4,9 @@ Qlib集成API接口
 提供Qlib数据处理、因子计算和模型训练的API接口
 """
 
-import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from loguru import logger
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -16,7 +16,6 @@ from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
 from app.services.qlib.unified_qlib_training_engine import UnifiedQlibTrainingEngine
 
 router = APIRouter(prefix="/qlib", tags=["Qlib集成"])
-logger = logging.getLogger(__name__)
 
 # 全局Qlib数据提供器和训练引擎实例
 _qlib_provider: Optional[EnhancedQlibDataProvider] = None

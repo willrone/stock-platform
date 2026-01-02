@@ -2,7 +2,6 @@
 统计显著性分析器
 实现A/B测试结果分析，提供统计显著性检验
 """
-import logging
 import numpy as np
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -12,11 +11,10 @@ import json
 from scipy import stats
 from scipy.stats import chi2_contingency, mannwhitneyu, ttest_ind
 import math
+from loguru import logger
 
 from app.services.ab_testing.metrics_collector import MetricValue, MetricType, BusinessMetricsCollector
 from app.services.ab_testing.traffic_manager import ABExperiment, TrafficVariant, VariantType
-
-logger = logging.getLogger(__name__)
 
 class TestType(Enum):
     """统计检验类型"""

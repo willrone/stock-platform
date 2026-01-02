@@ -4,7 +4,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
-import logging
+from loguru import logger
 
 from app.services.infrastructure.resource_monitor import resource_monitor, ResourceThresholds
 from app.services.infrastructure.task_scheduler import task_scheduler, TaskPriority, ResourceRequirement
@@ -13,8 +13,6 @@ from app.services.infrastructure.deployment_manager import (
 )
 from app.services.infrastructure.compatibility_validator import compatibility_validator
 from app.services.infrastructure.health_monitor import health_monitor
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/infrastructure", tags=["基础设施"])
 

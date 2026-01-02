@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
-import logging
+from loguru import logger
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
@@ -22,8 +22,6 @@ from sqlalchemy.orm import selectinload
 from ...core.database import get_async_session as get_db
 from ...models.task_models import ModelInfo, ModelLifecycleEvent
 from ...core.config import settings
-
-logger = logging.getLogger(__name__)
 
 
 class ModelStatus(Enum):

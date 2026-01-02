@@ -2,7 +2,6 @@
 量化因子解释功能
 支持Qlib因子的解释性分析，实现因子贡献度可视化
 """
-import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple, Union
@@ -16,8 +15,7 @@ from scipy import stats
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class FactorCategory(Enum):
     """因子类别"""

@@ -3,15 +3,13 @@
 实现系统恢复和重试机制
 """
 import asyncio
-import logging
 import traceback
 import time
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime, timedelta
 from enum import Enum
 import json
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class ErrorSeverity(Enum):
     """错误严重程度"""

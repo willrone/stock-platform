@@ -9,14 +9,12 @@ WebSocket支持
 """
 
 import json
-import logging
 from typing import Dict, Set, Any
 from datetime import datetime
+from loguru import logger
 
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
-
-logger = logging.getLogger(__name__)
 
 # WebSocket连接管理器
 class ConnectionManager:

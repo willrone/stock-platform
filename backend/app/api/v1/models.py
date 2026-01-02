@@ -5,7 +5,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from datetime import datetime
 from sqlalchemy import or_
-import logging
+from loguru import logger
 import uuid
 from pathlib import Path
 from typing import Optional, List
@@ -29,7 +29,6 @@ from app.services.models.model_lifecycle_manager import model_lifecycle_manager
 from app.services.models.lineage_tracker import lineage_tracker
 
 router = APIRouter(prefix="/models", tags=["模型管理"])
-logger = logging.getLogger(__name__)
 
 # 导入模型训练服务
 DEEP_TRAINING_AVAILABLE = False

@@ -8,8 +8,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
-import logging
 from dataclasses import dataclass
+from loguru import logger
 
 from app.models.stock_simple import StockData
 from app.models.file_management import (
@@ -37,7 +37,8 @@ class ParquetManager:
     def __init__(self, base_path: str = "data/parquet"):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        self.logger = logging.getLogger(__name__)
+        from loguru import logger
+        self.logger = logger
         
         # 文件组织结构: data/parquet/{stock_code}/{year}/{month}/
         # 例如: data/parquet/000001.SZ/2023/01/000001.SZ_2023-01.parquet

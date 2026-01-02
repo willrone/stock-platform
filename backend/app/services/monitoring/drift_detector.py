@@ -2,7 +2,6 @@
 数据漂移检测器
 检测输入数据分布变化，量化漂移程度并生成报告
 """
-import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple, Union
@@ -16,8 +15,7 @@ from scipy import stats
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from scipy.stats import wasserstein_distance
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class DriftType(Enum):
     """漂移类型"""

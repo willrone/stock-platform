@@ -3,7 +3,6 @@
 实现性能下降告警，支持邮件和WebSocket通知
 """
 import asyncio
-import logging
 import smtplib
 import json
 from typing import Dict, List, Optional, Any, Callable, Set
@@ -15,11 +14,10 @@ from email.mime.multipart import MIMEMultipart
 import threading
 from collections import defaultdict, deque
 import uuid
+from loguru import logger
 
 from app.services.monitoring.performance_monitor import Alert, AlertLevel, PerformanceMetrics
 from app.services.monitoring.drift_detector import DriftReport, DriftSeverity
-
-logger = logging.getLogger(__name__)
 
 class NotificationChannel(Enum):
     """通知渠道"""

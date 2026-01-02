@@ -5,13 +5,11 @@
 """
 
 import time
-import logging
 from typing import Dict, Optional
 from collections import defaultdict, deque
 from fastapi import Request, Response, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RateLimitConfig:

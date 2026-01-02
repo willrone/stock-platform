@@ -3,7 +3,6 @@
 收集预测请求和响应数据，监控准确率和延迟指标
 """
 import asyncio
-import logging
 import time
 import statistics
 from typing import Dict, List, Optional, Any, Callable
@@ -14,8 +13,7 @@ import json
 import numpy as np
 from collections import deque, defaultdict
 import threading
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class MetricType(Enum):
     """指标类型"""

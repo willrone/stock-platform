@@ -4,12 +4,11 @@
 
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
-import logging
+from loguru import logger
 
 from app.api.v1.schemas import StandardResponse, PredictionRequest
 
 router = APIRouter(prefix="/predictions", tags=["预测服务"])
-logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=StandardResponse)

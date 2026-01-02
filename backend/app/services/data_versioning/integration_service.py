@@ -2,10 +2,10 @@
 数据版本控制集成服务
 复用现有存储基础设施，添加版本控制接口
 """
-import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from pathlib import Path
+from loguru import logger
 
 from app.services.data_versioning.version_manager import (
     DataVersionManager, DataType, VersionStatus, data_version_manager
@@ -15,8 +15,6 @@ from app.services.data_versioning.lineage_tracker import (
 )
 from app.services.data.parquet_manager import ParquetManager
 from app.services.events.data_sync_events import get_data_sync_event_manager, DataSyncEventType
-
-logger = logging.getLogger(__name__)
 
 class DataVersioningIntegrationService:
     """数据版本控制集成服务"""

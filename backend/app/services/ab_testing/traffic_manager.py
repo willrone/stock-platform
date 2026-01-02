@@ -2,7 +2,6 @@
 A/B测试流量分割管理器
 支持按比例分割用户流量，实现用户分组和标识
 """
-import logging
 import hashlib
 import random
 from typing import Dict, List, Optional, Any, Tuple
@@ -13,8 +12,7 @@ import json
 import threading
 from collections import defaultdict, deque
 import uuid
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class TrafficSplitMethod(Enum):
     """流量分割方法"""

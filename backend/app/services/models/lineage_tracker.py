@@ -12,8 +12,8 @@ import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Set
 import json
-import logging
 import hashlib
+from loguru import logger
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, or_
@@ -22,8 +22,6 @@ from sqlalchemy.orm import selectinload
 from ...core.database import get_async_session as get_db
 from ...models.task_models import ModelInfo, Task
 from ...core.config import settings
-
-logger = logging.getLogger(__name__)
 
 
 class LineageTracker:

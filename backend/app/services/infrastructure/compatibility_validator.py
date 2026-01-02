@@ -2,7 +2,6 @@
 模型兼容性验证器
 检查模型依赖、环境兼容性和接口一致性
 """
-import logging
 import json
 import pickle
 import importlib
@@ -16,8 +15,7 @@ import subprocess
 import platform
 import pkg_resources
 from packaging import version
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class CompatibilityLevel(Enum):
     """兼容性级别"""

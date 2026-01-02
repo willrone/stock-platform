@@ -10,16 +10,14 @@ from typing import Dict, Any, Optional, List, Callable, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
-import logging
 from enum import Enum
+from loguru import logger
 
 import httpx
 from sqlalchemy import create_engine, pool
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 import psutil
-
-logger = logging.getLogger(__name__)
 
 
 class ConnectionStatus(Enum):

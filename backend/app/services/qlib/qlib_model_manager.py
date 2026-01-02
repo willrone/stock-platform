@@ -6,14 +6,12 @@ Qlib模型配置管理器
 """
 
 import json
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Type
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # 检测可用的深度学习框架
 try:

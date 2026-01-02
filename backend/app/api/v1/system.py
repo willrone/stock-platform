@@ -4,12 +4,11 @@
 
 from fastapi import APIRouter, HTTPException, Request
 from datetime import datetime
-import logging
+from loguru import logger
 
 from app.api.v1.schemas import StandardResponse
 
 router = APIRouter(prefix="/system", tags=["系统状态"])
-logger = logging.getLogger(__name__)
 
 
 @router.get(

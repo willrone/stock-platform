@@ -15,15 +15,13 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple, Callable
 import json
-import logging
 from enum import Enum
 import math
+from loguru import logger
 
 from sklearn.model_selection import ParameterGrid
 from scipy.stats import uniform, randint
 import optuna
-
-logger = logging.getLogger(__name__)
 
 
 class OptimizationMethod(Enum):

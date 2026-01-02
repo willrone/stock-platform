@@ -3,15 +3,13 @@
 优化特征计算性能和数据库查询效率
 """
 import asyncio
-import logging
 import time
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import psutil
 import gc
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class PerformanceOptimizer:
     """系统性能优化器"""

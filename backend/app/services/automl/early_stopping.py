@@ -2,15 +2,13 @@
 早停策略实现
 防止模型过拟合，提高训练效率
 """
-import logging
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 from datetime import datetime
 import json
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class EarlyStoppingMode(Enum):
     """早停模式"""

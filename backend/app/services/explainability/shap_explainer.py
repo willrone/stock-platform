@@ -2,7 +2,6 @@
 SHAP解释性库集成
 实现模型预测解释功能，支持全局和局部解释性分析
 """
-import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Any, Union, Tuple
@@ -13,8 +12,7 @@ import json
 import pickle
 from pathlib import Path
 import threading
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class ExplainerType(Enum):
     """解释器类型"""

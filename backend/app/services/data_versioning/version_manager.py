@@ -2,7 +2,6 @@
 轻量级数据版本管理器
 基于文件哈希的版本标识，记录训练数据版本信息
 """
-import logging
 import hashlib
 import json
 import shutil
@@ -14,8 +13,7 @@ from enum import Enum
 import pandas as pd
 import numpy as np
 import threading
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class DataType(Enum):
     """数据类型"""

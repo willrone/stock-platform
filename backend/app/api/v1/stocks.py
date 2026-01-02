@@ -5,7 +5,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from datetime import datetime, timedelta
-import logging
+from loguru import logger
 
 from app.api.v1.schemas import StandardResponse
 from app.core.container import get_data_service, get_indicators_service
@@ -13,7 +13,6 @@ from app.services.data import SimpleDataService
 from app.services.prediction import TechnicalIndicatorCalculator
 
 router = APIRouter(prefix="/stocks", tags=["股票数据"])
-logger = logging.getLogger(__name__)
 
 
 @router.get(

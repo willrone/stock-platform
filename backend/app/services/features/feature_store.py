@@ -7,17 +7,15 @@
 import asyncio
 import hashlib
 import json
-import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
+from loguru import logger
 
 import pandas as pd
 import numpy as np
-
-logger = logging.getLogger(__name__)
 
 
 class FeatureType(Enum):
