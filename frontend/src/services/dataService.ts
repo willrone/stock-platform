@@ -277,6 +277,14 @@ export class DataService {
   }
 
   /**
+   * 获取模型训练报告
+   */
+  static async getTrainingReport(modelId: string): Promise<any> {
+    const response = await apiRequest.get(`/models/${modelId}/evaluation-report`);
+    return response.data || response;
+  }
+
+  /**
    * 创建模型训练任务
    */
   static async createModel(request: {

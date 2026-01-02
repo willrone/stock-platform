@@ -61,8 +61,11 @@ export default function ModelsPage() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isTrainingReportOpen, onOpen: onTrainingReportOpen, onClose: onTrainingReportClose } = useDisclosure();
   const { isOpen: isLiveTrainingOpen, onOpen: onLiveTrainingOpen, onClose: onLiveTrainingClose } = useDisclosure();
+  const { isOpen: isDeleteModalOpen, onOpen: onDeleteModalOpen, onClose: onDeleteModalClose } = useDisclosure();
   const [trainingReportModelId, setTrainingReportModelId] = useState<string | null>(null);
   const [liveTrainingModelId, setLiveTrainingModelId] = useState<string | null>(null);
+  const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   // WebSocket连接状态
   const [wsConnected, setWsConnected] = useState(false);
@@ -77,6 +80,7 @@ export default function ModelsPage() {
     description: '',
     hyperparameters: {} as Record<string, any>,
     enable_hyperparameter_tuning: false,
+    num_iterations: 100, // 训练迭代次数（epochs）
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -225,6 +229,33 @@ export default function ModelsPage() {
     onTrainingReportOpen();
   };
 
+  // 显示删除确认对话框
+  const showDeleteConfirm = (modelId: string) => {
+    setDeletingModelId(modelId);
+    onDeleteModalOpen();
+  };
+
+  // 删除模型
+  const handleDeleteModel = async () => {
+    if (!deletingModelId) return;
+
+    setDeleting(true);
+    try {
+      await DataService.deleteModel(deletingModelId);
+      // 刷新模型列表
+      await loadModels();
+      // 关闭对话框
+      onDeleteModalClose();
+      setDeletingModelId(null);
+      alert('模型删除成功');
+    } catch (error: any) {
+      console.error('删除模型失败:', error);
+      alert(error?.message || '删除模型失败，请稍后重试');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // 验证表单
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -261,7 +292,15 @@ export default function ModelsPage() {
 
     setCreating(true);
     try {
-      const result = await DataService.createModel(formData);
+      // 确保num_iterations被包含在hyperparameters中
+      const submitData = {
+        ...formData,
+        hyperparameters: {
+          ...formData.hyperparameters,
+          num_iterations: formData.num_iterations || 100
+        }
+      };
+      const result = await DataService.createModel(submitData);
       console.log('模型创建成功:', result);
       
       // 重置表单
@@ -274,6 +313,7 @@ export default function ModelsPage() {
         description: '',
         hyperparameters: {},
         enable_hyperparameter_tuning: false,
+        num_iterations: 100,
       });
       setErrors({});
       
@@ -458,6 +498,18 @@ export default function ModelsPage() {
                             查看报告
                           </Button>
                         )}
+                        {model.status !== 'training' && (
+                          <Button
+                            size="sm"
+                            variant="light"
+                            color="danger"
+                            startContent={<Trash2 className="w-4 h-4" />}
+                            onPress={() => showDeleteConfirm(model.model_id)}
+                            isDisabled={deleting}
+                          >
+                            删除
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -558,6 +610,28 @@ export default function ModelsPage() {
                 }
               />
 
+              <Input
+                type="number"
+                label="训练迭代次数（Epochs）"
+                placeholder="请输入训练迭代次数"
+                value={String(formData.num_iterations)}
+                onValueChange={(value) => {
+                  const num = parseInt(value) || 100;
+                  setFormData((prev) => ({ 
+                    ...prev, 
+                    num_iterations: num,
+                    hyperparameters: {
+                      ...prev.hyperparameters,
+                      num_iterations: num
+                    }
+                  }));
+                }}
+                description="控制模型训练的迭代次数，LightGBM/XGBoost使用此参数。建议范围：50-1000，默认100"
+                min={10}
+                max={1000}
+                isRequired
+              />
+
               <Checkbox
                 isSelected={formData.enable_hyperparameter_tuning}
                 onValueChange={(checked) =>
@@ -590,6 +664,43 @@ export default function ModelsPage() {
         onClose={onTrainingReportClose}
         modelId={trainingReportModelId}
       />
+
+      {/* 删除确认对话框 */}
+      <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose}>
+        <ModalContent>
+          <ModalHeader>
+            <div className="flex items-center space-x-2">
+              <Trash2 className="w-5 h-5 text-danger" />
+              <span>确认删除模型</span>
+            </div>
+          </ModalHeader>
+          <ModalBody>
+            <p>您确定要删除此模型吗？此操作不可撤销。</p>
+            {deletingModelId && (
+              <p className="text-sm text-default-500 mt-2">
+                模型ID: {deletingModelId}
+              </p>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="light"
+              onPress={onDeleteModalClose}
+              isDisabled={deleting}
+            >
+              取消
+            </Button>
+            <Button
+              color="danger"
+              onPress={handleDeleteModel}
+              isLoading={deleting}
+              startContent={!deleting && <Trash2 className="w-4 h-4" />}
+            >
+              {deleting ? '删除中...' : '确认删除'}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* 实时训练监控弹窗 */}
       <Modal isOpen={isLiveTrainingOpen} onClose={onLiveTrainingClose} size="5xl" scrollBehavior="inside">

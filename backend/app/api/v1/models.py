@@ -125,7 +125,7 @@ def _normalize_accuracy(metrics: dict) -> float:
     return max(0.0, float(r2))
 
 def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
-    """规范化性能指标用于报告，确保accuracy不为负数"""
+    """规范化性能指标用于报告，确保accuracy不为负数，保留所有指标"""
     if not isinstance(metrics, dict):
         return {
             'accuracy': 0.0,
@@ -136,13 +136,33 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
     
     normalized_accuracy = _normalize_accuracy(metrics)
     
-    return {
+    # 保留所有传入的指标，不丢弃任何指标
+    # 注意：保留None值，让评估报告生成器决定如何处理
+    normalized_metrics = {
         'accuracy': normalized_accuracy,
-        'rmse': metrics.get('rmse', 0.0),
+        'rmse': metrics.get('rmse', metrics.get('mse', 0.0) ** 0.5 if metrics.get('mse') else 0.0),
         'mae': metrics.get('mae', 0.0),
         'r2': metrics.get('r2', 0.0),
-        'direction_accuracy': metrics.get('direction_accuracy')
+        'mse': metrics.get('mse', 0.0),
+        # 分类指标 - 如果不存在，保持None
+        'precision': metrics.get('precision'),
+        'recall': metrics.get('recall'),
+        'f1_score': metrics.get('f1_score'),
+        # 金融指标 - 如果不存在，保持None
+        'sharpe_ratio': metrics.get('sharpe_ratio'),
+        'total_return': metrics.get('total_return'),
+        'max_drawdown': metrics.get('max_drawdown'),
+        'win_rate': metrics.get('win_rate'),
+        # 其他指标
+        'direction_accuracy': metrics.get('direction_accuracy'),
+        'information_ratio': metrics.get('information_ratio'),
+        'calmar_ratio': metrics.get('calmar_ratio'),
+        'profit_factor': metrics.get('profit_factor'),
+        'volatility': metrics.get('volatility'),
     }
+    
+    # 保留所有字段，包括None值，让评估报告生成器处理
+    return normalized_metrics
 
 
 async def train_model_task(model_id: str, model_name: str, model_type: str,
@@ -202,7 +222,13 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
             qlib_model_type = model_type_mapping.get(model_type, QlibModelType.LIGHTGBM)
             
             # 超参数调优（如果启用）
+            # 合并超参数，确保num_iterations被正确传递
             final_hyperparameters = hyperparameters.copy()
+            
+            # 如果超参数中有num_iterations或epochs，确保传递到模型配置
+            if 'num_iterations' not in final_hyperparameters and 'epochs' in final_hyperparameters:
+                final_hyperparameters['num_iterations'] = final_hyperparameters['epochs']
+            
             if enable_hyperparameter_tuning:
                 await progress_callback(model_id, 5.0, "hyperparameter_tuning", "开始超参数搜索")
                 
@@ -261,26 +287,63 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                         logger.warning(f"超参数试验失败: {e}")
                         return {'score': 0.0, 'accuracy': 0.0, 'r2': 0.0}
                 
-                # 执行超参数搜索
-                best_trial = tuner.random_search(param_space, train_with_params, n_trials=5)
+                # 执行超参数搜索（需要处理异步函数）
+                best_trial = None
+                best_score = float('-inf')
+                
+                # 手动执行随机搜索，因为需要支持异步函数
+                import random
+                for trial_id in range(5):
+                    # 随机采样参数
+                    params = {}
+                    for param_name, space in param_space.items():
+                        if space.param_type == 'float':
+                            params[param_name] = round(random.uniform(space.min_value, space.max_value), 2)
+                        elif space.param_type == 'int':
+                            params[param_name] = random.randint(space.min_value, space.max_value)
+                    
+                    try:
+                        logger.info(f"超参数试验 {trial_id + 1}/5: {params}")
+                        metrics = await train_with_params(params)
+                        score = metrics.get('score', metrics.get('accuracy', 0.0))
+                        
+                        if score > best_score:
+                            best_score = score
+                            best_trial = type('HyperparameterTrial', (), {
+                                'trial_id': trial_id,
+                                'hyperparameters': params,
+                                'score': score,
+                                'metrics': metrics
+                            })()
+                            logger.info(f"发现更好的超参数组合，得分: {score:.4f}")
+                    except Exception as e:
+                        logger.error(f"超参数试验 {trial_id} 失败: {e}", exc_info=True)
+                
                 if best_trial and best_trial.score > 0:
                     final_hyperparameters.update(best_trial.hyperparameters)
+                    logger.info(f"超参数调优完成，最佳超参数: {best_trial.hyperparameters}, 得分: {best_trial.score:.4f}")
                     await progress_callback(
                         model_id, 10.0, "hyperparameter_tuning",
                         f"超参数搜索完成，最佳得分: {best_trial.score:.4f}",
                         {"best_score": best_trial.score, "best_params": best_trial.hyperparameters}
                     )
                 else:
+                    logger.warning("超参数调优未找到有效结果，使用默认参数")
                     await progress_callback(
                         model_id, 10.0, "hyperparameter_tuning",
                         "超参数搜索完成，使用默认参数"
                     )
             
             # 创建Qlib训练配置
+            # 从超参数中获取num_iterations或n_estimators，用于设置early_stopping_patience
+            num_iterations = final_hyperparameters.get('num_iterations') or final_hyperparameters.get('n_estimators') or final_hyperparameters.get('epochs') or 100
+            early_stopping_patience = max(num_iterations, 10)  # 至少10，但应该使用实际的迭代次数
+            
             config = QlibTrainingConfig(
                 model_type=qlib_model_type,
                 hyperparameters=final_hyperparameters,
                 validation_split=hyperparameters.get('validation_split', 0.2),
+                early_stopping_patience=early_stopping_patience,  # 使用实际的迭代次数
                 use_alpha_factors=True,
                 cache_features=True
             )
@@ -299,6 +362,19 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
             # 生成评估报告
             await progress_callback(model_id, 95.0, "generating_report", "生成评估报告")
             
+            # 从训练结果中获取样本数
+            train_samples = getattr(result, 'train_samples', 0)
+            validation_samples = getattr(result, 'validation_samples', 0)
+            test_samples = getattr(result, 'test_samples', 0)
+            total_samples = train_samples + validation_samples + test_samples
+            
+            # 确保超参数不为空
+            if not final_hyperparameters or len(final_hyperparameters) == 0:
+                logger.warning(f"模型 {model_id} 的超参数为空，使用默认值")
+                final_hyperparameters = hyperparameters.copy() if hyperparameters else {}
+            
+            logger.info(f"生成评估报告 - 模型 {model_id}, 超参数: {final_hyperparameters}")
+            
             report = report_generator.generate_report(
                 model_id=model_id,
                 model_name=model_name,
@@ -306,12 +382,12 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                 version=model_info.version,
                 training_summary={
                     'duration': result.training_duration,
-                    'total_samples': 0,  # TODO: 从结果中获取
-                    'train_samples': 0,
-                    'validation_samples': 0,
-                    'test_samples': 0,
-                    'epochs': 0,
-                    'batch_size': 0,
+                    'total_samples': total_samples,
+                    'train_samples': train_samples,
+                    'validation_samples': validation_samples,
+                    'test_samples': test_samples,
+                    'epochs': len(result.training_history) if result.training_history else 0,
+                    'batch_size': final_hyperparameters.get('batch_size', 32),
                     'learning_rate': final_hyperparameters.get('learning_rate', 0.0)
                 },
                 performance_metrics=_normalize_performance_metrics_for_report(result.validation_metrics),
@@ -411,18 +487,49 @@ async def get_model_versions(model_id: str):
         session.close()
 
 
-@router.get("/{model_id}/report", response_model=StandardResponse)
+@router.get("/{model_id}/evaluation-report", response_model=StandardResponse)
 async def get_model_evaluation_report(model_id: str):
     """获取模型评估报告"""
     session = SessionLocal()
     try:
         model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
         if not model:
+            logger.warning(f"模型不存在: {model_id}")
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
         
-        if not model.evaluation_report:
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告")
+        logger.info(f"查询模型 {model_id} 的评估报告，状态: {model.status}, evaluation_report类型: {type(model.evaluation_report)}")
         
+        # 检查评估报告是否存在
+        if model.evaluation_report is None:
+            logger.warning(f"模型 {model_id} 的评估报告为 None，状态: {model.status}")
+            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+        
+        # 检查评估报告是否为空字典
+        if isinstance(model.evaluation_report, dict) and len(model.evaluation_report) == 0:
+            logger.warning(f"模型 {model_id} 的评估报告为空字典")
+            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+        
+        # 检查评估报告是否为空字符串
+        if isinstance(model.evaluation_report, str) and len(model.evaluation_report.strip()) == 0:
+            logger.warning(f"模型 {model_id} 的评估报告为空字符串")
+            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+        
+        # 如果评估报告是字符串，尝试解析为JSON
+        if isinstance(model.evaluation_report, str):
+            try:
+                import json
+                evaluation_report = json.loads(model.evaluation_report)
+                logger.info(f"成功解析模型 {model_id} 的评估报告（从字符串）")
+                return StandardResponse(
+                    success=True,
+                    message="评估报告获取成功",
+                    data=evaluation_report
+                )
+            except json.JSONDecodeError as e:
+                logger.error(f"解析评估报告JSON失败: {e}")
+                raise HTTPException(status_code=500, detail="评估报告格式错误")
+        
+        logger.info(f"成功获取模型 {model_id} 的评估报告")
         return StandardResponse(
             success=True,
             message="评估报告获取成功",

@@ -187,11 +187,19 @@ class LightGBMAdapter(BaseModelAdapter):
                 min_value=0.0,
                 max_value=100.0,
                 description="L2正则化系数"
+            ),
+            HyperparameterSpec(
+                name="num_iterations",
+                param_type="int",
+                default_value=100,
+                min_value=10,
+                max_value=1000,
+                description="训练迭代次数（epochs），LightGBM使用num_iterations参数"
             )
         ]
     
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
-        return {
+        config = {
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
@@ -204,9 +212,24 @@ class LightGBMAdapter(BaseModelAdapter):
                 "bagging_fraction": hyperparameters.get("bagging_fraction", 0.8),
                 "lambda_l1": hyperparameters.get("lambda_l1", 0.0),
                 "lambda_l2": hyperparameters.get("lambda_l2", 0.0),
-                "num_threads": 20
+                "num_threads": 20,
+                "verbose": -1  # 禁用LightGBM的默认输出，但保留训练历史
             }
         }
+        
+        # 添加epoch数配置（LightGBM使用num_iterations或n_estimators）
+        num_iterations = None
+        if "num_iterations" in hyperparameters:
+            num_iterations = hyperparameters["num_iterations"]
+        elif "n_estimators" in hyperparameters:
+            num_iterations = hyperparameters["n_estimators"]
+        elif "epochs" in hyperparameters:
+            num_iterations = hyperparameters["epochs"]
+        
+        if num_iterations:
+            config["kwargs"]["num_iterations"] = num_iterations
+        
+        return config
     
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
@@ -348,7 +371,7 @@ class XGBoostAdapter(BaseModelAdapter):
         ]
     
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
-        return {
+        config = {
             "class": "XGBModel",
             "module_path": "qlib.contrib.model.xgboost",
             "kwargs": {
@@ -360,6 +383,14 @@ class XGBoostAdapter(BaseModelAdapter):
                 "random_state": 42
             }
         }
+        
+        # 支持num_iterations或epochs作为n_estimators的别名
+        if "num_iterations" in hyperparameters:
+            config["kwargs"]["n_estimators"] = hyperparameters["num_iterations"]
+        elif "epochs" in hyperparameters:
+            config["kwargs"]["n_estimators"] = hyperparameters["epochs"]
+        
+        return config
     
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         try:

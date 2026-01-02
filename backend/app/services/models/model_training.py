@@ -46,7 +46,7 @@ def get_device():
         return torch.device('cpu')
 try:
     import qlib
-    from qlib.config import REG_CN
+    from qlib.config import REG_CN, C
     from qlib.data import D
     from qlib.data.dataset import DatasetH
     from qlib.data.filter import NameDFilter, ExpressionDFilter
@@ -158,8 +158,32 @@ class QlibDataProvider:
     async def initialize_qlib(self):
         """初始化Qlib环境"""
         try:
-            # 使用内存模式，避免依赖Qlib的数据存储
-            qlib.init(provider_uri="memory://", region=REG_CN)
+            # 在使用memory://模式时，需要先设置mount_path和provider_uri，否则qlib会报错
+            from app.core.config import settings
+            
+            # 使用配置中的QLIB_DATA_PATH，如果不存在则创建
+            qlib_data_path = Path(settings.QLIB_DATA_PATH).resolve()
+            qlib_data_path.mkdir(parents=True, exist_ok=True)
+            
+            # 准备mount_path和provider_uri配置
+            # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
+            mount_path_config = {
+                "day": str(qlib_data_path),
+                "1min": str(qlib_data_path),
+            }
+            
+            provider_uri_config = {
+                "day": "memory://",
+                "1min": "memory://",
+            }
+            
+            # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
+            # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
+            qlib.init(
+                region=REG_CN,
+                provider_uri=provider_uri_config,
+                mount_path=mount_path_config
+            )
             logger.info("Qlib环境初始化成功")
         except Exception as e:
             logger.error(f"Qlib初始化失败: {e}")
