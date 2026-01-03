@@ -37,11 +37,13 @@ const createApiInstance = (): AxiosInstance => {
         config.headers.Authorization = `Bearer ${token}`;
       }
       
-      console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`[API] 发起请求: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+      console.log(`[API] 请求参数:`, config.params);
+      console.log(`[API] 请求头:`, config.headers);
       return config;
     },
     (error) => {
-      console.error('[API] 请求错误:', error);
+      console.error('[API] 请求拦截器错误:', error);
       return Promise.reject(error);
     }
   );
@@ -50,6 +52,10 @@ const createApiInstance = (): AxiosInstance => {
   instance.interceptors.response.use(
     (response: AxiosResponse<ApiResponse>) => {
       const { data } = response;
+      
+      console.log(`[API] 响应成功: ${response.config.method?.toUpperCase()} ${response.config.url}`);
+      console.log(`[API] 响应状态: ${response.status}`);
+      console.log(`[API] 响应数据:`, data);
       
       // 检查业务逻辑错误
       if (!data.success) {
@@ -61,7 +67,21 @@ const createApiInstance = (): AxiosInstance => {
       return response;
     },
     (error: AxiosError) => {
-      console.error('[API] 响应错误:', error);
+      console.error('[API] 响应错误详情:', {
+        message: error.message,
+        code: error.code,
+        config: {
+          method: error.config?.method,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          fullURL: `${error.config?.baseURL}${error.config?.url}`
+        },
+        response: {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        }
+      });
       
       // 处理不同类型的错误
       if (error.response) {
@@ -70,7 +90,7 @@ const createApiInstance = (): AxiosInstance => {
         
         switch (status) {
           case 400:
-            console.error(data?.message || '请求参数错误');
+            console.error('请求参数错误:', data?.message || '请求参数错误');
             break;
           case 401:
             console.error('未授权访问，请重新登录');
@@ -82,21 +102,21 @@ const createApiInstance = (): AxiosInstance => {
             console.error('权限不足');
             break;
           case 404:
-            console.error('请求的资源不存在');
+            console.error('请求的资源不存在:', `${error.config?.baseURL}${error.config?.url}`);
             break;
           case 429:
             console.error('请求过于频繁，请稍后再试');
             break;
           case 500:
-            console.error(data?.message || '服务器内部错误');
+            console.error('服务器内部错误:', data?.message || '服务器内部错误');
             break;
           default:
-            console.error(`请求失败 (${status})`);
+            console.error(`请求失败 (${status}):`, data?.message || '未知错误');
         }
       } else if (error.request) {
         console.error('网络连接失败，请检查网络设置');
       } else {
-        console.error('请求配置错误');
+        console.error('请求配置错误:', error.message);
       }
       
       return Promise.reject(error);

@@ -1,0 +1,563 @@
+"""
+回测数据适配器 - 将现有回测结果转换为增强格式
+用于支持完整的可视化功能
+"""
+
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime, timedelta
+from dataclasses import dataclass, asdict
+from loguru import logger
+
+from app.core.error_handler import TaskError, ErrorSeverity
+
+
+@dataclass
+class ExtendedRiskMetrics:
+    """扩展的风险指标（基于现有数据计算）"""
+    # 现有指标
+    volatility: float
+    sharpe_ratio: float
+    max_drawdown: float
+    
+    # 新增指标
+    sortino_ratio: float = 0.0
+    calmar_ratio: float = 0.0
+    max_drawdown_duration: int = 0
+    var_95: float = 0.0  # 95% VaR
+    downside_deviation: float = 0.0
+    
+    def to_dict(self) -> Dict[str, float]:
+        """转换为字典"""
+        return asdict(self)
+
+
+@dataclass
+class MonthlyReturnsAnalysis:
+    """月度收益分析"""
+    year: int
+    month: int
+    date: str
+    monthly_return: float
+    cumulative_return: float
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return asdict(self)
+
+
+@dataclass
+class PositionAnalysis:
+    """持仓分析（基于交易记录计算）"""
+    stock_code: str
+    stock_name: str = ""
+    total_return: float = 0.0
+    holding_days: int = 0
+    trade_count: int = 0
+    win_rate: float = 0.0
+    avg_holding_period: int = 0
+    max_position_value: float = 0.0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return asdict(self)
+
+
+@dataclass
+class DrawdownAnalysis:
+    """回撤详细分析"""
+    max_drawdown: float
+    max_drawdown_date: Optional[str]
+    max_drawdown_start: Optional[str]
+    max_drawdown_end: Optional[str]
+    max_drawdown_duration: int
+    drawdown_curve: List[Dict[str, Any]]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return asdict(self)
+
+
+@dataclass
+class EnhancedBacktestResult:
+    """增强的回测结果数据结构（基于现有格式扩展）"""
+    
+    # === 现有字段（保持兼容） ===
+    strategy_name: str
+    stock_codes: List[str]
+    start_date: str
+    end_date: str
+    initial_cash: float
+    final_value: float
+    total_return: float
+    annualized_return: float
+    volatility: float
+    sharpe_ratio: float
+    max_drawdown: float
+    total_trades: int
+    win_rate: float
+    profit_factor: float
+    winning_trades: int
+    losing_trades: int
+    backtest_config: Dict[str, Any]
+    trade_history: List[Dict[str, Any]]
+    portfolio_history: List[Dict[str, Any]]
+    
+    # === 新增字段（用于增强可视化） ===
+    # 扩展的风险指标
+    extended_risk_metrics: Optional[ExtendedRiskMetrics] = None
+    # 月度收益分析
+    monthly_returns: Optional[List[MonthlyReturnsAnalysis]] = None
+    # 持仓分析
+    position_analysis: Optional[List[PositionAnalysis]] = None
+    # 基准对比数据
+    benchmark_data: Optional[Dict[str, Any]] = None
+    # 回撤详细分析
+    drawdown_analysis: Optional[DrawdownAnalysis] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        result = asdict(self)
+        
+        # 处理嵌套对象
+        if self.extended_risk_metrics:
+            result['extended_risk_metrics'] = self.extended_risk_metrics.to_dict()
+        
+        if self.monthly_returns:
+            result['monthly_returns'] = [mr.to_dict() for mr in self.monthly_returns]
+        
+        if self.position_analysis:
+            result['position_analysis'] = [pa.to_dict() for pa in self.position_analysis]
+        
+        if self.drawdown_analysis:
+            result['drawdown_analysis'] = self.drawdown_analysis.to_dict()
+        
+        return result
+
+
+class BacktestDataAdapter:
+    """回测数据适配器 - 将现有回测结果转换为可视化所需格式"""
+    
+    def __init__(self):
+        self.risk_free_rate = 0.03  # 无风险利率，用于计算夏普比率等指标
+    
+    async def adapt_backtest_result(self, task_result: Dict[str, Any]) -> EnhancedBacktestResult:
+        """适配现有回测结果为增强格式"""
+        try:
+            logger.info("开始适配回测结果数据")
+            
+            # 1. 提取现有数据
+            base_data = self._extract_base_data(task_result)
+            
+            # 2. 计算扩展风险指标
+            extended_risk_metrics = await self._calculate_extended_risk_metrics(
+                task_result.get("portfolio_history", []),
+                task_result.get("initial_cash", 100000)
+            )
+            
+            # 3. 分析月度收益
+            monthly_returns = await self._analyze_monthly_returns(
+                task_result.get("portfolio_history", [])
+            )
+            
+            # 4. 分析持仓表现
+            position_analysis = await self._analyze_positions(
+                task_result.get("trade_history", [])
+            )
+            
+            # 5. 计算回撤详细分析
+            drawdown_analysis = await self._analyze_drawdowns(
+                task_result.get("portfolio_history", [])
+            )
+            
+            # 6. 构建增强结果
+            enhanced_result = EnhancedBacktestResult(
+                # 现有字段直接映射
+                strategy_name=base_data["strategy_name"],
+                stock_codes=base_data["stock_codes"],
+                start_date=base_data["start_date"],
+                end_date=base_data["end_date"],
+                initial_cash=base_data["initial_cash"],
+                final_value=base_data["final_value"],
+                total_return=base_data["total_return"],
+                annualized_return=base_data["annualized_return"],
+                volatility=base_data["volatility"],
+                sharpe_ratio=base_data["sharpe_ratio"],
+                max_drawdown=base_data["max_drawdown"],
+                total_trades=base_data["total_trades"],
+                win_rate=base_data["win_rate"],
+                profit_factor=base_data["profit_factor"],
+                winning_trades=base_data["winning_trades"],
+                losing_trades=base_data["losing_trades"],
+                backtest_config=base_data["backtest_config"],
+                trade_history=base_data["trade_history"],
+                portfolio_history=base_data["portfolio_history"],
+                
+                # 新增字段
+                extended_risk_metrics=extended_risk_metrics,
+                monthly_returns=monthly_returns,
+                position_analysis=position_analysis,
+                drawdown_analysis=drawdown_analysis
+            )
+            
+            logger.info("回测结果数据适配完成")
+            return enhanced_result
+            
+        except Exception as e:
+            logger.error(f"适配回测结果失败: {e}", exc_info=True)
+            raise TaskError(
+                message=f"适配回测结果失败: {str(e)}",
+                severity=ErrorSeverity.HIGH,
+                original_exception=e
+            )
+    
+    def _extract_base_data(self, task_result: Dict[str, Any]) -> Dict[str, Any]:
+        """提取现有的基础数据"""
+        return {
+            "strategy_name": task_result.get("strategy_name", ""),
+            "stock_codes": task_result.get("stock_codes", []),
+            "start_date": task_result.get("start_date", ""),
+            "end_date": task_result.get("end_date", ""),
+            "initial_cash": task_result.get("initial_cash", 100000),
+            "final_value": task_result.get("final_value", 100000),
+            "total_return": task_result.get("total_return", 0),
+            "annualized_return": task_result.get("annualized_return", 0),
+            "volatility": task_result.get("volatility", 0),
+            "sharpe_ratio": task_result.get("sharpe_ratio", 0),
+            "max_drawdown": task_result.get("max_drawdown", 0),
+            "total_trades": task_result.get("total_trades", 0),
+            "win_rate": task_result.get("win_rate", 0),
+            "profit_factor": task_result.get("profit_factor", 0),
+            "winning_trades": task_result.get("winning_trades", 0),
+            "losing_trades": task_result.get("losing_trades", 0),
+            "backtest_config": task_result.get("backtest_config", {}),
+            "trade_history": task_result.get("trade_history", []),
+            "portfolio_history": task_result.get("portfolio_history", [])
+        }
+    
+    async def _calculate_extended_risk_metrics(
+        self, 
+        portfolio_history: List[Dict], 
+        initial_cash: float
+    ) -> Optional[ExtendedRiskMetrics]:
+        """基于现有组合历史计算扩展风险指标"""
+        
+        if not portfolio_history:
+            logger.warning("组合历史数据为空，无法计算扩展风险指标")
+            return None
+        
+        try:
+            # 转换为pandas DataFrame
+            df = pd.DataFrame(portfolio_history)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'])
+                df.set_index('date', inplace=True)
+            
+            # 计算收益率序列
+            returns = df['portfolio_value'].pct_change().dropna()
+            
+            if len(returns) == 0:
+                logger.warning("收益率序列为空，无法计算扩展风险指标")
+                return None
+            
+            # 计算扩展指标
+            extended_metrics = {}
+            
+            # 获取基础指标
+            volatility = returns.std() * np.sqrt(252)
+            if pd.isna(volatility) or np.isnan(volatility):
+                volatility = 0.0
+                
+            annualized_return = (df['portfolio_value'].iloc[-1] / initial_cash) ** (252 / len(returns)) - 1
+            if pd.isna(annualized_return) or np.isnan(annualized_return):
+                annualized_return = 0.0
+            
+            # Sortino比率
+            downside_returns = returns[returns < 0]
+            if len(downside_returns) > 0:
+                downside_deviation = downside_returns.std() * np.sqrt(252)
+                # 确保下行偏差不是NaN
+                if pd.isna(downside_deviation) or np.isnan(downside_deviation):
+                    downside_deviation = 0.0
+                extended_metrics['sortino_ratio'] = (annualized_return - self.risk_free_rate) / downside_deviation if downside_deviation > 0 else 0
+                extended_metrics['downside_deviation'] = downside_deviation
+            else:
+                extended_metrics['sortino_ratio'] = 0
+                extended_metrics['downside_deviation'] = 0
+            
+            # Calmar比率
+            max_drawdown = self._calculate_max_drawdown(df['portfolio_value'])
+            if max_drawdown < 0:
+                extended_metrics['calmar_ratio'] = (annualized_return - self.risk_free_rate) / abs(max_drawdown)
+            else:
+                extended_metrics['calmar_ratio'] = 0
+            
+            # VaR 95%
+            var_95 = returns.quantile(0.05)
+            if pd.isna(var_95) or np.isnan(var_95):
+                var_95 = 0.0
+            extended_metrics['var_95'] = var_95
+            
+            # 最大回撤持续时间
+            extended_metrics['max_drawdown_duration'] = self._calculate_max_drawdown_duration(df['portfolio_value'])
+            
+            # 夏普比率（重新计算，使用无风险利率）
+            sharpe_ratio = (annualized_return - self.risk_free_rate) / volatility if volatility > 0 else 0
+            
+            return ExtendedRiskMetrics(
+                volatility=volatility,
+                sharpe_ratio=sharpe_ratio,
+                max_drawdown=max_drawdown,
+                sortino_ratio=extended_metrics['sortino_ratio'],
+                calmar_ratio=extended_metrics['calmar_ratio'],
+                max_drawdown_duration=extended_metrics['max_drawdown_duration'],
+                var_95=extended_metrics['var_95'],
+                downside_deviation=extended_metrics['downside_deviation']
+            )
+            
+        except Exception as e:
+            logger.error(f"计算扩展风险指标失败: {e}", exc_info=True)
+            return None
+    
+    async def _analyze_monthly_returns(self, portfolio_history: List[Dict]) -> Optional[List[MonthlyReturnsAnalysis]]:
+        """分析月度收益"""
+        
+        if not portfolio_history:
+            logger.warning("组合历史数据为空，无法分析月度收益")
+            return None
+        
+        try:
+            df = pd.DataFrame(portfolio_history)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'])
+                df.set_index('date', inplace=True)
+            
+            # 按月重采样
+            monthly_values = df['portfolio_value'].resample('ME').last()
+            monthly_returns = monthly_values.pct_change().dropna()
+            
+            # 获取初始价值用于计算累积收益
+            initial_value = df['portfolio_value'].iloc[0]
+            
+            result = []
+            
+            for date, monthly_return in monthly_returns.items():
+                # 计算从初始时点到当前月末的累积收益
+                current_value = monthly_values[date]
+                cumulative_return = (current_value - initial_value) / initial_value
+                
+                analysis = MonthlyReturnsAnalysis(
+                    year=date.year,
+                    month=date.month,
+                    date=date.strftime('%Y-%m'),
+                    monthly_return=float(monthly_return),
+                    cumulative_return=float(cumulative_return)
+                )
+                result.append(analysis)
+            
+            logger.info(f"月度收益分析完成，共 {len(result)} 个月")
+            return result
+            
+        except Exception as e:
+            logger.error(f"分析月度收益失败: {e}", exc_info=True)
+            return None
+    
+    async def _analyze_positions(self, trade_history: List[Dict]) -> Optional[List[PositionAnalysis]]:
+        """分析持仓表现"""
+        
+        if not trade_history:
+            logger.warning("交易历史数据为空，无法分析持仓表现")
+            return None
+        
+        try:
+            # 按股票分组分析
+            stock_stats = {}
+            
+            for trade in trade_history:
+                stock_code = trade.get('stock_code', '')
+                if stock_code not in stock_stats:
+                    stock_stats[stock_code] = {
+                        'stock_code': stock_code,
+                        'trades': [],
+                        'total_pnl': 0,
+                        'buy_trades': 0,
+                        'sell_trades': 0,
+                        'winning_trades': 0,
+                        'losing_trades': 0
+                    }
+                
+                stock_stats[stock_code]['trades'].append(trade)
+                pnl = trade.get('pnl', 0)
+                stock_stats[stock_code]['total_pnl'] += pnl
+                
+                if trade.get('action') == 'BUY':
+                    stock_stats[stock_code]['buy_trades'] += 1
+                elif trade.get('action') == 'SELL':
+                    stock_stats[stock_code]['sell_trades'] += 1
+                    if pnl > 0:
+                        stock_stats[stock_code]['winning_trades'] += 1
+                    elif pnl < 0:
+                        stock_stats[stock_code]['losing_trades'] += 1
+            
+            # 计算每只股票的统计指标
+            result = []
+            for stock_code, stats in stock_stats.items():
+                total_trades = stats['sell_trades']  # 只计算卖出交易
+                win_rate = stats['winning_trades'] / total_trades if total_trades > 0 else 0
+                
+                # 计算平均持仓期（简化计算）
+                avg_holding_period = self._calculate_avg_holding_period(stats['trades'])
+                
+                analysis = PositionAnalysis(
+                    stock_code=stock_code,
+                    stock_name=stock_code,  # 可以后续从股票信息服务获取
+                    total_return=stats['total_pnl'],
+                    trade_count=total_trades,
+                    win_rate=win_rate,
+                    avg_holding_period=avg_holding_period,
+                    winning_trades=stats['winning_trades'],
+                    losing_trades=stats['losing_trades']
+                )
+                result.append(analysis)
+            
+            # 按总收益排序
+            result.sort(key=lambda x: x.total_return, reverse=True)
+            
+            logger.info(f"持仓分析完成，共分析 {len(result)} 只股票")
+            return result
+            
+        except Exception as e:
+            logger.error(f"分析持仓表现失败: {e}", exc_info=True)
+            return None
+    
+    def _calculate_avg_holding_period(self, trades: List[Dict]) -> int:
+        """计算平均持仓期"""
+        try:
+            # 简化实现：配对买卖交易计算持仓期
+            buy_trades = [t for t in trades if t.get('action') == 'BUY']
+            sell_trades = [t for t in trades if t.get('action') == 'SELL']
+            
+            if not buy_trades or not sell_trades:
+                return 0
+            
+            # 简单配对最近的买卖交易
+            holding_periods = []
+            for sell_trade in sell_trades:
+                sell_date = pd.to_datetime(sell_trade.get('timestamp', ''))
+                # 找到最近的买入交易
+                for buy_trade in reversed(buy_trades):
+                    buy_date = pd.to_datetime(buy_trade.get('timestamp', ''))
+                    if buy_date <= sell_date:
+                        holding_period = (sell_date - buy_date).days
+                        holding_periods.append(holding_period)
+                        break
+            
+            return int(np.mean(holding_periods)) if holding_periods else 0
+            
+        except Exception as e:
+            logger.error(f"计算平均持仓期失败: {e}")
+            return 0
+    
+    async def _analyze_drawdowns(self, portfolio_history: List[Dict]) -> Optional[DrawdownAnalysis]:
+        """分析回撤详情"""
+        
+        if not portfolio_history:
+            logger.warning("组合历史数据为空，无法分析回撤")
+            return None
+        
+        try:
+            df = pd.DataFrame(portfolio_history)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'])
+                df.set_index('date', inplace=True)
+            
+            values = df['portfolio_value']
+            
+            # 计算回撤序列
+            peak = values.expanding().max()
+            drawdown = (values - peak) / peak
+            
+            # 找到最大回撤期间
+            max_dd_idx = drawdown.idxmin()
+            max_dd_value = drawdown.min()
+            
+            # 找到最大回撤开始和结束时间
+            max_dd_start = None
+            max_dd_end = None
+            
+            # 向前找到峰值点
+            for i in range(len(drawdown)):
+                if drawdown.index[i] >= max_dd_idx:
+                    break
+                if drawdown.iloc[i] == 0:  # 新高点
+                    max_dd_start = drawdown.index[i]
+            
+            # 向后找到恢复点
+            for i in range(len(drawdown) - 1, -1, -1):
+                if drawdown.index[i] <= max_dd_idx:
+                    continue
+                if drawdown.iloc[i] >= -0.001:  # 基本恢复
+                    max_dd_end = drawdown.index[i]
+                    break
+            
+            # 构建回撤曲线数据
+            drawdown_curve = [
+                {
+                    'date': date.isoformat(),
+                    'drawdown': float(dd)
+                }
+                for date, dd in drawdown.items()
+            ]
+            
+            analysis = DrawdownAnalysis(
+                max_drawdown=float(max_dd_value),
+                max_drawdown_date=max_dd_idx.isoformat() if max_dd_idx else None,
+                max_drawdown_start=max_dd_start.isoformat() if max_dd_start else None,
+                max_drawdown_end=max_dd_end.isoformat() if max_dd_end else None,
+                max_drawdown_duration=(max_dd_end - max_dd_start).days if max_dd_start and max_dd_end else 0,
+                drawdown_curve=drawdown_curve
+            )
+            
+            logger.info(f"回撤分析完成，最大回撤: {max_dd_value:.2%}")
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"分析回撤详情失败: {e}", exc_info=True)
+            return None
+    
+    def _calculate_max_drawdown(self, values: pd.Series) -> float:
+        """计算最大回撤"""
+        peak = values.expanding().max()
+        drawdown = (values - peak) / peak
+        return drawdown.min()
+    
+    def _calculate_max_drawdown_duration(self, values: pd.Series) -> int:
+        """计算最大回撤持续时间"""
+        try:
+            peak = values.expanding().max()
+            drawdown = (values - peak) / peak
+            
+            # 找到所有回撤期间
+            is_drawdown = drawdown < -0.001  # 小于-0.1%认为是回撤
+            drawdown_periods = []
+            current_period = 0
+            
+            for in_dd in is_drawdown:
+                if in_dd:
+                    current_period += 1
+                else:
+                    if current_period > 0:
+                        drawdown_periods.append(current_period)
+                    current_period = 0
+            
+            if current_period > 0:
+                drawdown_periods.append(current_period)
+            
+            return max(drawdown_periods) if drawdown_periods else 0
+            
+        except Exception as e:
+            logger.error(f"计算最大回撤持续时间失败: {e}")
+            return 0

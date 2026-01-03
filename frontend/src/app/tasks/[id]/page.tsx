@@ -51,12 +51,18 @@ import {
   BarChart3,
   LineChart,
   Activity,
+  PieChart,
+  Calendar,
+  FileText,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTaskStore, Task } from '../../../stores/useTaskStore';
 import { TaskService, PredictionResult } from '../../../services/taskService';
+import { BacktestService } from '../../../services/backtestService';
 import { wsService } from '../../../services/websocket';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
+import BacktestOverview from '../../../components/backtest/BacktestOverview';
+import BacktestTaskStatus from '../../../components/backtest/BacktestTaskStatus';
 import dynamic from 'next/dynamic';
 
 // 动态导入图表组件
@@ -75,6 +81,11 @@ const BacktestChart = dynamic(() => import('../../../components/charts/BacktestC
   loading: () => <div className="h-64 flex items-center justify-center">加载回测图表中...</div>
 });
 
+const InteractiveChartsContainer = dynamic(() => import('../../../components/charts/InteractiveChartsContainer'), {
+  ssr: false,
+  loading: () => <div className="h-96 flex items-center justify-center">加载交互式图表中...</div>
+});
+
 export default function TaskDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -85,7 +96,28 @@ export default function TaskDetailPage() {
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStock, setSelectedStock] = useState<string>('');
+  const [backtestDetailedData, setBacktestDetailedData] = useState<any>(null);
+  const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+
+  // 加载回测详细数据
+  const loadBacktestDetailedData = async () => {
+    if (!currentTask || currentTask.task_type !== 'backtest' || currentTask.status !== 'completed') {
+      return;
+    }
+
+    setLoadingBacktestData(true);
+    try {
+      const detailedResult = await BacktestService.getDetailedResult(taskId);
+      setBacktestDetailedData(detailedResult);
+    } catch (error) {
+      console.error('加载回测详细数据失败:', error);
+      // 如果详细数据不存在，使用基础回测数据
+      setBacktestDetailedData(null);
+    } finally {
+      setLoadingBacktestData(false);
+    }
+  };
 
   // 加载任务详情
   const loadTaskDetail = async () => {
@@ -122,6 +154,8 @@ export default function TaskDetailPage() {
           if (!selectedStock && task.stock_codes && task.stock_codes.length > 0) {
             setSelectedStock(task.stock_codes[0]);
           }
+          // 加载回测详细数据
+          await loadBacktestDetailedData();
         }
       }
     } catch (error) {
@@ -190,6 +224,8 @@ export default function TaskDetailPage() {
           } else if (task.task_type === 'backtest') {
             // 回测任务，确保回测结果已加载
             console.log('回测任务完成，回测结果:', task.results?.backtest_results);
+            // 重新加载回测详细数据
+            await loadBacktestDetailedData();
           }
         } catch (error) {
           console.error('加载任务详情失败:', error);
@@ -411,260 +447,481 @@ export default function TaskDetailPage() {
             </CardBody>
           </Card>
 
-          {/* 任务信息 */}
-          <Card>
-            <CardHeader>
-              <h3 className="text-lg font-semibold">任务信息</h3>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-default-500">模型</p>
-                  <Chip variant="flat" color="secondary">{currentTask.model_id}</Chip>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">股票数量</p>
-                  <p className="font-medium">{currentTask.stock_codes.length}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">创建时间</p>
-                  <p className="font-medium">{new Date(currentTask.created_at).toLocaleString()}</p>
-                </div>
-                {currentTask.completed_at && (
-                  <div>
-                    <p className="text-sm text-default-500">完成时间</p>
-                    <p className="font-medium">{new Date(currentTask.completed_at).toLocaleString()}</p>
-                  </div>
-                )}
-              </div>
-
-              <Divider />
-
-              <div>
-                <p className="text-sm text-default-500 mb-2">选择的股票</p>
-                <div className="flex flex-wrap gap-2">
-                  {currentTask.stock_codes.map(code => (
-                    <Chip key={code} variant="flat" size="sm">{code}</Chip>
-                  ))}
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* 预测结果和图表 */}
-          {currentTask.status === 'completed' && predictions.length > 0 && (
+          {/* 根据任务类型显示不同内容 */}
+          {currentTask.task_type === 'backtest' ? (
+            /* 回测任务专用标签页 */
             <Card>
-              <CardHeader className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">预测结果</h3>
-                <Select
-                  placeholder="选择股票"
-                  selectedKeys={selectedStock ? [selectedStock] : []}
-                  onSelectionChange={(keys) => {
-                    const selected = Array.from(keys)[0] as string;
-                    setSelectedStock(selected);
-                  }}
-                  className="w-48"
-                >
-                  {predictions.map((prediction) => (
-                    <SelectItem key={prediction.stock_code}>
-                      {prediction.stock_code}
-                    </SelectItem>
-                  ))}
-                </Select>
-              </CardHeader>
               <CardBody>
-                <Tabs aria-label="预测结果展示">
-                  <Tab key="chart" title={
-                    <div className="flex items-center space-x-2">
-                      <LineChart className="w-4 h-4" />
-                      <span>价格走势</span>
-                    </div>
-                  }>
-                    {selectedStock && (
-                      <TradingViewChart 
-                        stockCode={selectedStock}
-                        prediction={predictions.find(p => p.stock_code === selectedStock)}
-                      />
-                    )}
-                  </Tab>
-                  
-                  <Tab key="prediction" title={
+                <Tabs aria-label="回测结果展示" className="w-full">
+                  <Tab key="overview" title={
                     <div className="flex items-center space-x-2">
                       <BarChart3 className="w-4 h-4" />
-                      <span>预测分析</span>
+                      <span>概览</span>
                     </div>
                   }>
-                    {selectedStock && (
-                      <PredictionChart 
-                        stockCode={selectedStock}
-                        prediction={predictions.find(p => p.stock_code === selectedStock)}
+                    <div className="mt-4">
+                      <BacktestOverview 
+                        backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
+                        loading={loadingBacktestData}
                       />
-                    )}
+                    </div>
                   </Tab>
                   
-                  <Tab key="backtest" title={
+                  <Tab key="charts" title={
                     <div className="flex items-center space-x-2">
-                      <Activity className="w-4 h-4" />
-                      <span>回测结果</span>
+                      <LineChart className="w-4 h-4" />
+                      <span>交互式图表</span>
                     </div>
                   }>
-                    <BacktestChart 
-                      stockCode={selectedStock || (currentTask?.stock_codes?.[0] || '')}
-                      backtestData={(() => {
-                        // 尝试从多个位置获取回测数据
-                        const data = currentTask?.results?.backtest_results || 
-                                   currentTask?.backtest_results ||
-                                   (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
-                        console.log('回测数据来源检查:', {
-                          'results.backtest_results': currentTask?.results?.backtest_results,
-                          'backtest_results': currentTask?.backtest_results,
-                          'result': currentTask?.result,
-                          '最终数据': data
-                        });
-                        return data;
-                      })()}
-                    />
+                    <div className="mt-4">
+                      <InteractiveChartsContainer 
+                        taskId={taskId}
+                        backtestData={(() => {
+                          // 尝试从多个位置获取回测数据
+                          const data = currentTask?.results?.backtest_results || 
+                                     currentTask?.backtest_results ||
+                                     (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
+                          return data;
+                        })()}
+                      />
+                    </div>
                   </Tab>
                   
-                  <Tab key="table" title="数据表格">
-                    <Table aria-label="预测结果表格">
-                      <TableHeader>
-                        <TableColumn>股票代码</TableColumn>
-                        <TableColumn>预测方向</TableColumn>
-                        <TableColumn>预测收益率</TableColumn>
-                        <TableColumn>置信度</TableColumn>
-                        <TableColumn>置信区间</TableColumn>
-                        <TableColumn>VaR</TableColumn>
-                      </TableHeader>
-                      <TableBody>
-                        {predictions.map((prediction) => (
-                          <TableRow key={prediction.stock_code}>
-                            <TableCell>
-                              <Chip variant="flat" size="sm">{prediction.stock_code}</Chip>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                {getPredictionIcon(prediction.predicted_direction)}
-                                <span>{getPredictionText(prediction.predicted_direction)}</span>
+                  <Tab key="positions" title={
+                    <div className="flex items-center space-x-2">
+                      <PieChart className="w-4 h-4" />
+                      <span>持仓分析</span>
+                    </div>
+                  }>
+                    <div className="mt-4">
+                      {backtestDetailedData?.position_analysis ? (
+                        <div className="space-y-4">
+                          <h4 className="text-lg font-semibold">股票表现排行</h4>
+                          <Table aria-label="股票表现表格">
+                            <TableHeader>
+                              <TableColumn>股票代码</TableColumn>
+                              <TableColumn>总收益</TableColumn>
+                              <TableColumn>交易次数</TableColumn>
+                              <TableColumn>胜率</TableColumn>
+                              <TableColumn>平均持仓期</TableColumn>
+                            </TableHeader>
+                            <TableBody>
+                              {backtestDetailedData.position_analysis.map((position: any) => (
+                                <TableRow key={position.stock_code}>
+                                  <TableCell>
+                                    <Chip variant="flat" size="sm">{position.stock_code}</Chip>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={position.total_return >= 0 ? 'text-success' : 'text-danger'}>
+                                      ¥{position.total_return.toFixed(2)}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>{position.trade_count}</TableCell>
+                                  <TableCell>{(position.win_rate * 100).toFixed(1)}%</TableCell>
+                                  <TableCell>{position.avg_holding_period}天</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="text-center text-default-500 py-8">
+                          <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>持仓分析数据加载中...</p>
+                        </div>
+                      )}
+                    </div>
+                  </Tab>
+                  
+                  <Tab key="monthly" title={
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4" />
+                      <span>月度分析</span>
+                    </div>
+                  }>
+                    <div className="mt-4">
+                      {backtestDetailedData?.monthly_returns ? (
+                        <div className="space-y-4">
+                          <h4 className="text-lg font-semibold">月度收益热力图</h4>
+                          <div className="grid grid-cols-12 gap-1">
+                            {backtestDetailedData.monthly_returns.map((monthData: any) => (
+                              <div
+                                key={`${monthData.year}-${monthData.month}`}
+                                className={`
+                                  p-2 text-center text-xs rounded
+                                  ${monthData.monthly_return >= 0 
+                                    ? 'bg-success-100 text-success-800' 
+                                    : 'bg-danger-100 text-danger-800'
+                                  }
+                                `}
+                                title={`${monthData.year}年${monthData.month}月: ${(monthData.monthly_return * 100).toFixed(2)}%`}
+                              >
+                                {monthData.month}月
+                                <br />
+                                {(monthData.monthly_return * 100).toFixed(1)}%
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <span className={
-                                prediction.predicted_return > 0 
-                                  ? 'text-success' 
-                                  : prediction.predicted_return < 0 
-                                    ? 'text-danger' 
-                                    : 'text-default-500'
-                              }>
-                                {(prediction.predicted_return * 100).toFixed(2)}%
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <Progress
-                                value={prediction.confidence_score * 100}
-                                size="sm"
-                                className="w-20"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm text-default-500">
-                                [{(prediction.confidence_interval.lower * 100).toFixed(2)}%, {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-danger">
-                                {(prediction.risk_assessment.value_at_risk * 100).toFixed(2)}%
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center text-default-500 py-8">
+                          <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>月度分析数据加载中...</p>
+                        </div>
+                      )}
+                    </div>
+                  </Tab>
+                  
+                  <Tab key="report" title={
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>详细报告</span>
+                    </div>
+                  }>
+                    <div className="mt-4">
+                      <div className="space-y-6">
+                        <div>
+                          <h4 className="text-lg font-semibold mb-4">扩展风险指标</h4>
+                          {backtestDetailedData?.extended_risk_metrics ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              <Card>
+                                <CardBody className="text-center">
+                                  <p className="text-sm text-default-500 mb-1">Sortino比率</p>
+                                  <p className="text-xl font-bold">
+                                    {backtestDetailedData.extended_risk_metrics.sortino_ratio.toFixed(3)}
+                                  </p>
+                                </CardBody>
+                              </Card>
+                              <Card>
+                                <CardBody className="text-center">
+                                  <p className="text-sm text-default-500 mb-1">Calmar比率</p>
+                                  <p className="text-xl font-bold">
+                                    {backtestDetailedData.extended_risk_metrics.calmar_ratio.toFixed(3)}
+                                  </p>
+                                </CardBody>
+                              </Card>
+                              <Card>
+                                <CardBody className="text-center">
+                                  <p className="text-sm text-default-500 mb-1">VaR 95%</p>
+                                  <p className="text-xl font-bold text-danger">
+                                    {(backtestDetailedData.extended_risk_metrics.var_95 * 100).toFixed(2)}%
+                                  </p>
+                                </CardBody>
+                              </Card>
+                            </div>
+                          ) : (
+                            <div className="text-center text-default-500 py-4">
+                              <p>扩展风险指标计算中...</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div>
+                          <h4 className="text-lg font-semibold mb-4">回撤分析</h4>
+                          {backtestDetailedData?.drawdown_analysis ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <Card>
+                                <CardBody>
+                                  <p className="text-sm text-default-500 mb-1">最大回撤日期</p>
+                                  <p className="font-medium">
+                                    {new Date(backtestDetailedData.drawdown_analysis.max_drawdown_date).toLocaleDateString()}
+                                  </p>
+                                </CardBody>
+                              </Card>
+                              <Card>
+                                <CardBody>
+                                  <p className="text-sm text-default-500 mb-1">回撤持续时间</p>
+                                  <p className="font-medium">
+                                    {backtestDetailedData.drawdown_analysis.max_drawdown_duration}天
+                                  </p>
+                                </CardBody>
+                              </Card>
+                            </div>
+                          ) : (
+                            <div className="text-center text-default-500 py-4">
+                              <p>回撤分析数据计算中...</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </Tab>
                 </Tabs>
               </CardBody>
             </Card>
+          ) : (
+            /* 预测任务的原有内容 */
+            <>
+              {/* 任务信息 */}
+              <Card>
+                <CardHeader>
+                  <h3 className="text-lg font-semibold">任务信息</h3>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-default-500">模型</p>
+                      <Chip variant="flat" color="secondary">{currentTask.model_id}</Chip>
+                    </div>
+                    <div>
+                      <p className="text-sm text-default-500">股票数量</p>
+                      <p className="font-medium">{currentTask.stock_codes.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-default-500">创建时间</p>
+                      <p className="font-medium">{new Date(currentTask.created_at).toLocaleString()}</p>
+                    </div>
+                    {currentTask.completed_at && (
+                      <div>
+                        <p className="text-sm text-default-500">完成时间</p>
+                        <p className="font-medium">{new Date(currentTask.completed_at).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Divider />
+
+                  <div>
+                    <p className="text-sm text-default-500 mb-2">选择的股票</p>
+                    <div className="flex flex-wrap gap-2">
+                      {currentTask.stock_codes.map(code => (
+                        <Chip key={code} variant="flat" size="sm">{code}</Chip>
+                      ))}
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+
+              {/* 预测结果和图表 */}
+              {currentTask.status === 'completed' && predictions.length > 0 && (
+                <Card>
+                  <CardHeader className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold">预测结果</h3>
+                    <Select
+                      placeholder="选择股票"
+                      selectedKeys={selectedStock ? [selectedStock] : []}
+                      onSelectionChange={(keys) => {
+                        const selected = Array.from(keys)[0] as string;
+                        setSelectedStock(selected);
+                      }}
+                      className="w-48"
+                    >
+                      {predictions.map((prediction) => (
+                        <SelectItem key={prediction.stock_code}>
+                          {prediction.stock_code}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  </CardHeader>
+                  <CardBody>
+                    <Tabs aria-label="预测结果展示">
+                      <Tab key="chart" title={
+                        <div className="flex items-center space-x-2">
+                          <LineChart className="w-4 h-4" />
+                          <span>价格走势</span>
+                        </div>
+                      }>
+                        {selectedStock && (
+                          <TradingViewChart 
+                            stockCode={selectedStock}
+                            prediction={predictions.find(p => p.stock_code === selectedStock)}
+                          />
+                        )}
+                      </Tab>
+                      
+                      <Tab key="prediction" title={
+                        <div className="flex items-center space-x-2">
+                          <BarChart3 className="w-4 h-4" />
+                          <span>预测分析</span>
+                        </div>
+                      }>
+                        {selectedStock && (
+                          <PredictionChart 
+                            stockCode={selectedStock}
+                            prediction={predictions.find(p => p.stock_code === selectedStock)}
+                          />
+                        )}
+                      </Tab>
+                      
+                      <Tab key="backtest" title={
+                        <div className="flex items-center space-x-2">
+                          <Activity className="w-4 h-4" />
+                          <span>回测结果</span>
+                        </div>
+                      }>
+                        <BacktestChart 
+                          stockCode={selectedStock || (currentTask?.stock_codes?.[0] || '')}
+                          backtestData={(() => {
+                            // 尝试从多个位置获取回测数据
+                            const data = currentTask?.results?.backtest_results || 
+                                       currentTask?.backtest_results ||
+                                       (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
+                            console.log('回测数据来源检查:', {
+                              'results.backtest_results': currentTask?.results?.backtest_results,
+                              'backtest_results': currentTask?.backtest_results,
+                              'result': currentTask?.result,
+                              '最终数据': data
+                            });
+                            return data;
+                          })()}
+                        />
+                      </Tab>
+                      
+                      <Tab key="table" title="数据表格">
+                        <Table aria-label="预测结果表格">
+                          <TableHeader>
+                            <TableColumn>股票代码</TableColumn>
+                            <TableColumn>预测方向</TableColumn>
+                            <TableColumn>预测收益率</TableColumn>
+                            <TableColumn>置信度</TableColumn>
+                            <TableColumn>置信区间</TableColumn>
+                            <TableColumn>VaR</TableColumn>
+                          </TableHeader>
+                          <TableBody>
+                            {predictions.map((prediction) => (
+                              <TableRow key={prediction.stock_code}>
+                                <TableCell>
+                                  <Chip variant="flat" size="sm">{prediction.stock_code}</Chip>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-2">
+                                    {getPredictionIcon(prediction.predicted_direction)}
+                                    <span>{getPredictionText(prediction.predicted_direction)}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span className={
+                                    prediction.predicted_return > 0 
+                                      ? 'text-success' 
+                                      : prediction.predicted_return < 0 
+                                        ? 'text-danger' 
+                                        : 'text-default-500'
+                                  }>
+                                    {(prediction.predicted_return * 100).toFixed(2)}%
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <Progress
+                                    value={prediction.confidence_score * 100}
+                                    size="sm"
+                                    className="w-20"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm text-default-500">
+                                    [{(prediction.confidence_interval.lower * 100).toFixed(2)}%, {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-danger">
+                                    {(prediction.risk_assessment.value_at_risk * 100).toFixed(2)}%
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Tab>
+                    </Tabs>
+                  </CardBody>
+                </Card>
+              )}
+            </>
           )}
         </div>
 
         {/* 侧边栏 */}
         <div className="space-y-6">
-          {/* 统计信息 */}
-          {currentTask.results && (
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">统计信息</h3>
-              </CardHeader>
-              <CardBody className="space-y-4">
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-primary">{currentTask.results.total_stocks}</p>
-                    <p className="text-sm text-default-500">总股票数</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-success">{currentTask.results.successful_predictions}</p>
-                    <p className="text-sm text-default-500">成功预测</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-secondary">
-                      {((currentTask.results.average_confidence || 0) * 100).toFixed(1)}%
-                    </p>
-                    <p className="text-sm text-default-500">平均置信度</p>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
-          )}
+          {/* 根据任务类型显示不同的侧边栏内容 */}
+          {currentTask.task_type === 'backtest' ? (
+            /* 回测任务侧边栏 */
+            <BacktestTaskStatus 
+              task={currentTask}
+              onRetry={handleRetry}
+              onStop={() => {/* TODO: 实现停止功能 */}}
+              loading={refreshing}
+            />
+          ) : (
+            /* 预测任务侧边栏 */
+            <>
+              {/* 统计信息 */}
+              {currentTask.results && (
+                <Card>
+                  <CardHeader>
+                    <h3 className="text-lg font-semibold">统计信息</h3>
+                  </CardHeader>
+                  <CardBody className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-primary">{currentTask.results.total_stocks}</p>
+                        <p className="text-sm text-default-500">总股票数</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-success">{currentTask.results.successful_predictions}</p>
+                        <p className="text-sm text-default-500">成功预测</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-secondary">
+                          {((currentTask.results.average_confidence || 0) * 100).toFixed(1)}%
+                        </p>
+                        <p className="text-sm text-default-500">平均置信度</p>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              )}
 
-          {/* 快速操作 */}
-          <Card>
-            <CardHeader>
-              <h3 className="text-lg font-semibold">快速操作</h3>
-            </CardHeader>
-            <CardBody className="space-y-3">
-              <Button
-                variant="light"
-                startContent={<RefreshCw className="w-4 h-4" />}
-                onPress={handleRefresh}
-                isLoading={refreshing}
-                fullWidth
-              >
-                刷新状态
-              </Button>
-              
-              {currentTask.status === 'failed' && (
-                <Button
-                  color="primary"
-                  startContent={<Play className="w-4 h-4" />}
-                  onPress={handleRetry}
-                  fullWidth
-                >
-                  重新运行
-                </Button>
-              )}
-              
-              {currentTask.status === 'completed' && (
-                <Button
-                  color="secondary"
-                  startContent={<Download className="w-4 h-4" />}
-                  onPress={handleExport}
-                  fullWidth
-                >
-                  导出结果
-                </Button>
-              )}
-              
-              <Button
-                color="danger"
-                variant="light"
-                startContent={<Trash2 className="w-4 h-4" />}
-                onPress={onDeleteOpen}
-                fullWidth
-              >
-                删除任务
-              </Button>
-            </CardBody>
-          </Card>
+              {/* 快速操作 */}
+              <Card>
+                <CardHeader>
+                  <h3 className="text-lg font-semibold">快速操作</h3>
+                </CardHeader>
+                <CardBody className="space-y-3">
+                  <Button
+                    variant="light"
+                    startContent={<RefreshCw className="w-4 h-4" />}
+                    onPress={handleRefresh}
+                    isLoading={refreshing}
+                    fullWidth
+                  >
+                    刷新状态
+                  </Button>
+                  
+                  {currentTask.status === 'failed' && (
+                    <Button
+                      color="primary"
+                      startContent={<Play className="w-4 h-4" />}
+                      onPress={handleRetry}
+                      fullWidth
+                    >
+                      重新运行
+                    </Button>
+                  )}
+                  
+                  {currentTask.status === 'completed' && (
+                    <Button
+                      color="secondary"
+                      startContent={<Download className="w-4 h-4" />}
+                      onPress={handleExport}
+                      fullWidth
+                    >
+                      导出结果
+                    </Button>
+                  )}
+                  
+                  <Button
+                    color="danger"
+                    variant="light"
+                    startContent={<Trash2 className="w-4 h-4" />}
+                    onPress={onDeleteOpen}
+                    fullWidth
+                  >
+                    删除任务
+                  </Button>
+                </CardBody>
+              </Card>
+            </>
+          )}
         </div>
       </div>
 

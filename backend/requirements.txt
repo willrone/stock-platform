@@ -15,6 +15,8 @@ numpy>=1.26.0
 pyarrow==14.0.1
 polars==0.19.19
 scipy>=1.11.0  # 科学计算库，用于统计分析和风险计算
+openpyxl>=3.1.0  # Excel文件处理
+reportlab>=4.0.0  # PDF报告生成
 
 # 量化金融和机器学习
 # Qlib需要从GitHub安装（Python 3.13兼容）:

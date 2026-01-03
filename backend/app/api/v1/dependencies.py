@@ -202,31 +202,42 @@ def execute_backtest_task_simple(task_id: str):
             progress=30.0
         )
         
-        backtest_report = executor.run_backtest(
-            strategy_name=strategy_name,
-            stock_codes=stock_codes,
-            start_date=start_date,
-            end_date=end_date,
-            strategy_config=config.get('strategy_config', {}),
-            backtest_config=backtest_config
-        )
-        
-        # 更新进度
-        task_repository.update_task_status(
-            task_id=task_id,
-            status=TaskStatus.RUNNING,
-            progress=90.0
-        )
-        
-        # 保存回测结果
-        task_repository.update_task_status(
-            task_id=task_id,
-            status=TaskStatus.COMPLETED,
-            progress=100.0,
-            result=backtest_report
-        )
-        
-        logger.info(f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}")
+        try:
+            backtest_report = executor.run_backtest(
+                strategy_name=strategy_name,
+                stock_codes=stock_codes,
+                start_date=start_date,
+                end_date=end_date,
+                strategy_config=config.get('strategy_config', {}),
+                backtest_config=backtest_config
+            )
+            
+            # 更新进度到90%
+            task_repository.update_task_status(
+                task_id=task_id,
+                status=TaskStatus.RUNNING,
+                progress=90.0
+            )
+            
+            # 保存回测结果并完成任务
+            task_repository.update_task_status(
+                task_id=task_id,
+                status=TaskStatus.COMPLETED,
+                progress=100.0,
+                result=backtest_report
+            )
+            
+            logger.info(f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}")
+            
+        except Exception as backtest_error:
+            logger.error(f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True)
+            # 如果回测执行失败，标记任务为失败
+            task_repository.update_task_status(
+                task_id=task_id,
+                status=TaskStatus.FAILED,
+                error_message=f"回测执行失败: {str(backtest_error)}"
+            )
+            raise backtest_error
         
     except Exception as e:
         logger.error(f"执行回测任务失败: {task_id}, 错误: {e}", exc_info=True)

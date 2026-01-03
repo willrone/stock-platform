@@ -637,20 +637,20 @@ class PortfolioManager:
         # 交易统计
         winning_trades = [t for t in self.trades if t.pnl > 0]
         losing_trades = [t for t in self.trades if t.pnl < 0]
-        
+
         win_rate = len(winning_trades) / len(self.trades) if self.trades else 0
-        
-        avg_win = np.mean([t.pnl for t in winning_trades]) if winning_trades else 0
-        avg_loss = np.mean([t.pnl for t in losing_trades]) if losing_trades else 0
-        profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else float('inf')
-        
+
+        avg_win = float(np.mean([t.pnl for t in winning_trades])) if winning_trades else 0.0
+        avg_loss = float(np.mean([t.pnl for t in losing_trades])) if losing_trades else 0.0
+        profit_factor = float(abs(avg_win / avg_loss)) if avg_loss != 0 else float('inf')
+
         return {
-            'total_return': total_return,
-            'annualized_return': annualized_return,
-            'volatility': volatility,
-            'sharpe_ratio': sharpe_ratio,
-            'max_drawdown': max_drawdown,
-            'win_rate': win_rate,
+            'total_return': float(total_return),
+            'annualized_return': float(annualized_return),
+            'volatility': float(volatility),
+            'sharpe_ratio': float(sharpe_ratio),
+            'max_drawdown': float(max_drawdown),
+            'win_rate': float(win_rate),
             'profit_factor': profit_factor,
             'total_trades': len(self.trades),
             'winning_trades': len(winning_trades),

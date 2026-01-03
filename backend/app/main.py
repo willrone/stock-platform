@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         from app.services.infrastructure.resource_monitor import resource_monitor
         from app.services.infrastructure.task_scheduler import task_scheduler
+        from app.services.tasks.task_cleanup_service import task_cleanup_service
         
         # 启动资源监控（30秒间隔）
         await resource_monitor.start_monitoring(30.0)
@@ -52,13 +53,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # 启动任务调度器
         await task_scheduler.start()
         
+        # 启动任务清理服务
+        await task_cleanup_service.start()
+        
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("资源监控和任务调度器已启动")
+        logger.info("资源监控、任务调度器和任务清理服务已启动")
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"启动资源监控和任务调度器失败: {e}")
+        logger.warning(f"启动服务失败: {e}")
     
     yield
     
@@ -66,6 +70,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         from app.services.infrastructure.resource_monitor import resource_monitor
         from app.services.infrastructure.task_scheduler import task_scheduler
+        from app.services.tasks.task_cleanup_service import task_cleanup_service
+        
+        # 停止任务清理服务
+        await task_cleanup_service.stop()
         
         # 停止资源监控和任务调度器
         await resource_monitor.stop_monitoring()
@@ -73,11 +81,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("资源监控和任务调度器已停止")
+        logger.info("所有服务已停止")
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"停止资源监控和任务调度器失败: {e}")
+        logger.warning(f"停止服务失败: {e}")
     
     await cleanup_container()
 

@@ -96,3 +96,17 @@ class RemoteDataSyncRequest(BaseModel):
     """远端数据同步请求"""
     stock_codes: Optional[List[str]] = Field(default=None, description="要同步的股票代码列表，如果为空则同步所有股票")
 
+
+class BacktestCompareRequest(BaseModel):
+    """回测对比请求"""
+    task_ids: List[str] = Field(..., description="要对比的任务ID列表", min_length=2, max_length=5)
+    comparison_metrics: Optional[List[str]] = Field(default=None, description="指定对比的指标")
+
+
+class BacktestExportRequest(BaseModel):
+    """回测报告导出请求"""
+    format: str = Field(..., description="导出格式: pdf 或 excel")
+    include_charts: Optional[List[str]] = Field(default=None, description="包含的图表类型")
+    include_tables: Optional[List[str]] = Field(default=None, description="包含的数据表格")
+    include_raw_data: bool = Field(default=False, description="是否包含原始数据")
+

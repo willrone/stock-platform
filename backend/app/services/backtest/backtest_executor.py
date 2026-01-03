@@ -330,16 +330,16 @@ class BacktestExecutor:
                 snapshot['date'] for snapshot in portfolio_manager.portfolio_history
             ])
             
-            monthly_returns = portfolio_values.resample('M').last().pct_change().dropna()
+            monthly_returns = portfolio_values.resample('ME').last().pct_change().dropna()
             
             if len(monthly_returns) > 0:
                 additional_metrics.update({
-                    "monthly_return_mean": monthly_returns.mean(),
-                    "monthly_return_std": monthly_returns.std(),
-                    "best_month": monthly_returns.max(),
-                    "worst_month": monthly_returns.min(),
-                    "positive_months": (monthly_returns > 0).sum(),
-                    "negative_months": (monthly_returns < 0).sum()
+                    "monthly_return_mean": float(monthly_returns.mean()),
+                    "monthly_return_std": float(monthly_returns.std()),
+                    "best_month": float(monthly_returns.max()),
+                    "worst_month": float(monthly_returns.min()),
+                    "positive_months": int((monthly_returns > 0).sum()),
+                    "negative_months": int((monthly_returns < 0).sum())
                 })
             
             # 计算持仓分析

@@ -7,11 +7,12 @@ from typing import Optional
 from datetime import datetime
 from loguru import logger
 
-from app.api.v1.schemas import StandardResponse, TaskCreateRequest
+from app.api.v1.schemas import StandardResponse, TaskCreateRequest, BacktestCompareRequest, BacktestExportRequest
 from app.core.database import SessionLocal
 from app.repositories.task_repository import TaskRepository, PredictionResultRepository
 from app.models.task_models import TaskStatus, TaskType
 from app.api.v1.dependencies import execute_prediction_task_simple
+from app.services.tasks.task_monitor import task_monitor
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
@@ -167,6 +168,230 @@ async def list_tasks(
     except Exception as e:
         logger.error(f"获取任务列表失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取任务列表失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.get("/{task_id}/detailed", response_model=StandardResponse)
+async def get_task_detailed_result(task_id: str):
+    """获取任务的详细回测结果（用于可视化）"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        
+        # 获取基础任务信息
+        task = task_repository.get_task_by_id(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        if task.task_type != "backtest":
+            raise HTTPException(status_code=400, detail="只有回测任务支持详细结果查看")
+        
+        # 获取原始回测结果
+        raw_result = task.result
+        if not raw_result:
+            raise HTTPException(status_code=404, detail="回测结果不存在")
+        
+        # 使用适配器转换数据
+        from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+        adapter = BacktestDataAdapter()
+        
+        # 确保raw_result是字典格式
+        if isinstance(raw_result, str):
+            import json
+            raw_result = json.loads(raw_result)
+        
+        enhanced_result = await adapter.adapt_backtest_result(raw_result)
+        
+        return StandardResponse(
+            success=True,
+            message="获取详细回测结果成功",
+            data=enhanced_result.to_dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取详细回测结果失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取详细回测结果失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.get("/{task_id}/charts/{chart_type}")
+async def get_chart_data(task_id: str, chart_type: str):
+    """获取特定图表数据"""
+    
+    valid_chart_types = [
+        "equity_curve", "drawdown_curve", "monthly_heatmap", 
+        "trade_distribution", "position_weights", "risk_metrics"
+    ]
+    
+    if chart_type not in valid_chart_types:
+        raise HTTPException(status_code=400, detail=f"不支持的图表类型: {chart_type}")
+    
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        task = task_repository.get_task_by_id(task_id)
+        
+        if not task or not task.result:
+            raise HTTPException(status_code=404, detail="回测数据不存在")
+        
+        if task.task_type != "backtest":
+            raise HTTPException(status_code=400, detail="只有回测任务支持图表数据")
+        
+        # 获取原始回测结果
+        raw_result = task.result
+        if isinstance(raw_result, str):
+            import json
+            raw_result = json.loads(raw_result)
+        
+        # 生成图表数据
+        from app.services.backtest.chart_data_generator import ChartDataGenerator
+        chart_generator = ChartDataGenerator()
+        chart_data = await chart_generator.generate_chart_data(raw_result, chart_type)
+        
+        return StandardResponse(
+            success=True,
+            message="获取图表数据成功",
+            data={
+                "chart_type": chart_type,
+                "chart_data": chart_data
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取图表数据失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取图表数据失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.post("/compare", response_model=StandardResponse)
+async def compare_backtest_results(request: BacktestCompareRequest):
+    """对比多个回测结果"""
+    
+    if len(request.task_ids) > 5:
+        raise HTTPException(status_code=400, detail="最多支持对比5个回测结果")
+    
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        comparison_results = []
+        
+        for task_id in request.task_ids:
+            task = task_repository.get_task_by_id(task_id)
+            if not task:
+                raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+            
+            if task.task_type != "backtest":
+                raise HTTPException(status_code=400, detail=f"任务 {task_id} 不是回测任务")
+            
+            if not task.result:
+                raise HTTPException(status_code=404, detail=f"任务 {task_id} 没有回测结果")
+            
+            # 转换结果数据
+            raw_result = task.result
+            if isinstance(raw_result, str):
+                import json
+                raw_result = json.loads(raw_result)
+            
+            from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+            adapter = BacktestDataAdapter()
+            enhanced_result = await adapter.adapt_backtest_result(raw_result)
+            
+            comparison_results.append({
+                "task_id": task_id,
+                "task_name": task.task_name,
+                "result": enhanced_result.to_dict()
+            })
+        
+        # 计算对比指标
+        from app.services.backtest.comparison_analyzer import BacktestComparisonAnalyzer
+        comparison_analyzer = BacktestComparisonAnalyzer()
+        comparison_analysis = await comparison_analyzer.analyze_comparison(
+            comparison_results, request.comparison_metrics
+        )
+        
+        return StandardResponse(
+            success=True,
+            message="回测对比分析完成",
+            data={
+                "individual_results": comparison_results,
+                "comparison_analysis": comparison_analysis
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"回测对比分析失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"回测对比分析失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.post("/{task_id}/export", response_model=StandardResponse)
+async def export_backtest_report(
+    task_id: str,
+    export_request: BacktestExportRequest
+):
+    """导出回测报告"""
+    
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        task = task_repository.get_task_by_id(task_id)
+        
+        if not task or not task.result:
+            raise HTTPException(status_code=404, detail="回测数据不存在")
+        
+        if task.task_type != "backtest":
+            raise HTTPException(status_code=400, detail="只有回测任务支持报告导出")
+        
+        # 获取原始回测结果
+        raw_result = task.result
+        if isinstance(raw_result, str):
+            import json
+            raw_result = json.loads(raw_result)
+        
+        # 生成报告
+        from app.services.backtest.report_generator import BacktestReportGenerator
+        report_generator = BacktestReportGenerator()
+        
+        if export_request.format == "pdf":
+            report_path = await report_generator.generate_pdf_report(
+                raw_result, 
+                export_request.include_charts,
+                export_request.include_tables
+            )
+        elif export_request.format == "excel":
+            report_path = await report_generator.generate_excel_report(
+                raw_result,
+                export_request.include_raw_data
+            )
+        else:
+            raise HTTPException(status_code=400, detail="不支持的导出格式")
+        
+        import os
+        return StandardResponse(
+            success=True,
+            message="报告生成成功",
+            data={
+                "download_url": f"/api/v1/files/download/{os.path.basename(report_path)}",
+                "file_name": os.path.basename(report_path),
+                "file_size": os.path.getsize(report_path) if os.path.exists(report_path) else 0
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出回测报告失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"导出回测报告失败: {str(e)}")
     finally:
         session.close()
 
@@ -444,3 +669,86 @@ async def get_task_stats():
     finally:
         session.close()
 
+
+
+@router.get("/monitor/stuck", response_model=StandardResponse)
+async def get_stuck_tasks(timeout_minutes: int = 30):
+    """获取卡住的任务"""
+    try:
+        stuck_tasks = task_monitor.get_stuck_tasks(timeout_minutes)
+        
+        return StandardResponse(
+            success=True,
+            message=f"发现 {len(stuck_tasks)} 个卡住的任务",
+            data={
+                "stuck_tasks": stuck_tasks,
+                "timeout_minutes": timeout_minutes
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"获取卡住任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取卡住任务失败: {str(e)}")
+
+
+@router.post("/monitor/cleanup", response_model=StandardResponse)
+async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False):
+    """清理卡住的任务"""
+    try:
+        result = task_monitor.cleanup_stuck_tasks(timeout_minutes, auto_fix)
+        
+        message = f"处理完成：发现 {result['total_stuck']} 个卡住任务"
+        if auto_fix:
+            message += f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
+        
+        return StandardResponse(
+            success=True,
+            message=message,
+            data=result
+        )
+        
+    except Exception as e:
+        logger.error(f"清理卡住任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"清理卡住任务失败: {str(e)}")
+
+
+@router.post("/monitor/force-complete/{task_id}", response_model=StandardResponse)
+async def force_complete_task(task_id: str, status: str = "cancelled"):
+    """强制完成指定任务"""
+    try:
+        if status not in ["cancelled", "failed", "completed"]:
+            raise HTTPException(status_code=400, detail="状态必须是 cancelled、failed 或 completed")
+        
+        success = task_monitor.force_complete_task(task_id, status)
+        
+        if success:
+            return StandardResponse(
+                success=True,
+                message=f"任务已强制设置为 {status}",
+                data={"task_id": task_id, "status": status}
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"任务不存在或处理失败: {task_id}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"强制完成任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"强制完成任务失败: {str(e)}")
+
+
+@router.get("/monitor/statistics", response_model=StandardResponse)
+async def get_task_monitor_statistics():
+    """获取任务监控统计信息"""
+    try:
+        stats = task_monitor.get_task_statistics()
+        
+        return StandardResponse(
+            success=True,
+            message="获取统计信息成功",
+            data=stats
+        )
+        
+    except Exception as e:
+        logger.error(f"获取监控统计失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取监控统计失败: {str(e)}")
