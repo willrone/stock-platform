@@ -22,10 +22,11 @@ reportlab>=4.0.0  # PDF报告生成
 # Qlib需要从GitHub安装（Python 3.13兼容）:
 # pip install git+https://github.com/microsoft/qlib.git
 # 注意：这会安装pyqlib包（Microsoft Qlib量化投资平台）
-pyqlib>=0.9.8.dev18  # Microsoft Qlib量化投资平台，从GitHub安装
+# pyqlib>=0.9.8.dev18  # Microsoft Qlib量化投资平台，从GitHub安装（需要单独安装）
+git+https://github.com/microsoft/qlib.git  # Microsoft Qlib量化投资平台
 vectorbt>=0.26.0
 # ta-lib==0.4.28  # 暂时注释掉，因为编译问题，使用pandas-ta替代
-pandas-ta>=0.4.0  # 技术分析库，纯Python实现，无需编译
+pandas-ta>=0.4.67b0  # 技术分析库，纯Python实现，无需编译
 scikit-learn>=1.4.0
 joblib>=1.3.0  # scikit-learn的依赖，用于模型序列化
 # PyTorch - 支持ROCm和CUDA
@@ -65,3 +66,6 @@ loguru==0.7.2
 prometheus-client==0.19.0
 psutil==5.9.6
 GPUtil==1.4.0  # GPU监控库
+
+# 图论和数据分析
+networkx>=3.0  # 用于数据血缘追踪
