@@ -3,16 +3,24 @@
 提供回测详细数据和图表缓存的API接口
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Body
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from app.core.database import get_async_session
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
 from app.services.backtest.chart_cache_service import ChartCacheService
 from app.api.v1.schemas import StandardResponse
+
+
+class CacheChartRequest(BaseModel):
+    """缓存图表数据请求"""
+    chart_type: str = Field(..., description="图表类型")
+    chart_data: Dict[str, Any] = Field(..., description="图表数据")
+    expiry_hours: Optional[int] = Field(24, description="过期时间（小时）")
 
 
 router = APIRouter(prefix="/backtest-detailed", tags=["回测详细结果"])
@@ -205,25 +213,23 @@ async def get_benchmark_data(
 @router.post("/{task_id}/cache-chart", response_model=StandardResponse)
 async def cache_chart_data(
     task_id: str,
-    chart_type: str,
-    chart_data: Dict[str, Any],
-    expiry_hours: Optional[int] = 24
+    request: CacheChartRequest
 ):
     """缓存图表数据"""
     try:
         cache_service = ChartCacheService()
         success = await cache_service.cache_chart_data(
             task_id=task_id,
-            chart_type=chart_type,
-            chart_data=chart_data,
-            expiry_hours=expiry_hours
+            chart_type=request.chart_type,
+            chart_data=request.chart_data,
+            expiry_hours=request.expiry_hours
         )
         
         if success:
             return StandardResponse(
                 success=True,
                 message="图表数据缓存成功",
-                data={"task_id": task_id, "chart_type": chart_type}
+                data={"task_id": task_id, "chart_type": request.chart_type}
             )
         else:
             raise HTTPException(status_code=500, detail="图表数据缓存失败")

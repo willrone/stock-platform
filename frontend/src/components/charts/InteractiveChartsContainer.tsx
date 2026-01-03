@@ -85,23 +85,36 @@ export default function InteractiveChartsContainer({
 
       console.log(`[InteractiveChartsContainer] 并行加载三种图表数据...`);
       
-      // 并行加载所有图表数据
-      const [equityData, drawdownData, heatmapData] = await Promise.all([
-        BacktestService.getChartData(taskId, 'equity_curve', forceRefresh).catch(err => {
-          console.error(`[InteractiveChartsContainer] 权益曲线数据加载失败:`, err);
-          throw err;
-        }),
-        BacktestService.getChartData(taskId, 'drawdown_curve', forceRefresh).catch(err => {
-          console.error(`[InteractiveChartsContainer] 回撤曲线数据加载失败:`, err);
-          throw err;
-        }),
-        BacktestService.getChartData(taskId, 'monthly_heatmap', forceRefresh).catch(err => {
-          console.error(`[InteractiveChartsContainer] 月度热力图数据加载失败:`, err);
-          throw err;
-        }),
+      // 并行加载所有图表数据，允许部分失败
+      const [equityResult, drawdownResult, heatmapResult] = await Promise.allSettled([
+        BacktestService.getChartData(taskId, 'equity_curve', forceRefresh),
+        BacktestService.getChartData(taskId, 'drawdown_curve', forceRefresh),
+        BacktestService.getChartData(taskId, 'monthly_heatmap', forceRefresh),
       ]);
 
-      console.log(`[InteractiveChartsContainer] 基础图表数据加载成功:`, {
+      // 处理每个结果
+      const equityData = equityResult.status === 'fulfilled' ? equityResult.value : null;
+      const drawdownData = drawdownResult.status === 'fulfilled' ? drawdownResult.value : null;
+      const heatmapData = heatmapResult.status === 'fulfilled' ? heatmapResult.value : null;
+
+      if (equityResult.status === 'rejected') {
+        console.warn(`[InteractiveChartsContainer] 权益曲线数据加载失败:`, equityResult.reason);
+      }
+      if (drawdownResult.status === 'rejected') {
+        console.warn(`[InteractiveChartsContainer] 回撤曲线数据加载失败:`, drawdownResult.reason);
+      }
+      if (heatmapResult.status === 'rejected') {
+        console.warn(`[InteractiveChartsContainer] 月度热力图数据加载失败:`, heatmapResult.reason);
+      }
+
+      // 如果所有数据都加载失败，尝试从现有回测数据生成
+      if (!equityData && !drawdownData && !heatmapData) {
+        console.log(`[InteractiveChartsContainer] 所有API数据加载失败，尝试从现有回测数据生成...`);
+        generateChartDataFromBacktest();
+        return;
+      }
+
+      console.log(`[InteractiveChartsContainer] 基础图表数据加载结果:`, {
         equityData: !!equityData,
         drawdownData: !!drawdownData,
         heatmapData: !!heatmapData
@@ -138,7 +151,12 @@ export default function InteractiveChartsContainer({
 
     } catch (err: any) {
       console.error('[InteractiveChartsContainer] 加载图表数据失败:', err);
-      setError(err.message || '加载图表数据失败');
+      // 如果API加载失败，尝试从现有回测数据生成
+      console.log(`[InteractiveChartsContainer] 尝试从现有回测数据生成图表...`);
+      generateChartDataFromBacktest();
+      if (!chartData || Object.keys(chartData).length === 0) {
+        setError(err.message || '加载图表数据失败');
+      }
     } finally {
       setLoading(false);
     }

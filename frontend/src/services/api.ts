@@ -143,6 +143,15 @@ export const apiRequest = {
         return null as T;
       }
       return res.data.data;
+    }).catch((error: any) => {
+      // 确保错误对象包含状态码信息
+      if (error.response) {
+        const enhancedError = new Error(error.response.data?.message || error.message);
+        (enhancedError as any).status = error.response.status;
+        (enhancedError as any).response = error.response;
+        throw enhancedError;
+      }
+      throw error;
     });
   },
     

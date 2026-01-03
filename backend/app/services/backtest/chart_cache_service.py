@@ -77,6 +77,8 @@ class ChartCacheService:
                 self.logger.error(f"获取缓存数据失败: {e}", exc_info=True)
                 await session.rollback()
                 return None
+            finally:
+                break
     
     async def cache_chart_data(
         self,
@@ -91,7 +93,7 @@ class ChartCacheService:
             self.logger.warning(f"不支持的图表类型: {chart_type}")
             return False
         
-        async with get_async_session() as session:
+        async for session in get_async_session():
             try:
                 # 计算数据哈希值
                 data_hash = self._calculate_data_hash(chart_data)
@@ -136,6 +138,8 @@ class ChartCacheService:
                 self.logger.error(f"缓存图表数据失败: {e}", exc_info=True)
                 await session.rollback()
                 return False
+            finally:
+                break  # 只使用第一个会话
     
     async def invalidate_cache(
         self, 
@@ -144,7 +148,7 @@ class ChartCacheService:
     ) -> bool:
         """使缓存失效"""
         
-        async with get_async_session() as session:
+        async for session in get_async_session():
             try:
                 if chart_type:
                     # 删除特定图表类型的缓存
@@ -173,11 +177,13 @@ class ChartCacheService:
                 self.logger.error(f"删除缓存失败: {e}", exc_info=True)
                 await session.rollback()
                 return False
+            finally:
+                break
     
     async def cleanup_expired_cache(self) -> int:
         """清理过期的缓存记录"""
         
-        async with get_async_session() as session:
+        async for session in get_async_session():
             try:
                 # 删除过期的缓存记录
                 stmt = delete(BacktestChartCache).where(
@@ -200,11 +206,13 @@ class ChartCacheService:
                 self.logger.error(f"清理过期缓存失败: {e}", exc_info=True)
                 await session.rollback()
                 return 0
+            finally:
+                break
     
     async def get_cache_statistics(self) -> Dict[str, Any]:
         """获取缓存统计信息"""
         
-        async with get_async_session() as session:
+        async for session in get_async_session():
             try:
                 # 总缓存记录数
                 total_stmt = select(BacktestChartCache)
@@ -243,11 +251,13 @@ class ChartCacheService:
             except Exception as e:
                 self.logger.error(f"获取缓存统计失败: {e}", exc_info=True)
                 return {}
+            finally:
+                break
     
     async def get_task_cache_info(self, task_id: str) -> Dict[str, Any]:
         """获取特定任务的缓存信息"""
         
-        async with get_async_session() as session:
+        async for session in get_async_session():
             try:
                 stmt = select(BacktestChartCache).where(
                     BacktestChartCache.task_id == task_id
@@ -274,6 +284,8 @@ class ChartCacheService:
             except Exception as e:
                 self.logger.error(f"获取任务缓存信息失败: {e}", exc_info=True)
                 return {"task_id": task_id, "error": str(e)}
+            finally:
+                break
     
     def _calculate_data_hash(self, data: Dict[str, Any]) -> str:
         """计算数据的哈希值"""
@@ -314,7 +326,7 @@ class ChartCacheService:
     ) -> bool:
         """检查缓存是否有效"""
         
-        async with get_async_session() as session:
+        async for session in get_async_session():
             try:
                 stmt = select(BacktestChartCache).where(
                     and_(
@@ -341,6 +353,8 @@ class ChartCacheService:
             except Exception as e:
                 self.logger.error(f"检查缓存有效性失败: {e}", exc_info=True)
                 return False
+            finally:
+                break
 
 
 # 全局缓存服务实例

@@ -231,7 +231,9 @@ export class BacktestService {
     try {
       return await apiRequest.get(`/backtest-detailed/${taskId}/cached-chart/${chartType}`);
     } catch (error: any) {
-      if (error.status === 404) {
+      // 检查是否是404错误（缓存不存在）
+      if (error.response?.status === 404 || error.status === 404 || error.message?.includes('404')) {
+        console.log(`[BacktestService] 缓存不存在: taskId=${taskId}, chartType=${chartType}`);
         return null; // 缓存不存在
       }
       throw error;
@@ -352,45 +354,117 @@ export class BacktestService {
    * 生成权益曲线数据
    */
   private static async generateEquityCurveData(taskId: string): Promise<Record<string, any>> {
-    const snapshots = await this.getPortfolioSnapshots(taskId);
-    
-    return {
-      dates: snapshots.snapshots.map(s => s.snapshot_date),
-      portfolioValues: snapshots.snapshots.map(s => s.portfolio_value),
-      returns: snapshots.snapshots.map(s => s.total_return),
-      dailyReturns: snapshots.snapshots.map(s => s.daily_return),
-    };
+    try {
+      const snapshots = await this.getPortfolioSnapshots(taskId);
+      
+      if (!snapshots || !snapshots.snapshots || snapshots.snapshots.length === 0) {
+        console.warn(`[BacktestService] 组合快照数据为空: taskId=${taskId}`);
+        return {
+          dates: [],
+          portfolioValues: [],
+          returns: [],
+          dailyReturns: [],
+        };
+      }
+      
+      return {
+        dates: snapshots.snapshots.map(s => s.snapshot_date),
+        portfolioValues: snapshots.snapshots.map(s => s.portfolio_value),
+        returns: snapshots.snapshots.map(s => s.total_return),
+        dailyReturns: snapshots.snapshots.map(s => s.daily_return || 0),
+      };
+    } catch (error: any) {
+      console.error(`[BacktestService] 生成权益曲线数据失败:`, error);
+      if (error.response?.status === 404 || error.status === 404 || error.message?.includes('404')) {
+        console.warn(`[BacktestService] 组合快照数据不存在，返回空数据`);
+        return {
+          dates: [],
+          portfolioValues: [],
+          returns: [],
+          dailyReturns: [],
+        };
+      }
+      throw error;
+    }
   }
 
   /**
    * 生成回撤曲线数据
    */
   private static async generateDrawdownCurveData(taskId: string): Promise<Record<string, any>> {
-    const detailedResult = await this.getDetailedResult(taskId);
-    
-    return {
-      dates: detailedResult.drawdown_analysis.drawdown_curve.map(d => d.date),
-      drawdowns: detailedResult.drawdown_analysis.drawdown_curve.map(d => d.drawdown),
-      maxDrawdown: detailedResult.drawdown_analysis.max_drawdown,
-      maxDrawdownDate: detailedResult.drawdown_analysis.max_drawdown_date,
-      maxDrawdownDuration: detailedResult.drawdown_analysis.max_drawdown_duration,
-    };
+    try {
+      const detailedResult = await this.getDetailedResult(taskId);
+      
+      if (!detailedResult || !detailedResult.drawdown_analysis) {
+        console.warn(`[BacktestService] 回撤分析数据为空: taskId=${taskId}`);
+        return {
+          dates: [],
+          drawdowns: [],
+          maxDrawdown: 0,
+          maxDrawdownDate: '',
+          maxDrawdownDuration: 0,
+        };
+      }
+      
+      return {
+        dates: detailedResult.drawdown_analysis.drawdown_curve?.map((d: any) => d.date) || [],
+        drawdowns: detailedResult.drawdown_analysis.drawdown_curve?.map((d: any) => d.drawdown) || [],
+        maxDrawdown: detailedResult.drawdown_analysis.max_drawdown || 0,
+        maxDrawdownDate: detailedResult.drawdown_analysis.max_drawdown_date || '',
+        maxDrawdownDuration: detailedResult.drawdown_analysis.max_drawdown_duration || 0,
+      };
+    } catch (error: any) {
+      console.error(`[BacktestService] 生成回撤曲线数据失败:`, error);
+      if (error.response?.status === 404 || error.status === 404 || error.message?.includes('404')) {
+        console.warn(`[BacktestService] 详细结果数据不存在，返回空数据`);
+        return {
+          dates: [],
+          drawdowns: [],
+          maxDrawdown: 0,
+          maxDrawdownDate: '',
+          maxDrawdownDuration: 0,
+        };
+      }
+      throw error;
+    }
   }
 
   /**
    * 生成月度热力图数据
    */
   private static async generateMonthlyHeatmapData(taskId: string): Promise<Record<string, any>> {
-    const detailedResult = await this.getDetailedResult(taskId);
-    
-    const uniqueYears = new Set(detailedResult.monthly_returns.map(m => m.year));
-    const years = Array.from(uniqueYears).sort();
-    
-    return {
-      monthlyReturns: detailedResult.monthly_returns,
-      years: years,
-      months: Array.from({ length: 12 }, (_, i) => i + 1),
-    };
+    try {
+      const detailedResult = await this.getDetailedResult(taskId);
+      
+      if (!detailedResult || !detailedResult.monthly_returns || detailedResult.monthly_returns.length === 0) {
+        console.warn(`[BacktestService] 月度收益数据为空: taskId=${taskId}`);
+        return {
+          monthlyReturns: [],
+          years: [],
+          months: Array.from({ length: 12 }, (_, i) => i + 1),
+        };
+      }
+      
+      const uniqueYears = new Set(detailedResult.monthly_returns.map((m: any) => m.year));
+      const years = Array.from(uniqueYears).sort();
+      
+      return {
+        monthlyReturns: detailedResult.monthly_returns,
+        years: years,
+        months: Array.from({ length: 12 }, (_, i) => i + 1),
+      };
+    } catch (error: any) {
+      console.error(`[BacktestService] 生成月度热力图数据失败:`, error);
+      if (error.response?.status === 404 || error.status === 404 || error.message?.includes('404')) {
+        console.warn(`[BacktestService] 详细结果数据不存在，返回空数据`);
+        return {
+          monthlyReturns: [],
+          years: [],
+          months: Array.from({ length: 12 }, (_, i) => i + 1),
+        };
+      }
+      throw error;
+    }
   }
 
   /**
