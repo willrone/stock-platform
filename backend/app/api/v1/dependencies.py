@@ -328,54 +328,78 @@ def execute_backtest_task_simple(task_id: str):
                         try:
                             repository = BacktestDetailedRepository(session)
                             
+                            # 准备扩展指标数据
+                            extended_metrics = {}
+                            if enhanced_result.extended_risk_metrics:
+                                extended_metrics = {
+                                    'sortino_ratio': enhanced_result.extended_risk_metrics.sortino_ratio,
+                                    'calmar_ratio': enhanced_result.extended_risk_metrics.calmar_ratio,
+                                    'max_drawdown_duration': enhanced_result.extended_risk_metrics.max_drawdown_duration,
+                                    'var_95': enhanced_result.extended_risk_metrics.var_95,
+                                    'downside_deviation': enhanced_result.extended_risk_metrics.downside_deviation,
+                                }
+                            
+                            # 准备分析数据
+                            analysis_data = {
+                                'drawdown_analysis': enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},
+                                'monthly_returns': [mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
+                                'position_analysis': [pa.to_dict() for pa in enhanced_result.position_analysis] if enhanced_result.position_analysis else [],
+                                'benchmark_comparison': enhanced_result.benchmark_data or {},
+                                'rolling_metrics': {}
+                            }
+                            
                             # 创建详细结果记录
                             await repository.create_detailed_result(
                                 task_id=task_id,
                                 backtest_id=f"bt_{task_id[:8]}",
-                                sortino_ratio=enhanced_result.extended_risk_metrics.sortino_ratio if enhanced_result.extended_risk_metrics else 0,
-                                calmar_ratio=enhanced_result.extended_risk_metrics.calmar_ratio if enhanced_result.extended_risk_metrics else 0,
-                                max_drawdown_duration=enhanced_result.extended_risk_metrics.max_drawdown_duration if enhanced_result.extended_risk_metrics else 0,
-                                var_95=enhanced_result.extended_risk_metrics.var_95 if enhanced_result.extended_risk_metrics else 0,
-                                downside_deviation=enhanced_result.extended_risk_metrics.downside_deviation if enhanced_result.extended_risk_metrics else 0,
-                                drawdown_analysis=enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},
-                                monthly_returns=[mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
-                                position_analysis=[pa.to_dict() for pa in enhanced_result.position_analysis] if enhanced_result.position_analysis else [],
-                                benchmark_comparison=enhanced_result.benchmark_data or {},
-                                rolling_metrics={}
+                                extended_metrics=extended_metrics,
+                                analysis_data=analysis_data
                             )
                             
-                            # 创建组合快照记录
+                            # 批量创建组合快照记录
                             if enhanced_result.portfolio_history:
+                                snapshots_data = []
                                 for snapshot in enhanced_result.portfolio_history:
-                                    await repository.create_portfolio_snapshot(
+                                    snapshots_data.append({
+                                        'date': snapshot.get("date"),
+                                        'portfolio_value': snapshot.get("portfolio_value", 0),
+                                        'cash': snapshot.get("cash", 0),
+                                        'positions_count': snapshot.get("positions_count", 0),
+                                        'total_return': snapshot.get("total_return", 0),
+                                        'drawdown': 0,
+                                        'positions': snapshot.get("positions", {})
+                                    })
+                                
+                                if snapshots_data:
+                                    await repository.batch_create_portfolio_snapshots(
                                         task_id=task_id,
                                         backtest_id=f"bt_{task_id[:8]}",
-                                        snapshot_date=snapshot.get("date"),
-                                        portfolio_value=snapshot.get("portfolio_value", 0),
-                                        cash=snapshot.get("cash", 0),
-                                        positions_count=snapshot.get("positions_count", 0),
-                                        total_return=snapshot.get("total_return", 0),
-                                        drawdown=0,
-                                        positions=snapshot.get("positions", {})
+                                        snapshots_data=snapshots_data
                                     )
                             
-                            # 创建交易记录
+                            # 批量创建交易记录
                             if enhanced_result.trade_history:
+                                trades_data = []
                                 for trade in enhanced_result.trade_history:
-                                    await repository.create_trade_record(
+                                    trades_data.append({
+                                        'trade_id': trade.get("trade_id", ""),
+                                        'stock_code': trade.get("stock_code", ""),
+                                        'stock_name': trade.get("stock_code", ""),
+                                        'action': trade.get("action", ""),
+                                        'quantity': trade.get("quantity", 0),
+                                        'price': trade.get("price", 0),
+                                        'timestamp': trade.get("timestamp"),
+                                        'commission': trade.get("commission", 0),
+                                        'pnl': trade.get("pnl", 0),
+                                        'holding_days': trade.get("holding_days", 0),
+                                        'technical_indicators': {}
+                                    })
+                                
+                                if trades_data:
+                                    await repository.batch_create_trade_records(
                                         task_id=task_id,
                                         backtest_id=f"bt_{task_id[:8]}",
-                                        trade_id=trade.get("trade_id", ""),
-                                        stock_code=trade.get("stock_code", ""),
-                                        stock_name=trade.get("stock_code", ""),
-                                        action=trade.get("action", ""),
-                                        quantity=trade.get("quantity", 0),
-                                        price=trade.get("price", 0),
-                                        timestamp=trade.get("timestamp"),
-                                        commission=trade.get("commission", 0),
-                                        pnl=trade.get("pnl", 0),
-                                        holding_days=trade.get("holding_days", 0),
-                                        technical_indicators={}
+                                        trades_data=trades_data
                                     )
                             
                             await session.commit()
