@@ -59,10 +59,16 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTaskStore, Task } from '../../../stores/useTaskStore';
 import { TaskService, PredictionResult } from '../../../services/taskService';
 import { BacktestService } from '../../../services/backtestService';
+import { BacktestDataAdapter } from '../../../services/backtestDataAdapter';
 import { wsService } from '../../../services/websocket';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 import BacktestOverview from '../../../components/backtest/BacktestOverview';
 import BacktestTaskStatus from '../../../components/backtest/BacktestTaskStatus';
+import BacktestProgressMonitor from '../../../components/backtest/BacktestProgressMonitor';
+import { TradeHistoryTable } from '../../../components/backtest/TradeHistoryTable';
+import { PositionAnalysis } from '../../../components/backtest/PositionAnalysis';
+import { RiskAnalysis } from '../../../components/backtest/RiskAnalysis';
+import { PerformanceBreakdown } from '../../../components/backtest/PerformanceBreakdown';
 import dynamic from 'next/dynamic';
 
 // 动态导入图表组件
@@ -97,6 +103,8 @@ export default function TaskDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStock, setSelectedStock] = useState<string>('');
   const [backtestDetailedData, setBacktestDetailedData] = useState<any>(null);
+  const [adaptedRiskData, setAdaptedRiskData] = useState<any>(null);
+  const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<any>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
@@ -108,12 +116,45 @@ export default function TaskDetailPage() {
 
     setLoadingBacktestData(true);
     try {
+      console.log('[TaskDetail] 开始加载回测详细数据...');
       const detailedResult = await BacktestService.getDetailedResult(taskId);
+      console.log('[TaskDetail] 后端返回的详细数据:', detailedResult);
+      
       setBacktestDetailedData(detailedResult);
+      
+      // 使用数据适配器转换数据格式
+      console.log('[TaskDetail] 开始适配风险分析数据...');
+      const riskMetrics = BacktestDataAdapter.adaptRiskMetrics(detailedResult);
+      const returnDistribution = BacktestDataAdapter.generateReturnDistribution(detailedResult);
+      const rollingMetrics = BacktestDataAdapter.generateRollingMetrics(detailedResult);
+      
+      setAdaptedRiskData({
+        riskMetrics,
+        returnDistribution,
+        rollingMetrics
+      });
+      console.log('[TaskDetail] 风险分析数据适配完成:', { riskMetrics, returnDistribution, rollingMetrics });
+      
+      console.log('[TaskDetail] 开始适配绩效分解数据...');
+      const monthlyPerformance = BacktestDataAdapter.adaptMonthlyPerformance(detailedResult);
+      const yearlyPerformance = BacktestDataAdapter.generateYearlyPerformance(detailedResult);
+      const seasonalAnalysis = BacktestDataAdapter.generateSeasonalAnalysis(detailedResult);
+      const benchmarkComparison = BacktestDataAdapter.generateBenchmarkComparison(detailedResult);
+      
+      setAdaptedPerformanceData({
+        monthlyPerformance,
+        yearlyPerformance,
+        seasonalAnalysis,
+        benchmarkComparison
+      });
+      console.log('[TaskDetail] 绩效分解数据适配完成:', { monthlyPerformance, yearlyPerformance, seasonalAnalysis, benchmarkComparison });
+      
     } catch (error) {
-      console.error('加载回测详细数据失败:', error);
+      console.error('[TaskDetail] 加载回测详细数据失败:', error);
       // 如果详细数据不存在，使用基础回测数据
       setBacktestDetailedData(null);
+      setAdaptedRiskData(null);
+      setAdaptedPerformanceData(null);
     } finally {
       setLoadingBacktestData(false);
     }
@@ -418,34 +459,57 @@ export default function TaskDetailPage() {
         {/* 主要内容区域 */}
         <div className="lg:col-span-2 space-y-6">
           {/* 任务进度 */}
-          <Card>
-            <CardHeader>
-              <h3 className="text-lg font-semibold">任务进度</h3>
-            </CardHeader>
-            <CardBody>
-              <Progress
-                value={currentTask.progress}
-                color={currentTask.status === 'failed' ? 'danger' : 'primary'}
-                className="mb-4"
-              />
-              {currentTask.status === 'running' && (
-                <p className="text-default-500 text-sm">
-                  任务正在执行中，请耐心等待...
-                </p>
-              )}
-              {currentTask.status === 'failed' && currentTask.error_message && (
-                <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-2">
-                    <AlertTriangle className="w-5 h-5 text-danger mt-0.5" />
-                    <div>
-                      <p className="font-medium text-danger">任务执行失败</p>
-                      <p className="text-sm text-danger-600 mt-1">{currentTask.error_message}</p>
+          {currentTask.task_type === 'backtest' && (currentTask.status === 'running' || currentTask.status === 'pending') ? (
+            /* 回测任务的详细进度监控 */
+            <BacktestProgressMonitor
+              taskId={taskId}
+              onComplete={(results) => {
+                console.log('回测完成:', results);
+                // 刷新任务数据
+                loadTaskDetail();
+              }}
+              onError={(error) => {
+                console.error('回测错误:', error);
+                // 刷新任务数据以获取最新状态
+                loadTaskDetail();
+              }}
+              onCancel={() => {
+                console.log('回测已取消');
+                // 刷新任务数据
+                loadTaskDetail();
+              }}
+            />
+          ) : (
+            /* 通用任务进度显示 */
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">任务进度</h3>
+              </CardHeader>
+              <CardBody>
+                <Progress
+                  value={currentTask.progress}
+                  color={currentTask.status === 'failed' ? 'danger' : 'primary'}
+                  className="mb-4"
+                />
+                {currentTask.status === 'running' && (
+                  <p className="text-default-500 text-sm">
+                    任务正在执行中，请耐心等待...
+                  </p>
+                )}
+                {currentTask.status === 'failed' && currentTask.error_message && (
+                  <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-2">
+                      <AlertTriangle className="w-5 h-5 text-danger mt-0.5" />
+                      <div>
+                        <p className="font-medium text-danger">任务执行失败</p>
+                        <p className="text-sm text-danger-600 mt-1">{currentTask.error_message}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </CardBody>
-          </Card>
+                )}
+              </CardBody>
+            </Card>
+          )}
 
           {/* 根据任务类型显示不同内容 */}
           {currentTask.task_type === 'backtest' ? (
@@ -487,6 +551,22 @@ export default function TaskDetailPage() {
                     </div>
                   </Tab>
                   
+                  <Tab key="trades" title={
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>交易记录</span>
+                    </div>
+                  }>
+                    <div className="mt-4">
+                      <TradeHistoryTable 
+                        taskId={taskId}
+                        onTradeClick={(trade) => {
+                          console.log('查看交易详情:', trade);
+                        }}
+                      />
+                    </div>
+                  </Tab>
+                  
                   <Tab key="positions" title={
                     <div className="flex items-center space-x-2">
                       <PieChart className="w-4 h-4" />
@@ -495,35 +575,10 @@ export default function TaskDetailPage() {
                   }>
                     <div className="mt-4">
                       {backtestDetailedData?.position_analysis ? (
-                        <div className="space-y-4">
-                          <h4 className="text-lg font-semibold">股票表现排行</h4>
-                          <Table aria-label="股票表现表格">
-                            <TableHeader>
-                              <TableColumn>股票代码</TableColumn>
-                              <TableColumn>总收益</TableColumn>
-                              <TableColumn>交易次数</TableColumn>
-                              <TableColumn>胜率</TableColumn>
-                              <TableColumn>平均持仓期</TableColumn>
-                            </TableHeader>
-                            <TableBody>
-                              {backtestDetailedData.position_analysis.map((position: any) => (
-                                <TableRow key={position.stock_code}>
-                                  <TableCell>
-                                    <Chip variant="flat" size="sm">{position.stock_code}</Chip>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className={position.total_return >= 0 ? 'text-success' : 'text-danger'}>
-                                      ¥{position.total_return.toFixed(2)}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>{position.trade_count}</TableCell>
-                                  <TableCell>{(position.win_rate * 100).toFixed(1)}%</TableCell>
-                                  <TableCell>{position.avg_holding_period}天</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
+                        <PositionAnalysis 
+                          positionAnalysis={backtestDetailedData.position_analysis}
+                          stockCodes={currentTask.stock_codes || []}
+                        />
                       ) : (
                         <div className="text-center text-default-500 py-8">
                           <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -572,78 +627,50 @@ export default function TaskDetailPage() {
                     </div>
                   </Tab>
                   
-                  <Tab key="report" title={
+                  <Tab key="risk" title={
                     <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4" />
-                      <span>详细报告</span>
+                      <Activity className="w-4 h-4" />
+                      <span>风险分析</span>
                     </div>
                   }>
                     <div className="mt-4">
-                      <div className="space-y-6">
-                        <div>
-                          <h4 className="text-lg font-semibold mb-4">扩展风险指标</h4>
-                          {backtestDetailedData?.extended_risk_metrics ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              <Card>
-                                <CardBody className="text-center">
-                                  <p className="text-sm text-default-500 mb-1">Sortino比率</p>
-                                  <p className="text-xl font-bold">
-                                    {backtestDetailedData.extended_risk_metrics.sortino_ratio.toFixed(3)}
-                                  </p>
-                                </CardBody>
-                              </Card>
-                              <Card>
-                                <CardBody className="text-center">
-                                  <p className="text-sm text-default-500 mb-1">Calmar比率</p>
-                                  <p className="text-xl font-bold">
-                                    {backtestDetailedData.extended_risk_metrics.calmar_ratio.toFixed(3)}
-                                  </p>
-                                </CardBody>
-                              </Card>
-                              <Card>
-                                <CardBody className="text-center">
-                                  <p className="text-sm text-default-500 mb-1">VaR 95%</p>
-                                  <p className="text-xl font-bold text-danger">
-                                    {(backtestDetailedData.extended_risk_metrics.var_95 * 100).toFixed(2)}%
-                                  </p>
-                                </CardBody>
-                              </Card>
-                            </div>
-                          ) : (
-                            <div className="text-center text-default-500 py-4">
-                              <p>扩展风险指标计算中...</p>
-                            </div>
-                          )}
+                      {adaptedRiskData ? (
+                        <RiskAnalysis 
+                          taskId={taskId}
+                          riskMetrics={adaptedRiskData.riskMetrics}
+                          returnDistribution={adaptedRiskData.returnDistribution}
+                          rollingMetrics={adaptedRiskData.rollingMetrics}
+                        />
+                      ) : (
+                        <div className="text-center text-default-500 py-8">
+                          <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>风险分析数据加载中...</p>
                         </div>
-                        
-                        <div>
-                          <h4 className="text-lg font-semibold mb-4">回撤分析</h4>
-                          {backtestDetailedData?.drawdown_analysis ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <Card>
-                                <CardBody>
-                                  <p className="text-sm text-default-500 mb-1">最大回撤日期</p>
-                                  <p className="font-medium">
-                                    {new Date(backtestDetailedData.drawdown_analysis.max_drawdown_date).toLocaleDateString()}
-                                  </p>
-                                </CardBody>
-                              </Card>
-                              <Card>
-                                <CardBody>
-                                  <p className="text-sm text-default-500 mb-1">回撤持续时间</p>
-                                  <p className="font-medium">
-                                    {backtestDetailedData.drawdown_analysis.max_drawdown_duration}天
-                                  </p>
-                                </CardBody>
-                              </Card>
-                            </div>
-                          ) : (
-                            <div className="text-center text-default-500 py-4">
-                              <p>回撤分析数据计算中...</p>
-                            </div>
-                          )}
+                      )}
+                    </div>
+                  </Tab>
+                  
+                  <Tab key="performance" title={
+                    <div className="flex items-center space-x-2">
+                      <TrendingUp className="w-4 h-4" />
+                      <span>绩效分解</span>
+                    </div>
+                  }>
+                    <div className="mt-4">
+                      {adaptedPerformanceData ? (
+                        <PerformanceBreakdown 
+                          taskId={taskId}
+                          monthlyPerformance={adaptedPerformanceData.monthlyPerformance}
+                          yearlyPerformance={adaptedPerformanceData.yearlyPerformance}
+                          seasonalAnalysis={adaptedPerformanceData.seasonalAnalysis}
+                          benchmarkComparison={adaptedPerformanceData.benchmarkComparison}
+                        />
+                      ) : (
+                        <div className="text-center text-default-500 py-8">
+                          <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>绩效分解数据加载中...</p>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </Tab>
                 </Tabs>

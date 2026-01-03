@@ -221,37 +221,49 @@ async def get_task_detailed_result(task_id: str):
 @router.get("/{task_id}/charts/{chart_type}")
 async def get_chart_data(task_id: str, chart_type: str):
     """获取特定图表数据"""
-    
+
+    print(f"DEBUG: 请求图表数据 - task_id: {task_id}, chart_type: {chart_type}")
+
     valid_chart_types = [
-        "equity_curve", "drawdown_curve", "monthly_heatmap", 
+        "equity_curve", "drawdown_curve", "monthly_heatmap",
         "trade_distribution", "position_weights", "risk_metrics"
     ]
-    
+
     if chart_type not in valid_chart_types:
+        print(f"DEBUG: 不支持的图表类型: {chart_type}")
         raise HTTPException(status_code=400, detail=f"不支持的图表类型: {chart_type}")
-    
+
     session = SessionLocal()
     try:
         task_repository = TaskRepository(session)
         task = task_repository.get_task_by_id(task_id)
-        
+
+        print(f"DEBUG: 任务查询结果 - task: {task is not None}, result: {task.result is not None if task else None}")
+
         if not task or not task.result:
+            print(f"DEBUG: 回测数据不存在 - task: {task}, result: {task.result if task else None}")
             raise HTTPException(status_code=404, detail="回测数据不存在")
-        
+
         if task.task_type != "backtest":
+            print(f"DEBUG: 任务类型不是回测 - task_type: {task.task_type}")
             raise HTTPException(status_code=400, detail="只有回测任务支持图表数据")
-        
+
         # 获取原始回测结果
         raw_result = task.result
+        print(f"DEBUG: 原始结果类型: {type(raw_result)}")
         if isinstance(raw_result, str):
             import json
             raw_result = json.loads(raw_result)
-        
+            print(f"DEBUG: 解析后的结果类型: {type(raw_result)}")
+
         # 生成图表数据
+        print(f"DEBUG: 开始生成图表数据 - chart_type: {chart_type}")
         from app.services.backtest.chart_data_generator import ChartDataGenerator
         chart_generator = ChartDataGenerator()
         chart_data = await chart_generator.generate_chart_data(raw_result, chart_type)
-        
+
+        print(f"DEBUG: 图表数据生成成功")
+
         return StandardResponse(
             success=True,
             message="获取图表数据成功",
@@ -260,10 +272,11 @@ async def get_chart_data(task_id: str, chart_type: str):
                 "chart_data": chart_data
             }
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
+        print(f"DEBUG: 图表数据生成失败 - error: {e}")
         logger.error(f"获取图表数据失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取图表数据失败: {str(e)}")
     finally:
@@ -611,8 +624,14 @@ async def retry_task(
             progress=0.0
         )
         
-        # 添加后台任务来执行预测
-        background_tasks.add_task(execute_prediction_task_simple, task_id)
+        # 添加后台任务来重新执行
+        if task.task_type == "prediction":
+            background_tasks.add_task(execute_prediction_task_simple, task_id)
+        elif task.task_type == "backtest":
+            from app.api.v1.dependencies import execute_backtest_task_simple
+            background_tasks.add_task(execute_backtest_task_simple, task_id)
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的任务类型: {task.task_type}")
         
         task_data = {
             "task_id": task.task_id,

@@ -38,13 +38,13 @@ class Settings(BaseSettings):
     REMOTE_DATA_SERVICE_TIMEOUT: int = 30
 
     # 数据存储配置
-    DATA_ROOT_PATH: str = "./data"
-    PARQUET_DATA_PATH: str = "./data/stocks"
-    MODEL_STORAGE_PATH: str = "./data/models"
+    DATA_ROOT_PATH: str = "../data"  # 相对于backend目录
+    PARQUET_DATA_PATH: str = "../data/stocks"
+    MODEL_STORAGE_PATH: str = "../data/models"
 
     # Qlib 配置
-    QLIB_DATA_PATH: str = "./data/qlib_data"
-    QLIB_CACHE_PATH: str = "./data/qlib_cache"
+    QLIB_DATA_PATH: str = "../data/qlib_data"
+    QLIB_CACHE_PATH: str = "../data/qlib_cache"
 
     # 任务配置
     MAX_CONCURRENT_TASKS: int = 3

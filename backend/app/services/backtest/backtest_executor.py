@@ -13,6 +13,7 @@ from .backtest_engine import (
     BaseStrategy, StrategyFactory, PortfolioManager, BacktestConfig,
     TradingSignal, Trade, Position
 )
+from .backtest_progress_monitor import backtest_progress_monitor
 from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
 from app.models.task_models import BacktestResult
 
@@ -112,60 +113,147 @@ class BacktestExecutor:
             "failed_backtests": 0
         }
     
-    def run_backtest(self, strategy_name: str, stock_codes: List[str],
+    async def run_backtest(self, strategy_name: str, stock_codes: List[str],
                     start_date: datetime, end_date: datetime,
                     strategy_config: Dict[str, Any],
-                    backtest_config: Optional[BacktestConfig] = None) -> Dict[str, Any]:
+                    backtest_config: Optional[BacktestConfig] = None,
+                    task_id: str = None) -> Dict[str, Any]:
         """运行回测"""
         try:
             self.execution_stats["total_backtests"] += 1
+            
+            # 生成回测ID
+            backtest_id = f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(str(stock_codes))}"
             
             # 使用默认配置
             if backtest_config is None:
                 backtest_config = BacktestConfig()
             
+            # 开始进度监控
+            if task_id:
+                await backtest_progress_monitor.start_backtest_monitoring(
+                    task_id=task_id,
+                    backtest_id=backtest_id
+                )
+                await backtest_progress_monitor.update_stage(
+                    task_id, "initialization", progress=100, status="completed"
+                )
+            
             # 创建策略
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "strategy_setup", status="running"
+                )
+            
             strategy = StrategyFactory.create_strategy(strategy_name, strategy_config)
+            
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "strategy_setup", progress=100, status="completed"
+                )
             
             # 创建组合管理器
             portfolio_manager = PortfolioManager(backtest_config)
             
             # 加载数据
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "data_loading", status="running"
+                )
+            
             logger.info(f"开始回测: {strategy_name}, 股票: {stock_codes}, 期间: {start_date} - {end_date}")
             stock_data = self.data_loader.load_multiple_stocks(stock_codes, start_date, end_date)
+            
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "data_loading", progress=100, status="completed"
+                )
             
             # 获取交易日历
             trading_dates = self._get_trading_calendar(stock_data, start_date, end_date)
             
             if len(trading_dates) < 20:
+                error_msg = f"交易日数量不足: {len(trading_dates)}，至少需要20个交易日"
+                if task_id:
+                    await backtest_progress_monitor.set_error(task_id, error_msg)
                 raise TaskError(
-                    message=f"交易日数量不足: {len(trading_dates)}，至少需要20个交易日",
+                    message=error_msg,
                     severity=ErrorSeverity.MEDIUM
                 )
             
+            # 更新总交易日数
+            if task_id:
+                progress_data = backtest_progress_monitor.get_progress_data(task_id)
+                if progress_data:
+                    progress_data.total_trading_days = len(trading_dates)
+            
             # 执行回测
-            backtest_results = self._execute_backtest_loop(
-                strategy, portfolio_manager, stock_data, trading_dates
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "backtest_execution", status="running"
+                )
+            
+            backtest_results = await self._execute_backtest_loop(
+                strategy, portfolio_manager, stock_data, trading_dates, task_id
             )
             
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "backtest_execution", progress=100, status="completed"
+                )
+            
             # 计算绩效指标
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "metrics_calculation", status="running"
+                )
+            
             performance_metrics = portfolio_manager.get_performance_metrics()
             
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "metrics_calculation", progress=100, status="completed"
+                )
+            
             # 生成回测报告
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "report_generation", status="running"
+                )
+            
             backtest_report = self._generate_backtest_report(
                 strategy_name, stock_codes, start_date, end_date,
                 backtest_config, portfolio_manager, performance_metrics
             )
             
+            if task_id:
+                await backtest_progress_monitor.update_stage(
+                    task_id, "report_generation", progress=100, status="completed"
+                )
+                await backtest_progress_monitor.update_stage(
+                    task_id, "data_storage", progress=100, status="completed"
+                )
+            
             self.execution_stats["successful_backtests"] += 1
             logger.info(f"回测完成: {strategy_name}, 总收益: {performance_metrics.get('total_return', 0):.2%}")
+            
+            # 完成监控
+            if task_id:
+                await backtest_progress_monitor.complete_backtest(
+                    task_id, {"total_return": performance_metrics.get('total_return', 0)}
+                )
             
             return backtest_report
             
         except Exception as e:
             self.execution_stats["failed_backtests"] += 1
+            error_msg = f"回测执行失败: {str(e)}"
+            
+            if task_id:
+                await backtest_progress_monitor.set_error(task_id, error_msg)
+            
             raise TaskError(
-                message=f"回测执行失败: {str(e)}",
+                message=error_msg,
                 severity=ErrorSeverity.HIGH,
                 original_exception=e
             )
@@ -186,10 +274,11 @@ class BacktestExecutor:
         
         return trading_dates
     
-    def _execute_backtest_loop(self, strategy: BaseStrategy, 
+    async def _execute_backtest_loop(self, strategy: BaseStrategy, 
                              portfolio_manager: PortfolioManager,
                              stock_data: Dict[str, pd.DataFrame],
-                             trading_dates: List[datetime]) -> Dict[str, Any]:
+                             trading_dates: List[datetime],
+                             task_id: str = None) -> Dict[str, Any]:
         """执行回测主循环"""
         total_signals = 0
         executed_trades = 0
@@ -218,6 +307,7 @@ class BacktestExecutor:
                 total_signals += len(all_signals)
                 
                 # 执行交易信号
+                trades_this_day = 0
                 for signal in all_signals:
                     if strategy.validate_signal(signal, 
                                               portfolio_manager.get_portfolio_value(current_prices),
@@ -225,19 +315,50 @@ class BacktestExecutor:
                         trade = portfolio_manager.execute_signal(signal, current_prices)
                         if trade:
                             executed_trades += 1
+                            trades_this_day += 1
                 
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(current_date, current_prices)
                 
-                # 定期输出进度
+                # 更新进度监控
+                if task_id and i % 5 == 0:  # 每5天更新一次进度
+                    portfolio_value = portfolio_manager.get_portfolio_value(current_prices)
+                    await backtest_progress_monitor.update_execution_progress(
+                        task_id=task_id,
+                        processed_days=i + 1,
+                        current_date=current_date.strftime('%Y-%m-%d'),
+                        signals_generated=len(all_signals),
+                        trades_executed=trades_this_day,
+                        portfolio_value=portfolio_value
+                    )
+                
+                # 定期输出进度日志
                 if i % 50 == 0:
                     progress = (i + 1) / len(trading_dates) * 100
                     portfolio_value = portfolio_manager.get_portfolio_value(current_prices)
                     logger.debug(f"回测进度: {progress:.1f}%, 组合价值: {portfolio_value:.2f}")
                 
             except Exception as e:
-                logger.error(f"回测循环错误，日期: {current_date}, 错误: {e}")
+                error_msg = f"回测循环错误，日期: {current_date}, 错误: {e}"
+                logger.error(error_msg)
+                
+                # 添加警告到进度监控
+                if task_id:
+                    await backtest_progress_monitor.add_warning(task_id, error_msg)
+                
                 continue
+        
+        # 最终进度更新
+        if task_id:
+            final_portfolio_value = portfolio_manager.get_portfolio_value({})
+            await backtest_progress_monitor.update_execution_progress(
+                task_id=task_id,
+                processed_days=len(trading_dates),
+                current_date=trading_dates[-1].strftime('%Y-%m-%d') if trading_dates else None,
+                signals_generated=0,
+                trades_executed=0,
+                portfolio_value=final_portfolio_value
+            )
         
         return {
             "total_signals": total_signals,
