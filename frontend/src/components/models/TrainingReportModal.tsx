@@ -77,6 +77,23 @@ interface TrainingReport {
     importance: number;
     rank?: number;
   }> | Record<string, number>;
+  feature_correlation?: {
+    target_correlations?: Record<string, number>;
+    high_correlation_pairs?: Array<{
+      feature1: string;
+      feature2: string;
+      correlation: number;
+    }>;
+    avg_target_correlation?: number;
+    max_target_correlation?: number;
+    error?: string;
+  };
+  hyperparameter_tuning?: {
+    strategy?: string;
+    trials?: number;
+    best_score?: number;
+    best_hyperparameters?: Record<string, any> | null;
+  };
   hyperparameters: Record<string, any>;
   training_data_info: {
     stock_codes: string[];
@@ -126,6 +143,8 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
         performance_metrics: response.performance_metrics,
         training_history: response.training_history,
         feature_importance: response.feature_importance,
+        feature_correlation: response.feature_correlation,
+        hyperparameter_tuning: response.hyperparameter_tuning,
         hyperparameters: response.hyperparameters || {},
         training_data_info: response.training_data_info || {
           stock_codes: [],
@@ -182,6 +201,8 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
         performance_metrics: report.performance_metrics,
         training_history: report.training_history,
         feature_importance: report.feature_importance,
+        feature_correlation: report.feature_correlation,
+        hyperparameter_tuning: report.hyperparameter_tuning,
         hyperparameters: report.hyperparameters,
         training_data_info: report.training_data_info,
         recommendations: report.recommendations,
@@ -217,6 +238,13 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
       </Modal>
     );
   }
+
+  const correlationEntries = report?.feature_correlation?.target_correlations
+    ? Object.entries(report.feature_correlation.target_correlations)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 15)
+    : [];
+  const highCorrelationPairs = report?.feature_correlation?.high_correlation_pairs || [];
 
   return (
     <Modal 
@@ -525,6 +553,140 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                   </div>
                 </div>
               ))}
+
+              {/* 特征相关性 */}
+              {report.feature_correlation && !report.feature_correlation.error && correlationEntries.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">特征相关性</h3>
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <Card>
+                      <CardBody className="p-4">
+                        <div className="text-sm text-default-500 mb-1">平均相关性</div>
+                        <div className="text-lg font-semibold">
+                          {(report.feature_correlation.avg_target_correlation || 0).toFixed(4)}
+                        </div>
+                      </CardBody>
+                    </Card>
+                    <Card>
+                      <CardBody className="p-4">
+                        <div className="text-sm text-default-500 mb-1">最大相关性</div>
+                        <div className="text-lg font-semibold">
+                          {(report.feature_correlation.max_target_correlation || 0).toFixed(4)}
+                        </div>
+                      </CardBody>
+                    </Card>
+                    <Card>
+                      <CardBody className="p-4">
+                        <div className="text-sm text-default-500 mb-1">高相关特征对</div>
+                        <div className="text-lg font-semibold">
+                          {highCorrelationPairs.length}
+                        </div>
+                      </CardBody>
+                    </Card>
+                  </div>
+
+                  <div className="h-64 bg-default-50 rounded-lg p-4 mb-4">
+                    <ReactECharts
+                      option={{
+                        title: {
+                          text: 'Top 15 特征-目标相关性',
+                          left: 'center',
+                          textStyle: { fontSize: 14 }
+                        },
+                        tooltip: {
+                          trigger: 'axis',
+                          axisPointer: { type: 'shadow' },
+                          formatter: (params: any) => {
+                            const item = Array.isArray(params) ? params[0] : params;
+                            return `${item.name}: ${item.value.toFixed(4)}`;
+                          }
+                        },
+                        grid: {
+                          left: '20%',
+                          right: '4%',
+                          bottom: '10%',
+                          containLabel: true
+                        },
+                        xAxis: {
+                          type: 'value',
+                          name: '|corr|'
+                        },
+                        yAxis: {
+                          type: 'category',
+                          data: correlationEntries.map(([name]) => name).reverse()
+                        },
+                        series: [{
+                          name: '相关性',
+                          type: 'bar',
+                          data: correlationEntries.map(([, value]) => Number(value)).reverse(),
+                          itemStyle: {
+                            color: '#73c0de'
+                          }
+                        }]
+                      }}
+                      style={{ height: '100%', width: '100%' }}
+                    />
+                  </div>
+
+                  {highCorrelationPairs.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">高相关特征对（|corr| > 0.8）</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {highCorrelationPairs.slice(0, 6).map((pair, idx) => (
+                          <div key={`${pair.feature1}-${pair.feature2}-${idx}`} className="text-sm text-default-600">
+                            {pair.feature1} × {pair.feature2}: {pair.correlation.toFixed(3)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 超参数调优 */}
+              {report.hyperparameter_tuning && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">超参数调优</h3>
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <Card>
+                      <CardBody className="p-4">
+                        <div className="text-sm text-default-500 mb-1">搜索策略</div>
+                        <div className="text-lg font-semibold">
+                          {report.hyperparameter_tuning.strategy || 'unknown'}
+                        </div>
+                      </CardBody>
+                    </Card>
+                    <Card>
+                      <CardBody className="p-4">
+                        <div className="text-sm text-default-500 mb-1">试验次数</div>
+                        <div className="text-lg font-semibold">
+                          {report.hyperparameter_tuning.trials ?? 0}
+                        </div>
+                      </CardBody>
+                    </Card>
+                    <Card>
+                      <CardBody className="p-4">
+                        <div className="text-sm text-default-500 mb-1">最佳得分</div>
+                        <div className="text-lg font-semibold">
+                          {report.hyperparameter_tuning.best_score !== undefined && report.hyperparameter_tuning.best_score !== null
+                            ? report.hyperparameter_tuning.best_score.toFixed(4)
+                            : 'N/A'}
+                        </div>
+                      </CardBody>
+                    </Card>
+                  </div>
+                  {report.hyperparameter_tuning.best_hyperparameters && (
+                    <Card>
+                      <CardBody>
+                        <div className="text-sm text-default-500 mb-2">最佳超参数</div>
+                        <pre className="text-xs whitespace-pre-wrap">
+                          {JSON.stringify(report.hyperparameter_tuning.best_hyperparameters, null, 2)}
+                        </pre>
+                      </CardBody>
+                    </Card>
+                  )}
+                </div>
+              )}
 
               {/* 建议和改进 */}
               {report.recommendations && report.recommendations.length > 0 && (

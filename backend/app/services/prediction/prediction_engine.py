@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any, Tuple, Union
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import joblib
+import pickle
 import json
 from pathlib import Path
 from loguru import logger
@@ -15,6 +16,8 @@ from loguru import logger
 from .feature_extractor import FeatureExtractor, FeatureConfig
 from app.models.task_models import PredictionResult, RiskMetrics
 from app.core.error_handler import PredictionError, ErrorSeverity, ErrorContext, RecoveryAction
+from app.core.database import SessionLocal
+from app.repositories.task_repository import ModelInfoRepository
 
 
 @dataclass
@@ -52,6 +55,27 @@ class ModelLoader:
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.loaded_models: Dict[str, Any] = {}
         self.model_metadata: Dict[str, Dict[str, Any]] = {}
+
+    def _load_model_file(self, model_path: Path) -> Tuple[Any, Dict[str, Any]]:
+        if model_path.suffix == ".pkl":
+            with open(model_path, "rb") as f:
+                model_data = pickle.load(f)
+            if isinstance(model_data, dict) and "model" in model_data:
+                return model_data["model"], {
+                    "model_format": "qlib_pickle",
+                    "model_path": str(model_path),
+                    "qlib_config": model_data.get("config", {}),
+                    "timestamp": model_data.get("timestamp"),
+                }
+            return model_data, {
+                "model_format": "pickle",
+                "model_path": str(model_path),
+            }
+        model = joblib.load(model_path)
+        return model, {
+            "model_format": "joblib",
+            "model_path": str(model_path),
+        }
     
     def load_model(self, model_id: str) -> Tuple[Any, Dict[str, Any]]:
         """加载模型"""
@@ -60,21 +84,40 @@ class ModelLoader:
         
         try:
             model_path = self.model_dir / f"{model_id}.joblib"
-            metadata_path = self.model_dir / f"{model_id}_metadata.json"
-            
-            if not model_path.exists():
-                # 如果模型不存在，创建一个简单的线性回归模型作为备用
-                logger.warning(f"模型文件不存在: {model_path}，使用备用模型")
-                return self._create_fallback_model(model_id)
-            
-            # 加载模型
-            model = joblib.load(model_path)
-            
-            # 加载元数据
+
             metadata = {}
-            if metadata_path.exists():
-                with open(metadata_path, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
+            if model_path.exists():
+                model, metadata = self._load_model_file(model_path)
+            else:
+                session = SessionLocal()
+                try:
+                    model_info_repo = ModelInfoRepository(session)
+                    model_info = model_info_repo.get_model_info(model_id)
+                finally:
+                    session.close()
+                if not model_info:
+                    raise PredictionError(
+                        message=f"模型信息不存在: {model_id}",
+                        severity=ErrorSeverity.HIGH,
+                        context=ErrorContext(model_id=model_id)
+                    )
+
+                model_info_path = Path(model_info.file_path)
+                if not model_info_path.is_absolute():
+                    model_info_path = Path.cwd() / model_info_path
+                if not model_info_path.exists():
+                    raise PredictionError(
+                        message=f"模型文件不存在: {model_info_path}",
+                        severity=ErrorSeverity.HIGH,
+                        context=ErrorContext(model_id=model_id)
+                    )
+
+                model, metadata = self._load_model_file(model_info_path)
+                metadata.update({
+                    "model_id": model_id,
+                    "model_type": model_info.model_type,
+                    "performance_metrics": model_info.performance_metrics or {},
+                })
             
             # 缓存模型
             self.loaded_models[model_id] = model
@@ -85,7 +128,12 @@ class ModelLoader:
             
         except Exception as e:
             logger.error(f"模型加载失败: {model_id}, 错误: {e}")
-            return self._create_fallback_model(model_id)
+            raise PredictionError(
+                message=f"模型加载失败: {str(e)}",
+                severity=ErrorSeverity.HIGH,
+                context=ErrorContext(model_id=model_id),
+                original_exception=e
+            )
     
     def _create_fallback_model(self, model_id: str) -> Tuple[Any, Dict[str, Any]]:
         """创建备用模型"""
@@ -254,17 +302,37 @@ class PredictionEngine:
             
             # 加载历史数据
             historical_data = self._load_stock_data(stock_code, end_date)
-            
-            # 提取特征
-            features = self._extract_features(stock_code, historical_data, config)
-            
+
             # 加载模型
             model, model_metadata = self.model_loader.load_model(config.model_id)
-            
-            # 执行预测
-            prediction_result = self._execute_prediction(
-                stock_code, features, model, model_metadata, config
-            )
+
+            current_price = float(historical_data['close'].iloc[-1])
+
+            if model_metadata.get("model_format") == "qlib_pickle":
+                predicted_return = self._predict_with_qlib_model(
+                    model_metadata["model_path"],
+                    stock_code,
+                    end_date
+                )
+                predicted_price = current_price * (1 + predicted_return)
+                prediction_result = {
+                    "predicted_price": predicted_price,
+                    "predicted_direction": 1 if predicted_return > 0.01 else -1 if predicted_return < -0.01 else 0,
+                    "confidence_score": model_metadata.get("performance_metrics", {}).get("accuracy", 0.5),
+                    "confidence_interval": self._calculate_confidence_interval(
+                        predicted_price, 0.02, config.confidence_level
+                    ),
+                    "features_used": [],
+                    "model_confidence": model_metadata.get("performance_metrics", {}).get("accuracy", 0.5),
+                    "predicted_return": float(predicted_return),
+                }
+            else:
+                # 提取特征
+                features = self._extract_features(stock_code, historical_data, config)
+                # 执行预测
+                prediction_result = self._execute_prediction(
+                    stock_code, features, model, model_metadata, config, current_price
+                )
             
             # 风险评估
             if config.risk_assessment:
@@ -428,9 +496,9 @@ class PredictionEngine:
                 original_exception=e
             )
     
-    def _execute_prediction(self, stock_code: str, features: pd.DataFrame, 
+    def _execute_prediction(self, stock_code: str, features: pd.DataFrame,
                           model: Any, model_metadata: Dict[str, Any],
-                          config: PredictionConfig) -> Dict[str, Any]:
+                          config: PredictionConfig, current_price: float) -> Dict[str, Any]:
         """执行预测计算"""
         try:
             # 获取最新特征
@@ -440,16 +508,11 @@ class PredictionEngine:
             if hasattr(model, 'predict'):
                 predicted_return = model.predict(latest_features)[0]
             else:
-                # 备用预测逻辑
-                predicted_return = np.random.normal(0, 0.02)  # 随机预测
-                self.prediction_stats["model_fallbacks"] += 1
-            
-            # 获取当前价格
-            current_price = features.index[-1] if len(features) > 0 else 100.0
-            if hasattr(features, 'close'):
-                current_price = features['close'].iloc[-1] if len(features) > 0 else 100.0
-            else:
-                current_price = 100.0  # 默认价格
+                raise PredictionError(
+                    message=f"模型不支持predict接口: {type(model)}",
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(stock_code=stock_code, model_id=config.model_id)
+                )
             
             # 计算预测价格
             predicted_price = current_price * (1 + predicted_return)
@@ -481,7 +544,8 @@ class PredictionEngine:
                 'confidence_score': confidence_score,
                 'confidence_interval': confidence_interval,
                 'features_used': features.columns.tolist(),
-                'model_confidence': model_confidence
+                'model_confidence': model_confidence,
+                'predicted_return': float(predicted_return)
             }
             
         except Exception as e:
@@ -506,6 +570,122 @@ class PredictionEngine:
         upper_bound = predicted_price + margin
         
         return (lower_bound, upper_bound)
+
+    def _predict_with_qlib_model(self, model_path: str, stock_code: str, end_date: datetime) -> float:
+        """使用Qlib模型进行预测，返回预测收益率"""
+        try:
+            from app.services.qlib.unified_qlib_training_engine import UnifiedQlibTrainingEngine
+            import asyncio
+
+            engine = UnifiedQlibTrainingEngine()
+            start_date = end_date - timedelta(days=365)
+
+            async def run_predict():
+                return await engine.predict_with_qlib_model(
+                    model_path=model_path,
+                    stock_codes=[stock_code],
+                    start_date=start_date,
+                    end_date=end_date
+                )
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                predictions = loop.run_until_complete(run_predict())
+            finally:
+                loop.close()
+
+            if predictions is None or len(predictions) == 0:
+                raise PredictionError(
+                    message="Qlib模型预测结果为空",
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(stock_code=stock_code)
+                )
+
+            if isinstance(predictions, pd.DataFrame):
+                data = predictions
+                if isinstance(data.index, pd.MultiIndex):
+                    if "instrument" in data.index.names:
+                        data = data.xs(stock_code, level="instrument")
+                    else:
+                        try:
+                            data = data.xs(stock_code, level=-1)
+                        except Exception:
+                            pass
+                last_row = data.iloc[-1]
+                if isinstance(last_row, pd.Series):
+                    return float(last_row.iloc[0])
+                return float(last_row)
+
+            if isinstance(predictions, pd.Series):
+                return float(predictions.iloc[-1])
+
+            return float(predictions[-1])
+
+        except Exception as e:
+            raise PredictionError(
+                message=f"Qlib模型预测失败: {str(e)}",
+                severity=ErrorSeverity.HIGH,
+                context=ErrorContext(stock_code=stock_code),
+                original_exception=e
+            )
+
+    async def predict_return_series(self, stock_code: str, config: PredictionConfig,
+                                    start_date: datetime, end_date: datetime) -> pd.Series:
+        """预测区间内的收益率序列"""
+        model, model_metadata = self.model_loader.load_model(config.model_id)
+
+        if model_metadata.get("model_format") == "qlib_pickle":
+            from app.services.qlib.unified_qlib_training_engine import UnifiedQlibTrainingEngine
+
+            engine = UnifiedQlibTrainingEngine()
+
+            predictions = await engine.predict_with_qlib_model(
+                model_path=model_metadata["model_path"],
+                stock_codes=[stock_code],
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if isinstance(predictions, pd.DataFrame):
+                data = predictions
+                if isinstance(data.index, pd.MultiIndex):
+                    if "instrument" in data.index.names:
+                        data = data.xs(stock_code, level="instrument")
+                    else:
+                        data = data.xs(stock_code, level=-1)
+                series = data.iloc[:, 0] if isinstance(data, pd.DataFrame) else data
+                return series.sort_index()
+
+            if isinstance(predictions, pd.Series):
+                return predictions.sort_index()
+
+            raise PredictionError(
+                message="Qlib预测结果类型不支持",
+                severity=ErrorSeverity.HIGH,
+                context=ErrorContext(stock_code=stock_code)
+            )
+
+        historical_data = self._load_stock_data(stock_code, end_date)
+        features = self._extract_features(stock_code, historical_data, config)
+        features = features.loc[(features.index >= start_date) & (features.index <= end_date)]
+
+        if features.empty:
+            raise PredictionError(
+                message="预测特征数据为空",
+                severity=ErrorSeverity.HIGH,
+                context=ErrorContext(stock_code=stock_code)
+            )
+
+        if not hasattr(model, "predict"):
+            raise PredictionError(
+                message=f"模型不支持predict接口: {type(model)}",
+                severity=ErrorSeverity.HIGH,
+                context=ErrorContext(stock_code=stock_code, model_id=config.model_id)
+            )
+
+        predictions = model.predict(features.fillna(0))
+        return pd.Series(predictions, index=features.index).sort_index()
     
     def validate_prediction_inputs(self, stock_code: str, config: PredictionConfig) -> bool:
         """验证预测输入参数"""

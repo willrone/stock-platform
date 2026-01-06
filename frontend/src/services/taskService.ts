@@ -130,15 +130,28 @@ export class TaskService {
       risk_assessment: {
         value_at_risk: pred.risk_assessment?.value_at_risk || 0,
         volatility: pred.risk_assessment?.volatility || 0,
-        max_drawdown: 0.05, // 默认值
-        sharpe_ratio: 1.2, // 默认值
-      },
-      technical_indicators: {
-        rsi: Math.random() * 100,
-        macd: Math.random() * 2 - 1,
-        ma20: Math.random() * 200 + 50,
+        max_drawdown: pred.risk_assessment?.max_drawdown || 0,
+        sharpe_ratio: pred.risk_assessment?.sharpe_ratio || 0,
       },
     })) || [];
+  }
+
+  /**
+   * 获取预测任务的历史预测序列
+   */
+  static async getPredictionSeries(
+    taskId: string,
+    stockCode: string,
+    lookbackDays?: number
+  ): Promise<{
+    stock_code: string;
+    series: Array<{ date: string; actual: number; predicted: number }>;
+  }> {
+    const params: Record<string, string | number> = { stock_code: stockCode };
+    if (lookbackDays !== undefined && lookbackDays > 0) {
+      params.lookback_days = lookbackDays;
+    }
+    return apiRequest.get(`/tasks/${taskId}/prediction-series`, params);
   }
 
   /**

@@ -20,7 +20,6 @@ from app.websocket import (
     notify_model_training_failed
 )
 from app.services.models.hyperparameter_tuning import (
-    HyperparameterTuner,
     SearchStrategy,
     HyperparameterSpace
 )
@@ -166,7 +165,9 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
 
 async def train_model_task(model_id: str, model_name: str, model_type: str,
                            stock_codes: list, start_date: datetime, end_date: datetime,
-                           hyperparameters: dict, enable_hyperparameter_tuning: bool = False):
+                           hyperparameters: dict, enable_hyperparameter_tuning: bool = False,
+                           hyperparameter_search_strategy: str = "random_search",
+                           hyperparameter_search_trials: int = 10):
     """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
     report_generator = EvaluationReportGenerator()
@@ -228,7 +229,8 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
             if 'num_iterations' not in final_hyperparameters and 'epochs' in final_hyperparameters:
                 final_hyperparameters['num_iterations'] = final_hyperparameters['epochs']
             
-            if enable_hyperparameter_tuning:
+            tuning_summary = None
+            if enable_hyperparameter_tuning and hyperparameter_search_trials > 0:
                 await progress_callback(model_id, 5.0, "hyperparameter_tuning", "开始超参数搜索")
                 
                 # 定义超参数搜索空间
@@ -255,9 +257,6 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                         step=10
                     )
                 }
-                
-                # 创建调优器
-                tuner = HyperparameterTuner(SearchStrategy.RANDOM_SEARCH)
                 
                 # 定义训练函数
                 async def train_with_params(params):
@@ -290,19 +289,61 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                 best_trial = None
                 best_score = float('-inf')
                 
-                # 手动执行随机搜索，因为需要支持异步函数
+                # 手动执行搜索，因为需要支持异步函数
                 import random
-                for trial_id in range(5):
-                    # 随机采样参数
-                    params = {}
-                    for param_name, space in param_space.items():
-                        if space.param_type == 'float':
-                            params[param_name] = round(random.uniform(space.min_value, space.max_value), 2)
-                        elif space.param_type == 'int':
-                            params[param_name] = random.randint(space.min_value, space.max_value)
-                    
+                from itertools import product
+
+                strategy = (hyperparameter_search_strategy or "random_search").lower()
+                total_trials = max(int(hyperparameter_search_trials), 1)
+
+                def _generate_grid_combinations(space: dict) -> List[dict]:
+                    values = {}
+                    for name, spec in space.items():
+                        if spec.param_type == 'int':
+                            values[name] = list(range(int(spec.min_value), int(spec.max_value) + 1, int(spec.step or 1)))
+                        elif spec.param_type == 'float':
+                            step = float(spec.step or 0.01)
+                            start = float(spec.min_value)
+                            end = float(spec.max_value)
+                            vals = []
+                            current = start
+                            while current <= end + 1e-9:
+                                vals.append(round(current, 4))
+                                current += step
+                            values[name] = vals
+                        else:
+                            values[name] = list(spec.choices or [])
+                    combos = [dict(zip(values.keys(), combo)) for combo in product(*values.values())]
+                    return combos
+
+                if strategy == SearchStrategy.GRID_SEARCH.value:
+                    combinations = _generate_grid_combinations(param_space)
+                    if not combinations:
+                        logger.warning("超参数网格为空，改用随机搜索")
+                        combinations = None
+                    if combinations and len(combinations) > total_trials:
+                        combinations = random.sample(combinations, total_trials)
+                    trial_params = combinations
+                elif strategy == SearchStrategy.BAYESIAN_OPTIMIZATION.value:
+                    logger.warning("暂不支持贝叶斯优化，改用随机搜索")
+                    trial_params = None
+                else:
+                    trial_params = None
+
+                if trial_params is None:
+                    trial_params = []
+                    for _ in range(total_trials):
+                        params = {}
+                        for param_name, space in param_space.items():
+                            if space.param_type == 'float':
+                                params[param_name] = round(random.uniform(space.min_value, space.max_value), 4)
+                            elif space.param_type == 'int':
+                                params[param_name] = random.randint(space.min_value, space.max_value)
+                        trial_params.append(params)
+
+                for trial_id, params in enumerate(trial_params):
                     try:
-                        logger.info(f"超参数试验 {trial_id + 1}/5: {params}")
+                        logger.info(f"超参数试验 {trial_id + 1}/{len(trial_params)}: {params}")
                         metrics = await train_with_params(params)
                         score = metrics.get('score', metrics.get('accuracy', 0.0))
                         
@@ -321,6 +362,12 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                 if best_trial and best_trial.score > 0:
                     final_hyperparameters.update(best_trial.hyperparameters)
                     logger.info(f"超参数调优完成，最佳超参数: {best_trial.hyperparameters}, 得分: {best_trial.score:.4f}")
+                    tuning_summary = {
+                        "strategy": strategy,
+                        "trials": len(trial_params),
+                        "best_score": best_trial.score,
+                        "best_hyperparameters": best_trial.hyperparameters
+                    }
                     await progress_callback(
                         model_id, 10.0, "hyperparameter_tuning",
                         f"超参数搜索完成，最佳得分: {best_trial.score:.4f}",
@@ -328,6 +375,12 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                     )
                 else:
                     logger.warning("超参数调优未找到有效结果，使用默认参数")
+                    tuning_summary = {
+                        "strategy": strategy,
+                        "trials": len(trial_params),
+                        "best_score": None,
+                        "best_hyperparameters": None
+                    }
                     await progress_callback(
                         model_id, 10.0, "hyperparameter_tuning",
                         "超参数搜索完成，使用默认参数"
@@ -397,7 +450,9 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                     'stock_codes': stock_codes,
                     'start_date': start_date.isoformat(),
                     'end_date': end_date.isoformat()
-                }
+                },
+                feature_correlation=result.feature_correlation,
+                hyperparameter_tuning=tuning_summary
             )
             
             # 更新模型信息
@@ -794,7 +849,10 @@ async def create_training_task(
             stock_codes=request.stock_codes,
             start_date=start_date,
             end_date=end_date,
-            hyperparameters=request.hyperparameters or {}
+            hyperparameters=request.hyperparameters or {},
+            enable_hyperparameter_tuning=request.enable_hyperparameter_tuning,
+            hyperparameter_search_strategy=request.hyperparameter_search_strategy,
+            hyperparameter_search_trials=request.hyperparameter_search_trials
         )
         
         return StandardResponse(

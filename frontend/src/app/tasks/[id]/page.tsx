@@ -540,6 +540,8 @@ export default function TaskDetailPage() {
                     <div className="mt-4">
                       <InteractiveChartsContainer 
                         taskId={taskId}
+                        stockCode={selectedStock || currentTask?.stock_codes?.[0]}
+                        stockCodes={currentTask?.stock_codes || []}
                         backtestData={(() => {
                           // 尝试从多个位置获取回测数据
                           const data = currentTask?.results?.backtest_results || 
@@ -764,35 +766,38 @@ export default function TaskDetailPage() {
                       }>
                         {selectedStock && (
                           <PredictionChart 
+                            taskId={taskId}
                             stockCode={selectedStock}
                             prediction={predictions.find(p => p.stock_code === selectedStock)}
                           />
                         )}
                       </Tab>
                       
-                      <Tab key="backtest" title={
-                        <div className="flex items-center space-x-2">
-                          <Activity className="w-4 h-4" />
-                          <span>回测结果</span>
-                        </div>
-                      }>
-                        <BacktestChart 
-                          stockCode={selectedStock || (currentTask?.stock_codes?.[0] || '')}
-                          backtestData={(() => {
-                            // 尝试从多个位置获取回测数据
-                            const data = currentTask?.results?.backtest_results || 
-                                       currentTask?.backtest_results ||
-                                       (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
-                            console.log('回测数据来源检查:', {
-                              'results.backtest_results': currentTask?.results?.backtest_results,
-                              'backtest_results': currentTask?.backtest_results,
-                              'result': currentTask?.result,
-                              '最终数据': data
-                            });
-                            return data;
-                          })()}
-                        />
-                      </Tab>
+                      {currentTask.task_type === 'backtest' && (
+                        <Tab key="backtest" title={
+                          <div className="flex items-center space-x-2">
+                            <Activity className="w-4 h-4" />
+                            <span>回测结果</span>
+                          </div>
+                        }>
+                          <BacktestChart 
+                            stockCode={selectedStock || (currentTask?.stock_codes?.[0] || '')}
+                            backtestData={(() => {
+                              // 尝试从多个位置获取回测数据
+                              const data = currentTask?.results?.backtest_results || 
+                                         currentTask?.backtest_results ||
+                                         (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
+                              console.log('回测数据来源检查:', {
+                                'results.backtest_results': currentTask?.results?.backtest_results,
+                                'backtest_results': currentTask?.backtest_results,
+                                'result': currentTask?.result,
+                                '最终数据': data
+                              });
+                              return data;
+                            })()}
+                          />
+                        </Tab>
+                      )}
                       
                       <Tab key="table" title="数据表格">
                         <Table aria-label="预测结果表格">

@@ -89,7 +89,7 @@ class ModelEvaluationReport:
     
     # 超参数
     hyperparameters: Dict[str, Any]
-    
+
     # 训练数据信息
     training_data_info: Dict[str, Any]
     
@@ -101,6 +101,12 @@ class ModelEvaluationReport:
     
     # 建议和改进
     recommendations: Optional[List[str]] = None
+
+    # 特征相关性
+    feature_correlation: Optional[Dict[str, Any]] = None
+
+    # 超参数调优摘要
+    hyperparameter_tuning: Optional[Dict[str, Any]] = None
 
 
 class EvaluationReportGenerator:
@@ -121,7 +127,9 @@ class EvaluationReportGenerator:
         training_history: List[Dict[str, Any]],
         hyperparameters: Dict[str, Any],
         training_data_info: Dict[str, Any],
-        prediction_analysis: Optional[Dict[str, Any]] = None
+        prediction_analysis: Optional[Dict[str, Any]] = None,
+        feature_correlation: Optional[Dict[str, Any]] = None,
+        hyperparameter_tuning: Optional[Dict[str, Any]] = None
     ) -> ModelEvaluationReport:
         """生成评估报告"""
         
@@ -208,8 +216,10 @@ class EvaluationReportGenerator:
             training_summary=summary,
             performance_metrics=metrics,
             feature_importance=features,
+            feature_correlation=feature_correlation,
             training_history=history,
             hyperparameters=hyperparameters,
+            hyperparameter_tuning=hyperparameter_tuning,
             training_data_info=training_data_info,
             prediction_analysis=prediction_analysis,
             recommendations=recommendations
@@ -262,8 +272,10 @@ class EvaluationReportGenerator:
             "training_summary": asdict(report.training_summary),
             "performance_metrics": asdict(report.performance_metrics),
             "feature_importance": [asdict(f) for f in report.feature_importance],
+            "feature_correlation": report.feature_correlation,
             "training_history": [asdict(h) for h in report.training_history],
             "hyperparameters": report.hyperparameters,
+            "hyperparameter_tuning": report.hyperparameter_tuning,
             "training_data_info": report.training_data_info,
             "prediction_analysis": report.prediction_analysis,
             "model_comparison": report.model_comparison,
@@ -277,4 +289,3 @@ class EvaluationReportGenerator:
     def get_report(self, model_id: str) -> Optional[ModelEvaluationReport]:
         """获取报告"""
         return self.reports.get(model_id)
-

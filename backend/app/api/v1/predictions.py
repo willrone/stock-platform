@@ -7,6 +7,8 @@ from datetime import datetime
 from loguru import logger
 
 from app.api.v1.schemas import StandardResponse, PredictionRequest
+from app.core.config import settings
+from app.services.prediction.prediction_engine import PredictionEngine, PredictionConfig
 
 router = APIRouter(prefix="/predictions", tags=["预测服务"])
 
@@ -15,30 +17,57 @@ router = APIRouter(prefix="/predictions", tags=["预测服务"])
 async def create_prediction(request: PredictionRequest):
     """创建预测任务"""
     try:
-        # 这里应该调用预测引擎
-        # prediction_engine = get_prediction_engine()
-        # results = await prediction_engine.predict_multiple_stocks(...)
-        
-        # 模拟预测结果
-        mock_results = []
-        for stock_code in request.stock_codes:
-            mock_results.append({
-                "stock_code": stock_code,
-                "predicted_direction": 1,
-                "predicted_return": 0.05,
-                "confidence_score": 0.75,
-                "confidence_interval": {"lower": 0.02, "upper": 0.08},
-                "risk_assessment": {
-                    "value_at_risk": -0.03,
-                    "volatility": 0.2
-                }
+        prediction_engine = PredictionEngine(
+            model_dir=str(settings.MODEL_STORAGE_PATH),
+            data_dir=str(settings.DATA_ROOT_PATH)
+        )
+        prediction_config = PredictionConfig(
+            model_id=request.model_id,
+            horizon=request.horizon,
+            confidence_level=request.confidence_level,
+            risk_assessment=True
+        )
+
+        results = prediction_engine.predict_multiple_stocks(
+            request.stock_codes,
+            prediction_config
+        )
+
+        from app.services.data.stock_data_loader import StockDataLoader
+        loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+
+        predictions = []
+        for result in results:
+            current_price = None
+            try:
+                historical = loader.load_stock_data(result.stock_code, end_date=datetime.utcnow())
+                if not historical.empty and 'close' in historical.columns:
+                    current_price = float(historical['close'].iloc[-1])
+            except Exception:
+                current_price = None
+
+            predicted_return = 0.0
+            if current_price:
+                predicted_return = (result.predicted_price - current_price) / current_price
+
+            predictions.append({
+                "stock_code": result.stock_code,
+                "predicted_direction": result.predicted_direction,
+                "predicted_return": predicted_return,
+                "predicted_price": result.predicted_price,
+                "confidence_score": result.confidence_score,
+                "confidence_interval": {
+                    "lower": result.confidence_interval[0],
+                    "upper": result.confidence_interval[1]
+                },
+                "risk_assessment": result.risk_metrics.to_dict()
             })
         
         return StandardResponse(
             success=True,
             message=f"成功预测 {len(request.stock_codes)} 只股票",
             data={
-                "predictions": mock_results,
+                "predictions": predictions,
                 "model_id": request.model_id,
                 "horizon": request.horizon
             }
@@ -53,27 +82,45 @@ async def create_prediction(request: PredictionRequest):
 async def get_prediction_result(prediction_id: str):
     """获取预测结果"""
     try:
-        # 模拟预测结果查询
-        mock_result = {
+        from app.repositories.task_repository import PredictionResultRepository
+        from app.core.database import SessionLocal
+
+        session = SessionLocal()
+        try:
+            prediction_repo = PredictionResultRepository(session)
+            results = prediction_repo.get_prediction_results_by_task(prediction_id)
+        finally:
+            session.close()
+
+        if not results:
+            raise HTTPException(status_code=404, detail="预测结果不存在")
+
+        response_data = {
             "prediction_id": prediction_id,
             "status": "completed",
             "created_at": datetime.now().isoformat(),
             "results": [
                 {
-                    "stock_code": "000001.SZ",
-                    "predicted_direction": 1,
-                    "confidence_score": 0.82
+                    "stock_code": result.stock_code,
+                    "predicted_direction": result.predicted_direction,
+                    "confidence_score": result.confidence_score,
+                    "predicted_price": result.predicted_price,
+                    "confidence_interval": {
+                        "lower": result.confidence_interval_lower,
+                        "upper": result.confidence_interval_upper
+                    },
+                    "risk_assessment": result.risk_metrics or {}
                 }
+                for result in results
             ]
         }
         
         return StandardResponse(
             success=True,
             message="预测结果获取成功",
-            data=mock_result
+            data=response_data
         )
         
     except Exception as e:
         logger.error(f"获取预测结果失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取预测结果失败: {str(e)}")
-

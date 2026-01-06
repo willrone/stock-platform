@@ -302,7 +302,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                 <div>
                   <p className="text-sm text-gray-500">盈亏比</p>
                   <p className="text-xl font-bold">
-                    {statistics.profit_factor.toFixed(2)}
+                    {(statistics.profit_factor ?? 0).toFixed(2)}
                   </p>
                 </div>
               </div>

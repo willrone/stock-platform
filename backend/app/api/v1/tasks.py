@@ -4,7 +4,8 @@
 
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+import pandas as pd
 from loguru import logger
 
 from app.api.v1.schemas import StandardResponse, TaskCreateRequest, BacktestCompareRequest, BacktestExportRequest
@@ -13,6 +14,9 @@ from app.repositories.task_repository import TaskRepository, PredictionResultRep
 from app.models.task_models import TaskStatus, TaskType
 from app.api.v1.dependencies import execute_prediction_task_simple
 from app.services.tasks.task_monitor import task_monitor
+from app.services.prediction.prediction_engine import PredictionEngine, PredictionConfig
+from app.services.data.stock_data_loader import StockDataLoader
+from app.core.config import settings
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
@@ -214,6 +218,141 @@ async def get_task_detailed_result(task_id: str):
     except Exception as e:
         logger.error(f"获取详细回测结果失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取详细回测结果失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.get("/{task_id}/prediction-series", response_model=StandardResponse)
+async def get_prediction_series(
+    task_id: str,
+    stock_code: str,
+    lookback_days: Optional[int] = None
+):
+    """获取预测任务的历史预测与实际价格序列"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        task = task_repository.get_task_by_id(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task.task_type != "prediction":
+            raise HTTPException(status_code=400, detail="仅预测任务支持该接口")
+
+        config = task.config or {}
+        model_id = config.get("model_id")
+        if not model_id:
+            raise HTTPException(status_code=400, detail="预测任务缺少model_id")
+
+        loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+        actual_data = loader.load_stock_data(stock_code)
+        if actual_data.empty or 'close' not in actual_data.columns:
+            raise HTTPException(status_code=404, detail="实际价格数据不存在")
+
+        end_date = actual_data.index.max().to_pydatetime()
+        start_date = actual_data.index.min().to_pydatetime()
+        if lookback_days is not None and lookback_days > 0:
+            start_date = end_date - timedelta(days=lookback_days)
+
+        prediction_engine = PredictionEngine(
+            model_dir=str(settings.MODEL_STORAGE_PATH),
+            data_dir=str(settings.DATA_ROOT_PATH)
+        )
+        prediction_config = PredictionConfig(
+            model_id=model_id,
+            horizon=config.get("horizon", "short_term"),
+            confidence_level=config.get("confidence_level", 0.95),
+            features=config.get("features"),
+            use_ensemble=config.get("use_ensemble", True),
+            risk_assessment=config.get("risk_assessment", True)
+        )
+
+        predicted_returns = await prediction_engine.predict_return_series(
+            stock_code=stock_code,
+            config=prediction_config,
+            start_date=start_date,
+            end_date=end_date
+        )
+        if not predicted_returns.empty:
+            abs_returns = predicted_returns.abs()
+            logger.info(
+                "预测收益率统计: count={}, mean={:.6f}, std={:.6f}, min={:.6f}, max={:.6f}",
+                len(predicted_returns),
+                float(predicted_returns.mean()),
+                float(predicted_returns.std()),
+                float(predicted_returns.min()),
+                float(predicted_returns.max())
+            )
+            logger.info(
+                "预测收益率绝对值分位数: p50={:.6f}, p90={:.6f}, p95={:.6f}",
+                float(abs_returns.quantile(0.5)),
+                float(abs_returns.quantile(0.9)),
+                float(abs_returns.quantile(0.95))
+            )
+            unique_values = predicted_returns.round(6).unique()
+            logger.info(
+                "预测收益率唯一值数量: {}, 前几个值: {}",
+                len(unique_values),
+                unique_values[:5].tolist()
+            )
+
+        actual_data = actual_data[(actual_data.index >= pd.Timestamp(start_date)) & (actual_data.index <= pd.Timestamp(end_date))]
+
+        actual_close_by_date = {}
+        for idx, row in actual_data.iterrows():
+            date_key = pd.Timestamp(idx).normalize().strftime("%Y-%m-%d")
+            actual_close_by_date[date_key] = float(row["close"])
+
+        actual_date_keys = sorted(actual_close_by_date.keys())
+        actual_date_index = {date_key: i for i, date_key in enumerate(actual_date_keys)}
+
+        horizon_map = {
+            "intraday": 1,
+            "short_term": 5,
+            "medium_term": 20,
+            "long_term": 60,
+        }
+        horizon_days = horizon_map.get(config.get("horizon", "short_term"), 5)
+
+        series = []
+        for date, predicted_return in predicted_returns.items():
+            if isinstance(date, tuple):
+                date = date[-1]
+            date_key = pd.Timestamp(date).normalize().strftime("%Y-%m-%d")
+            origin_price = actual_close_by_date.get(date_key)
+            origin_index = actual_date_index.get(date_key)
+            if origin_price is None or origin_index is None:
+                continue
+
+            target_index = origin_index + horizon_days
+            if target_index >= len(actual_date_keys):
+                continue
+
+            target_date_key = actual_date_keys[target_index]
+            target_actual = actual_close_by_date.get(target_date_key)
+            if target_actual is None:
+                continue
+
+            predicted_price = origin_price * (1 + float(predicted_return))
+            series.append({
+                "date": target_date_key,
+                "actual": target_actual,
+                "predicted": predicted_price
+            })
+
+        return StandardResponse(
+            success=True,
+            message="预测序列获取成功",
+            data={
+                "stock_code": stock_code,
+                "series": series
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取预测序列失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取预测序列失败: {str(e)}")
     finally:
         session.close()
 
@@ -431,13 +570,35 @@ async def get_task_detail(task_id: str):
         prediction_results = prediction_result_repository.get_prediction_results_by_task(task_id)
         
         # 构建预测结果列表
+        from app.services.data.stock_data_loader import StockDataLoader
+        from app.core.config import settings
+        stock_loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+        latest_prices = {}
         predictions = []
         total_confidence = 0.0
         for result in prediction_results:
+            if result.stock_code not in latest_prices:
+                latest_price = None
+                try:
+                    data = stock_loader.load_stock_data(
+                        result.stock_code,
+                        end_date=result.prediction_date
+                    )
+                    if not data.empty and 'close' in data.columns:
+                        latest_price = float(data['close'].iloc[-1])
+                except Exception:
+                    latest_price = None
+                latest_prices[result.stock_code] = latest_price
+
+            current_price = latest_prices.get(result.stock_code)
+            predicted_return = 0.0
+            if current_price:
+                predicted_return = (result.predicted_price - current_price) / current_price
+
             prediction = {
                 "stock_code": result.stock_code,
                 "predicted_direction": result.predicted_direction,
-                "predicted_return": (result.predicted_price - 100) / 100 if result.predicted_price else 0,
+                "predicted_return": predicted_return,
                 "confidence_score": result.confidence_score,
                 "confidence_interval": {
                     "lower": result.confidence_interval_lower or 0,

@@ -25,6 +25,20 @@ class BacktestDetailedRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.logger = logger.bind(repository="backtest_detailed")
+
+    def _ensure_datetime(self, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime input for SQLite DateTime columns."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                # Fallback for date-only values.
+                return datetime.fromisoformat(f"{value}T00:00:00")
+        return value
     
     # ==================== BacktestDetailedResult 相关操作 ====================
     
@@ -59,7 +73,7 @@ class BacktestDetailedRepository:
             return detailed_result
             
         except Exception as e:
-            self.logger.error(f"创建回测详细结果失败: {e}", exc_info=True)
+            self.logger.error("创建回测详细结果失败: {}", e, exc_info=True)
             return None
     
     async def get_detailed_result_by_task_id(self, task_id: str) -> Optional[BacktestDetailedResult]:
@@ -72,7 +86,7 @@ class BacktestDetailedRepository:
             return result.scalar_one_or_none()
             
         except Exception as e:
-            self.logger.error(f"获取回测详细结果失败: {e}", exc_info=True)
+            self.logger.error("获取回测详细结果失败: {}", e, exc_info=True)
             return None
     
     async def update_detailed_result(
@@ -121,7 +135,7 @@ class BacktestDetailedRepository:
             return True
             
         except Exception as e:
-            self.logger.error(f"更新回测详细结果失败: {e}", exc_info=True)
+            self.logger.error("更新回测详细结果失败: {}", e, exc_info=True)
             return False
     
     # ==================== PortfolioSnapshot 相关操作 ====================
@@ -139,7 +153,7 @@ class BacktestDetailedRepository:
                 snapshot = PortfolioSnapshot(
                     task_id=task_id,
                     backtest_id=backtest_id,
-                    snapshot_date=snapshot_data['date'],
+                    snapshot_date=self._ensure_datetime(snapshot_data['date']),
                     portfolio_value=snapshot_data['portfolio_value'],
                     cash=snapshot_data['cash'],
                     positions_count=snapshot_data.get('positions_count', 0),
@@ -156,7 +170,7 @@ class BacktestDetailedRepository:
             return True
             
         except Exception as e:
-            self.logger.error(f"批量创建组合快照失败: {e}", exc_info=True)
+            self.logger.error("批量创建组合快照失败: {}", e, exc_info=True)
             return False
     
     async def get_portfolio_snapshots(
@@ -186,7 +200,7 @@ class BacktestDetailedRepository:
             return result.scalars().all()
             
         except Exception as e:
-            self.logger.error(f"获取组合快照失败: {e}", exc_info=True)
+            self.logger.error("获取组合快照失败: {}", e, exc_info=True)
             return []
     
     # ==================== TradeRecord 相关操作 ====================
@@ -210,7 +224,7 @@ class BacktestDetailedRepository:
                     action=trade_data['action'],
                     quantity=trade_data['quantity'],
                     price=trade_data['price'],
-                    timestamp=trade_data['timestamp'],
+                    timestamp=self._ensure_datetime(trade_data['timestamp']),
                     commission=trade_data.get('commission', 0.0),
                     pnl=trade_data.get('pnl'),
                     holding_days=trade_data.get('holding_days'),
@@ -225,7 +239,7 @@ class BacktestDetailedRepository:
             return True
             
         except Exception as e:
-            self.logger.error(f"批量创建交易记录失败: {e}", exc_info=True)
+            self.logger.error("批量创建交易记录失败: {}", e, exc_info=True)
             return False
     
     async def get_trade_records(
@@ -274,7 +288,7 @@ class BacktestDetailedRepository:
             return result.scalars().all()
             
         except Exception as e:
-            self.logger.error(f"获取交易记录失败: {e}", exc_info=True)
+            self.logger.error("获取交易记录失败: {}", e, exc_info=True)
             return []
     
     async def get_trade_statistics(self, task_id: str) -> Dict[str, Any]:
@@ -284,6 +298,19 @@ class BacktestDetailedRepository:
             total_stmt = select(func.count(TradeRecord.id)).where(TradeRecord.task_id == task_id)
             total_result = await self.session.execute(total_stmt)
             total_trades = total_result.scalar() or 0
+
+            # 买入/卖出交易数
+            buy_stmt = select(func.count(TradeRecord.id)).where(
+                and_(TradeRecord.task_id == task_id, TradeRecord.action == "BUY")
+            )
+            buy_result = await self.session.execute(buy_stmt)
+            buy_trades = buy_result.scalar() or 0
+
+            sell_stmt = select(func.count(TradeRecord.id)).where(
+                and_(TradeRecord.task_id == task_id, TradeRecord.action == "SELL")
+            )
+            sell_result = await self.session.execute(sell_stmt)
+            sell_trades = sell_result.scalar() or 0
             
             # 盈利交易数
             profit_stmt = select(func.count(TradeRecord.id)).where(
@@ -303,6 +330,24 @@ class BacktestDetailedRepository:
             pnl_stmt = select(func.sum(TradeRecord.pnl)).where(TradeRecord.task_id == task_id)
             pnl_result = await self.session.execute(pnl_stmt)
             total_pnl = pnl_result.scalar() or 0.0
+
+            # 平均盈利/亏损
+            avg_profit_stmt = select(func.avg(TradeRecord.pnl)).where(
+                and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
+            )
+            avg_profit_result = await self.session.execute(avg_profit_stmt)
+            avg_profit = avg_profit_result.scalar() or 0.0
+
+            avg_loss_stmt = select(func.avg(TradeRecord.pnl)).where(
+                and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
+            )
+            avg_loss_result = await self.session.execute(avg_loss_stmt)
+            avg_loss = avg_loss_result.scalar() or 0.0
+
+            # 总手续费
+            commission_stmt = select(func.sum(TradeRecord.commission)).where(TradeRecord.task_id == task_id)
+            commission_result = await self.session.execute(commission_stmt)
+            total_commission = commission_result.scalar() or 0.0
             
             # 平均持仓天数
             holding_stmt = select(func.avg(TradeRecord.holding_days)).where(
@@ -310,18 +355,28 @@ class BacktestDetailedRepository:
             )
             holding_result = await self.session.execute(holding_stmt)
             avg_holding_days = holding_result.scalar() or 0.0
+
+            profit_factor = 0.0
+            if avg_loss != 0:
+                profit_factor = abs(avg_profit / avg_loss)
             
             return {
                 "total_trades": total_trades,
-                "profit_trades": profit_trades,
-                "loss_trades": loss_trades,
+                "buy_trades": buy_trades,
+                "sell_trades": sell_trades,
+                "winning_trades": profit_trades,
+                "losing_trades": loss_trades,
                 "win_rate": profit_trades / total_trades if total_trades > 0 else 0.0,
+                "avg_profit": float(avg_profit),
+                "avg_loss": float(avg_loss),
+                "profit_factor": float(profit_factor),
+                "total_commission": float(total_commission),
                 "total_pnl": float(total_pnl),
                 "avg_holding_days": float(avg_holding_days)
             }
             
         except Exception as e:
-            self.logger.error(f"获取交易统计失败: {e}", exc_info=True)
+            self.logger.error("获取交易统计失败: {}", e, exc_info=True)
             return {}
     
     # ==================== BacktestBenchmark 相关操作 ====================

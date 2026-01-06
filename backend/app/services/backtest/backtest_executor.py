@@ -427,7 +427,7 @@ class BacktestExecutor:
                     "cash": snapshot["cash"],
                     "positions_count": len(snapshot["positions"])
                 }
-                for snapshot in portfolio_manager.portfolio_history[-100:]  # 只保留最近100个快照
+                for snapshot in portfolio_manager.portfolio_history
             ]
         }
         

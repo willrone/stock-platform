@@ -9,73 +9,48 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import { Card, CardBody, Chip, Spinner } from '@heroui/react';
 import { TrendingUp, TrendingDown, Target, AlertCircle } from 'lucide-react';
-import { PredictionResult } from '../../services/taskService';
-import { DataService } from '../../services/dataService';
+import { PredictionResult, TaskService } from '../../services/taskService';
 
 interface PredictionChartProps {
+  taskId: string;
   stockCode: string;
   prediction?: PredictionResult;
 }
 
-export default function PredictionChart({ stockCode, prediction }: PredictionChartProps) {
+export default function PredictionChart({ taskId, stockCode, prediction }: PredictionChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [loading, setLoading] = useState(true);
-  const [historicalData, setHistoricalData] = useState<Array<{date: string; close: number}>>([]);
+  const [seriesData, setSeriesData] = useState<Array<{date: string; actual: number; predicted: number}>>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // 获取历史价格数据
+  // 获取预测序列数据
   useEffect(() => {
-    const fetchHistoricalData = async () => {
-      if (!stockCode) {
+    const fetchPredictionSeries = async () => {
+      if (!stockCode || !taskId) {
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        // 获取最近60天的历史数据用于显示
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 60);
-        
-        const response = await DataService.getStockData(
-          stockCode,
-          startDate.toISOString().split('T')[0],
-          endDate.toISOString().split('T')[0]
-        );
-        
-        // 解析数据
-        const apiData: any = response.data;
-        const dataArray = (apiData?.data && Array.isArray(apiData.data)) 
-          ? apiData.data 
-          : (Array.isArray(apiData) ? apiData : []);
-        
-        if (dataArray.length > 0) {
-          const formatted = dataArray
-            .map((item: any) => ({
-              date: item.date ? item.date.split('T')[0] : item.date,
-              close: Number(item.close) || 0,
-            }))
-            .filter((item: any) => item.date && item.close > 0)
-            .sort((a: any, b: any) => a.date.localeCompare(b.date));
-          
-          setHistoricalData(formatted);
-        }
-      } catch (error) {
-        console.error('获取历史价格数据失败:', error);
-        setHistoricalData([]);
+        setLoadError(null);
+        const response = await TaskService.getPredictionSeries(taskId, stockCode);
+        setSeriesData(response.series || []);
+      } catch (error: any) {
+        console.error('获取预测序列失败:', error);
+        setSeriesData([]);
+        setLoadError(error.message || '获取预测序列失败');
       } finally {
         setLoading(false);
       }
     };
 
-    if (stockCode) {
-      fetchHistoricalData();
-    }
-  }, [stockCode]);
+    fetchPredictionSeries();
+  }, [stockCode, taskId]);
 
   useEffect(() => {
-    if (!chartRef.current || !prediction || loading) return;
+    if (!chartRef.current || loading) return;
 
     // 初始化图表
     if (chartInstance.current) {
@@ -83,115 +58,9 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
     }
     
     chartInstance.current = echarts.init(chartRef.current);
-
-    // 生成图表数据（使用真实历史数据和预测数据）
-    const generateChartData = () => {
-      const predictionDays = 5; // 预测未来5天
-      
-      // 使用真实历史数据
-      const historicalPrices = historicalData.map(item => item.close);
-      const historicalDates = historicalData.map(item => item.date);
-      
-      // 如果没有历史数据，使用最近30天的模拟数据作为后备
-      let dates = [...historicalDates];
-      let historical = [...historicalPrices];
-      
-      if (historical.length === 0) {
-        const basePrice = 100;
-        for (let i = 30; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          dates.push(date.toISOString().split('T')[0]);
-          historical.push(basePrice);
-        }
-      }
-      
-      // 获取当前价格（历史数据的最后一个）
-      const currentPrice = historical.length > 0 ? historical[historical.length - 1] : 100;
-      const splitIndex = historical.length - 1;
-      
-      // 预测数据
-      const predictionData = [];
-      const upperBound = [];
-      const lowerBound = [];
-      
-      for (let i = 1; i <= predictionDays; i++) {
-        const date = new Date();
-        date.setDate(date.getDate() + i);
-        dates.push(date.toISOString().split('T')[0]);
-        
-        // 基于预测收益率计算预测价格
-        const predictedPrice = currentPrice * (1 + prediction.predicted_return * (i / predictionDays));
-        predictionData.push(Number(predictedPrice.toFixed(2)));
-        
-        // 置信区间
-        const confidence = prediction.confidence_interval;
-        upperBound.push(Number((predictedPrice * (1 + confidence.upper)).toFixed(2)));
-        lowerBound.push(Number((predictedPrice * (1 + confidence.lower)).toFixed(2)));
-      }
-      
-      return {
-        dates,
-        historical,
-        prediction: predictionData,
-        upperBound,
-        lowerBound,
-        splitIndex
-      };
-    };
-
-    const chartData = generateChartData();
-
-    // 生成买卖信号
-    const generateTradingSignals = () => {
-      const signals: Array<{date: string; price: number; type: 'buy' | 'sell'; reason: string}> = [];
-      
-      // 买入信号条件：
-      // 1. 预测方向为上涨 (predicted_direction > 0)
-      // 2. 预测收益率 > 2%
-      // 3. 置信度 > 60%
-      const buyThreshold = 0.02; // 2%收益率阈值
-      const confidenceThreshold = 0.6; // 60%置信度阈值
-      
-      if (prediction.predicted_direction > 0 && 
-          prediction.predicted_return > buyThreshold && 
-          prediction.confidence_score > confidenceThreshold) {
-        // 在当前价格点标注买入
-        const currentDate = chartData.dates[chartData.splitIndex];
-        const currentPrice = chartData.historical[chartData.splitIndex];
-        signals.push({
-          date: currentDate,
-          price: currentPrice,
-          type: 'buy',
-          reason: `预测上涨 ${(prediction.predicted_return * 100).toFixed(2)}%`
-        });
-      }
-      
-      // 卖出信号条件：
-      // 1. 预测方向为下跌 (predicted_direction < 0)
-      // 2. 预测收益率 < -2%
-      // 3. 置信度 > 60%
-      if (prediction.predicted_direction < 0 && 
-          prediction.predicted_return < -buyThreshold && 
-          prediction.confidence_score > confidenceThreshold) {
-        // 在当前价格点标注卖出
-        const currentDate = chartData.dates[chartData.splitIndex];
-        const currentPrice = chartData.historical[chartData.splitIndex];
-        signals.push({
-          date: currentDate,
-          price: currentPrice,
-          type: 'sell',
-          reason: `预测下跌 ${(Math.abs(prediction.predicted_return) * 100).toFixed(2)}%`
-        });
-      }
-      
-      // 在预测的未来价格点，如果预测收益率足够大，也可以标注
-      // 这里我们只在当前点标注，未来点可以根据需要添加
-      
-      return signals;
-    };
-
-    const tradingSignals = generateTradingSignals();
+    const chartDates = seriesData.map(item => item.date);
+    const actualSeries = seriesData.map(item => item.actual);
+    const predictedSeries = seriesData.map(item => item.predicted);
 
     // 图表配置
     const option = {
@@ -220,7 +89,7 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
         }
       },
       legend: {
-        data: ['历史价格', '预测价格', '置信区间上限', '置信区间下限'],
+        data: ['实际价格', '预测价格'],
         top: 30
       },
       grid: {
@@ -232,7 +101,7 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
       },
       xAxis: {
         type: 'category',
-        data: chartData.dates,
+        data: chartDates,
         axisLine: {
           lineStyle: {
             color: '#ccc'
@@ -263,9 +132,9 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
       },
       series: [
         {
-          name: '历史价格',
+          name: '实际价格',
           type: 'line',
-          data: [...chartData.historical, ...new Array(chartData.prediction.length).fill(null)],
+          data: actualSeries,
           lineStyle: {
             color: '#3b82f6',
             width: 2
@@ -279,7 +148,7 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
         {
           name: '预测价格',
           type: 'line',
-          data: [...new Array(chartData.splitIndex + 1).fill(null), ...chartData.prediction],
+          data: predictedSeries,
           lineStyle: {
             color: '#10b981',
             width: 3,
@@ -290,91 +159,8 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
           },
           symbol: 'diamond',
           symbolSize: 6
-        },
-        {
-          name: '置信区间上限',
-          type: 'line',
-          data: [...new Array(chartData.splitIndex + 1).fill(null), ...chartData.upperBound],
-          lineStyle: {
-            color: '#f59e0b',
-            width: 1,
-            type: 'dotted'
-          },
-          itemStyle: {
-            color: '#f59e0b'
-          },
-          symbol: 'none'
-        },
-        {
-          name: '置信区间下限',
-          type: 'line',
-          data: [...new Array(chartData.splitIndex + 1).fill(null), ...chartData.lowerBound],
-          lineStyle: {
-            color: '#f59e0b',
-            width: 1,
-            type: 'dotted'
-          },
-          itemStyle: {
-            color: '#f59e0b'
-          },
-          symbol: 'none',
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              {
-                offset: 0,
-                color: 'rgba(245, 158, 11, 0.1)'
-              },
-              {
-                offset: 1,
-                color: 'rgba(245, 158, 11, 0.05)'
-              }
-            ])
-          },
-          stack: 'confidence'
         }
-      ],
-      markLine: {
-        data: [
-          {
-            xAxis: chartData.splitIndex,
-            lineStyle: {
-              color: '#ef4444',
-              type: 'solid',
-              width: 2
-            },
-            label: {
-              formatter: '预测起点',
-              position: 'insideEndTop'
-            }
-          }
-        ]
-      },
-      // 添加买卖点标注
-      markPoint: {
-        data: tradingSignals.map(signal => {
-          const dataIndex = chartData.dates.findIndex(d => d === signal.date);
-          return {
-            name: signal.type === 'buy' ? '买入' : '卖出',
-            coord: [dataIndex, signal.price],
-            value: signal.price,
-            symbol: signal.type === 'buy' ? 'triangle' : 'pin',
-            symbolSize: 50,
-            itemStyle: {
-              color: signal.type === 'buy' ? '#10b981' : '#ef4444'
-            },
-            label: {
-              formatter: signal.type === 'buy' ? '买入\n' + signal.reason : '卖出\n' + signal.reason,
-              position: signal.type === 'buy' ? 'bottom' : 'top',
-              color: '#fff',
-              fontSize: 12,
-              fontWeight: 'bold',
-              backgroundColor: signal.type === 'buy' ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)',
-              padding: [4, 8],
-              borderRadius: 4
-            }
-          };
-        })
-      }
+      ]
     };
 
     chartInstance.current.setOption(option);
@@ -394,7 +180,7 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
         chartInstance.current.dispose();
       }
     };
-  }, [stockCode, prediction, historicalData, loading]);
+  }, [stockCode, seriesData, loading]);
 
   if (!prediction) {
     return (
@@ -468,6 +254,11 @@ export default function PredictionChart({ stockCode, prediction }: PredictionCha
           {loading ? (
             <div className="flex items-center justify-center h-96">
               <Spinner size="lg" />
+            </div>
+          ) : loadError ? (
+            <div className="flex items-center justify-center h-96 text-default-500">
+              <AlertCircle className="w-8 h-8 mr-2" />
+              <span>{loadError}</span>
             </div>
           ) : (
             <div

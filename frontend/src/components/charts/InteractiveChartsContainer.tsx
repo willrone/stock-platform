@@ -15,6 +15,8 @@ import {
   Button,
   Spinner,
   Alert,
+  Select,
+  SelectItem,
 } from '@heroui/react';
 import {
   BarChart3,
@@ -28,11 +30,14 @@ import {
 import EquityCurveChart from './EquityCurveChart';
 import DrawdownChart from './DrawdownChart';
 import MonthlyHeatmapChart from './MonthlyHeatmapChart';
-import { BacktestService } from '../../services/backtestService';
+import { BacktestService, TradeRecord } from '../../services/backtestService';
+import TradingViewChart from './TradingViewChart';
 
 interface InteractiveChartsContainerProps {
   taskId: string;
   backtestData?: any;
+  stockCode?: string;
+  stockCodes?: string[];
 }
 
 interface ChartData {
@@ -69,11 +74,16 @@ interface ChartData {
 export default function InteractiveChartsContainer({
   taskId,
   backtestData,
+  stockCode,
+  stockCodes,
 }: InteractiveChartsContainerProps) {
   const [chartData, setChartData] = useState<ChartData>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('equity');
+  const [tradeRecords, setTradeRecords] = useState<TradeRecord[]>([]);
+  const [tradeLoading, setTradeLoading] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<string>('');
 
   // 加载图表数据
   const loadChartData = async (forceRefresh = false) => {
@@ -234,6 +244,41 @@ export default function InteractiveChartsContainer({
     }
   }, [taskId]);
 
+  useEffect(() => {
+    if (stockCode) {
+      setSelectedStock(stockCode);
+    } else if (stockCodes && stockCodes.length > 0) {
+      setSelectedStock((prev) => prev || stockCodes[0]);
+    }
+  }, [stockCode, stockCodes]);
+
+  useEffect(() => {
+    if (!taskId || !selectedStock) {
+      setTradeRecords([]);
+      return;
+    }
+
+    const fetchTrades = async () => {
+      try {
+        setTradeLoading(true);
+        const tradesResponse = await BacktestService.getTradeRecords(taskId, {
+          stockCode: selectedStock,
+          limit: 1000,
+          orderBy: 'timestamp',
+          orderDesc: false,
+        });
+        setTradeRecords(tradesResponse.trades);
+      } catch (tradeError) {
+        console.warn('[InteractiveChartsContainer] 无法加载交易记录:', tradeError);
+        setTradeRecords([]);
+      } finally {
+        setTradeLoading(false);
+      }
+    };
+
+    fetchTrades();
+  }, [taskId, selectedStock]);
+
   // 刷新数据
   const handleRefresh = () => {
     loadChartData(true);
@@ -291,16 +336,35 @@ export default function InteractiveChartsContainer({
             <BarChart3 className="w-5 h-5 text-primary" />
             <h2 className="text-xl font-semibold">交互式图表分析</h2>
           </div>
+
+          <div className="flex items-center gap-2">
+            {stockCodes && stockCodes.length > 0 && (
+              <Select
+                selectedKeys={selectedStock ? [selectedStock] : []}
+                onSelectionChange={(keys) => {
+                  const selected = Array.from(keys)[0] as string;
+                  setSelectedStock(selected);
+                }}
+                aria-label="选择股票"
+                size="sm"
+                className="min-w-[160px]"
+              >
+                {stockCodes.map((code) => (
+                  <SelectItem key={code}>{code}</SelectItem>
+                ))}
+              </Select>
+            )}
           
-          <Button
-            size="sm"
-            variant="flat"
-            startContent={<RefreshCw className="w-4 h-4" />}
-            onPress={handleRefresh}
-            isLoading={loading}
-          >
-            刷新数据
-          </Button>
+            <Button
+              size="sm"
+              variant="flat"
+              startContent={<RefreshCw className="w-4 h-4" />}
+              onPress={handleRefresh}
+              isLoading={loading}
+            >
+              刷新数据
+            </Button>
+          </div>
         </CardHeader>
 
         <CardBody>
@@ -315,6 +379,36 @@ export default function InteractiveChartsContainer({
               tabContent: "group-data-[selected=true]:text-primary"
             }}
           >
+            <Tab
+              key="price"
+              title={
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>价格走势</span>
+                </div>
+              }
+            >
+              {selectedStock ? (
+                <TradingViewChart
+                  stockCode={selectedStock}
+                  startDate={backtestData?.start_date}
+                  endDate={backtestData?.end_date}
+                  trades={tradeRecords}
+                  height={420}
+                />
+              ) : (
+                <div className="flex items-center justify-center py-12 text-default-500">
+                  <AlertCircle className="w-6 h-6 mr-2" />
+                  <span>暂无股票代码</span>
+                </div>
+              )}
+              {tradeLoading && (
+                <div className="mt-3 text-sm text-default-500">
+                  交易记录加载中...
+                </div>
+              )}
+            </Tab>
+
             <Tab
               key="equity"
               title={

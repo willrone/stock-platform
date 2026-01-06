@@ -17,6 +17,15 @@ interface TradingViewChartProps {
   stockCode: string;
   height?: number;
   prediction?: PredictionResult;
+  startDate?: string;
+  endDate?: string;
+  trades?: Array<{
+    trade_id?: string;
+    stock_code?: string;
+    action: 'BUY' | 'SELL';
+    price?: number;
+    timestamp: string;
+  }>;
 }
 
 interface PriceData {
@@ -28,7 +37,14 @@ interface PriceData {
   volume: number;
 }
 
-export default function TradingViewChart({ stockCode, height = 400, prediction }: TradingViewChartProps) {
+export default function TradingViewChart({
+  stockCode,
+  height = 400,
+  prediction,
+  startDate,
+  endDate,
+  trades,
+}: TradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -49,15 +65,16 @@ export default function TradingViewChart({ stockCode, height = 400, prediction }
 
     setLoading(true);
     try {
-      // 获取完整的数据范围：从2020年1月1日到现在
-      const endDate = new Date();
-      const startDate = new Date('2020-01-01');
+      const fallbackEnd = new Date();
+      const fallbackStart = new Date('2020-01-01');
+      const resolvedStart = startDate ? new Date(startDate) : fallbackStart;
+      const resolvedEnd = endDate ? new Date(endDate) : fallbackEnd;
       
       // 调用真实API获取数据
       const response = await DataService.getStockData(
         stockCode,
-        startDate.toISOString().split('T')[0],
-        endDate.toISOString().split('T')[0]
+        resolvedStart.toISOString().split('T')[0],
+        resolvedEnd.toISOString().split('T')[0]
       );
       
       // 转换数据格式
@@ -193,6 +210,22 @@ export default function TradingViewChart({ stockCode, height = 400, prediction }
     }
   };
 
+  const addTradeMarkers = () => {
+    if (!trades || trades.length === 0 || !candlestickSeriesRef.current) return;
+
+    const markers = trades
+      .filter((trade) => trade.timestamp)
+      .map((trade) => ({
+        time: trade.timestamp.split('T')[0],
+        position: trade.action === 'BUY' ? 'belowBar' : 'aboveBar',
+        color: trade.action === 'BUY' ? '#10b981' : '#ef4444',
+        shape: trade.action === 'BUY' ? 'arrowUp' : 'arrowDown',
+        text: trade.action === 'BUY' ? '买入' : '卖出',
+      }));
+
+    candlestickSeriesRef.current.setMarkers(markers);
+  };
+
   // 初始化图表
   const initChart = () => {
     if (!chartContainerRef.current) return;
@@ -219,6 +252,10 @@ export default function TradingViewChart({ stockCode, height = 400, prediction }
       },
       rightPriceScale: {
         borderColor: '#cccccc',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.3,
+        },
       },
       timeScale: {
         borderColor: '#cccccc',
@@ -256,12 +293,19 @@ export default function TradingViewChart({ stockCode, height = 400, prediction }
       priceScaleId: '',
     });
     volumeSeriesRef.current = volumeSeries;
+    chart.priceScale('').applyOptions({
+      scaleMargins: {
+        top: 0.8,
+        bottom: 0,
+      },
+    });
 
     // 设置数据
     updateChartData();
     
     // 添加买卖标记
     addTradingMarkers();
+    addTradeMarkers();
 
     // 响应式调整
     const handleResize = () => {
@@ -308,7 +352,7 @@ export default function TradingViewChart({ stockCode, height = 400, prediction }
   // 初始化
   useEffect(() => {
     fetchStockData();
-  }, [stockCode, timeframe]);
+  }, [stockCode, timeframe, startDate, endDate]);
 
   useEffect(() => {
     if (priceData.length > 0) {
@@ -321,8 +365,9 @@ export default function TradingViewChart({ stockCode, height = 400, prediction }
     // 当数据或预测结果更新时，重新添加买卖标记
     if (priceData.length > 0 && candlestickSeriesRef.current) {
       addTradingMarkers();
+      addTradeMarkers();
     }
-  }, [priceData, chartType, prediction]);
+  }, [priceData, chartType, prediction, trades]);
 
   return (
     <Card>

@@ -89,8 +89,27 @@ def execute_prediction_task_simple(task_id: str):
         
         logger.info(f"开始执行预测任务: {task_id}, 股票数量: {len(stock_codes)}")
         
-        # 模拟预测执行（这里可以替换为真实的预测逻辑）
+        # 执行真实预测
+        from app.services.prediction.prediction_engine import PredictionEngine, PredictionConfig
+        from app.core.config import settings
+
+        prediction_engine = PredictionEngine(
+            model_dir=str(settings.MODEL_STORAGE_PATH),
+            data_dir=str(settings.DATA_ROOT_PATH)
+        )
+
+        prediction_config = PredictionConfig(
+            model_id=model_id,
+            horizon=config.get("horizon", "short_term"),
+            confidence_level=config.get("confidence_level", 0.95),
+            features=config.get("features"),
+            use_ensemble=config.get("use_ensemble", True),
+            risk_assessment=config.get("risk_assessment", True)
+        )
+
         total_stocks = len(stock_codes)
+        success_count = 0
+        failures = []
         for i, stock_code in enumerate(stock_codes):
             try:
                 # 更新进度
@@ -101,35 +120,41 @@ def execute_prediction_task_simple(task_id: str):
                     progress=progress
                 )
                 
-                # TODO: 这里应该调用真实的预测引擎
-                # prediction_result = prediction_engine.predict(stock_code, model_id)
-                
-                # 模拟预测结果（临时实现）
-                import random
-                predicted_direction = random.choice([-1, 0, 1])
-                confidence_score = random.uniform(0.6, 0.95)
+                prediction_output = prediction_engine.predict_single_stock(
+                    stock_code=stock_code,
+                    config=prediction_config
+                )
                 
                 # 保存预测结果
                 prediction_result_repository.save_prediction_result(
                     task_id=task_id,
                     stock_code=stock_code,
-                    prediction_date=datetime.utcnow(),
-                    predicted_price=100.0,  # 临时值
-                    predicted_direction=predicted_direction,
-                    confidence_score=confidence_score,
-                    confidence_interval_lower=confidence_score - 0.1,
-                    confidence_interval_upper=confidence_score + 0.1,
+                    prediction_date=prediction_output.prediction_date,
+                    predicted_price=prediction_output.predicted_price,
+                    predicted_direction=prediction_output.predicted_direction,
+                    confidence_score=prediction_output.confidence_score,
+                    confidence_interval_lower=prediction_output.confidence_interval[0],
+                    confidence_interval_upper=prediction_output.confidence_interval[1],
                     model_id=model_id,
-                    features_used=[],
-                    risk_metrics={}
+                    features_used=prediction_output.features_used,
+                    risk_metrics=prediction_output.risk_metrics.to_dict()
                 )
                 
-                logger.info(f"完成股票预测: {stock_code}, 方向: {predicted_direction}, 置信度: {confidence_score:.2f}")
+                logger.info(
+                    f"完成股票预测: {stock_code}, 方向: {prediction_output.predicted_direction}, "
+                    f"置信度: {prediction_output.confidence_score:.2f}"
+                )
+                success_count += 1
                 
             except Exception as e:
                 logger.error(f"预测股票 {stock_code} 失败: {e}", exc_info=True)
+                failures.append(f"{stock_code}: {type(e).__name__} {e}")
                 continue
         
+        if success_count == 0:
+            details = "; ".join(failures[:5])
+            raise RuntimeError(f"所有股票预测失败，未生成任何结果: {details}")
+
         # 更新任务状态为完成
         task_repository.update_task_status(
             task_id=task_id,

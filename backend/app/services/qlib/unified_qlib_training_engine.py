@@ -108,6 +108,7 @@ class QlibTrainingResult:
     stopped_epoch: int = 0
     best_epoch: int = 0
     early_stopping_reason: Optional[str] = None
+    feature_correlation: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -125,7 +126,8 @@ class QlibTrainingResult:
             "early_stopped": self.early_stopped,
             "stopped_epoch": self.stopped_epoch,
             "best_epoch": self.best_epoch,
-            "early_stopping_reason": self.early_stopping_reason
+            "early_stopping_reason": self.early_stopping_reason,
+            "feature_correlation": self.feature_correlation
         }
 
 
@@ -231,6 +233,8 @@ class UnifiedQlibTrainingEngine:
                 })
             
             model_config = await self._create_qlib_model_config(config)
+
+            feature_correlation = self._analyze_feature_correlations(dataset)
             
             # 4. 数据预处理和分割
             if progress_callback:
@@ -337,7 +341,8 @@ class UnifiedQlibTrainingEngine:
                 early_stopped=early_stopping_info["early_stopped"],
                 stopped_epoch=early_stopping_info["stopped_epoch"],
                 best_epoch=early_stopping_info["best_epoch"],
-                early_stopping_reason=early_stopping_info["early_stopping_reason"]
+                early_stopping_reason=early_stopping_info["early_stopping_reason"],
+                feature_correlation=feature_correlation
             )
             
             logger.info(f"Qlib模型训练完成: {model_id}, 耗时: {training_duration:.2f}秒")
@@ -1393,6 +1398,69 @@ class UnifiedQlibTrainingEngine:
         except Exception as e:
             logger.warning(f"提取特征重要性失败: {e}")
             return None
+
+    def _analyze_feature_correlations(self, dataset: pd.DataFrame) -> Dict[str, Any]:
+        """分析特征与标签的相关性"""
+        try:
+            if dataset.empty:
+                return {"error": "数据集为空"}
+
+            data = dataset.copy()
+            if "label" not in data.columns:
+                close_col = None
+                for col in ["$close", "close", "Close", "CLOSE"]:
+                    if col in data.columns:
+                        close_col = col
+                        break
+                if close_col is None:
+                    return {"error": "缺少收盘价列，无法生成标签"}
+
+                if isinstance(data.index, pd.MultiIndex):
+                    data["label"] = data.groupby(level=0)[close_col].pct_change(periods=1).shift(-1).fillna(0)
+                else:
+                    data["label"] = data[close_col].pct_change(periods=1).shift(-1).fillna(0)
+
+            numeric_features = data.select_dtypes(include=[np.number]).columns.tolist()
+            numeric_features = list(dict.fromkeys(numeric_features))
+            if "label" in numeric_features:
+                numeric_features.remove("label")
+
+            if not numeric_features:
+                return {"error": "没有数值特征"}
+
+            target_correlations = {}
+            for feature in numeric_features:
+                series = data[feature]
+                if isinstance(series, pd.DataFrame):
+                    series = series.iloc[:, 0]
+                corr = series.corr(data["label"])
+                if isinstance(corr, pd.Series):
+                    corr = corr.iloc[0]
+                if not pd.isna(corr):
+                    target_correlations[feature] = float(abs(corr))
+
+            high_corr_pairs = []
+            feature_corr_matrix = data[numeric_features].corr()
+            for i in range(len(numeric_features)):
+                for j in range(i + 1, len(numeric_features)):
+                    corr = feature_corr_matrix.iloc[i, j]
+                    if not pd.isna(corr) and abs(corr) > 0.8:
+                        high_corr_pairs.append({
+                            "feature1": numeric_features[i],
+                            "feature2": numeric_features[j],
+                            "correlation": float(corr)
+                        })
+
+            return {
+                "target_correlations": target_correlations,
+                "high_correlation_pairs": high_corr_pairs,
+                "avg_target_correlation": float(np.mean(list(target_correlations.values()))) if target_correlations else 0.0,
+                "max_target_correlation": float(max(target_correlations.values())) if target_correlations else 0.0
+            }
+
+        except Exception as e:
+            logger.warning(f"特征相关性分析失败: {e}")
+            return {"error": str(e)}
     
     async def _save_qlib_model(
         self,
@@ -1470,6 +1538,87 @@ class UnifiedQlibTrainingEngine:
             
             if dataset.empty:
                 raise ValueError("无法获取预测数据")
+
+            if isinstance(dataset, pd.DataFrame):
+                dataset = self._align_prediction_features(model, dataset)
+                base_model = model.model if hasattr(model, "model") else model
+                feature_names = None
+                if hasattr(base_model, "feature_name"):
+                    try:
+                        feature_names = base_model.feature_name()
+                    except Exception:
+                        feature_names = None
+                if feature_names is None and hasattr(base_model, "feature_name_"):
+                    feature_names = list(base_model.feature_name_)
+                if feature_names:
+                    missing_count = sum(1 for name in feature_names if name not in dataset.columns)
+                    logger.info(
+                        "预测特征对齐: model_features={}, dataset_features={}, missing_filled={}",
+                        len(feature_names),
+                        len(dataset.columns),
+                        missing_count
+                    )
+
+                class DataFrameDatasetAdapter:
+                    """将DataFrame适配为qlib DatasetH格式（用于预测）"""
+                    def __init__(self, data: pd.DataFrame):
+                        self.data = data
+                        self.segments = {"test": data}
+
+                    def prepare(self, key: str, col_set: Union[List[str], str] = None, data_key: str = None):
+                        if col_set is None:
+                            col_set = ["feature"]
+                        if isinstance(col_set, str):
+                            col_set = [col_set]
+
+                        feature_cols = [col for col in self.data.columns if col != "label"]
+
+                        class FeatureSeries:
+                            def __init__(self, feature_array_2d, index):
+                                self._feature_array_2d = feature_array_2d
+                                self._index = index
+
+                            @property
+                            def values(self):
+                                return self._feature_array_2d
+
+                            @property
+                            def index(self):
+                                return self._index
+
+                            def __len__(self):
+                                return len(self._feature_array_2d)
+
+                            def __getitem__(self, key):
+                                if isinstance(key, (int, np.integer)):
+                                    return self._feature_array_2d[key]
+                                if isinstance(key, slice):
+                                    return self._feature_array_2d[key]
+                                if hasattr(self._index, 'get_loc'):
+                                    loc = self._index.get_loc(key)
+                                    return self._feature_array_2d[loc]
+                                return self._feature_array_2d[key]
+
+                            def __iter__(self):
+                                return iter(self._feature_array_2d)
+
+                            def __array__(self, dtype=None):
+                                return self._feature_array_2d if dtype is None else self._feature_array_2d.astype(dtype)
+
+                        if "feature" in col_set:
+                            feature_array = self.data[feature_cols].values if feature_cols else np.zeros((len(self.data), 0))
+                            return FeatureSeries(feature_array, self.data.index)
+
+                        if "label" in col_set:
+                            label_values = self.data["label"].values if "label" in self.data.columns else np.zeros(len(self.data))
+                            return label_values.reshape(-1, 1)
+
+                        return self.data
+
+                    def __getattr__(self, name):
+                        return getattr(self.data, name)
+
+                dataset = DataFrameDatasetAdapter(dataset)
             
             # 进行预测
             predictions = model.predict(dataset)
@@ -1480,6 +1629,85 @@ class UnifiedQlibTrainingEngine:
         except Exception as e:
             logger.error(f"Qlib模型预测失败: {e}")
             raise
+
+    def _align_prediction_features(self, model: Any, dataset: pd.DataFrame) -> pd.DataFrame:
+        """对齐预测数据特征列以匹配训练特征"""
+        try:
+            base_model = model.model if hasattr(model, "model") else model
+            feature_names = None
+
+            if hasattr(base_model, "feature_name"):
+                try:
+                    feature_names = base_model.feature_name()
+                except Exception:
+                    feature_names = None
+            if feature_names is None and hasattr(base_model, "feature_name_"):
+                feature_names = list(base_model.feature_name_)
+            if feature_names is None and hasattr(base_model, "booster_") and hasattr(base_model.booster_, "feature_name"):
+                feature_names = base_model.booster_.feature_name()
+
+            if not feature_names:
+                return dataset
+
+            normalized_feature_names = []
+            for name in feature_names:
+                if isinstance(name, bytes):
+                    normalized_feature_names.append(name.decode(errors="ignore"))
+                else:
+                    normalized_feature_names.append(str(name))
+
+            dataset_columns = [str(col) for col in dataset.columns]
+            has_named_match = any(name in dataset_columns for name in normalized_feature_names)
+            name_mismatch = all(name.startswith("Column_") for name in normalized_feature_names) and not has_named_match
+
+            if name_mismatch:
+                data = dataset.values
+                feature_count = len(normalized_feature_names)
+                if data.shape[1] < feature_count:
+                    pad_width = feature_count - data.shape[1]
+                    data = np.hstack([data, np.zeros((data.shape[0], pad_width))])
+                elif data.shape[1] > feature_count:
+                    data = data[:, :feature_count]
+                logger.info(
+                    "预测特征使用位置对齐: model_features={}, dataset_features={}",
+                    feature_count,
+                    dataset.shape[1]
+                )
+                return pd.DataFrame(data, index=dataset.index, columns=normalized_feature_names)
+
+            aligned = dataset.copy()
+            missing = []
+            for name in normalized_feature_names:
+                if name not in aligned.columns:
+                    aligned[name] = 0.0
+                    missing.append(name)
+            if missing and len(missing) == len(normalized_feature_names):
+                data = dataset.values
+                feature_count = len(normalized_feature_names)
+                if data.shape[1] < feature_count:
+                    pad_width = feature_count - data.shape[1]
+                    data = np.hstack([data, np.zeros((data.shape[0], pad_width))])
+                elif data.shape[1] > feature_count:
+                    data = data[:, :feature_count]
+                logger.info(
+                    "预测特征全部缺失，回退到位置对齐: model_features={}, dataset_features={}",
+                    feature_count,
+                    dataset.shape[1]
+                )
+                return pd.DataFrame(data, index=dataset.index, columns=normalized_feature_names)
+
+            aligned = aligned[normalized_feature_names]
+            if missing:
+                logger.info(
+                    "预测特征缺失补齐: count={}, sample={}",
+                    len(missing),
+                    missing[:5]
+                )
+            return aligned
+
+        except Exception as e:
+            logger.warning(f"对齐预测特征失败，使用原始数据: {e}")
+            return dataset
     
     def get_supported_model_types(self) -> List[str]:
         """获取支持的模型类型列表"""
