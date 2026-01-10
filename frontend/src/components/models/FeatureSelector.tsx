@@ -7,8 +7,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Checkbox, Input, Tooltip, Accordion, AccordionItem } from '@heroui/react';
-import { Search, Info } from 'lucide-react';
+import { Button, Checkbox, Input, Tooltip, Accordion, AccordionItem, Select, SelectItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from '@heroui/react';
+import { Search, Info, Save, Settings, Trash2 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { 
   groupAlphaFactorsByCategory, 
@@ -16,6 +16,13 @@ import {
   getAlphaFactorDisplayName,
   ALPHA_FACTOR_CATEGORIES 
 } from '../../utils/alphaFactorInfo';
+import { 
+  getAllConfigs, 
+  getConfigById, 
+  saveCustomConfig, 
+  deleteCustomConfig,
+  type FeatureConfig 
+} from '../../utils/featureConfigs';
 
 interface FeatureSelectorProps {
   stockCodes: string[];
@@ -51,6 +58,11 @@ export function FeatureSelector({
   const [loadingFeatures, setLoadingFeatures] = useState(false);
   const [alphaSearchTerm, setAlphaSearchTerm] = useState('');
   const [expandedAlphaCategories, setExpandedAlphaCategories] = useState<Set<string>>(new Set());
+  const [selectedConfigId, setSelectedConfigId] = useState<string>('');
+  const [configs, setConfigs] = useState<FeatureConfig[]>([]);
+  const [saveConfigName, setSaveConfigName] = useState('');
+  const [saveConfigDescription, setSaveConfigDescription] = useState('');
+  const { isOpen: isSaveModalOpen, onOpen: onSaveModalOpen, onClose: onSaveModalClose } = useDisclosure();
 
   // 加载可用特征列表
   const loadAvailableFeatures = async () => {
@@ -138,6 +150,11 @@ export function FeatureSelector({
     }
   };
 
+  // 加载配置列表
+  useEffect(() => {
+    setConfigs(getAllConfigs());
+  }, []);
+
   // 当股票代码或日期变化时，重新加载特征列表
   useEffect(() => {
     loadAvailableFeatures();
@@ -195,21 +212,181 @@ export function FeatureSelector({
     return selectedCount > 0 && selectedCount < categoryFactors.length;
   };
 
+  // 应用配置
+  const handleApplyConfig = () => {
+    if (!selectedConfigId) return;
+    
+    const config = getConfigById(selectedConfigId);
+    if (!config) return;
+    
+    // 过滤出实际可用的特征
+    const availableConfigFeatures = config.features.filter(f => 
+      availableFeatures.includes(f)
+    );
+    
+    if (availableConfigFeatures.length > 0) {
+      onFeaturesChange(availableConfigFeatures);
+      onUseAllFeaturesChange(false);
+    } else {
+      // 如果配置中的特征都不在可用列表中，直接使用配置的特征（可能还未加载）
+      onFeaturesChange(config.features);
+      onUseAllFeaturesChange(false);
+    }
+  };
+
+  // 保存当前选择为配置
+  const handleSaveConfig = () => {
+    if (!saveConfigName.trim()) {
+      alert('请输入配置名称');
+      return;
+    }
+    
+    if (selectedFeatures.length === 0) {
+      alert('请先选择一些特征');
+      return;
+    }
+    
+    const newConfig = saveCustomConfig({
+      name: saveConfigName.trim(),
+      description: saveConfigDescription.trim() || '自定义特征配置',
+      features: selectedFeatures,
+    });
+    
+    setConfigs(getAllConfigs());
+    setSelectedConfigId(newConfig.id);
+    setSaveConfigName('');
+    setSaveConfigDescription('');
+    onSaveModalClose();
+  };
+
+  // 删除自定义配置
+  const handleDeleteConfig = (configId: string) => {
+    if (!confirm('确定要删除这个配置吗？')) return;
+    
+    if (deleteCustomConfig(configId)) {
+      setConfigs(getAllConfigs());
+      if (selectedConfigId === configId) {
+        setSelectedConfigId('');
+      }
+    }
+  };
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-sm font-medium">特征选择</label>
-        <Button
-          size="sm"
-          variant="light"
-          onPress={loadAvailableFeatures}
-          isLoading={loadingFeatures}
-        >
-          {loadingFeatures ? '加载中...' : '刷新特征列表'}
-        </Button>
+    <div className="space-y-4">
+      {/* 特征配置选择区域 */}
+      <div className="p-4 bg-default-50 rounded-lg border border-default-200">
+        <div className="flex items-center gap-2 mb-3">
+          <Settings className="w-4 h-4" />
+          <span className="font-semibold text-sm">特征配置</span>
+        </div>
+        <div className="flex items-end gap-2">
+          <Select
+            label="选择预设配置"
+            placeholder="选择一个特征配置"
+            selectedKeys={selectedConfigId ? [selectedConfigId] : []}
+            onSelectionChange={(keys) => {
+              const key = Array.from(keys)[0] as string;
+              setSelectedConfigId(key || '');
+            }}
+            className="flex-1"
+            size="sm"
+          >
+            {configs.map((config) => (
+              <SelectItem 
+                key={config.id}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex flex-col">
+                    <span className="font-medium">{config.name}</span>
+                    <span className="text-xs text-default-500">{config.description}</span>
+                  </div>
+                  {config.category === 'custom' && (
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="danger"
+                      onPress={() => {
+                        handleDeleteConfig(config.id);
+                      }}
+                      className="ml-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </Select>
+          <Button
+            size="sm"
+            color="primary"
+            onPress={handleApplyConfig}
+            isDisabled={!selectedConfigId}
+          >
+            应用配置
+          </Button>
+          <Button
+            size="sm"
+            variant="bordered"
+            startContent={<Save className="w-4 h-4" />}
+            onPress={onSaveModalOpen}
+            isDisabled={selectedFeatures.length === 0}
+          >
+            保存为配置
+          </Button>
+        </div>
       </div>
-      
-      <Checkbox
+
+      {/* 保存配置模态框 */}
+      <Modal isOpen={isSaveModalOpen} onClose={onSaveModalClose} size="md">
+        <ModalContent>
+          <ModalHeader>保存特征配置</ModalHeader>
+          <ModalBody>
+            <Input
+              label="配置名称"
+              placeholder="请输入配置名称"
+              value={saveConfigName}
+              onValueChange={setSaveConfigName}
+              isRequired
+              autoFocus
+            />
+            <Input
+              label="配置描述"
+              placeholder="请输入配置描述（可选）"
+              value={saveConfigDescription}
+              onValueChange={setSaveConfigDescription}
+            />
+            <div className="text-xs text-default-500 mt-2">
+              当前已选择 {selectedFeatures.length} 个特征
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={onSaveModalClose}>
+              取消
+            </Button>
+            <Button color="primary" onPress={handleSaveConfig}>
+              保存
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">特征选择</label>
+          <Button
+            size="sm"
+            variant="light"
+            onPress={loadAvailableFeatures}
+            isLoading={loadingFeatures}
+          >
+            {loadingFeatures ? '加载中...' : '刷新特征列表'}
+          </Button>
+        </div>
+        
+        <Checkbox
         isSelected={useAllFeatures}
         onValueChange={(checked) => {
           onUseAllFeaturesChange(checked);
@@ -484,6 +661,7 @@ export function FeatureSelector({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
