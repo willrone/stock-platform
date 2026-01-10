@@ -23,9 +23,12 @@ class SimpleDataService:
     async def _get_client(self) -> httpx.AsyncClient:
         """获取HTTP客户端"""
         if self.client is None or self.client.is_closed:
+            # 创建一个不使用代理的HTTP传输
+            transport = httpx.AsyncHTTPTransport(proxy=None)
             self.client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                transport=transport  # 使用不带代理的传输
             )
         return self.client
     

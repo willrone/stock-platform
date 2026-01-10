@@ -136,8 +136,23 @@ class Alpha158Calculator:
                 },
                 "rolling": {},
             }
-            self.alpha_fields, self.alpha_names = Alpha158DL.get_feature_config(default_config)
-            logger.info(f"Alpha158计算器初始化，使用Qlib内置Alpha158，支持 {len(self.alpha_fields)} 个因子")
+            try:
+                # 处理Qlib不同版本返回值差异
+                config_result = Alpha158DL.get_feature_config(default_config)
+                if isinstance(config_result, tuple):
+                    if len(config_result) >= 2:
+                        self.alpha_fields, self.alpha_names = config_result[0], config_result[1]
+                    else:
+                        # 兼容旧版本，假设返回的是(alpha_fields, alpha_names)
+                        self.alpha_fields, self.alpha_names = config_result
+                else:
+                    # 处理非元组返回值
+                    logger.warning(f"Alpha158DL.get_feature_config返回非预期类型: {type(config_result)}")
+                    self.alpha_fields, self.alpha_names = [], []
+                logger.info(f"Alpha158计算器初始化，使用Qlib内置Alpha158，支持 {len(self.alpha_fields)} 个因子")
+            except Exception as e:
+                logger.warning(f"获取Alpha158配置失败: {e}，使用简化版本")
+                self.alpha_fields, self.alpha_names = [], []
         else:
             # 回退到简化版本
             self.alpha_fields = []
