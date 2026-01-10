@@ -32,6 +32,9 @@ from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 from ...core.config import settings
 
+# 全局Qlib初始化状态（跨实例共享）
+_QLIB_GLOBAL_INITIALIZED = False
+
 
 class FactorCache:
     """因子计算结果缓存"""
@@ -280,7 +283,11 @@ class EnhancedQlibDataProvider:
     
     async def initialize_qlib(self):
         """初始化Qlib环境"""
-        if self._qlib_initialized or not QLIB_AVAILABLE:
+        global _QLIB_GLOBAL_INITIALIZED
+        
+        # 如果全局已初始化，直接返回
+        if _QLIB_GLOBAL_INITIALIZED or not QLIB_AVAILABLE:
+            self._qlib_initialized = True
             return
         
         try:
@@ -308,9 +315,17 @@ class EnhancedQlibDataProvider:
                 provider_uri=provider_uri_config,
                 mount_path=mount_path_config
             )
+            _QLIB_GLOBAL_INITIALIZED = True
             self._qlib_initialized = True
             logger.info("Qlib环境初始化成功")
         except Exception as e:
+            error_msg = str(e)
+            # 如果Qlib已经初始化，忽略错误并标记为已初始化
+            if "reinitialize" in error_msg.lower() or "already activated" in error_msg.lower():
+                logger.warning(f"Qlib已经初始化，跳过重新初始化: {error_msg}")
+                _QLIB_GLOBAL_INITIALIZED = True
+                self._qlib_initialized = True
+                return
             logger.error(f"Qlib初始化失败: {e}")
             raise
     

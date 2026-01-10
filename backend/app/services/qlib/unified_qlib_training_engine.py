@@ -63,6 +63,8 @@ class QlibTrainingConfig:
     early_stopping_patience: int = 10
     use_alpha_factors: bool = True
     cache_features: bool = True
+    # 特征选择配置
+    selected_features: Optional[List[str]] = None  # 用户选择的特征列表，None表示使用所有特征
     # 早停策略配置
     enable_early_stopping: bool = True
     early_stopping_monitor: str = "val_loss"
@@ -81,6 +83,7 @@ class QlibTrainingConfig:
             "early_stopping_patience": self.early_stopping_patience,
             "use_alpha_factors": self.use_alpha_factors,
             "cache_features": self.cache_features,
+            "selected_features": self.selected_features,
             "enable_early_stopping": self.enable_early_stopping,
             "early_stopping_monitor": self.early_stopping_monitor,
             "early_stopping_min_delta": self.early_stopping_min_delta,
@@ -243,7 +246,7 @@ class UnifiedQlibTrainingEngine:
                 })
             
             train_dataset, val_dataset = await self._prepare_training_datasets(
-                dataset, config.validation_split
+                dataset, config.validation_split, config
             )
             
             # 记录数据集分割信息
@@ -373,7 +376,8 @@ class UnifiedQlibTrainingEngine:
     async def _prepare_training_datasets(
         self, 
         dataset: pd.DataFrame, 
-        validation_split: float
+        validation_split: float,
+        config: QlibTrainingConfig = None
     ) -> Tuple[Any, Any]:
         """准备训练和验证数据集，返回qlib DatasetH对象"""
         if not QLIB_AVAILABLE:
@@ -524,7 +528,99 @@ class UnifiedQlibTrainingEngine:
                         return getattr(self._series, name)
                 
                 # 分离特征和标签
-                feature_cols = [col for col in data.columns if col != "label"]
+                # 如果配置中指定了selected_features，则只使用选定的特征
+                all_feature_cols = [col for col in data.columns if col != "label"]
+                if config and config.selected_features:
+                    # 特征名称映射：将前端友好的名称转换为Qlib实际使用的名称
+                    def map_feature_name(feature_name: str) -> List[str]:
+                        """将前端特征名称映射到可能的Qlib特征名称"""
+                        # 基础特征映射（添加$前缀）
+                        base_mapping = {
+                            'open': ['$open', 'open'],
+                            'high': ['$high', 'high'],
+                            'low': ['$low', 'low'],
+                            'close': ['$close', 'close'],
+                            'volume': ['$volume', 'volume'],
+                        }
+                        
+                        # 技术指标映射（大小写和下划线变体）
+                        indicator_mapping = {
+                            'ma_5': ['MA5', 'ma_5', 'MA_5'],
+                            'ma_10': ['MA10', 'ma_10', 'MA_10'],
+                            'ma_20': ['MA20', 'ma_20', 'MA_20'],
+                            'ma_60': ['MA60', 'ma_60', 'MA_60'],
+                            'sma': ['SMA', 'sma'],
+                            'ema': ['EMA', 'EMA20', 'ema'],
+                            'rsi': ['RSI14', 'RSI', 'rsi', 'rsi_14'],
+                            'macd': ['MACD', 'macd'],
+                            'macd_signal': ['MACD_SIGNAL', 'macd_signal', 'MACD_SIGN'],
+                            'macd_histogram': ['MACD_HIST', 'MACD_HISTOGRAM', 'macd_histogram'],
+                            'bb_upper': ['BOLL_UPPER', 'BB_UPPER', 'bb_upper', 'bollinger_upper'],
+                            'bb_middle': ['BOLL_MIDDLE', 'BB_MIDDLE', 'bb_middle', 'bollinger_middle'],
+                            'bb_lower': ['BOLL_LOWER', 'BB_LOWER', 'bb_lower', 'bollinger_lower'],
+                            'atr': ['ATR14', 'ATR', 'atr', 'atr_14'],
+                            'vwap': ['VWAP', 'vwap'],
+                            'obv': ['OBV', 'obv'],
+                            'stoch': ['STOCH_K', 'STOCH', 'stoch', 'stoch_k'],
+                            'kdj_k': ['KDJ_K', 'kdj_k'],
+                            'kdj_d': ['KDJ_D', 'kdj_d'],
+                            'kdj_j': ['KDJ_J', 'kdj_j'],
+                            'williams_r': ['WILLIAMS_R', 'williams_r', 'WILLIAMS'],
+                            'cci': ['CCI20', 'CCI', 'cci'],
+                            'momentum': ['MOMENTUM', 'momentum'],
+                            'roc': ['ROC', 'roc'],
+                            'sar': ['SAR', 'sar'],
+                            'adx': ['ADX', 'adx'],
+                            'volume_rsi': ['VOLUME_RSI', 'volume_rsi'],
+                        }
+                        
+                        # 基本面特征映射
+                        fundamental_mapping = {
+                            'price_change': ['RET1', 'price_change', 'PRICE_CHANGE'],
+                            'price_change_5d': ['RET5', 'price_change_5d', 'PRICE_CHANGE_5D'],
+                            'price_change_20d': ['RET20', 'price_change_20d', 'PRICE_CHANGE_20D'],
+                            'volume_change': ['VOLUME_RET1', 'volume_change', 'VOLUME_CHANGE'],
+                            'volume_ma_ratio': ['VOLUME_MA_RATIO', 'volume_ma_ratio'],
+                            'volatility_5d': ['VOLATILITY5', 'volatility_5d', 'VOLATILITY_5D'],
+                            'volatility_20d': ['VOLATILITY20', 'volatility_20d', 'VOLATILITY_20D'],
+                            'price_position': ['PRICE_POSITION', 'price_position'],
+                        }
+                        
+                        # 合并所有映射
+                        all_mapping = {**base_mapping, **indicator_mapping, **fundamental_mapping}
+                        
+                        # 查找映射
+                        if feature_name in all_mapping:
+                            return all_mapping[feature_name]
+                        # 如果特征名本身已经匹配，直接返回
+                        return [feature_name]
+                    
+                    # 将前端特征名称映射到实际特征名称
+                    mapped_features = []
+                    for user_feature in config.selected_features:
+                        possible_names = map_feature_name(user_feature)
+                        # 查找第一个在数据中存在的特征名称
+                        found = False
+                        for possible_name in possible_names:
+                            if possible_name in all_feature_cols:
+                                mapped_features.append(possible_name)
+                                found = True
+                                break
+                        if not found:
+                            logger.debug(f"特征 '{user_feature}' 未找到匹配项，尝试的变体: {possible_names}")
+                    
+                    # 只选择用户指定的特征，且这些特征在数据中存在
+                    feature_cols = [col for col in mapped_features if col in all_feature_cols]
+                    if len(feature_cols) == 0:
+                        logger.warning(f"用户指定的特征都不存在，使用所有可用特征。指定特征: {config.selected_features}, 可用特征: {all_feature_cols[:20]}")
+                        feature_cols = all_feature_cols
+                    else:
+                        missing_features = [col for col in config.selected_features if col not in [f for f in mapped_features if f in all_feature_cols]]
+                        if missing_features:
+                            logger.warning(f"以下特征不存在，将被忽略: {missing_features[:10]}")
+                        logger.info(f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}")
+                else:
+                    feature_cols = all_feature_cols
                 
                 # 创建一个包装类，使Series的values返回2D数组
                 class FeatureSeries:

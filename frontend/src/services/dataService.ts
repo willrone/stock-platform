@@ -285,6 +285,68 @@ export class DataService {
   }
 
   /**
+   * 获取可用特征列表
+   */
+  static async getAvailableFeatures(params?: {
+    stock_code?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<{
+    features: string[];
+    feature_count: number;
+    feature_categories: {
+      base_features: string[];
+      indicator_features: string[];
+      fundamental_features: string[];
+      alpha_features: string[];
+    };
+    source: string;
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.stock_code) queryParams.append('stock_code', params.stock_code);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const url = `/models/available-features${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    const response = await apiRequest.get<{
+      success: boolean;
+      message: string;
+      data: {
+        features: string[];
+        feature_count: number;
+        feature_categories: {
+          base_features: string[];
+          indicator_features: string[];
+          fundamental_features: string[];
+          alpha_features: string[];
+        };
+        source: string;
+      };
+    }>(url);
+    
+    // 处理响应格式：可能是 { data: {...} } 或直接是 { success, data, ... }
+    if (response.data) {
+      return response.data;
+    } else if (response.features) {
+      // 如果响应直接包含features字段
+      return response as any;
+    } else {
+      // 如果都没有，返回空数据
+      return {
+        features: [],
+        feature_count: 0,
+        feature_categories: {
+          base_features: [],
+          indicator_features: [],
+          fundamental_features: [],
+          alpha_features: [],
+        },
+        source: 'error'
+      };
+    }
+  }
+
+  /**
    * 创建模型训练任务
    */
   static async createModel(request: {
@@ -294,6 +356,7 @@ export class DataService {
     start_date: string;
     end_date: string;
     hyperparameters?: Record<string, any>;
+    selected_features?: string[];
     description?: string;
     parent_model_id?: string;
     enable_hyperparameter_tuning?: boolean;

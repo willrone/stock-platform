@@ -167,7 +167,8 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                            stock_codes: list, start_date: datetime, end_date: datetime,
                            hyperparameters: dict, enable_hyperparameter_tuning: bool = False,
                            hyperparameter_search_strategy: str = "random_search",
-                           hyperparameter_search_trials: int = 10):
+                           hyperparameter_search_trials: int = 10,
+                           selected_features: Optional[List[str]] = None):
     """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
     report_generator = EvaluationReportGenerator()
@@ -264,7 +265,8 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                         model_type=qlib_model_type,
                         hyperparameters={**hyperparameters, **params},
                         validation_split=0.2,
-                        use_alpha_factors=True
+                        use_alpha_factors=True,
+                        selected_features=selected_features
                     )
                     
                     try:
@@ -397,7 +399,8 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                 validation_split=hyperparameters.get('validation_split', 0.2),
                 early_stopping_patience=early_stopping_patience,  # 使用实际的迭代次数
                 use_alpha_factors=True,
-                cache_features=True
+                cache_features=True,
+                selected_features=selected_features  # 传递用户选择的特征
             )
             
             # 使用统一Qlib训练引擎训练模型
@@ -652,6 +655,159 @@ async def list_models():
         session.close()
 
 
+@router.get("/available-features", response_model=StandardResponse, summary="获取可用特征列表")
+async def get_available_features(
+    stock_code: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    获取可用于模型训练的特征列表
+    
+    如果提供了stock_code和日期范围，将基于实际数据返回可用特征。
+    否则返回所有可能支持的特征列表。
+    """
+    try:
+        from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
+        from app.services.prediction.technical_indicators import TechnicalIndicatorCalculator
+        from datetime import datetime, timedelta
+        
+        # 基础价格特征
+        base_features = [
+            "open", "high", "low", "close", "volume"
+        ]
+        
+        # 技术指标特征
+        indicator_calculator = TechnicalIndicatorCalculator()
+        supported_indicators = indicator_calculator.get_supported_indicators_info()
+        
+        # 从技术指标信息中提取特征名称
+        indicator_features = []
+        indicator_mapping = {
+            'MA5': 'ma_5', 'MA10': 'ma_10', 'MA20': 'ma_20', 'MA60': 'ma_60',
+            'SMA': 'sma', 'EMA': 'ema', 'WMA': 'wma',
+            'RSI': 'rsi', 'STOCH': 'stoch', 'WILLIAMS_R': 'williams_r',
+            'CCI': 'cci', 'MOMENTUM': 'momentum', 'ROC': 'roc',
+            'MACD': 'macd', 'MACD_SIGNAL': 'macd_signal', 'MACD_HISTOGRAM': 'macd_histogram',
+            'BOLLINGER': ['bb_upper', 'bb_middle', 'bb_lower', 'bb_width', 'bb_position'],
+            'SAR': 'sar', 'ADX': 'adx',
+            'VWAP': 'vwap', 'OBV': 'obv', 'AD_LINE': 'ad_line', 'VOLUME_RSI': 'volume_rsi',
+            'ATR': 'atr', 'VOLATILITY': 'volatility', 'HISTORICAL_VOLATILITY': 'historical_volatility',
+            'KDJ': ['kdj_k', 'kdj_d', 'kdj_j']
+        }
+        
+        for indicator_name in supported_indicators.keys():
+            if indicator_name in indicator_mapping:
+                mapping = indicator_mapping[indicator_name]
+                if isinstance(mapping, list):
+                    indicator_features.extend(mapping)
+                else:
+                    indicator_features.append(mapping)
+        
+        # 基本面特征
+        fundamental_features = [
+            "price_change", "price_change_5d", "price_change_20d",
+            "volume_change", "volume_ma_ratio",
+            "volatility_5d", "volatility_20d",
+            "price_position"
+        ]
+        
+        # Alpha因子特征（如果启用）
+        alpha_features = []
+        # Alpha158因子通常有158个特征，这里列出一些常见的
+        alpha_features = [f"alpha_{i:03d}" for i in range(1, 159)]
+        
+        # 如果提供了股票代码和日期，尝试获取实际可用的特征
+        if stock_code and start_date and end_date:
+            try:
+                provider = EnhancedQlibDataProvider()
+                await provider.initialize_qlib()
+                
+                start_dt = datetime.fromisoformat(start_date)
+                end_dt = datetime.fromisoformat(end_date)
+                
+                # 准备数据集以获取实际可用的特征
+                dataset = await provider.prepare_qlib_dataset(
+                    stock_codes=[stock_code],
+                    start_date=start_dt,
+                    end_date=end_dt,
+                    include_alpha_factors=True,
+                    use_cache=False
+                )
+                
+                if not dataset.empty:
+                    # 获取实际存在的特征（排除label和元数据列）
+                    actual_features = [col for col in dataset.columns 
+                                      if col not in ['label', 'stock_code', 'date', 'instrument', 'datetime', 'ts_code']]
+                    
+                    # 分类实际特征
+                    actual_base = [f for f in actual_features if f.startswith('$')]
+                    actual_indicators = [f for f in actual_features if f not in actual_base and not f.startswith('alpha_') and f not in ['ts_code']]
+                    actual_fundamental = [f for f in actual_features if f in ['RET1', 'RET5', 'RET20', 'VOLUME_RET1', 'VOLUME_MA_RATIO', 'VOLATILITY5', 'VOLATILITY20', 'PRICE_POSITION']]
+                    actual_alpha = [f for f in actual_features if f.startswith('alpha_')]
+                    
+                    return StandardResponse(
+                        success=True,
+                        message="成功获取可用特征列表",
+                        data={
+                            "features": actual_features,  # 返回实际特征名称，用于训练
+                            "feature_count": len(actual_features),
+                            "feature_categories": {
+                                "base_features": actual_base,
+                                "indicator_features": actual_indicators,
+                                "fundamental_features": actual_fundamental,
+                                "alpha_features": actual_alpha
+                            },
+                            "source": "actual_data"
+                        }
+                    )
+            except Exception as e:
+                logger.warning(f"获取实际特征失败，返回理论特征列表: {e}")
+        
+        # 返回理论特征列表（使用实际训练时的特征名称格式）
+        # 将理论特征名称转换为实际训练时使用的格式
+        actual_base_features = ['$open', '$high', '$low', '$close', '$volume']
+        actual_indicator_features = []
+        # 映射技术指标到实际名称
+        indicator_to_actual = {
+            'ma_5': 'MA5', 'ma_10': 'MA10', 'ma_20': 'MA20', 'ma_60': 'MA60',
+            'sma': 'SMA', 'ema': 'EMA20', 'rsi': 'RSI14',
+            'macd': 'MACD', 'macd_signal': 'MACD_SIGNAL', 'macd_histogram': 'MACD_HIST',
+            'bb_upper': 'BOLL_UPPER', 'bb_middle': 'BOLL_MIDDLE', 'bb_lower': 'BOLL_LOWER',
+            'atr': 'ATR14', 'vwap': 'VWAP', 'obv': 'OBV',
+            'stoch': 'STOCH_K', 'kdj_k': 'KDJ_K', 'kdj_d': 'KDJ_D', 'kdj_j': 'KDJ_J',
+            'williams_r': 'WILLIAMS_R', 'cci': 'CCI20', 'momentum': 'MOMENTUM',
+            'roc': 'ROC', 'sar': 'SAR', 'adx': 'ADX', 'volume_rsi': 'VOLUME_RSI'
+        }
+        for ind in indicator_features:
+            actual_indicator_features.append(indicator_to_actual.get(ind, ind.upper()))
+        
+        actual_fundamental_features = ['RET1', 'RET5', 'RET20', 'VOLUME_RET1', 'VOLUME_MA_RATIO', 
+                                      'VOLATILITY5', 'VOLATILITY20', 'PRICE_POSITION']
+        
+        all_features = actual_base_features + actual_indicator_features + actual_fundamental_features + alpha_features
+        
+        return StandardResponse(
+            success=True,
+            message="成功获取可用特征列表",
+            data={
+                "features": all_features,
+                "feature_count": len(all_features),
+                "feature_categories": {
+                    "base_features": actual_base_features,
+                    "indicator_features": actual_indicator_features,
+                    "fundamental_features": actual_fundamental_features,
+                    "alpha_features": alpha_features
+                },
+                "source": "theoretical"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"获取可用特征列表失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取可用特征列表失败: {str(e)}")
+
+
 @router.get("/{model_id}", response_model=StandardResponse)
 async def get_model_detail(model_id: str):
     """获取模型详情"""
@@ -852,7 +1008,8 @@ async def create_training_task(
             hyperparameters=request.hyperparameters or {},
             enable_hyperparameter_tuning=request.enable_hyperparameter_tuning,
             hyperparameter_search_strategy=request.hyperparameter_search_strategy,
-            hyperparameter_search_trials=request.hyperparameter_search_trials
+            hyperparameter_search_trials=request.hyperparameter_search_trials,
+            selected_features=request.selected_features
         )
         
         return StandardResponse(

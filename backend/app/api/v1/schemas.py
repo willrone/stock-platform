@@ -85,6 +85,7 @@ class ModelTrainingRequest(BaseModel):
     start_date: str = Field(..., description="训练数据开始日期 (YYYY-MM-DD)")
     end_date: str = Field(..., description="训练数据结束日期 (YYYY-MM-DD)")
     hyperparameters: Dict[str, Any] = Field(default={}, description="超参数")
+    selected_features: Optional[List[str]] = Field(None, description="选择的特征列表，如果为空则使用所有可用特征")
     description: Optional[str] = Field(None, description="模型描述")
     parent_model_id: Optional[str] = Field(None, description="父模型ID，用于创建新版本")
     enable_hyperparameter_tuning: bool = Field(default=False, description="是否启用超参数调优")
