@@ -17,43 +17,165 @@ router = APIRouter(prefix="/backtest", tags=["回测服务"])
 async def get_available_strategies():
     """获取可用策略列表"""
     try:
-        from app.services.backtest import StrategyFactory
+        from app.services.backtest import StrategyFactory, AdvancedStrategyFactory
         
-        strategies = StrategyFactory.get_available_strategies()
+        # 获取基础策略
+        basic_strategies = StrategyFactory.get_available_strategies()
         
-        # 策略描述
+        # 获取高级策略分类
+        advanced_categories = AdvancedStrategyFactory.get_available_strategies()
+        
+        # 合并所有策略
+        all_strategies = set(basic_strategies)
+        for category_strategies in advanced_categories.values():
+            all_strategies.update(category_strategies)
+        
+        # 策略描述和参数
         strategy_descriptions = {
+            # 基础技术分析策略
             'moving_average': {
                 'name': '移动平均策略',
-                'description': '基于短期和长期移动平均线的交叉信号',
+                'description': '基于短期和长期移动平均线的交叉信号，金叉买入，死叉卖出',
+                'category': 'technical',
                 'parameters': {
-                    'short_window': {'type': 'int', 'default': 5, 'description': '短期均线周期'},
-                    'long_window': {'type': 'int', 'default': 20, 'description': '长期均线周期'},
-                    'signal_threshold': {'type': 'float', 'default': 0.02, 'description': '信号阈值'}
+                    'short_window': {'type': 'int', 'default': 5, 'description': '短期均线周期', 'min': 2, 'max': 50},
+                    'long_window': {'type': 'int', 'default': 20, 'description': '长期均线周期', 'min': 5, 'max': 200},
+                    'signal_threshold': {'type': 'float', 'default': 0.02, 'description': '信号阈值', 'min': 0.001, 'max': 0.1}
                 }
             },
             'rsi': {
                 'name': 'RSI策略',
-                'description': '基于相对强弱指数的超买超卖策略',
+                'description': '基于相对强弱指数的超买超卖策略，RSI低于超卖阈值买入，高于超买阈值卖出',
+                'category': 'technical',
                 'parameters': {
-                    'rsi_period': {'type': 'int', 'default': 14, 'description': 'RSI周期'},
-                    'oversold_threshold': {'type': 'int', 'default': 30, 'description': '超卖阈值'},
-                    'overbought_threshold': {'type': 'int', 'default': 70, 'description': '超买阈值'}
+                    'rsi_period': {'type': 'int', 'default': 14, 'description': 'RSI周期', 'min': 2, 'max': 50},
+                    'oversold_threshold': {'type': 'int', 'default': 30, 'description': '超卖阈值', 'min': 10, 'max': 40},
+                    'overbought_threshold': {'type': 'int', 'default': 70, 'description': '超买阈值', 'min': 60, 'max': 90}
                 }
             },
             'macd': {
                 'name': 'MACD策略',
-                'description': '基于MACD指标的趋势跟踪策略',
+                'description': '基于MACD指标的趋势跟踪策略，MACD柱状图由负转正买入，由正转负卖出',
+                'category': 'technical',
                 'parameters': {
-                    'fast_period': {'type': 'int', 'default': 12, 'description': '快线周期'},
-                    'slow_period': {'type': 'int', 'default': 26, 'description': '慢线周期'},
-                    'signal_period': {'type': 'int', 'default': 9, 'description': '信号线周期'}
+                    'fast_period': {'type': 'int', 'default': 12, 'description': '快线周期', 'min': 5, 'max': 30},
+                    'slow_period': {'type': 'int', 'default': 26, 'description': '慢线周期', 'min': 10, 'max': 50},
+                    'signal_period': {'type': 'int', 'default': 9, 'description': '信号线周期', 'min': 3, 'max': 20}
+                }
+            },
+            
+            # 新增技术分析策略
+            'bollinger': {
+                'name': '布林带策略',
+                'description': '基于布林带的突破策略，价格突破下轨买入，突破上轨卖出',
+                'category': 'technical',
+                'parameters': {
+                    'period': {'type': 'int', 'default': 20, 'description': '布林带周期', 'min': 5, 'max': 50},
+                    'std_dev': {'type': 'float', 'default': 2, 'description': '标准差倍数', 'min': 1, 'max': 3},
+                    'entry_threshold': {'type': 'float', 'default': 0.02, 'description': '入场阈值', 'min': 0.01, 'max': 0.1}
+                }
+            },
+            'stochastic': {
+                'name': '随机指标策略',
+                'description': '基于随机指标(K%D)的超买超卖策略，低位金叉买入，高位死叉卖出',
+                'category': 'technical',
+                'parameters': {
+                    'k_period': {'type': 'int', 'default': 14, 'description': '%K周期', 'min': 5, 'max': 30},
+                    'd_period': {'type': 'int', 'default': 3, 'description': '%D周期', 'min': 2, 'max': 10},
+                    'oversold': {'type': 'int', 'default': 20, 'description': '超卖阈值', 'min': 10, 'max': 30},
+                    'overbought': {'type': 'int', 'default': 80, 'description': '超买阈值', 'min': 70, 'max': 90}
+                }
+            },
+            'cci': {
+                'name': 'CCI策略',
+                'description': '基于商品通道指数的趋势策略，CCI低于-100后回升买入，高于100后回落卖出',
+                'category': 'technical',
+                'parameters': {
+                    'period': {'type': 'int', 'default': 20, 'description': 'CCI周期', 'min': 5, 'max': 50},
+                    'oversold': {'type': 'int', 'default': -100, 'description': '超卖阈值', 'min': -200, 'max': -50},
+                    'overbought': {'type': 'int', 'default': 100, 'description': '超买阈值', 'min': 50, 'max': 200}
+                }
+            },
+            
+            # 统计套利策略
+            'pairs_trading': {
+                'name': '配对交易策略',
+                'description': '基于两只高度相关股票价差的统计套利策略，价差偏离均值时做多被低估的，做空被高估的',
+                'category': 'statistical_arbitrage',
+                'parameters': {
+                    'correlation_threshold': {'type': 'float', 'default': 0.8, 'description': '相关性阈值', 'min': 0.5, 'max': 0.95},
+                    'entry_threshold': {'type': 'float', 'default': 2.0, 'description': '入场Z-score阈值', 'min': 1.0, 'max': 3.0},
+                    'exit_threshold': {'type': 'float', 'default': 0.5, 'description': '出场Z-score阈值', 'min': 0.1, 'max': 1.0},
+                    'max_holding_period': {'type': 'int', 'default': 60, 'description': '最大持有期（天）', 'min': 20, 'max': 120}
+                }
+            },
+            'mean_reversion': {
+                'name': '均值回归策略',
+                'description': '基于价格偏离均值的回归策略，价格偏离均值超过Z-score阈值时入场，回归时平仓',
+                'category': 'statistical_arbitrage',
+                'parameters': {
+                    'lookback_period': {'type': 'int', 'default': 20, 'description': '回看周期', 'min': 10, 'max': 60},
+                    'zscore_threshold': {'type': 'float', 'default': 2.0, 'description': 'Z-score阈值', 'min': 1.0, 'max': 3.0},
+                    'position_size': {'type': 'float', 'default': 0.1, 'description': '仓位比例', 'min': 0.05, 'max': 0.3}
+                }
+            },
+            'cointegration': {
+                'name': '协整策略',
+                'description': '基于协整关系的统计套利策略，寻找具有长期均衡关系的资产，偏离均衡时套利',
+                'category': 'statistical_arbitrage',
+                'parameters': {
+                    'lookback_period': {'type': 'int', 'default': 60, 'description': '回看周期', 'min': 30, 'max': 120},
+                    'entry_threshold': {'type': 'float', 'default': 2.0, 'description': '入场阈值', 'min': 1.0, 'max': 3.0},
+                    'half_life': {'type': 'int', 'default': 20, 'description': '半衰期', 'min': 5, 'max': 60}
+                }
+            },
+            
+            # 因子投资策略
+            'value_factor': {
+                'name': '价值因子策略',
+                'description': '基于估值因子的投资策略，选择PE、PB、PS等估值指标较低的股票',
+                'category': 'factor_investment',
+                'parameters': {
+                    'pe_weight': {'type': 'float', 'default': 0.25, 'description': 'PE权重', 'min': 0, 'max': 1},
+                    'pb_weight': {'type': 'float', 'default': 0.25, 'description': 'PB权重', 'min': 0, 'max': 1},
+                    'ps_weight': {'type': 'float', 'default': 0.25, 'description': 'PS权重', 'min': 0, 'max': 1},
+                    'ev_ebitda_weight': {'type': 'float', 'default': 0.25, 'description': 'EV/EBITDA权重', 'min': 0, 'max': 1}
+                }
+            },
+            'momentum_factor': {
+                'name': '动量因子策略',
+                'description': '基于价格动量的投资策略，买入近期表现好的股票，卖出近期表现差的股票',
+                'category': 'factor_investment',
+                'parameters': {
+                    'momentum_periods': {'type': 'json', 'default': [21, 63, 126], 'description': '动量计算周期（天）'},
+                    'momentum_weights': {'type': 'json', 'default': [0.5, 0.3, 0.2], 'description': '各周期权重'}
+                }
+            },
+            'low_volatility': {
+                'name': '低波动因子策略',
+                'description': '基于波动率因子的投资策略，选择历史波动率较低的股票构建组合',
+                'category': 'factor_investment',
+                'parameters': {
+                    'volatility_period': {'type': 'int', 'default': 21, 'description': '波动率周期', 'min': 10, 'max': 60},
+                    'volatility_window': {'type': 'int', 'default': 63, 'description': '波动率窗口', 'min': 20, 'max': 120}
+                }
+            },
+            'multi_factor': {
+                'name': '多因子组合策略',
+                'description': '综合多个因子（价值、动量、低波动等）进行选股和加权，构建多元化投资组合',
+                'category': 'factor_investment',
+                'parameters': {
+                    'factors': {'type': 'json', 'default': ['value', 'momentum', 'low_volatility'], 'description': '使用的因子列表'},
+                    'factor_weights': {'type': 'json', 'default': [0.33, 0.33, 0.34], 'description': '因子权重'},
+                    'weighting_method': {'type': 'string', 'default': 'equal', 'description': '权重方法', 'options': ['equal', 'ic', 'optimize']},
+                    'market_cap_neutral': {'type': 'boolean', 'default': False, 'description': '是否市值中性化'},
+                    'industry_neutral': {'type': 'boolean', 'default': False, 'description': '是否行业中性化'}
                 }
             }
         }
         
         result = []
-        for strategy_key in strategies:
+        for strategy_key in all_strategies:
             if strategy_key in strategy_descriptions:
                 result.append({
                     'key': strategy_key,
@@ -62,10 +184,15 @@ async def get_available_strategies():
             else:
                 result.append({
                     'key': strategy_key,
-                    'name': strategy_key,
+                    'name': strategy_key.replace('_', ' ').title(),
                     'description': '自定义策略',
+                    'category': 'other',
                     'parameters': {}
                 })
+        
+        # 按分类排序
+        category_order = {'technical': 0, 'statistical_arbitrage': 1, 'factor_investment': 2, 'other': 3}
+        result.sort(key=lambda x: (category_order.get(x.get('category'), 3), x['key']))
         
         return StandardResponse(
             success=True,

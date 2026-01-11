@@ -38,7 +38,7 @@ class Config:
     BATCH_SIZE = int(os.getenv('BATCH_SIZE', 100))
     
     # 默认日期范围
-    DEFAULT_START_DATE = '20200301'
+    DEFAULT_START_DATE = '19700101'
     DEFAULT_END_DATE = '20250601'
     
     # Parquet存储配置

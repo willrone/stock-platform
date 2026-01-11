@@ -13,6 +13,12 @@
 - DataLoader: 数据加载器
 - 策略类: BaseStrategy, MovingAverageStrategy, RSIStrategy, MACDStrategy
 - PortfolioManager: 组合管理器
+
+新增高级策略（从 strategies.py 导入）：
+- 技术分析策略: BollingerBandStrategy, StochasticStrategy, CCIStrategy
+- 统计套利策略: PairsTradingStrategy, MeanReversionStrategy, CointegrationStrategy
+- 因子投资策略: ValueFactorStrategy, MomentumFactorStrategy, LowVolatilityStrategy, MultiFactorStrategy
+- AdvancedStrategyFactory: 高级策略工厂
 """
 
 # 回测引擎
@@ -44,6 +50,28 @@ from .backtest_executor import (
     DataLoader
 )
 
+# 高级策略
+from .strategies import (
+    # 技术分析策略
+    BollingerBandStrategy,
+    StochasticStrategy,
+    CCIStrategy,
+    
+    # 统计套利策略
+    PairsTradingStrategy,
+    MeanReversionStrategy,
+    CointegrationStrategy,
+    
+    # 因子投资策略
+    ValueFactorStrategy,
+    MomentumFactorStrategy,
+    LowVolatilityStrategy,
+    MultiFactorStrategy,
+    
+    # 高级策略工厂
+    AdvancedStrategyFactory
+)
+
 __all__ = [
     # 枚举类型
     'SignalType',
@@ -67,5 +95,24 @@ __all__ = [
     
     # 执行器
     'BacktestExecutor',
-    'DataLoader'
+    'DataLoader',
+    
+    # 技术分析策略
+    'BollingerBandStrategy',
+    'StochasticStrategy',
+    'CCIStrategy',
+    
+    # 统计套利策略
+    'PairsTradingStrategy',
+    'MeanReversionStrategy',
+    'CointegrationStrategy',
+    
+    # 因子投资策略
+    'ValueFactorStrategy',
+    'MomentumFactorStrategy',
+    'LowVolatilityStrategy',
+    'MultiFactorStrategy',
+    
+    # 高级策略工厂
+    'AdvancedStrategyFactory'
 ]

@@ -13,6 +13,7 @@ from .backtest_engine import (
     BaseStrategy, StrategyFactory, PortfolioManager, BacktestConfig,
     TradingSignal, Trade, Position
 )
+from .strategies import AdvancedStrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
 from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
 from app.models.task_models import BacktestResult
@@ -145,7 +146,12 @@ class BacktestExecutor:
                     task_id, "strategy_setup", status="running"
                 )
             
-            strategy = StrategyFactory.create_strategy(strategy_name, strategy_config)
+            # 优先使用高级策略工厂
+            try:
+                strategy = AdvancedStrategyFactory.create_strategy(strategy_name, strategy_config)
+            except Exception:
+                # 如果高级策略工厂没有该策略，回退到基础策略工厂
+                strategy = StrategyFactory.create_strategy(strategy_name, strategy_config)
             
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -399,6 +405,7 @@ class BacktestExecutor:
             
             # 配置信息
             "backtest_config": {
+                "strategy_name": strategy_name,  # 添加策略名称，方便前端获取
                 "commission_rate": config.commission_rate,
                 "slippage_rate": config.slippage_rate,
                 "max_position_size": config.max_position_size
