@@ -106,17 +106,46 @@ export default function BacktestTaskStatus({
     }
   };
 
+  // 策略名称中英文映射
+  const getStrategyDisplayName = (strategyName: string): string => {
+    const strategyNameMap: Record<string, string> = {
+      // 基础技术分析策略
+      'moving_average': '移动平均策略',
+      'rsi': 'RSI策略',
+      'macd': 'MACD策略',
+      // 新增技术分析策略
+      'bollinger': '布林带策略',
+      'stochastic': '随机指标策略',
+      'cci': 'CCI策略',
+      // 统计套利策略
+      'pairs_trading': '配对交易策略',
+      'mean_reversion': '均值回归策略',
+      'cointegration': '协整策略',
+      // 因子投资策略
+      'value_factor': '价值因子策略',
+      'momentum_factor': '动量因子策略',
+      'low_volatility': '低波动因子策略',
+      'multi_factor': '多因子组合策略',
+    };
+    
+    return strategyNameMap[strategyName] || strategyName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   // 获取回测配置信息
   const getBacktestConfig = () => {
-    // 从任务结果或配置中提取回测参数
-    const config = task.result?.backtest_config || {};
+    const result = task.result;
+    const config = result?.backtest_config || {};
+    
+    // 获取原始策略名称并转换为中文
+    const rawStrategyName = config.strategy_name || result?.strategy_name || task.model_id || '默认策略';
+    
     return {
-      startDate: config.start_date || '未设置',
-      endDate: config.end_date || '未设置',
-      initialCash: config.initial_cash || 100000,
-      commissionRate: (config.commission_rate || 0.001) * 100,
-      slippageRate: (config.slippage_rate || 0.001) * 100,
-      strategyName: config.strategy_name || task.model_id || '默认策略',
+      startDate: config.start_date || result?.start_date || result?.startDate || '未设置',
+      endDate: config.end_date || result?.end_date || result?.endDate || '未设置',
+      initialCash: config.initial_cash || result?.initial_cash || result?.initialCash || 100000,
+      commissionRate: (config.commission_rate || result?.commission_rate || 0.001) * 100,
+      slippageRate: (config.slippage_rate || result?.slippage_rate || 0.001) * 100,
+      strategyName: getStrategyDisplayName(rawStrategyName),
     };
   };
 

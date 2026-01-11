@@ -140,17 +140,26 @@ async def get_trade_records(
             order_desc=order_desc
         )
         
+        # 获取总记录数
+        total_count = await repository.get_trade_records_count(
+            task_id=task_id,
+            stock_code=stock_code,
+            action=action,
+            start_date=start_dt,
+            end_date=end_dt
+        )
+        
         trades_data = [trade.to_dict() for trade in trades]
         
         return StandardResponse(
             success=True,
-            message=f"获取交易记录成功，共{len(trades_data)}条记录",
+            message=f"获取交易记录成功，共{total_count}条记录",
             data={
                 "trades": trades_data,
                 "pagination": {
                     "offset": offset,
                     "limit": limit,
-                    "count": len(trades_data)
+                    "count": total_count  # 修正：返回总记录数而不是当前页记录数
                 }
             }
         )

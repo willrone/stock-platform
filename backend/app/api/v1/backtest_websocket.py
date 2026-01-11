@@ -12,6 +12,7 @@ from loguru import logger
 
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.routing import APIRouter
+import websockets
 
 from app.services.backtest.backtest_progress_monitor import backtest_progress_monitor
 from app.services.infrastructure.websocket_manager import websocket_manager
@@ -242,6 +243,20 @@ async def backtest_progress_websocket(
                 await backtest_ws_manager.send_to_connection(connection_id, {
                     "type": "error",
                     "message": "无效的JSON格式",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            except websockets.WebSocketDisconnect:
+                await backtest_ws_manager.disconnect(connection_id)
+                break
+            except RuntimeError as e:
+                if "disconnect" in str(e).lower() or "receive" in str(e).lower():
+                    logger.debug(f"WebSocket已断开: {connection_id}")
+                    await backtest_ws_manager.disconnect(connection_id)
+                    break
+                logger.error(f"处理回测WebSocket消息失败: {e}")
+                await backtest_ws_manager.send_to_connection(connection_id, {
+                    "type": "error",
+                    "message": "消息处理失败",
                     "timestamp": datetime.utcnow().isoformat()
                 })
             except Exception as e:

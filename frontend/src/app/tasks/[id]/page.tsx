@@ -107,6 +107,7 @@ export default function TaskDetailPage() {
   const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<any>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const [deleteForce, setDeleteForce] = useState(false);
 
   // 加载回测详细数据
   const loadBacktestDetailedData = async () => {
@@ -322,11 +323,18 @@ export default function TaskDetailPage() {
   // 删除任务
   const handleDelete = async () => {
     try {
-      await TaskService.deleteTask(taskId);
-      console.log('任务删除成功');
+      await TaskService.deleteTask(taskId, deleteForce);
+      console.log(`任务删除成功${deleteForce ? '（强制删除）' : ''}`);
       router.push('/tasks');
-    } catch (error) {
-      console.error('删除任务失败');
+    } catch (error: any) {
+      console.error('删除任务失败:', error);
+      // 如果任务正在运行或可能是僵尸任务，显示强制删除选项
+      if (error.message?.includes('正在运行中') || 
+          error.message?.includes('运行中') ||
+          currentTask?.status === 'running') {
+        setDeleteForce(true);
+        onDeleteOpen();
+      }
     }
   };
 
@@ -459,8 +467,7 @@ export default function TaskDetailPage() {
         {/* 主要内容区域 */}
         <div className="lg:col-span-2 space-y-6">
           {/* 任务进度 */}
-          {currentTask.task_type === 'backtest' && (currentTask.status === 'running' || currentTask.status === 'pending') ? (
-            /* 回测任务的详细进度监控 */
+          {currentTask.task_type === 'backtest' && (currentTask.status === 'running' || currentTask.status === 'created') ? (
             <BacktestProgressMonitor
               taskId={taskId}
               onComplete={(results) => {
@@ -970,16 +977,35 @@ export default function TaskDetailPage() {
               </ModalHeader>
               <ModalBody>
                 <p>确定要删除这个任务吗？此操作不可撤销。</p>
+                {currentTask?.status === 'running' && (
+                  <div className="mt-4 p-3 bg-warning-50 border border-warning-200 rounded-lg">
+                    <p className="text-sm text-warning-700 mb-2">
+                      ⚠️ 该任务当前正在运行中
+                    </p>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={deleteForce}
+                        onChange={(e) => setDeleteForce(e.target.checked)}
+                        className="w-4 h-4 text-danger rounded"
+                      />
+                      <span className="text-sm font-medium">强制删除（将中断正在运行的任务）</span>
+                    </label>
+                  </div>
+                )}
               </ModalBody>
               <ModalFooter>
-                <Button variant="light" onPress={onClose}>
+                <Button variant="light" onPress={() => {
+                  setDeleteForce(false);
+                  onClose();
+                }}>
                   取消
                 </Button>
                 <Button color="danger" onPress={() => {
                   handleDelete();
                   onClose();
                 }}>
-                  删除
+                  {deleteForce ? '强制删除' : '删除'}
                 </Button>
               </ModalFooter>
             </>

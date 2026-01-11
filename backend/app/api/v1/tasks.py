@@ -2,7 +2,7 @@
 任务管理路由
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query
 from typing import Optional
 from datetime import datetime, timedelta
 import pandas as pd
@@ -664,18 +664,17 @@ async def get_task_detail(task_id: str):
                 "successful_predictions": len(prediction_results),
                 "average_confidence": average_confidence,
                 "predictions": predictions,
-                "backtest_results": backtest_results  # 添加回测结果
+                "backtest_results": backtest_results
             },
-            # 如果有回测结果，直接将回测结果放在顶层，方便前端访问
-            "backtest_results": backtest_results if backtest_results is not None else None
+            "backtest_results": backtest_results if backtest_results is not None else None,
+            "result": backtest_results if backtest_results is not None else None
         }
         
         # 添加调试日志
         if backtest_results is not None:
-            logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}, backtest_results存在={backtest_results is not None}, "
-                       f"results.backtest_results存在={backtest_results is not None}")
-            if backtest_results:
-                logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20] if isinstance(backtest_results, dict) else '非字典'}")
+            logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}")
+            if isinstance(backtest_results, dict):
+                logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20]}")
         
         return StandardResponse(
             success=True,
@@ -693,14 +692,15 @@ async def get_task_detail(task_id: str):
 
 
 @router.delete("/{task_id}", response_model=StandardResponse)
-async def delete_task(task_id: str):
+async def delete_task(task_id: str, force: bool = Query(False, description="是否强制删除运行中的任务")):
     """删除任务"""
     session = SessionLocal()
     try:
         task_repository = TaskRepository(session)
         success = task_repository.delete_task(
             task_id=task_id,
-            user_id="default_user"
+            user_id="default_user",
+            force=force
         )
         
         if not success:
@@ -709,7 +709,7 @@ async def delete_task(task_id: str):
         return StandardResponse(
             success=True,
             message="任务删除成功",
-            data={"task_id": task_id}
+            data={"task_id": task_id, "force": force}
         )
         
     except HTTPException:

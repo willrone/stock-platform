@@ -96,9 +96,12 @@ export class TaskService {
 
   /**
    * 删除任务
+   * @param taskId 任务ID
+   * @param force 是否强制删除运行中的任务
    */
-  static async deleteTask(taskId: string): Promise<void> {
-    return apiRequest.delete(`/tasks/${taskId}`);
+  static async deleteTask(taskId: string, force: boolean = false): Promise<void> {
+    const url = force ? `/tasks/${taskId}?force=true` : `/tasks/${taskId}`;
+    return apiRequest.delete(url);
   }
 
   /**

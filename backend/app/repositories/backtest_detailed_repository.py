@@ -291,6 +291,34 @@ class BacktestDetailedRepository:
             self.logger.error("获取交易记录失败: {}", e, exc_info=True)
             return []
     
+    async def get_trade_records_count(
+        self,
+        task_id: str,
+        stock_code: Optional[str] = None,
+        action: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> int:
+        """获取交易记录总数"""
+        try:
+            stmt = select(func.count(TradeRecord.id)).where(TradeRecord.task_id == task_id)
+            
+            if stock_code:
+                stmt = stmt.where(TradeRecord.stock_code == stock_code)
+            if action:
+                stmt = stmt.where(TradeRecord.action == action)
+            if start_date:
+                stmt = stmt.where(TradeRecord.timestamp >= start_date)
+            if end_date:
+                stmt = stmt.where(TradeRecord.timestamp <= end_date)
+            
+            result = await self.session.execute(stmt)
+            return result.scalar() or 0
+            
+        except Exception as e:
+            self.logger.error("获取交易记录总数失败: {}", e, exc_info=True)
+            return 0
+    
     async def get_trade_statistics(self, task_id: str) -> Dict[str, Any]:
         """获取交易统计信息"""
         try:

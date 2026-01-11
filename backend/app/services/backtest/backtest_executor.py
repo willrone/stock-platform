@@ -406,6 +406,9 @@ class BacktestExecutor:
             # 配置信息
             "backtest_config": {
                 "strategy_name": strategy_name,  # 添加策略名称，方便前端获取
+                "start_date": start_date.isoformat(),  # 添加开始日期
+                "end_date": end_date.isoformat(),  # 添加结束日期
+                "initial_cash": config.initial_cash,  # 添加初始资金
                 "commission_rate": config.commission_rate,
                 "slippage_rate": config.slippage_rate,
                 "max_position_size": config.max_position_size

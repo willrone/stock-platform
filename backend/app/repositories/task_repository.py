@@ -172,7 +172,7 @@ class TaskRepository:
                 original_exception=e
             )
     
-    def delete_task(self, task_id: str, user_id: str) -> bool:
+    def delete_task(self, task_id: str, user_id: str, force: bool = False) -> bool:
         """删除任务"""
         try:
             task = self.get_task_by_id(task_id)
@@ -187,13 +187,35 @@ class TaskRepository:
                     context=ErrorContext(task_id=task_id, user_id=user_id)
                 )
             
-            # 只能删除已完成或失败的任务
-            if task.status not in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value]:
-                raise TaskError(
-                    message="只能删除已完成、失败或已取消的任务",
-                    severity=ErrorSeverity.MEDIUM,
-                    context=ErrorContext(task_id=task_id)
-                )
+            # 检测僵尸任务（状态是运行中但实际已中断）
+            is_zombie_task = False
+            if task.status == TaskStatus.RUNNING.value:
+                # 如果任务开始时间超过一定时间，认为是僵尸任务
+                now = datetime.utcnow()
+                task_age = (now - task.created_at).total_seconds() / 3600 if task.created_at else 0
+                # 使用started_at作为运行开始时间
+                time_since_start = (now - task.started_at).total_seconds() / 3600 if task.started_at else 0
+                
+                # 判定条件：
+                # 1. 任务创建超过3小时，或
+                # 2. 任务开始运行超过1.5小时
+                if task_age > 3 or time_since_start > 1.5:
+                    is_zombie_task = True
+                    logger.info(f"检测到僵尸任务: {task_id}, 创建时间: {task_age:.1f}小时前, 开始运行: {time_since_start:.1f}小时前")
+            
+            # 非强制模式下，只能删除已完成或失败的任务，或僵尸任务
+            if not force:
+                if task.status not in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value]:
+                    if not is_zombie_task:
+                        raise TaskError(
+                            message="该任务正在运行中，请使用强制删除或等待任务完成",
+                            severity=ErrorSeverity.MEDIUM,
+                            context=ErrorContext(task_id=task_id)
+                        )
+                    else:
+                        logger.info(f"自动删除僵尸任务: {task_id}")
+            else:
+                logger.info(f"强制删除任务: {task_id}, 原状态: {task.status}")
             
             self.db.delete(task)
             self.db.commit()
@@ -203,10 +225,10 @@ class TaskRepository:
                 action="delete_task",
                 user_id=user_id,
                 resource=f"task:{task_id}",
-                details={"task_name": task.task_name, "task_type": task.task_type}
+                details={"task_name": task.task_name, "task_type": task.task_type, "force": force}
             )
             
-            logger.info(f"任务删除成功: {task_id}")
+            logger.info(f"任务删除成功: {task_id}, 强制模式: {force}")
             return True
             
         except TaskError:

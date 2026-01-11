@@ -90,7 +90,14 @@ export class BacktestProgressWebSocket {
 
   constructor(taskId: string, private wsUrl?: string) {
     this.taskId = taskId;
-    this.wsUrl = wsUrl || process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+    // 清理URL末尾的斜杠，并确保不包含多余的/ws前缀
+    let baseUrl = wsUrl || process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+    baseUrl = baseUrl.replace(/\/+$/, '');  // 移除末尾斜杠
+    // 如果URL末尾是/ws，移除它（避免重复）
+    if (baseUrl.endsWith('/ws')) {
+      baseUrl = baseUrl.slice(0, -3);
+    }
+    this.wsUrl = baseUrl;
   }
 
   /**
