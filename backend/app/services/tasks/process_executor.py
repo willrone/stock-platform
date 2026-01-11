@@ -1,0 +1,145 @@
+"""
+进程池任务执行器
+
+使用ProcessPoolExecutor执行CPU密集型任务，避免阻塞主进程的API请求。
+每个进程独立创建所需资源（数据库连接、服务实例等），不依赖全局变量。
+"""
+
+import os
+import asyncio
+from concurrent.futures import ProcessPoolExecutor, Future
+from typing import Optional, Dict, Any, Callable
+from datetime import datetime
+from loguru import logger
+
+from app.core.config import settings
+
+
+class ProcessTaskExecutor:
+    """进程池任务执行器"""
+    
+    def __init__(self, max_workers: Optional[int] = None):
+        """
+        初始化进程池执行器
+        
+        Args:
+            max_workers: 最大工作进程数，默认使用配置中的PROCESS_POOL_SIZE
+        """
+        self.max_workers = max_workers or getattr(settings, 'PROCESS_POOL_SIZE', 3)
+        self.executor: Optional[ProcessPoolExecutor] = None
+        self.is_running = False
+        
+        # 统计信息
+        self.stats = {
+            "total_submitted": 0,
+            "total_completed": 0,
+            "total_failed": 0,
+            "active_tasks": 0
+        }
+    
+    def start(self):
+        """启动进程池"""
+        if self.is_running:
+            logger.warning("进程池已经运行中")
+            return
+        
+        self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
+        self.is_running = True
+        logger.info(f"进程池执行器已启动，工作进程数: {self.max_workers}")
+    
+    def shutdown(self, wait: bool = True, timeout: Optional[float] = None):
+        """关闭进程池"""
+        if not self.is_running or not self.executor:
+            return
+        
+        self.is_running = False
+        self.executor.shutdown(wait=wait, timeout=timeout)
+        logger.info("进程池执行器已关闭")
+    
+    def submit(self, fn: Callable, *args, **kwargs) -> Future:
+        """
+        提交任务到进程池
+        
+        Args:
+            fn: 要执行的函数（必须是可序列化的）
+            *args: 位置参数
+            **kwargs: 关键字参数
+            
+        Returns:
+            Future对象，可用于获取结果
+        """
+        if not self.is_running or not self.executor:
+            raise RuntimeError("进程池未启动，请先调用start()")
+        
+        self.stats["total_submitted"] += 1
+        self.stats["active_tasks"] += 1
+        
+        future = self.executor.submit(fn, *args, **kwargs)
+        
+        # 添加回调来更新统计信息
+        def on_done(f: Future):
+            self.stats["active_tasks"] -= 1
+            try:
+                f.result()  # 获取结果，如果有异常会抛出
+                self.stats["total_completed"] += 1
+            except Exception as e:
+                self.stats["total_failed"] += 1
+                logger.error(f"任务执行失败: {e}")
+        
+        future.add_done_callback(on_done)
+        
+        logger.debug(f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}")
+        return future
+    
+    async def submit_async(self, fn: Callable, *args, **kwargs) -> Any:
+        """
+        异步提交任务到进程池并等待结果
+        
+        Args:
+            fn: 要执行的函数
+            *args: 位置参数
+            **kwargs: 关键字参数
+            
+        Returns:
+            任务执行结果
+        """
+        loop = asyncio.get_event_loop()
+        future = self.submit(fn, *args, **kwargs)
+        
+        # 在事件循环中等待结果
+        result = await loop.run_in_executor(None, future.result)
+        return result
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """获取统计信息"""
+        return {
+            **self.stats,
+            "max_workers": self.max_workers,
+            "is_running": self.is_running
+        }
+
+
+# 全局进程池执行器实例
+_process_executor: Optional[ProcessTaskExecutor] = None
+
+
+def get_process_executor() -> ProcessTaskExecutor:
+    """获取全局进程池执行器实例"""
+    global _process_executor
+    if _process_executor is None:
+        _process_executor = ProcessTaskExecutor()
+    return _process_executor
+
+
+def start_process_executor():
+    """启动全局进程池执行器"""
+    executor = get_process_executor()
+    executor.start()
+
+
+def shutdown_process_executor(wait: bool = True, timeout: Optional[float] = None):
+    """关闭全局进程池执行器"""
+    global _process_executor
+    if _process_executor:
+        _process_executor.shutdown(wait=wait, timeout=timeout)
+        _process_executor = None

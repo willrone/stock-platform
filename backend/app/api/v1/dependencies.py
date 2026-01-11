@@ -1,19 +1,19 @@
 """
 API依赖注入和共享函数
+
+注意：任务执行函数（execute_prediction_task_simple, execute_backtest_task_simple）
+会在独立进程中执行，不能依赖全局变量或单例。每个进程必须独立创建所需资源。
 """
 
+import os
 from datetime import datetime
 from loguru import logger
-from app.core.container import (
-    get_data_service, 
-    get_indicators_service
-)
 from app.core.database import SessionLocal
 from app.repositories.task_repository import TaskRepository, PredictionResultRepository, ModelInfoRepository
 from app.models.task_models import TaskStatus
 from app.services.tasks import TaskQueueManager
 
-# 全局任务队列管理器实例
+# 全局任务队列管理器实例（仅用于主进程的任务调度）
 task_queue_manager = TaskQueueManager()
 
 # 启动任务调度器（在模块加载时启动）
@@ -54,9 +54,23 @@ def get_model_info_repository():
         raise
 
 
-# 简化的任务执行函数（用于后台任务）
+# 简化的任务执行函数（用于进程池执行）
+# 注意：此函数在独立进程中执行，不能使用全局变量或单例
 def execute_prediction_task_simple(task_id: str):
-    """简化的预测任务执行函数（后台任务）"""
+    """
+    简化的预测任务执行函数（进程池执行）
+    
+    重要：此函数在独立进程中执行，必须：
+    1. 每个进程独立创建数据库连接
+    2. 不使用全局缓存、服务容器等单例
+    3. 独立创建所需服务实例
+    4. 添加进程ID到日志上下文
+    """
+    # 绑定进程ID到日志上下文
+    process_id = os.getpid()
+    task_logger = logger.bind(process_id=process_id, task_id=task_id, log_type="task")
+    
+    # 每个进程独立创建数据库连接
     session = SessionLocal()
     try:
         task_repository = TaskRepository(session)
@@ -65,34 +79,34 @@ def execute_prediction_task_simple(task_id: str):
         # 获取任务
         task = task_repository.get_task_by_id(task_id)
         if not task:
-            logger.error(f"任务不存在: {task_id}")
+            task_logger.error(f"任务不存在: {task_id}")
             return
         
         # 更新任务状态为运行中
-        print(f"DEBUG: 准备更新任务状态为 RUNNING")
         try:
             task_repository.update_task_status(
                 task_id=task_id,
                 status=TaskStatus.RUNNING,
                 progress=10.0
             )
-            print(f"DEBUG: 任务状态更新成功")
+            task_logger.info(f"任务状态已更新为RUNNING，进程ID: {process_id}")
         except Exception as status_error:
-            print(f"DEBUG: 任务状态更新失败: {status_error}")
-            import traceback
-            traceback.print_exc()
+            task_logger.error(f"任务状态更新失败: {status_error}", exc_info=True)
+            raise
         
         # 解析任务配置
         config = task.config or {}
         stock_codes = config.get('stock_codes', [])
         model_id = config.get('model_id', 'default_model')
         
-        logger.info(f"开始执行预测任务: {task_id}, 股票数量: {len(stock_codes)}")
+        task_logger.info(f"开始执行预测任务: {task_id}, 股票数量: {len(stock_codes)}, 进程ID: {process_id}")
         
         # 执行真实预测
+        # 每个进程独立创建PredictionEngine实例（不使用全局缓存）
         from app.services.prediction.prediction_engine import PredictionEngine, PredictionConfig
         from app.core.config import settings
 
+        # 创建独立的PredictionEngine实例，不使用全局单例
         prediction_engine = PredictionEngine(
             model_dir=str(settings.MODEL_STORAGE_PATH),
             data_dir=str(settings.DATA_ROOT_PATH)
@@ -140,14 +154,14 @@ def execute_prediction_task_simple(task_id: str):
                     risk_metrics=prediction_output.risk_metrics.to_dict()
                 )
                 
-                logger.info(
+                task_logger.info(
                     f"完成股票预测: {stock_code}, 方向: {prediction_output.predicted_direction}, "
                     f"置信度: {prediction_output.confidence_score:.2f}"
                 )
                 success_count += 1
                 
             except Exception as e:
-                logger.error(f"预测股票 {stock_code} 失败: {e}", exc_info=True)
+                task_logger.error(f"预测股票 {stock_code} 失败: {e}", exc_info=True)
                 failures.append(f"{stock_code}: {type(e).__name__} {e}")
                 continue
         
@@ -162,28 +176,45 @@ def execute_prediction_task_simple(task_id: str):
             progress=100.0
         )
         
-        logger.info(f"预测任务完成: {task_id}")
+        task_logger.info(f"预测任务完成: {task_id}, 进程ID: {process_id}")
         
     except Exception as e:
-        logger.error(f"执行预测任务失败: {task_id}, 错误: {e}", exc_info=True)
+        task_logger.error(f"执行预测任务失败: {task_id}, 错误: {e}", exc_info=True)
         try:
-            task_repository.update_task_status(
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                error_message=str(e)
-            )
-        except:
-            pass
+            # 确保有session和task_repository
+            if 'task_repository' in locals():
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=str(e)
+                )
+        except Exception as update_error:
+            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
     finally:
-        session.close()
+        # 确保关闭数据库连接
+        if 'session' in locals():
+            session.close()
 
 
 def execute_backtest_task_simple(task_id: str):
-    """简化的回测任务执行函数（后台任务）"""
+    """
+    简化的回测任务执行函数（进程池执行）
+    
+    重要：此函数在独立进程中执行，必须：
+    1. 每个进程独立创建数据库连接
+    2. 不使用全局缓存、服务容器等单例
+    3. 独立创建所需服务实例
+    4. 添加进程ID到日志上下文
+    """
     import asyncio
+    
+    # 绑定进程ID到日志上下文
+    process_id = os.getpid()
+    task_logger = logger.bind(process_id=process_id, task_id=task_id, log_type="task")
+    
+    # 每个进程独立创建数据库连接
     session = SessionLocal()
-    print(f"DEBUG: 开始执行回测任务函数: {task_id}")  # 临时调试
-    logger.info(f"开始执行回测任务函数: {task_id}")
+    task_logger.info(f"开始执行回测任务: {task_id}, 进程ID: {process_id}")
 
     # 添加全局异常捕获
     try:
@@ -196,7 +227,7 @@ def execute_backtest_task_simple(task_id: str):
         # 获取任务
         task = task_repository.get_task_by_id(task_id)
         if not task:
-            logger.error(f"任务不存在: {task_id}")
+            task_logger.error(f"任务不存在: {task_id}")
             return
         
         # 更新任务状态为运行中
@@ -208,9 +239,8 @@ def execute_backtest_task_simple(task_id: str):
         
         # 解析任务配置
         config = task.config or {}
-        print(f"DEBUG: 原始配置: {config}")
-        logger.info(f"任务配置: {config}")
-        logger.info(f"配置键: {list(config.keys())}")
+        task_logger.info(f"任务配置: {config}")
+        task_logger.info(f"配置键: {list(config.keys())}")
 
         # 检查是否有系统字段被意外包含在配置中
         system_fields = ['task_id', 'task_name', 'task_type', 'status', 'progress', 'created_at', 'completed_at', 'error_message', 'result']
@@ -218,13 +248,12 @@ def execute_backtest_task_simple(task_id: str):
         for field in system_fields:
             if field in config:
                 found_system_fields.append(field)
-                print(f"DEBUG: 配置中发现系统字段 '{field}': {config[field]}")
+                task_logger.error(f"配置中发现系统字段 '{field}': {config[field]}")
                 # 抛出异常来立即停止执行
                 raise ValueError(f"配置中发现意外的系统字段 '{field}': {config[field]}")
 
         if found_system_fields:
-            print(f"DEBUG: 配置中发现系统字段: {found_system_fields}")
-            logger.warning(f"配置中发现系统字段: {found_system_fields}")
+            task_logger.warning(f"配置中发现系统字段: {found_system_fields}")
 
         stock_codes = config.get('stock_codes', [])
         strategy_name = config.get('strategy_name', 'default_strategy')
@@ -237,15 +266,15 @@ def execute_backtest_task_simple(task_id: str):
         for key in ['status', 'progress', 'result', 'completed_at', 'error_message']:
             if key in config:
                 unexpected_keys.append(key)
-                logger.warning(f"配置中包含意外的'{key}'字段: {config[key]}")
+                task_logger.warning(f"配置中包含意外的'{key}'字段: {config[key]}")
 
         if unexpected_keys:
-            logger.warning(f"配置中包含意外字段: {unexpected_keys}")
+            task_logger.warning(f"配置中包含意外字段: {unexpected_keys}")
 
         # 记录所有配置字段
-        logger.info(f"完整配置字段: {list(config.keys())}")
+        task_logger.info(f"完整配置字段: {list(config.keys())}")
 
-        logger.info(f"解析配置: stock_codes={len(stock_codes) if stock_codes else 0}, strategy_name={strategy_name}, start_date={start_date_str}, end_date={end_date_str}")
+        task_logger.info(f"解析配置: stock_codes={len(stock_codes) if stock_codes else 0}, strategy_name={strategy_name}, start_date={start_date_str}, end_date={end_date_str}")
         
         if not start_date_str or not end_date_str:
             raise ValueError("回测任务需要提供start_date和end_date")
@@ -271,12 +300,12 @@ def execute_backtest_task_simple(task_id: str):
                 end_date = end_date_str
 
         except Exception as date_error:
-            logger.error(f"日期解析失败: start_date={start_date_str}, end_date={end_date_str}, 错误: {date_error}")
+            task_logger.error(f"日期解析失败: start_date={start_date_str}, end_date={end_date_str}, 错误: {date_error}")
             raise ValueError(f"无效的日期格式: start_date={start_date_str}, end_date={end_date_str}")
         
-        logger.info(f"开始执行回测任务: {task_id}, 股票数量: {len(stock_codes)}, 期间: {start_date} - {end_date}")
+        task_logger.info(f"开始执行回测任务: {task_id}, 股票数量: {len(stock_codes)}, 期间: {start_date} - {end_date}, 进程ID: {process_id}")
         
-        # 创建回测执行器
+        # 创建回测执行器（每个进程独立创建，不使用全局单例）
         executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
         
         # 创建回测配置
@@ -332,11 +361,11 @@ def execute_backtest_task_simple(task_id: str):
                 result=backtest_report
             )
             
-            logger.info(f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}")
+            task_logger.info(f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}, 进程ID: {process_id}")
             
             # 异步保存详细数据到数据库
             try:
-                logger.info(f"开始保存回测详细数据: {task_id}")
+                task_logger.info(f"开始保存回测详细数据: {task_id}")
                 
                 async def save_detailed_data():
                     """异步保存详细数据"""
@@ -428,11 +457,11 @@ def execute_backtest_task_simple(task_id: str):
                                     )
                             
                             await session.commit()
-                            logger.info(f"回测详细数据保存成功: {task_id}")
+                            task_logger.info(f"回测详细数据保存成功: {task_id}")
                             
                         except Exception as e:
                             await session.rollback()
-                            logger.error(f"保存回测详细数据失败: {task_id}, 错误: {e}", exc_info=True)
+                            task_logger.error(f"保存回测详细数据失败: {task_id}, 错误: {e}", exc_info=True)
                         break
                 
                 # 在新的事件循环中运行
@@ -444,11 +473,11 @@ def execute_backtest_task_simple(task_id: str):
                     loop.close()
                     
             except Exception as save_error:
-                logger.error(f"保存详细数据时出错: {task_id}, 错误: {save_error}", exc_info=True)
+                task_logger.error(f"保存详细数据时出错: {task_id}, 错误: {save_error}", exc_info=True)
                 # 不影响主流程，继续执行
             
         except Exception as backtest_error:
-            logger.error(f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True)
+            task_logger.error(f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True)
             # 如果回测执行失败，标记任务为失败
             task_repository.update_task_status(
                 task_id=task_id,
@@ -460,74 +489,49 @@ def execute_backtest_task_simple(task_id: str):
     except KeyError as ke:
         # 专门处理 KeyError，提供更详细的信息
         error_msg = f"KeyError in backtest task {task_id}: {ke}"
-        print(f"DEBUG: {error_msg}")  # 临时输出到控制台
-
-        # 写入调试文件
-        try:
-            with open('/tmp/backtest_debug.log', 'a') as f:
-                f.write(f"\n=== KeyError Debug {datetime.now()} ===\n")
-                f.write(f"Task ID: {task_id}\n")
-                f.write(f"Error: {ke}\n")
-                f.write(f"Config: {config}\n")
-                f.write(f"Config type: {type(config)}\n")
-                if isinstance(config, dict):
-                    f.write(f"Config keys: {list(config.keys())}\n")
-                import traceback
-                f.write(f"Traceback:\n{traceback.format_exc()}\n")
-                f.write("=" * 50 + "\n")
-        except Exception as file_error:
-            print(f"DEBUG: 无法写入调试文件: {file_error}")
-
-        logger.error(error_msg, exc_info=True)
+        task_logger.error(error_msg, exc_info=True)
         import traceback
         error_details = traceback.format_exc()
-        logger.error(f"KeyError 详细堆栈: {error_details}")
-        logger.error(f"配置内容: {config}")
-        logger.error(f"配置类型: {type(config)}")
-        if isinstance(config, dict):
-            logger.error(f"配置键: {list(config.keys())}")
-        logger.error(f"尝试访问的键: {ke}")
-
-        # 尝试确定是哪个对象导致了 KeyError
-        try:
-            # 检查是否是 config 相关的
-            if str(ke).strip("'\"") in ['status', 'progress', 'result', 'completed_at']:
-                logger.error("KeyError 可能与任务状态或结果访问相关")
-            elif str(ke).strip("'\"") in config:
-                logger.error(f"键 '{ke}' 存在于配置中，但访问失败")
-            else:
-                logger.error(f"键 '{ke}' 不存在于配置中")
-        except:
-            pass
+        task_logger.error(f"KeyError 详细堆栈: {error_details}")
+        
+        if 'config' in locals():
+            task_logger.error(f"配置内容: {config}")
+            task_logger.error(f"配置类型: {type(config)}")
+            if isinstance(config, dict):
+                task_logger.error(f"配置键: {list(config.keys())}")
+        task_logger.error(f"尝试访问的键: {ke}")
 
         try:
-            task_repository.update_task_status(
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                error_message=f"KeyError: {str(ke)}"
-            )
+            if 'task_repository' in locals():
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"KeyError: {str(ke)}"
+                )
         except Exception as update_error:
-            logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
 
     except Exception as e:
-        logger.error(f"执行回测任务失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}", exc_info=True)
-        # 记录更详细的错误信息
+        task_logger.error(f"执行回测任务失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}", exc_info=True)
         import traceback
         error_details = traceback.format_exc()
-        logger.error(f"详细错误信息: {error_details}")
-        logger.error(f"配置内容: {config}")
-        logger.error(f"任务对象: task_id={task.task_id}, task_type={task.task_type}, status={task.status}")
+        task_logger.error(f"详细错误信息: {error_details}")
+        
+        if 'config' in locals():
+            task_logger.error(f"配置内容: {config}")
+        if 'task' in locals():
+            task_logger.error(f"任务对象: task_id={task.task_id}, task_type={task.task_type}, status={task.status}")
 
         try:
-            task_repository.update_task_status(
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                error_message=f"{type(e).__name__}: {str(e)}"
-            )
+            if 'task_repository' in locals():
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"{type(e).__name__}: {str(e)}"
+                )
         except Exception as update_error:
-            logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
-            import traceback
-            update_details = traceback.format_exc()
-            logger.error(f"更新任务状态详细错误: {update_details}")
+            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
     finally:
-        session.close()
+        # 确保关闭数据库连接
+        if 'session' in locals():
+            session.close()

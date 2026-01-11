@@ -2,18 +2,20 @@
 任务管理路由
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from datetime import datetime, timedelta
 import pandas as pd
+import asyncio
 from loguru import logger
 
 from app.api.v1.schemas import StandardResponse, TaskCreateRequest, BacktestCompareRequest, BacktestExportRequest
 from app.core.database import SessionLocal
 from app.repositories.task_repository import TaskRepository, PredictionResultRepository
 from app.models.task_models import TaskStatus, TaskType
-from app.api.v1.dependencies import execute_prediction_task_simple
+from app.api.v1.dependencies import execute_prediction_task_simple, execute_backtest_task_simple
 from app.services.tasks.task_monitor import task_monitor
+from app.services.tasks.process_executor import get_process_executor
 from app.services.prediction.prediction_engine import PredictionEngine, PredictionConfig
 from app.services.data.stock_data_loader import StockDataLoader
 from app.core.config import settings
@@ -22,10 +24,7 @@ router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
 
 @router.post("", response_model=StandardResponse)
-async def create_task(
-    request: TaskCreateRequest, 
-    background_tasks: BackgroundTasks
-):
+async def create_task(request: TaskCreateRequest):
     """创建任务（支持预测和回测）"""
     session = SessionLocal()
     try:
@@ -63,16 +62,30 @@ async def create_task(
             config=config
         )
         
-        # 将任务加入后台执行
+        # 将任务提交到进程池执行（异步，不阻塞）
         try:
+            process_executor = get_process_executor()
+            loop = asyncio.get_event_loop()
+            
+            # 使用run_in_executor将任务提交到进程池
+            # 注意：这里只是提交任务，不等待结果，立即返回
             if task_type == TaskType.PREDICTION:
-                background_tasks.add_task(execute_prediction_task_simple, task.task_id)
+                future = process_executor.submit(execute_prediction_task_simple, task.task_id)
             else:  # BACKTEST
-                from app.api.v1.dependencies import execute_backtest_task_simple
-                background_tasks.add_task(execute_backtest_task_simple, task.task_id)
-            logger.info(f"任务已加入后台执行: {task.task_id}, 类型: {task_type.value}")
-        except Exception as bg_error:
-            logger.error(f"将任务加入后台执行时出错: {bg_error}", exc_info=True)
+                future = process_executor.submit(execute_backtest_task_simple, task.task_id)
+            
+            logger.info(f"任务已提交到进程池: {task.task_id}, 类型: {task_type.value}")
+        except Exception as submit_error:
+            logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
+            # 如果提交失败，标记任务为失败
+            try:
+                task_repository.update_task_status(
+                    task_id=task.task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"任务提交失败: {str(submit_error)}"
+                )
+            except:
+                pass
         
         # 转换为前端期望的格式
         task_data = {
@@ -763,10 +776,7 @@ async def stop_task(task_id: str):
 
 
 @router.post("/{task_id}/retry", response_model=StandardResponse)
-async def retry_task(
-    task_id: str,
-    background_tasks: BackgroundTasks
-):
+async def retry_task(task_id: str):
     """重新运行失败的任务"""
     session = SessionLocal()
     try:
@@ -785,14 +795,21 @@ async def retry_task(
             progress=0.0
         )
         
-        # 添加后台任务来重新执行
-        if task.task_type == "prediction":
-            background_tasks.add_task(execute_prediction_task_simple, task_id)
-        elif task.task_type == "backtest":
-            from app.api.v1.dependencies import execute_backtest_task_simple
-            background_tasks.add_task(execute_backtest_task_simple, task_id)
-        else:
-            raise HTTPException(status_code=400, detail=f"不支持的任务类型: {task.task_type}")
+        # 将任务提交到进程池重新执行
+        try:
+            process_executor = get_process_executor()
+            
+            if task.task_type == "prediction":
+                future = process_executor.submit(execute_prediction_task_simple, task_id)
+            elif task.task_type == "backtest":
+                future = process_executor.submit(execute_backtest_task_simple, task_id)
+            else:
+                raise HTTPException(status_code=400, detail=f"不支持的任务类型: {task.task_type}")
+            
+            logger.info(f"任务已重新提交到进程池: {task_id}")
+        except Exception as submit_error:
+            logger.error(f"重新提交任务到进程池失败: {submit_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"重新提交任务失败: {str(submit_error)}")
         
         task_data = {
             "task_id": task.task_id,

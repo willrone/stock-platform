@@ -24,11 +24,18 @@ async_engine = create_async_engine(
     future=True,
 )
 
-# 同步数据库引擎（用于 Alembic 迁移）
+# 同步数据库引擎（用于 Alembic 迁移和多进程任务执行）
+# 优化连接池配置以支持多进程访问
 sync_engine = create_engine(
     settings.database_url_sync,
     echo=settings.DEBUG,
     future=True,
+    # 连接池配置（支持多进程）
+    pool_size=10,  # 连接池大小
+    max_overflow=20,  # 允许溢出的连接数
+    pool_timeout=30,  # 获取连接的超时时间（秒）
+    pool_pre_ping=True,  # 连接前ping检查，确保连接有效
+    pool_recycle=3600,  # 连接回收时间（秒），1小时
 )
 
 # 会话工厂

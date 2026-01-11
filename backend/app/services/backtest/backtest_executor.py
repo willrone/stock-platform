@@ -187,11 +187,37 @@ class BacktestExecutor:
                     severity=ErrorSeverity.MEDIUM
                 )
             
-            # 更新总交易日数
+            # 更新总交易日数（同时写入数据库）
             if task_id:
                 progress_data = backtest_progress_monitor.get_progress_data(task_id)
                 if progress_data:
                     progress_data.total_trading_days = len(trading_dates)
+                
+                # 将总交易日数写入数据库
+                try:
+                    from app.core.database import SessionLocal
+                    from app.repositories.task_repository import TaskRepository
+                    from app.models.task_models import TaskStatus
+                    
+                    session = SessionLocal()
+                    try:
+                        task_repo = TaskRepository(session)
+                        existing_task = task_repo.get_task_by_id(task_id)
+                        if existing_task:
+                            result_data = existing_task.result or {}
+                            progress_data_db = result_data.get('progress_data', {})
+                            progress_data_db['total_days'] = len(trading_dates)
+                            result_data['progress_data'] = progress_data_db
+                            
+                            task_repo.update_task_status(
+                                task_id=task_id,
+                                status=TaskStatus.RUNNING,
+                                result=result_data
+                            )
+                    finally:
+                        session.close()
+                except Exception as e:
+                    logger.warning(f"更新总交易日数失败: {e}")
             
             # 执行回测
             if task_id:
@@ -326,9 +352,76 @@ class BacktestExecutor:
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(current_date, current_prices)
                 
-                # 更新进度监控
+                # 更新进度监控（同时更新数据库）
                 if task_id and i % 5 == 0:  # 每5天更新一次进度
                     portfolio_value = portfolio_manager.get_portfolio_value(current_prices)
+                    logger.debug(f"准备更新进度: task_id={task_id}, i={i}, total_days={len(trading_dates)}, signals={len(all_signals)}, trades={trades_this_day}, total_signals={total_signals}, total_trades={executed_trades}")
+                    
+                    # 计算进度百分比（回测执行阶段占30-90%，即60%的进度范围）
+                    execution_progress = (i + 1) / len(trading_dates) * 100
+                    overall_progress = 30 + (execution_progress / 100) * 60  # 30%到90%
+                    
+                    # 更新数据库中的任务进度（包含详细数据）
+                    try:
+                        from app.core.database import SessionLocal
+                        from app.repositories.task_repository import TaskRepository
+                        from app.models.task_models import TaskStatus
+                        from datetime import datetime
+                        
+                        session = SessionLocal()
+                        try:
+                            task_repo = TaskRepository(session)
+                            
+                            # 读取现有的 result 数据
+                            existing_task = task_repo.get_task_by_id(task_id)
+                            if not existing_task:
+                                logger.warning(f"任务不存在，无法更新进度: {task_id}")
+                            else:
+                                result_data = existing_task.result or {}
+                                if not isinstance(result_data, dict):
+                                    result_data = {}
+                                progress_data = result_data.get('progress_data', {})
+                                if not isinstance(progress_data, dict):
+                                    progress_data = {}
+                                
+                                # 更新进度数据
+                                progress_data.update({
+                                    'processed_days': i + 1,
+                                    'total_days': len(trading_dates),
+                                    'current_date': current_date.strftime('%Y-%m-%d'),
+                                    'signals_generated': len(all_signals),
+                                    'trades_executed': trades_this_day,
+                                    'total_signals': total_signals,
+                                    'total_trades': executed_trades,
+                                    'portfolio_value': portfolio_value,
+                                    'last_updated': datetime.utcnow().isoformat()
+                                })
+                                
+                                result_data['progress_data'] = progress_data
+                                
+                                # 记录日志以便调试
+                                logger.info(f"更新回测进度数据: task_id={task_id}, processed_days={i+1}, total_days={len(trading_dates)}, signals={total_signals}, trades={executed_trades}, portfolio={portfolio_value:.2f}, progress_data_keys={list(progress_data.keys())}")
+                                
+                                task_repo.update_task_status(
+                                    task_id=task_id,
+                                    status=TaskStatus.RUNNING,
+                                    progress=overall_progress,
+                                    result=result_data  # 包含详细进度数据
+                                )
+                                
+                                # 确保 result 字段被标记为已修改并提交
+                                session.commit()
+                                logger.info(f"进度数据已提交到数据库: task_id={task_id}, result_data_keys={list(result_data.keys())}, progress_data={progress_data}")
+                        except Exception as inner_error:
+                            session.rollback()
+                            logger.error(f"更新任务进度到数据库失败（内部错误）: {inner_error}", exc_info=True)
+                            raise
+                        finally:
+                            session.close()
+                    except Exception as db_error:
+                        logger.error(f"更新任务进度到数据库失败: {db_error}", exc_info=True)
+                    
+                    # 更新进程内的进度监控（虽然主进程看不到，但保持一致性）
                     await backtest_progress_monitor.update_execution_progress(
                         task_id=task_id,
                         processed_days=i + 1,

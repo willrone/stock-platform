@@ -113,6 +113,36 @@ class TaskRepository:
                 original_exception=e
             )
     
+    def get_recently_updated_tasks(self, since: datetime, limit: int = 100) -> List[Task]:
+        """获取最近更新的任务列表"""
+        try:
+            # 使用completed_at或started_at来判断最近更新的任务
+            tasks = (self.db.query(Task)
+                    .filter(
+                        or_(
+                            Task.completed_at >= since,
+                            Task.started_at >= since
+                        )
+                    )
+                    .filter(
+                        Task.status.in_([
+                            TaskStatus.COMPLETED.value,
+                            TaskStatus.FAILED.value,
+                            TaskStatus.CANCELLED.value,
+                            TaskStatus.RUNNING.value  # 也包括运行中的任务
+                        ])
+                    )
+                    .order_by(desc(Task.created_at))
+                    .limit(limit)
+                    .all())
+            return tasks
+        except Exception as e:
+            raise TaskError(
+                message=f"获取最近更新的任务失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
+                original_exception=e
+            )
+    
     def update_task_status(self, task_id: str, status: TaskStatus, 
                           progress: Optional[float] = None,
                           result: Optional[Dict[str, Any]] = None,
@@ -134,7 +164,10 @@ class TaskRepository:
                 task.progress = progress
             
             if result is not None:
+                # 强制更新 result 字段，即使值看起来相同
+                from sqlalchemy.orm.attributes import flag_modified
                 task.result = result
+                flag_modified(task, 'result')  # 标记 result 字段为已修改
             
             if error_message is not None:
                 task.error_message = error_message

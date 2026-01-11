@@ -41,6 +41,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger = logging.getLogger(__name__)
         logger.warning(f"注册特征管道回调失败: {e}")
     
+    # 启动进程池执行器
+    try:
+        from app.services.tasks.process_executor import start_process_executor
+        start_process_executor()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("进程池执行器已启动")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"启动进程池执行器失败: {e}")
+    
+    # 启动任务状态通知器（WebSocket同步）
+    try:
+        from app.services.tasks.task_notifier import task_notifier
+        await task_notifier.start()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("任务状态通知器已启动")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"启动任务状态通知器失败: {e}")
+    
     # 启动资源监控和任务调度器
     try:
         from app.services.infrastructure.resource_monitor import resource_monitor
@@ -67,6 +91,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     
     # 关闭时清理
+    try:
+        # 停止任务状态通知器
+        from app.services.tasks.task_notifier import task_notifier
+        await task_notifier.stop()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("任务状态通知器已停止")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"停止任务状态通知器失败: {e}")
+    
+    try:
+        # 关闭进程池执行器
+        from app.services.tasks.process_executor import shutdown_process_executor
+        shutdown_process_executor(wait=True, timeout=30)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("进程池执行器已关闭")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"关闭进程池执行器失败: {e}")
+    
     try:
         from app.services.infrastructure.resource_monitor import resource_monitor
         from app.services.infrastructure.task_scheduler import task_scheduler

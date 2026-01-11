@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_TASKS: int = 3
     TASK_TIMEOUT_SECONDS: int = 3600
     CLEANUP_INTERVAL_HOURS: int = 24
+    
+    # 进程池配置（用于任务执行，独立于WORKERS配置）
+    PROCESS_POOL_SIZE: int = 3  # 进程池大小，建议为CPU核心数
+    TASK_EXECUTION_TIMEOUT: int = 3600  # 任务执行超时（秒）
 
     # API 配置
     API_V1_PREFIX: str = "/api/v1"
