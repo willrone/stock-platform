@@ -410,6 +410,8 @@ class BacktestDataAdapter:
     ) -> Optional[EnhancedPositionAnalysis]:
         """分析持仓表现（使用完整的PositionAnalyzer服务）"""
         
+        logger.info(f"开始分析持仓表现: trade_history长度={len(trade_history) if trade_history else 0}, portfolio_history长度={len(portfolio_history) if portfolio_history else 0}")
+        
         if not trade_history:
             logger.warning("交易历史数据为空，无法分析持仓表现")
             return None
@@ -426,8 +428,11 @@ class BacktestDataAdapter:
                 logger.warning("PositionAnalyzer返回空结果")
                 return None
             
+            logger.info(f"PositionAnalyzer返回结果: keys={list(analysis_result.keys())}")
+            
             # 转换stock_performance为兼容格式（包含原有字段）
             stock_performance = analysis_result.get('stock_performance', [])
+            logger.info(f"stock_performance 原始数据长度: {len(stock_performance)}")
             compatible_stock_performance = []
             
             for stock_data in stock_performance:

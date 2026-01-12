@@ -402,16 +402,22 @@ def execute_backtest_task_simple(task_id: str):
                             # 准备分析数据
                             # 处理 position_analysis（可能是 EnhancedPositionAnalysis 对象或列表）
                             position_analysis_data = None
+                            task_logger.info(f"检查 position_analysis: type={type(enhanced_result.position_analysis)}, value={enhanced_result.position_analysis is not None}")
                             if enhanced_result.position_analysis:
                                 if isinstance(enhanced_result.position_analysis, EnhancedPositionAnalysis):
                                     # 如果是 EnhancedPositionAnalysis 对象，调用 to_dict()
                                     position_analysis_data = enhanced_result.position_analysis.to_dict()
+                                    task_logger.info(f"EnhancedPositionAnalysis 转换为字典: stock_performance长度={len(position_analysis_data.get('stock_performance', []))}")
                                 elif isinstance(enhanced_result.position_analysis, list):
                                     # 如果是列表，转换为字典列表
                                     position_analysis_data = [pa.to_dict() for pa in enhanced_result.position_analysis]
+                                    task_logger.info(f"列表格式 position_analysis: 长度={len(position_analysis_data)}")
                                 else:
                                     # 其他情况，直接使用
                                     position_analysis_data = enhanced_result.position_analysis
+                                    task_logger.info(f"其他格式 position_analysis: type={type(position_analysis_data)}")
+                            else:
+                                task_logger.warning(f"enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据")
                             
                             analysis_data = {
                                 'drawdown_analysis': enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},

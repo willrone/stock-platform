@@ -591,8 +591,8 @@ export default function TaskDetailPage() {
                   }>
                     <div className="mt-4">
                       {(() => {
-                        const posAnalysis = backtestDetailedData?.position_analysis;
-                        if (!posAnalysis) {
+                        // 如果数据正在加载，显示加载中
+                        if (loadingBacktestData || backtestDetailedData === null) {
                           return (
                             <div className="text-center text-default-500 py-8">
                               <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -600,22 +600,51 @@ export default function TaskDetailPage() {
                             </div>
                           );
                         }
+                        
+                        const posAnalysis = backtestDetailedData?.position_analysis;
+                        
+                        // 如果position_analysis为null或undefined，显示无数据
+                        if (posAnalysis === null || posAnalysis === undefined) {
+                          return (
+                            <div className="text-center text-default-500 py-8">
+                              <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                              <p>暂无持仓分析数据</p>
+                            </div>
+                          );
+                        }
+                        
                         // 检查新格式（对象，包含stock_performance）
                         if (typeof posAnalysis === 'object' && !Array.isArray(posAnalysis)) {
-                          const hasData = posAnalysis.stock_performance && 
-                                         Array.isArray(posAnalysis.stock_performance) && 
-                                         posAnalysis.stock_performance.length > 0;
-                          if (hasData) {
+                          // 检查是否有stock_performance字段
+                          if (posAnalysis.stock_performance !== undefined) {
+                            const stockPerf = posAnalysis.stock_performance;
+                            if (Array.isArray(stockPerf) && stockPerf.length > 0) {
+                              return (
+                                <PositionAnalysis 
+                                  positionAnalysis={posAnalysis}
+                                  stockCodes={currentTask.stock_codes || []}
+                                />
+                              );
+                            }
+                            // stock_performance存在但为空数组
                             return (
-                              <PositionAnalysis 
-                                positionAnalysis={posAnalysis}
-                                stockCodes={currentTask.stock_codes || []}
-                              />
+                              <div className="text-center text-default-500 py-8">
+                                <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>暂无持仓分析数据</p>
+                              </div>
                             );
                           }
-                        }
-                        // 检查旧格式（数组）
-                        if (Array.isArray(posAnalysis) && posAnalysis.length > 0) {
+                          // 对象格式但没有stock_performance字段，可能是空对象或其他格式
+                          // 检查是否是完全空对象
+                          if (Object.keys(posAnalysis).length === 0) {
+                            return (
+                              <div className="text-center text-default-500 py-8">
+                                <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>暂无持仓分析数据</p>
+                              </div>
+                            );
+                          }
+                          // 有其他字段但没有stock_performance，尝试直接使用（兼容其他可能的格式）
                           return (
                             <PositionAnalysis 
                               positionAnalysis={posAnalysis}
@@ -623,7 +652,27 @@ export default function TaskDetailPage() {
                             />
                           );
                         }
-                        // 无数据
+                        
+                        // 检查旧格式（数组）
+                        if (Array.isArray(posAnalysis)) {
+                          if (posAnalysis.length > 0) {
+                            return (
+                              <PositionAnalysis 
+                                positionAnalysis={posAnalysis}
+                                stockCodes={currentTask.stock_codes || []}
+                              />
+                            );
+                          }
+                          // 数组为空
+                          return (
+                            <div className="text-center text-default-500 py-8">
+                              <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                              <p>暂无持仓分析数据</p>
+                            </div>
+                          );
+                        }
+                        
+                        // 其他情况，显示无数据
                         return (
                           <div className="text-center text-default-500 py-8">
                             <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />

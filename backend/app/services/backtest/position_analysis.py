@@ -39,8 +39,11 @@ class PositionAnalyzer:
                 logger.warning("交易历史数据为空，无法进行持仓分析")
                 return {}
             
+            logger.info(f"开始分析持仓表现: trade_history长度={len(trade_history)}")
+            
             # 股票级别分析
             stock_analysis = self._analyze_stock_performance(trade_history)
+            logger.info(f"股票级别分析完成: 分析了{len(stock_analysis)}只股票")
             
             # 持仓权重分析
             weight_analysis = self._analyze_position_weights(portfolio_history)
