@@ -57,17 +57,17 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [randomCount, setRandomCount] = useState<string>('10');
 
-  // 加载全量股票列表
+  // 加载本地股票列表（只显示已存储的股票数据）
   useEffect(() => {
     const loadAllStocks = async () => {
       setLoadingAllStocks(true);
       try {
-        console.log('[StockSelector] 开始加载全量股票列表...');
-        const result = await DataService.getRemoteStockList();
-        console.log(`[StockSelector] 获取到 ${result.total_stocks} 只股票`);
+        console.log('[StockSelector] 开始加载本地股票列表...');
+        const result = await DataService.getLocalStockList();
+        console.log(`[StockSelector] 获取到 ${result.total_stocks} 只本地股票`);
         
         if (!result.stocks || result.stocks.length === 0) {
-          console.warn('[StockSelector] 股票列表为空');
+          console.warn('[StockSelector] 本地股票列表为空');
           setAllStocks([]);
           return;
         }
@@ -88,7 +88,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
         console.log(`[StockSelector] 格式化后 ${formattedStocks.length} 只股票`);
         setAllStocks(formattedStocks);
       } catch (error) {
-        console.error('[StockSelector] 加载全量股票列表失败:', error);
+        console.error('[StockSelector] 加载本地股票列表失败:', error);
         setAllStocks([]);
       } finally {
         setLoadingAllStocks(false);
@@ -285,17 +285,17 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
         </CardBody>
       </Card>
 
-      {/* 全量股票列表 */}
+      {/* 本地股票列表 */}
       <Card>
         <CardHeader className="flex justify-between items-center">
           <span>
-            股票列表 
+            本地股票列表 
             {searchValue ? (
               <span className="text-default-500">
                 (搜索: "{searchValue}", 找到 {filteredStocks.length} 只，共 {allStocks.length} 只)
               </span>
             ) : (
-              <span className="text-default-500">(共 {allStocks.length} 只)</span>
+              <span className="text-default-500">(共 {allStocks.length} 只本地股票)</span>
             )}
           </span>
         </CardHeader>
@@ -306,8 +306,8 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
             </div>
           ) : allStocks.length === 0 ? (
             <div className="text-center py-8 text-default-500">
-              <p>暂无股票数据</p>
-              <p className="text-sm mt-2">请检查网络连接或稍后重试</p>
+              <p>暂无本地股票数据</p>
+              <p className="text-sm mt-2">请先在数据管理页面同步股票数据</p>
             </div>
           ) : (
             <div className="space-y-4">

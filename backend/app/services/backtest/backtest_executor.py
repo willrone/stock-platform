@@ -522,13 +522,15 @@ class BacktestExecutor:
                 for trade in portfolio_manager.trades
             ],
             
-            # 组合历史
+            # 组合历史（包含完整的positions信息）
             "portfolio_history": [
                 {
                     "date": snapshot["date"].isoformat(),
                     "portfolio_value": snapshot["portfolio_value"],
                     "cash": snapshot["cash"],
-                    "positions_count": len(snapshot["positions"])
+                    "positions_count": len(snapshot.get("positions", {})),
+                    "positions": snapshot.get("positions", {}),  # 包含完整的持仓信息
+                    "total_return": (snapshot["portfolio_value"] - config.initial_cash) / config.initial_cash if config.initial_cash > 0 else 0
                 }
                 for snapshot in portfolio_manager.portfolio_history
             ]

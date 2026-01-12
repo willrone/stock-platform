@@ -41,10 +41,35 @@ interface PositionData {
   avg_holding_period: number;
   winning_trades: number;
   losing_trades: number;
+  // 扩展字段
+  avg_return_per_trade?: number;
+  return_ratio?: number;
+  trade_frequency?: number;
+  avg_win?: number;
+  avg_loss?: number;
+  largest_win?: number;
+  largest_loss?: number;
+  profit_factor?: number;
+  max_holding_period?: number;
+  min_holding_period?: number;
+  avg_buy_price?: number;
+  avg_sell_price?: number;
+  price_improvement?: number;
+  total_volume?: number;
+  total_commission?: number;
+  commission_ratio?: number;
+}
+
+interface EnhancedPositionAnalysis {
+  stock_performance: PositionData[];
+  position_weights?: any;
+  trading_patterns?: any;
+  holding_periods?: any;
+  concentration_risk?: any;
 }
 
 interface PositionAnalysisProps {
-  positionAnalysis: PositionData[];
+  positionAnalysis: PositionData[] | EnhancedPositionAnalysis;
   stockCodes: string[];
 }
 
@@ -67,15 +92,45 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
   const pieChartRef = useRef<HTMLDivElement>(null);
   const barChartRef = useRef<HTMLDivElement>(null);
   const treemapChartRef = useRef<HTMLDivElement>(null);
+  const weightChartRef = useRef<HTMLDivElement>(null);
+  const tradingPatternChartRef = useRef<HTMLDivElement>(null);
+  const holdingPeriodChartRef = useRef<HTMLDivElement>(null);
   const pieChartInstance = useRef<echarts.ECharts | null>(null);
   const barChartInstance = useRef<echarts.ECharts | null>(null);
   const treemapChartInstance = useRef<echarts.ECharts | null>(null);
+  const weightChartInstance = useRef<echarts.ECharts | null>(null);
+  const tradingPatternChartInstance = useRef<echarts.ECharts | null>(null);
+  const holdingPeriodChartInstance = useRef<echarts.ECharts | null>(null);
+
+  // 数据格式转换：兼容新旧两种格式
+  const normalizedData = useMemo(() => {
+    if (!positionAnalysis) return null;
+    
+    // 如果是数组格式（旧格式），直接使用
+    if (Array.isArray(positionAnalysis)) {
+      return {
+        stock_performance: positionAnalysis,
+        position_weights: undefined,
+        trading_patterns: undefined,
+        holding_periods: undefined,
+        concentration_risk: undefined
+      };
+    }
+    
+    // 如果是对象格式（新格式），直接使用
+    return positionAnalysis as EnhancedPositionAnalysis;
+  }, [positionAnalysis]);
+
+  // 获取股票表现数据
+  const stockPerformance = useMemo(() => {
+    return normalizedData?.stock_performance || [];
+  }, [normalizedData]);
 
   // 排序后的持仓数据
   const sortedPositions = useMemo(() => {
-    if (!positionAnalysis || positionAnalysis.length === 0) return [];
+    if (!stockPerformance || stockPerformance.length === 0) return [];
     
-    return [...positionAnalysis].sort((a, b) => {
+    return [...stockPerformance].sort((a, b) => {
       const aValue = a[sortConfig.key];
       const bValue = b[sortConfig.key];
       
@@ -91,13 +146,13 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       
       return 0;
     });
-  }, [positionAnalysis, sortConfig]);
+  }, [stockPerformance, sortConfig]);
 
   // 饼图数据（基于总收益）
   const pieChartData = useMemo(() => {
-    if (!positionAnalysis || positionAnalysis.length === 0) return [];
+    if (!stockPerformance || stockPerformance.length === 0) return [];
     
-    return positionAnalysis
+    return stockPerformance
       .filter(pos => Math.abs(pos.total_return) > 0)
       .map(pos => ({
         name: pos.stock_code,
@@ -106,13 +161,13 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10); // 只显示前10个
-  }, [positionAnalysis]);
+  }, [stockPerformance]);
 
   // 柱状图数据
   const barChartData = useMemo(() => {
-    if (!positionAnalysis || positionAnalysis.length === 0) return [];
+    if (!stockPerformance || stockPerformance.length === 0) return [];
     
-    return positionAnalysis
+    return stockPerformance
       .map(pos => ({
         stock_code: pos.stock_code,
         total_return: pos.total_return,
@@ -122,13 +177,13 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       }))
       .sort((a, b) => b.total_return - a.total_return)
       .slice(0, 15); // 显示前15个
-  }, [positionAnalysis]);
+  }, [stockPerformance]);
 
   // 树状图数据（用于权重可视化）
   const treemapData = useMemo(() => {
-    if (!positionAnalysis || positionAnalysis.length === 0) return [];
+    if (!stockPerformance || stockPerformance.length === 0) return [];
     
-    return positionAnalysis
+    return stockPerformance
       .filter(pos => Math.abs(pos.total_return) > 0)
       .map(pos => ({
         name: pos.stock_code,
@@ -139,11 +194,25 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
         }
       }))
       .sort((a, b) => b.value - a.value);
-  }, [positionAnalysis]);
+  }, [stockPerformance]);
+
+  // 持仓权重数据（基于真实权重）
+  const weightChartData = useMemo(() => {
+    const weights = normalizedData?.position_weights?.current_weights;
+    if (!weights || Object.keys(weights).length === 0) return null;
+    
+    return Object.entries(weights)
+      .map(([stock_code, weight]) => ({
+        name: stock_code,
+        value: (weight as number) * 100, // 转换为百分比
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  }, [normalizedData]);
 
   // 统计信息
   const statistics = useMemo(() => {
-    if (!positionAnalysis || positionAnalysis.length === 0) {
+    if (!stockPerformance || stockPerformance.length === 0) {
       return {
         totalStocks: 0,
         profitableStocks: 0,
@@ -155,16 +224,16 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       };
     }
     
-    const totalStocks = positionAnalysis.length;
-    const profitableStocks = positionAnalysis.filter(pos => pos.total_return > 0).length;
-    const totalReturn = positionAnalysis.reduce((sum, pos) => sum + pos.total_return, 0);
-    const avgWinRate = positionAnalysis.reduce((sum, pos) => sum + pos.win_rate, 0) / totalStocks;
-    const avgHoldingPeriod = positionAnalysis.reduce((sum, pos) => sum + pos.avg_holding_period, 0) / totalStocks;
+    const totalStocks = stockPerformance.length;
+    const profitableStocks = stockPerformance.filter(pos => pos.total_return > 0).length;
+    const totalReturn = stockPerformance.reduce((sum, pos) => sum + pos.total_return, 0);
+    const avgWinRate = stockPerformance.reduce((sum, pos) => sum + pos.win_rate, 0) / totalStocks;
+    const avgHoldingPeriod = stockPerformance.reduce((sum, pos) => sum + pos.avg_holding_period, 0) / totalStocks;
     
-    const bestPerformer = positionAnalysis.reduce((best, pos) => 
+    const bestPerformer = stockPerformance.reduce((best, pos) => 
       pos.total_return > best.total_return ? pos : best
     );
-    const worstPerformer = positionAnalysis.reduce((worst, pos) => 
+    const worstPerformer = stockPerformance.reduce((worst, pos) => 
       pos.total_return < worst.total_return ? pos : worst
     );
     
@@ -177,7 +246,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       bestPerformer,
       worstPerformer
     };
-  }, [positionAnalysis]);
+  }, [stockPerformance]);
 
   // 初始化饼图
   useEffect(() => {
@@ -433,6 +502,188 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     };
   }, [treemapData]);
 
+  // 初始化持仓权重图表
+  useEffect(() => {
+    if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
+
+    if (weightChartInstance.current) {
+      weightChartInstance.current.dispose();
+    }
+
+    weightChartInstance.current = echarts.init(weightChartRef.current);
+
+    const option = {
+      title: {
+        text: '持仓权重分布（真实权重）',
+        left: 'center',
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'bold',
+        },
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: function (params: any) {
+          return `${params.name}<br/>权重: ${params.value.toFixed(2)}%`;
+        },
+      },
+      legend: {
+        orient: 'vertical',
+        left: 'left',
+        data: weightChartData.map(item => item.name),
+      },
+      series: [
+        {
+          name: '持仓权重',
+          type: 'pie',
+          radius: '50%',
+          data: weightChartData,
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)',
+            },
+          },
+        },
+      ],
+    };
+
+    weightChartInstance.current.setOption(option);
+
+    const handleResize = () => {
+      if (weightChartInstance.current) {
+        weightChartInstance.current.resize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [weightChartData]);
+
+  // 初始化交易模式图表
+  useEffect(() => {
+    if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
+
+    if (tradingPatternChartInstance.current) {
+      tradingPatternChartInstance.current.dispose();
+    }
+
+    tradingPatternChartInstance.current = echarts.init(tradingPatternChartRef.current);
+
+    const patterns = normalizedData.trading_patterns;
+    const option: any = {
+      title: {
+        text: '交易模式分析',
+        left: 'center',
+      },
+      tooltip: {
+        trigger: 'axis',
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '15%',
+        top: '15%',
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        data: patterns.time_patterns?.monthly_distribution?.map((m: any) => `${m.month}月`) || [],
+      },
+      yAxis: {
+        type: 'value',
+      },
+      series: [
+        {
+          name: '交易次数',
+          type: 'bar',
+          data: patterns.time_patterns?.monthly_distribution?.map((m: any) => m.count) || [],
+          itemStyle: {
+            color: '#3b82f6',
+          },
+        },
+      ],
+    };
+
+    tradingPatternChartInstance.current.setOption(option);
+
+    const handleResize = () => {
+      if (tradingPatternChartInstance.current) {
+        tradingPatternChartInstance.current.resize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [normalizedData?.trading_patterns]);
+
+  // 初始化持仓时间图表
+  useEffect(() => {
+    if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
+
+    if (holdingPeriodChartInstance.current) {
+      holdingPeriodChartInstance.current.dispose();
+    }
+
+    holdingPeriodChartInstance.current = echarts.init(holdingPeriodChartRef.current);
+
+    const periods = normalizedData.holding_periods;
+    const option = {
+      title: {
+        text: '持仓时间分布',
+        left: 'center',
+      },
+      tooltip: {
+        trigger: 'item',
+      },
+      series: [
+        {
+          name: '持仓时间',
+          type: 'pie',
+          radius: '50%',
+          data: [
+            {
+              value: periods.short_term_positions,
+              name: '短期（≤7天）',
+              itemStyle: { color: '#3b82f6' },
+            },
+            {
+              value: periods.medium_term_positions,
+              name: '中期（7-30天）',
+              itemStyle: { color: '#10b981' },
+            },
+            {
+              value: periods.long_term_positions,
+              name: '长期（>30天）',
+              itemStyle: { color: '#f59e0b' },
+            },
+          ],
+        },
+      ],
+    };
+
+    holdingPeriodChartInstance.current.setOption(option);
+
+    const handleResize = () => {
+      if (holdingPeriodChartInstance.current) {
+        holdingPeriodChartInstance.current.resize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [normalizedData?.holding_periods]);
+
   // 处理排序
   const handleSort = (key: keyof PositionData) => {
     setSortConfig(prev => ({
@@ -460,7 +711,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     return `${(value * 100).toFixed(2)}%`;
   };
 
-  if (!positionAnalysis || positionAnalysis.length === 0) {
+  if (!stockPerformance || stockPerformance.length === 0) {
     return (
       <Card>
         <CardBody className="flex items-center justify-center h-64">
@@ -816,6 +1067,247 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
             </CardBody>
           </Card>
         </Tab>
+
+        {/* 持仓权重分析 */}
+        {normalizedData?.position_weights && (
+          <Tab key="weights" title={
+            <div className="flex items-center gap-2">
+              <PieChartIcon className="w-4 h-4" />
+              持仓权重
+            </div>
+          }>
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">持仓权重分析</h3>
+                <p className="text-sm text-gray-500">基于真实持仓权重的分布</p>
+              </CardHeader>
+              <CardBody>
+                {weightChartData && weightChartData.length > 0 ? (
+                  <div ref={weightChartRef} style={{ height: '400px', width: '100%' }} />
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <p>暂无持仓权重数据</p>
+                  </div>
+                )}
+                {/* 集中度指标 */}
+                {normalizedData.position_weights.concentration_metrics?.averages && (
+                  <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-gray-50 rounded">
+                      <p className="text-sm text-gray-500">HHI指数</p>
+                      <p className="text-lg font-bold">
+                        {normalizedData.position_weights.concentration_metrics.averages.avg_hhi.toFixed(3)}
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded">
+                      <p className="text-sm text-gray-500">有效股票数</p>
+                      <p className="text-lg font-bold">
+                        {normalizedData.position_weights.concentration_metrics.averages.avg_effective_stocks.toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded">
+                      <p className="text-sm text-gray-500">前3大集中度</p>
+                      <p className="text-lg font-bold">
+                        {(normalizedData.position_weights.concentration_metrics.averages.avg_top_3_concentration * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded">
+                      <p className="text-sm text-gray-500">前5大集中度</p>
+                      <p className="text-lg font-bold">
+                        {(normalizedData.position_weights.concentration_metrics.averages.avg_top_5_concentration * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </Tab>
+        )}
+
+        {/* 交易模式分析 */}
+        {normalizedData?.trading_patterns && (
+          <Tab key="trading-patterns" title={
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              交易模式
+            </div>
+          }>
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">交易模式分析</h3>
+              </CardHeader>
+              <CardBody>
+                <div ref={tradingPatternChartRef} style={{ height: '400px', width: '100%' }} />
+                {/* 交易模式统计 */}
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {normalizedData.trading_patterns.size_patterns && (
+                    <>
+                      <div className="text-center p-3 bg-gray-50 rounded">
+                        <p className="text-sm text-gray-500">平均交易规模</p>
+                        <p className="text-lg font-bold">
+                          ¥{(normalizedData.trading_patterns.size_patterns.avg_trade_size / 10000).toFixed(2)}万
+                        </p>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded">
+                        <p className="text-sm text-gray-500">总交易量</p>
+                        <p className="text-lg font-bold">
+                          ¥{(normalizedData.trading_patterns.size_patterns.total_volume / 10000).toFixed(2)}万
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  {normalizedData.trading_patterns.frequency_patterns && (
+                    <>
+                      <div className="text-center p-3 bg-gray-50 rounded">
+                        <p className="text-sm text-gray-500">平均间隔</p>
+                        <p className="text-lg font-bold">
+                          {normalizedData.trading_patterns.frequency_patterns.avg_interval_days.toFixed(1)}天
+                        </p>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded">
+                        <p className="text-sm text-gray-500">月度交易次数</p>
+                        <p className="text-lg font-bold">
+                          {normalizedData.trading_patterns.frequency_patterns.avg_monthly_trades.toFixed(1)}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          </Tab>
+        )}
+
+        {/* 持仓时间分析 */}
+        {normalizedData?.holding_periods && (
+          <Tab key="holding-periods" title={
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              持仓时间
+            </div>
+          }>
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">持仓时间分析</h3>
+              </CardHeader>
+              <CardBody>
+                <div ref={holdingPeriodChartRef} style={{ height: '400px', width: '100%' }} />
+                {/* 持仓时间统计 */}
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-gray-50 rounded">
+                    <p className="text-sm text-gray-500">平均持仓期</p>
+                    <p className="text-lg font-bold">
+                      {normalizedData.holding_periods.avg_holding_period.toFixed(1)}天
+                    </p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded">
+                    <p className="text-sm text-gray-500">中位数持仓期</p>
+                    <p className="text-lg font-bold">
+                      {normalizedData.holding_periods.median_holding_period.toFixed(1)}天
+                    </p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded">
+                    <p className="text-sm text-gray-500">短期持仓</p>
+                    <p className="text-lg font-bold text-blue-600">
+                      {normalizedData.holding_periods.short_term_positions}
+                    </p>
+                    <p className="text-xs text-gray-500">≤7天</p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded">
+                    <p className="text-sm text-gray-500">长期持仓</p>
+                    <p className="text-lg font-bold text-green-600">
+                      {normalizedData.holding_periods.long_term_positions}
+                    </p>
+                    <p className="text-xs text-gray-500">&gt;30天</p>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          </Tab>
+        )}
+
+        {/* 风险集中度分析 */}
+        {normalizedData?.concentration_risk && (
+          <Tab key="concentration" title={
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4" />
+              风险集中度
+            </div>
+          }>
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">风险集中度分析</h3>
+              </CardHeader>
+              <CardBody>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* 交易集中度 */}
+                  {normalizedData.concentration_risk.trade_concentration && (
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-lg">交易集中度</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-blue-50 rounded">
+                          <p className="text-sm text-gray-600">HHI指数</p>
+                          <p className="text-2xl font-bold">
+                            {normalizedData.concentration_risk.trade_concentration.hhi.toFixed(3)}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-green-50 rounded">
+                          <p className="text-sm text-gray-600">有效股票数</p>
+                          <p className="text-2xl font-bold">
+                            {normalizedData.concentration_risk.trade_concentration.effective_stocks.toFixed(1)}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-yellow-50 rounded">
+                          <p className="text-sm text-gray-600">前3大权重</p>
+                          <p className="text-2xl font-bold">
+                            {(normalizedData.concentration_risk.trade_concentration.top_3_weight * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 rounded">
+                          <p className="text-sm text-gray-600">前5大权重</p>
+                          <p className="text-2xl font-bold">
+                            {(normalizedData.concentration_risk.trade_concentration.top_5_weight * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* 持仓集中度 */}
+                  {normalizedData.concentration_risk.position_concentration && (
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-lg">持仓集中度</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-blue-50 rounded">
+                          <p className="text-sm text-gray-600">HHI指数</p>
+                          <p className="text-2xl font-bold">
+                            {normalizedData.concentration_risk.position_concentration.hhi.toFixed(3)}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-green-50 rounded">
+                          <p className="text-sm text-gray-600">有效持仓数</p>
+                          <p className="text-2xl font-bold">
+                            {normalizedData.concentration_risk.position_concentration.effective_positions.toFixed(1)}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-yellow-50 rounded">
+                          <p className="text-sm text-gray-600">前3大权重</p>
+                          <p className="text-2xl font-bold">
+                            {(normalizedData.concentration_risk.position_concentration.top_3_weight * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 rounded">
+                          <p className="text-sm text-gray-600">前5大权重</p>
+                          <p className="text-2xl font-bold">
+                            {(normalizedData.concentration_risk.position_concentration.top_5_weight * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          </Tab>
+        )}
       </Tabs>
 
       {/* 股票详情模态框 */}
@@ -870,6 +1362,101 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
                     <p className="text-xl font-bold text-red-600">{selectedStock.losing_trades}</p>
                   </div>
                 </div>
+
+                {/* 扩展信息 */}
+                {(selectedStock.avg_win !== undefined || selectedStock.avg_loss !== undefined || selectedStock.profit_factor !== undefined) && (
+                  <div className="pt-4 border-t">
+                    <h4 className="text-lg font-semibold mb-3">盈亏分析</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedStock.avg_win !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">平均盈利</p>
+                          <p className="text-lg font-bold text-green-600">{formatCurrency(selectedStock.avg_win)}</p>
+                        </div>
+                      )}
+                      {selectedStock.avg_loss !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">平均亏损</p>
+                          <p className="text-lg font-bold text-red-600">{formatCurrency(selectedStock.avg_loss)}</p>
+                        </div>
+                      )}
+                      {selectedStock.largest_win !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">最大盈利</p>
+                          <p className="text-lg font-bold text-green-600">{formatCurrency(selectedStock.largest_win)}</p>
+                        </div>
+                      )}
+                      {selectedStock.largest_loss !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">最大亏损</p>
+                          <p className="text-lg font-bold text-red-600">{formatCurrency(selectedStock.largest_loss)}</p>
+                        </div>
+                      )}
+                      {selectedStock.profit_factor !== undefined && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-500">盈亏比</p>
+                          <p className={`text-lg font-bold ${selectedStock.profit_factor >= 1 ? 'text-green-600' : 'text-red-600'}`}>
+                            {selectedStock.profit_factor.toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 价格分析 */}
+                {(selectedStock.avg_buy_price !== undefined || selectedStock.avg_sell_price !== undefined || selectedStock.price_improvement !== undefined) && (
+                  <div className="pt-4 border-t">
+                    <h4 className="text-lg font-semibold mb-3">价格分析</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedStock.avg_buy_price !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">平均买入价</p>
+                          <p className="text-lg font-bold">¥{selectedStock.avg_buy_price.toFixed(2)}</p>
+                        </div>
+                      )}
+                      {selectedStock.avg_sell_price !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">平均卖出价</p>
+                          <p className="text-lg font-bold">¥{selectedStock.avg_sell_price.toFixed(2)}</p>
+                        </div>
+                      )}
+                      {selectedStock.price_improvement !== undefined && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-500">价格改善率</p>
+                          <p className={`text-lg font-bold ${selectedStock.price_improvement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {(selectedStock.price_improvement * 100).toFixed(2)}%
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 持仓期详情 */}
+                {(selectedStock.max_holding_period !== undefined || selectedStock.min_holding_period !== undefined) && (
+                  <div className="pt-4 border-t">
+                    <h4 className="text-lg font-semibold mb-3">持仓期详情</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">平均持仓期</p>
+                        <p className="text-lg font-bold">{selectedStock.avg_holding_period} 天</p>
+                      </div>
+                      {selectedStock.max_holding_period !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">最长持仓期</p>
+                          <p className="text-lg font-bold">{selectedStock.max_holding_period} 天</p>
+                        </div>
+                      )}
+                      {selectedStock.min_holding_period !== undefined && (
+                        <div>
+                          <p className="text-sm text-gray-500">最短持仓期</p>
+                          <p className="text-lg font-bold">{selectedStock.min_holding_period} 天</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="pt-4 border-t">
                   <div className="flex justify-between items-center mb-2">

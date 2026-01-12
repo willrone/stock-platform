@@ -23,7 +23,150 @@ export interface BacktestDetailedResult {
     monthly_return: number;
     cumulative_return: number;
   }>;
-  position_analysis: Array<{
+  position_analysis: {
+    // 股票表现数据（兼容原有格式）
+    stock_performance: Array<{
+      stock_code: string;
+      stock_name: string;
+      total_return: number;
+      trade_count: number;
+      win_rate: number;
+      avg_holding_period: number;
+      winning_trades: number;
+      losing_trades: number;
+      // 扩展字段
+      avg_return_per_trade?: number;
+      return_ratio?: number;
+      trade_frequency?: number;
+      avg_win?: number;
+      avg_loss?: number;
+      largest_win?: number;
+      largest_loss?: number;
+      profit_factor?: number;
+      max_holding_period?: number;
+      min_holding_period?: number;
+      avg_buy_price?: number;
+      avg_sell_price?: number;
+      price_improvement?: number;
+      total_volume?: number;
+      total_commission?: number;
+      commission_ratio?: number;
+    }>;
+    // 持仓权重分析
+    position_weights?: {
+      weight_statistics?: Array<{
+        stock_code: string;
+        avg_weight: number;
+        max_weight: number;
+        min_weight: number;
+        weight_volatility: number;
+        observations: number;
+      }>;
+      weight_changes?: Array<{
+        date: string;
+        stock_code: string;
+        prev_weight: number;
+        curr_weight: number;
+        weight_change: number;
+        change_type: string;
+      }>;
+      concentration_metrics?: {
+        time_series?: Array<{
+          date: string;
+          hhi: number;
+          effective_stocks: number;
+          top_1_concentration: number;
+          top_3_concentration: number;
+          top_5_concentration: number;
+          total_positions: number;
+        }>;
+        averages?: {
+          avg_hhi: number;
+          avg_effective_stocks: number;
+          avg_top_1_concentration: number;
+          avg_top_3_concentration: number;
+          avg_top_5_concentration: number;
+          avg_total_positions: number;
+        };
+      };
+      current_weights?: Record<string, number>;
+    };
+    // 交易模式分析
+    trading_patterns?: {
+      time_patterns?: {
+        monthly_distribution?: Array<{
+          month: number;
+          count: number;
+          percentage: number;
+        }>;
+        weekday_distribution?: Array<{
+          weekday: number;
+          weekday_name: string;
+          count: number;
+          percentage: number;
+        }>;
+      };
+      size_patterns?: {
+        avg_trade_size: number;
+        median_trade_size: number;
+        max_trade_size: number;
+        min_trade_size: number;
+        trade_size_std: number;
+        total_volume: number;
+      };
+      frequency_patterns?: {
+        avg_interval_days: number;
+        median_interval_days: number;
+        min_interval_days: number;
+        max_interval_days: number;
+        avg_monthly_trades: number;
+        max_monthly_trades: number;
+        total_trading_days: number;
+      };
+      success_patterns?: {
+        total_closed_trades: number;
+        winning_trades: number;
+        losing_trades: number;
+        breakeven_trades: number;
+        win_rate: number;
+        loss_rate: number;
+        avg_win_amount: number;
+        avg_loss_amount: number;
+      };
+    };
+    // 持仓时间分析
+    holding_periods?: {
+      avg_holding_period: number;
+      median_holding_period: number;
+      max_holding_period: number;
+      min_holding_period: number;
+      holding_period_std: number;
+      total_positions_closed: number;
+      short_term_positions: number;
+      medium_term_positions: number;
+      long_term_positions: number;
+    };
+    // 风险集中度分析
+    concentration_risk?: {
+      trade_concentration?: {
+        hhi: number;
+        effective_stocks: number;
+        top_1_weight: number;
+        top_3_weight: number;
+        top_5_weight: number;
+        total_stocks: number;
+      };
+      position_concentration?: {
+        hhi: number;
+        effective_positions: number;
+        top_1_weight: number;
+        top_3_weight: number;
+        top_5_weight: number;
+        total_positions: number;
+      };
+    };
+  } | Array<{
+    // 兼容旧格式
     stock_code: string;
     stock_name: string;
     total_return: number;

@@ -371,12 +371,18 @@ def execute_backtest_task_simple(task_id: str):
                     """异步保存详细数据"""
                     from app.core.database import get_async_session
                     from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
-                    from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+                    from app.services.backtest.backtest_data_adapter import BacktestDataAdapter, EnhancedPositionAnalysis
                     
                     adapter = BacktestDataAdapter()
                     
+                    # 记录原始数据
+                    task_logger.info(f"原始回测报告数据: trade_history={len(backtest_report.get('trade_history', []))}, portfolio_history={len(backtest_report.get('portfolio_history', []))}")
+                    
                     # 转换数据
                     enhanced_result = await adapter.adapt_backtest_result(backtest_report)
+                    
+                    # 记录转换后的数据
+                    task_logger.info(f"转换后的数据: trade_history={len(enhanced_result.trade_history)}, portfolio_history={len(enhanced_result.portfolio_history)}")
                     
                     async for session in get_async_session():
                         try:
@@ -394,10 +400,23 @@ def execute_backtest_task_simple(task_id: str):
                                 }
                             
                             # 准备分析数据
+                            # 处理 position_analysis（可能是 EnhancedPositionAnalysis 对象或列表）
+                            position_analysis_data = None
+                            if enhanced_result.position_analysis:
+                                if isinstance(enhanced_result.position_analysis, EnhancedPositionAnalysis):
+                                    # 如果是 EnhancedPositionAnalysis 对象，调用 to_dict()
+                                    position_analysis_data = enhanced_result.position_analysis.to_dict()
+                                elif isinstance(enhanced_result.position_analysis, list):
+                                    # 如果是列表，转换为字典列表
+                                    position_analysis_data = [pa.to_dict() for pa in enhanced_result.position_analysis]
+                                else:
+                                    # 其他情况，直接使用
+                                    position_analysis_data = enhanced_result.position_analysis
+                            
                             analysis_data = {
                                 'drawdown_analysis': enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},
                                 'monthly_returns': [mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
-                                'position_analysis': [pa.to_dict() for pa in enhanced_result.position_analysis] if enhanced_result.position_analysis else [],
+                                'position_analysis': position_analysis_data,
                                 'benchmark_comparison': enhanced_result.benchmark_data or {},
                                 'rolling_metrics': {}
                             }
@@ -411,11 +430,24 @@ def execute_backtest_task_simple(task_id: str):
                             )
                             
                             # 批量创建组合快照记录
-                            if enhanced_result.portfolio_history:
+                            portfolio_history = enhanced_result.portfolio_history or []
+                            task_logger.info(f"准备保存组合快照: task_id={task_id}, count={len(portfolio_history)}")
+                            
+                            if portfolio_history:
                                 snapshots_data = []
-                                for snapshot in enhanced_result.portfolio_history:
+                                for snapshot in portfolio_history:
+                                    # 处理日期格式（可能是字符串或datetime）
+                                    date_value = snapshot.get("date")
+                                    if isinstance(date_value, str):
+                                        try:
+                                            from datetime import datetime
+                                            date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                                        except:
+                                            task_logger.warning(f"无法解析日期: {date_value}")
+                                            continue
+                                    
                                     snapshots_data.append({
-                                        'date': snapshot.get("date"),
+                                        'date': date_value,
                                         'portfolio_value': snapshot.get("portfolio_value", 0),
                                         'cash': snapshot.get("cash", 0),
                                         'positions_count': snapshot.get("positions_count", 0),
@@ -425,16 +457,37 @@ def execute_backtest_task_simple(task_id: str):
                                     })
                                 
                                 if snapshots_data:
-                                    await repository.batch_create_portfolio_snapshots(
+                                    success = await repository.batch_create_portfolio_snapshots(
                                         task_id=task_id,
                                         backtest_id=f"bt_{task_id[:8]}",
                                         snapshots_data=snapshots_data
                                     )
+                                    if success:
+                                        task_logger.info(f"成功保存 {len(snapshots_data)} 个组合快照: task_id={task_id}")
+                                    else:
+                                        task_logger.error(f"保存组合快照失败: task_id={task_id}")
+                                else:
+                                    task_logger.warning(f"组合快照数据为空: task_id={task_id}")
+                            else:
+                                task_logger.warning(f"没有组合历史数据: task_id={task_id}")
                             
                             # 批量创建交易记录
-                            if enhanced_result.trade_history:
+                            trade_history = enhanced_result.trade_history or []
+                            task_logger.info(f"准备保存交易记录: task_id={task_id}, count={len(trade_history)}")
+                            
+                            if trade_history:
                                 trades_data = []
-                                for trade in enhanced_result.trade_history:
+                                for trade in trade_history:
+                                    # 处理时间戳格式（可能是字符串或datetime）
+                                    timestamp_value = trade.get("timestamp")
+                                    if isinstance(timestamp_value, str):
+                                        try:
+                                            from datetime import datetime
+                                            timestamp_value = datetime.fromisoformat(timestamp_value.replace('Z', '+00:00'))
+                                        except:
+                                            task_logger.warning(f"无法解析时间戳: {timestamp_value}")
+                                            continue
+                                    
                                     trades_data.append({
                                         'trade_id': trade.get("trade_id", ""),
                                         'stock_code': trade.get("stock_code", ""),
@@ -442,7 +495,7 @@ def execute_backtest_task_simple(task_id: str):
                                         'action': trade.get("action", ""),
                                         'quantity': trade.get("quantity", 0),
                                         'price': trade.get("price", 0),
-                                        'timestamp': trade.get("timestamp"),
+                                        'timestamp': timestamp_value,
                                         'commission': trade.get("commission", 0),
                                         'pnl': trade.get("pnl", 0),
                                         'holding_days': trade.get("holding_days", 0),
@@ -450,11 +503,19 @@ def execute_backtest_task_simple(task_id: str):
                                     })
                                 
                                 if trades_data:
-                                    await repository.batch_create_trade_records(
+                                    success = await repository.batch_create_trade_records(
                                         task_id=task_id,
                                         backtest_id=f"bt_{task_id[:8]}",
                                         trades_data=trades_data
                                     )
+                                    if success:
+                                        task_logger.info(f"成功保存 {len(trades_data)} 条交易记录: task_id={task_id}")
+                                    else:
+                                        task_logger.error(f"保存交易记录失败: task_id={task_id}")
+                                else:
+                                    task_logger.warning(f"交易记录数据为空: task_id={task_id}")
+                            else:
+                                task_logger.warning(f"没有交易历史数据: task_id={task_id}")
                             
                             await session.commit()
                             task_logger.info(f"回测详细数据保存成功: {task_id}")

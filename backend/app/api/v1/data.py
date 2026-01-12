@@ -304,6 +304,121 @@ async def get_local_stock_list():
         )
 
 
+@router.get("/local/stocks/simple", response_model=StandardResponse, summary="获取本地股票列表（快速版）", description="快速获取本地股票代码列表，仅用于选择股票，不包含详细信息")
+async def get_local_stock_list_simple():
+    """快速获取本地股票列表（仅股票代码和名称）"""
+    try:
+        from pathlib import Path
+        
+        # 固定路径：backend/data/parquet/stock_data/
+        backend_dir = Path(__file__).parent.parent.parent.parent
+        stock_data_path = backend_dir / "data" / "parquet" / "stock_data"
+        
+        # 如果固定路径不存在，尝试其他可能的路径
+        if not stock_data_path.exists():
+            data_root = Path(settings.DATA_ROOT_PATH)
+            if not data_root.is_absolute():
+                data_root = (backend_dir / data_root).resolve()
+            
+            possible_paths = [
+                data_root / "parquet" / "stock_data",
+                data_root / "parquet",
+                backend_dir / "data" / "parquet" / "stock_data",
+                Path("data") / "parquet" / "stock_data",
+            ]
+            
+            stock_data_path = None
+            for path in possible_paths:
+                path_resolved = path.resolve() if path.exists() else None
+                if path_resolved and path_resolved.exists():
+                    stock_data_path = path_resolved
+                    break
+            
+            if stock_data_path is None:
+                logger.warning(f"未找到stock_data目录，尝试的路径: {possible_paths}")
+                return StandardResponse(
+                    success=False,
+                    message="未找到parquet数据目录",
+                    data={
+                        "stocks": [],
+                        "stock_codes": [],
+                        "total_stocks": 0
+                    }
+                )
+        
+        logger.info(f"使用股票数据目录: {stock_data_path}")
+        
+        # 快速方法：从文件名获取股票代码，不读取文件内容
+        stock_codes_set = set()
+        
+        # 查找所有parquet文件
+        parquet_files = list(stock_data_path.glob("*.parquet"))
+        logger.info(f"找到 {len(parquet_files)} 个parquet文件")
+        
+        for file_path in parquet_files:
+            file_name = file_path.stem  # 不含扩展名的文件名，例如: 000001_SZ
+            
+            # 文件名格式: {code}_{market}.parquet，例如: 000001_SZ.parquet, 920000_BJ.parquet
+            # 需要转换为标准格式: {code}.{market}，例如: 000001.SZ, 920000.BJ
+            if '_' in file_name:
+                parts = file_name.split('_')
+                if len(parts) >= 2:
+                    code = parts[0]
+                    market = parts[1].upper()  # SZ, SH, 或 BJ
+                    
+                    # 验证市场代码（支持所有市场：SZ深圳、SH上海、BJ北京）
+                    if market in ['SZ', 'SH', 'BJ']:
+                        # 转换为标准格式
+                        stock_code = f"{code}.{market}"
+                        stock_codes_set.add(stock_code)
+                    else:
+                        logger.debug(f"跳过未知的市场代码: {file_name} (市场: {market})")
+                else:
+                    logger.debug(f"文件名格式不正确: {file_name}")
+            else:
+                # 如果文件名已经是标准格式（带点），直接使用
+                if '.' in file_name and (file_name.endswith('.SZ') or file_name.endswith('.SH') or file_name.endswith('.BJ')):
+                    stock_codes_set.add(file_name)
+        
+        # 转换为列表并排序
+        stock_codes = sorted(list(stock_codes_set))
+        
+        logger.info(f"提取到 {len(stock_codes)} 个股票代码")
+        
+        # 构建简化的股票列表（只有代码和名称）
+        stocks = [
+            {
+                "ts_code": code,
+                "name": code  # 本地数据可能没有名称，使用代码作为名称
+            }
+            for code in stock_codes
+        ]
+        
+        logger.info(f"快速获取本地股票列表: {len(stocks)} 只股票")
+        
+        return StandardResponse(
+            success=True,
+            message=f"成功获取本地股票列表: {len(stocks)} 只股票",
+            data={
+                "stocks": stocks,
+                "stock_codes": stock_codes,
+                "total_stocks": len(stocks)
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"快速获取本地股票列表失败: {e}", exc_info=True)
+        return StandardResponse(
+            success=False,
+            message=f"获取本地股票列表失败: {str(e)}",
+            data={
+                "stocks": [],
+                "stock_codes": [],
+                "total_stocks": 0
+            }
+        )
+
+
 @router.post("/sync/remote", response_model=StandardResponse, summary="同步远端数据", description="通过SFTP从远端服务器同步股票parquet数据")
 async def sync_remote_data(
     request: RemoteDataSyncRequest,

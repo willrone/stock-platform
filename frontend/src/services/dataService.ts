@@ -535,9 +535,32 @@ export class DataService {
   }
 
   /**
-   * 获取本地股票列表
+   * 获取本地股票列表（快速版，仅用于选择股票）
    */
   static async getLocalStockList(): Promise<{
+    stocks: Array<{
+      ts_code: string;
+      name?: string;
+      data_range?: {
+        start_date: string;
+        end_date: string;
+        total_days: number;
+      };
+      file_count?: number;
+      total_size?: number;
+      record_count?: number;
+    }>;
+    stock_codes: string[];
+    total_stocks: number;
+  }> {
+    // 使用快速接口，只获取股票代码和名称
+    return apiRequest.get('/data/local/stocks/simple');
+  }
+
+  /**
+   * 获取本地股票列表（详细版，包含所有信息）
+   */
+  static async getLocalStockListDetailed(): Promise<{
     stocks: Array<{
       ts_code: string;
       name?: string;

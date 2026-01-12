@@ -120,6 +120,13 @@ export default function TaskDetailPage() {
       console.log('[TaskDetail] 开始加载回测详细数据...');
       const detailedResult = await BacktestService.getDetailedResult(taskId);
       console.log('[TaskDetail] 后端返回的详细数据:', detailedResult);
+      console.log('[TaskDetail] position_analysis 数据:', detailedResult?.position_analysis);
+      console.log('[TaskDetail] position_analysis 类型:', typeof detailedResult?.position_analysis);
+      console.log('[TaskDetail] position_analysis 是否为数组:', Array.isArray(detailedResult?.position_analysis));
+      if (detailedResult?.position_analysis && typeof detailedResult.position_analysis === 'object' && !Array.isArray(detailedResult.position_analysis)) {
+        console.log('[TaskDetail] position_analysis.stock_performance:', detailedResult.position_analysis.stock_performance);
+        console.log('[TaskDetail] stock_performance 长度:', detailedResult.position_analysis.stock_performance?.length);
+      }
       
       setBacktestDetailedData(detailedResult);
       
@@ -583,17 +590,47 @@ export default function TaskDetailPage() {
                     </div>
                   }>
                     <div className="mt-4">
-                      {backtestDetailedData?.position_analysis ? (
-                        <PositionAnalysis 
-                          positionAnalysis={backtestDetailedData.position_analysis}
-                          stockCodes={currentTask.stock_codes || []}
-                        />
-                      ) : (
-                        <div className="text-center text-default-500 py-8">
-                          <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>持仓分析数据加载中...</p>
-                        </div>
-                      )}
+                      {(() => {
+                        const posAnalysis = backtestDetailedData?.position_analysis;
+                        if (!posAnalysis) {
+                          return (
+                            <div className="text-center text-default-500 py-8">
+                              <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                              <p>持仓分析数据加载中...</p>
+                            </div>
+                          );
+                        }
+                        // 检查新格式（对象，包含stock_performance）
+                        if (typeof posAnalysis === 'object' && !Array.isArray(posAnalysis)) {
+                          const hasData = posAnalysis.stock_performance && 
+                                         Array.isArray(posAnalysis.stock_performance) && 
+                                         posAnalysis.stock_performance.length > 0;
+                          if (hasData) {
+                            return (
+                              <PositionAnalysis 
+                                positionAnalysis={posAnalysis}
+                                stockCodes={currentTask.stock_codes || []}
+                              />
+                            );
+                          }
+                        }
+                        // 检查旧格式（数组）
+                        if (Array.isArray(posAnalysis) && posAnalysis.length > 0) {
+                          return (
+                            <PositionAnalysis 
+                              positionAnalysis={posAnalysis}
+                              stockCodes={currentTask.stock_codes || []}
+                            />
+                          );
+                        }
+                        // 无数据
+                        return (
+                          <div className="text-center text-default-500 py-8">
+                            <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                            <p>暂无持仓分析数据</p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </Tab>
                   

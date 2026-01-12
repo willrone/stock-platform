@@ -11,6 +11,7 @@ from dataclasses import dataclass, asdict
 from loguru import logger
 
 from app.core.error_handler import TaskError, ErrorSeverity
+from app.services.backtest.position_analysis import PositionAnalyzer
 
 
 @dataclass
@@ -67,6 +68,36 @@ class PositionAnalysis:
 
 
 @dataclass
+class EnhancedPositionAnalysis:
+    """增强的持仓分析（包含完整分析结果）"""
+    # 股票表现数据（兼容原有格式）
+    stock_performance: List[Dict[str, Any]]
+    # 持仓权重分析
+    position_weights: Optional[Dict[str, Any]] = None
+    # 交易模式分析
+    trading_patterns: Optional[Dict[str, Any]] = None
+    # 持仓时间分析
+    holding_periods: Optional[Dict[str, Any]] = None
+    # 风险集中度分析
+    concentration_risk: Optional[Dict[str, Any]] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        result = {
+            'stock_performance': self.stock_performance,
+        }
+        if self.position_weights:
+            result['position_weights'] = self.position_weights
+        if self.trading_patterns:
+            result['trading_patterns'] = self.trading_patterns
+        if self.holding_periods:
+            result['holding_periods'] = self.holding_periods
+        if self.concentration_risk:
+            result['concentration_risk'] = self.concentration_risk
+        return result
+
+
+@dataclass
 class DrawdownAnalysis:
     """回撤详细分析"""
     max_drawdown: float
@@ -111,8 +142,8 @@ class EnhancedBacktestResult:
     extended_risk_metrics: Optional[ExtendedRiskMetrics] = None
     # 月度收益分析
     monthly_returns: Optional[List[MonthlyReturnsAnalysis]] = None
-    # 持仓分析
-    position_analysis: Optional[List[PositionAnalysis]] = None
+    # 持仓分析（支持增强格式）
+    position_analysis: Optional[Any] = None  # 可以是List[PositionAnalysis]或EnhancedPositionAnalysis
     # 基准对比数据
     benchmark_data: Optional[Dict[str, Any]] = None
     # 回撤详细分析
@@ -130,7 +161,13 @@ class EnhancedBacktestResult:
             result['monthly_returns'] = [mr.to_dict() for mr in self.monthly_returns]
         
         if self.position_analysis:
-            result['position_analysis'] = [pa.to_dict() for pa in self.position_analysis]
+            # 支持两种格式：List[PositionAnalysis] 或 EnhancedPositionAnalysis
+            if isinstance(self.position_analysis, EnhancedPositionAnalysis):
+                result['position_analysis'] = self.position_analysis.to_dict()
+            elif isinstance(self.position_analysis, list):
+                result['position_analysis'] = [pa.to_dict() for pa in self.position_analysis]
+            else:
+                result['position_analysis'] = self.position_analysis
         
         if self.drawdown_analysis:
             result['drawdown_analysis'] = self.drawdown_analysis.to_dict()
@@ -163,9 +200,10 @@ class BacktestDataAdapter:
                 task_result.get("portfolio_history", [])
             )
             
-            # 4. 分析持仓表现
+            # 4. 分析持仓表现（使用完整的PositionAnalyzer）
             position_analysis = await self._analyze_positions(
-                task_result.get("trade_history", [])
+                task_result.get("trade_history", []),
+                task_result.get("portfolio_history", [])
             )
             
             # 5. 计算回撤详细分析
@@ -365,69 +403,75 @@ class BacktestDataAdapter:
             logger.error(f"分析月度收益失败: {e}", exc_info=True)
             return None
     
-    async def _analyze_positions(self, trade_history: List[Dict]) -> Optional[List[PositionAnalysis]]:
-        """分析持仓表现"""
+    async def _analyze_positions(
+        self, 
+        trade_history: List[Dict],
+        portfolio_history: List[Dict]
+    ) -> Optional[EnhancedPositionAnalysis]:
+        """分析持仓表现（使用完整的PositionAnalyzer服务）"""
         
         if not trade_history:
             logger.warning("交易历史数据为空，无法分析持仓表现")
             return None
         
         try:
-            # 按股票分组分析
-            stock_stats = {}
+            # 使用完整的PositionAnalyzer服务
+            analyzer = PositionAnalyzer()
+            analysis_result = await analyzer.analyze_position_performance(
+                trade_history=trade_history,
+                portfolio_history=portfolio_history or []
+            )
             
-            for trade in trade_history:
-                stock_code = trade.get('stock_code', '')
-                if stock_code not in stock_stats:
-                    stock_stats[stock_code] = {
-                        'stock_code': stock_code,
-                        'trades': [],
-                        'total_pnl': 0,
-                        'buy_trades': 0,
-                        'sell_trades': 0,
-                        'winning_trades': 0,
-                        'losing_trades': 0
-                    }
-                
-                stock_stats[stock_code]['trades'].append(trade)
-                pnl = trade.get('pnl', 0)
-                stock_stats[stock_code]['total_pnl'] += pnl
-                
-                if trade.get('action') == 'BUY':
-                    stock_stats[stock_code]['buy_trades'] += 1
-                elif trade.get('action') == 'SELL':
-                    stock_stats[stock_code]['sell_trades'] += 1
-                    if pnl > 0:
-                        stock_stats[stock_code]['winning_trades'] += 1
-                    elif pnl < 0:
-                        stock_stats[stock_code]['losing_trades'] += 1
+            if not analysis_result:
+                logger.warning("PositionAnalyzer返回空结果")
+                return None
             
-            # 计算每只股票的统计指标
-            result = []
-            for stock_code, stats in stock_stats.items():
-                total_trades = stats['sell_trades']  # 只计算卖出交易
-                win_rate = stats['winning_trades'] / total_trades if total_trades > 0 else 0
-                
-                # 计算平均持仓期（简化计算）
-                avg_holding_period = self._calculate_avg_holding_period(stats['trades'])
-                
-                analysis = PositionAnalysis(
-                    stock_code=stock_code,
-                    stock_name=stock_code,  # 可以后续从股票信息服务获取
-                    total_return=stats['total_pnl'],
-                    trade_count=total_trades,
-                    win_rate=win_rate,
-                    avg_holding_period=avg_holding_period,
-                    winning_trades=stats['winning_trades'],
-                    losing_trades=stats['losing_trades']
-                )
-                result.append(analysis)
+            # 转换stock_performance为兼容格式（包含原有字段）
+            stock_performance = analysis_result.get('stock_performance', [])
+            compatible_stock_performance = []
             
-            # 按总收益排序
-            result.sort(key=lambda x: x.total_return, reverse=True)
+            for stock_data in stock_performance:
+                # 转换为兼容原有前端格式的数据
+                compatible_data = {
+                    'stock_code': stock_data.get('stock_code', ''),
+                    'stock_name': stock_data.get('stock_name', stock_data.get('stock_code', '')),
+                    'total_return': stock_data.get('total_return', 0.0),
+                    'trade_count': stock_data.get('total_trades', 0),
+                    'win_rate': stock_data.get('win_rate', 0.0),
+                    'avg_holding_period': stock_data.get('avg_holding_period', 0),
+                    'winning_trades': stock_data.get('winning_trades', 0),
+                    'losing_trades': stock_data.get('losing_trades', 0),
+                    # 添加额外字段供前端使用
+                    'avg_return_per_trade': stock_data.get('avg_return_per_trade', 0.0),
+                    'return_ratio': stock_data.get('return_ratio', 0.0),
+                    'trade_frequency': stock_data.get('trade_frequency', 0.0),
+                    'avg_win': stock_data.get('avg_win', 0.0),
+                    'avg_loss': stock_data.get('avg_loss', 0.0),
+                    'largest_win': stock_data.get('largest_win', 0.0),
+                    'largest_loss': stock_data.get('largest_loss', 0.0),
+                    'profit_factor': stock_data.get('profit_factor', 0.0),
+                    'max_holding_period': stock_data.get('max_holding_period', 0),
+                    'min_holding_period': stock_data.get('min_holding_period', 0),
+                    'avg_buy_price': stock_data.get('avg_buy_price', 0.0),
+                    'avg_sell_price': stock_data.get('avg_sell_price', 0.0),
+                    'price_improvement': stock_data.get('price_improvement', 0.0),
+                    'total_volume': stock_data.get('total_volume', 0.0),
+                    'total_commission': stock_data.get('total_commission', 0.0),
+                    'commission_ratio': stock_data.get('commission_ratio', 0.0),
+                }
+                compatible_stock_performance.append(compatible_data)
             
-            logger.info(f"持仓分析完成，共分析 {len(result)} 只股票")
-            return result
+            # 构建增强的持仓分析结果
+            enhanced_analysis = EnhancedPositionAnalysis(
+                stock_performance=compatible_stock_performance,
+                position_weights=analysis_result.get('position_weights'),
+                trading_patterns=analysis_result.get('trading_patterns'),
+                holding_periods=analysis_result.get('holding_periods'),
+                concentration_risk=analysis_result.get('concentration_risk')
+            )
+            
+            logger.info(f"持仓分析完成，共分析 {len(compatible_stock_performance)} 只股票")
+            return enhanced_analysis
             
         except Exception as e:
             logger.error(f"分析持仓表现失败: {e}", exc_info=True)
