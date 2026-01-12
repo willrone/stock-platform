@@ -113,14 +113,50 @@ export class DataService {
       end_date: endDate,
     };
     
-    const response = await apiRequest.get<any>('/stocks/data', params);
-    
-    // 转换为标准格式
-    return {
-      stock_code: stockCode,
-      data: response.data || [],
-      last_updated: new Date().toISOString(),
-    };
+    try {
+      const response = await apiRequest.get<any>('/stocks/data', params);
+      
+      console.log(`[DataService] getStockData 响应:`, response);
+      
+      // 转换为标准格式
+      // response 是后端返回的 response_data: { stock_code, start_date, end_date, data_points, data: [...] }
+      // 如果 response 为 null（后端返回 success=False 但 data 不为 null），则尝试从其他地方获取
+      let dataArray: any[] = [];
+      
+      if (response) {
+        if (Array.isArray(response.data)) {
+          dataArray = response.data;
+        } else if (Array.isArray(response)) {
+          dataArray = response;
+        }
+      }
+      
+      console.log(`[DataService] 解析后的数据数组长度: ${dataArray.length}`, {
+        responseType: typeof response,
+        responseKeys: response ? Object.keys(response) : [],
+        hasData: !!response?.data,
+        dataIsArray: Array.isArray(response?.data)
+      });
+      
+      return {
+        stock_code: stockCode,
+        data: dataArray,
+        last_updated: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      console.error(`[DataService] getStockData 失败:`, error);
+      console.error(`[DataService] 错误详情:`, {
+        message: error?.message,
+        status: error?.status,
+        response: error?.response
+      });
+      // 返回空数据而不是抛出错误，让组件可以处理
+      return {
+        stock_code: stockCode,
+        data: [],
+        last_updated: new Date().toISOString(),
+      };
+    }
   }
 
   /**

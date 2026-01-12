@@ -245,10 +245,23 @@ export default function InteractiveChartsContainer({
   }, [taskId]);
 
   useEffect(() => {
+    console.log(`[InteractiveChartsContainer] 更新selectedStock:`, { stockCode, stockCodes, currentSelected: selectedStock });
+    
     if (stockCode) {
+      console.log(`[InteractiveChartsContainer] 使用stockCode: ${stockCode}`);
       setSelectedStock(stockCode);
     } else if (stockCodes && stockCodes.length > 0) {
-      setSelectedStock((prev) => prev || stockCodes[0]);
+      const defaultStock = stockCodes[0];
+      console.log(`[InteractiveChartsContainer] 使用stockCodes[0]: ${defaultStock}`);
+      setSelectedStock((prev) => {
+        // 如果已经有选中的股票且该股票仍在列表中，保持选中
+        if (prev && stockCodes.includes(prev)) {
+          return prev;
+        }
+        return defaultStock;
+      });
+    } else {
+      console.warn(`[InteractiveChartsContainer] 没有可用的股票代码`);
     }
   }, [stockCode, stockCodes]);
 
@@ -391,8 +404,22 @@ export default function InteractiveChartsContainer({
               {selectedStock ? (
                 <TradingViewChart
                   stockCode={selectedStock}
-                  startDate={backtestData?.start_date}
-                  endDate={backtestData?.end_date}
+                  startDate={(() => {
+                    // 尝试从多个可能的位置获取开始日期
+                    const startDate = backtestData?.start_date || 
+                                     backtestData?.period?.start_date ||
+                                     backtestData?.backtest_config?.start_date;
+                    console.log(`[InteractiveChartsContainer] TradingViewChart startDate:`, startDate, 'from backtestData:', backtestData);
+                    return startDate;
+                  })()}
+                  endDate={(() => {
+                    // 尝试从多个可能的位置获取结束日期
+                    const endDate = backtestData?.end_date || 
+                                   backtestData?.period?.end_date ||
+                                   backtestData?.backtest_config?.end_date;
+                    console.log(`[InteractiveChartsContainer] TradingViewChart endDate:`, endDate, 'from backtestData:', backtestData);
+                    return endDate;
+                  })()}
                   trades={tradeRecords}
                   height={420}
                 />

@@ -37,10 +37,17 @@ async def get_stock_data(
         stock_data = await data_service.get_stock_data(stock_code, start_date, end_date)
         
         if not stock_data:
+            logger.warning(f"未找到股票 {stock_code} 在指定时间范围内的数据 (start_date={start_date.isoformat()}, end_date={end_date.isoformat()})")
             return StandardResponse(
                 success=False,
                 message=f"未找到股票 {stock_code} 在指定时间范围内的数据",
-                data=None
+                data={
+                    "stock_code": stock_code,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "data_points": 0,
+                    "data": []
+                }
             )
         
         # 转换数据格式
@@ -53,7 +60,7 @@ async def get_stock_data(
                 "low": item.low,
                 "close": item.close,
                 "volume": item.volume,
-                "adj_close": item.adj_close
+                "adj_close": getattr(item, 'adj_close', item.close)  # 如果不存在则使用close
             })
         
         response_data = {

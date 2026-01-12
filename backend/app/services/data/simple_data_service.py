@@ -4,6 +4,7 @@
 """
 
 import httpx
+import pandas as pd
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from loguru import logger
@@ -76,6 +77,54 @@ class SimpleDataService:
         start_date: datetime,
         end_date: datetime
     ) -> Optional[List[StockData]]:
+        """获取股票数据，优先从本地parquet文件读取，如果本地没有则从远端服务获取"""
+        try:
+            # 优先从本地parquet文件读取
+            from app.services.data.stock_data_loader import StockDataLoader
+            from app.core.config import settings
+            
+            logger.info(f"尝试从本地加载股票数据: {stock_code}, 时间范围: {start_date.date()} 至 {end_date.date()}")
+            loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
+            stock_df = loader.load_stock_data(stock_code, start_date=start_date, end_date=end_date)
+            
+            if not stock_df.empty and len(stock_df) > 0:
+                # 从本地文件成功加载数据
+                stock_data_list = []
+                for date, row in stock_df.iterrows():
+                    stock_data_list.append(StockData(
+                        stock_code=stock_code,
+                        date=date if isinstance(date, datetime) else pd.Timestamp(date).to_pydatetime(),
+                        open=float(row.get('open', 0)),
+                        high=float(row.get('high', 0)),
+                        low=float(row.get('low', 0)),
+                        close=float(row.get('close', 0)),
+                        volume=int(row.get('volume', 0)),
+                        adj_close=float(row.get('adj_close', row.get('close', 0))) if 'adj_close' in row else None
+                    ))
+                
+                logger.info(f"从本地成功加载股票数据: {stock_code}, {len(stock_data_list)} 条记录")
+                return stock_data_list
+            
+            # 本地没有数据，尝试从远端服务获取
+            logger.info(f"本地无数据，尝试从远端服务获取: {stock_code}")
+            return await self._get_stock_data_from_remote(stock_code, start_date, end_date)
+            
+        except Exception as e:
+            logger.error(f"获取股票数据异常: {stock_code}, 错误类型: {type(e).__name__}, 错误信息: {str(e)}", exc_info=True)
+            # 如果本地加载失败，尝试从远端获取
+            try:
+                logger.info(f"本地加载失败，尝试从远端服务获取: {stock_code}")
+                return await self._get_stock_data_from_remote(stock_code, start_date, end_date)
+            except Exception as remote_error:
+                logger.error(f"从远端获取股票数据也失败: {stock_code}, {str(remote_error)}")
+                return None
+    
+    async def _get_stock_data_from_remote(
+        self,
+        stock_code: str,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Optional[List[StockData]]:
         """从远端服务获取股票数据"""
         try:
             # 格式化日期
@@ -93,12 +142,12 @@ class SimpleDataService:
             response = await client.get(url, params=params)
             
             if response.status_code != 200:
-                logger.error(f"获取股票数据失败: {stock_code}, HTTP {response.status_code}")
+                logger.error(f"从远端获取股票数据失败: {stock_code}, HTTP {response.status_code}")
                 return None
             
             data = response.json()
             if not data.get('success', False):
-                logger.error(f"获取股票数据失败: {stock_code}, {data.get('error', '未知错误')}")
+                logger.error(f"从远端获取股票数据失败: {stock_code}, {data.get('error', '未知错误')}")
                 return None
             
             # 转换为StockData格式
@@ -114,11 +163,11 @@ class SimpleDataService:
                     volume=int(item['volume'])
                 ))
             
-            logger.info(f"成功获取股票数据: {stock_code}, {len(stock_data_list)} 条记录")
+            logger.info(f"从远端成功获取股票数据: {stock_code}, {len(stock_data_list)} 条记录")
             return stock_data_list
             
         except Exception as e:
-            logger.error(f"获取股票数据异常: {stock_code}, {str(e)}")
+            logger.error(f"从远端获取股票数据异常: {stock_code}, 错误类型: {type(e).__name__}, 错误信息: {str(e)}", exc_info=True)
             return None
     
     async def get_remote_stock_list(self) -> Optional[List[Dict[str, Any]]]:

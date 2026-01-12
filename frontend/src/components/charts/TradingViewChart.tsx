@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
 import { Card, CardBody, Button, ButtonGroup, Spinner } from '@heroui/react';
-import { Calendar, TrendingUp, BarChart3 } from 'lucide-react';
+import { Calendar, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { DataService } from '@/services/dataService';
 
 import { PredictionResult } from '../../services/taskService';
@@ -58,6 +58,7 @@ export default function TradingViewChart({
   // 获取股票数据
   const fetchStockData = async () => {
     if (!stockCode) {
+      console.warn('[TradingViewChart] 股票代码为空，无法加载数据');
       setPriceData([]);
       setLoading(false);
       return;
@@ -65,10 +66,48 @@ export default function TradingViewChart({
 
     setLoading(true);
     try {
+      // 处理日期格式
       const fallbackEnd = new Date();
       const fallbackStart = new Date('2020-01-01');
-      const resolvedStart = startDate ? new Date(startDate) : fallbackStart;
-      const resolvedEnd = endDate ? new Date(endDate) : fallbackEnd;
+      
+      let resolvedStart: Date;
+      let resolvedEnd: Date;
+      
+      // 处理startDate：可能是ISO字符串、Date对象或undefined
+      if (startDate) {
+        if (typeof startDate === 'string') {
+          resolvedStart = new Date(startDate);
+          if (isNaN(resolvedStart.getTime())) {
+            console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
+            resolvedStart = fallbackStart;
+          }
+        } else if (startDate instanceof Date) {
+          resolvedStart = startDate;
+        } else {
+          resolvedStart = fallbackStart;
+        }
+      } else {
+        resolvedStart = fallbackStart;
+      }
+      
+      // 处理endDate：可能是ISO字符串、Date对象或undefined
+      if (endDate) {
+        if (typeof endDate === 'string') {
+          resolvedEnd = new Date(endDate);
+          if (isNaN(resolvedEnd.getTime())) {
+            console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
+            resolvedEnd = fallbackEnd;
+          }
+        } else if (endDate instanceof Date) {
+          resolvedEnd = endDate;
+        } else {
+          resolvedEnd = fallbackEnd;
+        }
+      } else {
+        resolvedEnd = fallbackEnd;
+      }
+      
+      console.log(`[TradingViewChart] 开始获取股票数据: ${stockCode}, 时间范围: ${resolvedStart.toISOString().split('T')[0]} 至 ${resolvedEnd.toISOString().split('T')[0]}`);
       
       // 调用真实API获取数据
       const response = await DataService.getStockData(
@@ -77,13 +116,20 @@ export default function TradingViewChart({
         resolvedEnd.toISOString().split('T')[0]
       );
       
+      console.log(`[TradingViewChart] API响应:`, response);
+      
       // 转换数据格式
-      // DataService.getStockData返回的格式: { stock_code, data: { stock_code, start_date, end_date, data_points, data: [...] }, last_updated }
-      // 所以实际数据在 response.data.data 中
-      const apiData: any = response.data;
-      const dataArray = (apiData?.data && Array.isArray(apiData.data)) 
-        ? apiData.data 
-        : (Array.isArray(apiData) ? apiData : []);
+      // DataService.getStockData 返回格式: { stock_code, data: [...], last_updated }
+      // 其中 data 字段已经是后端返回的数据数组
+      const dataArray: any[] = Array.isArray(response?.data) ? response.data : [];
+      
+      console.log(`[TradingViewChart] 解析后的数据数组长度: ${dataArray.length}`, {
+        responseType: typeof response,
+        responseKeys: response ? Object.keys(response) : [],
+        hasDataArray: Array.isArray(dataArray),
+        dataArrayLength: dataArray.length,
+        firstItem: dataArray[0]
+      });
       
       if (dataArray.length > 0) {
         let formattedData: PriceData[] = dataArray.map((item: any) => ({
@@ -149,15 +195,28 @@ export default function TradingViewChart({
         // 按时间排序（确保数据按时间顺序）
         formattedData.sort((a, b) => a.time.localeCompare(b.time));
         
-        console.log(`成功加载 ${formattedData.length} 条${timeframe === '1D' ? '日' : timeframe === '1W' ? '周' : '月'}线数据，时间范围: ${formattedData[0]?.time} 至 ${formattedData[formattedData.length - 1]?.time}`);
+        console.log(`[TradingViewChart] 成功加载 ${formattedData.length} 条${timeframe === '1D' ? '日' : timeframe === '1W' ? '周' : '月'}线数据，时间范围: ${formattedData[0]?.time} 至 ${formattedData[formattedData.length - 1]?.time}`);
         setPriceData(formattedData);
       } else {
-        console.warn('未获取到股票数据，返回空数据');
+        console.warn('[TradingViewChart] 未获取到股票数据，返回空数据。', {
+          stockCode,
+          startDate: resolvedStart.toISOString().split('T')[0],
+          endDate: resolvedEnd.toISOString().split('T')[0],
+          response,
+          dataArrayLength: dataArray.length
+        });
         setPriceData([]);
       }
-    } catch (error) {
-      console.error('获取股票数据失败:', error);
+    } catch (error: any) {
+      console.error('[TradingViewChart] 获取股票数据失败:', error);
+      console.error('[TradingViewChart] 错误详情:', {
+        message: error?.message,
+        stack: error?.stack,
+        response: error?.response,
+        status: error?.status
+      });
       setPriceData([]);
+      // 可以在这里添加用户友好的错误提示
     } finally {
       setLoading(false);
     }
@@ -355,10 +414,11 @@ export default function TradingViewChart({
   }, [stockCode, timeframe, startDate, endDate]);
 
   useEffect(() => {
-    if (priceData.length > 0) {
+    // 即使数据为空也初始化图表，以便显示空状态
+    if (chartContainerRef.current) {
       initChart();
     }
-  }, [priceData, chartType, height]);
+  }, [priceData.length > 0, chartType, height]); // 当有数据时重新初始化
 
   useEffect(() => {
     updateChartData();
@@ -425,6 +485,14 @@ export default function TradingViewChart({
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
               <Spinner size="lg" />
+            </div>
+          )}
+          {!loading && priceData.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-10">
+              <AlertCircle className="w-12 h-12 text-default-400 mb-2" />
+              <p className="text-default-500 text-sm">暂无数据</p>
+              <p className="text-default-400 text-xs mt-1">股票代码: {stockCode}</p>
+              <p className="text-default-400 text-xs">时间范围: {startDate || '默认'} 至 {endDate || '现在'}</p>
             </div>
           )}
           <div
