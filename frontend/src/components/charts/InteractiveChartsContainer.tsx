@@ -180,12 +180,21 @@ export default function InteractiveChartsContainer({
       // 生成权益曲线数据
       const portfolioHistory = backtestData.portfolio_history || [];
       if (portfolioHistory.length > 0) {
+        // 按日期排序，确保数据顺序正确
+        const sortedHistory = [...portfolioHistory].sort((a: any, b: any) => {
+          const dateA = new Date(a.date || a.snapshot_date).getTime();
+          const dateB = new Date(b.date || b.snapshot_date).getTime();
+          return dateA - dateB;
+        });
+        
         const equityCurveData = {
-          dates: portfolioHistory.map((h: any) => h.date || h.snapshot_date),
-          portfolioValues: portfolioHistory.map((h: any) => h.portfolio_value),
-          returns: portfolioHistory.map((h: any) => h.total_return || 0),
-          dailyReturns: portfolioHistory.map((h: any) => h.daily_return || 0),
+          dates: sortedHistory.map((h: any) => h.date || h.snapshot_date),
+          portfolioValues: sortedHistory.map((h: any) => h.portfolio_value),
+          returns: sortedHistory.map((h: any) => h.total_return || 0),
+          dailyReturns: sortedHistory.map((h: any) => h.daily_return || 0),
         };
+        
+        console.log(`[InteractiveChartsContainer] 从回测数据生成权益曲线: 数据量=${sortedHistory.length}, 日期范围=${equityCurveData.dates[0]} 至 ${equityCurveData.dates[equityCurveData.dates.length - 1]}`);
 
         // 生成回撤数据
         const values = equityCurveData.portfolioValues;
@@ -235,8 +244,8 @@ export default function InteractiveChartsContainer({
 
   useEffect(() => {
     if (taskId) {
-      // 优先尝试从API加载数据
-      loadChartData().catch(() => {
+      // 首次加载时强制刷新，确保获取完整数据（包括所有年份的数据）
+      loadChartData(true).catch(() => {
         // 如果API加载失败，尝试从现有回测数据生成
         generateChartDataFromBacktest();
         setLoading(false);

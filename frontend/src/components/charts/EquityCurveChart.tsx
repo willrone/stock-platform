@@ -249,15 +249,16 @@ export default function EquityCurveChart({
       },
       grid: {
         left: '3%',
-        right: '4%',
-        bottom: '3%',
+        right: '4%', // 移除Y轴滑块后减少右边距
+        bottom: '10%', // 为X轴缩放滑块留出空间
         top: '15%',
         containLabel: true,
       },
       toolbox: {
         feature: {
           dataZoom: {
-            yAxisIndex: 'none',
+            yAxisIndex: [0], // 启用Y轴缩放
+            xAxisIndex: [0], // 启用X轴缩放
           },
           restore: {},
           saveAsImage: {},
@@ -271,22 +272,82 @@ export default function EquityCurveChart({
         data: filteredData.dates,
         axisLabel: {
           formatter: function (value: string) {
-            return new Date(value).toLocaleDateString('zh-CN', {
+            const date = new Date(value);
+            return date.toLocaleDateString('zh-CN', {
+              year: 'numeric',
               month: 'short',
               day: 'numeric',
             });
           },
+          rotate: 45, // 旋转标签以避免重叠
         },
       },
       yAxis: {
         type: 'value',
-        scale: true,
+        scale: false,
+        // 初始时根据当前数据计算范围
+        min: (() => {
+          if (chartType === 'value') {
+            const allValues = [...filteredData.portfolioValues];
+            if (showBenchmark && filteredBenchmarkData) {
+              allValues.push(...filteredBenchmarkData.values);
+            }
+            if (allValues.length > 0) {
+              const min = Math.min(...allValues);
+              const max = Math.max(...allValues);
+              const range = max - min;
+              return min - range * 0.1;
+            }
+          } else {
+            const allReturns = filteredData.returns.map(r => r * 100);
+            if (showBenchmark && filteredBenchmarkData) {
+              allReturns.push(...filteredBenchmarkData.returns.map(r => r * 100));
+            }
+            if (allReturns.length > 0) {
+              const min = Math.min(...allReturns);
+              const max = Math.max(...allReturns);
+              const range = max - min;
+              return min - Math.max(range * 0.1, 0.5);
+            }
+          }
+          return undefined;
+        })(),
+        max: (() => {
+          if (chartType === 'value') {
+            const allValues = [...filteredData.portfolioValues];
+            if (showBenchmark && filteredBenchmarkData) {
+              allValues.push(...filteredBenchmarkData.values);
+            }
+            if (allValues.length > 0) {
+              const min = Math.min(...allValues);
+              const max = Math.max(...allValues);
+              const range = max - min;
+              return max + range * 0.1;
+            }
+          } else {
+            const allReturns = filteredData.returns.map(r => r * 100);
+            if (showBenchmark && filteredBenchmarkData) {
+              allReturns.push(...filteredBenchmarkData.returns.map(r => r * 100));
+            }
+            if (allReturns.length > 0) {
+              const min = Math.min(...allReturns);
+              const max = Math.max(...allReturns);
+              const range = max - min;
+              return max + Math.max(range * 0.1, 0.5);
+            }
+          }
+          return undefined;
+        })(),
         axisLabel: {
           formatter: function (value: number) {
             if (chartType === 'value') {
-              return `¥${(value / 1000).toFixed(0)}K`;
+              if (value >= 10000) {
+                return `¥${(value / 10000).toFixed(1)}万`;
+              } else {
+                return `¥${(value / 1000).toFixed(0)}K`;
+              }
             } else {
-              return `${value.toFixed(1)}%`;
+              return `${value.toFixed(2)}%`;
             }
           },
         },
@@ -296,18 +357,100 @@ export default function EquityCurveChart({
           type: 'inside',
           start: 0,
           end: 100,
+          xAxisIndex: [0], // X轴缩放
+          yAxisIndex: [0], // Y轴缩放（鼠标滚轮）
         },
         {
+          type: 'slider',
           start: 0,
           end: 100,
           height: 30,
           bottom: 20,
+          xAxisIndex: [0], // 只保留X轴缩放滑块
         },
       ],
       series: series,
     };
 
     chartInstance.current.setOption(option);
+
+    // 监听dataZoom事件，动态更新Y轴范围
+    const handleDataZoom = () => {
+      if (!chartInstance.current) return;
+      
+      // 获取当前dataZoom状态
+      const option = chartInstance.current.getOption();
+      const dataZoom = option.dataZoom as any[];
+      
+      if (!dataZoom || dataZoom.length === 0) return;
+      
+      // 找到X轴的dataZoom
+      const xDataZoom = dataZoom.find((dz: any) => {
+        if (dz.xAxisIndex !== undefined) {
+          return Array.isArray(dz.xAxisIndex) ? dz.xAxisIndex.includes(0) : dz.xAxisIndex === 0;
+        }
+        return false;
+      });
+      
+      if (xDataZoom) {
+        const startPercent = xDataZoom.start || 0;
+        const endPercent = xDataZoom.end || 100;
+        
+        // 计算当前显示范围内的数据索引
+        const dataLength = filteredData.dates.length;
+        const startIndex = Math.max(0, Math.floor((startPercent / 100) * dataLength));
+        const endIndex = Math.min(dataLength, Math.ceil((endPercent / 100) * dataLength));
+        
+        // 根据图表类型获取当前显示范围内的数据
+        let visibleValues: number[] = [];
+        
+        if (chartType === 'value') {
+          // 权益曲线模式
+          visibleValues = filteredData.portfolioValues.slice(startIndex, endIndex);
+          if (showBenchmark && filteredBenchmarkData) {
+            const visibleBenchmarkValues = filteredBenchmarkData.values.slice(startIndex, endIndex);
+            visibleValues.push(...visibleBenchmarkValues);
+          }
+        } else {
+          // 收益率模式
+          const visibleReturns = filteredData.returns.slice(startIndex, endIndex).map((r: number) => r * 100);
+          visibleValues = visibleReturns;
+          if (showBenchmark && filteredBenchmarkData) {
+            const visibleBenchmarkReturns = filteredBenchmarkData.returns.slice(startIndex, endIndex).map((r: number) => r * 100);
+            visibleValues.push(...visibleBenchmarkReturns);
+          }
+        }
+        
+        if (visibleValues.length > 0) {
+          const minValue = Math.min(...visibleValues);
+          const maxValue = Math.max(...visibleValues);
+          const range = maxValue - minValue;
+          
+          // 如果范围太小（接近0），设置最小范围
+          let padding = range * 0.1; // 10%边距
+          if (range < 0.01) {
+            // 对于非常小的范围（如收益率），使用固定边距
+            padding = Math.max(0.5, Math.abs(minValue) * 0.1);
+          }
+          
+          // 更新Y轴范围
+          chartInstance.current.setOption({
+            yAxis: {
+              min: minValue - padding,
+              max: maxValue + padding,
+            }
+          }, false); // false表示不合并，只更新指定部分
+        }
+      }
+    };
+
+    // 监听dataZoom事件
+    chartInstance.current.on('dataZoom', handleDataZoom);
+    
+    // 初始计算Y轴范围
+    setTimeout(() => {
+      handleDataZoom();
+    }, 100);
 
     // 响应式调整
     const handleResize = () => {
@@ -319,6 +462,9 @@ export default function EquityCurveChart({
     window.addEventListener('resize', handleResize);
 
     return () => {
+      if (chartInstance.current) {
+        chartInstance.current.off('dataZoom', handleDataZoom);
+      }
       window.removeEventListener('resize', handleResize);
       if (chartInstance.current) {
         chartInstance.current.dispose();
@@ -329,8 +475,16 @@ export default function EquityCurveChart({
   // 图表操作函数
   const handleZoomIn = () => {
     if (chartInstance.current) {
+      // X轴和Y轴都放大到中心区域
       chartInstance.current.dispatchAction({
         type: 'dataZoom',
+        xAxisIndex: [0],
+        start: 25,
+        end: 75,
+      });
+      chartInstance.current.dispatchAction({
+        type: 'dataZoom',
+        yAxisIndex: [0],
         start: 25,
         end: 75,
       });
@@ -339,8 +493,16 @@ export default function EquityCurveChart({
 
   const handleZoomOut = () => {
     if (chartInstance.current) {
+      // X轴和Y轴都恢复到完整范围
       chartInstance.current.dispatchAction({
         type: 'dataZoom',
+        xAxisIndex: [0],
+        start: 0,
+        end: 100,
+      });
+      chartInstance.current.dispatchAction({
+        type: 'dataZoom',
+        yAxisIndex: [0],
         start: 0,
         end: 100,
       });

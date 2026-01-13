@@ -48,6 +48,20 @@ async def get_detailed_backtest_result(
         result_dict = detailed_result.to_dict()
         logger.debug(f"[API] 详细结果数据字段: {list(result_dict.keys())}")
         
+        # 检查 position_analysis 数据
+        if result_dict.get('position_analysis'):
+            pos_analysis = result_dict['position_analysis']
+            logger.info(f"[API] position_analysis 类型: {type(pos_analysis)}")
+            if isinstance(pos_analysis, dict):
+                logger.info(f"[API] position_analysis 键: {list(pos_analysis.keys())}")
+                if 'stock_performance' in pos_analysis:
+                    stock_perf = pos_analysis['stock_performance']
+                    logger.info(f"[API] stock_performance 类型: {type(stock_perf)}, 长度: {len(stock_perf) if isinstance(stock_perf, list) else 'N/A'}")
+            elif isinstance(pos_analysis, list):
+                logger.info(f"[API] position_analysis 是数组，长度: {len(pos_analysis)}")
+        else:
+            logger.warning(f"[API] position_analysis 为空或不存在")
+        
         return StandardResponse(
             success=True,
             message="获取回测详细结果成功",
@@ -66,7 +80,7 @@ async def get_portfolio_snapshots(
     task_id: str,
     start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
-    limit: Optional[int] = Query(100, description="返回记录数限制"),
+    limit: Optional[int] = Query(None, description="返回记录数限制，不指定则返回所有数据"),
     session: AsyncSession = Depends(get_async_session)
 ):
     """获取组合快照数据"""

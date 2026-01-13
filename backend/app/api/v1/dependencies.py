@@ -306,7 +306,14 @@ def execute_backtest_task_simple(task_id: str):
         task_logger.info(f"开始执行回测任务: {task_id}, 股票数量: {len(stock_codes)}, 期间: {start_date} - {end_date}, 进程ID: {process_id}")
         
         # 创建回测执行器（每个进程独立创建，不使用全局单例）
-        executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+        # 使用配置中的并行化设置
+        enable_parallel = getattr(settings, 'BACKTEST_PARALLEL_ENABLED', True)
+        max_workers = getattr(settings, 'BACKTEST_MAX_WORKERS', 4)
+        executor = BacktestExecutor(
+            data_dir=str(settings.DATA_ROOT_PATH),
+            enable_parallel=enable_parallel,
+            max_workers=max_workers
+        )
         
         # 创建回测配置
         backtest_config = BacktestConfig(

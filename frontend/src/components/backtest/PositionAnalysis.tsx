@@ -30,7 +30,8 @@ import {
   useDisclosure,
 } from '@heroui/react';
 import * as echarts from 'echarts';
-import { TrendingUp, TrendingDown, PieChart as PieChartIcon, BarChart3, Target, Award } from 'lucide-react';
+import { TrendingUp, TrendingDown, PieChart as PieChartIcon, BarChart3, Target, Award, DollarSign } from 'lucide-react';
+import { BacktestService, PortfolioSnapshot } from '@/services/backtestService';
 
 interface PositionData {
   stock_code: string;
@@ -71,6 +72,7 @@ interface EnhancedPositionAnalysis {
 interface PositionAnalysisProps {
   positionAnalysis: PositionData[] | EnhancedPositionAnalysis;
   stockCodes: string[];
+  taskId?: string; // 任务ID，用于获取组合快照数据
 }
 
 interface SortConfig {
@@ -78,13 +80,18 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnalysisProps) {
+export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: PositionAnalysisProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'total_return',
     direction: 'desc'
   });
   const [selectedMetric, setSelectedMetric] = useState<keyof PositionData>('total_return');
   const [selectedStock, setSelectedStock] = useState<PositionData | null>(null);
+  const [selectedTab, setSelectedTab] = useState<string>('table');
+  
+  // 组合快照数据状态
+  const [portfolioSnapshots, setPortfolioSnapshots] = useState<PortfolioSnapshot[]>([]);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
   
   const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
   
@@ -95,19 +102,29 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
   const weightChartRef = useRef<HTMLDivElement>(null);
   const tradingPatternChartRef = useRef<HTMLDivElement>(null);
   const holdingPeriodChartRef = useRef<HTMLDivElement>(null);
+  const capitalChartRef = useRef<HTMLDivElement>(null);
   const pieChartInstance = useRef<echarts.ECharts | null>(null);
   const barChartInstance = useRef<echarts.ECharts | null>(null);
   const treemapChartInstance = useRef<echarts.ECharts | null>(null);
   const weightChartInstance = useRef<echarts.ECharts | null>(null);
   const tradingPatternChartInstance = useRef<echarts.ECharts | null>(null);
   const holdingPeriodChartInstance = useRef<echarts.ECharts | null>(null);
+  const capitalChartInstance = useRef<echarts.ECharts | null>(null);
 
   // 数据格式转换：兼容新旧两种格式
   const normalizedData = useMemo(() => {
-    if (!positionAnalysis) return null;
+    console.log('[PositionAnalysis] 接收到的 positionAnalysis:', positionAnalysis);
+    console.log('[PositionAnalysis] positionAnalysis 类型:', typeof positionAnalysis);
+    console.log('[PositionAnalysis] 是否为数组:', Array.isArray(positionAnalysis));
+    
+    if (!positionAnalysis) {
+      console.log('[PositionAnalysis] positionAnalysis 为空');
+      return null;
+    }
     
     // 如果是数组格式（旧格式），直接使用
     if (Array.isArray(positionAnalysis)) {
+      console.log('[PositionAnalysis] 使用数组格式，长度:', positionAnalysis.length);
       return {
         stock_performance: positionAnalysis,
         position_weights: undefined,
@@ -117,8 +134,25 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       };
     }
     
-    // 如果是对象格式（新格式），直接使用
-    return positionAnalysis as EnhancedPositionAnalysis;
+    // 如果是对象格式（新格式），检查是否有 stock_performance
+    if (typeof positionAnalysis === 'object' && positionAnalysis !== null) {
+      console.log('[PositionAnalysis] 使用对象格式');
+      console.log('[PositionAnalysis] 对象键:', Object.keys(positionAnalysis));
+      console.log('[PositionAnalysis] stock_performance:', positionAnalysis.stock_performance);
+      console.log('[PositionAnalysis] stock_performance 类型:', typeof positionAnalysis.stock_performance);
+      console.log('[PositionAnalysis] stock_performance 长度:', Array.isArray(positionAnalysis.stock_performance) ? positionAnalysis.stock_performance.length : 'N/A');
+      
+      // 确保 stock_performance 存在且是数组
+      if (positionAnalysis.stock_performance && Array.isArray(positionAnalysis.stock_performance)) {
+        return positionAnalysis as EnhancedPositionAnalysis;
+      } else {
+        console.warn('[PositionAnalysis] stock_performance 不存在或不是数组');
+        return null;
+      }
+    }
+    
+    console.warn('[PositionAnalysis] 未知的数据格式');
+    return null;
   }, [positionAnalysis]);
 
   // 获取股票表现数据
@@ -251,52 +285,78 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
   // 初始化饼图
   useEffect(() => {
     if (!pieChartRef.current || pieChartData.length === 0) return;
+    
+    // 如果不在饼图Tab，不初始化
+    if (selectedTab !== 'pie') return;
 
-    if (pieChartInstance.current) {
-      pieChartInstance.current.dispose();
-    }
+    const initChart = () => {
+      if (!pieChartRef.current || pieChartData.length === 0) return;
+      
+      // 检查容器是否有尺寸
+      const rect = pieChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
 
-    pieChartInstance.current = echarts.init(pieChartRef.current);
+      if (pieChartInstance.current) {
+        pieChartInstance.current.dispose();
+      }
 
-    const option = {
-      title: {
-        text: '持仓权重分布',
-        left: 'center',
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold',
-        },
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: function (params: any) {
-          const percentage = ((params.value / pieChartData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
-          return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(2)}<br/>占比: ${percentage}%`;
-        },
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        data: pieChartData.map(item => item.name),
-      },
-      series: [
-        {
-          name: '持仓权重',
-          type: 'pie',
-          radius: '50%',
-          data: pieChartData,
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)',
-            },
+      pieChartInstance.current = echarts.init(pieChartRef.current);
+
+      const option = {
+        title: {
+          text: '持仓权重分布',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold',
           },
         },
-      ],
+        tooltip: {
+          trigger: 'item',
+          formatter: function (params: any) {
+            const percentage = ((params.value / pieChartData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
+            return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(2)}<br/>占比: ${percentage}%`;
+          },
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          data: pieChartData.map(item => item.name),
+        },
+        series: [
+          {
+            name: '持仓权重',
+            type: 'pie',
+            radius: '50%',
+            data: pieChartData,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)',
+              },
+            },
+          },
+        ],
+      };
+
+      pieChartInstance.current.setOption(option);
+
+      const handleResize = () => {
+        if (pieChartInstance.current) {
+          pieChartInstance.current.resize();
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
     };
 
-    pieChartInstance.current.setOption(option);
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
 
     const handleResize = () => {
       if (pieChartInstance.current) {
@@ -307,19 +367,34 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
     };
-  }, [pieChartData]);
+  }, [pieChartData, selectedTab]);
 
   // 初始化柱状图
   useEffect(() => {
     if (!barChartRef.current || barChartData.length === 0) return;
+    
+    // 如果不在柱状图Tab，不初始化
+    if (selectedTab !== 'bar') return;
 
-    if (barChartInstance.current) {
-      barChartInstance.current.dispose();
-    }
+    const initChart = () => {
+      if (!barChartRef.current || barChartData.length === 0) return;
+      
+      // 检查容器是否有尺寸
+      const rect = barChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
 
-    barChartInstance.current = echarts.init(barChartRef.current);
+      if (barChartInstance.current) {
+        barChartInstance.current.dispose();
+      }
+
+      barChartInstance.current = echarts.init(barChartRef.current);
 
     const getDataByMetric = () => {
       switch (selectedMetric) {
@@ -420,7 +495,11 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       ],
     };
 
-    barChartInstance.current.setOption(option);
+      barChartInstance.current.setOption(option);
+    };
+
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
 
     const handleResize = () => {
       if (barChartInstance.current) {
@@ -431,63 +510,82 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
     };
-  }, [barChartData, selectedMetric]);
+  }, [barChartData, selectedMetric, selectedTab]);
 
   // 初始化树状图
   useEffect(() => {
     if (!treemapChartRef.current || treemapData.length === 0) return;
+    
+    // 如果不在树状图Tab，不初始化
+    if (selectedTab !== 'treemap') return;
 
-    if (treemapChartInstance.current) {
-      treemapChartInstance.current.dispose();
-    }
+    const initChart = () => {
+      if (!treemapChartRef.current || treemapData.length === 0) return;
+      
+      // 检查容器是否有尺寸
+      const rect = treemapChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
 
-    treemapChartInstance.current = echarts.init(treemapChartRef.current);
+      if (treemapChartInstance.current) {
+        treemapChartInstance.current.dispose();
+      }
 
-    const option = {
-      title: {
-        text: '持仓权重树状图',
-        left: 'center',
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold',
-        },
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: function (params: any) {
-          const percentage = ((params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
-          return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(2)}<br/>占比: ${percentage}%`;
-        },
-      },
-      series: [
-        {
-          name: '持仓权重',
-          type: 'treemap',
-          data: treemapData,
-          roam: false,
-          nodeClick: false,
-          breadcrumb: {
-            show: false,
-          },
-          label: {
-            show: true,
-            formatter: function (params: any) {
-              const percentage = ((params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
-              return `${params.name}\n${percentage}%`;
-            },
-            color: '#fff',
+      treemapChartInstance.current = echarts.init(treemapChartRef.current);
+
+      const option = {
+        title: {
+          text: '持仓权重树状图',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
             fontWeight: 'bold',
           },
-          upperLabel: {
-            show: false,
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: function (params: any) {
+            const percentage = ((params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
+            return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(2)}<br/>占比: ${percentage}%`;
           },
         },
-      ],
+        series: [
+          {
+            name: '持仓权重',
+            type: 'treemap',
+            data: treemapData,
+            roam: false,
+            nodeClick: false,
+            breadcrumb: {
+              show: false,
+            },
+            label: {
+              show: true,
+              formatter: function (params: any) {
+                const percentage = ((params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
+                return `${params.name}\n${percentage}%`;
+              },
+              color: '#fff',
+              fontWeight: 'bold',
+            },
+            upperLabel: {
+              show: false,
+            },
+          },
+        ],
+      };
+
+      treemapChartInstance.current.setOption(option);
     };
 
-    treemapChartInstance.current.setOption(option);
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
 
     const handleResize = () => {
       if (treemapChartInstance.current) {
@@ -498,19 +596,34 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
     };
-  }, [treemapData]);
+  }, [treemapData, selectedTab]);
 
   // 初始化持仓权重图表
   useEffect(() => {
     if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
+    
+    // 如果不在持仓权重Tab，不初始化
+    if (selectedTab !== 'weights') return;
 
-    if (weightChartInstance.current) {
-      weightChartInstance.current.dispose();
-    }
+    const initChart = () => {
+      if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
+      
+      // 检查容器是否有尺寸
+      const rect = weightChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
 
-    weightChartInstance.current = echarts.init(weightChartRef.current);
+      if (weightChartInstance.current) {
+        weightChartInstance.current.dispose();
+      }
+
+      weightChartInstance.current = echarts.init(weightChartRef.current);
 
     const option = {
       title: {
@@ -549,7 +662,11 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       ],
     };
 
-    weightChartInstance.current.setOption(option);
+      weightChartInstance.current.setOption(option);
+    };
+
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
 
     const handleResize = () => {
       if (weightChartInstance.current) {
@@ -560,56 +677,75 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
     };
-  }, [weightChartData]);
+  }, [weightChartData, selectedTab]);
 
   // 初始化交易模式图表
   useEffect(() => {
     if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
+    
+    // 如果不在交易模式Tab，不初始化
+    if (selectedTab !== 'trading-patterns') return;
 
-    if (tradingPatternChartInstance.current) {
-      tradingPatternChartInstance.current.dispose();
-    }
+    const initChart = () => {
+      if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
+      
+      // 检查容器是否有尺寸
+      const rect = tradingPatternChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
 
-    tradingPatternChartInstance.current = echarts.init(tradingPatternChartRef.current);
+      if (tradingPatternChartInstance.current) {
+        tradingPatternChartInstance.current.dispose();
+      }
 
-    const patterns = normalizedData.trading_patterns;
-    const option: any = {
-      title: {
-        text: '交易模式分析',
-        left: 'center',
-      },
-      tooltip: {
-        trigger: 'axis',
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '15%',
-        top: '15%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'category',
-        data: patterns.time_patterns?.monthly_distribution?.map((m: any) => `${m.month}月`) || [],
-      },
-      yAxis: {
-        type: 'value',
-      },
-      series: [
-        {
-          name: '交易次数',
-          type: 'bar',
-          data: patterns.time_patterns?.monthly_distribution?.map((m: any) => m.count) || [],
-          itemStyle: {
-            color: '#3b82f6',
-          },
+      tradingPatternChartInstance.current = echarts.init(tradingPatternChartRef.current);
+
+      const patterns = normalizedData.trading_patterns;
+      const option: any = {
+        title: {
+          text: '交易模式分析',
+          left: 'center',
         },
-      ],
+        tooltip: {
+          trigger: 'axis',
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '15%',
+          top: '15%',
+          containLabel: true,
+        },
+        xAxis: {
+          type: 'category',
+          data: patterns.time_patterns?.monthly_distribution?.map((m: any) => `${m.month}月`) || [],
+        },
+        yAxis: {
+          type: 'value',
+        },
+        series: [
+          {
+            name: '交易次数',
+            type: 'bar',
+            data: patterns.time_patterns?.monthly_distribution?.map((m: any) => m.count) || [],
+            itemStyle: {
+              color: '#3b82f6',
+            },
+          },
+        ],
+      };
+
+      tradingPatternChartInstance.current.setOption(option);
     };
 
-    tradingPatternChartInstance.current.setOption(option);
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
 
     const handleResize = () => {
       if (tradingPatternChartInstance.current) {
@@ -620,56 +756,75 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
     };
-  }, [normalizedData?.trading_patterns]);
+  }, [normalizedData?.trading_patterns, selectedTab]);
 
   // 初始化持仓时间图表
   useEffect(() => {
     if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
+    
+    // 如果不在持仓时间Tab，不初始化
+    if (selectedTab !== 'holding-periods') return;
 
-    if (holdingPeriodChartInstance.current) {
-      holdingPeriodChartInstance.current.dispose();
-    }
+    const initChart = () => {
+      if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
+      
+      // 检查容器是否有尺寸
+      const rect = holdingPeriodChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
 
-    holdingPeriodChartInstance.current = echarts.init(holdingPeriodChartRef.current);
+      if (holdingPeriodChartInstance.current) {
+        holdingPeriodChartInstance.current.dispose();
+      }
 
-    const periods = normalizedData.holding_periods;
-    const option = {
-      title: {
-        text: '持仓时间分布',
-        left: 'center',
-      },
-      tooltip: {
-        trigger: 'item',
-      },
-      series: [
-        {
-          name: '持仓时间',
-          type: 'pie',
-          radius: '50%',
-          data: [
-            {
-              value: periods.short_term_positions,
-              name: '短期（≤7天）',
-              itemStyle: { color: '#3b82f6' },
-            },
-            {
-              value: periods.medium_term_positions,
-              name: '中期（7-30天）',
-              itemStyle: { color: '#10b981' },
-            },
-            {
-              value: periods.long_term_positions,
-              name: '长期（>30天）',
-              itemStyle: { color: '#f59e0b' },
-            },
-          ],
+      holdingPeriodChartInstance.current = echarts.init(holdingPeriodChartRef.current);
+
+      const periods = normalizedData.holding_periods;
+      const option = {
+        title: {
+          text: '持仓时间分布',
+          left: 'center',
         },
-      ],
+        tooltip: {
+          trigger: 'item',
+        },
+        series: [
+          {
+            name: '持仓时间',
+            type: 'pie',
+            radius: '50%',
+            data: [
+              {
+                value: periods.short_term_positions,
+                name: '短期（≤7天）',
+                itemStyle: { color: '#3b82f6' },
+              },
+              {
+                value: periods.medium_term_positions,
+                name: '中期（7-30天）',
+                itemStyle: { color: '#10b981' },
+              },
+              {
+                value: periods.long_term_positions,
+                name: '长期（>30天）',
+                itemStyle: { color: '#f59e0b' },
+              },
+            ],
+          },
+        ],
+      };
+
+      holdingPeriodChartInstance.current.setOption(option);
     };
 
-    holdingPeriodChartInstance.current.setOption(option);
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
 
     const handleResize = () => {
       if (holdingPeriodChartInstance.current) {
@@ -680,9 +835,195 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
     };
-  }, [normalizedData?.holding_periods]);
+  }, [normalizedData?.holding_periods, selectedTab]);
+
+  // 获取组合快照数据
+  useEffect(() => {
+    if (!taskId) return;
+
+    const loadSnapshots = async () => {
+      setLoadingSnapshots(true);
+      try {
+        const result = await BacktestService.getPortfolioSnapshots(taskId, undefined, undefined, 10000);
+        if (result && result.snapshots) {
+          // 按日期排序
+          const sorted = [...result.snapshots].sort((a, b) => 
+            new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime()
+          );
+          setPortfolioSnapshots(sorted);
+        }
+      } catch (error) {
+        console.error('获取组合快照数据失败:', error);
+      } finally {
+        setLoadingSnapshots(false);
+      }
+    };
+
+    loadSnapshots();
+  }, [taskId]);
+
+  // 资金分配图表数据
+  const capitalChartData = useMemo(() => {
+    if (!portfolioSnapshots || portfolioSnapshots.length === 0) return null;
+
+    const dates: string[] = [];
+    const totalCapital: number[] = [];
+    const positionCapital: number[] = [];
+    const freeCapital: number[] = [];
+
+    portfolioSnapshots.forEach(snapshot => {
+      dates.push(snapshot.snapshot_date);
+      totalCapital.push(snapshot.portfolio_value);
+      freeCapital.push(snapshot.cash);
+      positionCapital.push(snapshot.portfolio_value - snapshot.cash);
+    });
+
+    return {
+      dates,
+      totalCapital,
+      positionCapital,
+      freeCapital
+    };
+  }, [portfolioSnapshots]);
+
+  // 初始化资金分配折线图
+  useEffect(() => {
+    if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) return;
+    
+    // 如果不在资金分配Tab，不初始化
+    if (selectedTab !== 'capital-allocation') return;
+
+    const initChart = () => {
+      if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) return;
+      
+      // 检查容器是否有尺寸
+      const rect = capitalChartRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // 如果容器还没有尺寸，延迟重试
+        setTimeout(initChart, 100);
+        return;
+      }
+
+      if (capitalChartInstance.current) {
+        capitalChartInstance.current.dispose();
+      }
+
+      capitalChartInstance.current = echarts.init(capitalChartRef.current);
+
+      const option = {
+        title: {
+          text: '资金分配趋势',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold',
+          },
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: function (params: any) {
+            let result = `${params[0].axisValue}<br/>`;
+            params.forEach((param: any) => {
+              result += `${param.marker}${param.seriesName}: ¥${param.value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<br/>`;
+            });
+            return result;
+          },
+        },
+        legend: {
+          data: ['总资金', '持仓资金', '空闲资金'],
+          top: 30,
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          top: '15%',
+          containLabel: true,
+        },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: capitalChartData.dates,
+          axisLabel: {
+            rotate: 45,
+            formatter: function (value: string) {
+              return value.split('T')[0]; // 只显示日期部分
+            },
+          },
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: {
+            formatter: function (value: number) {
+              if (value >= 10000) {
+                return `¥${(value / 10000).toFixed(1)}万`;
+              }
+              return `¥${value.toFixed(0)}`;
+            },
+          },
+        },
+        series: [
+          {
+            name: '总资金',
+            type: 'line',
+            data: capitalChartData.totalCapital,
+            smooth: true,
+            itemStyle: {
+              color: '#3b82f6', // 蓝色
+            },
+            areaStyle: {
+              opacity: 0.1,
+            },
+          },
+          {
+            name: '持仓资金',
+            type: 'line',
+            data: capitalChartData.positionCapital,
+            smooth: true,
+            itemStyle: {
+              color: '#10b981', // 绿色
+            },
+            areaStyle: {
+              opacity: 0.1,
+            },
+          },
+          {
+            name: '空闲资金',
+            type: 'line',
+            data: capitalChartData.freeCapital,
+            smooth: true,
+            itemStyle: {
+              color: '#f59e0b', // 橙色
+            },
+            areaStyle: {
+              opacity: 0.1,
+            },
+          },
+        ],
+      };
+
+      capitalChartInstance.current.setOption(option);
+    };
+
+    // 延迟初始化，确保容器已渲染
+    const timer = setTimeout(initChart, 100);
+
+    const handleResize = () => {
+      if (capitalChartInstance.current) {
+        capitalChartInstance.current.resize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [capitalChartData, selectedTab]);
 
   // 处理排序
   const handleSort = (key: keyof PositionData) => {
@@ -842,7 +1183,12 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
       )}
 
       {/* 图表展示 */}
-      <Tabs defaultSelectedKey="table" className="w-full">
+      <Tabs 
+        defaultSelectedKey="table" 
+        className="w-full"
+        selectedKey={selectedTab}
+        onSelectionChange={(key) => setSelectedTab(key as string)}
+      >
         <Tab key="table" title={
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4" />
@@ -1304,6 +1650,65 @@ export function PositionAnalysis({ positionAnalysis, stockCodes }: PositionAnaly
                     </div>
                   )}
                 </div>
+              </CardBody>
+            </Card>
+          </Tab>
+        )}
+
+        {/* 资金分配分析 */}
+        {taskId && (
+          <Tab key="capital-allocation" title={
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4" />
+              资金分配
+            </div>
+          }>
+            <Card>
+              <CardHeader>
+                <h3 className="text-lg font-semibold">资金分配趋势</h3>
+                <p className="text-sm text-gray-500">展示每天的持仓资金、空闲资金和总资金变化</p>
+              </CardHeader>
+              <CardBody>
+                {loadingSnapshots ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <p>加载资金分配数据中...</p>
+                  </div>
+                ) : capitalChartData && capitalChartData.dates.length > 0 ? (
+                  <div ref={capitalChartRef} style={{ height: '400px', width: '100%' }} />
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <p>暂无资金分配数据</p>
+                  </div>
+                )}
+                {/* 资金统计信息 */}
+                {capitalChartData && capitalChartData.dates.length > 0 && (
+                  <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-blue-50 rounded">
+                      <p className="text-sm text-gray-500">平均总资金</p>
+                      <p className="text-lg font-bold text-blue-600">
+                        ¥{(capitalChartData.totalCapital.reduce((a, b) => a + b, 0) / capitalChartData.totalCapital.length / 10000).toFixed(2)}万
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded">
+                      <p className="text-sm text-gray-500">平均持仓资金</p>
+                      <p className="text-lg font-bold text-green-600">
+                        ¥{(capitalChartData.positionCapital.reduce((a, b) => a + b, 0) / capitalChartData.positionCapital.length / 10000).toFixed(2)}万
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 rounded">
+                      <p className="text-sm text-gray-500">平均空闲资金</p>
+                      <p className="text-lg font-bold text-orange-600">
+                        ¥{(capitalChartData.freeCapital.reduce((a, b) => a + b, 0) / capitalChartData.freeCapital.length / 10000).toFixed(2)}万
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded">
+                      <p className="text-sm text-gray-500">平均持仓比例</p>
+                      <p className="text-lg font-bold">
+                        {((capitalChartData.positionCapital.reduce((a, b) => a + b, 0) / capitalChartData.totalCapital.reduce((a, b) => a + b, 0)) * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardBody>
             </Card>
           </Tab>

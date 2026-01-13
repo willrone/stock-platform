@@ -46,10 +46,19 @@ class ChartDataGenerator:
         if not portfolio_history:
             return {"equity_curve": [], "benchmark_curve": []}
         
+        logger.info(f"生成收益曲线数据: portfolio_history长度={len(portfolio_history)}")
+        
         # 转换为DataFrame
         df = pd.DataFrame(portfolio_history)
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
+            # 按日期排序，确保数据顺序正确
+            df = df.sort_values('date')
+            logger.info(f"收益曲线数据排序后: 日期范围={df['date'].min()} 至 {df['date'].max()}, 数据量={len(df)}")
+        elif 'snapshot_date' in df.columns:
+            df['date'] = pd.to_datetime(df['snapshot_date'])
+            df = df.sort_values('date')
+            logger.info(f"收益曲线数据排序后: 日期范围={df['date'].min()} 至 {df['date'].max()}, 数据量={len(df)}")
         
         # 计算累积收益率
         initial_value = df['portfolio_value'].iloc[0]

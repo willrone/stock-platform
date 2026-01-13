@@ -401,25 +401,163 @@ class EnhancedMetricsCalculator:
             基准对比指标
         """
         try:
-            # 这里可以集成现有的数据服务获取基准数据
-            # 暂时返回模拟数据结构
             logger.info(f"计算与基准 {benchmark_symbol} 的对比指标")
             
-            # TODO: 实际实现中需要获取基准数据并计算相关性、Beta等指标
+            if not portfolio_history:
+                logger.warning("组合历史数据为空，无法计算基准对比")
+                return {}
+            
+            # 获取基准数据
+            from app.services.data.simple_data_service import SimpleDataService
+            from app.services.data.stock_data_loader import StockDataLoader
+            from app.core.config import settings
+            
+            # 确定日期范围
+            dates = [pd.to_datetime(snapshot['date']) for snapshot in portfolio_history]
+            start_date = min(dates)
+            end_date = max(dates)
+            
+            # 尝试从本地加载基准数据
+            benchmark_data = None
+            loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
+            benchmark_df = loader.load_stock_data(benchmark_symbol, start_date=start_date, end_date=end_date)
+            
+            if benchmark_df.empty or len(benchmark_df) == 0:
+                # 尝试从远程服务获取
+                logger.info(f"本地无基准数据，尝试从远程服务获取: {benchmark_symbol}")
+                data_service = SimpleDataService()
+                benchmark_data_list = await data_service.get_stock_data(benchmark_symbol, start_date, end_date)
+                
+                if benchmark_data_list and len(benchmark_data_list) > 0:
+                    benchmark_df = pd.DataFrame([{
+                        'date': item.date,
+                        'close': item.close
+                    } for item in benchmark_data_list])
+                    benchmark_df = benchmark_df.set_index('date')
+                    benchmark_df = benchmark_df.sort_index()
+            
+            if benchmark_df.empty or len(benchmark_df) == 0:
+                logger.warning(f"无法获取基准数据: {benchmark_symbol}，返回空结果")
+                return {
+                    'benchmark_symbol': benchmark_symbol,
+                    'benchmark_name': self._get_benchmark_name(benchmark_symbol),
+                    'error': '无法获取基准数据'
+                }
+            
+            # 准备组合数据
+            portfolio_df = pd.DataFrame(portfolio_history)
+            portfolio_df['date'] = pd.to_datetime(portfolio_df['date'])
+            portfolio_df = portfolio_df.set_index('date')
+            portfolio_df = portfolio_df.sort_index()
+            
+            # 计算收益率
+            portfolio_returns = portfolio_df['portfolio_value'].pct_change().dropna()
+            benchmark_returns = benchmark_df['close'].pct_change().dropna()
+            
+            # 对齐日期
+            common_dates = portfolio_returns.index.intersection(benchmark_returns.index)
+            if len(common_dates) == 0:
+                logger.warning("组合和基准数据没有共同的日期，无法计算对比指标")
+                return {
+                    'benchmark_symbol': benchmark_symbol,
+                    'benchmark_name': self._get_benchmark_name(benchmark_symbol),
+                    'error': '数据日期不匹配'
+                }
+            
+            portfolio_returns_aligned = portfolio_returns.loc[common_dates]
+            benchmark_returns_aligned = benchmark_returns.loc[common_dates]
+            
+            # 计算相关性
+            correlation = float(portfolio_returns_aligned.corr(benchmark_returns_aligned))
+            
+            # 计算Beta（组合收益对基准收益的敏感度）
+            if len(portfolio_returns_aligned) > 1 and benchmark_returns_aligned.std() > 0:
+                covariance = portfolio_returns_aligned.cov(benchmark_returns_aligned)
+                benchmark_variance = benchmark_returns_aligned.var()
+                beta = float(covariance / benchmark_variance) if benchmark_variance > 0 else 0.0
+            else:
+                beta = 0.0
+            
+            # 计算Alpha（超额收益）
+            portfolio_annual_return = portfolio_returns_aligned.mean() * 252
+            benchmark_annual_return = benchmark_returns_aligned.mean() * 252
+            alpha = float(portfolio_annual_return - (beta * benchmark_annual_return))
+            
+            # 计算跟踪误差（组合收益与基准收益的差异的标准差）
+            excess_returns = portfolio_returns_aligned - benchmark_returns_aligned
+            tracking_error = float(excess_returns.std() * np.sqrt(252))
+            
+            # 计算信息比率（超额收益/跟踪误差）
+            excess_return_mean = float(excess_returns.mean() * np.sqrt(252))
+            information_ratio = float(excess_return_mean / tracking_error) if tracking_error > 0 else 0.0
+            
+            # 计算总超额收益
+            total_excess_return = float((portfolio_df['portfolio_value'].iloc[-1] / portfolio_df['portfolio_value'].iloc[0]) - 
+                                       (benchmark_df['close'].iloc[-1] / benchmark_df['close'].iloc[0]))
+            
+            # 计算上涨/下跌捕获率
+            up_capture, down_capture = self._calculate_capture_ratios(
+                portfolio_returns_aligned, benchmark_returns_aligned
+            )
+            
             return {
                 'benchmark_symbol': benchmark_symbol,
-                'benchmark_name': '沪深300指数',
-                'correlation': 0.75,
-                'beta': 1.2,
-                'alpha': 0.05,
-                'tracking_error': 0.15,
-                'information_ratio': 0.33,
-                'excess_return': 0.08
+                'benchmark_name': self._get_benchmark_name(benchmark_symbol),
+                'correlation': correlation,
+                'beta': beta,
+                'alpha': alpha,
+                'tracking_error': tracking_error,
+                'information_ratio': information_ratio,
+                'excess_return': total_excess_return,
+                'upside_capture': up_capture,
+                'downside_capture': down_capture,
+                'benchmark_data': benchmark_df['close'].to_dict()  # 保存基准数据用于前端展示
             }
             
         except Exception as e:
             logger.error(f"计算基准对比指标失败: {e}", exc_info=True)
-            return {}
+            return {
+                'benchmark_symbol': benchmark_symbol,
+                'benchmark_name': self._get_benchmark_name(benchmark_symbol),
+                'error': str(e)
+            }
+    
+    def _get_benchmark_name(self, symbol: str) -> str:
+        """获取基准名称"""
+        benchmark_names = {
+            '000300.SH': '沪深300指数',
+            '000905.SH': '中证500指数',
+            '000852.SH': '中证1000指数',
+            '399001.SZ': '深证成指',
+            '399006.SZ': '创业板指'
+        }
+        return benchmark_names.get(symbol, f'{symbol}指数')
+    
+    def _calculate_capture_ratios(self, portfolio_returns: pd.Series, benchmark_returns: pd.Series) -> Tuple[float, float]:
+        """计算上涨/下跌捕获率"""
+        try:
+            # 上涨捕获率：基准上涨时，组合的平均收益 / 基准的平均收益
+            up_periods = benchmark_returns > 0
+            if up_periods.sum() > 0:
+                portfolio_up_avg = portfolio_returns[up_periods].mean()
+                benchmark_up_avg = benchmark_returns[up_periods].mean()
+                up_capture = float(portfolio_up_avg / benchmark_up_avg) if benchmark_up_avg > 0 else 0.0
+            else:
+                up_capture = 0.0
+            
+            # 下跌捕获率：基准下跌时，组合的平均收益 / 基准的平均收益
+            down_periods = benchmark_returns < 0
+            if down_periods.sum() > 0:
+                portfolio_down_avg = portfolio_returns[down_periods].mean()
+                benchmark_down_avg = benchmark_returns[down_periods].mean()
+                down_capture = float(portfolio_down_avg / benchmark_down_avg) if benchmark_down_avg < 0 else 0.0
+            else:
+                down_capture = 0.0
+            
+            return up_capture, down_capture
+        except Exception as e:
+            logger.error(f"计算捕获率失败: {e}")
+            return 0.0, 0.0
     
     def calculate_sector_analysis(self, trade_history: List[Dict]) -> Dict[str, Any]:
         """

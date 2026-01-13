@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # 进程池配置（用于任务执行，独立于WORKERS配置）
     PROCESS_POOL_SIZE: int = 3  # 进程池大小，建议为CPU核心数
     TASK_EXECUTION_TIMEOUT: int = 3600  # 任务执行超时（秒）
+    
+    # 回测并行化配置（单个回测任务内部的并行化）
+    BACKTEST_PARALLEL_ENABLED: bool = True  # 是否启用回测并行化（多股票信号生成并行）
+    BACKTEST_MAX_WORKERS: int = 10  # 回测并行化工作线程数（建议为CPU核心数）
 
     # API 配置
     API_V1_PREFIX: str = "/api/v1"

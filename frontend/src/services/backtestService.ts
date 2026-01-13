@@ -498,7 +498,8 @@ export class BacktestService {
    */
   private static async generateEquityCurveData(taskId: string): Promise<Record<string, any>> {
     try {
-      const snapshots = await this.getPortfolioSnapshots(taskId);
+      // 获取所有数据，不限制数量（传入一个很大的数字，或者不传limit让后端返回所有）
+      const snapshots = await this.getPortfolioSnapshots(taskId, undefined, undefined, 100000);
       
       if (!snapshots || !snapshots.snapshots || snapshots.snapshots.length === 0) {
         console.warn(`[BacktestService] 组合快照数据为空: taskId=${taskId}`);
@@ -510,11 +511,18 @@ export class BacktestService {
         };
       }
       
+      // 按日期排序，确保数据顺序正确
+      const sortedSnapshots = [...snapshots.snapshots].sort((a, b) => 
+        new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime()
+      );
+      
+      console.log(`[BacktestService] 生成权益曲线数据: taskId=${taskId}, 数据量=${sortedSnapshots.length}, 日期范围=${sortedSnapshots[0]?.snapshot_date} 至 ${sortedSnapshots[sortedSnapshots.length - 1]?.snapshot_date}`);
+      
       return {
-        dates: snapshots.snapshots.map(s => s.snapshot_date),
-        portfolioValues: snapshots.snapshots.map(s => s.portfolio_value),
-        returns: snapshots.snapshots.map(s => s.total_return),
-        dailyReturns: snapshots.snapshots.map(s => s.daily_return || 0),
+        dates: sortedSnapshots.map(s => s.snapshot_date),
+        portfolioValues: sortedSnapshots.map(s => s.portfolio_value),
+        returns: sortedSnapshots.map(s => s.total_return),
+        dailyReturns: sortedSnapshots.map(s => s.daily_return || 0),
       };
     } catch (error: any) {
       console.error(`[BacktestService] 生成权益曲线数据失败:`, error);

@@ -211,7 +211,15 @@ class BacktestDataAdapter:
                 task_result.get("portfolio_history", [])
             )
             
-            # 6. 构建增强结果
+            # 6. 计算基准对比
+            from app.services.backtest.enhanced_metrics_calculator import EnhancedMetricsCalculator
+            metrics_calculator = EnhancedMetricsCalculator()
+            benchmark_data = await metrics_calculator.calculate_benchmark_comparison(
+                task_result.get("portfolio_history", []),
+                benchmark_symbol="000300.SH"
+            )
+            
+            # 7. 构建增强结果
             enhanced_result = EnhancedBacktestResult(
                 # 现有字段直接映射
                 strategy_name=base_data["strategy_name"],
@@ -238,7 +246,8 @@ class BacktestDataAdapter:
                 extended_risk_metrics=extended_risk_metrics,
                 monthly_returns=monthly_returns,
                 position_analysis=position_analysis,
-                drawdown_analysis=drawdown_analysis
+                drawdown_analysis=drawdown_analysis,
+                benchmark_data=benchmark_data if benchmark_data else None
             )
             
             logger.info("回测结果数据适配完成")

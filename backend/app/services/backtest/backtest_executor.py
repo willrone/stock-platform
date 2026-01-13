@@ -8,6 +8,9 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+from functools import partial
 
 from .backtest_engine import (
     BaseStrategy, StrategyFactory, PortfolioManager, BacktestConfig,
@@ -22,8 +25,9 @@ from app.models.task_models import BacktestResult
 class DataLoader:
     """数据加载器"""
     
-    def __init__(self, data_dir: str = "backend/data"):
+    def __init__(self, data_dir: str = "backend/data", max_workers: Optional[int] = None):
         self.data_dir = Path(data_dir)
+        self.max_workers = max_workers  # 用于并行加载数据
     
     def load_stock_data(self, stock_code: str, start_date: datetime, 
                        end_date: datetime) -> pd.DataFrame:
@@ -77,19 +81,53 @@ class DataLoader:
             )
     
     def load_multiple_stocks(self, stock_codes: List[str], start_date: datetime,
-                           end_date: datetime) -> Dict[str, pd.DataFrame]:
-        """加载多只股票数据"""
+                           end_date: datetime, parallel: bool = True) -> Dict[str, pd.DataFrame]:
+        """
+        加载多只股票数据
+        
+        Args:
+            stock_codes: 股票代码列表
+            start_date: 开始日期
+            end_date: 结束日期
+            parallel: 是否并行加载（默认True）
+        """
         stock_data = {}
         failed_stocks = []
         
-        for stock_code in stock_codes:
-            try:
-                data = self.load_stock_data(stock_code, start_date, end_date)
-                stock_data[stock_code] = data
-            except Exception as e:
-                logger.error(f"加载股票数据失败: {stock_code}, 错误: {e}")
-                failed_stocks.append(stock_code)
-                continue
+        if parallel and len(stock_codes) > 1 and self.max_workers:
+            # 并行加载多只股票数据
+            max_workers = min(self.max_workers, len(stock_codes))
+            logger.info(f"并行加载 {len(stock_codes)} 只股票数据，使用 {max_workers} 个线程")
+            
+            def load_single_stock(stock_code: str) -> Tuple[str, Optional[pd.DataFrame], Optional[str]]:
+                """加载单只股票数据，返回 (stock_code, data, error)"""
+                try:
+                    data = self.load_stock_data(stock_code, start_date, end_date)
+                    return (stock_code, data, None)
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"加载股票数据失败: {stock_code}, 错误: {error_msg}")
+                    return (stock_code, None, error_msg)
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(load_single_stock, code): code for code in stock_codes}
+                
+                for future in as_completed(futures):
+                    stock_code, data, error = future.result()
+                    if data is not None:
+                        stock_data[stock_code] = data
+                    else:
+                        failed_stocks.append(stock_code)
+        else:
+            # 顺序加载（兼容旧逻辑）
+            for stock_code in stock_codes:
+                try:
+                    data = self.load_stock_data(stock_code, start_date, end_date)
+                    stock_data[stock_code] = data
+                except Exception as e:
+                    logger.error(f"加载股票数据失败: {stock_code}, 错误: {e}")
+                    failed_stocks.append(stock_code)
+                    continue
         
         if failed_stocks:
             logger.warning(f"部分股票数据加载失败: {failed_stocks}")
@@ -106,13 +144,31 @@ class DataLoader:
 class BacktestExecutor:
     """回测执行器"""
     
-    def __init__(self, data_dir: str = "backend/data"):
-        self.data_loader = DataLoader(data_dir)
+    def __init__(self, data_dir: str = "backend/data", enable_parallel: bool = True, 
+                 max_workers: Optional[int] = None):
+        """
+        初始化回测执行器
+        
+        Args:
+            data_dir: 数据目录
+            enable_parallel: 是否启用并行化（默认True）
+            max_workers: 最大工作线程数，默认使用CPU核心数
+        """
+        import os
+        if max_workers is None:
+            max_workers = min(os.cpu_count() or 4, 8)  # 最多8个线程，避免过多线程导致开销
+        
+        self.enable_parallel = enable_parallel
+        self.max_workers = max_workers
+        self.data_loader = DataLoader(data_dir, max_workers=max_workers if enable_parallel else None)
         self.execution_stats = {
             "total_backtests": 0,
             "successful_backtests": 0,
             "failed_backtests": 0
         }
+        
+        if enable_parallel:
+            logger.info(f"回测执行器已启用并行化，最大工作线程数: {max_workers}")
     
     async def run_backtest(self, strategy_name: str, stock_codes: List[str],
                     start_date: datetime, end_date: datetime,
@@ -326,15 +382,50 @@ class BacktestExecutor:
                 if not current_prices:
                     continue
                 
-                # 生成交易信号
+                # 生成交易信号（支持并行生成多股票信号）
                 all_signals = []
-                for stock_code, data in stock_data.items():
-                    if current_date in data.index:
-                        # 获取到当前日期的历史数据
-                        historical_data = data[data.index <= current_date]
-                        if len(historical_data) >= 20:  # 确保有足够的历史数据
-                            signals = strategy.generate_signals(historical_data, current_date)
-                            all_signals.extend(signals)
+                
+                if self.enable_parallel and len(stock_data) > 3:
+                    # 并行生成多股票信号
+                    def generate_stock_signals(stock_code: str, data: pd.DataFrame) -> List[TradingSignal]:
+                        """为单只股票生成信号（用于并行执行）"""
+                        if current_date in data.index:
+                            historical_data = data[data.index <= current_date]
+                            if len(historical_data) >= 20:  # 确保有足够的历史数据
+                                try:
+                                    return strategy.generate_signals(historical_data, current_date)
+                                except Exception as e:
+                                    logger.warning(f"生成信号失败 {stock_code}: {e}")
+                                    return []
+                        return []
+                    
+                    # 使用线程池并行生成信号
+                    with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                        futures = {
+                            executor.submit(generate_stock_signals, code, data): code 
+                            for code, data in stock_data.items()
+                        }
+                        
+                        for future in as_completed(futures):
+                            try:
+                                signals = future.result()
+                                all_signals.extend(signals)
+                            except Exception as e:
+                                stock_code = futures[future]
+                                logger.error(f"并行生成信号失败 {stock_code}: {e}")
+                else:
+                    # 顺序生成信号（股票数量少或禁用并行）
+                    for stock_code, data in stock_data.items():
+                        if current_date in data.index:
+                            # 获取到当前日期的历史数据
+                            historical_data = data[data.index <= current_date]
+                            if len(historical_data) >= 20:  # 确保有足够的历史数据
+                                try:
+                                    signals = strategy.generate_signals(historical_data, current_date)
+                                    all_signals.extend(signals)
+                                except Exception as e:
+                                    logger.warning(f"生成信号失败 {stock_code}: {e}")
+                                    continue
                 
                 total_signals += len(all_signals)
                 
@@ -517,6 +608,7 @@ class BacktestExecutor:
                     "price": trade.price,
                     "timestamp": trade.timestamp.isoformat(),
                     "commission": trade.commission,
+                    "slippage_cost": getattr(trade, 'slippage_cost', 0.0),
                     "pnl": trade.pnl
                 }
                 for trade in portfolio_manager.trades
@@ -527,13 +619,41 @@ class BacktestExecutor:
                 {
                     "date": snapshot["date"].isoformat(),
                     "portfolio_value": snapshot["portfolio_value"],
+                    "portfolio_value_without_cost": snapshot.get("portfolio_value_without_cost", snapshot["portfolio_value"]),
                     "cash": snapshot["cash"],
                     "positions_count": len(snapshot.get("positions", {})),
                     "positions": snapshot.get("positions", {}),  # 包含完整的持仓信息
-                    "total_return": (snapshot["portfolio_value"] - config.initial_cash) / config.initial_cash if config.initial_cash > 0 else 0
+                    "total_return": (snapshot["portfolio_value"] - config.initial_cash) / config.initial_cash if config.initial_cash > 0 else 0,
+                    "total_return_without_cost": (snapshot.get("portfolio_value_without_cost", snapshot["portfolio_value"]) - config.initial_cash) / config.initial_cash if config.initial_cash > 0 else 0
                 }
                 for snapshot in portfolio_manager.portfolio_history
-            ]
+            ],
+            
+            # 交易成本统计
+            "cost_statistics": {
+                "total_commission": portfolio_manager.total_commission,
+                "total_slippage": portfolio_manager.total_slippage,
+                "total_cost": portfolio_manager.total_commission + portfolio_manager.total_slippage,
+                "cost_ratio": (portfolio_manager.total_commission + portfolio_manager.total_slippage) / config.initial_cash if config.initial_cash > 0 else 0
+            }
+        }
+        
+        # 添加无成本指标到报告
+        metrics_without_cost = portfolio_manager.get_performance_metrics_without_cost()
+        report["excess_return_without_cost"] = {
+            "mean": metrics_without_cost.get("mean", 0),
+            "std": metrics_without_cost.get("std", 0),
+            "annualized_return": metrics_without_cost.get("annualized_return", 0),
+            "information_ratio": metrics_without_cost.get("information_ratio", 0),
+            "max_drawdown": metrics_without_cost.get("max_drawdown", 0)
+        }
+        
+        report["excess_return_with_cost"] = {
+            "mean": performance_metrics.get("volatility", 0) / np.sqrt(252) if performance_metrics.get("volatility", 0) > 0 else 0,
+            "std": performance_metrics.get("volatility", 0),
+            "annualized_return": performance_metrics.get("annualized_return", 0),
+            "information_ratio": performance_metrics.get("sharpe_ratio", 0),  # 使用夏普比率作为近似
+            "max_drawdown": performance_metrics.get("max_drawdown", 0)
         }
         
         # 计算额外的分析指标

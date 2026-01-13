@@ -10,7 +10,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card,
   CardHeader,
@@ -63,6 +63,7 @@ import { BacktestDataAdapter } from '../../../services/backtestDataAdapter';
 import { wsService } from '../../../services/websocket';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 import BacktestOverview from '../../../components/backtest/BacktestOverview';
+import { CostAnalysis } from '../../../components/backtest/CostAnalysis';
 import BacktestTaskStatus from '../../../components/backtest/BacktestTaskStatus';
 import BacktestProgressMonitor from '../../../components/backtest/BacktestProgressMonitor';
 import { TradeHistoryTable } from '../../../components/backtest/TradeHistoryTable';
@@ -106,12 +107,26 @@ export default function TaskDetailPage() {
   const [adaptedRiskData, setAdaptedRiskData] = useState<any>(null);
   const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<any>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
+  const [selectedBacktestTab, setSelectedBacktestTab] = useState<string>('overview');
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   const [deleteForce, setDeleteForce] = useState(false);
 
   // 加载回测详细数据
-  const loadBacktestDetailedData = async () => {
-    if (!currentTask || currentTask.task_type !== 'backtest' || currentTask.status !== 'completed') {
+  const loadBacktestDetailedData = async (force: boolean = false) => {
+    // 如果数据已加载且不强制刷新，则跳过
+    if (!force && backtestDetailedData !== null && !loadingBacktestData) {
+      console.log('[TaskDetail] 回测详细数据已加载，跳过重复加载');
+      return;
+    }
+    
+    // 检查任务状态（允许传入task参数以支持提前加载）
+    const task = currentTask;
+    if (!task || task.task_type !== 'backtest' || task.status !== 'completed') {
+      console.log('[TaskDetail] 任务状态不满足加载条件:', { 
+        hasTask: !!task, 
+        taskType: task?.task_type, 
+        status: task?.status 
+      });
       return;
     }
 
@@ -203,8 +218,8 @@ export default function TaskDetailPage() {
           if (!selectedStock && task.stock_codes && task.stock_codes.length > 0) {
             setSelectedStock(task.stock_codes[0]);
           }
-          // 加载回测详细数据
-          await loadBacktestDetailedData();
+          // 加载回测详细数据（初始化加载，强制刷新）
+          await loadBacktestDetailedData(true);
         }
       }
     } catch (error) {
@@ -228,6 +243,28 @@ export default function TaskDetailPage() {
       }
     };
   }, [taskId]);
+
+  // 当currentTask状态变化时，确保回测详细数据已加载（仅在任务状态变为completed时触发一次）
+  // 使用 ref 来跟踪是否已经触发过加载，避免重复加载
+  const hasTriggeredLoadRef = React.useRef(false);
+  useEffect(() => {
+    if (currentTask && 
+        currentTask.task_type === 'backtest' && 
+        currentTask.status === 'completed' &&
+        !hasTriggeredLoadRef.current) {
+      // 只在第一次检测到任务完成时触发加载
+      hasTriggeredLoadRef.current = true;
+      console.log('[TaskDetail] 检测到回测任务已完成，触发数据加载');
+      loadBacktestDetailedData();
+    }
+    // 如果任务状态变化，重置 ref
+    if (currentTask?.status !== 'completed') {
+      hasTriggeredLoadRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTask?.status, currentTask?.task_type]);
+
+  // 当currentTask状态变化时，确保回测详细数据已加载（移除selectedBacktestTab依赖，避免干扰页签切换）
 
   // WebSocket实时更新
   useEffect(() => {
@@ -273,8 +310,8 @@ export default function TaskDetailPage() {
           } else if (task.task_type === 'backtest') {
             // 回测任务，确保回测结果已加载
             console.log('回测任务完成，回测结果:', task.results?.backtest_results);
-            // 重新加载回测详细数据
-            await loadBacktestDetailedData();
+            // 重新加载回测详细数据（强制刷新，因为任务刚完成）
+            await loadBacktestDetailedData(true);
           }
         } catch (error) {
           console.error('加载任务详情失败:', error);
@@ -530,15 +567,39 @@ export default function TaskDetailPage() {
             /* 回测任务专用标签页 */
             <Card>
               <CardBody>
-                <Tabs aria-label="回测结果展示" className="w-full">
+                <Tabs 
+                  aria-label="回测结果展示" 
+                  className="w-full"
+                  selectedKey={selectedBacktestTab}
+                  onSelectionChange={(key) => {
+                    const tabKey = key as string;
+                    setSelectedBacktestTab(tabKey);
+                    console.log('[TaskDetail] 切换到页签:', tabKey);
+                    
+                    // 如果切换到持仓分析页签，确保数据已加载
+                    if (tabKey === 'positions' && 
+                        currentTask && 
+                        currentTask.task_type === 'backtest' && 
+                        currentTask.status === 'completed' &&
+                        !backtestDetailedData && 
+                        !loadingBacktestData) {
+                      console.log('[TaskDetail] 切换到持仓分析页签，触发数据加载');
+                      loadBacktestDetailedData();
+                    }
+                  }}
+                >
                   <Tab key="overview" title={
                     <div className="flex items-center space-x-2">
                       <BarChart3 className="w-4 h-4" />
                       <span>概览</span>
                     </div>
                   }>
-                    <div className="mt-4">
+                    <div className="mt-4 space-y-6">
                       <BacktestOverview 
+                        backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
+                        loading={loadingBacktestData}
+                      />
+                      <CostAnalysis
                         backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
                         loading={loadingBacktestData}
                       />
@@ -592,11 +653,21 @@ export default function TaskDetailPage() {
                     <div className="mt-4">
                       {(() => {
                         // 如果数据正在加载，显示加载中
-                        if (loadingBacktestData || backtestDetailedData === null) {
+                        if (loadingBacktestData) {
                           return (
                             <div className="text-center text-default-500 py-8">
                               <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
                               <p>持仓分析数据加载中...</p>
+                            </div>
+                          );
+                        }
+                        
+                        // 如果数据未加载（null），但不在加载中，可能是数据不存在或加载失败
+                        if (backtestDetailedData === null) {
+                          return (
+                            <div className="text-center text-default-500 py-8">
+                              <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                              <p>暂无持仓分析数据</p>
                             </div>
                           );
                         }
@@ -623,6 +694,7 @@ export default function TaskDetailPage() {
                                 <PositionAnalysis 
                                   positionAnalysis={posAnalysis}
                                   stockCodes={currentTask.stock_codes || []}
+                                  taskId={taskId}
                                 />
                               );
                             }
@@ -649,6 +721,7 @@ export default function TaskDetailPage() {
                             <PositionAnalysis 
                               positionAnalysis={posAnalysis}
                               stockCodes={currentTask.stock_codes || []}
+                              taskId={taskId}
                             />
                           );
                         }
