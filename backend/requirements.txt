@@ -29,6 +29,7 @@ vectorbt>=0.26.0
 pandas-ta>=0.4.67b0  # 技术分析库，纯Python实现，无需编译
 scikit-learn>=1.4.0
 joblib>=1.3.0  # scikit-learn的依赖，用于模型序列化
+optuna>=3.4.0  # 超参数优化框架
 # PyTorch - 支持ROCm和CUDA
 torch>=2.1.0
 torchvision>=0.16.0

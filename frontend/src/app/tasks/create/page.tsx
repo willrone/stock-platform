@@ -41,6 +41,8 @@ import { TaskService, CreateTaskRequest } from '../../../services/taskService';
 import { DataService } from '../../../services/dataService';
 import { StockSelector } from '../../../components/tasks/StockSelector';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
+import { StrategyConfigForm, StrategyParameter } from '../../../components/backtest/StrategyConfigForm';
+import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
 
 
 
@@ -52,7 +54,11 @@ export default function CreateTaskPage() {
   const [loading, setLoading] = useState(false);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
   const [taskType, setTaskType] = useState<'prediction' | 'backtest'>('prediction');
-  const [availableStrategies, setAvailableStrategies] = useState<Array<{key: string; name: string; description: string}>>([]);
+  const [availableStrategies, setAvailableStrategies] = useState<Array<{key: string; name: string; description: string; parameters?: Record<string, StrategyParameter>}>>([]);
+  const [strategyConfig, setStrategyConfig] = useState<Record<string, any>>({});
+  const [savedConfigs, setSavedConfigs] = useState<StrategyConfig[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [configFormKey, setConfigFormKey] = useState(0);
   const [formData, setFormData] = useState({
     task_name: '',
     description: '',
@@ -110,6 +116,39 @@ export default function CreateTaskPage() {
 
     loadStrategies();
   }, [taskType]);
+
+  // 加载已保存的配置列表
+  useEffect(() => {
+    const loadSavedConfigs = async () => {
+      if (taskType === 'backtest' && formData.strategy_name) {
+        setLoadingConfigs(true);
+        try {
+          const response = await StrategyConfigService.getConfigs(formData.strategy_name);
+          setSavedConfigs(response.configs);
+        } catch (error) {
+          console.error('加载已保存配置失败:', error);
+        } finally {
+          setLoadingConfigs(false);
+        }
+      } else {
+        setSavedConfigs([]);
+      }
+    };
+
+    loadSavedConfigs();
+  }, [taskType, formData.strategy_name]);
+
+  // 加载配置详情
+  const handleLoadConfig = async (configId: string) => {
+    try {
+      const config = await StrategyConfigService.getConfig(configId);
+      setStrategyConfig(config.parameters);
+      // 通过更新key强制重新渲染组件，传入新的values
+      setConfigFormKey(prev => prev + 1);
+    } catch (error) {
+      console.error('加载配置失败:', error);
+    }
+  };
 
   // 表单验证
   const validateForm = () => {
@@ -172,6 +211,7 @@ export default function CreateTaskPage() {
             initial_cash: formData.initial_cash,
             commission_rate: formData.commission_rate,
             slippage_rate: formData.slippage_rate,
+            strategy_config: strategyConfig,
           },
         }),
       };
@@ -421,6 +461,33 @@ export default function CreateTaskPage() {
                     </SelectItem>
                   ))}
                 </Select>
+
+                {/* 策略配置表单 */}
+                {formData.strategy_name && (() => {
+                  const selectedStrategy = availableStrategies.find(s => s.key === formData.strategy_name);
+                  if (selectedStrategy && selectedStrategy.parameters) {
+                    return (
+                      <StrategyConfigForm
+                        key={`${formData.strategy_name}-${configFormKey}`}
+                        strategyName={formData.strategy_name}
+                        parameters={selectedStrategy.parameters}
+                        values={configFormKey > 0 && Object.keys(strategyConfig).length > 0 ? strategyConfig : undefined}
+                        onChange={(newConfig) => {
+                          // 使用函数式更新，确保获取最新值
+                          setStrategyConfig(newConfig);
+                        }}
+                        onLoadConfig={handleLoadConfig}
+                        savedConfigs={savedConfigs.map(c => ({
+                          config_id: c.config_id,
+                          config_name: c.config_name,
+                          created_at: c.created_at,
+                        }))}
+                        loading={loadingConfigs}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input

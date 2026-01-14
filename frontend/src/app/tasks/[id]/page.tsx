@@ -54,6 +54,7 @@ import {
   PieChart,
   Calendar,
   FileText,
+  Save,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTaskStore, Task } from '../../../stores/useTaskStore';
@@ -70,6 +71,8 @@ import { TradeHistoryTable } from '../../../components/backtest/TradeHistoryTabl
 import { PositionAnalysis } from '../../../components/backtest/PositionAnalysis';
 import { RiskAnalysis } from '../../../components/backtest/RiskAnalysis';
 import { PerformanceBreakdown } from '../../../components/backtest/PerformanceBreakdown';
+import { SaveStrategyConfigDialog } from '../../../components/backtest/SaveStrategyConfigDialog';
+import { StrategyConfigService } from '../../../services/strategyConfigService';
 import dynamic from 'next/dynamic';
 
 // 动态导入图表组件
@@ -109,7 +112,9 @@ export default function TaskDetailPage() {
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const [selectedBacktestTab, setSelectedBacktestTab] = useState<string>('overview');
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const { isOpen: isSaveConfigOpen, onOpen: onSaveConfigOpen, onClose: onSaveConfigClose } = useDisclosure();
   const [deleteForce, setDeleteForce] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   // 加载回测详细数据
   const loadBacktestDetailedData = async (force: boolean = false) => {
@@ -400,6 +405,61 @@ export default function TaskDetailPage() {
     }
   };
 
+  // 获取策略配置信息
+  const getStrategyConfig = () => {
+    if (!currentTask || currentTask.task_type !== 'backtest') {
+      return null;
+    }
+
+    const backtestData = currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results;
+    if (!backtestData) {
+      return null;
+    }
+
+    // 从回测配置中获取策略配置
+    const backtestConfig = backtestData.backtest_config;
+    if (backtestConfig && backtestConfig.strategy_config) {
+      return {
+        strategyName: backtestConfig.strategy_name || currentTask.config?.backtest_config?.strategy_name,
+        parameters: backtestConfig.strategy_config,
+      };
+    }
+
+    // 如果回测配置中没有，尝试从任务配置中获取
+    if (currentTask.config?.backtest_config?.strategy_config) {
+      return {
+        strategyName: currentTask.config.backtest_config.strategy_name,
+        parameters: currentTask.config.backtest_config.strategy_config,
+      };
+    }
+
+    return null;
+  };
+
+  // 保存策略配置
+  const handleSaveConfig = async (configName: string, description: string) => {
+    const configInfo = getStrategyConfig();
+    if (!configInfo) {
+      throw new Error('无法获取策略配置信息');
+    }
+
+    setSavingConfig(true);
+    try {
+      await StrategyConfigService.createConfig({
+        config_name: configName,
+        strategy_name: configInfo.strategyName,
+        parameters: configInfo.parameters,
+        description: description,
+      });
+      console.log('策略配置保存成功');
+    } catch (error: any) {
+      console.error('保存策略配置失败:', error);
+      throw error;
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   // 返回任务列表
   const handleBack = () => {
     router.push('/tasks');
@@ -595,6 +655,45 @@ export default function TaskDetailPage() {
                     </div>
                   }>
                     <div className="mt-4 space-y-6">
+                      {/* 策略配置信息和保存按钮 */}
+                      {(() => {
+                        const configInfo = getStrategyConfig();
+                        if (configInfo && currentTask.status === 'completed') {
+                          return (
+                            <Card>
+                              <CardHeader className="flex justify-between items-center">
+                                <div>
+                                  <h4 className="text-md font-semibold">策略配置</h4>
+                                  <p className="text-sm text-default-500">策略: {configInfo.strategyName}</p>
+                                </div>
+                                <Button
+                                  color="primary"
+                                  variant="flat"
+                                  startContent={<Save className="w-4 h-4" />}
+                                  onPress={onSaveConfigOpen}
+                                >
+                                  保存配置
+                                </Button>
+                              </CardHeader>
+                              <CardBody>
+                                <div className="bg-default-100 rounded-lg p-3">
+                                  <pre className="text-xs text-default-600 whitespace-pre-wrap font-mono">
+                                    {Object.entries(configInfo.parameters)
+                                      .map(([key, value]) => {
+                                        if (typeof value === 'object' && value !== null) {
+                                          return `${key}: ${JSON.stringify(value, null, 2)}`;
+                                        }
+                                        return `${key}: ${value}`;
+                                      })
+                                      .join('\n')}
+                                  </pre>
+                                </div>
+                              </CardBody>
+                            </Card>
+                          );
+                        }
+                        return null;
+                      })()}
                       <BacktestOverview 
                         backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
                         loading={loadingBacktestData}
@@ -1122,6 +1221,24 @@ export default function TaskDetailPage() {
           )}
         </div>
       </div>
+
+      {/* 保存策略配置对话框 */}
+      {(() => {
+        const configInfo = getStrategyConfig();
+        if (configInfo) {
+          return (
+            <SaveStrategyConfigDialog
+              isOpen={isSaveConfigOpen}
+              onClose={onSaveConfigClose}
+              strategyName={configInfo.strategyName}
+              parameters={configInfo.parameters}
+              onSave={handleSaveConfig}
+              loading={savingConfig}
+            />
+          );
+        }
+        return null;
+      })()}
 
       {/* 删除确认对话框 */}
       <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>

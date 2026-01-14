@@ -41,6 +41,7 @@ import {
   Home,
   Activity,
   Brain,
+  Sparkles,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore } from '../../stores/useAppStore';
@@ -86,6 +87,11 @@ const menuItems = [
     key: '/backtest',
     icon: Activity,
     label: '策略回测',
+  },
+  {
+    key: '/optimization',
+    icon: Sparkles,
+    label: '超参优化',
   },
   {
     key: '/settings',

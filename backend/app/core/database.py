@@ -69,6 +69,7 @@ async def init_db() -> None:
     # 导入所有模型以确保它们被注册到Base.metadata
     from app.models import task_models  # noqa: F401
     from app.models import backtest_detailed_models  # noqa: F401
+    from app.models import strategy_config_models  # noqa: F401
     
     # 创建所有表
     async with async_engine.begin() as conn:

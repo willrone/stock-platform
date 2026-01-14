@@ -98,6 +98,49 @@ class RemoteDataSyncRequest(BaseModel):
     stock_codes: Optional[List[str]] = Field(default=None, description="要同步的股票代码列表，如果为空则同步所有股票")
 
 
+class ParamSpaceConfig(BaseModel):
+    """参数空间配置"""
+    type: str = Field(..., description="参数类型: int, float, categorical")
+    low: Optional[float] = Field(None, description="最小值（数值类型）")
+    high: Optional[float] = Field(None, description="最大值（数值类型）")
+    choices: Optional[List[Any]] = Field(None, description="可选值列表（分类类型）")
+    default: Optional[Any] = Field(None, description="默认值")
+    enabled: bool = Field(default=True, description="是否启用优化")
+    log: bool = Field(default=False, description="是否使用对数尺度（数值类型）")
+
+
+class ObjectiveConfig(BaseModel):
+    """优化目标配置"""
+    objective_metric: Any = Field(..., description="目标指标: 'sharpe' | 'calmar' | 'ic' | 'custom' | ['sharpe', 'calmar'] (多目标)")
+    direction: str = Field(default="maximize", description="优化方向: maximize 或 minimize")
+    objective_weights: Optional[Dict[str, float]] = Field(None, description="自定义权重（custom 时使用）")
+
+
+class OptimizationConfig(BaseModel):
+    """优化配置"""
+    strategy_name: str = Field(..., description="策略名称")
+    param_space: Dict[str, ParamSpaceConfig] = Field(..., description="参数空间")
+    objective_config: ObjectiveConfig = Field(..., description="目标函数配置")
+    n_trials: int = Field(default=50, description="试验次数")
+    optimization_method: str = Field(default="tpe", description="优化方法: tpe, random, grid, nsga2, motpe")
+    timeout: Optional[int] = Field(None, description="超时时间（秒）")
+
+
+class HyperparameterOptimizationRequest(BaseModel):
+    """超参优化任务创建请求"""
+    task_name: str = Field(..., description="任务名称")
+    strategy_name: str = Field(..., description="策略名称")
+    stock_codes: List[str] = Field(..., description="股票代码列表")
+    start_date: datetime = Field(..., description="回测开始日期")
+    end_date: datetime = Field(..., description="回测结束日期")
+    param_space: Dict[str, ParamSpaceConfig] = Field(..., description="参数空间")
+    objective_config: ObjectiveConfig = Field(..., description="目标函数配置")
+    n_trials: int = Field(default=50, description="试验次数")
+    optimization_method: str = Field(default="tpe", description="优化方法")
+    timeout: Optional[int] = Field(None, description="超时时间（秒）")
+    backtest_config: Optional[Dict[str, Any]] = Field(default=None, description="回测配置（初始资金、手续费等）")
+
+
 class BacktestCompareRequest(BaseModel):
     """回测对比请求"""
     task_ids: List[str] = Field(..., description="要对比的任务ID列表", min_length=2, max_length=5)

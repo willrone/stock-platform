@@ -19,6 +19,7 @@ class TaskType(Enum):
     BACKTEST = "backtest"
     TRAINING = "training"
     DATA_SYNC = "data_sync"
+    HYPERPARAMETER_OPTIMIZATION = "hyperparameter_optimization"
 
 
 class TaskStatus(Enum):

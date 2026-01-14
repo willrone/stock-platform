@@ -628,7 +628,137 @@ class TaskExecutionEngine:
                 # 训练时间与股票数量相关，但主要取决于模型复杂度
                 return min(stock_count * 20 + 300, 7200)  # 最多2小时
             
+            elif task_type == TaskType.HYPERPARAMETER_OPTIMIZATION:
+                n_trials = config.get('optimization_config', {}).get('n_trials', 50)
+                # 优化时间与试验次数相关，每个试验大约需要1-2分钟
+                return min(n_trials * 90, 7200)  # 最多2小时
+            
             return 600  # 默认10分钟
             
         except Exception:
             return 600  # 出错时返回默认值
+
+
+class HyperparameterOptimizationTaskExecutor:
+    """超参优化任务执行器"""
+    
+    def __init__(self, task_repository: TaskRepository):
+        self.task_repository = task_repository
+    
+    def execute(self, queued_task: QueuedTask, context: TaskExecutionContext) -> Dict[str, Any]:
+        """执行超参优化任务"""
+        task_id = queued_task.task_id
+        
+        with set_log_context(task_id=task_id, user_id=queued_task.user_id):
+            try:
+                # 解析任务配置
+                config_dict = queued_task.config
+                optimization_config = config_dict.get('optimization_config', {})
+                
+                strategy_name = optimization_config.get('strategy_name')
+                param_space = optimization_config.get('param_space', {})
+                stock_codes = config_dict.get('stock_codes', [])
+                start_date = datetime.fromisoformat(config_dict.get('start_date'))
+                end_date = datetime.fromisoformat(config_dict.get('end_date'))
+                
+                objective_config = optimization_config.get('objective_config', {})
+                n_trials = optimization_config.get('n_trials', 50)
+                optimization_method = optimization_config.get('optimization_method', 'tpe')
+                timeout = optimization_config.get('timeout')
+                
+                backtest_config = config_dict.get('backtest_config', {})
+                
+                # 更新任务状态为运行中
+                self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
+                
+                # 创建进度回调
+                # 注意：StrategyHyperparameterOptimizer 的 progress_callback 签名已扩展，包含 trial 统计信息
+                def progress_callback(trial_num, n_trials, strategy_params, score, backtest_report,
+                                     completed_trials=0, running_trials=0, pruned_trials=0, failed_trials=0,
+                                     best_score=None, best_trial_number=None, best_params=None):
+                    progress = (trial_num / n_trials) * 100
+                    message = f"Trial {trial_num}/{n_trials}"
+                    if score is not None:
+                        message += f", Score: {score:.4f}"
+                    
+                    if context.progress_callback:
+                        context.progress_callback(progress, message)
+                    
+                    # 构建当前状态数据
+                    current_result = {
+                        "n_trials": n_trials,
+                        "completed_trials": completed_trials,
+                        "running_trials": running_trials,
+                        "pruned_trials": pruned_trials,
+                        "failed_trials": failed_trials,
+                    }
+                    if best_score is not None:
+                        current_result["best_score"] = best_score
+                    if best_trial_number is not None:
+                        current_result["best_trial_number"] = best_trial_number
+                    if best_params is not None:
+                        current_result["best_params"] = best_params
+                    
+                    # 更新任务进度和状态
+                    self.task_repository.update_task_status(
+                        task_id,
+                        TaskStatus.RUNNING,
+                        progress=progress,
+                        result=current_result
+                    )
+                
+                # 执行优化（使用 asyncio.run 在同步函数中运行异步代码）
+                from app.services.backtest.strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer
+                
+                optimizer = StrategyHyperparameterOptimizer()
+                result = asyncio.run(optimizer.optimize_strategy_parameters(
+                    strategy_name=strategy_name,
+                    param_space=param_space,
+                    stock_codes=stock_codes,
+                    start_date=start_date,
+                    end_date=end_date,
+                    objective_config=objective_config,
+                    backtest_config=backtest_config,
+                    n_trials=n_trials,
+                    optimization_method=optimization_method,
+                    timeout=timeout,
+                    progress_callback=progress_callback
+                ))
+                
+                # 保存结果
+                if result.get('success'):
+                    self.task_repository.update_task_status(
+                        task_id,
+                        TaskStatus.COMPLETED,
+                        result=result,
+                        progress=100.0
+                    )
+                else:
+                    self.task_repository.update_task_status(
+                        task_id,
+                        TaskStatus.FAILED,
+                        error_message=result.get('error', '优化失败'),
+                        progress=100.0
+                    )
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"超参优化任务执行失败: {e}", exc_info=True)
+                self.task_repository.update_task_status(
+                    task_id,
+                    TaskStatus.FAILED,
+                    error_message=str(e)
+                )
+                raise TaskError(
+                    f"超参优化任务执行失败: {str(e)}",
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(
+                        task_id=task_id,
+                        additional_data={
+                            "task_type": TaskType.HYPERPARAMETER_OPTIMIZATION.value,
+                            "original_exception": str(e)
+                        }
+                    ),
+                    original_exception=e
+                )

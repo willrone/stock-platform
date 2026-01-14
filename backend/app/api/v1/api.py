@@ -7,7 +7,7 @@ API v1 路由聚合器
 from fastapi import APIRouter
 
 # 导入各个模块的路由
-from app.api.v1 import health, stocks, predictions, tasks, models, backtest, backtest_detailed, backtest_websocket, data, system, qlib, infrastructure, data_versioning, features, training_progress, monitoring, files
+from app.api.v1 import health, stocks, predictions, tasks, models, backtest, backtest_detailed, backtest_websocket, data, system, qlib, infrastructure, data_versioning, features, training_progress, monitoring, files, strategy_configs, optimization
 
 # 创建API v1路由器
 api_router = APIRouter()
@@ -30,3 +30,5 @@ api_router.include_router(features.router)
 api_router.include_router(training_progress.router)
 api_router.include_router(monitoring.router)
 api_router.include_router(files.router)
+api_router.include_router(strategy_configs.router)
+api_router.include_router(optimization.router)
