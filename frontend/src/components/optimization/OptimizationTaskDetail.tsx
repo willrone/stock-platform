@@ -47,7 +47,12 @@ export default function OptimizationTaskDetail({
       const taskData = await OptimizationService.getTask(taskId);
       setTask(taskData);
       if (taskData.result) {
+        console.log('[OptimizationTaskDetail] task result:', taskData.result);
+        console.log('[OptimizationTaskDetail] optimization_history:', taskData.result.optimization_history);
+        console.log('[OptimizationTaskDetail] param_importance:', taskData.result.param_importance);
         setResult(taskData.result);
+      } else {
+        console.warn('[OptimizationTaskDetail] task result is empty:', taskData);
       }
     } catch (error) {
       console.error('加载任务详情失败:', error);
