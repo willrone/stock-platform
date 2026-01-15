@@ -587,6 +587,18 @@ class BacktestExecutor:
             "winning_trades": performance_metrics.get("winning_trades", 0),
             "losing_trades": performance_metrics.get("losing_trades", 0),
             
+            # 将指标也放在 metrics 字段中，方便优化器使用
+            "metrics": {
+                "sharpe_ratio": performance_metrics.get("sharpe_ratio", 0),
+                "total_return": performance_metrics.get("total_return", 0),
+                "annualized_return": performance_metrics.get("annualized_return", 0),
+                "max_drawdown": performance_metrics.get("max_drawdown", 0),
+                "volatility": performance_metrics.get("volatility", 0),
+                "win_rate": performance_metrics.get("win_rate", 0),
+                "profit_factor": performance_metrics.get("profit_factor", 0),
+                "total_trades": performance_metrics.get("total_trades", 0),
+            },
+            
             # 配置信息
             "backtest_config": {
                 "strategy_name": strategy_name,  # 添加策略名称，方便前端获取

@@ -351,18 +351,22 @@ def execute_optimization_task_simple(task_id: str):
     import asyncio
     import os
     from loguru import logger
+    from datetime import datetime
     
     process_id = os.getpid()
     task_logger = logger.bind(process_id=process_id, task_id=task_id, log_type="task")
+    
+    # 在进程池中需要重新导入，因为进程池会创建新的进程
+    from app.core.database import SessionLocal
+    from app.repositories.task_repository import TaskRepository
+    from app.models.task_models import TaskType, TaskStatus
+    from app.services.tasks.task_execution_engine import HyperparameterOptimizationTaskExecutor
+    from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext, TaskPriority
     
     session = SessionLocal()
     task_logger.info(f"开始执行超参优化任务: {task_id}, 进程ID: {process_id}")
     
     try:
-        from app.repositories.task_repository import TaskRepository
-        from app.models.task_models import TaskStatus
-        from app.services.tasks.task_execution_engine import HyperparameterOptimizationTaskExecutor
-        from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext, TaskPriority
         
         task_repository = TaskRepository(session)
         
@@ -408,15 +412,21 @@ def execute_optimization_task_simple(task_id: str):
         task_logger.info(f"超参优化任务执行完成: {task_id}")
         
     except Exception as e:
-        task_logger.error(f"超参优化任务执行失败: {e}", exc_info=True)
+        import traceback
+        error_details = traceback.format_exc()
+        task_logger.error(f"超参优化任务执行失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}", exc_info=True)
+        task_logger.error(f"详细错误信息: {error_details}")
+        
         try:
-            task_repository.update_task_status(
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                error_message=str(e)
-            )
-        except:
-            pass
+            if 'task_repository' in locals():
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"{type(e).__name__}: {str(e)}"
+                )
+        except Exception as update_error:
+            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
     finally:
-        session.close()
+        if 'session' in locals():
+            session.close()
 

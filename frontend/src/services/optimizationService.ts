@@ -96,13 +96,13 @@ export interface OptimizationResult {
     params: Record<string, any>;
     objectives: number[];
   }>;
-  optimization_metadata: {
+  optimization_metadata?: {
     method: string;
     direction: string;
-    duration_seconds: number;
-    start_time: string;
-    end_time: string;
-    data_period: {
+    duration_seconds?: number;
+    start_time?: string;
+    end_time?: string;
+    data_period?: {
       start_date: string;
       end_date: string;
     };

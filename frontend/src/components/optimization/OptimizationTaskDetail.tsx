@@ -176,7 +176,7 @@ export default function OptimizationTaskDetail({
                       <CardBody>
                         <div className="text-center">
                           <p className="text-2xl font-bold">
-                            {result.optimization_metadata.duration_seconds
+                            {result.optimization_metadata?.duration_seconds
                               ? `${Math.round(result.optimization_metadata.duration_seconds / 60)} 分钟`
                               : '-'}
                           </p>

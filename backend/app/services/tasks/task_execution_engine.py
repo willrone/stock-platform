@@ -542,7 +542,8 @@ class TaskExecutionEngine:
                 prediction_engine, task_repository, prediction_result_repository
             ),
             TaskType.BACKTEST: BacktestTaskExecutor(task_repository),
-            TaskType.TRAINING: TrainingTaskExecutor(task_repository)
+            TaskType.TRAINING: TrainingTaskExecutor(task_repository),
+            TaskType.HYPERPARAMETER_OPTIMIZATION: HyperparameterOptimizationTaskExecutor(task_repository)
         }
     
     def get_task_handler(self, task_type: TaskType) -> Callable:
@@ -595,6 +596,30 @@ class TaskExecutionEngine:
                 for field in required_fields:
                     if field not in config:
                         raise TaskError(f"训练任务缺少必需字段: {field}")
+            
+            elif task_type == TaskType.HYPERPARAMETER_OPTIMIZATION:
+                required_fields = ['stock_codes', 'start_date', 'end_date', 'optimization_config']
+                for field in required_fields:
+                    if field not in config:
+                        raise TaskError(f"超参优化任务缺少必需字段: {field}")
+                
+                # 验证优化配置
+                optimization_config = config.get('optimization_config', {})
+                if 'strategy_name' not in optimization_config:
+                    raise TaskError("超参优化任务缺少策略名称")
+                if 'param_space' not in optimization_config:
+                    raise TaskError("超参优化任务缺少参数空间定义")
+                if 'objective_config' not in optimization_config:
+                    raise TaskError("超参优化任务缺少目标函数配置")
+                
+                # 验证日期格式
+                try:
+                    start_date = datetime.fromisoformat(config['start_date'])
+                    end_date = datetime.fromisoformat(config['end_date'])
+                    if start_date >= end_date:
+                        raise TaskError("开始日期必须早于结束日期")
+                except ValueError:
+                    raise TaskError("日期格式错误，应为ISO格式")
             
             return True
             
@@ -653,20 +678,53 @@ class HyperparameterOptimizationTaskExecutor:
             try:
                 # 解析任务配置
                 config_dict = queued_task.config
+                if not config_dict:
+                    raise ValueError("任务配置为空")
+                
                 optimization_config = config_dict.get('optimization_config', {})
+                if not optimization_config:
+                    raise ValueError("优化配置为空")
                 
                 strategy_name = optimization_config.get('strategy_name')
+                if not strategy_name:
+                    raise ValueError("策略名称未指定")
+                
                 param_space = optimization_config.get('param_space', {})
+                if not param_space:
+                    raise ValueError("参数空间未定义")
+                
                 stock_codes = config_dict.get('stock_codes', [])
-                start_date = datetime.fromisoformat(config_dict.get('start_date'))
-                end_date = datetime.fromisoformat(config_dict.get('end_date'))
+                if not stock_codes or not isinstance(stock_codes, list):
+                    raise ValueError("股票代码列表为空或格式错误")
+                
+                start_date_str = config_dict.get('start_date')
+                if not start_date_str:
+                    raise ValueError("开始日期未指定")
+                start_date = datetime.fromisoformat(start_date_str)
+                
+                end_date_str = config_dict.get('end_date')
+                if not end_date_str:
+                    raise ValueError("结束日期未指定")
+                end_date = datetime.fromisoformat(end_date_str)
+                
+                if start_date >= end_date:
+                    raise ValueError("开始日期必须早于结束日期")
                 
                 objective_config = optimization_config.get('objective_config', {})
+                if not objective_config:
+                    raise ValueError("目标函数配置为空")
+                
                 n_trials = optimization_config.get('n_trials', 50)
+                if n_trials <= 0:
+                    raise ValueError(f"试验次数必须大于0，当前值: {n_trials}")
+                
                 optimization_method = optimization_config.get('optimization_method', 'tpe')
                 timeout = optimization_config.get('timeout')
                 
                 backtest_config = config_dict.get('backtest_config', {})
+                
+                logger.info(f"解析超参优化任务配置: 策略={strategy_name}, 股票数={len(stock_codes)}, "
+                           f"日期范围={start_date.date()} - {end_date.date()}, 试验次数={n_trials}")
                 
                 # 更新任务状态为运行中
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
@@ -707,23 +765,38 @@ class HyperparameterOptimizationTaskExecutor:
                         result=current_result
                     )
                 
-                # 执行优化（使用 asyncio.run 在同步函数中运行异步代码）
-                from app.services.backtest.strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer
+                # 执行优化（在同步函数中运行异步代码）
+                # 使用新的事件循环，避免与外部事件循环冲突
+                try:
+                    from app.services.backtest.strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer
+                except ImportError as e:
+                    error_msg = f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg) from e
                 
                 optimizer = StrategyHyperparameterOptimizer()
-                result = asyncio.run(optimizer.optimize_strategy_parameters(
-                    strategy_name=strategy_name,
-                    param_space=param_space,
-                    stock_codes=stock_codes,
-                    start_date=start_date,
-                    end_date=end_date,
-                    objective_config=objective_config,
-                    backtest_config=backtest_config,
-                    n_trials=n_trials,
-                    optimization_method=optimization_method,
-                    timeout=timeout,
-                    progress_callback=progress_callback
-                ))
+                
+                # 创建新的事件循环来运行异步代码
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    result = new_loop.run_until_complete(
+                        optimizer.optimize_strategy_parameters(
+                            strategy_name=strategy_name,
+                            param_space=param_space,
+                            stock_codes=stock_codes,
+                            start_date=start_date,
+                            end_date=end_date,
+                            objective_config=objective_config,
+                            backtest_config=backtest_config,
+                            n_trials=n_trials,
+                            optimization_method=optimization_method,
+                            timeout=timeout,
+                            progress_callback=progress_callback
+                        )
+                    )
+                finally:
+                    new_loop.close()
                 
                 # 保存结果
                 if result.get('success'):

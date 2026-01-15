@@ -9,9 +9,18 @@ import concurrent.futures
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Callable, Tuple
 from loguru import logger
-import optuna
-from optuna.samplers import TPESampler, NSGAIISampler
-from optuna.pruners import MedianPruner
+
+try:
+    import optuna
+    from optuna.samplers import TPESampler, NSGAIISampler
+    from optuna.pruners import MedianPruner
+except ImportError as e:
+    logger.error(f"无法导入 optuna 模块: {e}")
+    logger.error("请运行: pip install optuna>=3.4.0")
+    raise ImportError(
+        "optuna 模块未安装。超参优化功能需要 optuna 库。"
+        "请运行: pip install optuna>=3.4.0"
+    ) from e
 
 from app.services.backtest import BacktestExecutor, BacktestConfig
 from app.core.config import settings
@@ -100,7 +109,12 @@ class StrategyHyperparameterOptimizer:
             )
         
         # 创建回测执行器
-        executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+        try:
+            executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+            logger.info(f"回测执行器已创建，数据目录: {settings.DATA_ROOT_PATH}")
+        except Exception as e:
+            logger.error(f"创建回测执行器失败: {e}", exc_info=True)
+            raise
         
         # 默认回测配置
         if backtest_config is None:
@@ -148,16 +162,42 @@ class StrategyHyperparameterOptimizer:
                             param_config["choices"]
                         )
                 
+                # 记录采样到的参数（用于调试）
+                logger.info(f"Trial {trial.number}: 采样参数 = {strategy_params}")
+                
                 # 运行回测（在同步函数中运行异步代码）
-                # 在 Optuna 的 trial 函数中，使用 asyncio.run 创建新的事件循环
-                # 这样可以避免与现有事件循环冲突
+                # 在 Optuna 的 trial 函数中，需要安全地运行异步代码
+                # 使用新的事件循环，避免与外部事件循环冲突
                 try:
                     # 尝试获取当前运行中的事件循环
                     loop = asyncio.get_running_loop()
                     # 如果已经有运行中的循环，在新线程中运行
                     with concurrent.futures.ThreadPoolExecutor() as executor_pool:
-                        future = executor_pool.submit(
-                            asyncio.run,
+                        def run_in_new_loop():
+                            new_loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(new_loop)
+                            try:
+                                return new_loop.run_until_complete(
+                                    executor.run_backtest(
+                                        strategy_name=strategy_name,
+                                        stock_codes=stock_codes,
+                                        start_date=start_date,
+                                        end_date=end_date,
+                                        strategy_config=strategy_params,
+                                        backtest_config=backtest_cfg
+                                    )
+                                )
+                            finally:
+                                new_loop.close()
+                        
+                        future = executor_pool.submit(run_in_new_loop)
+                        backtest_report = future.result()
+                except RuntimeError:
+                    # 如果没有运行中的循环，创建新的事件循环
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        backtest_report = new_loop.run_until_complete(
                             executor.run_backtest(
                                 strategy_name=strategy_name,
                                 stock_codes=stock_codes,
@@ -167,19 +207,17 @@ class StrategyHyperparameterOptimizer:
                                 backtest_config=backtest_cfg
                             )
                         )
-                        backtest_report = future.result()
-                except RuntimeError:
-                    # 如果没有运行中的循环，直接使用 asyncio.run
-                    backtest_report = asyncio.run(executor.run_backtest(
-                        strategy_name=strategy_name,
-                        stock_codes=stock_codes,
-                        start_date=start_date,
-                        end_date=end_date,
-                        strategy_config=strategy_params,
-                        backtest_config=backtest_cfg
-                    ))
+                    finally:
+                        new_loop.close()
                 
                 # 计算目标函数值
+                # 记录回测结果的关键指标（用于调试）
+                metrics = backtest_report.get("metrics", {})
+                logger.info(f"Trial {trial.number}: 回测指标 - sharpe_ratio={metrics.get('sharpe_ratio', 0):.4f}, "
+                           f"total_return={metrics.get('total_return', 0):.4f}, "
+                           f"annualized_return={metrics.get('annualized_return', 0):.4f}, "
+                           f"max_drawdown={metrics.get('max_drawdown', 0):.4f}")
+                
                 if is_multi_objective:
                     # 多目标：返回多个值
                     objectives = []
@@ -190,6 +228,7 @@ class StrategyHyperparameterOptimizer:
                             objective_config.get("objective_weights")
                         )
                         objectives.append(score)
+                    logger.info(f"Trial {trial.number}: 多目标得分 = {objectives}")
                     return tuple(objectives)
                 else:
                     # 单目标：返回单个值
@@ -198,6 +237,7 @@ class StrategyHyperparameterOptimizer:
                         objective_metric,
                         objective_config.get("objective_weights")
                     )
+                    logger.info(f"Trial {trial.number}: 目标得分 = {score:.6f} (原始指标: {objective_metric})")
                     
                     # 更新进度
                     if progress_callback:
@@ -226,7 +266,8 @@ class StrategyHyperparameterOptimizer:
                     return score
                     
             except Exception as e:
-                logger.warning(f"Trial {trial.number} 失败: {e}")
+                logger.error(f"Trial {trial.number} 失败: {e}", exc_info=True)
+                logger.error(f"Trial {trial.number} 参数: {strategy_params}")
                 # 返回最差分数
                 if is_multi_objective:
                     return tuple([float('-inf') if objective_config.get("direction", "maximize") == "maximize" else float('inf')] * len(objective_metric))
@@ -235,6 +276,10 @@ class StrategyHyperparameterOptimizer:
         
         # 执行优化
         try:
+            logger.info(f"开始执行优化，策略: {strategy_name}, 股票: {stock_codes}, 日期范围: {start_date} - {end_date}")
+            logger.info(f"参数空间: {list(param_space.keys())}")
+            logger.info(f"目标函数: {objective_metric}, 方向: {objective_config.get('direction', 'maximize')}")
+            
             study.optimize(
                 objective,
                 n_trials=n_trials,
@@ -361,7 +406,19 @@ class StrategyHyperparameterOptimizer:
         Returns:
             float: 目标函数得分
         """
+        # 回测报告可能直接包含指标，也可能在 metrics 字段中
         metrics = backtest_report.get("metrics", {})
+        # 如果 metrics 为空，尝试直接从 report 中获取
+        if not metrics:
+            metrics = {
+                "sharpe_ratio": backtest_report.get("sharpe_ratio", 0.0),
+                "total_return": backtest_report.get("total_return", 0.0),
+                "annualized_return": backtest_report.get("annualized_return", 0.0),
+                "max_drawdown": backtest_report.get("max_drawdown", 0.0),
+                "win_rate": backtest_report.get("win_rate", 0.0),
+            }
+        
+        logger.debug(f"计算目标得分: metric={objective_metric}, metrics={metrics}")
         
         if objective_metric == "sharpe":
             # 夏普比率
