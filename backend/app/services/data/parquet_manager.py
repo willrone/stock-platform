@@ -18,6 +18,22 @@ from app.models.file_management import (
 )
 
 
+def _read_parquet_with_fallback(file_path):
+    """
+    读取 parquet 文件，如果 pyarrow 失败则尝试 fastparquet
+    用于处理包含 arrow.py_extension_type 的旧版本 parquet 文件
+    """
+    try:
+        return pd.read_parquet(file_path, engine='pyarrow')
+    except Exception as e:
+        logger.debug(f"使用 pyarrow 引擎读取失败: {e}，尝试使用 fastparquet")
+        try:
+            return pd.read_parquet(file_path, engine='fastparquet')
+        except Exception as e2:
+            logger.error(f"使用 fastparquet 引擎也失败: {e2}")
+            raise
+
+
 @dataclass
 class ParquetFileInfo:
     """Parquet文件信息"""
@@ -87,7 +103,7 @@ class ParquetManager:
                 
                 if merge_with_existing and file_path.exists():
                     # 读取现有数据并合并
-                    df_existing = pd.read_parquet(file_path)
+                    df_existing = _read_parquet_with_fallback(file_path)
                     
                     # 合并数据，去重并排序
                     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
@@ -137,7 +153,7 @@ class ParquetManager:
             dataframes = []
             for file_path in file_paths:
                 if file_path.exists():
-                    df = pd.read_parquet(file_path)
+                    df = _read_parquet_with_fallback(file_path)
                     dataframes.append(df)
             
             if not dataframes:

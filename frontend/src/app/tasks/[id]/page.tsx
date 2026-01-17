@@ -411,26 +411,24 @@ export default function TaskDetailPage() {
       return null;
     }
 
-    const backtestData = currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results;
-    if (!backtestData) {
-      return null;
-    }
-
-    // 从回测配置中获取策略配置
-    const backtestConfig = backtestData.backtest_config;
-    if (backtestConfig && backtestConfig.strategy_config) {
-      return {
-        strategyName: backtestConfig.strategy_name || currentTask.config?.backtest_config?.strategy_name,
-        parameters: backtestConfig.strategy_config,
-      };
-    }
-
-    // 如果回测配置中没有，尝试从任务配置中获取
+    // 优先从任务配置中获取（最可靠）
     if (currentTask.config?.backtest_config?.strategy_config) {
       return {
         strategyName: currentTask.config.backtest_config.strategy_name,
         parameters: currentTask.config.backtest_config.strategy_config,
       };
+    }
+
+    // 从回测结果中获取
+    const backtestData = currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results;
+    if (backtestData) {
+      const backtestConfig = backtestData.backtest_config;
+      if (backtestConfig && backtestConfig.strategy_config) {
+        return {
+          strategyName: backtestConfig.strategy_name || currentTask.config?.backtest_config?.strategy_name,
+          parameters: backtestConfig.strategy_config,
+        };
+      }
     }
 
     return null;
@@ -658,7 +656,7 @@ export default function TaskDetailPage() {
                       {/* 策略配置信息和保存按钮 */}
                       {(() => {
                         const configInfo = getStrategyConfig();
-                        if (configInfo && currentTask.status === 'completed') {
+                        if (configInfo) {
                           return (
                             <Card>
                               <CardHeader className="flex justify-between items-center">
@@ -671,23 +669,28 @@ export default function TaskDetailPage() {
                                   variant="flat"
                                   startContent={<Save className="w-4 h-4" />}
                                   onPress={onSaveConfigOpen}
+                                  isDisabled={!configInfo.strategyName || Object.keys(configInfo.parameters).length === 0}
                                 >
                                   保存配置
                                 </Button>
                               </CardHeader>
                               <CardBody>
-                                <div className="bg-default-100 rounded-lg p-3">
-                                  <pre className="text-xs text-default-600 whitespace-pre-wrap font-mono">
-                                    {Object.entries(configInfo.parameters)
-                                      .map(([key, value]) => {
-                                        if (typeof value === 'object' && value !== null) {
-                                          return `${key}: ${JSON.stringify(value, null, 2)}`;
-                                        }
-                                        return `${key}: ${value}`;
-                                      })
-                                      .join('\n')}
-                                  </pre>
-                                </div>
+                                {Object.keys(configInfo.parameters).length > 0 ? (
+                                  <div className="bg-default-100 rounded-lg p-3">
+                                    <pre className="text-xs text-default-600 whitespace-pre-wrap font-mono">
+                                      {Object.entries(configInfo.parameters)
+                                        .map(([key, value]) => {
+                                          if (typeof value === 'object' && value !== null) {
+                                            return `${key}: ${JSON.stringify(value, null, 2)}`;
+                                          }
+                                          return `${key}: ${value}`;
+                                        })
+                                        .join('\n')}
+                                    </pre>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-default-500">暂无策略参数配置</p>
+                                )}
                               </CardBody>
                             </Card>
                           );

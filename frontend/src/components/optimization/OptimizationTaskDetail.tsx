@@ -21,12 +21,15 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  useDisclosure,
 } from '@heroui/react';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save } from 'lucide-react';
 import { OptimizationService, OptimizationStatus, OptimizationResult } from '../../services/optimizationService';
+import { StrategyConfigService } from '../../services/strategyConfigService';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import OptimizationStatusMonitor from './OptimizationStatusMonitor';
 import OptimizationVisualization from './OptimizationVisualization';
+import { SaveStrategyConfigDialog } from '../backtest/SaveStrategyConfigDialog';
 
 interface OptimizationTaskDetailProps {
   taskId: string;
@@ -41,6 +44,8 @@ export default function OptimizationTaskDetail({
   const [task, setTask] = useState<any>(null);
   const [status, setStatus] = useState<OptimizationStatus | null>(null);
   const [result, setResult] = useState<OptimizationResult | null>(null);
+  const { isOpen: isSaveConfigOpen, onOpen: onSaveConfigOpen, onClose: onSaveConfigClose } = useDisclosure();
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const loadTask = async () => {
     try {
@@ -86,6 +91,29 @@ export default function OptimizationTaskDetail({
 
     return () => clearInterval(interval);
   }, [taskId, task?.status]);
+
+  // 保存策略配置
+  const handleSaveConfig = async (configName: string, description: string) => {
+    if (!result?.best_params || !task?.strategy_name) {
+      throw new Error('无法获取最佳参数或策略名称');
+    }
+
+    setSavingConfig(true);
+    try {
+      await StrategyConfigService.createConfig({
+        config_name: configName,
+        strategy_name: task.strategy_name,
+        parameters: result.best_params,
+        description: description || `来自超参优化任务: ${task.task_name}`,
+      });
+      console.log('策略配置保存成功');
+    } catch (error: any) {
+      console.error('保存策略配置失败:', error);
+      throw error;
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   if (loading) {
     return <LoadingSpinner text="加载任务详情..." />;
@@ -188,8 +216,17 @@ export default function OptimizationTaskDetail({
 
                   {result.best_params && (
                     <Card>
-                      <CardHeader>
+                      <CardHeader className="flex justify-between items-center">
                         <h3 className="text-lg font-semibold">最佳参数</h3>
+                        <Button
+                          color="primary"
+                          variant="flat"
+                          size="sm"
+                          startContent={<Save className="w-4 h-4" />}
+                          onPress={onSaveConfigOpen}
+                        >
+                          保存为配置
+                        </Button>
                       </CardHeader>
                       <CardBody>
                         <div className="grid grid-cols-2 gap-4">
@@ -215,6 +252,18 @@ export default function OptimizationTaskDetail({
           </Card>
         </Tab>
       </Tabs>
+
+      {/* 保存配置对话框 */}
+      {result?.best_params && task?.strategy_name && (
+        <SaveStrategyConfigDialog
+          isOpen={isSaveConfigOpen}
+          onClose={onSaveConfigClose}
+          strategyName={task.strategy_name}
+          parameters={result.best_params}
+          onSave={handleSaveConfig}
+          loading={savingConfig}
+        />
+      )}
     </div>
   );
 }

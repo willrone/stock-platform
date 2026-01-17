@@ -61,7 +61,7 @@ class Settings(BaseSettings):
 
     # API 配置
     API_V1_PREFIX: str = "/api/v1"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://192.168.3.62:3000"
 
     @property
     def cors_origins_list(self) -> List[str]:

@@ -41,6 +41,9 @@ xgboost==2.0.2
 httpx==0.25.2
 aiohttp==3.9.1
 
+# 异步事件循环支持
+nest-asyncio>=1.6.0  # 允许在已有事件循环中嵌套运行异步代码
+
 # SFTP 客户端
 paramiko==3.4.0
 

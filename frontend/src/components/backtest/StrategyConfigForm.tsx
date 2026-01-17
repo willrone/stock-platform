@@ -319,25 +319,33 @@ export function StrategyConfigForm({
       </CardHeader>
       <CardBody className="space-y-4">
         {/* 加载已保存配置 */}
-        {savedConfigs.length > 0 && onLoadConfig && (
-          <div className="mb-4">
-            <Select
-              label="加载已保存配置"
-              placeholder="选择已保存的配置"
-              onSelectionChange={(keys) => {
-                const configId = Array.from(keys)[0] as string;
-                if (configId && onLoadConfig) {
-                  onLoadConfig(configId);
-                }
-              }}
-              isDisabled={loading}
-            >
-              {savedConfigs.map(config => (
-                <SelectItem key={config.config_id} value={config.config_id}>
-                  {config.config_name} ({new Date(config.created_at).toLocaleDateString()})
-                </SelectItem>
-              ))}
-            </Select>
+        {onLoadConfig && (
+          <div className="mb-4 p-3 bg-default-50 rounded-lg border border-default-200">
+            <label className="text-sm font-medium mb-2 block">加载已保存配置</label>
+            {loading ? (
+              <p className="text-sm text-default-500">加载中...</p>
+            ) : savedConfigs.length > 0 ? (
+              <Select
+                placeholder="选择已保存的配置"
+                onSelectionChange={(keys) => {
+                  const configId = Array.from(keys)[0] as string;
+                  if (configId && onLoadConfig) {
+                    onLoadConfig(configId);
+                  }
+                }}
+                isDisabled={loading}
+              >
+                {savedConfigs.map(config => (
+                  <SelectItem key={config.config_id} value={config.config_id}>
+                    {config.config_name} ({new Date(config.created_at).toLocaleDateString()})
+                  </SelectItem>
+                ))}
+              </Select>
+            ) : (
+              <p className="text-sm text-default-500">
+                暂无已保存的配置。完成回测或超参优化后可以保存配置。
+              </p>
+            )}
           </div>
         )}
 
