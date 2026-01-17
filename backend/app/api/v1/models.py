@@ -7,8 +7,10 @@ from datetime import datetime
 from sqlalchemy import or_
 from loguru import logger
 import uuid
+import asyncio
 from pathlib import Path
 from typing import Optional, List
+from concurrent.futures import ThreadPoolExecutor
 
 from app.api.v1.schemas import StandardResponse, ModelTrainingRequest
 from app.core.database import SessionLocal
@@ -163,12 +165,62 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
     return normalized_metrics
 
 
+def _run_train_model_task_sync(model_id: str, model_name: str, model_type: str,
+                               stock_codes: list, start_date: datetime, end_date: datetime,
+                               hyperparameters: dict, enable_hyperparameter_tuning: bool = False,
+                               hyperparameter_search_strategy: str = "random_search",
+                               hyperparameter_search_trials: int = 10,
+                               selected_features: Optional[List[str]] = None,
+                               main_loop: Optional[asyncio.AbstractEventLoop] = None):
+    """
+    同步包装函数，用于在线程池中执行异步训练任务
+    这样训练任务中的同步阻塞操作不会阻塞主事件循环
+    """
+    try:
+        # 创建新的事件循环来运行异步函数
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(
+                train_model_task(
+                    model_id=model_id,
+                    model_name=model_name,
+                    model_type=model_type,
+                    stock_codes=stock_codes,
+                    start_date=start_date,
+                    end_date=end_date,
+                    hyperparameters=hyperparameters,
+                    enable_hyperparameter_tuning=enable_hyperparameter_tuning,
+                    hyperparameter_search_strategy=hyperparameter_search_strategy,
+                    hyperparameter_search_trials=hyperparameter_search_trials,
+                    selected_features=selected_features,
+                    main_loop=main_loop  # 传递主事件循环
+                )
+            )
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.error(f"训练任务执行失败: {e}", exc_info=True)
+
+
+# 创建线程池执行器（单例）
+_train_executor = None
+
+def get_train_executor():
+    """获取训练任务线程池执行器"""
+    global _train_executor
+    if _train_executor is None:
+        _train_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="train_task")
+    return _train_executor
+
+
 async def train_model_task(model_id: str, model_name: str, model_type: str,
                            stock_codes: list, start_date: datetime, end_date: datetime,
                            hyperparameters: dict, enable_hyperparameter_tuning: bool = False,
                            hyperparameter_search_strategy: str = "random_search",
                            hyperparameter_search_trials: int = 10,
-                           selected_features: Optional[List[str]] = None):
+                           selected_features: Optional[List[str]] = None,
+                           main_loop: Optional[asyncio.AbstractEventLoop] = None):
     """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
     report_generator = EvaluationReportGenerator()
@@ -179,7 +231,14 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
         
         if not model_info:
             logger.error(f"模型不存在: {model_id}")
-            await notify_model_training_failed(model_id, "模型不存在")
+            # 如果提供了主事件循环，在主循环中发送通知
+            if main_loop:
+                asyncio.run_coroutine_threadsafe(
+                    notify_model_training_failed(model_id, "模型不存在"),
+                    main_loop
+                )
+            else:
+                await notify_model_training_failed(model_id, "模型不存在")
             return
         
         try:
@@ -195,7 +254,16 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
             
             # 定义进度回调函数
             async def progress_callback(model_id: str, progress: float, stage: str, message: str, metrics: dict = None):
-                await notify_model_training_progress(model_id, progress, stage, message, metrics)
+                # 如果提供了主事件循环，在主循环中发送 WebSocket 通知
+                if main_loop:
+                    asyncio.run_coroutine_threadsafe(
+                        notify_model_training_progress(model_id, progress, stage, message, metrics),
+                        main_loop
+                    )
+                else:
+                    await notify_model_training_progress(model_id, progress, stage, message, metrics)
+                
+                # 更新数据库（在当前事件循环中执行）
                 model_info.training_stage = stage
                 model_info.training_progress = progress
                 session.commit()
@@ -480,7 +548,13 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
             session.commit()
             
             # 发送完成通知
-            await notify_model_training_completed(model_id, model_info.performance_metrics)
+            if main_loop:
+                asyncio.run_coroutine_threadsafe(
+                    notify_model_training_completed(model_id, model_info.performance_metrics),
+                    main_loop
+                )
+            else:
+                await notify_model_training_completed(model_id, model_info.performance_metrics)
             logger.info(f"统一Qlib模型训练完成: {model_id}")
             
         except Exception as e:
@@ -492,12 +566,24 @@ async def train_model_task(model_id: str, model_name: str, model_type: str,
                 "status": "failed"
             }
             session.commit()
-            await notify_model_training_failed(model_id, str(e))
+            if main_loop:
+                asyncio.run_coroutine_threadsafe(
+                    notify_model_training_failed(model_id, str(e)),
+                    main_loop
+                )
+            else:
+                await notify_model_training_failed(model_id, str(e))
             
     except Exception as e:
         logger.error(f"训练任务执行失败: {e}", exc_info=True)
         session.rollback()
-        await notify_model_training_failed(model_id, str(e))
+        if main_loop:
+            asyncio.run_coroutine_threadsafe(
+                notify_model_training_failed(model_id, str(e)),
+                main_loop
+            )
+        else:
+            await notify_model_training_failed(model_id, str(e))
     finally:
         session.close()
 
@@ -933,8 +1019,7 @@ async def delete_model(model_id: str):
 
 @router.post("/train", response_model=StandardResponse)
 async def create_training_task(
-    request: ModelTrainingRequest,
-    background_tasks: BackgroundTasks
+    request: ModelTrainingRequest
 ):
     """创建模型训练任务"""
     if not TRAINING_AVAILABLE:
@@ -996,9 +1081,14 @@ async def create_training_task(
         
         logger.info(f"创建模型训练任务: {model_id}, 模型名称: {request.model_name}, 类型: {request.model_type}")
         
-        # 启动后台训练任务
-        background_tasks.add_task(
-            train_model_task,
+        # 获取当前事件循环（主事件循环），用于发送 WebSocket 通知
+        main_loop = asyncio.get_event_loop()
+        
+        # 使用线程池执行器在后台执行训练任务
+        # 这样训练任务中的同步阻塞操作不会阻塞主事件循环，前端可以立即得到响应
+        executor = get_train_executor()
+        executor.submit(
+            _run_train_model_task_sync,
             model_id=model_id,
             model_name=request.model_name,
             model_type=request.model_type,
@@ -1009,7 +1099,8 @@ async def create_training_task(
             enable_hyperparameter_tuning=request.enable_hyperparameter_tuning,
             hyperparameter_search_strategy=request.hyperparameter_search_strategy,
             hyperparameter_search_trials=request.hyperparameter_search_trials,
-            selected_features=request.selected_features
+            selected_features=request.selected_features,
+            main_loop=main_loop  # 传递主事件循环
         )
         
         return StandardResponse(
