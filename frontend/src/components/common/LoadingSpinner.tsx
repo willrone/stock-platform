@@ -11,7 +11,7 @@
 'use client';
 
 import React from 'react';
-import { Spinner } from '@heroui/react';
+import { CircularProgress, Box, Typography, SxProps, Theme } from '@mui/material';
 import { Loader2 } from 'lucide-react';
 
 interface LoadingSpinnerProps {
@@ -21,23 +21,48 @@ interface LoadingSpinnerProps {
   fullScreen?: boolean;
 }
 
+const sizeMap = {
+  sm: 24,
+  md: 40,
+  lg: 56,
+};
+
 export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   text = '加载中...',
   size = 'lg',
   className = '',
   fullScreen = false,
 }) => {
-  const containerClass = fullScreen
-    ? 'fixed inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50'
-    : 'flex flex-col items-center justify-center p-8';
+  const containerSx: SxProps<Theme> = fullScreen
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.paper',
+        zIndex: 9999,
+      }
+    : {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 4,
+      };
 
   return (
-    <div className={`${containerClass} ${className}`}>
-      <Spinner size={size} />
+    <Box sx={containerSx} className={className}>
+      <CircularProgress size={sizeMap[size]} />
       {text && (
-        <p className="mt-4 text-default-600 text-center">{text}</p>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+          {text}
+        </Typography>
       )}
-    </div>
+    </Box>
   );
 };
 
@@ -51,12 +76,17 @@ export const InlineLoading: React.FC<{ text?: string; size?: 'sm' | 'md' | 'lg' 
   text, 
   size = 'md' 
 }) => (
-  <div className="flex items-center space-x-2">
-    <Spinner size={size} />
-    {text && <span className="text-default-600">{text}</span>}
-  </div>
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <CircularProgress size={sizeMap[size]} />
+    {text && (
+      <Typography variant="body2" color="text.secondary">
+        {text}
+      </Typography>
+    )}
+  </Box>
 );
 
 // 按钮加载状态
 export const ButtonLoading: React.FC = () => (
-  <Loader2 className="w-4 h-4 animate-spin" />);
+  <Loader2 size={16} className="animate-spin" />
+);

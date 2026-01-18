@@ -10,11 +10,27 @@
 
 // API配置
 export const API_CONFIG = {
-  // 基础URL
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
+  // 基础URL - 使用相对路径，通过Next.js代理转发
+  BASE_URL: '/api/v1',
   
-  // WebSocket URL
-  WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws',
+  // WebSocket URL - WebSocket不能通过HTTP代理，需要直接连接后端
+  // 从环境变量读取，如果没有则从当前页面hostname推断
+  WS_URL: (() => {
+    if (typeof window === 'undefined') {
+      // 服务端渲染时使用环境变量
+      return process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+    }
+    // 客户端：使用环境变量或从当前页面推断
+    const envUrl = process.env.NEXT_PUBLIC_WS_URL;
+    if (envUrl) return envUrl;
+    
+    // 从当前页面的hostname和协议推断WebSocket地址
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const hostname = window.location.hostname;
+    // 从环境变量获取后端端口，或使用默认8000
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+    return `${protocol}//${hostname}:${port}/ws`;
+  })(),
   
   // 请求超时时间（毫秒）
   TIMEOUT: 30000,

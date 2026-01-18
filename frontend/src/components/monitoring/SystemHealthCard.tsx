@@ -13,20 +13,22 @@
 import React, { useEffect, useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Chip,
-  Progress,
   Tooltip,
   Button,
-} from '@heroui/react';
+  Box,
+  Typography,
+  IconButton,
+  CircularProgress,
+} from '@mui/material';
 import {
   Activity,
   CheckCircle,
   XCircle,
   AlertTriangle,
   RefreshCw,
-  Zap,
   Clock,
 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
@@ -72,9 +74,9 @@ export function SystemHealthCard() {
 
   const getServiceIcon = (service: ServiceHealth) => {
     if (service.healthy) {
-      return <CheckCircle className="w-4 h-4 text-success" />;
+      return <CheckCircle size={16} color="#2e7d32" />;
     } else {
-      return <XCircle className="w-4 h-4 text-danger" />;
+      return <XCircle size={16} color="#d32f2f" />;
     }
   };
 
@@ -82,14 +84,14 @@ export function SystemHealthCard() {
     if (service.healthy) {
       return { color: 'success' as const, text: '正常' };
     } else {
-      return { color: 'danger' as const, text: '异常' };
+      return { color: 'error' as const, text: '异常' };
     }
   };
 
-  const getResponseTimeColor = (responseTime: number) => {
-    if (responseTime < 100) return 'text-success';
-    if (responseTime < 500) return 'text-warning';
-    return 'text-danger';
+  const getResponseTimeColor = (responseTime: number): string => {
+    if (responseTime < 100) return 'success.main';
+    if (responseTime < 500) return 'warning.main';
+    return 'error.main';
   };
 
   const formatServiceName = (serviceName: string) => {
@@ -105,105 +107,116 @@ export function SystemHealthCard() {
   if (loading && !healthData) {
     return (
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <Activity className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">系统健康状态</h3>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-            <span className="ml-2 text-default-500">检查系统状态中...</span>
-          </div>
-        </CardBody>
+        <CardHeader
+          avatar={<Activity size={24} />}
+          title="系统健康状态"
+        />
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={24} sx={{ mr: 1 }} />
+            <Typography variant="body2" color="text.secondary">
+              检查系统状态中...
+            </Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-2">
-            <Activity className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">系统健康状态</h3>
-          </div>
-          <div className="flex items-center space-x-2">
+      <CardHeader
+        avatar={<Activity size={24} />}
+        title="系统健康状态"
+        action={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Chip
-              color={healthData?.overall_healthy ? 'success' : 'danger'}
-              variant="flat"
-              size="sm"
-              startContent={
+              label={healthData?.overall_healthy ? '系统正常' : '系统异常'}
+              color={healthData?.overall_healthy ? 'success' : 'error'}
+              size="small"
+              icon={
                 healthData?.overall_healthy ? (
-                  <CheckCircle className="w-3 h-3" />
+                  <CheckCircle size={12} />
                 ) : (
-                  <AlertTriangle className="w-3 h-3" />
+                  <AlertTriangle size={12} />
                 )
               }
+            />
+            <IconButton
+              size="small"
+              onClick={loadHealthData}
+              disabled={loading}
             >
-              {healthData?.overall_healthy ? '系统正常' : '系统异常'}
-            </Chip>
-            <Button
-              isIconOnly
-              variant="light"
-              size="sm"
-              onPress={loadHealthData}
-              isLoading={loading}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardBody className="space-y-4">
+              <RefreshCw size={16} />
+            </IconButton>
+          </Box>
+        }
+      />
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {healthData?.services && Object.entries(healthData.services).map(([serviceName, service]) => (
-          <div key={serviceName} className="flex items-center justify-between p-3 bg-default-50 rounded-lg">
-            <div className="flex items-center space-x-3">
+          <Box
+            key={serviceName}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 1.5,
+              bgcolor: 'grey.50',
+              borderRadius: 1,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               {getServiceIcon(service)}
-              <div>
-                <p className="font-medium">{formatServiceName(serviceName)}</p>
-                <p className="text-xs text-default-500">
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {formatServiceName(serviceName)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
                   最后检查: {new Date(service.last_check).toLocaleTimeString()}
-                </p>
-              </div>
-            </div>
+                </Typography>
+              </Box>
+            </Box>
             
-            <div className="flex items-center space-x-3">
-              <div className="text-right">
-                <div className="flex items-center space-x-1">
-                  <Clock className="w-3 h-3 text-default-400" />
-                  <span className={`text-sm font-medium ${getResponseTimeColor(service.response_time_ms)}`}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ textAlign: 'right' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Clock size={12} color="#666" />
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 500, color: getResponseTimeColor(service.response_time_ms) }}
+                  >
                     {service.response_time_ms}ms
-                  </span>
-                </div>
+                  </Typography>
+                </Box>
                 {service.error_message && (
-                  <Tooltip content={service.error_message}>
-                    <p className="text-xs text-danger cursor-help">
+                  <Tooltip title={service.error_message}>
+                    <Typography variant="caption" color="error" sx={{ cursor: 'help' }}>
                       错误详情
-                    </p>
+                    </Typography>
                   </Tooltip>
                 )}
-              </div>
+              </Box>
               
               <Chip
+                label={getServiceStatus(service).text}
                 color={getServiceStatus(service).color}
-                variant="flat"
-                size="sm"
-              >
-                {getServiceStatus(service).text}
-              </Chip>
-            </div>
-          </div>
+                size="small"
+              />
+            </Box>
+          </Box>
         ))}
         
-        <div className="pt-2 border-t border-default-200">
-          <div className="flex items-center justify-between text-sm text-default-500">
-            <span>最后更新: {lastUpdate.toLocaleTimeString()}</span>
-            <span>自动刷新: 30秒</span>
-          </div>
-        </div>
-      </CardBody>
+        <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Typography variant="caption" color="text.secondary">
+              最后更新: {lastUpdate.toLocaleTimeString()}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              自动刷新: 30秒
+            </Typography>
+          </Box>
+        </Box>
+      </CardContent>
     </Card>
   );
 }

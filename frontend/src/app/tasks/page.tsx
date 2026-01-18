@@ -13,29 +13,34 @@
 import React, { useEffect, useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Button,
-  Input,
+  TextField,
   Select,
-  SelectItem,
+  MenuItem,
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Chip,
-  Progress,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
+  LinearProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Pagination,
   Tooltip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  IconButton,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Switch,
+  FormControlLabel,
+} from '@mui/material';
 import {
   Plus,
   RefreshCw,
@@ -78,8 +83,10 @@ export default function TasksPage() {
     completed: 0,
     failed: 0,
   });
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
-  const { isOpen: isBatchDeleteOpen, onOpen: onBatchDeleteOpen, onClose: onBatchDeleteClose } = useDisclosure();
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
+  const [deleteForce, setDeleteForce] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // 加载任务列表
   const loadTasks = async (page = currentPage, size = pageSize, status = statusFilter) => {
@@ -179,22 +186,21 @@ export default function TasksPage() {
       created: { color: 'default' as const, text: '已创建' },
       running: { color: 'primary' as const, text: '运行中' },
       completed: { color: 'success' as const, text: '已完成' },
-      failed: { color: 'danger' as const, text: '失败' },
+      failed: { color: 'error' as const, text: '失败' },
     };
     
     const config = statusConfig[status] || statusConfig.created;
-    return <Chip color={config.color} variant="flat" size="sm">{config.text}</Chip>;
+    return <Chip label={config.text} color={config.color} size="small" />;
   };
 
   // 处理分页变化
-  const handlePageChange = (page: number) => {
+  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
     setPagination(page, pageSize);
     loadTasks(page, pageSize, statusFilter);
   };
 
   // 处理状态筛选
-  const handleStatusFilter = (keys: Set<string>) => {
-    const status = Array.from(keys)[0] || null;
+  const handleStatusFilter = (status: string | null) => {
     setStatusFilter(status);
     setPagination(1, pageSize);
     loadTasks(1, pageSize, status);
@@ -219,15 +225,23 @@ export default function TasksPage() {
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
     
+    setDeleteError(null);
     try {
-      await TaskService.deleteTask(taskToDelete);
+      await TaskService.deleteTask(taskToDelete, deleteForce);
       console.log('任务删除成功');
       loadTasks();
-    } catch (error) {
-      console.error('删除任务失败');
-    } finally {
       setTaskToDelete(null);
-      onDeleteClose();
+      setIsDeleteOpen(false);
+      setDeleteForce(false);
+    } catch (error: any) {
+      console.error('删除任务失败:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || '删除任务失败';
+      setDeleteError(errorMessage);
+      
+      // 如果错误提示需要使用强制删除，自动勾选强制删除选项
+      if (errorMessage.includes('强制删除') || errorMessage.includes('正在运行中')) {
+        setDeleteForce(true);
+      }
     }
   };
 
@@ -244,7 +258,7 @@ export default function TasksPage() {
     } catch (error) {
       console.error('批量删除失败');
     } finally {
-      onBatchDeleteClose();
+      setIsBatchDeleteOpen(false);
     }
   };
 
@@ -259,280 +273,330 @@ export default function TasksPage() {
     }
   };
 
+  // 过滤任务
+  const filteredTasks = tasks.filter(task => 
+    task.task_name.toLowerCase().includes(searchText.toLowerCase())
+  );
 
   if (loading && tasks.length === 0) {
     return <LoadingSpinner text="加载任务列表..." />;
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题和统计 */}
-      <div>
-        <h1 className="text-2xl font-bold mb-4">任务管理</h1>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Box>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 2 }}>
+          任务管理
+        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
           <Card>
-            <CardBody className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <BarChart3 className="w-6 h-6 text-primary" />
-              </div>
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-sm text-default-500">总任务数</p>
-            </CardBody>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                <BarChart3 size={24} color="#1976d2" />
+              </Box>
+              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                {stats.total}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                总任务数
+              </Typography>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="text-center">
-              <p className="text-2xl font-bold text-primary">{stats.running}</p>
-              <p className="text-sm text-default-500">运行中</p>
-            </CardBody>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                {stats.running}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                运行中
+              </Typography>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="text-center">
-              <p className="text-2xl font-bold text-success">{stats.completed}</p>
-              <p className="text-sm text-default-500">已完成</p>
-            </CardBody>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                {stats.completed}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                已完成
+              </Typography>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="text-center">
-              <p className="text-2xl font-bold text-danger">{stats.failed}</p>
-              <p className="text-sm text-default-500">失败</p>
-            </CardBody>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+                {stats.failed}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                失败
+              </Typography>
+            </CardContent>
           </Card>
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* 操作栏 */}
       <Card>
-        <CardBody>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-            <div className="flex flex-wrap gap-2">
+        <CardContent>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' }, gap: 2 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               <Button
+                variant="contained"
                 color="primary"
-                startContent={<Plus className="w-4 h-4" />}
-                onPress={handleCreateTask}
+                startIcon={<Plus size={16} />}
+                onClick={handleCreateTask}
               >
                 创建任务
               </Button>
               <Button
-                variant="light"
-                startContent={<RefreshCw className="w-4 h-4" />}
-                onPress={handleRefresh}
-                isLoading={loading}
+                variant="outlined"
+                startIcon={<RefreshCw size={16} />}
+                onClick={handleRefresh}
+                disabled={loading}
               >
                 刷新
               </Button>
               {selectedKeys.size > 0 && (
                 <Button
-                  color="danger"
-                  variant="light"
-                  startContent={<Trash2 className="w-4 h-4" />}
-                  onPress={onBatchDeleteOpen}
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Trash2 size={16} />}
+                  onClick={() => setIsBatchDeleteOpen(true)}
                 >
                   批量删除 ({selectedKeys.size})
                 </Button>
               )}
-            </div>
+            </Box>
             
-            <div className="flex flex-wrap gap-2">
-              <Input
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <TextField
                 placeholder="搜索任务名称"
-                startContent={<Search className="w-4 h-4" />}
+                size="small"
                 value={searchText}
-                onValueChange={setSearchText}
-                className="w-48"
-              />
-              <Select
-                placeholder="筛选状态"
-                startContent={<Filter className="w-4 h-4" />}
-                selectedKeys={statusFilter ? [statusFilter] : []}
-                onSelectionChange={(keys) => {
-                  const selectedKeys = Array.from(keys);
-                  handleStatusFilter(new Set(selectedKeys.map(String)));
+                onChange={(e) => setSearchText(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={16} />
+                    </InputAdornment>
+                  ),
                 }}
-                className="w-32"
-              >
-                <SelectItem key="created">已创建</SelectItem>
-                <SelectItem key="running">运行中</SelectItem>
-                <SelectItem key="completed">已完成</SelectItem>
-                <SelectItem key="failed">失败</SelectItem>
-              </Select>
-            </div>
-          </div>
-        </CardBody>
+                sx={{ width: 200 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>筛选状态</InputLabel>
+                <Select
+                  value={statusFilter || ''}
+                  label="筛选状态"
+                  onChange={(e) => handleStatusFilter(e.target.value || null)}
+                  startAdornment={<Filter size={16} />}
+                >
+                  <MenuItem value="">全部</MenuItem>
+                  <MenuItem value="created">已创建</MenuItem>
+                  <MenuItem value="running">运行中</MenuItem>
+                  <MenuItem value="completed">已完成</MenuItem>
+                  <MenuItem value="failed">失败</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 任务列表 */}
       <Card>
-        <CardBody>
-          <Table
-            aria-label="任务列表"
-            selectionMode="multiple"
-            selectedKeys={selectedKeys}
-            onSelectionChange={(keys) => setSelectedKeys(new Set(Array.from(keys).map(String)))}
-          >
-            <TableHeader>
-              <TableColumn>任务名称</TableColumn>
-              <TableColumn>状态</TableColumn>
-              <TableColumn>进度</TableColumn>
-              <TableColumn>股票数量</TableColumn>
-              <TableColumn>模型</TableColumn>
-              <TableColumn>创建时间</TableColumn>
-              <TableColumn>操作</TableColumn>
-            </TableHeader>
-            <TableBody>
-              {tasks.map((task) => (
-                <TableRow key={task.task_id}>
-                  <TableCell>
-                    <Button
-                      variant="light"
-                      onPress={() => handleViewTask(task.task_id)}
-                      className="p-0 h-auto min-w-0 justify-start"
-                    >
-                      {task.task_name}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusChip(task.status)}
-                  </TableCell>
-                  <TableCell>
-                    <Progress
-                      value={task.progress}
-                      color={task.status === 'failed' ? 'danger' : 'primary'}
-                      size="sm"
-                      className="w-20"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-default-600">{task.stock_codes?.length || 0}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Chip variant="flat" size="sm">{task.model_id}</Chip>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-default-500 text-sm">
-                      {new Date(task.created_at).toLocaleString()}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-1">
-                      <Tooltip content="查看详情">
-                        <Button
-                          isIconOnly
-                          variant="light"
-                          size="sm"
-                          onPress={() => handleViewTask(task.task_id)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                      
-                      {task.status === 'running' && (
-                        <Tooltip content="暂停任务">
-                          <Button
-                            isIconOnly
-                            variant="light"
-                            size="sm"
-                            onPress={() => {
-                              console.log('暂停功能开发中');
+        <CardContent>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>任务名称</TableCell>
+                  <TableCell>状态</TableCell>
+                  <TableCell>进度</TableCell>
+                  <TableCell>股票数量</TableCell>
+                  <TableCell>模型</TableCell>
+                  <TableCell>创建时间</TableCell>
+                  <TableCell>操作</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredTasks.map((task) => (
+                  <TableRow key={task.task_id} hover>
+                    <TableCell>
+                      <Button
+                        variant="text"
+                        onClick={() => handleViewTask(task.task_id)}
+                        sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
+                      >
+                        {task.task_name}
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusChip(task.status)}
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ width: 80 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={task.progress}
+                          color={task.status === 'failed' ? 'error' : 'primary'}
+                        />
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {task.stock_codes?.length || 0}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={task.model_id} size="small" />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(task.created_at).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="查看详情">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleViewTask(task.task_id)}
+                          >
+                            <Eye size={16} />
+                          </IconButton>
+                        </Tooltip>
+                        
+                        {task.status === 'running' && (
+                          <Tooltip title="暂停任务">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                console.log('暂停功能开发中');
+                              }}
+                            >
+                              <Pause size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        
+                        {task.status === 'failed' && (
+                          <Tooltip title="重新运行">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRetryTask(task.task_id)}
+                            >
+                              <Play size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        
+                        <Tooltip title="删除任务">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => {
+                              setTaskToDelete(task.task_id);
+                              setIsDeleteOpen(true);
                             }}
                           >
-                            <Pause className="w-4 h-4" />
-                          </Button>
+                            <Trash2 size={16} />
+                          </IconButton>
                         </Tooltip>
-                      )}
-                      
-                      {task.status === 'failed' && (
-                        <Tooltip content="重新运行">
-                          <Button
-                            isIconOnly
-                            variant="light"
-                            size="sm"
-                            onPress={() => handleRetryTask(task.task_id)}
-                          >
-                            <Play className="w-4 h-4" />
-                          </Button>
-                        </Tooltip>
-                      )}
-                      
-                      <Tooltip content="删除任务">
-                        <Button
-                          isIconOnly
-                          variant="light"
-                          size="sm"
-                          color="danger"
-                          onPress={() => {
-                            setTaskToDelete(task.task_id);
-                            onDeleteOpen();
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
           
           {/* 分页 */}
           {total > pageSize && (
-            <div className="flex justify-center mt-4">
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
               <Pagination
-                total={Math.ceil(total / pageSize)}
+                count={Math.ceil(total / pageSize)}
                 page={currentPage}
                 onChange={handlePageChange}
-                showControls
+                color="primary"
               />
-            </div>
+            </Box>
           )}
-        </CardBody>
+        </CardContent>
       </Card>
 
       {/* 删除确认对话框 */}
-      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader>确认删除</ModalHeader>
-              <ModalBody>
-                <p>确定要删除这个任务吗？此操作不可撤销。</p>
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="light" onPress={onClose}>
-                  取消
-                </Button>
-                <Button color="danger" onPress={handleDeleteTask}>
-                  删除
-                </Button>
-              </ModalFooter>
-            </>
+      <Dialog open={isDeleteOpen} onClose={() => {
+        setIsDeleteOpen(false);
+        setDeleteForce(false);
+        setDeleteError(null);
+      }}>
+        <DialogTitle>确认删除</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>确定要删除这个任务吗？此操作不可撤销。</Typography>
+          
+          {deleteError && (
+            <Box sx={{ 
+              p: 2, 
+              mb: 2, 
+              bgcolor: 'error.light', 
+              color: 'error.contrastText',
+              borderRadius: 1 
+            }}>
+              <Typography variant="body2">{deleteError}</Typography>
+            </Box>
           )}
-        </ModalContent>
-      </Modal>
+          
+          <FormControlLabel
+            control={
+              <Switch
+                checked={deleteForce}
+                onChange={(e) => setDeleteForce(e.target.checked)}
+                color="error"
+              />
+            }
+            label={
+              <Typography variant="body2">
+                强制删除（用于删除运行中的任务或存在关联数据的任务）
+              </Typography>
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setIsDeleteOpen(false);
+            setDeleteForce(false);
+            setDeleteError(null);
+          }}>
+            取消
+          </Button>
+          <Button 
+            onClick={handleDeleteTask} 
+            color="error" 
+            variant="contained"
+          >
+            {deleteForce ? '强制删除' : '删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 批量删除确认对话框 */}
-      <Modal isOpen={isBatchDeleteOpen} onClose={onBatchDeleteClose}>
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader>批量删除确认</ModalHeader>
-              <ModalBody>
-                <p>确定要删除选中的 {selectedKeys.size} 个任务吗？此操作不可撤销。</p>
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="light" onPress={onClose}>
-                  取消
-                </Button>
-                <Button color="danger" onPress={handleBatchDelete}>
-                  删除
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
-    </div>
-  );}
+      <Dialog open={isBatchDeleteOpen} onClose={() => setIsBatchDeleteOpen(false)}>
+        <DialogTitle>批量删除确认</DialogTitle>
+        <DialogContent>
+          <Typography>确定要删除选中的 {selectedKeys.size} 个任务吗？此操作不可撤销。</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsBatchDeleteOpen(false)}>取消</Button>
+          <Button onClick={handleBatchDelete} color="error" variant="contained">
+            删除
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}

@@ -14,30 +14,34 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card,
   CardHeader,
-  CardBody,
-  CardFooter,
+  CardContent,
+  CardActions,
   Button,
-  Progress,
+  LinearProgress,
   Chip,
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Divider,
-  Spacer,
   Select,
-  SelectItem,
+  MenuItem,
   Tabs,
   Tab,
-} from '@heroui/react';
+  Box,
+  Typography,
+  TableContainer,
+  Paper,
+  FormControl,
+  InputLabel,
+  IconButton,
+  CircularProgress,
+} from '@mui/material';
 import {
   ArrowLeft,
   RefreshCw,
@@ -111,8 +115,13 @@ export default function TaskDetailPage() {
   const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<any>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const [selectedBacktestTab, setSelectedBacktestTab] = useState<string>('overview');
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
-  const { isOpen: isSaveConfigOpen, onOpen: onSaveConfigOpen, onClose: onSaveConfigClose } = useDisclosure();
+  const [selectedPredictionTab, setSelectedPredictionTab] = useState<string>('chart');
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSaveConfigOpen, setIsSaveConfigOpen] = useState(false);
+  const onDeleteOpen = () => setIsDeleteOpen(true);
+  const onDeleteClose = () => setIsDeleteOpen(false);
+  const onSaveConfigOpen = () => setIsSaveConfigOpen(true);
+  const onSaveConfigClose = () => setIsSaveConfigOpen(false);
   const [deleteForce, setDeleteForce] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
 
@@ -469,11 +478,11 @@ export default function TaskDetailPage() {
       created: { color: 'default' as const, text: '已创建' },
       running: { color: 'primary' as const, text: '运行中' },
       completed: { color: 'success' as const, text: '已完成' },
-      failed: { color: 'danger' as const, text: '失败' },
+      failed: { color: 'error' as const, text: '失败' },
     };
     
     const config = statusConfig[status] || statusConfig.created;
-    return <Chip color={config.color} variant="flat">{config.text}</Chip>;
+    return <Chip label={config.text} color={config.color} size="small" />;
   };
 
   // 获取预测方向图标
@@ -496,49 +505,48 @@ export default function TaskDetailPage() {
 
   if (!currentTask) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-96 space-y-4">
-        <p className="text-default-500">任务不存在或已被删除</p>
-        <Button color="primary" onPress={handleBack}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 384, gap: 2 }}>
+        <Typography variant="body2" color="text.secondary">任务不存在或已被删除</Typography>
+        <Button variant="contained" color="primary" onClick={handleBack}>
           返回任务列表
         </Button>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button
-            isIconOnly
-            variant="light"
-            onPress={handleBack}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{currentTask.task_name}</h1>
-            <p className="text-default-500 text-sm">任务ID: {currentTask.task_id}</p>
-          </div>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton onClick={handleBack} size="small">
+            <ArrowLeft size={20} />
+          </IconButton>
+          <Box>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+              {currentTask.task_name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">任务ID: {currentTask.task_id}</Typography>
+          </Box>
           {getStatusChip(currentTask.status)}
-        </div>
+        </Box>
         
-        <div className="flex space-x-2">
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            variant="light"
-            startContent={<RefreshCw className="w-4 h-4" />}
-            onPress={handleRefresh}
-            isLoading={refreshing}
+            variant="outlined"
+            startIcon={<RefreshCw size={16} />}
+            onClick={handleRefresh}
+            disabled={refreshing}
           >
             刷新
           </Button>
           
           {currentTask.status === 'failed' && (
             <Button
+              variant="contained"
               color="primary"
-              startContent={<Play className="w-4 h-4" />}
-              onPress={handleRetry}
+              startIcon={<Play size={16} />}
+              onClick={handleRetry}
             >
               重新运行
             </Button>
@@ -546,28 +554,29 @@ export default function TaskDetailPage() {
           
           {currentTask.status === 'completed' && (
             <Button
+              variant="outlined"
               color="secondary"
-              startContent={<Download className="w-4 h-4" />}
-              onPress={handleExport}
+              startIcon={<Download size={16} />}
+              onClick={handleExport}
             >
               导出结果
             </Button>
           )}
           
           <Button
-            color="danger"
-            variant="light"
-            startContent={<Trash2 className="w-4 h-4" />}
-            onPress={onDeleteOpen}
+            variant="outlined"
+            color="error"
+            startIcon={<Trash2 size={16} />}
+            onClick={onDeleteOpen}
           >
             删除
           </Button>
-        </div>
-      </div>
+        </Box>
+      </Box>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3 }}>
         {/* 主要内容区域 */}
-        <div className="lg:col-span-2 space-y-6">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* 任务进度 */}
           {currentTask.task_type === 'backtest' && (currentTask.status === 'running' || currentTask.status === 'created') ? (
             <BacktestProgressMonitor
@@ -591,32 +600,37 @@ export default function TaskDetailPage() {
           ) : (
             /* 通用任务进度显示 */
             <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">任务进度</h3>
-              </CardHeader>
-              <CardBody>
-                <Progress
-                  value={currentTask.progress}
-                  color={currentTask.status === 'failed' ? 'danger' : 'primary'}
-                  className="mb-4"
-                />
+              <CardHeader title="任务进度" />
+              <CardContent>
+                <Box sx={{ mb: 2 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={currentTask.progress}
+                    color={currentTask.status === 'failed' ? 'error' : 'primary'}
+                    sx={{ height: 10, borderRadius: 5 }}
+                  />
+                </Box>
                 {currentTask.status === 'running' && (
-                  <p className="text-default-500 text-sm">
+                  <Typography variant="caption" color="text.secondary">
                     任务正在执行中，请耐心等待...
-                  </p>
+                  </Typography>
                 )}
                 {currentTask.status === 'failed' && currentTask.error_message && (
-                  <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
-                    <div className="flex items-start space-x-2">
-                      <AlertTriangle className="w-5 h-5 text-danger mt-0.5" />
-                      <div>
-                        <p className="font-medium text-danger">任务执行失败</p>
-                        <p className="text-sm text-danger-600 mt-1">{currentTask.error_message}</p>
-                      </div>
-                    </div>
-                  </div>
+                  <Box sx={{ bgcolor: 'error.light', border: 1, borderColor: 'error.main', borderRadius: 1, p: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <AlertTriangle size={20} color="#d32f2f" style={{ marginTop: 2 }} />
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.dark' }}>
+                          任务执行失败
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'error.dark', mt: 0.5, display: 'block' }}>
+                          {currentTask.error_message}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
                 )}
-              </CardBody>
+              </CardContent>
             </Card>
           )}
 
@@ -624,135 +638,170 @@ export default function TaskDetailPage() {
           {currentTask.task_type === 'backtest' ? (
             /* 回测任务专用标签页 */
             <Card>
-              <CardBody>
-                <Tabs 
-                  aria-label="回测结果展示" 
-                  className="w-full"
-                  selectedKey={selectedBacktestTab}
-                  onSelectionChange={(key) => {
-                    const tabKey = key as string;
-                    setSelectedBacktestTab(tabKey);
-                    console.log('[TaskDetail] 切换到页签:', tabKey);
-                    
-                    // 如果切换到持仓分析页签，确保数据已加载
-                    if (tabKey === 'positions' && 
-                        currentTask && 
-                        currentTask.task_type === 'backtest' && 
-                        currentTask.status === 'completed' &&
-                        !backtestDetailedData && 
-                        !loadingBacktestData) {
-                      console.log('[TaskDetail] 切换到持仓分析页签，触发数据加载');
-                      loadBacktestDetailedData();
-                    }
-                  }}
-                >
-                  <Tab key="overview" title={
-                    <div className="flex items-center space-x-2">
-                      <BarChart3 className="w-4 h-4" />
-                      <span>概览</span>
-                    </div>
-                  }>
-                    <div className="mt-4 space-y-6">
-                      {/* 策略配置信息和保存按钮 */}
-                      {(() => {
-                        const configInfo = getStrategyConfig();
-                        if (configInfo) {
-                          return (
-                            <Card>
-                              <CardHeader className="flex justify-between items-center">
-                                <div>
-                                  <h4 className="text-md font-semibold">策略配置</h4>
-                                  <p className="text-sm text-default-500">策略: {configInfo.strategyName}</p>
-                                </div>
-                                <Button
-                                  color="primary"
-                                  variant="flat"
-                                  startContent={<Save className="w-4 h-4" />}
-                                  onPress={onSaveConfigOpen}
-                                  isDisabled={!configInfo.strategyName || Object.keys(configInfo.parameters).length === 0}
-                                >
-                                  保存配置
-                                </Button>
-                              </CardHeader>
-                              <CardBody>
-                                {Object.keys(configInfo.parameters).length > 0 ? (
-                                  <div className="bg-default-100 rounded-lg p-3">
-                                    <pre className="text-xs text-default-600 whitespace-pre-wrap font-mono">
-                                      {Object.entries(configInfo.parameters)
-                                        .map(([key, value]) => {
-                                          if (typeof value === 'object' && value !== null) {
-                                            return `${key}: ${JSON.stringify(value, null, 2)}`;
-                                          }
-                                          return `${key}: ${value}`;
-                                        })
-                                        .join('\n')}
-                                    </pre>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-default-500">暂无策略参数配置</p>
-                                )}
-                              </CardBody>
-                            </Card>
-                          );
-                        }
-                        return null;
-                      })()}
-                      <BacktestOverview 
-                        backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
-                        loading={loadingBacktestData}
-                      />
-                      <CostAnalysis
-                        backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
-                        loading={loadingBacktestData}
-                      />
-                    </div>
-                  </Tab>
-                  
-                  <Tab key="charts" title={
-                    <div className="flex items-center space-x-2">
-                      <LineChart className="w-4 h-4" />
-                      <span>交互式图表</span>
-                    </div>
-                  }>
-                    <div className="mt-4">
-                      <InteractiveChartsContainer 
-                        taskId={taskId}
-                        stockCode={selectedStock || currentTask?.stock_codes?.[0]}
-                        stockCodes={currentTask?.stock_codes || []}
-                        backtestData={(() => {
-                          // 尝试从多个位置获取回测数据
-                          const data = currentTask?.results?.backtest_results || 
-                                     currentTask?.backtest_results ||
-                                     (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
-                          return data;
+              <CardContent>
+                <Box>
+                  <Tabs 
+                    value={selectedBacktestTab}
+                    onChange={(e, newValue) => {
+                      const tabKey = newValue as string;
+                      setSelectedBacktestTab(tabKey);
+                      console.log('[TaskDetail] 切换到页签:', tabKey);
+                      
+                      // 如果切换到持仓分析页签，确保数据已加载
+                      if (tabKey === 'positions' && 
+                          currentTask && 
+                          currentTask.task_type === 'backtest' && 
+                          currentTask.status === 'completed' &&
+                          !backtestDetailedData && 
+                          !loadingBacktestData) {
+                        console.log('[TaskDetail] 切换到持仓分析页签，触发数据加载');
+                        loadBacktestDetailedData();
+                      }
+                    }}
+                    aria-label="回测结果展示"
+                    variant="scrollable"
+                    scrollButtons="auto"
+                  >
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <BarChart3 size={16} />
+                        <span>概览</span>
+                      </Box>
+                    } value="overview" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <LineChart size={16} />
+                        <span>交互式图表</span>
+                      </Box>
+                    } value="charts" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <FileText size={16} />
+                        <span>交易记录</span>
+                      </Box>
+                    } value="trades" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <PieChart size={16} />
+                        <span>持仓分析</span>
+                      </Box>
+                    } value="positions" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Calendar size={16} />
+                        <span>月度分析</span>
+                      </Box>
+                    } value="monthly" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Activity size={16} />
+                        <span>风险分析</span>
+                      </Box>
+                    } value="risk" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <TrendingUp size={16} />
+                        <span>绩效分解</span>
+                      </Box>
+                    } value="performance" />
+                  </Tabs>
+
+                  <Box sx={{ mt: 2 }}>
+                    {selectedBacktestTab === 'overview' && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {/* 策略配置信息和保存按钮 */}
+                        {(() => {
+                          const configInfo = getStrategyConfig();
+                          if (configInfo) {
+                            return (
+                              <Card>
+                                <CardHeader
+                                  title={
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                      <Box>
+                                        <Typography variant="h6" component="h4" sx={{ fontWeight: 600 }}>
+                                          策略配置
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                          策略: {configInfo.strategyName}
+                                        </Typography>
+                                      </Box>
+                                      <Button
+                                        variant="outlined"
+                                        color="primary"
+                                        size="small"
+                                        startIcon={<Save size={16} />}
+                                        onClick={onSaveConfigOpen}
+                                        disabled={!configInfo.strategyName || Object.keys(configInfo.parameters).length === 0}
+                                      >
+                                        保存配置
+                                      </Button>
+                                    </Box>
+                                  }
+                                />
+                                <CardContent>
+                                  {Object.keys(configInfo.parameters).length > 0 ? (
+                                    <Box sx={{ bgcolor: 'grey.100', borderRadius: 1, p: 1.5 }}>
+                                      <Box component="pre" sx={{ fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'pre-wrap', fontFamily: 'monospace', m: 0 }}>
+                                        {Object.entries(configInfo.parameters)
+                                          .map(([key, value]) => {
+                                            if (typeof value === 'object' && value !== null) {
+                                              return `${key}: ${JSON.stringify(value, null, 2)}`;
+                                            }
+                                            return `${key}: ${value}`;
+                                          })
+                                          .join('\n')}
+                                      </Box>
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">暂无策略参数配置</Typography>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          }
+                          return null;
                         })()}
-                      />
-                    </div>
-                  </Tab>
-                  
-                  <Tab key="trades" title={
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4" />
-                      <span>交易记录</span>
-                    </div>
-                  }>
-                    <div className="mt-4">
-                      <TradeHistoryTable 
-                        taskId={taskId}
-                        onTradeClick={(trade) => {
-                          console.log('查看交易详情:', trade);
-                        }}
-                      />
-                    </div>
-                  </Tab>
-                  
-                  <Tab key="positions" title={
-                    <div className="flex items-center space-x-2">
-                      <PieChart className="w-4 h-4" />
-                      <span>持仓分析</span>
-                    </div>
-                  }>
-                    <div className="mt-4">
+                        <BacktestOverview 
+                          backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
+                          loading={loadingBacktestData}
+                        />
+                        <CostAnalysis
+                          backtestData={currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results}
+                          loading={loadingBacktestData}
+                        />
+                      </Box>
+                    )}
+
+                    {selectedBacktestTab === 'charts' && (
+                      <Box sx={{ mt: 2 }}>
+                        <InteractiveChartsContainer 
+                          taskId={taskId}
+                          stockCode={selectedStock || currentTask?.stock_codes?.[0]}
+                          stockCodes={currentTask?.stock_codes || []}
+                          backtestData={(() => {
+                            const data = currentTask?.results?.backtest_results || 
+                                       currentTask?.backtest_results ||
+                                       (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
+                            return data;
+                          })()}
+                        />
+                      </Box>
+                    )}
+
+                    {selectedBacktestTab === 'trades' && (
+                      <Box sx={{ mt: 2 }}>
+                        <TradeHistoryTable 
+                          taskId={taskId}
+                          onTradeClick={(trade) => {
+                            console.log('查看交易详情:', trade);
+                          }}
+                        />
+                      </Box>
+                    )}
+
+                    {selectedBacktestTab === 'positions' && (
+                      <Box sx={{ mt: 2 }}>
                       {(() => {
                         // 如果数据正在加载，显示加载中
                         if (loadingBacktestData) {
@@ -855,55 +904,48 @@ export default function TaskDetailPage() {
                           </div>
                         );
                       })()}
-                    </div>
-                  </Tab>
-                  
-                  <Tab key="monthly" title={
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>月度分析</span>
-                    </div>
-                  }>
-                    <div className="mt-4">
+                      </Box>
+                    )}
+
+                  {selectedBacktestTab === 'monthly' && (
+                    <Box sx={{ mt: 2 }}>
                       {backtestDetailedData?.monthly_returns ? (
-                        <div className="space-y-4">
-                          <h4 className="text-lg font-semibold">月度收益热力图</h4>
-                          <div className="grid grid-cols-12 gap-1">
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <Typography variant="h6" component="h4" sx={{ fontWeight: 600 }}>
+                            月度收益热力图
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 0.5 }}>
                             {backtestDetailedData.monthly_returns.map((monthData: any) => (
-                              <div
+                              <Box
                                 key={`${monthData.year}-${monthData.month}`}
-                                className={`
-                                  p-2 text-center text-xs rounded
-                                  ${monthData.monthly_return >= 0 
-                                    ? 'bg-success-100 text-success-800' 
-                                    : 'bg-danger-100 text-danger-800'
-                                  }
-                                `}
+                                sx={{
+                                  p: 1,
+                                  textAlign: 'center',
+                                  fontSize: '0.75rem',
+                                  borderRadius: 1,
+                                  bgcolor: monthData.monthly_return >= 0 ? 'success.light' : 'error.light',
+                                  color: monthData.monthly_return >= 0 ? 'success.dark' : 'error.dark',
+                                }}
                                 title={`${monthData.year}年${monthData.month}月: ${(monthData.monthly_return * 100).toFixed(2)}%`}
                               >
                                 {monthData.month}月
                                 <br />
                                 {(monthData.monthly_return * 100).toFixed(1)}%
-                              </div>
+                              </Box>
                             ))}
-                          </div>
-                        </div>
+                          </Box>
+                        </Box>
                       ) : (
-                        <div className="text-center text-default-500 py-8">
-                          <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>月度分析数据加载中...</p>
-                        </div>
+                        <Box sx={{ textAlign: 'center', py: 4 }}>
+                          <Calendar size={48} color="#999" style={{ margin: '0 auto 16px' }} />
+                          <Typography variant="body2" color="text.secondary">月度分析数据加载中...</Typography>
+                        </Box>
                       )}
-                    </div>
-                  </Tab>
-                  
-                  <Tab key="risk" title={
-                    <div className="flex items-center space-x-2">
-                      <Activity className="w-4 h-4" />
-                      <span>风险分析</span>
-                    </div>
-                  }>
-                    <div className="mt-4">
+                    </Box>
+                  )}
+
+                  {selectedBacktestTab === 'risk' && (
+                    <Box sx={{ mt: 2 }}>
                       {adaptedRiskData ? (
                         <RiskAnalysis 
                           taskId={taskId}
@@ -912,21 +954,16 @@ export default function TaskDetailPage() {
                           rollingMetrics={adaptedRiskData.rollingMetrics}
                         />
                       ) : (
-                        <div className="text-center text-default-500 py-8">
-                          <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>风险分析数据加载中...</p>
-                        </div>
+                        <Box sx={{ textAlign: 'center', py: 4 }}>
+                          <Activity size={48} color="#999" style={{ margin: '0 auto 16px' }} />
+                          <Typography variant="body2" color="text.secondary">风险分析数据加载中...</Typography>
+                        </Box>
                       )}
-                    </div>
-                  </Tab>
-                  
-                  <Tab key="performance" title={
-                    <div className="flex items-center space-x-2">
-                      <TrendingUp className="w-4 h-4" />
-                      <span>绩效分解</span>
-                    </div>
-                  }>
-                    <div className="mt-4">
+                    </Box>
+                  )}
+
+                  {selectedBacktestTab === 'performance' && (
+                    <Box sx={{ mt: 2 }}>
                       {adaptedPerformanceData ? (
                         <PerformanceBreakdown 
                           taskId={taskId}
@@ -936,122 +973,132 @@ export default function TaskDetailPage() {
                           benchmarkComparison={adaptedPerformanceData.benchmarkComparison}
                         />
                       ) : (
-                        <div className="text-center text-default-500 py-8">
-                          <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>绩效分解数据加载中...</p>
-                        </div>
+                        <Box sx={{ textAlign: 'center', py: 4 }}>
+                          <TrendingUp size={48} color="#999" style={{ margin: '0 auto 16px' }} />
+                          <Typography variant="body2" color="text.secondary">绩效分解数据加载中...</Typography>
+                        </Box>
                       )}
-                    </div>
-                  </Tab>
-                </Tabs>
-              </CardBody>
+                    </Box>
+                  )}
+                  </Box>
+                </Box>
+              </CardContent>
             </Card>
           ) : (
             /* 预测任务的原有内容 */
             <>
               {/* 任务信息 */}
               <Card>
-                <CardHeader>
-                  <h3 className="text-lg font-semibold">任务信息</h3>
-                </CardHeader>
-                <CardBody className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-default-500">模型</p>
-                      <Chip variant="flat" color="secondary">{currentTask.model_id}</Chip>
-                    </div>
-                    <div>
-                      <p className="text-sm text-default-500">股票数量</p>
-                      <p className="font-medium">{currentTask.stock_codes.length}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-default-500">创建时间</p>
-                      <p className="font-medium">{new Date(currentTask.created_at).toLocaleString()}</p>
-                    </div>
-                    {currentTask.completed_at && (
-                      <div>
-                        <p className="text-sm text-default-500">完成时间</p>
-                        <p className="font-medium">{new Date(currentTask.completed_at).toLocaleString()}</p>
-                      </div>
-                    )}
-                  </div>
+                <CardHeader title="任务信息" />
+                <CardContent>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">模型</Typography>
+                        <Chip label={currentTask.model_id} color="secondary" size="small" sx={{ mt: 0.5 }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">股票数量</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{currentTask.stock_codes.length}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">创建时间</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{new Date(currentTask.created_at).toLocaleString()}</Typography>
+                      </Box>
+                      {currentTask.completed_at && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">完成时间</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{new Date(currentTask.completed_at).toLocaleString()}</Typography>
+                        </Box>
+                      )}
+                    </Box>
 
-                  <Divider />
+                    <Divider />
 
-                  <div>
-                    <p className="text-sm text-default-500 mb-2">选择的股票</p>
-                    <div className="flex flex-wrap gap-2">
-                      {currentTask.stock_codes.map(code => (
-                        <Chip key={code} variant="flat" size="sm">{code}</Chip>
-                      ))}
-                    </div>
-                  </div>
-                </CardBody>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>选择的股票</Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {currentTask.stock_codes.map(code => (
+                          <Chip key={code} label={code} size="small" />
+                        ))}
+                      </Box>
+                    </Box>
+                  </Box>
+                </CardContent>
               </Card>
 
               {/* 预测结果和图表 */}
               {currentTask.status === 'completed' && predictions.length > 0 && (
                 <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold">预测结果</h3>
-                    <Select
-                      placeholder="选择股票"
-                      selectedKeys={selectedStock ? [selectedStock] : []}
-                      onSelectionChange={(keys) => {
-                        const selected = Array.from(keys)[0] as string;
-                        setSelectedStock(selected);
-                      }}
-                      className="w-48"
-                    >
-                      {predictions.map((prediction) => (
-                        <SelectItem key={prediction.stock_code}>
-                          {prediction.stock_code}
-                        </SelectItem>
-                      ))}
-                    </Select>
-                  </CardHeader>
-                  <CardBody>
-                    <Tabs aria-label="预测结果展示">
-                      <Tab key="chart" title={
-                        <div className="flex items-center space-x-2">
-                          <LineChart className="w-4 h-4" />
-                          <span>价格走势</span>
-                        </div>
-                      }>
-                        {selectedStock && (
+                  <CardHeader
+                    title={
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                          预测结果
+                        </Typography>
+                        <FormControl size="small" sx={{ minWidth: 192 }}>
+                          <InputLabel>选择股票</InputLabel>
+                          <Select
+                            value={selectedStock || ''}
+                            label="选择股票"
+                            onChange={(e) => setSelectedStock(e.target.value)}
+                          >
+                            {predictions.map((prediction) => (
+                              <MenuItem key={prediction.stock_code} value={prediction.stock_code}>
+                                {prediction.stock_code}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    }
+                  />
+                  <CardContent>
+                    <Box>
+                      <Tabs value={selectedPredictionTab} onChange={(e, newValue) => setSelectedPredictionTab(newValue)} aria-label="预测结果展示">
+                        <Tab label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <LineChart size={16} />
+                            <span>价格走势</span>
+                          </Box>
+                        } value="chart" />
+                        <Tab label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <BarChart3 size={16} />
+                            <span>预测分析</span>
+                          </Box>
+                        } value="prediction" />
+                        {currentTask.task_type === 'backtest' && (
+                          <Tab label={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Activity size={16} />
+                              <span>回测结果</span>
+                            </Box>
+                          } value="backtest" />
+                        )}
+                        <Tab label="数据表格" value="table" />
+                      </Tabs>
+
+                      <Box sx={{ mt: 2 }}>
+                        {selectedPredictionTab === 'chart' && selectedStock && (
                           <TradingViewChart 
                             stockCode={selectedStock}
                             prediction={predictions.find(p => p.stock_code === selectedStock)}
                           />
                         )}
-                      </Tab>
-                      
-                      <Tab key="prediction" title={
-                        <div className="flex items-center space-x-2">
-                          <BarChart3 className="w-4 h-4" />
-                          <span>预测分析</span>
-                        </div>
-                      }>
-                        {selectedStock && (
+
+                        {selectedPredictionTab === 'prediction' && selectedStock && (
                           <PredictionChart 
                             taskId={taskId}
                             stockCode={selectedStock}
                             prediction={predictions.find(p => p.stock_code === selectedStock)}
                           />
                         )}
-                      </Tab>
-                      
-                      {currentTask.task_type === 'backtest' && (
-                        <Tab key="backtest" title={
-                          <div className="flex items-center space-x-2">
-                            <Activity className="w-4 h-4" />
-                            <span>回测结果</span>
-                          </div>
-                        }>
+
+                        {selectedPredictionTab === 'backtest' && currentTask.task_type === 'backtest' && (
                           <BacktestChart 
                             stockCode={selectedStock || (currentTask?.stock_codes?.[0] || '')}
                             backtestData={(() => {
-                              // 尝试从多个位置获取回测数据
                               const data = currentTask?.results?.backtest_results || 
                                          currentTask?.backtest_results ||
                                          (currentTask?.task_type === 'backtest' ? currentTask?.result : null);
@@ -1064,74 +1111,80 @@ export default function TaskDetailPage() {
                               return data;
                             })()}
                           />
-                        </Tab>
-                      )}
-                      
-                      <Tab key="table" title="数据表格">
-                        <Table aria-label="预测结果表格">
-                          <TableHeader>
-                            <TableColumn>股票代码</TableColumn>
-                            <TableColumn>预测方向</TableColumn>
-                            <TableColumn>预测收益率</TableColumn>
-                            <TableColumn>置信度</TableColumn>
-                            <TableColumn>置信区间</TableColumn>
-                            <TableColumn>VaR</TableColumn>
-                          </TableHeader>
-                          <TableBody>
-                            {predictions.map((prediction) => (
-                              <TableRow key={prediction.stock_code}>
-                                <TableCell>
-                                  <Chip variant="flat" size="sm">{prediction.stock_code}</Chip>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center space-x-2">
-                                    {getPredictionIcon(prediction.predicted_direction)}
-                                    <span>{getPredictionText(prediction.predicted_direction)}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <span className={
-                                    prediction.predicted_return > 0 
-                                      ? 'text-success' 
-                                      : prediction.predicted_return < 0 
-                                        ? 'text-danger' 
-                                        : 'text-default-500'
-                                  }>
-                                    {(prediction.predicted_return * 100).toFixed(2)}%
-                                  </span>
-                                </TableCell>
-                                <TableCell>
-                                  <Progress
-                                    value={prediction.confidence_score * 100}
-                                    size="sm"
-                                    className="w-20"
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-sm text-default-500">
-                                    [{(prediction.confidence_interval.lower * 100).toFixed(2)}%, {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
-                                  </span>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-danger">
-                                    {(prediction.risk_assessment.value_at_risk * 100).toFixed(2)}%
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </Tab>
-                    </Tabs>
-                  </CardBody>
+                        )}
+
+                        {selectedPredictionTab === 'table' && (
+                          <TableContainer component={Paper}>
+                            <Table aria-label="预测结果表格">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>股票代码</TableCell>
+                                  <TableCell>预测方向</TableCell>
+                                  <TableCell>预测收益率</TableCell>
+                                  <TableCell>置信度</TableCell>
+                                  <TableCell>置信区间</TableCell>
+                                  <TableCell>VaR</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {predictions.map((prediction) => (
+                                  <TableRow key={prediction.stock_code}>
+                                    <TableCell>
+                                      <Chip label={prediction.stock_code} size="small" />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        {getPredictionIcon(prediction.predicted_direction)}
+                                        <Typography variant="body2">{getPredictionText(prediction.predicted_direction)}</Typography>
+                                      </Box>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="body2" sx={{ 
+                                        color: prediction.predicted_return > 0 
+                                          ? 'success.main' 
+                                          : prediction.predicted_return < 0 
+                                            ? 'error.main' 
+                                            : 'text.secondary'
+                                      }}>
+                                        {(prediction.predicted_return * 100).toFixed(2)}%
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Box sx={{ width: 80 }}>
+                                        <LinearProgress 
+                                          variant="determinate" 
+                                          value={prediction.confidence_score * 100} 
+                                          sx={{ height: 8, borderRadius: 4 }}
+                                        />
+                                      </Box>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="caption" color="text.secondary">
+                                        [{(prediction.confidence_interval.lower * 100).toFixed(2)}%, {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="body2" color="error.main">
+                                        {(prediction.risk_assessment.value_at_risk * 100).toFixed(2)}%
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        )}
+                      </Box>
+                    </Box>
+                  </CardContent>
                 </Card>
               )}
             </>
           )}
-        </div>
+        </Box>
 
         {/* 侧边栏 */}
-        <div className="space-y-6">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* 根据任务类型显示不同的侧边栏内容 */}
           {currentTask.task_type === 'backtest' ? (
             /* 回测任务侧边栏 */
@@ -1147,83 +1200,87 @@ export default function TaskDetailPage() {
               {/* 统计信息 */}
               {currentTask.results && (
                 <Card>
-                  <CardHeader>
-                    <h3 className="text-lg font-semibold">统计信息</h3>
-                  </CardHeader>
-                  <CardBody className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">{currentTask.results.total_stocks}</p>
-                        <p className="text-sm text-default-500">总股票数</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-success">{currentTask.results.successful_predictions}</p>
-                        <p className="text-sm text-default-500">成功预测</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-secondary">
+                  <CardHeader title="统计信息" />
+                  <CardContent>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                          {currentTask.results.total_stocks}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">总股票数</Typography>
+                      </Box>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                          {currentTask.results.successful_predictions}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">成功预测</Typography>
+                      </Box>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main' }}>
                           {((currentTask.results.average_confidence || 0) * 100).toFixed(1)}%
-                        </p>
-                        <p className="text-sm text-default-500">平均置信度</p>
-                      </div>
-                    </div>
-                  </CardBody>
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">平均置信度</Typography>
+                      </Box>
+                    </Box>
+                  </CardContent>
                 </Card>
               )}
 
               {/* 快速操作 */}
               <Card>
-                <CardHeader>
-                  <h3 className="text-lg font-semibold">快速操作</h3>
-                </CardHeader>
-                <CardBody className="space-y-3">
-                  <Button
-                    variant="light"
-                    startContent={<RefreshCw className="w-4 h-4" />}
-                    onPress={handleRefresh}
-                    isLoading={refreshing}
-                    fullWidth
-                  >
-                    刷新状态
-                  </Button>
-                  
-                  {currentTask.status === 'failed' && (
+                <CardHeader title="快速操作" />
+                <CardContent>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <Button
-                      color="primary"
-                      startContent={<Play className="w-4 h-4" />}
-                      onPress={handleRetry}
+                      variant="outlined"
+                      startIcon={<RefreshCw size={16} />}
+                      onClick={handleRefresh}
+                      disabled={refreshing}
                       fullWidth
                     >
-                      重新运行
+                      刷新状态
                     </Button>
-                  )}
-                  
-                  {currentTask.status === 'completed' && (
+                    
+                    {currentTask.status === 'failed' && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Play size={16} />}
+                        onClick={handleRetry}
+                        fullWidth
+                      >
+                        重新运行
+                      </Button>
+                    )}
+                    
+                    {currentTask.status === 'completed' && (
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={<Download size={16} />}
+                        onClick={handleExport}
+                        fullWidth
+                      >
+                        导出结果
+                      </Button>
+                    )}
+                    
                     <Button
-                      color="secondary"
-                      startContent={<Download className="w-4 h-4" />}
-                      onPress={handleExport}
+                      variant="outlined"
+                      color="error"
+                      startIcon={<Trash2 size={16} />}
+                      onClick={onDeleteOpen}
                       fullWidth
                     >
-                      导出结果
+                      删除任务
                     </Button>
-                  )}
-                  
-                  <Button
-                    color="danger"
-                    variant="light"
-                    startContent={<Trash2 className="w-4 h-4" />}
-                    onPress={onDeleteOpen}
-                    fullWidth
-                  >
-                    删除任务
-                  </Button>
-                </CardBody>
+                  </Box>
+                </CardContent>
               </Card>
             </>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* 保存策略配置对话框 */}
       {(() => {
@@ -1244,52 +1301,51 @@ export default function TaskDetailPage() {
       })()}
 
       {/* 删除确认对话框 */}
-      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="w-5 h-5 text-danger" />
-                  <span>确认删除</span>
-                </div>
-              </ModalHeader>
-              <ModalBody>
-                <p>确定要删除这个任务吗？此操作不可撤销。</p>
-                {currentTask?.status === 'running' && (
-                  <div className="mt-4 p-3 bg-warning-50 border border-warning-200 rounded-lg">
-                    <p className="text-sm text-warning-700 mb-2">
-                      ⚠️ 该任务当前正在运行中
-                    </p>
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={deleteForce}
-                        onChange={(e) => setDeleteForce(e.target.checked)}
-                        className="w-4 h-4 text-danger rounded"
-                      />
-                      <span className="text-sm font-medium">强制删除（将中断正在运行的任务）</span>
-                    </label>
-                  </div>
-                )}
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="light" onPress={() => {
-                  setDeleteForce(false);
-                  onClose();
-                }}>
-                  取消
-                </Button>
-                <Button color="danger" onPress={() => {
-                  handleDelete();
-                  onClose();
-                }}>
-                  {deleteForce ? '强制删除' : '删除'}
-                </Button>
-              </ModalFooter>
-            </>
+      <Dialog open={isDeleteOpen} onClose={onDeleteClose}>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AlertTriangle size={20} color="#d32f2f" />
+            <Typography variant="h6" component="span">确认删除</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            确定要删除这个任务吗？此操作不可撤销。
+          </Typography>
+          {currentTask?.status === 'running' && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'warning.light', border: 1, borderColor: 'warning.main', borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ color: 'warning.dark', mb: 1 }}>
+                ⚠️ 该任务当前正在运行中
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <input
+                  type="checkbox"
+                  checked={deleteForce}
+                  onChange={(e) => setDeleteForce(e.target.checked)}
+                  style={{ width: 16, height: 16 }}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  强制删除（将中断正在运行的任务）
+                </Typography>
+              </Box>
+            </Box>
           )}
-        </ModalContent>
-      </Modal>
-    </div>
-  );}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => {
+            setDeleteForce(false);
+            onDeleteClose();
+          }}>
+            取消
+          </Button>
+          <Button variant="contained" color="error" onClick={() => {
+            handleDelete();
+            onDeleteClose();
+          }}>
+            {deleteForce ? '强制删除' : '删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}

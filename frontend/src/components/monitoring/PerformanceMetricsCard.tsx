@@ -13,13 +13,17 @@
 import React, { useEffect, useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
-  Progress,
+  LinearProgress,
   Button,
   Tabs,
   Tab,
-} from '@heroui/react';
+  Box,
+  Typography,
+  IconButton,
+  CircularProgress,
+} from '@mui/material';
 import {
   BarChart3,
   TrendingUp,
@@ -81,177 +85,198 @@ export function PerformanceMetricsCard() {
     return total_requests > 0 ? (total_errors / total_requests) * 100 : 0;
   };
 
-  const getResponseTimeColor = (responseTime: number) => {
+  const getResponseTimeColor = (responseTime: number): "success" | "warning" | "error" => {
     if (responseTime < 100) return 'success';
     if (responseTime < 500) return 'warning';
-    return 'danger';
+    return 'error';
   };
 
   if (loading && !performanceData) {
     return (
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">性能指标</h3>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-            <span className="ml-2 text-default-500">加载性能数据中...</span>
-          </div>
-        </CardBody>
+        <CardHeader
+          avatar={<BarChart3 size={24} />}
+          title="性能指标"
+        />
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={24} sx={{ mr: 1 }} />
+            <Typography variant="body2" color="text.secondary">
+              加载性能数据中...
+            </Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">性能指标</h3>
-          </div>
-          <Button
-            isIconOnly
-            variant="light"
-            size="sm"
-            onPress={loadPerformanceData}
-            isLoading={loading}
+      <CardHeader
+        avatar={<BarChart3 size={24} />}
+        title="性能指标"
+        action={
+          <IconButton
+            size="small"
+            onClick={loadPerformanceData}
+            disabled={loading}
           >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardBody>
+            <RefreshCw size={16} />
+          </IconButton>
+        }
+      />
+      <CardContent>
         <Tabs
-          selectedKey={selectedTab}
-          onSelectionChange={(key) => setSelectedTab(key as string)}
-          variant="underlined"
-          classNames={{
-            tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
-            cursor: "w-full bg-primary",
-            tab: "max-w-fit px-0 h-12",
-          }}
+          value={selectedTab}
+          onChange={(e, newValue) => setSelectedTab(newValue)}
         >
-          <Tab key="overview" title="概览">
-            <div className="space-y-6 pt-4">
+          <Tab label="概览" value="overview" />
+          <Tab label="服务详情" value="services" />
+        </Tabs>
+
+        <Box sx={{ mt: 2 }}>
+          {selectedTab === 'overview' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* 关键指标 */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-primary-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <Clock className="w-5 h-5 text-primary" />
-                  </div>
-                  <p className="text-2xl font-bold text-primary">
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Clock size={20} color="#1976d2" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
                     {performanceData?.summary?.avg_response_time?.toFixed(0) || 0}ms
-                  </p>
-                  <p className="text-sm text-default-500">平均响应时间</p>
-                </div>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    平均响应时间
+                  </Typography>
+                </Box>
                 
-                <div className="text-center p-4 bg-success-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <TrendingUp className="w-5 h-5 text-success" />
-                  </div>
-                  <p className="text-2xl font-bold text-success">
+                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <TrendingUp size={20} color="#2e7d32" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
                     {formatNumber(performanceData?.summary?.total_requests || 0)}
-                  </p>
-                  <p className="text-sm text-default-500">总请求数</p>
-                </div>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    总请求数
+                  </Typography>
+                </Box>
                 
-                <div className="text-center p-4 bg-warning-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <AlertCircle className="w-5 h-5 text-warning" />
-                  </div>
-                  <p className="text-2xl font-bold text-warning">
+                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <AlertCircle size={20} color="#ed6c02" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
                     {formatNumber(performanceData?.summary?.total_errors || 0)}
-                  </p>
-                  <p className="text-sm text-default-500">错误总数</p>
-                </div>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    错误总数
+                  </Typography>
+                </Box>
                 
-                <div className="text-center p-4 bg-secondary-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <Activity className="w-5 h-5 text-secondary" />
-                  </div>
-                  <p className="text-2xl font-bold text-secondary">
+                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'secondary.light', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Activity size={20} color="#9c27b0" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main' }}>
                     {performanceData?.summary?.total_services || 0}
-                  </p>
-                  <p className="text-sm text-default-500">活跃服务</p>
-                </div>
-              </div>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    活跃服务
+                  </Typography>
+                </Box>
+              </Box>
 
               {/* 错误率 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">错误率</span>
-                  <span className="text-sm text-default-500">
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    错误率
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                     {getErrorRate().toFixed(2)}%
-                  </span>
-                </div>
-                <Progress
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
                   value={getErrorRate()}
-                  color={getErrorRate() > 5 ? 'danger' : getErrorRate() > 1 ? 'warning' : 'success'}
-                  className="w-full"
+                  color={getErrorRate() > 5 ? 'error' : getErrorRate() > 1 ? 'warning' : 'success'}
+                  sx={{ height: 8, borderRadius: 4 }}
                 />
-              </div>
+              </Box>
 
               {/* 响应时间状态 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">响应时间状态</span>
-                  <span className="text-sm text-default-500">
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    响应时间状态
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                     {performanceData?.summary?.avg_response_time || 0}ms
-                  </span>
-                </div>
-                <Progress
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
                   value={Math.min((performanceData?.summary?.avg_response_time || 0) / 10, 100)}
                   color={getResponseTimeColor(performanceData?.summary?.avg_response_time || 0)}
-                  className="w-full"
+                  sx={{ height: 8, borderRadius: 4 }}
                 />
-              </div>
-            </div>
-          </Tab>
+              </Box>
+            </Box>
+          )}
           
-          <Tab key="services" title="服务详情">
-            <div className="space-y-4 pt-4">
+          {selectedTab === 'services' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {performanceData?.services && Object.entries(performanceData.services).map(([serviceName, metrics]) => (
-                <div key={serviceName} className="p-4 bg-default-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium">{serviceName}</h4>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium">
+                <Box key={serviceName} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {serviceName}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Zap size={16} color="#1976d2" />
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         {metrics.avg_response_time?.toFixed(0) || 0}ms
-                      </span>
-                    </div>
-                  </div>
+                      </Typography>
+                    </Box>
+                  </Box>
                   
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-default-500">请求数</p>
-                      <p className="font-medium">{formatNumber(metrics.request_count || 0)}</p>
-                    </div>
-                    <div>
-                      <p className="text-default-500">错误数</p>
-                      <p className="font-medium text-danger">{metrics.error_count || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-default-500">成功率</p>
-                      <p className="font-medium text-success">
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        请求数
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {formatNumber(metrics.request_count || 0)}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        错误数
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>
+                        {metrics.error_count || 0}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        成功率
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
                         {metrics.request_count > 0 
                           ? (((metrics.request_count - metrics.error_count) / metrics.request_count) * 100).toFixed(1)
                           : 100
                         }%
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
               ))}
-            </div>
-          </Tab>
-        </Tabs>
-      </CardBody>
+            </Box>
+          )}
+        </Box>
+      </CardContent>
     </Card>
   );
 }

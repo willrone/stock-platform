@@ -13,18 +13,23 @@
 import React, { useEffect, useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Button,
-  Input,
+  TextField,
   Select,
-  SelectItem,
-  Textarea,
+  MenuItem,
   Switch,
   Slider,
   Chip,
   Divider,
-} from '@heroui/react';
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  IconButton,
+} from '@mui/material';
 import {
   ArrowLeft,
   Settings,
@@ -43,8 +48,6 @@ import { StockSelector } from '../../../components/tasks/StockSelector';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 import { StrategyConfigForm, StrategyParameter } from '../../../components/backtest/StrategyConfigForm';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
-
-
 
 export default function CreateTaskPage() {
   const router = useRouter();
@@ -242,77 +245,75 @@ export default function CreateTaskPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
-      <div className="flex items-center space-x-4">
-        <Button
-          isIconOnly
-          variant="light"
-          onPress={handleBack}
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">创建任务</h1>
-          <p className="text-default-500">配置股票预测或回测任务参数</p>
-        </div>
-      </div>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <IconButton onClick={handleBack}>
+          <ArrowLeft size={20} />
+        </IconButton>
+        <Box>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+            创建任务
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            配置股票预测或回测任务参数
+          </Typography>
+        </Box>
+      </Box>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3 }}>
         {/* 主要配置区域 */}
-        <div className="lg:col-span-2 space-y-6">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* 基本信息 */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <Settings className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">基本信息</h3>
-              </div>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              <Select
-                label="任务类型"
-                selectedKeys={[taskType]}
-                onSelectionChange={(keys) => {
-                  const type = Array.from(keys)[0] as 'prediction' | 'backtest';
-                  setTaskType(type);
-                }}
-                isRequired
-              >
-                <SelectItem key="prediction">预测任务</SelectItem>
-                <SelectItem key="backtest">回测任务</SelectItem>
-              </Select>
+            <CardHeader
+              avatar={<Settings size={20} />}
+              title="基本信息"
+            />
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <FormControl fullWidth required>
+                <InputLabel>任务类型</InputLabel>
+                <Select
+                  value={taskType}
+                  label="任务类型"
+                  onChange={(e) => setTaskType(e.target.value as 'prediction' | 'backtest')}
+                >
+                  <MenuItem value="prediction">预测任务</MenuItem>
+                  <MenuItem value="backtest">回测任务</MenuItem>
+                </Select>
+              </FormControl>
               
-              <Input
+              <TextField
                 label="任务名称"
                 placeholder="请输入任务名称"
                 value={formData.task_name}
-                onValueChange={(value) => updateFormData('task_name', value)}
-                isInvalid={!!errors.task_name}
-                errorMessage={errors.task_name}
-                isRequired
+                onChange={(e) => updateFormData('task_name', e.target.value)}
+                error={!!errors.task_name}
+                helperText={errors.task_name}
+                required
+                fullWidth
               />
               
-              <Textarea
+              <TextField
                 label="任务描述"
                 placeholder="请输入任务描述（可选）"
                 value={formData.description}
-                onValueChange={(value) => updateFormData('description', value)}
-                minRows={3}
+                onChange={(e) => updateFormData('description', e.target.value)}
+                multiline
+                rows={3}
+                fullWidth
               />
-            </CardBody>
+            </CardContent>
           </Card>
 
           {/* 股票选择 */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <Target className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">股票选择</h3>
-              </div>
-            </CardHeader>
-            <CardBody>
-              <div className="space-y-4">
+            <CardHeader
+              avatar={<Target size={20} />}
+              title="股票选择"
+            />
+            <CardContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <StockSelector
                   value={selectedStocks}
                   onChange={(stocks) => {
@@ -325,142 +326,141 @@ export default function CreateTaskPage() {
                   placeholder="搜索股票代码或名称"
                 />
                 {errors.stock_codes && (
-                  <p className="text-danger text-sm">{errors.stock_codes}</p>
+                  <FormHelperText error>{errors.stock_codes}</FormHelperText>
                 )}
                 {selectedStocks.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                     {selectedStocks.map(stock => (
                       <Chip
                         key={stock}
-                        onClose={() => {
+                        label={stock}
+                        onDelete={() => {
                           setSelectedStocks(prev => prev.filter(s => s !== stock));
                         }}
-                        variant="flat"
-                      >
-                        {stock}
-                      </Chip>
+                        size="small"
+                      />
                     ))}
-                  </div>
+                  </Box>
                 )}
-              </div>
-            </CardBody>
+              </Box>
+            </CardContent>
           </Card>
 
           {/* 模型和参数 / 回测配置 */}
           {taskType === 'prediction' ? (
             <Card>
-              <CardHeader>
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="w-5 h-5" />
-                  <h3 className="text-lg font-semibold">模型和参数</h3>
-                </div>
-              </CardHeader>
-              <CardBody className="space-y-6">
-                <Select
-                  label="预测模型"
-                  placeholder="请选择预测模型"
-                  selectedKeys={formData.model_id ? [formData.model_id] : []}
-                  onSelectionChange={(keys) => {
-                    const modelId = Array.from(keys)[0] as string;
-                    updateFormData('model_id', modelId);
-                    const model = models.find(m => m.model_id === modelId);
-                    setSelectedModel(model || null);
-                  }}
-                  isInvalid={!!errors.model_id}
-                  errorMessage={errors.model_id}
-                  isRequired
-                >
-                  {models
-                    .filter(model => model.status === 'ready' || model.status === 'active')
-                    .map(model => (
-                      <SelectItem key={model.model_id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{model.model_name}</span>
-                          <span className="text-xs text-default-500">
-                            准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                </Select>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CardHeader
+                avatar={<TrendingUp size={20} />}
+                title="模型和参数"
+              />
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <FormControl fullWidth required error={!!errors.model_id}>
+                  <InputLabel>预测模型</InputLabel>
                   <Select
-                    label="预测时间维度"
-                    selectedKeys={[formData.horizon]}
-                    onSelectionChange={(keys) => {
-                      const horizon = Array.from(keys)[0] as string;
-                      updateFormData('horizon', horizon);
+                    value={formData.model_id}
+                    label="预测模型"
+                    onChange={(e) => {
+                      const modelId = e.target.value;
+                      updateFormData('model_id', modelId);
+                      const model = models.find(m => m.model_id === modelId);
+                      setSelectedModel(model || null);
                     }}
                   >
-                    <SelectItem key="intraday">
-                      日内 (1-4小时)
-                    </SelectItem>
-                    <SelectItem key="short_term">
-                      短期 (1-5天)
-                    </SelectItem>
-                    <SelectItem key="medium_term">
-                      中期 (1-4周)
-                    </SelectItem>
+                    {models
+                      .filter(model => model.status === 'ready' || model.status === 'active')
+                      .map(model => (
+                        <MenuItem key={model.model_id} value={model.model_id}>
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {model.model_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
                   </Select>
+                  {errors.model_id && <FormHelperText>{errors.model_id}</FormHelperText>}
+                </FormControl>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">置信水平: {formData.confidence_level}%</label>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>预测时间维度</InputLabel>
+                    <Select
+                      value={formData.horizon}
+                      label="预测时间维度"
+                      onChange={(e) => updateFormData('horizon', e.target.value)}
+                    >
+                      <MenuItem value="intraday">日内 (1-4小时)</MenuItem>
+                      <MenuItem value="short_term">短期 (1-5天)</MenuItem>
+                      <MenuItem value="medium_term">中期 (1-4周)</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      置信水平: {formData.confidence_level}%
+                    </Typography>
                     <Slider
                       value={formData.confidence_level}
-                      onChange={(value) => updateFormData('confidence_level', Array.isArray(value) ? value[0] : value)}
-                      minValue={80}
-                      maxValue={99}
+                      onChange={(e, value) => updateFormData('confidence_level', value)}
+                      min={80}
+                      max={99}
                       step={1}
-                      className="w-full"
+                      marks
+                      valueLabelDisplay="auto"
                     />
-                  </div>
-                </div>
+                  </Box>
+                </Box>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Shield className="w-5 h-5 text-primary" />
-                    <div>
-                      <p className="font-medium">风险评估</p>
-                      <p className="text-sm text-default-500">启用风险评估和VaR计算</p>
-                    </div>
-                  </div>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Shield size={20} color="#1976d2" />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        风险评估
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        启用风险评估和VaR计算
+                      </Typography>
+                    </Box>
+                  </Box>
                   <Switch
-                    isSelected={formData.risk_assessment}
-                    onValueChange={(value) => updateFormData('risk_assessment', value)}
+                    checked={formData.risk_assessment}
+                    onChange={(e) => updateFormData('risk_assessment', e.target.checked)}
                   />
-                </div>
-              </CardBody>
+                </Box>
+              </CardContent>
             </Card>
           ) : (
             <Card>
-              <CardHeader>
-                <div className="flex items-center space-x-2">
-                  <Activity className="w-5 h-5" />
-                  <h3 className="text-lg font-semibold">回测配置</h3>
-                </div>
-              </CardHeader>
-              <CardBody className="space-y-6">
-                <Select
-                  label="交易策略"
-                  placeholder="请选择交易策略"
-                  selectedKeys={formData.strategy_name ? [formData.strategy_name] : []}
-                  onSelectionChange={(keys) => {
-                    const strategyKey = Array.from(keys)[0] as string;
-                    updateFormData('strategy_name', strategyKey);
-                  }}
-                  isRequired
-                  isDisabled={availableStrategies.length === 0}
-                >
-                  {availableStrategies.map(strategy => (
-                    <SelectItem key={strategy.key}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{strategy.name}</span>
-                        <span className="text-xs text-default-500">{strategy.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </Select>
+              <CardHeader
+                avatar={<Activity size={20} />}
+                title="回测配置"
+              />
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <FormControl fullWidth required disabled={availableStrategies.length === 0}>
+                  <InputLabel>交易策略</InputLabel>
+                  <Select
+                    value={formData.strategy_name}
+                    label="交易策略"
+                    onChange={(e) => updateFormData('strategy_name', e.target.value)}
+                  >
+                    {availableStrategies.map(strategy => (
+                      <MenuItem key={strategy.key} value={strategy.key}>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {strategy.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {strategy.description}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
                 {/* 策略配置表单 */}
                 {formData.strategy_name && (() => {
@@ -473,7 +473,6 @@ export default function CreateTaskPage() {
                         parameters={selectedStrategy.parameters}
                         values={configFormKey > 0 && Object.keys(strategyConfig).length > 0 ? strategyConfig : undefined}
                         onChange={(newConfig) => {
-                          // 使用函数式更新，确保获取最新值
                           setStrategyConfig(newConfig);
                         }}
                         onLoadConfig={handleLoadConfig}
@@ -489,152 +488,180 @@ export default function CreateTaskPage() {
                   return null;
                 })()}
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                  <TextField
                     type="date"
                     label="回测开始日期"
                     value={formData.start_date}
-                    onValueChange={(value) => updateFormData('start_date', value)}
-                    isInvalid={!!errors.start_date}
-                    errorMessage={errors.start_date}
-                    isRequired
+                    onChange={(e) => updateFormData('start_date', e.target.value)}
+                    error={!!errors.start_date}
+                    helperText={errors.start_date}
+                    required
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
                   />
                   
-                  <Input
+                  <TextField
                     type="date"
                     label="回测结束日期"
                     value={formData.end_date}
-                    onValueChange={(value) => updateFormData('end_date', value)}
-                    isInvalid={!!errors.end_date}
-                    errorMessage={errors.end_date}
-                    isRequired
+                    onChange={(e) => updateFormData('end_date', e.target.value)}
+                    error={!!errors.end_date}
+                    helperText={errors.end_date}
+                    required
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
                   />
-                </div>
+                </Box>
                 
-                <Input
+                <TextField
                   type="number"
                   label="初始资金"
-                  value={formData.initial_cash.toString()}
-                  onValueChange={(value) => updateFormData('initial_cash', parseFloat(value) || 100000)}
-                  min={1000}
-                  step={1000}
+                  value={formData.initial_cash}
+                  onChange={(e) => updateFormData('initial_cash', parseFloat(e.target.value) || 100000)}
+                  inputProps={{ min: 1000, step: 1000 }}
+                  fullWidth
                 />
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                  <TextField
                     type="number"
                     label="手续费率"
-                    value={formData.commission_rate.toString()}
-                    onValueChange={(value) => updateFormData('commission_rate', parseFloat(value) || 0.0003)}
-                    min={0}
-                    max={0.01}
-                    step={0.0001}
+                    value={formData.commission_rate}
+                    onChange={(e) => updateFormData('commission_rate', parseFloat(e.target.value) || 0.0003)}
+                    inputProps={{ min: 0, max: 0.01, step: 0.0001 }}
+                    fullWidth
                   />
                   
-                  <Input
+                  <TextField
                     type="number"
                     label="滑点率"
-                    value={formData.slippage_rate.toString()}
-                    onValueChange={(value) => updateFormData('slippage_rate', parseFloat(value) || 0.0001)}
-                    min={0}
-                    max={0.01}
-                    step={0.0001}
+                    value={formData.slippage_rate}
+                    onChange={(e) => updateFormData('slippage_rate', parseFloat(e.target.value) || 0.0001)}
+                    inputProps={{ min: 0, max: 0.01, step: 0.0001 }}
+                    fullWidth
                   />
-                </div>
-              </CardBody>
+                </Box>
+              </CardContent>
             </Card>
           )}
 
           {/* 提交按钮 */}
-          <div className="flex space-x-4">
+          <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
+              variant="contained"
               color="primary"
-              size="lg"
-              onPress={handleSubmit}
-              isLoading={loading}
-              className="flex-1"
+              size="large"
+              onClick={handleSubmit}
+              disabled={loading}
+              fullWidth
             >
-              创建任务
+              {loading ? '创建中...' : '创建任务'}
             </Button>
             <Button
-              variant="light"
-              size="lg"
-              onPress={handleBack}
+              variant="outlined"
+              size="large"
+              onClick={handleBack}
             >
               取消
             </Button>
-          </div>
-        </div>
+          </Box>
+        </Box>
 
         {/* 侧边栏信息 */}
-        <div className="space-y-6">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* 模型信息 */}
           {selectedModel && (
             <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">模型信息</h3>
-              </CardHeader>
-              <CardBody className="space-y-4">
-                <div>
-                  <p className="text-sm text-default-500">模型名称</p>
-                  <p className="font-medium">{selectedModel.model_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">模型类型</p>
-                  <Chip variant="flat" color="secondary">{selectedModel.model_type}</Chip>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">准确率</p>
-                  <p className="font-medium">{(selectedModel.accuracy * 100).toFixed(1)}%</p>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">版本</p>
-                  <p className="font-medium">{selectedModel.version}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">创建时间</p>
-                  <p className="text-default-600">
+              <CardHeader title="模型信息" />
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    模型名称
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {selectedModel.model_name}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    模型类型
+                  </Typography>
+                  <Chip label={selectedModel.model_type} size="small" color="secondary" sx={{ mt: 0.5 }} />
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    准确率
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {(selectedModel.accuracy * 100).toFixed(1)}%
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    版本
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {selectedModel.version}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    创建时间
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                     {new Date(selectedModel.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </CardBody>
+                  </Typography>
+                </Box>
+              </CardContent>
             </Card>
           )}
 
           {/* 预测说明 */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <Info className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">预测说明</h3>
-              </div>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              <div>
-                <p className="font-medium mb-2">时间维度说明:</p>
-                <ul className="space-y-1 text-sm text-default-600">
-                  <li>• 日内: 适合短线交易</li>
-                  <li>• 短期: 适合波段操作</li>
-                  <li>• 中期: 适合趋势投资</li>
-                </ul>
-              </div>
+            <CardHeader
+              avatar={<Info size={20} />}
+              title="预测说明"
+            />
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  时间维度说明:
+                </Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Typography component="li" variant="body2" color="text.secondary">
+                    日内: 适合短线交易
+                  </Typography>
+                  <Typography component="li" variant="body2" color="text.secondary">
+                    短期: 适合波段操作
+                  </Typography>
+                  <Typography component="li" variant="body2" color="text.secondary">
+                    中期: 适合趋势投资
+                  </Typography>
+                </Box>
+              </Box>
               <Divider />
-              <div>
-                <p className="font-medium mb-2">置信水平:</p>
-                <p className="text-sm text-default-600">
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  置信水平:
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
                   置信水平越高，预测区间越宽，但可靠性越高
-                </p>
-              </div>
+                </Typography>
+              </Box>
               <Divider />
-              <div>
-                <p className="font-medium mb-2">风险评估:</p>
-                <p className="text-sm text-default-600">
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  风险评估:
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
                   包含VaR计算和波动率分析，帮助评估投资风险
-                </p>
-              </div>
-            </CardBody>
+                </Typography>
+              </Box>
+            </CardContent>
           </Card>
-        </div>
-      </div>
-    </div>
-  );}
+        </Box>
+      </Box>
+    </Box>
+  );
+}

@@ -19,9 +19,10 @@ export interface ApiResponse<T = any> {
 }
 
 // 创建axios实例
+// 使用相对路径，通过Next.js代理转发到后端
 const createApiInstance = (): AxiosInstance => {
   const instance = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
+    baseURL: '/api/v1', // 使用相对路径，通过Next.js rewrites代理
     timeout: 300000, // 增加到5分钟，用于长时间操作如数据同步
     headers: {
       'Content-Type': 'application/json',

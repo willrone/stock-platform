@@ -53,8 +53,19 @@ export const useAppStore = create<AppState>()(
       user: null,
       isAuthenticated: false,
       config: {
-        apiBaseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
-        wsUrl: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws',
+        apiBaseUrl: '/api/v1', // 使用相对路径，通过Next.js代理转发
+        wsUrl: (() => {
+          // WebSocket不能通过HTTP代理，需要直接连接后端
+          if (typeof window === 'undefined') {
+            return process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+          }
+          const envUrl = process.env.NEXT_PUBLIC_WS_URL;
+          if (envUrl) return envUrl;
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const hostname = window.location.hostname;
+          const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+          return `${protocol}//${hostname}:${port}/ws`;
+        })(),
         theme: 'light',
         language: 'zh-CN',
       },

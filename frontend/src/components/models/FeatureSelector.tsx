@@ -7,7 +7,30 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Checkbox, Input, Tooltip, Accordion, AccordionItem, Select, SelectItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from '@heroui/react';
+import {
+  Button,
+  Checkbox,
+  TextField,
+  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Select,
+  MenuItem,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
+  Box,
+  Typography,
+  IconButton,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  InputAdornment,
+  CircularProgress,
+} from '@mui/material';
+import { ExpandMore } from '@mui/icons-material';
 import { Search, Info, Save, Settings, Trash2 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { 
@@ -57,12 +80,12 @@ export function FeatureSelector({
   });
   const [loadingFeatures, setLoadingFeatures] = useState(false);
   const [alphaSearchTerm, setAlphaSearchTerm] = useState('');
-  const [expandedAlphaCategories, setExpandedAlphaCategories] = useState<Set<string>>(new Set());
+  const [expandedAlphaCategories, setExpandedAlphaCategories] = useState<string[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>('');
   const [configs, setConfigs] = useState<FeatureConfig[]>([]);
   const [saveConfigName, setSaveConfigName] = useState('');
   const [saveConfigDescription, setSaveConfigDescription] = useState('');
-  const { isOpen: isSaveModalOpen, onOpen: onSaveModalOpen, onClose: onSaveModalClose } = useDisclosure();
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
 
   // 加载可用特征列表
   const loadAvailableFeatures = async () => {
@@ -256,7 +279,7 @@ export function FeatureSelector({
     setSelectedConfigId(newConfig.id);
     setSaveConfigName('');
     setSaveConfigDescription('');
-    onSaveModalClose();
+    setIsSaveModalOpen(false);
   };
 
   // 删除自定义配置
@@ -272,397 +295,423 @@ export function FeatureSelector({
   };
 
   return (
-    <div className="space-y-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 特征配置选择区域 */}
-      <div className="p-4 bg-default-50 rounded-lg border border-default-200">
-        <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-4 h-4" />
-          <span className="font-semibold text-sm">特征配置</span>
-        </div>
-        <div className="flex items-end gap-2">
-          <Select
-            label="选择预设配置"
-            placeholder="选择一个特征配置"
-            selectedKeys={selectedConfigId ? [selectedConfigId] : []}
-            onSelectionChange={(keys) => {
-              const key = Array.from(keys)[0] as string;
-              setSelectedConfigId(key || '');
-            }}
-            className="flex-1"
-            size="sm"
-          >
-            {configs.map((config) => (
-              <SelectItem 
-                key={config.id}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{config.name}</span>
-                    <span className="text-xs text-default-500">{config.description}</span>
-                  </div>
-                  {config.category === 'custom' && (
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="light"
-                      color="danger"
-                      onPress={() => {
-                        handleDeleteConfig(config.id);
-                      }}
-                      className="ml-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
-                </div>
-              </SelectItem>
-            ))}
-          </Select>
+      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Settings size={16} />
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            特征配置
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+          <FormControl size="small" sx={{ flex: 1 }}>
+            <InputLabel>选择预设配置</InputLabel>
+            <Select
+              value={selectedConfigId}
+              label="选择预设配置"
+              onChange={(e) => setSelectedConfigId(e.target.value)}
+            >
+              {configs.map((config) => (
+                <MenuItem key={config.id} value={config.id}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {config.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {config.description}
+                      </Typography>
+                    </Box>
+                    {config.category === 'custom' && (
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteConfig(config.id);
+                        }}
+                        sx={{ ml: 1 }}
+                      >
+                        <Trash2 size={12} />
+                      </IconButton>
+                    )}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <Button
-            size="sm"
+            size="small"
+            variant="contained"
             color="primary"
-            onPress={handleApplyConfig}
-            isDisabled={!selectedConfigId}
+            onClick={handleApplyConfig}
+            disabled={!selectedConfigId}
           >
             应用配置
           </Button>
           <Button
-            size="sm"
-            variant="bordered"
-            startContent={<Save className="w-4 h-4" />}
-            onPress={onSaveModalOpen}
-            isDisabled={selectedFeatures.length === 0}
+            size="small"
+            variant="outlined"
+            startIcon={<Save size={16} />}
+            onClick={() => setIsSaveModalOpen(true)}
+            disabled={selectedFeatures.length === 0}
           >
             保存为配置
           </Button>
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* 保存配置模态框 */}
-      <Modal isOpen={isSaveModalOpen} onClose={onSaveModalClose} size="md">
-        <ModalContent>
-          <ModalHeader>保存特征配置</ModalHeader>
-          <ModalBody>
-            <Input
+      <Dialog open={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>保存特征配置</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
               label="配置名称"
               placeholder="请输入配置名称"
               value={saveConfigName}
-              onValueChange={setSaveConfigName}
-              isRequired
+              onChange={(e) => setSaveConfigName(e.target.value)}
+              required
               autoFocus
+              fullWidth
             />
-            <Input
+            <TextField
               label="配置描述"
               placeholder="请输入配置描述（可选）"
               value={saveConfigDescription}
-              onValueChange={setSaveConfigDescription}
+              onChange={(e) => setSaveConfigDescription(e.target.value)}
+              fullWidth
             />
-            <div className="text-xs text-default-500 mt-2">
+            <Typography variant="caption" color="text.secondary">
               当前已选择 {selectedFeatures.length} 个特征
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onSaveModalClose}>
-              取消
-            </Button>
-            <Button color="primary" onPress={handleSaveConfig}>
-              保存
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsSaveModalOpen(false)}>取消</Button>
+          <Button variant="contained" color="primary" onClick={handleSaveConfig}>
+            保存
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">特征选择</label>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            特征选择
+          </Typography>
           <Button
-            size="sm"
-            variant="light"
-            onPress={loadAvailableFeatures}
-            isLoading={loadingFeatures}
+            size="small"
+            variant="outlined"
+            onClick={loadAvailableFeatures}
+            disabled={loadingFeatures}
+            startIcon={loadingFeatures ? <CircularProgress size={16} /> : undefined}
           >
             {loadingFeatures ? '加载中...' : '刷新特征列表'}
           </Button>
-        </div>
+        </Box>
         
-        <Checkbox
-        isSelected={useAllFeatures}
-        onValueChange={(checked) => {
-          onUseAllFeaturesChange(checked);
-          if (checked) {
-            onFeaturesChange([]);
-          }
-        }}
-      >
-        使用所有可用特征（推荐）
-      </Checkbox>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Checkbox
+            checked={useAllFeatures}
+            onChange={(e) => {
+              onUseAllFeaturesChange(e.target.checked);
+              if (e.target.checked) {
+                onFeaturesChange([]);
+              }
+            }}
+          />
+          <Typography variant="body2">使用所有可用特征（推荐）</Typography>
+        </Box>
 
-      {!useAllFeatures && (
-        <div className="space-y-3 mt-3 p-4 border border-default-200 rounded-lg max-h-96 overflow-y-auto">
-          {loadingFeatures ? (
-            <div className="text-center py-4 text-default-500">加载特征列表中...</div>
-          ) : availableFeatures.length === 0 && Object.values(featureCategories).every(arr => arr.length === 0) ? (
-            <div className="text-center py-4 text-default-500">
-              <p>暂无可用特征</p>
-              <p className="text-xs mt-2">请先选择股票和日期范围，或点击"刷新特征列表"按钮</p>
-            </div>
-          ) : (
-            <>
-              {/* 基础价格特征 */}
-              {featureCategories.base_features.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-default-700">基础价格特征</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {featureCategories.base_features.map((feature) => (
-                      <Checkbox
-                        key={feature}
-                        size="sm"
-                        isSelected={selectedFeatures.includes(feature)}
-                        onValueChange={(checked) => handleFeatureToggle(feature, checked)}
-                      >
-                        {feature}
-                      </Checkbox>
-                    ))}
-                  </div>
-                </div>
-              )}
+        {!useAllFeatures && (
+          <Box sx={{ mt: 1, p: 2, border: 1, borderColor: 'divider', borderRadius: 1, maxHeight: 384, overflowY: 'auto' }}>
+            {loadingFeatures ? (
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="body2" color="text.secondary">加载特征列表中...</Typography>
+              </Box>
+            ) : availableFeatures.length === 0 && Object.values(featureCategories).every(arr => arr.length === 0) ? (
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  暂无可用特征
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  请先选择股票和日期范围，或点击"刷新特征列表"按钮
+                </Typography>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* 基础价格特征 */}
+                {featureCategories.base_features.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      基础价格特征
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {featureCategories.base_features.map((feature) => (
+                        <Box key={feature} sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Checkbox
+                            size="small"
+                            checked={selectedFeatures.includes(feature)}
+                            onChange={(e) => handleFeatureToggle(feature, e.target.checked)}
+                          />
+                          <Typography variant="body2">{feature}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
 
-              {/* 技术指标特征 */}
-              {featureCategories.indicator_features.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-default-700">技术指标特征</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {featureCategories.indicator_features.map((feature) => (
-                      <Checkbox
-                        key={feature}
-                        size="sm"
-                        isSelected={selectedFeatures.includes(feature)}
-                        onValueChange={(checked) => handleFeatureToggle(feature, checked)}
-                      >
-                        {feature}
-                      </Checkbox>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {/* 技术指标特征 */}
+                {featureCategories.indicator_features.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      技术指标特征
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {featureCategories.indicator_features.map((feature) => (
+                        <Box key={feature} sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Checkbox
+                            size="small"
+                            checked={selectedFeatures.includes(feature)}
+                            onChange={(e) => handleFeatureToggle(feature, e.target.checked)}
+                          />
+                          <Typography variant="body2">{feature}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
 
-              {/* 基本面特征 */}
-              {featureCategories.fundamental_features.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-default-700">基本面特征</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {featureCategories.fundamental_features.map((feature) => (
-                      <Checkbox
-                        key={feature}
-                        size="sm"
-                        isSelected={selectedFeatures.includes(feature)}
-                        onValueChange={(checked) => handleFeatureToggle(feature, checked)}
-                      >
-                        {feature}
-                      </Checkbox>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {/* 基本面特征 */}
+                {featureCategories.fundamental_features.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      基本面特征
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {featureCategories.fundamental_features.map((feature) => (
+                        <Box key={feature} sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Checkbox
+                            size="small"
+                            checked={selectedFeatures.includes(feature)}
+                            onChange={(e) => handleFeatureToggle(feature, e.target.checked)}
+                          />
+                          <Typography variant="body2">{feature}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
 
-              {/* 如果所有分类都为空，显示所有特征 */}
-              {Object.values(featureCategories).every(arr => arr.length === 0) && availableFeatures.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-default-700">所有可用特征 ({availableFeatures.length})</h4>
-                  <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto">
-                    {availableFeatures.slice(0, 100).map((feature) => (
-                      <Checkbox
-                        key={feature}
-                        size="sm"
-                        isSelected={selectedFeatures.includes(feature)}
-                        onValueChange={(checked) => handleFeatureToggle(feature, checked)}
-                      >
-                        {feature}
-                      </Checkbox>
-                    ))}
-                    {availableFeatures.length > 100 && (
-                      <div className="text-xs text-default-500 w-full">
-                        还有 {availableFeatures.length - 100} 个特征...
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                {/* 如果所有分类都为空，显示所有特征 */}
+                {Object.values(featureCategories).every(arr => arr.length === 0) && availableFeatures.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      所有可用特征 ({availableFeatures.length})
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: 256, overflowY: 'auto' }}>
+                      {availableFeatures.slice(0, 100).map((feature) => (
+                        <Box key={feature} sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Checkbox
+                            size="small"
+                            checked={selectedFeatures.includes(feature)}
+                            onChange={(e) => handleFeatureToggle(feature, e.target.checked)}
+                          />
+                          <Typography variant="body2">{feature}</Typography>
+                        </Box>
+                      ))}
+                      {availableFeatures.length > 100 && (
+                        <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }}>
+                          还有 {availableFeatures.length - 100} 个特征...
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                )}
 
-              {/* Alpha因子特征 - 优化显示 */}
-              {featureCategories.alpha_features.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-semibold text-default-700">
-                        Alpha因子特征 ({featureCategories.alpha_features.length}个)
-                      </h4>
-                      <Tooltip content="Alpha因子是量化投资中用于预测股票未来收益率的量化特征，包括价格收益率、移动平均、波动率等多种类型">
-                        <Info className="w-4 h-4 text-default-400 cursor-help" />
-                      </Tooltip>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="light"
-                      onPress={() => {
-                        // 切换所有Alpha因子的选择状态
-                        const allAlphaSelected = featureCategories.alpha_features.every(f => selectedFeatures.includes(f));
-                        if (allAlphaSelected) {
-                          onFeaturesChange(selectedFeatures.filter(f => !featureCategories.alpha_features.includes(f)));
-                        } else {
-                          const newFeatures = featureCategories.alpha_features.filter(f => !selectedFeatures.includes(f));
-                          onFeaturesChange([...selectedFeatures, ...newFeatures]);
-                        }
-                      }}
-                    >
-                      {featureCategories.alpha_features.every(f => selectedFeatures.includes(f)) ? '全不选' : '全选'}
-                    </Button>
-                  </div>
-
-                  {/* 搜索框 */}
-                  <Input
-                    size="sm"
-                    placeholder="搜索Alpha因子..."
-                    value={alphaSearchTerm}
-                    onValueChange={setAlphaSearchTerm}
-                    startContent={<Search className="w-4 h-4 text-default-400" />}
-                    classNames={{
-                      input: "text-sm",
-                    }}
-                  />
-
-                  {/* 按类别分组的Alpha因子 */}
-                  <div className="max-h-96 overflow-y-auto border border-default-200 rounded-lg p-2">
-                    {Object.keys(groupedAlphaFactors).length === 0 ? (
-                      <div className="text-center py-4 text-default-500 text-sm">
-                        {alphaSearchTerm ? '未找到匹配的Alpha因子' : '暂无Alpha因子'}
-                      </div>
-                    ) : (
-                      <Accordion
-                        selectionMode="multiple"
-                        selectedKeys={expandedAlphaCategories}
-                        onSelectionChange={(keys) => {
-                          if (keys === 'all') {
-                            setExpandedAlphaCategories(new Set(Object.keys(groupedAlphaFactors)));
+                {/* Alpha因子特征 - 优化显示 */}
+                {featureCategories.alpha_features.length > 0 && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          Alpha因子特征 ({featureCategories.alpha_features.length}个)
+                        </Typography>
+                        <Tooltip title="Alpha因子是量化投资中用于预测股票未来收益率的量化特征，包括价格收益率、移动平均、波动率等多种类型">
+                          <IconButton size="small">
+                            <Info size={16} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          // 切换所有Alpha因子的选择状态
+                          const allAlphaSelected = featureCategories.alpha_features.every(f => selectedFeatures.includes(f));
+                          if (allAlphaSelected) {
+                            onFeaturesChange(selectedFeatures.filter(f => !featureCategories.alpha_features.includes(f)));
                           } else {
-                            const keysArray = Array.isArray(keys) ? keys : Array.from(keys as Set<string>);
-                            setExpandedAlphaCategories(new Set(keysArray));
+                            const newFeatures = featureCategories.alpha_features.filter(f => !selectedFeatures.includes(f));
+                            onFeaturesChange([...selectedFeatures, ...newFeatures]);
                           }
                         }}
-                        variant="bordered"
                       >
-                        {Object.entries(groupedAlphaFactors)
-                          .sort(([a], [b]) => {
-                            // 优先显示有名称的类别
-                            const order = ['MOMENTUM', 'MEAN_REVERSION', 'VOLATILITY', 'VOLUME', 'RESI', 'MA', 'STD', 'VSTD', 'CORR', 'MAX', 'MIN', 'QTLU', 'OTHER'];
-                            const indexA = order.indexOf(a);
-                            const indexB = order.indexOf(b);
-                            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                            if (indexA !== -1) return -1;
-                            if (indexB !== -1) return 1;
-                            return a.localeCompare(b);
-                          })
-                          .map(([category, factors]) => {
-                            const categoryInfo = ALPHA_FACTOR_CATEGORIES[category as keyof typeof ALPHA_FACTOR_CATEGORIES] || ALPHA_FACTOR_CATEGORIES.OTHER;
-                            const isFullySelected = isCategoryFullySelected(category);
-                            const isPartiallySelected = isCategoryPartiallySelected(category);
-                            
-                            return (
-                              <AccordionItem
-                                key={category}
-                                title={
-                                  <div className="flex items-center justify-between w-full pr-4">
-                                    <div className="flex items-center gap-2">
-                                      <span>{categoryInfo.icon}</span>
-                                      <span className="font-medium">{categoryInfo.name}</span>
-                                      <span className="text-xs text-default-500">({factors.length}个)</span>
-                                    </div>
-                                    <Checkbox
-                                      size="sm"
-                                      isSelected={isFullySelected}
-                                      isIndeterminate={isPartiallySelected}
-                                      onValueChange={(checked) => handleCategoryToggle(category, checked)}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </div>
-                                }
-                                subtitle={
-                                  <div className="text-xs text-default-500 mt-1">
-                                    {categoryInfo.description}
-                                  </div>
-                                }
-                              >
-                                <div className="space-y-2 pt-2">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {factors.map((feature) => {
-                                      const info = parseAlphaFactor(feature);
-                                      const displayName = getAlphaFactorDisplayName(feature);
-                                      
-                                      return (
-                                        <div key={feature} className="flex items-start gap-2">
-                                          <Checkbox
-                                            size="sm"
-                                            isSelected={selectedFeatures.includes(feature)}
-                                            onValueChange={(checked) => handleFeatureToggle(feature, checked)}
-                                            classNames={{
-                                              label: "text-xs",
-                                            }}
-                                          >
-                                            <div className="flex flex-col">
-                                              <span className="font-medium">{displayName}</span>
-                                              <span className="text-xs text-default-500">
-                                                {feature}
-                                              </span>
-                                            </div>
-                                          </Checkbox>
-                                          {info.formula && (
-                                            <Tooltip content={info.formula}>
-                                              <Info className="w-3 h-3 text-default-400 cursor-help mt-1 flex-shrink-0" />
-                                            </Tooltip>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </AccordionItem>
-                            );
-                          })}
-                      </Accordion>
+                        {featureCategories.alpha_features.every(f => selectedFeatures.includes(f)) ? '全不选' : '全选'}
+                      </Button>
+                    </Box>
+
+                    {/* 搜索框 */}
+                    <TextField
+                      size="small"
+                      placeholder="搜索Alpha因子..."
+                      value={alphaSearchTerm}
+                      onChange={(e) => setAlphaSearchTerm(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Search size={16} />
+                          </InputAdornment>
+                        ),
+                      }}
+                      fullWidth
+                    />
+
+                    {/* 按类别分组的Alpha因子 */}
+                    <Box sx={{ maxHeight: 384, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
+                      {Object.keys(groupedAlphaFactors).length === 0 ? (
+                        <Box sx={{ textAlign: 'center', py: 2 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {alphaSearchTerm ? '未找到匹配的Alpha因子' : '暂无Alpha因子'}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box>
+                          {Object.entries(groupedAlphaFactors)
+                            .sort(([a], [b]) => {
+                              // 优先显示有名称的类别
+                              const order = ['MOMENTUM', 'MEAN_REVERSION', 'VOLATILITY', 'VOLUME', 'RESI', 'MA', 'STD', 'VSTD', 'CORR', 'MAX', 'MIN', 'QTLU', 'OTHER'];
+                              const indexA = order.indexOf(a);
+                              const indexB = order.indexOf(b);
+                              if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                              if (indexA !== -1) return -1;
+                              if (indexB !== -1) return 1;
+                              return a.localeCompare(b);
+                            })
+                            .map(([category, factors]) => {
+                              const categoryInfo = ALPHA_FACTOR_CATEGORIES[category as keyof typeof ALPHA_FACTOR_CATEGORIES] || ALPHA_FACTOR_CATEGORIES.OTHER;
+                              const isFullySelected = isCategoryFullySelected(category);
+                              const isPartiallySelected = isCategoryPartiallySelected(category);
+                              
+                              return (
+                                <Accordion
+                                  key={category}
+                                  expanded={expandedAlphaCategories.includes(category)}
+                                  onChange={(e, expanded) => {
+                                    if (expanded) {
+                                      setExpandedAlphaCategories([...expandedAlphaCategories, category]);
+                                    } else {
+                                      setExpandedAlphaCategories(expandedAlphaCategories.filter(c => c !== category));
+                                    }
+                                  }}
+                                >
+                                  <AccordionSummary expandIcon={<ExpandMore />}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 2 }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <span>{categoryInfo.icon}</span>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                          {categoryInfo.name}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                          ({factors.length}个)
+                                        </Typography>
+                                      </Box>
+                                      <Checkbox
+                                        size="small"
+                                        checked={isFullySelected}
+                                        indeterminate={isPartiallySelected}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleCategoryToggle(category, !isFullySelected);
+                                        }}
+                                      />
+                                    </Box>
+                                  </AccordionSummary>
+                                  <AccordionDetails>
+                                    <Box>
+                                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                                        {categoryInfo.description}
+                                      </Typography>
+                                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
+                                        {factors.map((feature) => {
+                                          const info = parseAlphaFactor(feature);
+                                          const displayName = getAlphaFactorDisplayName(feature);
+                                          
+                                          return (
+                                            <Box key={feature} sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                                              <Checkbox
+                                                size="small"
+                                                checked={selectedFeatures.includes(feature)}
+                                                onChange={(e) => handleFeatureToggle(feature, e.target.checked)}
+                                              />
+                                              <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                  {displayName}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                  {feature}
+                                                </Typography>
+                                              </Box>
+                                              {info.formula && (
+                                                <Tooltip title={info.formula}>
+                                                  <IconButton size="small">
+                                                    <Info size={12} />
+                                                  </IconButton>
+                                                </Tooltip>
+                                              )}
+                                            </Box>
+                                          );
+                                        })}
+                                      </Box>
+                                    </Box>
+                                  </AccordionDetails>
+                                </Accordion>
+                              );
+                            })}
+                        </Box>
+                      )}
+                    </Box>
+
+                    {/* 已选择的Alpha因子统计 */}
+                    {selectedFeatures.filter(f => featureCategories.alpha_features.includes(f)).length > 0 && (
+                      <Typography variant="caption" color="text.secondary" sx={{ pt: 1, borderTop: 1, borderColor: 'divider', display: 'block' }}>
+                        已选择 <strong>{selectedFeatures.filter(f => featureCategories.alpha_features.includes(f)).length}</strong> 个Alpha因子
+                      </Typography>
                     )}
-                  </div>
+                  </Box>
+                )}
 
-                  {/* 已选择的Alpha因子统计 */}
-                  {selectedFeatures.filter(f => featureCategories.alpha_features.includes(f)).length > 0 && (
-                    <div className="text-xs text-default-600 pt-2 border-t border-default-200">
-                      已选择 <strong>{selectedFeatures.filter(f => featureCategories.alpha_features.includes(f)).length}</strong> 个Alpha因子
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {selectedFeatures.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-default-200">
-                  <p className="text-sm text-default-600">
-                    已选择 <strong>{selectedFeatures.length}</strong> 个特征
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="light"
-                    className="mt-2"
-                    onPress={() => onFeaturesChange([])}
-                  >
-                    清空选择
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-      </div>
-    </div>
+                {selectedFeatures.length > 0 && (
+                  <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      已选择 <strong>{selectedFeatures.length}</strong> 个特征
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => onFeaturesChange([])}
+                    >
+                      清空选择
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 }
-

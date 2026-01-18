@@ -229,6 +229,30 @@ class StrategyHyperparameterOptimizer:
                         )
                         objectives.append(score)
                     logger.info(f"Trial {trial.number}: 多目标得分 = {objectives}")
+                    
+                    # 更新进度（多目标优化）
+                    if progress_callback:
+                        # 计算 trial 统计信息
+                        completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+                        running_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING])
+                        pruned_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
+                        failed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
+                        trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
+                        progress_callback(
+                            trial_num,
+                            n_trials,
+                            strategy_params,
+                            None,  # 多目标没有单一得分
+                            backtest_report,
+                            completed_trials=completed_trials,
+                            running_trials=running_trials,
+                            pruned_trials=pruned_trials,
+                            failed_trials=failed_trials,
+                            best_score=None,  # 多目标没有单一最佳得分
+                            best_trial_number=None,
+                            best_params=None
+                        )
+                    
                     return tuple(objectives)
                 else:
                     # 单目标：返回单个值
@@ -241,13 +265,12 @@ class StrategyHyperparameterOptimizer:
                     
                     # 更新进度
                     if progress_callback:
-                        trial_num = len(study.trials)
-                        progress = (trial_num / n_trials) * 100
                         # 计算 trial 统计信息
                         completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
                         running_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING])
                         pruned_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
                         failed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
+                        trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
                         progress_callback(
                             trial_num,
                             n_trials,
@@ -279,6 +302,23 @@ class StrategyHyperparameterOptimizer:
             logger.info(f"开始执行优化，策略: {strategy_name}, 股票: {stock_codes}, 日期范围: {start_date} - {end_date}")
             logger.info(f"参数空间: {list(param_space.keys())}")
             logger.info(f"目标函数: {objective_metric}, 方向: {objective_config.get('direction', 'maximize')}")
+            
+            # 初始化进度状态（在优化开始前）
+            if progress_callback:
+                progress_callback(
+                    0,
+                    n_trials,
+                    {},
+                    None,
+                    {},
+                    completed_trials=0,
+                    running_trials=0,
+                    pruned_trials=0,
+                    failed_trials=0,
+                    best_score=None,
+                    best_trial_number=None,
+                    best_params=None
+                )
             
             study.optimize(
                 objective,

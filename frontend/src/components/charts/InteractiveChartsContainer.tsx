@@ -9,15 +9,19 @@ import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardHeader,
-  CardBody,
+  CardContent,
   Tabs,
   Tab,
   Button,
-  Spinner,
+  CircularProgress,
   Alert,
   Select,
-  SelectItem,
-} from '@heroui/react';
+  MenuItem,
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
 import {
   BarChart3,
   TrendingUp,
@@ -309,12 +313,14 @@ export default function InteractiveChartsContainer({
   if (loading) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex flex-col items-center justify-center py-12">
-            <Spinner size="lg" />
-            <p className="mt-4 text-default-500">正在加载图表数据...</p>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+            <CircularProgress size={48} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              正在加载图表数据...
+            </Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
@@ -322,201 +328,214 @@ export default function InteractiveChartsContainer({
   if (error) {
     return (
       <Card>
-        <CardBody>
+        <CardContent>
           <Alert
-            color="danger"
-            variant="flat"
-            startContent={<AlertCircle className="w-5 h-5" />}
-            endContent={
+            severity="error"
+            action={
               <Button
-                size="sm"
-                variant="flat"
-                color="danger"
-                startContent={<RefreshCw className="w-4 h-4" />}
-                onPress={handleRefresh}
+                size="small"
+                color="error"
+                startIcon={<RefreshCw size={16} />}
+                onClick={handleRefresh}
               >
                 重试
               </Button>
             }
+            icon={<AlertCircle size={20} />}
           >
-            <div>
-              <p className="font-medium">图表数据加载失败</p>
-              <p className="text-sm">{error}</p>
-            </div>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              图表数据加载失败
+            </Typography>
+            <Typography variant="caption">{error}</Typography>
           </Alert>
-        </CardBody>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 图表标签页 */}
       <Card>
-        <CardHeader className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="w-5 h-5 text-primary" />
-            <h2 className="text-xl font-semibold">交互式图表分析</h2>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {stockCodes && stockCodes.length > 0 && (
-              <Select
-                selectedKeys={selectedStock ? [selectedStock] : []}
-                onSelectionChange={(keys) => {
-                  const selected = Array.from(keys)[0] as string;
-                  setSelectedStock(selected);
-                }}
-                aria-label="选择股票"
-                size="sm"
-                className="min-w-[160px]"
-              >
-                {stockCodes.map((code) => (
-                  <SelectItem key={code}>{code}</SelectItem>
-                ))}
-              </Select>
-            )}
+        <CardHeader
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BarChart3 size={20} color="#1976d2" />
+              <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }}>
+                交互式图表分析
+              </Typography>
+            </Box>
+          }
+          action={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {stockCodes && stockCodes.length > 0 && (
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel>选择股票</InputLabel>
+                  <Select
+                    value={selectedStock || ''}
+                    label="选择股票"
+                    onChange={(e) => setSelectedStock(e.target.value)}
+                  >
+                    {stockCodes.map((code) => (
+                      <MenuItem key={code} value={code}>
+                        {code}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
           
-            <Button
-              size="sm"
-              variant="flat"
-              startContent={<RefreshCw className="w-4 h-4" />}
-              onPress={handleRefresh}
-              isLoading={loading}
-            >
-              刷新数据
-            </Button>
-          </div>
-        </CardHeader>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<RefreshCw size={16} />}
+                onClick={handleRefresh}
+                disabled={loading}
+              >
+                刷新数据
+              </Button>
+            </Box>
+          }
+        />
 
-        <CardBody>
+        <CardContent>
           <Tabs
-            selectedKey={activeTab}
-            onSelectionChange={(key) => setActiveTab(key as string)}
-            variant="underlined"
-            classNames={{
-              tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
-              cursor: "w-full bg-primary",
-              tab: "max-w-fit px-0 h-12",
-              tabContent: "group-data-[selected=true]:text-primary"
-            }}
+            value={activeTab}
+            onChange={(e, newValue) => setActiveTab(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
           >
             <Tab
-              key="price"
-              title={
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="w-4 h-4" />
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <TrendingUp size={16} />
                   <span>价格走势</span>
-                </div>
+                </Box>
               }
-            >
-              {selectedStock ? (
-                <TradingViewChart
-                  stockCode={selectedStock}
-                  startDate={(() => {
-                    // 尝试从多个可能的位置获取开始日期
-                    const startDate = backtestData?.start_date || 
-                                     backtestData?.period?.start_date ||
-                                     backtestData?.backtest_config?.start_date;
-                    console.log(`[InteractiveChartsContainer] TradingViewChart startDate:`, startDate, 'from backtestData:', backtestData);
-                    return startDate;
-                  })()}
-                  endDate={(() => {
-                    // 尝试从多个可能的位置获取结束日期
-                    const endDate = backtestData?.end_date || 
-                                   backtestData?.period?.end_date ||
-                                   backtestData?.backtest_config?.end_date;
-                    console.log(`[InteractiveChartsContainer] TradingViewChart endDate:`, endDate, 'from backtestData:', backtestData);
-                    return endDate;
-                  })()}
-                  trades={tradeRecords}
-                  height={420}
-                />
-              ) : (
-                <div className="flex items-center justify-center py-12 text-default-500">
-                  <AlertCircle className="w-6 h-6 mr-2" />
-                  <span>暂无股票代码</span>
-                </div>
-              )}
-              {tradeLoading && (
-                <div className="mt-3 text-sm text-default-500">
-                  交易记录加载中...
-                </div>
-              )}
-            </Tab>
-
+              value="price"
+            />
             <Tab
-              key="equity"
-              title={
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="w-4 h-4" />
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <TrendingUp size={16} />
                   <span>收益曲线</span>
-                </div>
+                </Box>
               }
-            >
-              {chartData.equityCurve ? (
-                <EquityCurveChart
-                  taskId={taskId}
-                  data={chartData.equityCurve}
-                  benchmarkData={chartData.benchmarkData}
-                  loading={false}
-                />
-              ) : (
-                <div className="flex items-center justify-center py-12 text-default-500">
-                  <AlertCircle className="w-6 h-6 mr-2" />
-                  <span>暂无收益曲线数据</span>
-                </div>
-              )}
-            </Tab>
-
+              value="equity"
+            />
             <Tab
-              key="drawdown"
-              title={
-                <div className="flex items-center space-x-2">
-                  <TrendingDown className="w-4 h-4" />
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <TrendingDown size={16} />
                   <span>回撤分析</span>
-                </div>
+                </Box>
               }
-            >
-              {chartData.drawdownCurve ? (
-                <DrawdownChart
-                  taskId={taskId}
-                  data={chartData.drawdownCurve}
-                  loading={false}
-                />
-              ) : (
-                <div className="flex items-center justify-center py-12 text-default-500">
-                  <AlertCircle className="w-6 h-6 mr-2" />
-                  <span>暂无回撤分析数据</span>
-                </div>
-              )}
-            </Tab>
-
+              value="drawdown"
+            />
             <Tab
-              key="monthly"
-              title={
-                <div className="flex items-center space-x-2">
-                  <Calendar className="w-4 h-4" />
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Calendar size={16} />
                   <span>月度热力图</span>
-                </div>
+                </Box>
               }
-            >
-              {chartData.monthlyHeatmap && chartData.monthlyHeatmap.monthlyReturns.length > 0 ? (
-                <MonthlyHeatmapChart
-                  taskId={taskId}
-                  data={chartData.monthlyHeatmap}
-                  loading={false}
-                />
-              ) : (
-                <div className="flex items-center justify-center py-12 text-default-500">
-                  <AlertCircle className="w-6 h-6 mr-2" />
-                  <span>暂无月度收益数据</span>
-                </div>
-              )}
-            </Tab>
+              value="monthly"
+            />
           </Tabs>
-        </CardBody>
+
+          <Box sx={{ mt: 2 }}>
+            {activeTab === 'price' && (
+              <Box>
+                {selectedStock ? (
+                  <TradingViewChart
+                    stockCode={selectedStock}
+                    startDate={(() => {
+                      const startDate = backtestData?.start_date || 
+                                       backtestData?.period?.start_date ||
+                                       backtestData?.backtest_config?.start_date;
+                      console.log(`[InteractiveChartsContainer] TradingViewChart startDate:`, startDate, 'from backtestData:', backtestData);
+                      return startDate;
+                    })()}
+                    endDate={(() => {
+                      const endDate = backtestData?.end_date || 
+                                     backtestData?.period?.end_date ||
+                                     backtestData?.backtest_config?.end_date;
+                      console.log(`[InteractiveChartsContainer] TradingViewChart endDate:`, endDate, 'from backtestData:', backtestData);
+                      return endDate;
+                    })()}
+                    trades={tradeRecords}
+                    height={420}
+                  />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                    <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
+                    <Typography variant="body2" color="text.secondary">暂无股票代码</Typography>
+                  </Box>
+                )}
+                {tradeLoading && (
+                  <Box sx={{ mt: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      交易记录加载中...
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {activeTab === 'equity' && (
+              <Box>
+                {chartData.equityCurve ? (
+                  <EquityCurveChart
+                    taskId={taskId}
+                    data={chartData.equityCurve}
+                    benchmarkData={chartData.benchmarkData}
+                    loading={false}
+                  />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                    <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
+                    <Typography variant="body2" color="text.secondary">暂无收益曲线数据</Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {activeTab === 'drawdown' && (
+              <Box>
+                {chartData.drawdownCurve ? (
+                  <DrawdownChart
+                    taskId={taskId}
+                    data={chartData.drawdownCurve}
+                    loading={false}
+                  />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                    <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
+                    <Typography variant="body2" color="text.secondary">暂无回撤分析数据</Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {activeTab === 'monthly' && (
+              <Box>
+                {chartData.monthlyHeatmap && chartData.monthlyHeatmap.monthlyReturns.length > 0 ? (
+                  <MonthlyHeatmapChart
+                    taskId={taskId}
+                    data={chartData.monthlyHeatmap}
+                    loading={false}
+                  />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                    <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
+                    <Typography variant="body2" color="text.secondary">暂无月度收益数据</Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

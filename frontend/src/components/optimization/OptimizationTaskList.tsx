@@ -7,16 +7,18 @@
 import React from 'react';
 import {
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Chip,
-  Progress,
+  LinearProgress,
   Button,
   Tooltip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  IconButton,
+} from '@mui/material';
 import { Eye, RefreshCw } from 'lucide-react';
 import { OptimizationTask } from '../../services/optimizationService';
 
@@ -31,14 +33,14 @@ export default function OptimizationTaskList({
   onTaskSelect,
   onRefresh,
 }: OptimizationTaskListProps) {
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): "success" | "primary" | "error" | "default" => {
     switch (status) {
       case 'completed':
         return 'success';
       case 'running':
         return 'primary';
       case 'failed':
-        return 'danger';
+        return 'error';
       case 'created':
       case 'queued':
         return 'default';
@@ -60,100 +62,115 @@ export default function OptimizationTaskList({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">优化任务列表</h3>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          优化任务列表
+        </Typography>
         <Button
-          size="sm"
-          variant="light"
-          onPress={onRefresh}
-          startContent={<RefreshCw size={16} />}
+          size="small"
+          variant="outlined"
+          onClick={onRefresh}
+          startIcon={<RefreshCw size={16} />}
         >
           刷新
         </Button>
-      </div>
+      </Box>
 
       {tasks.length === 0 ? (
-        <div className="text-center py-8 text-default-500">
-          暂无优化任务，请创建新任务
-        </div>
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body2" color="text.secondary">
+            暂无优化任务，请创建新任务
+          </Typography>
+        </Box>
       ) : (
-        <Table aria-label="优化任务列表">
-          <TableHeader>
-            <TableColumn>任务名称</TableColumn>
-            <TableColumn>策略</TableColumn>
-            <TableColumn>状态</TableColumn>
-            <TableColumn>进度</TableColumn>
-            <TableColumn>试验数</TableColumn>
-            <TableColumn>最佳得分</TableColumn>
-            <TableColumn>创建时间</TableColumn>
-            <TableColumn>操作</TableColumn>
-          </TableHeader>
-          <TableBody>
-            {tasks.map((task) => (
-              <TableRow key={task.task_id}>
-                <TableCell>
-                  <div className="font-medium">{task.task_name}</div>
-                </TableCell>
-                <TableCell>
-                  <Chip size="sm" variant="flat">
-                    {task.strategy_name}
-                  </Chip>
-                </TableCell>
-                <TableCell>
-                  <Chip color={getStatusColor(task.status)} size="sm" variant="flat">
-                    {getStatusText(task.status)}
-                  </Chip>
-                </TableCell>
-                <TableCell>
-                  <Progress
-                    value={task.progress}
-                    color={task.status === 'failed' ? 'danger' : 'primary'}
-                    size="sm"
-                    className="w-24"
-                  />
-                </TableCell>
-                <TableCell>
-                  {task.status === 'completed' ? (
-                    <span>{task.n_trials} / {task.n_trials}</span>
-                  ) : (
-                    <span>- / {task.n_trials}</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {task.best_score !== undefined ? (
-                    <span className="font-medium text-success">
-                      {task.best_score.toFixed(4)}
-                    </span>
-                  ) : (
-                    <span className="text-default-400">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <span className="text-sm text-default-500">
-                    {task.created_at
-                      ? new Date(task.created_at).toLocaleString('zh-CN')
-                      : '-'}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Tooltip content="查看详情">
-                    <Button
-                      size="sm"
-                      variant="light"
-                      isIconOnly
-                      onPress={() => onTaskSelect(task.task_id)}
-                    >
-                      <Eye size={16} />
-                    </Button>
-                  </Tooltip>
-                </TableCell>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>任务名称</TableCell>
+                <TableCell>策略</TableCell>
+                <TableCell>状态</TableCell>
+                <TableCell>进度</TableCell>
+                <TableCell>试验数</TableCell>
+                <TableCell>最佳得分</TableCell>
+                <TableCell>创建时间</TableCell>
+                <TableCell>操作</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {tasks.map((task) => (
+                <TableRow key={task.task_id} hover>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {task.task_name}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={task.strategy_name} size="small" />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={getStatusText(task.status)}
+                      color={getStatusColor(task.status)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ width: 96 }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={task.progress}
+                        color={task.status === 'failed' ? 'error' : 'primary'}
+                        sx={{ height: 6, borderRadius: 3 }}
+                      />
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {task.status === 'completed' ? (
+                      <Typography variant="body2">
+                        {task.n_trials} / {task.n_trials}
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        - / {task.n_trials}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {task.best_score !== undefined ? (
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
+                        {task.best_score.toFixed(4)}
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        -
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {task.created_at
+                        ? new Date(task.created_at).toLocaleString('zh-CN')
+                        : '-'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip title="查看详情">
+                      <IconButton
+                        size="small"
+                        onClick={() => onTaskSelect(task.task_id)}
+                      >
+                        <Eye size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }
-

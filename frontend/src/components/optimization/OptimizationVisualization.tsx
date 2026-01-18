@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, CardHeader, CardBody, Tabs, Tab } from '@heroui/react';
+import { Card, CardHeader, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
 import { OptimizationResult } from '../../services/optimizationService';
 import * as echarts from 'echarts';
 
@@ -207,7 +207,7 @@ export default function OptimizationVisualization({
       const chart = echarts.init(importanceChartRef.current);
       importanceChartInstance.current = chart;
       
-      const entries = Object.entries(result.param_importance).sort(
+      const entries = Object.entries(result.param_importance || {}).sort(
         (a, b) => b[1] - a[1]
       );
       
@@ -289,9 +289,9 @@ export default function OptimizationVisualization({
       const otherData = result.optimization_history
         .filter(t => t.objectives && (t.state === 'complete' || t.state === 'finished'))
         .map(t => t.objectives!)
-        .filter(obj => !result.pareto_front.some(p => 
+        .filter(obj => result.pareto_front && result.pareto_front.some(p => 
           p.objectives[0] === obj[0] && p.objectives[1] === obj[1]
-        ));
+        ) === false);
 
       const option = {
         title: {
@@ -340,68 +340,79 @@ export default function OptimizationVisualization({
   }, [result.pareto_front, result.objective_metric]);
 
   return (
-    <Tabs 
-      aria-label="可视化标签页"
-      selectedKey={selectedTab}
-      onSelectionChange={(key) => {
-        const tabKey = Array.isArray(key) ? key[0] : key;
-        setSelectedTab(tabKey as string);
-        console.log('[OptimizationVisualization] Tab切换:', tabKey);
-      }}
-    >
-      <Tab key="history" title="优化历史">
-        <Card className="mt-4">
-          <CardBody>
-            {result.optimization_history && result.optimization_history.length > 0 ? (
-              <div
-                ref={historyChartRef}
-                style={{ width: '100%', height: '400px' }}
-              />
-            ) : (
-              <div className="text-center py-8 text-default-500">
-                暂无优化历史数据
-                <div className="text-xs mt-2">
-                  数据: {JSON.stringify(result.optimization_history)}
-                </div>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      </Tab>
+    <Box>
+      <Tabs 
+        value={selectedTab}
+        onChange={(e, newValue) => {
+          setSelectedTab(newValue);
+          console.log('[OptimizationVisualization] Tab切换:', newValue);
+        }}
+        aria-label="可视化标签页"
+      >
+        <Tab label="优化历史" value="history" />
+        <Tab label="参数重要性" value="importance" />
+        {result.pareto_front && result.pareto_front.length > 0 && (
+          <Tab label="帕累托前沿" value="pareto" />
+        )}
+      </Tabs>
 
-      <Tab key="importance" title="参数重要性">
-        <Card className="mt-4">
-          <CardBody>
-            {result.param_importance && Object.keys(result.param_importance).length > 0 ? (
-              <div
-                ref={importanceChartRef}
-                style={{ width: '100%', height: '400px' }}
-              />
-            ) : (
-              <div className="text-center py-8 text-default-500">
-                暂无参数重要性数据（仅单目标优化任务提供）
-                <div className="text-xs mt-2">
-                  数据: {JSON.stringify(result.param_importance)}
-                </div>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      </Tab>
-
-      {result.pareto_front && result.pareto_front.length > 0 && (
-        <Tab key="pareto" title="帕累托前沿">
-          <Card className="mt-4">
-            <CardBody>
-              <div
-                ref={paretoChartRef}
-                style={{ width: '100%', height: '400px' }}
-              />
-            </CardBody>
+      <Box sx={{ mt: 2 }}>
+        {selectedTab === 'history' && (
+          <Card>
+            <CardContent>
+              {result.optimization_history && result.optimization_history.length > 0 ? (
+                <Box
+                  ref={historyChartRef}
+                  sx={{ width: '100%', height: 400 }}
+                />
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    暂无优化历史数据
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    数据: {JSON.stringify(result.optimization_history)}
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
           </Card>
-        </Tab>
-      )}
-    </Tabs>
+        )}
+
+        {selectedTab === 'importance' && (
+          <Card>
+            <CardContent>
+              {result.param_importance && Object.keys(result.param_importance).length > 0 ? (
+                <Box
+                  ref={importanceChartRef}
+                  sx={{ width: '100%', height: 400 }}
+                />
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    暂无参数重要性数据（仅单目标优化任务提供）
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    数据: {JSON.stringify(result.param_importance)}
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {selectedTab === 'pareto' && result.pareto_front && result.pareto_front.length > 0 && (
+          <Card>
+            <CardContent>
+              <Box
+                ref={paretoChartRef}
+                sx={{ width: '100%', height: 400 }}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </Box>
+    </Box>
   );
 }
 

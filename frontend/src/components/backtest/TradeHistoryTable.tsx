@@ -6,28 +6,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Pagination,
-  Input,
+  TextField,
   Select,
-  SelectItem,
+  MenuItem,
   Button,
   Chip,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Tooltip,
   Card,
-  CardBody,
-  Spinner,
-} from '@heroui/react';
+  CardContent,
+  CircularProgress,
+  Box,
+  Typography,
+  IconButton,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  TableSortLabel,
+} from '@mui/material';
 import { Search, Filter, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from 'lucide-react';
 import { BacktestService, TradeRecord, TradeStatistics } from '../../services/backtestService';
 
@@ -82,8 +86,8 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   const [searchTerm, setSearchTerm] = useState('');
   
   // 模态框状态
-  const { isOpen: isFilterOpen, onOpen: onFilterOpen, onClose: onFilterClose } = useDisclosure();
-  const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<TradeRecord | null>(null);
 
   // 获取交易数据
@@ -172,7 +176,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   // 处理交易详情点击
   const handleTradeClick = (trade: TradeRecord) => {
     setSelectedTrade(trade);
-    onDetailOpen();
+    setIsDetailOpen(true);
     onTradeClick?.(trade);
   };
 
@@ -235,10 +239,14 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   if (loading && trades.length === 0) {
     return (
       <Card>
-        <CardBody className="flex items-center justify-center h-64">
-          <Spinner size="lg" />
-          <p className="mt-4 text-gray-600">加载交易记录中...</p>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+            <CircularProgress size={48} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              加载交易记录中...
+            </Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
@@ -246,431 +254,464 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   if (error) {
     return (
       <Card>
-        <CardBody className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <TrendingDown className="w-12 h-12 text-red-500 mx-auto mb-2" />
-            <p className="text-red-600">{error}</p>
-            <Button 
-              color="primary" 
-              variant="light" 
-              onPress={fetchTrades}
-              className="mt-2"
-            >
+        <CardContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+            <TrendingDown size={48} color="#d32f2f" style={{ marginBottom: 8 }} />
+            <Typography variant="body2" color="error" sx={{ mb: 2 }}>
+              {error}
+            </Typography>
+            <Button variant="outlined" color="primary" onClick={fetchTrades}>
               重试
             </Button>
-          </div>
-        </CardBody>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 统计信息卡片 */}
       {statistics && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-blue-500" />
-                <div>
-                  <p className="text-sm text-gray-500">总交易次数</p>
-                  <p className="text-xl font-bold">{statistics.total_trades}</p>
-                </div>
-              </div>
-            </CardBody>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingUp size={20} color="#1976d2" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    总交易次数
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {statistics.total_trades}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-green-500" />
-                <div>
-                  <p className="text-sm text-gray-500">胜率</p>
-                  <p className="text-xl font-bold text-green-600">
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingUp size={20} color="#2e7d32" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    胜率
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
                     {formatPercent(statistics.win_rate)}
-                  </p>
-                </div>
-              </div>
-            </CardBody>
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-purple-500" />
-                <div>
-                  <p className="text-sm text-gray-500">盈亏比</p>
-                  <p className="text-xl font-bold">
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <DollarSign size={20} color="#9c27b0" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    盈亏比
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
                     {(statistics.profit_factor ?? 0).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            </CardBody>
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-orange-500" />
-                <div>
-                  <p className="text-sm text-gray-500">总盈亏</p>
-                  <p className={`text-xl font-bold ${statistics.total_pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <DollarSign size={20} color="#ed6c02" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    总盈亏
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 600,
+                      color: statistics.total_pnl >= 0 ? 'success.main' : 'error.main',
+                    }}
+                  >
                     {formatCurrency(statistics.total_pnl)}
-                  </p>
-                </div>
-              </div>
-            </CardBody>
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
-        </div>
+        </Box>
       )}
 
       {/* 搜索和筛选工具栏 */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Input
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+          <TextField
             placeholder="搜索股票代码或交易ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            startContent={<Search className="w-4 h-4" />}
-            className="w-full sm:w-64"
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={16} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ width: { xs: '100%', sm: 256 } }}
           />
           <Button
-            variant="bordered"
-            onPress={onFilterOpen}
-            startContent={<Filter className="w-4 h-4" />}
+            variant="outlined"
+            onClick={() => setIsFilterOpen(true)}
+            startIcon={<Filter size={16} />}
           >
             筛选
           </Button>
-        </div>
+        </Box>
         
-        <div className="flex gap-2">
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            variant="bordered"
-            onPress={handleExport}
-            startContent={<Download className="w-4 h-4" />}
+            variant="outlined"
+            onClick={handleExport}
+            startIcon={<Download size={16} />}
           >
             导出
           </Button>
           <Button
-            variant="light"
-            onPress={resetFilters}
+            variant="outlined"
+            onClick={resetFilters}
           >
             重置
           </Button>
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* 交易记录表格 */}
       <Card>
-        <CardBody className="p-0">
-          <Table
-            aria-label="交易记录表格"
-            isHeaderSticky
-            classNames={{
-              wrapper: "max-h-[600px]",
-            }}
-          >
-            <TableHeader>
-              <TableColumn 
-                key="timestamp" 
-                allowsSorting
-                className="cursor-pointer"
-                onClick={() => handleSort('timestamp')}
-              >
-                <div className="flex items-center gap-1">
-                  时间
-                  {sortConfig.key === 'timestamp' && (
-                    <span className="text-xs">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </TableColumn>
-              <TableColumn 
-                key="stock_code"
-                allowsSorting
-                className="cursor-pointer"
-                onClick={() => handleSort('stock_code')}
-              >
-                <div className="flex items-center gap-1">
-                  股票代码
-                  {sortConfig.key === 'stock_code' && (
-                    <span className="text-xs">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </TableColumn>
-              <TableColumn key="action">操作</TableColumn>
-              <TableColumn 
-                key="quantity"
-                allowsSorting
-                className="cursor-pointer"
-                onClick={() => handleSort('quantity')}
-              >
-                <div className="flex items-center gap-1">
-                  数量
-                  {sortConfig.key === 'quantity' && (
-                    <span className="text-xs">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </TableColumn>
-              <TableColumn 
-                key="price"
-                allowsSorting
-                className="cursor-pointer"
-                onClick={() => handleSort('price')}
-              >
-                <div className="flex items-center gap-1">
-                  价格
-                  {sortConfig.key === 'price' && (
-                    <span className="text-xs">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </TableColumn>
-              <TableColumn key="commission">手续费</TableColumn>
-              <TableColumn 
-                key="pnl"
-                allowsSorting
-                className="cursor-pointer"
-                onClick={() => handleSort('pnl')}
-              >
-                <div className="flex items-center gap-1">
-                  盈亏
-                  {sortConfig.key === 'pnl' && (
-                    <span className="text-xs">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </TableColumn>
-              <TableColumn key="actions">操作</TableColumn>
-            </TableHeader>
-            <TableBody
-              items={filteredTrades}
-              isLoading={loading}
-              loadingContent={<Spinner />}
-              emptyContent="暂无交易记录"
-            >
-              {(trade) => (
-                <TableRow key={trade.id}>
+        <CardContent sx={{ p: 0 }}>
+          <Box sx={{ overflowX: 'auto', maxHeight: 600 }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
                   <TableCell>
-                    <Tooltip content={formatDateTime(trade.timestamp)}>
-                      <span className="text-sm">
-                        {new Date(trade.timestamp).toLocaleDateString()}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono font-medium">
-                      {trade.stock_code}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      color={trade.action === 'BUY' ? 'success' : 'danger'}
-                      variant="flat"
-                      size="sm"
+                    <TableSortLabel
+                      active={sortConfig.key === 'timestamp'}
+                      direction={sortConfig.key === 'timestamp' ? sortConfig.direction : 'asc'}
+                      onClick={() => handleSort('timestamp')}
                     >
-                      {trade.action === 'BUY' ? '买入' : '卖出'}
-                    </Chip>
+                      时间
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono">
-                      {trade.quantity.toLocaleString()}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono">
-                      ¥{trade.price.toFixed(2)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-gray-600">
-                      ¥{trade.commission.toFixed(2)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span 
-                      className={`font-mono font-medium ${
-                        trade.pnl > 0 ? 'text-green-600' : 
-                        trade.pnl < 0 ? 'text-red-600' : 'text-gray-600'
-                      }`}
+                    <TableSortLabel
+                      active={sortConfig.key === 'stock_code'}
+                      direction={sortConfig.key === 'stock_code' ? sortConfig.direction : 'asc'}
+                      onClick={() => handleSort('stock_code')}
                     >
-                      {formatCurrency(trade.pnl)}
-                    </span>
+                      股票代码
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>操作</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortConfig.key === 'quantity'}
+                      direction={sortConfig.key === 'quantity' ? sortConfig.direction : 'asc'}
+                      onClick={() => handleSort('quantity')}
+                    >
+                      数量
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      size="sm"
-                      variant="light"
-                      onPress={() => handleTradeClick(trade)}
+                    <TableSortLabel
+                      active={sortConfig.key === 'price'}
+                      direction={sortConfig.key === 'price' ? sortConfig.direction : 'asc'}
+                      onClick={() => handleSort('price')}
                     >
-                      详情
-                    </Button>
+                      价格
+                    </TableSortLabel>
                   </TableCell>
+                  <TableCell>手续费</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortConfig.key === 'pnl'}
+                      direction={sortConfig.key === 'pnl' ? sortConfig.direction : 'asc'}
+                      onClick={() => handleSort('pnl')}
+                    >
+                      盈亏
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>操作</TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardBody>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredTrades.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        暂无交易记录
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredTrades.map((trade) => (
+                    <TableRow key={trade.id} hover>
+                      <TableCell>
+                        <Tooltip title={formatDateTime(trade.timestamp)}>
+                          <Typography variant="body2">
+                            {new Date(trade.timestamp).toLocaleDateString()}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                          {trade.stock_code}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={trade.action === 'BUY' ? '买入' : '卖出'}
+                          color={trade.action === 'BUY' ? 'success' : 'error'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {trade.quantity.toLocaleString()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          ¥{trade.price.toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                          ¥{trade.commission.toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontWeight: 500,
+                            color: trade.pnl > 0 ? 'success.main' : trade.pnl < 0 ? 'error.main' : 'text.secondary',
+                          }}
+                        >
+                          {formatCurrency(trade.pnl)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => handleTradeClick(trade)}
+                        >
+                          详情
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 分页 */}
       {totalPages > 1 && (
-        <div className="flex justify-center">
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Pagination
-            total={totalPages}
+            count={totalPages}
             page={currentPage}
-            onChange={setCurrentPage}
-            showControls
-            showShadow
+            onChange={(e, page) => setCurrentPage(page)}
             color="primary"
           />
-        </div>
+        </Box>
       )}
 
       {/* 筛选模态框 */}
-      <Modal isOpen={isFilterOpen} onClose={onFilterClose} size="2xl">
-        <ModalContent>
-          <ModalHeader>筛选交易记录</ModalHeader>
-          <ModalBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="股票代码"
-                placeholder="输入股票代码"
-                value={filters.stockCode}
-                onChange={(e) => handleFilterChange('stockCode', e.target.value)}
-              />
-              
+      <Dialog open={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>筛选交易记录</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mt: 1 }}>
+            <TextField
+              label="股票代码"
+              placeholder="输入股票代码"
+              value={filters.stockCode}
+              onChange={(e) => handleFilterChange('stockCode', e.target.value)}
+              fullWidth
+            />
+            
+            <FormControl fullWidth>
+              <InputLabel>操作类型</InputLabel>
               <Select
+                value={filters.action}
                 label="操作类型"
-                selectedKeys={[filters.action]}
                 onChange={(e) => handleFilterChange('action', e.target.value as any)}
               >
-                <SelectItem key="ALL">全部</SelectItem>
-                <SelectItem key="BUY">买入</SelectItem>
-                <SelectItem key="SELL">卖出</SelectItem>
+                <MenuItem value="ALL">全部</MenuItem>
+                <MenuItem value="BUY">买入</MenuItem>
+                <MenuItem value="SELL">卖出</MenuItem>
               </Select>
-              
-              <Input
-                type="date"
-                label="开始日期"
-                value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              />
-              
-              <Input
-                type="date"
-                label="结束日期"
-                value={filters.endDate}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              />
-              
-              <Input
-                type="number"
-                label="最小盈亏"
-                placeholder="输入最小盈亏金额"
-                value={filters.minPnl}
-                onChange={(e) => handleFilterChange('minPnl', e.target.value)}
-              />
-              
-              <Input
-                type="number"
-                label="最大盈亏"
-                placeholder="输入最大盈亏金额"
-                value={filters.maxPnl}
-                onChange={(e) => handleFilterChange('maxPnl', e.target.value)}
-              />
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={resetFilters}>
-              重置
-            </Button>
-            <Button color="primary" onPress={onFilterClose}>
-              应用筛选
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+            </FormControl>
+            
+            <TextField
+              type="date"
+              label="开始日期"
+              value={filters.startDate}
+              onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            
+            <TextField
+              type="date"
+              label="结束日期"
+              value={filters.endDate}
+              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            
+            <TextField
+              type="number"
+              label="最小盈亏"
+              placeholder="输入最小盈亏金额"
+              value={filters.minPnl}
+              onChange={(e) => handleFilterChange('minPnl', e.target.value)}
+              fullWidth
+            />
+            
+            <TextField
+              type="number"
+              label="最大盈亏"
+              placeholder="输入最大盈亏金额"
+              value={filters.maxPnl}
+              onChange={(e) => handleFilterChange('maxPnl', e.target.value)}
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={resetFilters}>重置</Button>
+          <Button variant="contained" color="primary" onClick={() => setIsFilterOpen(false)}>
+            应用筛选
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 交易详情模态框 */}
-      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="lg">
-        <ModalContent>
-          <ModalHeader>交易详情</ModalHeader>
-          <ModalBody>
-            {selectedTrade && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">交易ID</p>
-                    <p className="font-mono">{selectedTrade.trade_id}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">股票代码</p>
-                    <p className="font-mono font-medium">{selectedTrade.stock_code}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">操作类型</p>
-                    <Chip
-                      color={selectedTrade.action === 'BUY' ? 'success' : 'danger'}
-                      variant="flat"
-                      size="sm"
-                    >
-                      {selectedTrade.action === 'BUY' ? '买入' : '卖出'}
-                    </Chip>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">交易时间</p>
-                    <p>{formatDateTime(selectedTrade.timestamp)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">数量</p>
-                    <p className="font-mono">{selectedTrade.quantity.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">价格</p>
-                    <p className="font-mono">¥{selectedTrade.price.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">手续费</p>
-                    <p className="font-mono">¥{selectedTrade.commission.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">盈亏</p>
-                    <p 
-                      className={`font-mono font-medium ${
-                        selectedTrade.pnl > 0 ? 'text-green-600' : 
-                        selectedTrade.pnl < 0 ? 'text-red-600' : 'text-gray-600'
-                      }`}
-                    >
-                      {formatCurrency(selectedTrade.pnl)}
-                    </p>
-                  </div>
-                </div>
-                
-                {selectedTrade.holding_days && (
-                  <div>
-                    <p className="text-sm text-gray-500">持仓天数</p>
-                    <p>{selectedTrade.holding_days} 天</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button color="primary" onPress={onDetailClose}>
-              关闭
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </div>
+      <Dialog open={isDetailOpen} onClose={() => setIsDetailOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>交易详情</DialogTitle>
+        <DialogContent>
+          {selectedTrade && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    交易ID
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {selectedTrade.trade_id}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    股票代码
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                    {selectedTrade.stock_code}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    操作类型
+                  </Typography>
+                  <Chip
+                    label={selectedTrade.action === 'BUY' ? '买入' : '卖出'}
+                    color={selectedTrade.action === 'BUY' ? 'success' : 'error'}
+                    size="small"
+                  />
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    交易时间
+                  </Typography>
+                  <Typography variant="body2">
+                    {formatDateTime(selectedTrade.timestamp)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    数量
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {selectedTrade.quantity.toLocaleString()}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    价格
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    ¥{selectedTrade.price.toFixed(2)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    手续费
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    ¥{selectedTrade.commission.toFixed(2)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    盈亏
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 500,
+                      color: selectedTrade.pnl > 0 ? 'success.main' : selectedTrade.pnl < 0 ? 'error.main' : 'text.secondary',
+                    }}
+                  >
+                    {formatCurrency(selectedTrade.pnl)}
+                  </Typography>
+                </Box>
+              </Box>
+              
+              {selectedTrade.holding_days && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    持仓天数
+                  </Typography>
+                  <Typography variant="body2">
+                    {selectedTrade.holding_days} 天
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" color="primary" onClick={() => setIsDetailOpen(false)}>
+            关闭
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

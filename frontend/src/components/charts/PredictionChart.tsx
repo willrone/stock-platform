@@ -7,7 +7,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
-import { Card, CardBody, Chip, Spinner } from '@heroui/react';
+import { Card, CardContent, Chip, CircularProgress, Box, Typography } from '@mui/material';
 import { TrendingUp, TrendingDown, Target, AlertCircle } from 'lucide-react';
 import { PredictionResult, TaskService } from '../../services/taskService';
 
@@ -185,145 +185,149 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
   if (!prediction) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex items-center justify-center h-64 text-default-500">
-            <AlertCircle className="w-8 h-8 mr-2" />
-            <span>暂无预测数据</span>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+            <AlertCircle size={32} style={{ marginRight: 8 }} />
+            <Typography variant="body2" color="text.secondary">暂无预测数据</Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 预测摘要 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-2">
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
               {prediction.predicted_direction > 0 ? (
-                <TrendingUp className="w-6 h-6 text-success" />
+                <TrendingUp size={24} color="#2e7d32" />
               ) : prediction.predicted_direction < 0 ? (
-                <TrendingDown className="w-6 h-6 text-danger" />
+                <TrendingDown size={24} color="#d32f2f" />
               ) : (
-                <Target className="w-6 h-6 text-warning" />
+                <Target size={24} color="#ed6c02" />
               )}
-            </div>
-            <p className="text-sm text-default-500">预测方向</p>
-            <p className="font-semibold">
+            </Box>
+            <Typography variant="caption" color="text.secondary">预测方向</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {prediction.predicted_direction > 0 ? '上涨' : 
                prediction.predicted_direction < 0 ? '下跌' : '持平'}
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <p className="text-2xl font-bold text-primary">
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
               {(prediction.predicted_return * 100).toFixed(2)}%
-            </p>
-            <p className="text-sm text-default-500">预测收益率</p>
-          </CardBody>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">预测收益率</Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <p className="text-2xl font-bold text-secondary">
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main' }}>
               {(prediction.confidence_score * 100).toFixed(1)}%
-            </p>
-            <p className="text-sm text-default-500">置信度</p>
-          </CardBody>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">置信度</Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <p className="text-2xl font-bold text-danger">
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
               {prediction.risk_assessment?.value_at_risk 
                 ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2) 
                 : '--'}%
-            </p>
-            <p className="text-sm text-default-500">风险价值(VaR)</p>
-          </CardBody>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">风险价值(VaR)</Typography>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* 预测图表 */}
       <Card>
-        <CardBody>
+        <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center h-96">
-              <Spinner size="lg" />
-            </div>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 384 }}>
+              <CircularProgress size={48} />
+            </Box>
           ) : loadError ? (
-            <div className="flex items-center justify-center h-96 text-default-500">
-              <AlertCircle className="w-8 h-8 mr-2" />
-              <span>{loadError}</span>
-            </div>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 384 }}>
+              <AlertCircle size={32} style={{ marginRight: 8 }} />
+              <Typography variant="body2" color="text.secondary">{loadError}</Typography>
+            </Box>
           ) : (
-            <div
+            <Box
               ref={chartRef}
-              style={{ height: '400px', width: '100%' }}
+              sx={{ height: 400, width: '100%' }}
             />
           )}
-        </CardBody>
+        </CardContent>
       </Card>
 
       {/* 技术指标摘要 */}
       <Card>
-        <CardBody>
-          <h4 className="text-lg font-semibold mb-4">技术指标分析</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <CardContent>
+          <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+            技术指标分析
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
             {prediction.technical_indicators && Object.entries(prediction.technical_indicators).map(([key, value]) => (
-              <div key={key} className="text-center">
-                <p className="text-sm text-default-500 capitalize">{key.replace('_', ' ')}</p>
-                <Chip variant="flat" size="sm">
-                  {typeof value === 'number' ? value.toFixed(2) : String(value)}
-                </Chip>
-              </div>
+              <Box key={key} sx={{ textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                  {key.replace('_', ' ')}
+                </Typography>
+                <Chip label={typeof value === 'number' ? value.toFixed(2) : String(value)} size="small" sx={{ mt: 0.5 }} />
+              </Box>
             ))}
-          </div>
-        </CardBody>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 风险评估详情 */}
       <Card>
-        <CardBody>
-          <h4 className="text-lg font-semibold mb-4">风险评估</h4>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-default-600">置信区间</span>
-              <span className="font-medium">
+        <CardContent>
+          <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+            风险评估
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">置信区间</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 [{(prediction.confidence_interval.lower * 100).toFixed(2)}%, {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-default-600">风险价值 (VaR)</span>
-              <span className="font-medium text-danger">
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">风险价值 (VaR)</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>
                 {prediction.risk_assessment?.value_at_risk 
                   ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2) 
                   : '--'}%
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-default-600">最大回撤</span>
-              <span className="font-medium text-warning">
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">最大回撤</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500, color: 'warning.main' }}>
                 {prediction.risk_assessment?.max_drawdown 
                   ? (prediction.risk_assessment.max_drawdown * 100).toFixed(2) 
                   : '--'}%
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-default-600">夏普比率</span>
-              <span className="font-medium text-success">
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">夏普比率</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
                 {prediction.risk_assessment?.sharpe_ratio 
                   ? prediction.risk_assessment.sharpe_ratio.toFixed(3) 
                   : '--'}
-              </span>
-            </div>
-          </div>
-        </CardBody>
+              </Typography>
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

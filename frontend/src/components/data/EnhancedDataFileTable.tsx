@@ -14,30 +14,33 @@
 import React, { useState, useMemo } from 'react';
 import {
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Chip,
   Button,
   Tooltip,
-  Input,
+  TextField,
   Select,
-  SelectItem,
-  DatePicker,
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-  Progress,
-} from '@heroui/react';
+  MenuItem,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
+  LinearProgress,
+  Box,
+  Typography,
+  IconButton,
+  Menu,
+  TableContainer,
+  Paper,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  CircularProgress,
+  Checkbox,
+} from '@mui/material';
 import {
   FileText,
   Download,
@@ -77,6 +80,45 @@ interface EnhancedDataFileTableProps {
   onRefresh: () => void;
 }
 
+// 文件操作菜单组件
+function FileMenu({ file, onDelete }: { file: DataFile; onDelete: () => void }) {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        onClick={handleClick}
+      >
+        <MoreVertical size={16} />
+      </IconButton>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+      >
+        <MenuItem onClick={handleClose}>
+          <Download size={16} style={{ marginRight: 8 }} />
+          下载文件
+        </MenuItem>
+        <MenuItem onClick={() => { onDelete(); handleClose(); }} sx={{ color: 'error.main' }}>
+          <Trash2 size={16} style={{ marginRight: 8 }} />
+          删除文件
+        </MenuItem>
+      </Menu>
+    </>
+  );
+}
+
 export function EnhancedDataFileTable({
   files,
   loading = false,
@@ -91,8 +133,12 @@ export function EnhancedDataFileTable({
   const [dateFilter, setDateFilter] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<DataFile | null>(null);
   
-  const { isOpen: isPreviewOpen, onOpen: onPreviewOpen, onClose: onPreviewClose } = useDisclosure();
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const onPreviewOpen = () => setIsPreviewOpen(true);
+  const onPreviewClose = () => setIsPreviewOpen(false);
+  const onDeleteOpen = () => setIsDeleteOpen(true);
+  const onDeleteClose = () => setIsDeleteOpen(false);
 
   // 格式化文件大小
   const formatFileSize = (bytes: number) => {
@@ -109,7 +155,7 @@ export function EnhancedDataFileTable({
       case 'valid':
         return { color: 'success' as const, text: '完整', icon: CheckCircle };
       case 'corrupted':
-        return { color: 'danger' as const, text: '损坏', icon: AlertTriangle };
+        return { color: 'error' as const, text: '损坏', icon: AlertTriangle };
       case 'partial':
         return { color: 'warning' as const, text: '部分', icon: Clock };
       default:
@@ -135,7 +181,7 @@ export function EnhancedDataFileTable({
     } else if (hoursDiff < 72) {
       return { color: 'warning' as const, text: '较新' };
     } else {
-      return { color: 'danger' as const, text: '过期' };
+      return { color: 'error' as const, text: '过期' };
     }
   };
 
@@ -190,103 +236,130 @@ export function EnhancedDataFileTable({
   };
 
   return (
-    <div className="space-y-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 筛选控件 */}
-      <div className="flex flex-col md:flex-row gap-4 p-4 bg-default-50 rounded-lg">
-        <Input
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+        <TextField
           placeholder="搜索股票代码"
-          startContent={<Search className="w-4 h-4" />}
           value={searchText}
-          onValueChange={setSearchText}
-          className="md:w-64"
+          onChange={(e) => setSearchText(e.target.value)}
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search size={16} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ width: { md: 256 } }}
         />
         
-        <Select
-          placeholder="完整性状态"
-          selectedKeys={statusFilter ? [statusFilter] : []}
-          onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string || '')}
-          className="md:w-40"
-        >
-          <SelectItem key="valid">完整</SelectItem>
-          <SelectItem key="corrupted">损坏</SelectItem>
-          <SelectItem key="partial">部分</SelectItem>
-        </Select>
+        <FormControl size="small" sx={{ minWidth: { md: 160 } }}>
+          <InputLabel>完整性状态</InputLabel>
+          <Select
+            value={statusFilter}
+            label="完整性状态"
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <MenuItem value="">全部</MenuItem>
+            <MenuItem value="valid">完整</MenuItem>
+            <MenuItem value="corrupted">损坏</MenuItem>
+            <MenuItem value="partial">部分</MenuItem>
+          </Select>
+        </FormControl>
         
-        <Select
-          placeholder="文件大小"
-          selectedKeys={sizeFilter ? [sizeFilter] : []}
-          onSelectionChange={(keys) => setSizeFilter(Array.from(keys)[0] as string || '')}
-          className="md:w-40"
-        >
-          <SelectItem key="small">小于 10MB</SelectItem>
-          <SelectItem key="medium">10MB - 100MB</SelectItem>
-          <SelectItem key="large">大于 100MB</SelectItem>
-        </Select>
+        <FormControl size="small" sx={{ minWidth: { md: 160 } }}>
+          <InputLabel>文件大小</InputLabel>
+          <Select
+            value={sizeFilter}
+            label="文件大小"
+            onChange={(e) => setSizeFilter(e.target.value)}
+          >
+            <MenuItem value="">全部</MenuItem>
+            <MenuItem value="small">小于 10MB</MenuItem>
+            <MenuItem value="medium">10MB - 100MB</MenuItem>
+            <MenuItem value="large">大于 100MB</MenuItem>
+          </Select>
+        </FormControl>
         
-        <Select
-          placeholder="文件新旧"
-          selectedKeys={dateFilter ? [dateFilter] : []}
-          onSelectionChange={(keys) => setDateFilter(Array.from(keys)[0] as string || '')}
-          className="md:w-40"
-        >
-          <SelectItem key="最新">最新</SelectItem>
-          <SelectItem key="较新">较新</SelectItem>
-          <SelectItem key="过期">过期</SelectItem>
-        </Select>
+        <FormControl size="small" sx={{ minWidth: { md: 160 } }}>
+          <InputLabel>文件新旧</InputLabel>
+          <Select
+            value={dateFilter}
+            label="文件新旧"
+            onChange={(e) => setDateFilter(e.target.value)}
+          >
+            <MenuItem value="">全部</MenuItem>
+            <MenuItem value="最新">最新</MenuItem>
+            <MenuItem value="较新">较新</MenuItem>
+            <MenuItem value="过期">过期</MenuItem>
+          </Select>
+        </FormControl>
         
         <Button
-          variant="light"
-          startContent={<Filter className="w-4 h-4" />}
-          onPress={clearFilters}
+          variant="outlined"
+          startIcon={<Filter size={16} />}
+          onClick={clearFilters}
         >
           清除筛选
         </Button>
-      </div>
+      </Box>
 
       {/* 操作栏 */}
       {selectedFiles.size > 0 && (
-        <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-          <span className="text-sm font-medium text-primary">
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'primary.light', borderRadius: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main' }}>
             已选择 {selectedFiles.size} 个文件
-          </span>
+          </Typography>
           <Button
-            color="danger"
-            variant="light"
-            size="sm"
-            startContent={<Trash2 className="w-4 h-4" />}
-            onPress={onDeleteOpen}
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<Trash2 size={16} />}
+            onClick={onDeleteOpen}
           >
             删除选中
           </Button>
-        </div>
+        </Box>
       )}
 
       {/* 文件表格 */}
-      <Table
-        aria-label="增强的数据文件列表"
-        selectionMode="multiple"
-        selectedKeys={selectedFiles}
-        onSelectionChange={(keys) => onSelectionChange(new Set(Array.from(keys).map(String)))}
-        classNames={{
-          wrapper: "min-h-[400px]",
-        }}
-      >
-        <TableHeader>
-          <TableColumn>股票代码</TableColumn>
-          <TableColumn>文件大小</TableColumn>
-          <TableColumn>记录数</TableColumn>
-          <TableColumn>压缩比</TableColumn>
-          <TableColumn>数据范围</TableColumn>
-          <TableColumn>完整性</TableColumn>
-          <TableColumn>最后修改</TableColumn>
-          <TableColumn>操作</TableColumn>
-        </TableHeader>
-        <TableBody
-          isLoading={loading}
-          loadingContent="加载文件列表中..."
-          emptyContent="暂无数据文件"
-        >
-          {filteredFiles.map((file) => {
+      <TableContainer component={Paper}>
+        <Table aria-label="增强的数据文件列表" sx={{ minHeight: 400 }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>股票代码</TableCell>
+              <TableCell>文件大小</TableCell>
+              <TableCell>记录数</TableCell>
+              <TableCell>压缩比</TableCell>
+              <TableCell>数据范围</TableCell>
+              <TableCell>完整性</TableCell>
+              <TableCell>最后修改</TableCell>
+              <TableCell>操作</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} align="center">
+                  <Box sx={{ py: 4 }}>
+                    <CircularProgress size={24} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      加载文件列表中...
+                    </Typography>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ) : filteredFiles.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} align="center">
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 4 }}>
+                    暂无数据文件
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredFiles.map((file) => {
             const status = getFileStatus(file);
             const age = getFileAge(file);
             const StatusIcon = status.icon;
@@ -294,256 +367,226 @@ export function EnhancedDataFileTable({
             return (
               <TableRow key={file.file_path}>
                 <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <FileText className="w-4 h-4 text-default-400" />
-                    <div>
-                      <p className="font-medium">{file.stock_code}</p>
-                      <p className="text-xs text-default-500">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FileText size={16} color="#999" />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{file.stock_code}</Typography>
+                      <Typography variant="caption" color="text.secondary">
                         {file.file_path.split('/').pop()}
-                      </p>
-                    </div>
-                  </div>
+                      </Typography>
+                    </Box>
+                  </Box>
                 </TableCell>
                 
                 <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <HardDrive className="w-3 h-3 text-default-400" />
-                    <span className="text-sm font-medium">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <HardDrive size={12} color="#999" />
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       {formatFileSize(file.file_size)}
-                    </span>
-                  </div>
+                    </Typography>
+                  </Box>
                 </TableCell>
                 
                 <TableCell>
-                  <span className="text-sm font-medium">
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {file.record_count.toLocaleString()}
-                  </span>
+                  </Typography>
                 </TableCell>
                 
                 <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <Zap className="w-3 h-3 text-default-400" />
-                    <span className={`text-sm font-medium ${getCompressionColor(file.compression_ratio)}`}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Zap size={12} color="#999" />
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        fontWeight: 500,
+                        color: file.compression_ratio > 0.8 ? 'success.main' : 
+                               file.compression_ratio > 0.6 ? 'warning.main' : 'error.main'
+                      }}
+                    >
                       {(file.compression_ratio * 100).toFixed(1)}%
-                    </span>
-                  </div>
+                    </Typography>
+                  </Box>
                 </TableCell>
                 
                 <TableCell>
-                  <div className="text-sm">
-                    <div className="font-medium">{file.date_range.start}</div>
-                    <div className="text-default-500">至 {file.date_range.end}</div>
-                  </div>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{file.date_range.start}</Typography>
+                    <Typography variant="caption" color="text.secondary">至 {file.date_range.end}</Typography>
+                  </Box>
                 </TableCell>
                 
                 <TableCell>
-                  <div className="flex items-center space-x-2">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
+                      label={status.text}
                       color={status.color}
-                      variant="flat"
-                      size="sm"
-                      startContent={<StatusIcon className="w-3 h-3" />}
-                    >
-                      {status.text}
-                    </Chip>
-                  </div>
+                      size="small"
+                      icon={<StatusIcon size={12} />}
+                    />
+                  </Box>
                 </TableCell>
                 
                 <TableCell>
-                  <div className="space-y-1">
-                    <div className="text-sm">
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    <Typography variant="body2">
                       {new Date(file.last_modified).toLocaleDateString()}
-                    </div>
+                    </Typography>
                     <Chip
+                      label={age.text}
                       color={age.color}
-                      variant="flat"
-                      size="sm"
-                    >
-                      {age.text}
-                    </Chip>
-                  </div>
+                      size="small"
+                    />
+                  </Box>
                 </TableCell>
                 
                 <TableCell>
-                  <div className="flex items-center space-x-1">
-                    <Tooltip content="预览文件信息">
-                      <Button
-                        isIconOnly
-                        variant="light"
-                        size="sm"
-                        onPress={() => handlePreviewFile(file)}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Tooltip title="预览文件信息">
+                      <IconButton
+                        size="small"
+                        onClick={() => handlePreviewFile(file)}
                       >
-                        <Eye className="w-4 h-4" />
-                      </Button>
+                        <Eye size={16} />
+                      </IconButton>
                     </Tooltip>
                     
-                    <Dropdown>
-                      <DropdownTrigger>
-                        <Button
-                          isIconOnly
-                          variant="light"
-                          size="sm"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownTrigger>
-                      <DropdownMenu>
-                        <DropdownItem
-                          key="download"
-                          startContent={<Download className="w-4 h-4" />}
-                        >
-                          下载文件
-                        </DropdownItem>
-                        <DropdownItem
-                          key="delete"
-                          className="text-danger"
-                          color="danger"
-                          startContent={<Trash2 className="w-4 h-4" />}
-                          onPress={() => onDeleteFiles([file.file_path])}
-                        >
-                          删除文件
-                        </DropdownItem>
-                      </DropdownMenu>
-                    </Dropdown>
-                  </div>
+                    <FileMenu file={file} onDelete={() => onDeleteFiles([file.file_path])} />
+                  </Box>
                 </TableCell>
               </TableRow>
             );
-          })}
-        </TableBody>
-      </Table>
+              })
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {/* 文件预览模态框 */}
-      <Modal isOpen={isPreviewOpen} onClose={onPreviewClose} size="2xl">
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader>
-                <div className="flex items-center space-x-2">
-                  <FileText className="w-5 h-5" />
-                  <span>文件详情 - {selectedFile?.stock_code}</span>
-                </div>
-              </ModalHeader>
-              <ModalBody>
-                {selectedFile && (
-                  <div className="space-y-4">
-                    {/* 基本信息 */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-default-500">文件路径</p>
-                        <p className="font-mono text-sm break-all">{selectedFile.file_path}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-default-500">股票代码</p>
-                        <p className="font-medium">{selectedFile.stock_code}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-default-500">文件大小</p>
-                        <p className="font-medium">{formatFileSize(selectedFile.file_size)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-default-500">记录数量</p>
-                        <p className="font-medium">{selectedFile.record_count.toLocaleString()}</p>
-                      </div>
-                    </div>
+      <Dialog open={isPreviewOpen} onClose={onPreviewClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FileText size={20} />
+            <Typography variant="h6" component="span">
+              文件详情 - {selectedFile?.stock_code}
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedFile && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* 基本信息 */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">文件路径</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.5 }}>
+                    {selectedFile.file_path}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">股票代码</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.stock_code}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">文件大小</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{formatFileSize(selectedFile.file_size)}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">记录数量</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.record_count.toLocaleString()}</Typography>
+                </Box>
+              </Box>
 
-                    {/* 数据质量指标 */}
-                    <div className="p-4 bg-default-50 rounded-lg">
-                      <h4 className="font-medium mb-3">数据质量指标</h4>
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm">压缩效率</span>
-                            <span className="text-sm font-medium">
-                              {(selectedFile.compression_ratio * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                          <Progress
-                            value={selectedFile.compression_ratio * 100}
-                            color={selectedFile.compression_ratio > 0.8 ? 'success' : 
-                                   selectedFile.compression_ratio > 0.6 ? 'warning' : 'danger'}
-                            className="w-full"
-                          />
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">完整性状态</span>
-                          <Chip
-                            color={getFileStatus(selectedFile).color}
-                            variant="flat"
-                            size="sm"
-                          >
-                            {getFileStatus(selectedFile).text}
-                          </Chip>
-                        </div>
-                      </div>
-                    </div>
+              {/* 数据质量指标 */}
+              <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1.5 }}>数据质量指标</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="body2">压缩效率</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {(selectedFile.compression_ratio * 100).toFixed(1)}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={selectedFile.compression_ratio * 100}
+                      color={selectedFile.compression_ratio > 0.8 ? 'success' : 
+                             selectedFile.compression_ratio > 0.6 ? 'warning' : 'error'}
+                      sx={{ height: 8, borderRadius: 4 }}
+                    />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2">完整性状态</Typography>
+                    <Chip
+                      label={getFileStatus(selectedFile).text}
+                      color={getFileStatus(selectedFile).color}
+                      size="small"
+                    />
+                  </Box>
+                </Box>
+              </Box>
 
-                    {/* 时间信息 */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-default-500">数据开始日期</p>
-                        <p className="font-medium">{selectedFile.date_range.start}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-default-500">数据结束日期</p>
-                        <p className="font-medium">{selectedFile.date_range.end}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-default-500">最后修改时间</p>
-                        <p className="font-medium">
-                          {new Date(selectedFile.last_modified).toLocaleString()}
-                        </p>
-                      </div>
-                      {selectedFile.created_at && (
-                        <div>
-                          <p className="text-sm text-default-500">创建时间</p>
-                          <p className="font-medium">
-                            {new Date(selectedFile.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+              {/* 时间信息 */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">数据开始日期</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.date_range.start}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">数据结束日期</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.date_range.end}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">最后修改时间</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                    {new Date(selectedFile.last_modified).toLocaleString()}
+                  </Typography>
+                </Box>
+                {selectedFile.created_at && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">创建时间</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                      {new Date(selectedFile.created_at).toLocaleString()}
+                    </Typography>
+                  </Box>
                 )}
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="light" onPress={onClose}>
-                  关闭
-                </Button>
-                <Button
-                  color="primary"
-                  startContent={<Download className="w-4 h-4" />}
-                >
-                  下载文件
-                </Button>
-              </ModalFooter>
-            </>
+              </Box>
+            </Box>
           )}
-        </ModalContent>
-      </Modal>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={onPreviewClose}>
+            关闭
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Download size={16} />}
+          >
+            下载文件
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 删除确认模态框 */}
-      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader>确认删除</ModalHeader>
-              <ModalBody>
-                <p>确定要删除选中的 {selectedFiles.size} 个数据文件吗？此操作不可撤销。</p>
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="light" onPress={onClose}>
-                  取消
-                </Button>
-                <Button color="danger" onPress={handleDeleteSelected}>
-                  删除
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
-    </div>
+      <Dialog open={isDeleteOpen} onClose={onDeleteClose}>
+        <DialogTitle>确认删除</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            确定要删除选中的 {selectedFiles.size} 个数据文件吗？此操作不可撤销。
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={onDeleteClose}>
+            取消
+          </Button>
+          <Button variant="contained" color="error" onClick={handleDeleteSelected}>
+            删除
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

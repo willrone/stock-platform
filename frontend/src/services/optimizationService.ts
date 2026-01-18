@@ -109,10 +109,9 @@ export interface OptimizationResult {
   };
 }
 
-// API 基础 URL（不包含 /api/v1 前缀）
-// 如果环境变量已经包含 /api/v1，需要去掉
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE_URL = rawApiUrl.replace(/\/api\/v1\/?$/, '');
+// API 基础 URL - 使用相对路径，通过Next.js代理转发
+// 不再需要绝对URL，直接使用相对路径即可
+const API_BASE_URL = '';
 
 export class OptimizationService {
   /**
@@ -122,8 +121,8 @@ export class OptimizationService {
     request: CreateOptimizationTaskRequest
   ): Promise<OptimizationTask> {
     try {
-      // 构建完整的 API URL（API_BASE_URL 不包含 /api/v1）
-      const url = `${API_BASE_URL}/api/v1/optimization/tasks`;
+      // 构建完整的 API URL（使用相对路径，通过Next.js代理转发）
+      const url = `/api/v1/optimization/tasks`;
       console.log('[OptimizationService] 创建任务请求 URL:', url);
       console.log('[OptimizationService] 请求数据:', JSON.stringify(request, null, 2));
       
@@ -143,7 +142,7 @@ export class OptimizationService {
       if (response.status === 404) {
         console.error('[OptimizationService] 404 错误 - 请求的 URL 不存在');
         console.error('[OptimizationService] 实际请求 URL:', url);
-        console.error('[OptimizationService] API_BASE_URL:', API_BASE_URL);
+        console.error('[OptimizationService] 请求失败，URL:', url);
         console.error('[OptimizationService] 响应 URL:', response.url);
         console.error('[OptimizationService] 响应状态:', response.status, response.statusText);
         
@@ -155,7 +154,7 @@ export class OptimizationService {
           console.error('[OptimizationService] 无法读取错误响应:', e);
         }
         
-        throw new Error(`API 端点不存在 (404): ${url}。请检查：1) 后端服务是否在 ${API_BASE_URL} 运行；2) 路由是否正确注册；3) 网络连接是否正常。`);
+        throw new Error(`API 端点不存在 (404): ${url}。请检查：1) 后端服务是否正常运行；2) 路由是否正确注册；3) Next.js代理配置是否正确。`);
       }
 
       if (!response.ok) {
@@ -236,7 +235,7 @@ export class OptimizationService {
     }
 
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/optimization/tasks?${params.toString()}`
+      `/api/v1/optimization/tasks?${params.toString()}`
     );
 
     if (!response.ok) {
@@ -253,7 +252,7 @@ export class OptimizationService {
    */
   static async getTask(taskId: string): Promise<OptimizationTask & { result?: OptimizationResult }> {
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/optimization/tasks/${taskId}`
+      `/api/v1/optimization/tasks/${taskId}`
     );
 
     if (!response.ok) {
@@ -270,7 +269,7 @@ export class OptimizationService {
    */
   static async getStatus(taskId: string): Promise<OptimizationStatus> {
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/optimization/tasks/${taskId}/status`
+      `/api/v1/optimization/tasks/${taskId}/status`
     );
 
     if (!response.ok) {
@@ -288,7 +287,7 @@ export class OptimizationService {
     taskId: string
   ): Promise<Record<string, number>> {
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/optimization/tasks/${taskId}/param-importance`
+      `/api/v1/optimization/tasks/${taskId}/param-importance`
     );
 
     if (!response.ok) {
@@ -312,7 +311,7 @@ export class OptimizationService {
     }>
   > {
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/optimization/tasks/${taskId}/pareto-front`
+      `/api/v1/optimization/tasks/${taskId}/pareto-front`
     );
 
     if (!response.ok) {

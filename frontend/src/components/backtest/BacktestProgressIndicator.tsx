@@ -1,9 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Progress } from '@heroui/progress';
-import { Chip } from '@heroui/chip';
-import { Tooltip } from '@heroui/tooltip';
+import {
+  LinearProgress,
+  Chip,
+  Tooltip,
+  Box,
+  Typography,
+  CircularProgress,
+} from '@mui/material';
 import { 
   PlayIcon, 
   CheckCircleIcon,
@@ -91,58 +96,48 @@ export default function BacktestProgressIndicator({
   // 根据任务状态显示不同的内容
   if (taskStatus === 'completed') {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <CheckCircleIcon className="w-4 h-4 text-success-500" />
-        <Chip size="sm" color="success" variant="flat">
-          已完成
-        </Chip>
-      </div>
+      <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <CheckCircleIcon className="w-4 h-4" style={{ color: '#2e7d32' }} />
+        <Chip label="已完成" size="small" color="success" />
+      </Box>
     );
   }
 
   if (taskStatus === 'failed') {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <ExclamationTriangleIcon className="w-4 h-4 text-danger-500" />
-        <Chip size="sm" color="danger" variant="flat">
-          失败
-        </Chip>
-      </div>
+      <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ExclamationTriangleIcon className="w-4 h-4" style={{ color: '#d32f2f' }} />
+        <Chip label="失败" size="small" color="error" />
+      </Box>
     );
   }
 
   if (taskStatus === 'cancelled') {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <StopIcon className="w-4 h-4 text-warning-500" />
-        <Chip size="sm" color="warning" variant="flat">
-          已取消
-        </Chip>
-      </div>
+      <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <StopIcon className="w-4 h-4" style={{ color: '#ed6c02' }} />
+        <Chip label="已取消" size="small" color="warning" />
+      </Box>
     );
   }
 
   if (!shouldConnect) {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <Chip size="sm" color="default" variant="flat">
-          {taskStatus}
-        </Chip>
-      </div>
+      <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Chip label={taskStatus} size="small" />
+      </Box>
     );
   }
 
   // 显示错误状态
   if (error) {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <ExclamationTriangleIcon className="w-4 h-4 text-danger-500" />
-        <Tooltip content={error}>
-          <Chip size="sm" color="danger" variant="flat">
-            连接错误
-          </Chip>
+      <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ExclamationTriangleIcon className="w-4 h-4" style={{ color: '#d32f2f' }} />
+        <Tooltip title={error}>
+          <Chip label="连接错误" size="small" color="error" />
         </Tooltip>
-      </div>
+      </Box>
     );
   }
 
@@ -152,72 +147,71 @@ export default function BacktestProgressIndicator({
     
     if (showDetails) {
       return (
-        <div className={`space-y-2 ${className}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <PlayIcon className="w-4 h-4 text-primary-500 animate-pulse" />
-              <span className="text-sm font-medium">运行中</span>
-            </div>
-            <span className="text-xs text-default-500">
+        <Box className={className} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PlayIcon className="w-4 h-4" style={{ color: '#1976d2' }} />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>运行中</Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary">
               {progressData.overall_progress.toFixed(1)}%
-            </span>
-          </div>
+            </Typography>
+          </Box>
           
-          <Progress 
+          <LinearProgress 
+            variant="determinate"
             value={progressData.overall_progress} 
-            size="sm"
             color="primary"
+            sx={{ height: 6, borderRadius: 3 }}
           />
           
-          <div className="flex justify-between text-xs text-default-500">
-            <span>{currentStageDisplay}</span>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Typography variant="caption" color="text.secondary">{currentStageDisplay}</Typography>
             {progressData.processed_days > 0 && progressData.total_days > 0 && (
-              <span>{progressData.processed_days}/{progressData.total_days} 天</span>
+              <Typography variant="caption" color="text.secondary">
+                {progressData.processed_days}/{progressData.total_days} 天
+              </Typography>
             )}
-          </div>
+          </Box>
           
           {progressData.current_date && (
-            <div className="text-xs text-default-400">
+            <Typography variant="caption" color="text.secondary">
               当前: {progressData.current_date}
-            </div>
+            </Typography>
           )}
-        </div>
+        </Box>
       );
     } else {
       // 简化显示
       return (
-        <div className={`flex items-center gap-2 ${className}`}>
-          <PlayIcon className="w-4 h-4 text-primary-500 animate-pulse" />
+        <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PlayIcon className="w-4 h-4" style={{ color: '#1976d2' }} />
           <Tooltip 
-            content={
-              <div className="space-y-1">
-                <div>进度: {progressData.overall_progress.toFixed(1)}%</div>
-                <div>阶段: {currentStageDisplay}</div>
+            title={
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Typography variant="caption">进度: {progressData.overall_progress.toFixed(1)}%</Typography>
+                <Typography variant="caption">阶段: {currentStageDisplay}</Typography>
                 {progressData.processed_days > 0 && progressData.total_days > 0 && (
-                  <div>处理: {progressData.processed_days}/{progressData.total_days} 天</div>
+                  <Typography variant="caption">处理: {progressData.processed_days}/{progressData.total_days} 天</Typography>
                 )}
                 {progressData.current_date && (
-                  <div>当前日期: {progressData.current_date}</div>
+                  <Typography variant="caption">当前日期: {progressData.current_date}</Typography>
                 )}
-              </div>
+              </Box>
             }
           >
-            <Chip size="sm" color="primary" variant="flat">
-              运行中 {progressData.overall_progress.toFixed(0)}%
-            </Chip>
+            <Chip label={`运行中 ${progressData.overall_progress.toFixed(0)}%`} size="small" color="primary" />
           </Tooltip>
-        </div>
+        </Box>
       );
     }
   }
 
   // 连接中或等待状态
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <div className="w-4 h-4 border-2 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
-      <Chip size="sm" color="primary" variant="flat">
-        {isConnected ? '准备中' : '连接中'}
-      </Chip>
-    </div>
+    <Box className={className} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <CircularProgress size={16} />
+      <Chip label={isConnected ? '准备中' : '连接中'} size="small" color="primary" />
+    </Box>
   );
 }

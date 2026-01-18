@@ -6,8 +6,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
-import { Card, CardBody, Button, ButtonGroup, Spinner } from '@heroui/react';
+import { createChart, IChartApi, ISeriesApi, ColorType, SeriesMarkerPosition, SeriesMarkerShape } from 'lightweight-charts';
+import { Card, CardContent, Button, ButtonGroup, CircularProgress, Box, Typography } from '@mui/material';
 import { Calendar, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { DataService } from '@/services/dataService';
 
@@ -73,34 +73,22 @@ export default function TradingViewChart({
       let resolvedStart: Date;
       let resolvedEnd: Date;
       
-      // 处理startDate：可能是ISO字符串、Date对象或undefined
+      // 处理startDate：可能是ISO字符串或undefined
       if (startDate) {
-        if (typeof startDate === 'string') {
-          resolvedStart = new Date(startDate);
-          if (isNaN(resolvedStart.getTime())) {
-            console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
-            resolvedStart = fallbackStart;
-          }
-        } else if (startDate instanceof Date) {
-          resolvedStart = startDate;
-        } else {
+        resolvedStart = new Date(startDate);
+        if (isNaN(resolvedStart.getTime())) {
+          console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
           resolvedStart = fallbackStart;
         }
       } else {
         resolvedStart = fallbackStart;
       }
       
-      // 处理endDate：可能是ISO字符串、Date对象或undefined
+      // 处理endDate：可能是ISO字符串或undefined
       if (endDate) {
-        if (typeof endDate === 'string') {
-          resolvedEnd = new Date(endDate);
-          if (isNaN(resolvedEnd.getTime())) {
-            console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
-            resolvedEnd = fallbackEnd;
-          }
-        } else if (endDate instanceof Date) {
-          resolvedEnd = endDate;
-        } else {
+        resolvedEnd = new Date(endDate);
+        if (isNaN(resolvedEnd.getTime())) {
+          console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
           resolvedEnd = fallbackEnd;
         }
       } else {
@@ -276,9 +264,9 @@ export default function TradingViewChart({
       .filter((trade) => trade.timestamp)
       .map((trade) => ({
         time: trade.timestamp.split('T')[0],
-        position: trade.action === 'BUY' ? 'belowBar' : 'aboveBar',
+        position: (trade.action === 'BUY' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
         color: trade.action === 'BUY' ? '#10b981' : '#ef4444',
-        shape: trade.action === 'BUY' ? 'arrowUp' : 'arrowDown',
+        shape: (trade.action === 'BUY' ? 'arrowUp' : 'arrowDown') as SeriesMarkerShape,
         text: trade.action === 'BUY' ? '买入' : '卖出',
       }));
 
@@ -431,77 +419,82 @@ export default function TradingViewChart({
 
   return (
     <Card>
-      <CardBody>
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">{stockCode} 价格走势</h3>
-            <p className="text-sm text-default-500">
+      <CardContent>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+              {stockCode} 价格走势
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
               当前价格: ¥{priceData.length > 0 ? priceData[priceData.length - 1]?.close.toFixed(2) : '--'}
-            </p>
-          </div>
+            </Typography>
+          </Box>
           
-          <div className="flex space-x-2">
-            <ButtonGroup size="sm">
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <ButtonGroup size="small" variant="outlined">
               <Button
-                variant={timeframe === '1D' ? 'solid' : 'light'}
-                onPress={() => setTimeframe('1D')}
+                variant={timeframe === '1D' ? 'contained' : 'outlined'}
+                onClick={() => setTimeframe('1D')}
               >
                 日线
               </Button>
               <Button
-                variant={timeframe === '1W' ? 'solid' : 'light'}
-                onPress={() => setTimeframe('1W')}
+                variant={timeframe === '1W' ? 'contained' : 'outlined'}
+                onClick={() => setTimeframe('1W')}
               >
                 周线
               </Button>
               <Button
-                variant={timeframe === '1M' ? 'solid' : 'light'}
-                onPress={() => setTimeframe('1M')}
+                variant={timeframe === '1M' ? 'contained' : 'outlined'}
+                onClick={() => setTimeframe('1M')}
               >
                 月线
               </Button>
             </ButtonGroup>
             
-            <ButtonGroup size="sm">
+            <ButtonGroup size="small" variant="outlined">
               <Button
-                variant={chartType === 'candlestick' ? 'solid' : 'light'}
-                onPress={() => setChartType('candlestick')}
-                startContent={<BarChart3 className="w-4 h-4" />}
+                variant={chartType === 'candlestick' ? 'contained' : 'outlined'}
+                onClick={() => setChartType('candlestick')}
+                startIcon={<BarChart3 size={16} />}
               >
                 K线
               </Button>
               <Button
-                variant={chartType === 'line' ? 'solid' : 'light'}
-                onPress={() => setChartType('line')}
-                startContent={<TrendingUp className="w-4 h-4" />}
+                variant={chartType === 'line' ? 'contained' : 'outlined'}
+                onClick={() => setChartType('line')}
+                startIcon={<TrendingUp size={16} />}
               >
                 线图
               </Button>
             </ButtonGroup>
-          </div>
-        </div>
+          </Box>
+        </Box>
         
-        <div className="relative">
+        <Box sx={{ position: 'relative' }}>
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-              <Spinner size="lg" />
-            </div>
+            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
+              <CircularProgress size={48} />
+            </Box>
           )}
           {!loading && priceData.length === 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-10">
-              <AlertCircle className="w-12 h-12 text-default-400 mb-2" />
-              <p className="text-default-500 text-sm">暂无数据</p>
-              <p className="text-default-400 text-xs mt-1">股票代码: {stockCode}</p>
-              <p className="text-default-400 text-xs">时间范围: {startDate || '默认'} 至 {endDate || '现在'}</p>
-            </div>
+            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
+              <AlertCircle size={48} color="#999" style={{ marginBottom: 8 }} />
+              <Typography variant="body2" color="text.secondary">暂无数据</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                股票代码: {stockCode}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                时间范围: {startDate || '默认'} 至 {endDate || '现在'}
+              </Typography>
+            </Box>
           )}
-          <div
+          <Box
             ref={chartContainerRef}
-            style={{ height: `${height}px` }}
-            className="w-full"
+            sx={{ height: `${height}px`, width: '100%' }}
           />
-        </div>
-      </CardBody>
+        </Box>
+      </CardContent>
     </Card>
   );
 }

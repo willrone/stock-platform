@@ -6,16 +6,18 @@
 
 import React from 'react';
 import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Button,
   Card,
+  CardContent,
   Chip,
-  Progress,
-} from '@heroui/react';
+  LinearProgress,
+  Box,
+  Typography,
+} from '@mui/material';
 import { TrendingUp } from 'lucide-react';
 import { Model } from '../../stores/useDataStore';
 
@@ -37,108 +39,125 @@ export function LiveTrainingModal({
   getStageText,
 }: LiveTrainingModalProps) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="5xl" scrollBehavior="inside">
-      <ModalContent>
-        <ModalHeader>
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5" />
-            <span>实时训练监控</span>
-            {modelId && (
-              <Chip size="sm" color="primary" variant="flat">
-                {models.find(m => m.model_id === modelId)?.model_name || '未知模型'}
-              </Chip>
-            )}
-          </div>
-        </ModalHeader>
-        <ModalBody>
-          {modelId && trainingProgress[modelId] ? (
-            <div className="space-y-6">
-              {/* 顶部：实时指标概览 */}
-              <div className="grid grid-cols-2 gap-6">
-                {/* 左侧：实时指标 */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold">实时指标</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    {trainingProgress[modelId].metrics && Object.entries(trainingProgress[modelId].metrics).map(([key, value]) => (
-                      <Card key={key} className="p-3">
-                        <div className="text-sm text-default-500">{key}</div>
-                        <div className="text-lg font-semibold">
+    <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <TrendingUp size={20} />
+          <span>实时训练监控</span>
+          {modelId && (
+            <Chip
+              label={models.find(m => m.model_id === modelId)?.model_name || '未知模型'}
+              color="primary"
+              size="small"
+            />
+          )}
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        {modelId && trainingProgress[modelId] ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* 顶部：实时指标概览 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+              {/* 左侧：实时指标 */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  实时指标
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
+                  {trainingProgress[modelId].metrics && Object.entries(trainingProgress[modelId].metrics).map(([key, value]) => (
+                    <Card key={key}>
+                      <CardContent sx={{ p: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {key}
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {typeof value === 'number' ? value.toFixed(4) : String(value)}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>总体进度</span>
-                      <span>{trainingProgress[modelId].progress?.toFixed(1)}%</span>
-                    </div>
-                    <Progress value={trainingProgress[modelId].progress || 0} />
-                    <div className="text-xs text-default-500">
-                      当前阶段: {getStageText(trainingProgress[modelId].stage)}
-                    </div>
-                    {trainingProgress[modelId].message && (
-                      <div className="text-xs text-default-400">
-                        {trainingProgress[modelId].message}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
                 
-                {/* 右侧：训练曲线占位符 */}
-                <div className="space-y-4">
-                  <h4 className="font-semibold">训练曲线</h4>
-                  <div className="h-64 bg-default-50 rounded-lg flex items-center justify-center">
-                    <div className="text-center text-default-500">
-                      <TrendingUp className="w-8 h-8 mx-auto mb-2" />
-                      <p>训练曲线图</p>
-                      <p className="text-sm">(开发中)</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* 训练日志占位符 */}
-              <div>
-                <h4 className="font-semibold mb-2">训练日志</h4>
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg h-32 overflow-y-auto text-sm font-mono">
-                  <div>[{new Date().toLocaleTimeString()}] 训练进度: {trainingProgress[modelId].progress?.toFixed(1)}%</div>
-                  <div>[{new Date().toLocaleTimeString()}] 当前阶段: {getStageText(trainingProgress[modelId].stage)}</div>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2">总体进度</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {trainingProgress[modelId].progress?.toFixed(1)}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={trainingProgress[modelId].progress || 0}
+                    sx={{ height: 8, borderRadius: 4 }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    当前阶段: {getStageText(trainingProgress[modelId].stage)}
+                  </Typography>
                   {trainingProgress[modelId].message && (
-                    <div>[{new Date().toLocaleTimeString()}] {trainingProgress[modelId].message}</div>
+                    <Typography variant="caption" color="text.secondary">
+                      {trainingProgress[modelId].message}
+                    </Typography>
                   )}
-                  <div className="text-gray-500">更多日志功能开发中...</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <div className="text-default-500">
-                {modelId ? '暂无训练数据' : '请选择一个训练中的模型'}
-              </div>
-            </div>
-          )}
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="light" onPress={onClose}>
-            关闭
+                </Box>
+              </Box>
+              
+              {/* 右侧：训练曲线占位符 */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  训练曲线
+                </Typography>
+                <Box sx={{ height: 256, bgcolor: 'grey.50', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <TrendingUp size={32} color="#666" style={{ margin: '0 auto 8px' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      训练曲线图
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      (开发中)
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+            
+            {/* 训练日志占位符 */}
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                训练日志
+              </Typography>
+              <Box sx={{ bgcolor: '#1e1e1e', color: '#4ade80', p: 2, borderRadius: 1, height: 128, overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                <div>[{new Date().toLocaleTimeString()}] 训练进度: {trainingProgress[modelId].progress?.toFixed(1)}%</div>
+                <div>[{new Date().toLocaleTimeString()}] 当前阶段: {getStageText(trainingProgress[modelId].stage)}</div>
+                {trainingProgress[modelId].message && (
+                  <div>[{new Date().toLocaleTimeString()}] {trainingProgress[modelId].message}</div>
+                )}
+                <div style={{ color: '#666' }}>更多日志功能开发中...</div>
+              </Box>
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" color="text.secondary">
+              {modelId ? '暂无训练数据' : '请选择一个训练中的模型'}
+            </Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>关闭</Button>
+        {modelId && trainingProgress[modelId] && (
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => {
+              // TODO: 实现停止训练功能
+              alert('停止训练功能开发中...');
+            }}
+          >
+            停止训练
           </Button>
-          {modelId && trainingProgress[modelId] && (
-            <Button 
-              color="danger" 
-              variant="light"
-              onPress={() => {
-                // TODO: 实现停止训练功能
-                alert('停止训练功能开发中...');
-              }}
-            >
-              停止训练
-            </Button>
-          )}
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        )}
+      </DialogActions>
+    </Dialog>
   );
 }
-

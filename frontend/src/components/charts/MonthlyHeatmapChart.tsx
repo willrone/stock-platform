@@ -10,13 +10,28 @@ import * as echarts from 'echarts';
 import {
   Card,
   CardHeader,
-  CardBody,
+  CardContent,
   Select,
-  SelectItem,
+  MenuItem,
   Chip,
   Tooltip,
   Button,
-} from '@heroui/react';
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  FormControlLabel,
+  Checkbox,
+  CircularProgress,
+  IconButton,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  Paper,
+} from '@mui/material';
 import {
   Calendar,
   Info,
@@ -262,11 +277,11 @@ export default function MonthlyHeatmapChart({
   if (loading) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex items-center justify-center" style={{ height }}>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height }}>
+            <CircularProgress size={32} />
+          </Box>
+        </CardContent>
       </Card>
     );
   }
@@ -281,152 +296,151 @@ export default function MonthlyHeatmapChart({
 
   return (
     <Card>
-      <CardHeader className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-semibold">月度收益热力图</h3>
-            <Tooltip content="显示每月收益率的分布，帮助识别季节性模式">
-              <Info className="w-4 h-4 text-default-400 cursor-help" />
-            </Tooltip>
-          </div>
+      <CardHeader
+        title={
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Calendar size={20} color="#1976d2" />
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                  月度收益热力图
+                </Typography>
+                <Tooltip title="显示每月收益率的分布，帮助识别季节性模式">
+                  <IconButton size="small">
+                    <Info size={16} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
 
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="flat"
-              startContent={<Download className="w-4 h-4" />}
-              onPress={handleExportChart}
-            >
-              导出图表
-            </Button>
-          </div>
-        </div>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<Download size={16} />}
+                onClick={handleExportChart}
+              >
+                导出图表
+              </Button>
+            </Box>
 
-        {/* 年份选择和统计开关 */}
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-4">
-            <Select
-              size="sm"
-              placeholder="选择年份"
-              selectedKeys={[selectedYear]}
-              onSelectionChange={(keys) => {
-                const selected = Array.from(keys)[0] as string;
-                setSelectedYear(selected);
-              }}
-              className="w-32"
-              items={[{ key: 'all', label: '全部年份' }, ...data.years.map(year => ({ key: year.toString(), label: `${year}年` }))]}
-            >
-              {(item) => (
-                <SelectItem key={item.key}>
-                  {item.label}
-                </SelectItem>
-              )}
-            </Select>
-          </div>
+            {/* 年份选择和统计开关 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <FormControl size="small" sx={{ minWidth: 128 }}>
+                <InputLabel>选择年份</InputLabel>
+                <Select
+                  value={selectedYear}
+                  label="选择年份"
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                >
+                  <MenuItem value="all">全部年份</MenuItem>
+                  {data.years.map(year => (
+                    <MenuItem key={year} value={year.toString()}>
+                      {year}年
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="showStatistics"
-              checked={showStatistics}
-              onChange={(e) => setShowStatistics(e.target.checked)}
-              className="rounded"
-            />
-            <label htmlFor="showStatistics" className="text-sm text-default-600">
-              显示月度统计
-            </label>
-          </div>
-        </div>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showStatistics}
+                    onChange={(e) => setShowStatistics(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="显示月度统计"
+              />
+            </Box>
 
-        {/* 月度统计信息 */}
-        {showStatistics && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between p-3 bg-success-50 rounded-lg">
-              <div>
-                <p className="text-sm text-default-500">表现最佳月份</p>
-                <div className="flex items-center space-x-2">
-                  <p className="text-lg font-bold text-success">
-                    {MONTH_NAMES[bestMonth.month - 1]}
-                  </p>
-                  <Chip color="success" variant="flat" size="sm">
-                    +{bestMonth.avgReturn.toFixed(2)}%
-                  </Chip>
-                </div>
-              </div>
-              <TrendingUp className="w-6 h-6 text-success" />
-            </div>
+            {/* 月度统计信息 */}
+            {showStatistics && (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'success.light', borderRadius: 1 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      表现最佳月份
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                        {MONTH_NAMES[bestMonth.month - 1]}
+                      </Typography>
+                      <Chip label={`+${bestMonth.avgReturn.toFixed(2)}%`} color="success" size="small" />
+                    </Box>
+                  </Box>
+                  <TrendingUp size={24} color="#2e7d32" />
+                </Box>
 
-            <div className="flex items-center justify-between p-3 bg-danger-50 rounded-lg">
-              <div>
-                <p className="text-sm text-default-500">表现最差月份</p>
-                <div className="flex items-center space-x-2">
-                  <p className="text-lg font-bold text-danger">
-                    {MONTH_NAMES[worstMonth.month - 1]}
-                  </p>
-                  <Chip color="danger" variant="flat" size="sm">
-                    {worstMonth.avgReturn.toFixed(2)}%
-                  </Chip>
-                </div>
-              </div>
-              <TrendingDown className="w-6 h-6 text-danger" />
-            </div>
-          </div>
-        )}
-      </CardHeader>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'error.light', borderRadius: 1 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      表现最差月份
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                        {MONTH_NAMES[worstMonth.month - 1]}
+                      </Typography>
+                      <Chip label={`${worstMonth.avgReturn.toFixed(2)}%`} color="error" size="small" />
+                    </Box>
+                  </Box>
+                  <TrendingDown size={24} color="#d32f2f" />
+                </Box>
+              </Box>
+            )}
+          </Box>
+        }
+      />
 
-      <CardBody>
-        <div
+      <CardContent>
+        <Box
           ref={chartRef}
-          style={{ height, width: '100%' }}
-          className="min-h-[400px]"
+          sx={{ height, width: '100%', minHeight: 400 }}
         />
 
         {/* 月度详细统计表格 */}
         {showStatistics && (
-          <div className="mt-6">
-            <h4 className="text-md font-semibold mb-3">月度统计详情</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">月份</th>
-                    <th className="text-right p-2">平均收益率</th>
-                    <th className="text-right p-2">数据点数</th>
-                    <th className="text-right p-2">正收益次数</th>
-                    <th className="text-right p-2">负收益次数</th>
-                    <th className="text-right p-2">最高收益率</th>
-                    <th className="text-right p-2">最低收益率</th>
-                  </tr>
-                </thead>
-                <tbody>
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+              月度统计详情
+            </Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>月份</TableCell>
+                    <TableCell align="right">平均收益率</TableCell>
+                    <TableCell align="right">数据点数</TableCell>
+                    <TableCell align="right">正收益次数</TableCell>
+                    <TableCell align="right">负收益次数</TableCell>
+                    <TableCell align="right">最高收益率</TableCell>
+                    <TableCell align="right">最低收益率</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {monthlyStats.map((stat) => (
-                    <tr key={stat.month} className="border-b hover:bg-default-50">
-                      <td className="p-2 font-medium">
+                    <TableRow key={stat.month} hover>
+                      <TableCell sx={{ fontWeight: 500 }}>
                         {MONTH_NAMES[stat.month - 1]}
-                      </td>
-                      <td className={`p-2 text-right font-medium ${
-                        stat.avgReturn >= 0 ? 'text-success' : 'text-danger'
-                      }`}>
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 500, color: stat.avgReturn >= 0 ? 'success.main' : 'error.main' }}>
                         {stat.avgReturn.toFixed(2)}%
-                      </td>
-                      <td className="p-2 text-right">{stat.count}</td>
-                      <td className="p-2 text-right text-success">{stat.positiveCount}</td>
-                      <td className="p-2 text-right text-danger">{stat.negativeCount}</td>
-                      <td className="p-2 text-right text-success">
+                      </TableCell>
+                      <TableCell align="right">{stat.count}</TableCell>
+                      <TableCell align="right" sx={{ color: 'success.main' }}>{stat.positiveCount}</TableCell>
+                      <TableCell align="right" sx={{ color: 'error.main' }}>{stat.negativeCount}</TableCell>
+                      <TableCell align="right" sx={{ color: 'success.main' }}>
                         {stat.maxReturn.toFixed(2)}%
-                      </td>
-                      <td className="p-2 text-right text-danger">
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: 'error.main' }}>
                         {stat.minReturn.toFixed(2)}%
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
         )}
-      </CardBody>
+      </CardContent>
     </Card>
   );
 }

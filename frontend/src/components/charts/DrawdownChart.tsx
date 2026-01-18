@@ -9,13 +9,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Chip,
   Tooltip,
   Button,
   ButtonGroup,
-} from '@heroui/react';
+  Box,
+  Typography,
+  Checkbox,
+  FormControlLabel,
+  CircularProgress,
+  IconButton,
+} from '@mui/material';
 import {
   TrendingDown,
   Info,
@@ -305,17 +311,17 @@ export default function DrawdownChart({
     if (absDrawdown <= 5) return { text: '优秀', color: 'success' as const };
     if (absDrawdown <= 10) return { text: '良好', color: 'primary' as const };
     if (absDrawdown <= 20) return { text: '一般', color: 'warning' as const };
-    return { text: '较差', color: 'danger' as const };
+    return { text: '较差', color: 'error' as const };
   };
 
   if (loading) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex items-center justify-center" style={{ height }}>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height }}>
+            <CircularProgress size={32} />
+          </Box>
+        </CardContent>
       </Card>
     );
   }
@@ -324,106 +330,113 @@ export default function DrawdownChart({
 
   return (
     <Card>
-      <CardHeader className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-2">
-            <TrendingDown className="w-5 h-5 text-danger" />
-            <h3 className="text-lg font-semibold">回撤分析</h3>
-            <Tooltip content="显示组合价值从峰值下跌的幅度">
-              <Info className="w-4 h-4 text-default-400 cursor-help" />
-            </Tooltip>
-          </div>
+      <CardHeader
+        title={
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingDown size={20} color="#d32f2f" />
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                  回撤分析
+                </Typography>
+                <Tooltip title="显示组合价值从峰值下跌的幅度">
+                  <IconButton size="small">
+                    <Info size={16} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
 
-          {/* 图表控制按钮 */}
-          <div className="flex items-center space-x-2">
-            <ButtonGroup size="sm" variant="flat">
-              <Button
-                onPress={handleZoomIn}
-                startContent={<ZoomIn className="w-4 h-4" />}
-              >
-                放大
-              </Button>
-              <Button
-                onPress={handleZoomOut}
-                startContent={<ZoomOut className="w-4 h-4" />}
-              >
-                缩小
-              </Button>
-              <Button
-                onPress={handleReset}
-                startContent={<RotateCcw className="w-4 h-4" />}
-              >
-                重置
-              </Button>
-            </ButtonGroup>
-          </div>
-        </div>
+              {/* 图表控制按钮 */}
+              <ButtonGroup size="small" variant="outlined">
+                <Button
+                  onClick={handleZoomIn}
+                  startIcon={<ZoomIn size={16} />}
+                >
+                  放大
+                </Button>
+                <Button
+                  onClick={handleZoomOut}
+                  startIcon={<ZoomOut size={16} />}
+                >
+                  缩小
+                </Button>
+                <Button
+                  onClick={handleReset}
+                  startIcon={<RotateCcw size={16} />}
+                >
+                  重置
+                </Button>
+              </ButtonGroup>
+            </Box>
 
-        {/* 回撤统计信息 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center justify-between p-3 bg-danger-50 rounded-lg">
-            <div>
-              <p className="text-sm text-default-500">最大回撤</p>
-              <div className="flex items-center space-x-2">
-                <p className="text-lg font-bold text-danger">
-                  {Math.abs(data.maxDrawdown).toFixed(2)}%
-                </p>
-                <Chip color={drawdownRating.color} variant="flat" size="sm">
-                  {drawdownRating.text}
-                </Chip>
-              </div>
-            </div>
-            <AlertTriangle className="w-6 h-6 text-danger" />
-          </div>
+            {/* 回撤统计信息 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'error.light', borderRadius: 1 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    最大回撤
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                      {Math.abs(data.maxDrawdown).toFixed(2)}%
+                    </Typography>
+                    <Chip label={drawdownRating.text} color={drawdownRating.color} size="small" />
+                  </Box>
+                </Box>
+                <AlertTriangle size={24} color="#d32f2f" />
+              </Box>
 
-          <div className="flex items-center justify-between p-3 bg-warning-50 rounded-lg">
-            <div>
-              <p className="text-sm text-default-500">最大回撤日期</p>
-              <p className="text-lg font-bold text-warning">
-                {data.maxDrawdownDate ? 
-                  new Date(data.maxDrawdownDate).toLocaleDateString('zh-CN') : 
-                  '未知'
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'warning.light', borderRadius: 1 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    最大回撤日期
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                    {data.maxDrawdownDate ? 
+                      new Date(data.maxDrawdownDate).toLocaleDateString('zh-CN') : 
+                      '未知'
+                    }
+                  </Typography>
+                </Box>
+                <Calendar size={24} color="#ed6c02" />
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'secondary.light', borderRadius: 1 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    回撤持续天数
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'secondary.main' }}>
+                    {data.maxDrawdownDuration || 0} 天
+                  </Typography>
+                </Box>
+                <TrendingDown size={24} color="#9c27b0" />
+              </Box>
+            </Box>
+
+            {/* 显示选项 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showMaxDrawdownPeriod}
+                    onChange={(e) => setShowMaxDrawdownPeriod(e.target.checked)}
+                    size="small"
+                  />
                 }
-              </p>
-            </div>
-            <Calendar className="w-6 h-6 text-warning" />
-          </div>
+                label="标注最大回撤期间"
+              />
+            </Box>
+          </Box>
+        }
+      />
 
-          <div className="flex items-center justify-between p-3 bg-secondary-50 rounded-lg">
-            <div>
-              <p className="text-sm text-default-500">回撤持续天数</p>
-              <p className="text-lg font-bold text-secondary">
-                {data.maxDrawdownDuration || 0} 天
-              </p>
-            </div>
-            <TrendingDown className="w-6 h-6 text-secondary" />
-          </div>
-        </div>
-
-        {/* 显示选项 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="showMaxDrawdownPeriod"
-              checked={showMaxDrawdownPeriod}
-              onChange={(e) => setShowMaxDrawdownPeriod(e.target.checked)}
-              className="rounded"
-            />
-            <label htmlFor="showMaxDrawdownPeriod" className="text-sm text-default-600">
-              标注最大回撤期间
-            </label>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardBody>
-        <div
+      <CardContent>
+        <Box
           ref={chartRef}
-          style={{ height, width: '100%' }}
-          className="min-h-[400px]"
+          sx={{ height, width: '100%', minHeight: 400 }}
         />
-      </CardBody>
+      </CardContent>
     </Card>
   );
 }

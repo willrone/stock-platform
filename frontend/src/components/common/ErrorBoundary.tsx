@@ -11,7 +11,15 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Card, CardBody, Button } from '@heroui/react';
+import {
+  Card,
+  CardContent,
+  Button,
+  Box,
+  Typography,
+  Alert,
+  AlertTitle,
+} from '@mui/material';
 import { AlertTriangle, RefreshCw, Home, RotateCcw } from 'lucide-react';
 
 interface Props {
@@ -88,82 +96,113 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // 默认错误UI
       return (
-        <div className="flex items-center justify-center min-h-screen p-6">
-          <Card className="max-w-2xl w-full">
-            <CardBody className="text-center space-y-6">
-              <div className="flex justify-center">
-                <AlertTriangle className="w-16 h-16 text-danger" />
-              </div>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', p: 3 }}>
+          <Card sx={{ maxWidth: 800, width: '100%' }}>
+            <CardContent sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <AlertTriangle size={64} color="#d32f2f" />
+              </Box>
               
-              <div>
-                <h1 className="text-2xl font-bold text-danger mb-2">页面出现错误</h1>
-                <p className="text-default-600">
+              <Box>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 600, color: 'error.main', mb: 1 }}>
+                  页面出现错误
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
                   抱歉，页面遇到了一些问题。您可以尝试刷新页面或返回首页。
-                </p>
-              </div>
+                </Typography>
+              </Box>
 
-              <div className="flex flex-wrap justify-center gap-3">
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1.5 }}>
                 <Button
+                  variant="contained"
                   color="primary"
-                  startContent={<RefreshCw className="w-4 h-4" />}
-                  onPress={this.handleReload}
+                  startIcon={<RefreshCw size={16} />}
+                  onClick={this.handleReload}
                 >
                   刷新页面
                 </Button>
                 <Button
-                  variant="light"
-                  startContent={<Home className="w-4 h-4" />}
-                  onPress={this.handleGoHome}
+                  variant="outlined"
+                  startIcon={<Home size={16} />}
+                  onClick={this.handleGoHome}
                 >
                   返回首页
                 </Button>
                 <Button
-                  variant="light"
-                  startContent={<RotateCcw className="w-4 h-4" />}
-                  onPress={this.handleRetry}
+                  variant="outlined"
+                  startIcon={<RotateCcw size={16} />}
+                  onClick={this.handleRetry}
                 >
                   重试
                 </Button>
-              </div>
+              </Box>
 
               {/* 开发环境下显示详细错误信息 */}
               {process.env.NODE_ENV === 'development' && this.state.error && (
-                <Card className="mt-6">
-                  <CardBody>
-                    <div className="text-left space-y-4">
-                      <h3 className="text-lg font-semibold text-danger">
+                <Card sx={{ mt: 3 }}>
+                  <CardContent>
+                    <Box sx={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
                         错误详情（仅开发环境显示）
-                      </h3>
+                      </Typography>
                       
-                      <div>
-                        <p className="font-medium mb-2">错误信息：</p>
-                        <code className="block p-2 bg-danger-50 text-danger rounded text-sm">
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                          错误信息：
+                        </Typography>
+                        <Alert severity="error" sx={{ fontFamily: 'monospace' }}>
                           {this.state.error.message}
-                        </code>
-                      </div>
+                        </Alert>
+                      </Box>
                       
-                      <div>
-                        <p className="font-medium mb-2">错误堆栈：</p>
-                        <pre className="text-xs max-h-48 overflow-auto bg-default-100 p-3 rounded">
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                          错误堆栈：
+                        </Typography>
+                        <Box
+                          component="pre"
+                          sx={{
+                            fontSize: '0.75rem',
+                            maxHeight: 200,
+                            overflow: 'auto',
+                            bgcolor: 'grey.100',
+                            p: 2,
+                            borderRadius: 1,
+                            fontFamily: 'monospace',
+                          }}
+                        >
                           {this.state.error.stack}
-                        </pre>
-                      </div>
+                        </Box>
+                      </Box>
 
                       {this.state.errorInfo && (
-                        <div>
-                          <p className="font-medium mb-2">组件堆栈：</p>
-                          <pre className="text-xs max-h-48 overflow-auto bg-default-100 p-3 rounded">
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                            组件堆栈：
+                          </Typography>
+                          <Box
+                            component="pre"
+                            sx={{
+                              fontSize: '0.75rem',
+                              maxHeight: 200,
+                              overflow: 'auto',
+                              bgcolor: 'grey.100',
+                              p: 2,
+                              borderRadius: 1,
+                              fontFamily: 'monospace',
+                            }}
+                          >
                             {this.state.errorInfo.componentStack}
-                          </pre>
-                        </div>
+                          </Box>
+                        </Box>
                       )}
-                    </div>
-                  </CardBody>
+                    </Box>
+                  </CardContent>
                 </Card>
               )}
-            </CardBody>
+            </CardContent>
           </Card>
-        </div>
+        </Box>
       );
     }
 
@@ -193,19 +232,24 @@ export const SimpleErrorFallback: React.FC<{
   error?: Error;
   onRetry?: () => void;
 }> = ({ error, onRetry }) => (
-  <div className="flex items-center justify-center p-6">
+  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
     <Card>
-      <CardBody className="text-center space-y-4">
-        <AlertTriangle className="w-12 h-12 text-danger mx-auto" />
-        <div>
-          <h3 className="text-lg font-semibold text-danger">出现错误</h3>
-          <p className="text-default-600">{error?.message || '页面加载失败'}</p>
-        </div>
+      <CardContent sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <AlertTriangle size={48} color="#d32f2f" style={{ margin: '0 auto' }} />
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+            出现错误
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {error?.message || '页面加载失败'}
+          </Typography>
+        </Box>
         {onRetry && (
-          <Button color="primary" onPress={onRetry}>
+          <Button variant="contained" color="primary" onClick={onRetry}>
             重试
           </Button>
         )}
-      </CardBody>
+      </CardContent>
     </Card>
-  </div>);
+  </Box>
+);

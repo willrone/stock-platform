@@ -13,9 +13,13 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@heroicons/react": "^2.2.0",
     "@heroui/react": "^2.2.9",
     "@heroui/theme": "^2.4.0",
+    "@mui/icons-material": "^7.3.7",
+    "@mui/material": "^7.3.7",
     "axios": "1.6.2",
     "clsx": "^2.0.0",
     "dayjs": "1.11.10",

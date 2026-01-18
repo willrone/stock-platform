@@ -639,9 +639,15 @@ export class BacktestService {
   private static async generatePositionWeightsData(taskId: string): Promise<Record<string, any>> {
     const detailedResult = await this.getDetailedResult(taskId);
     
+    // 处理 position_analysis 可能是数组或对象的情况
+    const positionAnalysis = detailedResult.position_analysis;
+    const stockPerformance = Array.isArray(positionAnalysis)
+      ? positionAnalysis
+      : (positionAnalysis?.stock_performance || []);
+    
     return {
-      positionAnalysis: detailedResult.position_analysis,
-      totalReturn: detailedResult.position_analysis.reduce((sum, p) => sum + p.total_return, 0),
+      positionAnalysis: positionAnalysis,
+      totalReturn: stockPerformance.reduce((sum, p) => sum + p.total_return, 0),
     };
   }
 

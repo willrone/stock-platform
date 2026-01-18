@@ -13,13 +13,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Button,
   Chip,
-  Input,
+  TextField,
   Pagination,
-} from '@heroui/react';
+  Box,
+  Typography,
+  IconButton,
+  InputAdornment,
+  CircularProgress,
+} from '@mui/material';
 import {
   X,
   Search,
@@ -192,200 +197,217 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   }, [totalPages, currentPage]);
 
   // 处理分页变化
-  const handlePageChange = (page: number) => {
+  const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
     setCurrentPage(page);
     // 滚动到顶部
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
-    <div className="space-y-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 搜索框 */}
-      <div className="flex gap-2">
-        <Input
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <TextField
           placeholder={placeholder}
-          startContent={<Search className="w-4 h-4" />}
           value={searchValue}
-          onValueChange={handleSearchChange}
-          endContent={
-            searchValue ? (
-              <Button
-                isIconOnly
-                size="sm"
-                variant="light"
-                onPress={() => handleSearchChange('')}
-                className="min-w-0"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            ) : null
-          }
-          className="flex-1"
+          onChange={(e) => handleSearchChange(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search size={16} />
+              </InputAdornment>
+            ),
+            endAdornment: searchValue ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => handleSearchChange('')}
+                >
+                  <X size={16} />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }}
+          fullWidth
         />
-      </div>
+      </Box>
 
       {/* 已选股票 */}
       <Card>
-        <CardHeader className="flex justify-between items-center">
-          <span>已选股票 ({value.length} 只)</span>
-          <div className="flex gap-2 items-center">
-            {/* 随机选择 */}
-            <div className="flex gap-2 items-center">
-              <Input
-                type="number"
-                size="sm"
-                value={randomCount}
-                onValueChange={setRandomCount}
-                placeholder="数量"
-                className="w-20"
-                min={1}
-              />
-              <Button
-                size="sm"
-                variant="flat"
-                color="primary"
-                startContent={<Shuffle className="w-4 h-4" />}
-                onPress={handleRandomSelect}
-                isDisabled={filteredStocks.length === 0 || loadingAllStocks}
-              >
-                随机选择
-              </Button>
-            </div>
-            {value.length > 0 && (
-              <Button
-                size="sm"
-                variant="light"
-                color="danger"
-                startContent={<Trash2 className="w-3 h-3" />}
-                onPress={handleClearAll}
-              >
-                清空
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="min-h-16">
+        <CardHeader
+          title={`已选股票 (${value.length} 只)`}
+          action={
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {/* 随机选择 */}
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={randomCount}
+                  onChange={(e) => setRandomCount(e.target.value)}
+                  placeholder="数量"
+                  sx={{ width: 80 }}
+                  inputProps={{ min: 1 }}
+                />
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<Shuffle size={16} />}
+                  onClick={handleRandomSelect}
+                  disabled={filteredStocks.length === 0 || loadingAllStocks}
+                >
+                  随机选择
+                </Button>
+              </Box>
+              {value.length > 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Trash2 size={14} />}
+                  onClick={handleClearAll}
+                >
+                  清空
+                </Button>
+              )}
+            </Box>
+          }
+        />
+        <CardContent>
+          <Box sx={{ minHeight: 64 }}>
             {value.length === 0 ? (
-              <p className="text-default-500 text-center py-4">请搜索或从下方列表选择股票，或使用随机选择功能</p>
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                请搜索或从下方列表选择股票，或使用随机选择功能
+              </Typography>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {value.map(code => (
                   <Chip
                     key={code}
-                    onClose={() => handleRemoveStock(code)}
-                    variant="flat"
-                  >
-                    {getStockDisplayName(code)}
-                  </Chip>
+                    label={getStockDisplayName(code)}
+                    onDelete={() => handleRemoveStock(code)}
+                    size="small"
+                  />
                 ))}
-              </div>
+              </Box>
             )}
-          </div>
-        </CardBody>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 本地股票列表 */}
       <Card>
-        <CardHeader className="flex justify-between items-center">
-          <span>
-            本地股票列表 
-            {searchValue ? (
-              <span className="text-default-500">
-                (搜索: "{searchValue}", 找到 {filteredStocks.length} 只，共 {allStocks.length} 只)
-              </span>
-            ) : (
-              <span className="text-default-500">(共 {allStocks.length} 只本地股票)</span>
-            )}
-          </span>
-        </CardHeader>
-        <CardBody>
+        <CardHeader
+          title={
+            <Box>
+              <Typography variant="h6" component="span">
+                本地股票列表
+              </Typography>
+              {searchValue ? (
+                <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
+                  (搜索: "{searchValue}", 找到 {filteredStocks.length} 只，共 {allStocks.length} 只)
+                </Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
+                  (共 {allStocks.length} 只本地股票)
+                </Typography>
+              )}
+            </Box>
+          }
+        />
+        <CardContent>
           {loadingAllStocks ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={32} />
+            </Box>
           ) : allStocks.length === 0 ? (
-            <div className="text-center py-8 text-default-500">
-              <p>暂无本地股票数据</p>
-              <p className="text-sm mt-2">请先在数据管理页面同步股票数据</p>
-            </div>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                暂无本地股票数据
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                请先在数据管理页面同步股票数据
+              </Typography>
+            </Box>
           ) : (
-            <div className="space-y-4">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* 股票列表 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 1 }}>
                 {currentStocks.map(stock => {
                   const isSelected = value.includes(stock.code);
                   
                   return (
                     <Button
                       key={stock.code}
-                      size="sm"
-                      variant={isSelected ? "solid" : "bordered"}
-                      color={isSelected ? "primary" : "default"}
-                      isDisabled={isSelected}
-                      onPress={() => handleAddStock(stock.code)}
-                      className="justify-start h-auto py-2"
+                      size="small"
+                      variant={isSelected ? "contained" : "outlined"}
+                      color={isSelected ? "primary" : "inherit"}
+                      disabled={isSelected}
+                      onClick={() => handleAddStock(stock.code)}
+                      sx={{ 
+                        justifyContent: 'flex-start',
+                        height: 'auto',
+                        py: 1,
+                        textTransform: 'none',
+                      }}
                     >
-                      <div className="flex flex-col items-start w-full">
-                        <div className="flex items-center space-x-2 w-full">
-                          <span className="font-medium text-sm">{stock.code}</span>
-                          <Chip size="sm" variant="flat" className="text-xs">
-                            {stock.market}
-                          </Chip>
-                        </div>
-                        <span className="text-xs text-default-500 mt-1 truncate w-full">
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: '100%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {stock.code}
+                          </Typography>
+                          <Chip label={stock.market} size="small" variant="outlined" />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {stock.name}
-                        </span>
-                      </div>
+                        </Typography>
+                      </Box>
                     </Button>
                   );
                 })}
-              </div>
+              </Box>
 
               {/* 分页控制 */}
               {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 pt-4">
-                  <Button
-                    size="sm"
-                    variant="light"
-                    isDisabled={currentPage === 1}
-                    onPress={() => handlePageChange(currentPage - 1)}
-                    startContent={<ChevronLeft className="w-4 h-4" />}
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1, pt: 2 }}>
+                  <IconButton
+                    size="small"
+                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange({} as React.ChangeEvent<unknown>, currentPage - 1)}
                   >
-                    上一页
-                  </Button>
+                    <ChevronLeft size={16} />
+                  </IconButton>
                   
                   <Pagination
-                    total={totalPages}
+                    count={totalPages}
                     page={currentPage}
                     onChange={handlePageChange}
-                    size="sm"
-                    showControls
+                    size="small"
+                    color="primary"
                   />
                   
-                  <Button
-                    size="sm"
-                    variant="light"
-                    isDisabled={currentPage === totalPages}
-                    onPress={() => handlePageChange(currentPage + 1)}
-                    endContent={<ChevronRight className="w-4 h-4" />}
+                  <IconButton
+                    size="small"
+                    disabled={currentPage === totalPages}
+                    onClick={() => handlePageChange({} as React.ChangeEvent<unknown>, currentPage + 1)}
                   >
-                    下一页
-                  </Button>
-                </div>
+                    <ChevronRight size={16} />
+                  </IconButton>
+                </Box>
               )}
 
               {/* 分页信息 */}
-              <div className="text-center text-sm text-default-500 pt-2">
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', pt: 1 }}>
                 显示第 {startIndex + 1} - {Math.min(endIndex, filteredStocks.length)} 条，共 {filteredStocks.length} 条
                 {searchValue && filteredStocks.length < allStocks.length && (
-                  <span className="ml-2">(全部 {allStocks.length} 条)</span>
+                  <span style={{ marginLeft: 8 }}>(全部 {allStocks.length} 条)</span>
                 )}
-              </div>
-            </div>
+              </Typography>
+            </Box>
           )}
-        </CardBody>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 };

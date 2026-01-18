@@ -25,7 +25,21 @@ export class TrainingProgressWebSocket {
   private isConnecting = false;
 
   constructor(private wsUrl?: string) {
-    this.wsUrl = wsUrl || process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+    // 确定WebSocket URL
+    if (wsUrl) {
+      this.wsUrl = wsUrl;
+    } else if (process.env.NEXT_PUBLIC_WS_URL) {
+      this.wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+    } else if (typeof window !== 'undefined') {
+      // 客户端：根据当前页面地址推断后端WebSocket地址
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const hostname = window.location.hostname;
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+      this.wsUrl = `${protocol}//${hostname}:${port}/ws`;
+    } else {
+      // 服务端：使用默认值
+      this.wsUrl = 'ws://localhost:8000/ws';
+    }
   }
 
   /**

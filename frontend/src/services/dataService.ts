@@ -363,7 +363,7 @@ export class DataService {
     // 处理响应格式：可能是 { data: {...} } 或直接是 { success, data, ... }
     if (response.data) {
       return response.data;
-    } else if (response.features) {
+    } else if ((response as any).features) {
       // 如果响应直接包含features字段
       return response as any;
     } else {

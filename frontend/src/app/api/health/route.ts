@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
         rss: process.memoryUsage().rss
       },
       backend_connection: {
-        url: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+        // API请求通过Next.js代理转发，使用相对路径
+        api_path: '/api/v1',
+        // 后端服务器地址（用于信息显示）
+        backend_host: process.env.NEXT_PUBLIC_BACKEND_HOST || 'localhost:8000',
         status: 'unknown' // 这里可以添加对后端的连接检查
       }
     };

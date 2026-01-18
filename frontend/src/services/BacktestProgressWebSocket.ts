@@ -90,8 +90,26 @@ export class BacktestProgressWebSocket {
 
   constructor(taskId: string, private wsUrl?: string) {
     this.taskId = taskId;
+    
+    // 确定WebSocket基础URL
+    let baseUrl: string;
+    
+    if (wsUrl) {
+      baseUrl = wsUrl;
+    } else if (process.env.NEXT_PUBLIC_WS_URL) {
+      baseUrl = process.env.NEXT_PUBLIC_WS_URL;
+    } else if (typeof window !== 'undefined') {
+      // 客户端：根据当前页面地址推断后端WebSocket地址
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const hostname = window.location.hostname;
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+      baseUrl = `${protocol}//${hostname}:${port}`;
+    } else {
+      // 服务端：使用默认值
+      baseUrl = 'ws://localhost:8000';
+    }
+    
     // 清理URL末尾的斜杠，并确保不包含多余的/ws前缀
-    let baseUrl = wsUrl || process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
     baseUrl = baseUrl.replace(/\/+$/, '');  // 移除末尾斜杠
     // 如果URL末尾是/ws，移除它（避免重复）
     if (baseUrl.endsWith('/ws')) {

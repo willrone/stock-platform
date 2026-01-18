@@ -9,16 +9,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Button,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-} from '@heroui/react';
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
+  Box,
+  Typography,
+} from '@mui/material';
 import {
   Plus,
   Brain,
@@ -39,10 +39,10 @@ export default function ModelsPage() {
   const { models, setModels } = useDataStore();
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const { isOpen: isTrainingReportOpen, onOpen: onTrainingReportOpen, onClose: onTrainingReportClose } = useDisclosure();
-  const { isOpen: isLiveTrainingOpen, onOpen: onLiveTrainingOpen, onClose: onLiveTrainingClose } = useDisclosure();
-  const { isOpen: isDeleteModalOpen, onOpen: onDeleteModalOpen, onClose: onDeleteModalClose } = useDisclosure();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isTrainingReportOpen, setIsTrainingReportOpen] = useState(false);
+  const [isLiveTrainingOpen, setIsLiveTrainingOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [trainingReportModelId, setTrainingReportModelId] = useState<string | null>(null);
   const [liveTrainingModelId, setLiveTrainingModelId] = useState<string | null>(null);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
@@ -80,7 +80,6 @@ export default function ModelsPage() {
     }
   };
 
-
   // 设置WebSocket连接
   const setupWebSocketConnection = async () => {
     try {
@@ -96,7 +95,9 @@ export default function ModelsPage() {
       });
       
       // 保存取消订阅函数以便清理
-      (window as any).unsubscribeTrainingProgress = unsubscribe;
+      if (typeof window !== 'undefined') {
+        (window as any).unsubscribeTrainingProgress = unsubscribe;
+      }
       
     } catch (error) {
       console.error('设置WebSocket连接失败:', error);
@@ -155,7 +156,7 @@ export default function ModelsPage() {
   };
 
   // 获取状态颜色
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): "success" | "primary" | "secondary" | "warning" | "error" | "default" => {
     switch (status) {
       case 'ready':
         return 'success';
@@ -166,7 +167,7 @@ export default function ModelsPage() {
       case 'training':
         return 'warning';
       case 'failed':
-        return 'danger';
+        return 'error';
       default:
         return 'default';
     }
@@ -204,19 +205,19 @@ export default function ModelsPage() {
   // 显示实时训练详情
   const showLiveTrainingDetails = (modelId: string) => {
     setLiveTrainingModelId(modelId);
-    onLiveTrainingOpen();
+    setIsLiveTrainingOpen(true);
   };
 
   // 显示训练报告
   const showTrainingReport = (modelId: string) => {
     setTrainingReportModelId(modelId);
-    onTrainingReportOpen();
+    setIsTrainingReportOpen(true);
   };
 
   // 显示删除确认对话框
   const showDeleteConfirm = (modelId: string) => {
     setDeletingModelId(modelId);
-    onDeleteModalOpen();
+    setIsDeleteModalOpen(true);
   };
 
   // 删除模型
@@ -229,7 +230,7 @@ export default function ModelsPage() {
       // 刷新模型列表
       await loadModels();
       // 关闭对话框
-      onDeleteModalClose();
+      setIsDeleteModalOpen(false);
       setDeletingModelId(null);
       alert('模型删除成功');
     } catch (error: any) {
@@ -306,7 +307,7 @@ export default function ModelsPage() {
       setUseAllFeatures(true);
       
       // 关闭对话框并刷新列表
-      onClose();
+      setIsOpen(false);
       await loadModels();
       
       alert('模型创建成功！训练任务已开始，您可以在模型列表中查看进度。');
@@ -338,50 +339,60 @@ export default function ModelsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 3 }}>
       {/* 页面标题 */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Brain className="w-8 h-8" />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Brain size={32} />
             模型管理
-          </h1>
-          <p className="text-default-500 mt-2">创建和管理预测模型</p>
-        </div>
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            创建和管理预测模型
+          </Typography>
+        </Box>
         <Button
+          variant="contained"
           color="primary"
-          startContent={<Plus className="w-4 h-4" />}
-          onPress={onOpen}
+          startIcon={<Plus size={16} />}
+          onClick={() => setIsOpen(true)}
         >
           创建模型
         </Button>
-      </div>
+      </Box>
 
       {/* 模型列表 */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5" />
-            <h2 className="text-lg font-semibold">模型列表</h2>
-            <span className="text-default-500">({models.length} 个)</span>
-          </div>
-        </CardHeader>
-        <CardBody>
+        <CardHeader
+          avatar={<TrendingUp size={24} />}
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <span>模型列表</span>
+              <Typography variant="body2" color="text.secondary">
+                ({models.length} 个)
+              </Typography>
+            </Box>
+          }
+        />
+        <CardContent>
           {models.length === 0 ? (
-            <div className="text-center py-12">
-              <Brain className="w-16 h-16 mx-auto text-default-300 mb-4" />
-              <p className="text-default-500 text-lg mb-2">暂无模型</p>
-              <p className="text-default-400 text-sm mb-4">
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Brain size={64} color="#ccc" style={{ margin: '0 auto 16px' }} />
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                暂无模型
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 创建您的第一个预测模型开始使用
-              </p>
+              </Typography>
               <Button
+                variant="contained"
                 color="primary"
-                startContent={<Plus className="w-4 h-4" />}
-                onPress={onOpen}
+                startIcon={<Plus size={16} />}
+                onClick={() => setIsOpen(true)}
               >
                 创建模型
               </Button>
-            </div>
+            </Box>
           ) : (
             <ModelListTable
               models={models}
@@ -395,97 +406,92 @@ export default function ModelsPage() {
               deleting={deleting}
             />
           )}
-        </CardBody>
+        </CardContent>
       </Card>
 
       {/* 创建模型对话框 */}
-      <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
-        <ModalContent>
-          <ModalHeader>
-            <div className="flex items-center space-x-2">
-              <Plus className="w-5 h-5" />
-              <span>创建新模型</span>
-            </div>
-          </ModalHeader>
-          <ModalBody>
-            <CreateModelForm
-              formData={formData}
-              errors={errors}
-              useAllFeatures={useAllFeatures}
-              onFormDataChange={handleFormDataChange}
-              onUseAllFeaturesChange={setUseAllFeatures}
-              onSelectedFeaturesChange={(features) => handleFormDataChange('selected_features', features)}
-            />
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onClose}>
-              取消
-            </Button>
-            <Button
-              color="primary"
-              onPress={handleSubmit}
-              isLoading={creating}
-              startContent={!creating ? <Plus className="w-4 h-4" /> : undefined}
-            >
-              {creating ? '创建中...' : '创建模型'}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <Dialog open={isOpen} onClose={() => setIsOpen(false)} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Plus size={20} />
+            <span>创建新模型</span>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <CreateModelForm
+            formData={formData}
+            errors={errors}
+            useAllFeatures={useAllFeatures}
+            onFormDataChange={handleFormDataChange}
+            onUseAllFeaturesChange={setUseAllFeatures}
+            onSelectedFeaturesChange={(features) => handleFormDataChange('selected_features', features)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsOpen(false)}>取消</Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={creating}
+            startIcon={!creating ? <Plus size={16} /> : undefined}
+          >
+            {creating ? '创建中...' : '创建模型'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 训练报告详情弹窗 */}
       <TrainingReportModal
         isOpen={isTrainingReportOpen}
-        onClose={onTrainingReportClose}
+        onClose={() => setIsTrainingReportOpen(false)}
         modelId={trainingReportModelId}
       />
 
       {/* 删除确认对话框 */}
-      <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose}>
-        <ModalContent>
-          <ModalHeader>
-            <div className="flex items-center space-x-2">
-              <Trash2 className="w-5 h-5 text-danger" />
-              <span>确认删除模型</span>
-            </div>
-          </ModalHeader>
-          <ModalBody>
-            <p>您确定要删除此模型吗？此操作不可撤销。</p>
-            {deletingModelId && (
-              <p className="text-sm text-default-500 mt-2">
-                模型ID: {deletingModelId}
-              </p>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="light"
-              onPress={onDeleteModalClose}
-              isDisabled={deleting}
-            >
-              取消
-            </Button>
-            <Button
-              color="danger"
-              onPress={handleDeleteModel}
-              isLoading={deleting}
-              startContent={!deleting && <Trash2 className="w-4 h-4" />}
-            >
-              {deleting ? '删除中...' : '确认删除'}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <Dialog open={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Trash2 size={20} color="#d32f2f" />
+            <span>确认删除模型</span>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography>您确定要删除此模型吗？此操作不可撤销。</Typography>
+          {deletingModelId && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              模型ID: {deletingModelId}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setIsDeleteModalOpen(false)}
+            disabled={deleting}
+          >
+            取消
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteModel}
+            disabled={deleting}
+            startIcon={!deleting ? <Trash2 size={16} /> : undefined}
+          >
+            {deleting ? '删除中...' : '确认删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 实时训练监控弹窗 */}
       <LiveTrainingModal
         isOpen={isLiveTrainingOpen}
-        onClose={onLiveTrainingClose}
+        onClose={() => setIsLiveTrainingOpen(false)}
         modelId={liveTrainingModelId}
         models={models}
         trainingProgress={trainingProgress}
         getStageText={getStageText}
       />
-    </div>
+    </Box>
   );
 }

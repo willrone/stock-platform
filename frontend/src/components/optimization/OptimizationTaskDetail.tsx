@@ -9,20 +9,22 @@ import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardHeader,
-  CardBody,
+  CardContent,
   Button,
   Chip,
-  Progress,
+  LinearProgress,
   Tabs,
   Tab,
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
-  useDisclosure,
-} from '@heroui/react';
+  Box,
+  Typography,
+  TableContainer,
+  Paper,
+} from '@mui/material';
 import { ArrowLeft, RefreshCw, Save } from 'lucide-react';
 import { OptimizationService, OptimizationStatus, OptimizationResult } from '../../services/optimizationService';
 import { StrategyConfigService } from '../../services/strategyConfigService';
@@ -44,8 +46,11 @@ export default function OptimizationTaskDetail({
   const [task, setTask] = useState<any>(null);
   const [status, setStatus] = useState<OptimizationStatus | null>(null);
   const [result, setResult] = useState<OptimizationResult | null>(null);
-  const { isOpen: isSaveConfigOpen, onOpen: onSaveConfigOpen, onClose: onSaveConfigClose } = useDisclosure();
+  const [isSaveConfigOpen, setIsSaveConfigOpen] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<string>('status');
+  const onSaveConfigOpen = () => setIsSaveConfigOpen(true);
+  const onSaveConfigClose = () => setIsSaveConfigOpen(false);
 
   const loadTask = async () => {
     try {
@@ -121,137 +126,153 @@ export default function OptimizationTaskDetail({
 
   if (!task) {
     return (
-      <div className="text-center py-8">
-        <p className="text-default-500">任务不存在</p>
-        <Button onPress={onBack} className="mt-4">
+      <Box sx={{ textAlign: 'center', py: 4 }}>
+        <Typography variant="body2" color="text.secondary">任务不存在</Typography>
+        <Button onClick={onBack} variant="outlined" sx={{ mt: 2 }}>
           返回列表
         </Button>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button
-            variant="light"
-            isIconOnly
-            onPress={onBack}
+            variant="outlined"
+            onClick={onBack}
+            sx={{ minWidth: 40, px: 1 }}
           >
-            <ArrowLeft />
+            <ArrowLeft size={20} />
           </Button>
-          <div>
-            <h2 className="text-2xl font-bold">{task.task_name}</h2>
-            <p className="text-default-500 text-sm">
+          <Box>
+            <Typography variant="h4" component="h2" sx={{ fontWeight: 600 }}>
+              {task.task_name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
               策略: {task.strategy_name} | 创建时间: {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
-            </p>
-          </div>
-        </div>
+            </Typography>
+          </Box>
+        </Box>
         <Button
-          variant="light"
-          startContent={<RefreshCw size={16} />}
-          onPress={() => {
+          variant="outlined"
+          startIcon={<RefreshCw size={16} />}
+          onClick={() => {
             loadTask();
             loadStatus();
           }}
         >
           刷新
         </Button>
-      </div>
+      </Box>
 
-      <Tabs aria-label="任务详情标签页">
-        <Tab key="status" title="运行状态">
-          <Card className="mt-4">
-            <CardBody>
-              {status && (
-                <OptimizationStatusMonitor
-                  status={status}
-                  task={task}
-                />
-              )}
-            </CardBody>
-          </Card>
-        </Tab>
+      <Box>
+        <Tabs value={selectedTab} onChange={(e, newValue) => setSelectedTab(newValue)} aria-label="任务详情标签页">
+          <Tab label="运行状态" value="status" />
+          <Tab label="优化结果" value="results" disabled={task.status !== 'completed'} />
+        </Tabs>
 
-        <Tab key="results" title="优化结果" isDisabled={task.status !== 'completed'}>
-          <Card className="mt-4">
-            <CardBody>
-              {result ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-3 gap-4">
-                    <Card>
-                      <CardBody>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-success">
-                            {result.best_score?.toFixed(4) || '-'}
-                          </p>
-                          <p className="text-sm text-default-500">最佳得分</p>
-                        </div>
-                      </CardBody>
-                    </Card>
-                    <Card>
-                      <CardBody>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold">
-                            {result.completed_trials} / {result.n_trials}
-                          </p>
-                          <p className="text-sm text-default-500">完成试验数</p>
-                        </div>
-                      </CardBody>
-                    </Card>
-                    <Card>
-                      <CardBody>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold">
-                            {result.optimization_metadata?.duration_seconds
-                              ? `${Math.round(result.optimization_metadata.duration_seconds / 60)} 分钟`
-                              : '-'}
-                          </p>
-                          <p className="text-sm text-default-500">优化耗时</p>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </div>
+        <Box sx={{ mt: 2 }}>
+          {selectedTab === 'status' && (
+            <Card>
+              <CardContent>
+                {status && (
+                  <OptimizationStatusMonitor
+                    status={status}
+                    task={task}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-                  {result.best_params && (
-                    <Card>
-                      <CardHeader className="flex justify-between items-center">
-                        <h3 className="text-lg font-semibold">最佳参数</h3>
-                        <Button
-                          color="primary"
-                          variant="flat"
-                          size="sm"
-                          startContent={<Save className="w-4 h-4" />}
-                          onPress={onSaveConfigOpen}
-                        >
-                          保存为配置
-                        </Button>
-                      </CardHeader>
-                      <CardBody>
-                        <div className="grid grid-cols-2 gap-4">
-                          {Object.entries(result.best_params).map(([key, value]) => (
-                            <div key={key} className="flex justify-between">
-                              <span className="text-default-600">{key}:</span>
-                              <span className="font-medium">{String(value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardBody>
-                    </Card>
-                  )}
+          {selectedTab === 'results' && (
+            <Card>
+              <CardContent>
+                {result ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+                      <Card>
+                        <CardContent>
+                          <Box sx={{ textAlign: 'center' }}>
+                            <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                              {result.best_score?.toFixed(4) || '-'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">最佳得分</Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent>
+                          <Box sx={{ textAlign: 'center' }}>
+                            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                              {result.completed_trials} / {result.n_trials}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">完成试验数</Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent>
+                          <Box sx={{ textAlign: 'center' }}>
+                            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                              {result.optimization_metadata?.duration_seconds
+                                ? `${Math.round(result.optimization_metadata.duration_seconds / 60)} 分钟`
+                                : '-'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">优化耗时</Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Box>
 
-                  <OptimizationVisualization result={result} />
-                </div>
-              ) : (
-                <div className="text-center py-8 text-default-500">
-                  任务尚未完成，暂无结果
-                </div>
-              )}
-            </CardBody>
-          </Card>
-        </Tab>
-      </Tabs>
+                    {result.best_params && (
+                      <Card>
+                        <CardHeader
+                          title={
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                              <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                                最佳参数
+                              </Typography>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Save size={16} />}
+                                onClick={onSaveConfigOpen}
+                              >
+                                保存为配置
+                              </Button>
+                            </Box>
+                          }
+                        />
+                        <CardContent>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                            {Object.entries(result.best_params).map(([key, value]) => (
+                              <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" color="text.secondary">{key}:</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>{String(value)}</Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    <OptimizationVisualization result={result} />
+                  </Box>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      任务尚未完成，暂无结果
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </Box>
+      </Box>
 
       {/* 保存配置对话框 */}
       {result?.best_params && task?.strategy_name && (
@@ -264,7 +285,7 @@ export default function OptimizationTaskDetail({
           loading={savingConfig}
         />
       )}
-    </div>
+    </Box>
   );
 }
 

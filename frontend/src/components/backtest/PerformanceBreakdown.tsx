@@ -6,22 +6,27 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Card,
-  CardBody,
+  CardContent,
   CardHeader,
   Tabs,
   Tab,
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Chip,
   Select,
-  SelectItem,
+  MenuItem,
   Button,
   Tooltip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  TableContainer,
+  Paper,
+} from '@mui/material';
 import * as echarts from 'echarts';
 import { 
   Calendar, 
@@ -105,6 +110,7 @@ export function PerformanceBreakdown({
 }: PerformanceBreakdownProps) {
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMetric, setSelectedMetric] = useState<'return' | 'volatility' | 'sharpe'>('return');
+  const [activeTab, setActiveTab] = useState<string>('heatmap');
   
   // 图表引用
   const heatmapChartRef = useRef<HTMLDivElement>(null);
@@ -509,362 +515,395 @@ export function PerformanceBreakdown({
   if (!monthlyPerformance.length || !yearlyPerformance.length) {
     return (
       <Card>
-        <CardBody className="flex items-center justify-center h-64">
-          <div className="text-center text-gray-500">
-            <Calendar className="w-12 h-12 mx-auto mb-2" />
-            <p>暂无绩效分解数据</p>
-          </div>
-        </CardBody>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Calendar size={48} color="#999" style={{ margin: '0 auto 8px' }} />
+            <Typography variant="body2" color="text.secondary">暂无绩效分解数据</Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 年度统计概览 */}
       {yearlyStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-blue-500" />
-                <div>
-                  <p className="text-sm text-gray-500">平均年化收益</p>
-                  <p className="text-xl font-bold">{formatPercent(yearlyStats.avgReturn)}</p>
-                </div>
-              </div>
-            </CardBody>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingUp size={20} color="#1976d2" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">平均年化收益</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{formatPercent(yearlyStats.avgReturn)}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-purple-500" />
-                <div>
-                  <p className="text-sm text-gray-500">平均波动率</p>
-                  <p className="text-xl font-bold">{formatPercent(yearlyStats.avgVolatility)}</p>
-                </div>
-              </div>
-            </CardBody>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Activity size={20} color="#9c27b0" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">平均波动率</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{formatPercent(yearlyStats.avgVolatility)}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-green-500" />
-                <div>
-                  <p className="text-sm text-gray-500">平均夏普比率</p>
-                  <p className="text-xl font-bold">{formatRatio(yearlyStats.avgSharpe)}</p>
-                </div>
-              </div>
-            </CardBody>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Target size={20} color="#2e7d32" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">平均夏普比率</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{formatRatio(yearlyStats.avgSharpe)}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardBody className="p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-500" />
-                <div>
-                  <p className="text-sm text-gray-500">回测年数</p>
-                  <p className="text-xl font-bold">{yearlyStats.totalYears} 年</p>
-                </div>
-              </div>
-            </CardBody>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Clock size={20} color="#ed6c02" />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">回测年数</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{yearlyStats.totalYears} 年</Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
-        </div>
+        </Box>
       )}
 
       {/* 最佳和最差年份 */}
       {yearlyStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
           <Card>
-            <CardHeader className="pb-2">
-              <h4 className="text-lg font-semibold text-green-600 flex items-center gap-2">
-                <Award className="w-5 h-5" />
-                最佳年份
-              </h4>
-            </CardHeader>
-            <CardBody className="pt-0">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-2xl font-bold">{yearlyStats.bestYear.year}</p>
-                  <p className="text-sm text-gray-500">年化收益率</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-green-600">
+            <CardHeader title={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Award size={20} color="#2e7d32" />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  最佳年份
+                </Typography>
+              </Box>
+            } />
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{yearlyStats.bestYear.year}</Typography>
+                  <Typography variant="caption" color="text.secondary">年化收益率</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
                     {formatPercent(yearlyStats.bestYear.annual_return)}
-                  </p>
-                  <p className="text-sm text-gray-500">
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
                     夏普: {formatRatio(yearlyStats.bestYear.sharpe_ratio)}
-                  </p>
-                </div>
-              </div>
-            </CardBody>
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
           
           <Card>
-            <CardHeader className="pb-2">
-              <h4 className="text-lg font-semibold text-red-600 flex items-center gap-2">
-                <TrendingDown className="w-5 h-5" />
-                最差年份
-              </h4>
-            </CardHeader>
-            <CardBody className="pt-0">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-2xl font-bold">{yearlyStats.worstYear.year}</p>
-                  <p className="text-sm text-gray-500">年化收益率</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-red-600">
+            <CardHeader title={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingDown size={20} color="#d32f2f" />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                  最差年份
+                </Typography>
+              </Box>
+            } />
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{yearlyStats.worstYear.year}</Typography>
+                  <Typography variant="caption" color="text.secondary">年化收益率</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main' }}>
                     {formatPercent(yearlyStats.worstYear.annual_return)}
-                  </p>
-                  <p className="text-sm text-gray-500">
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
                     夏普: {formatRatio(yearlyStats.worstYear.sharpe_ratio)}
-                  </p>
-                </div>
-              </div>
-            </CardBody>
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
           </Card>
-        </div>
+        </Box>
       )}
 
-      <Tabs defaultSelectedKey="heatmap" className="w-full">
-        {/* 月度热力图 */}
-        <Tab key="heatmap" title={
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            月度热力图
-          </div>
-        }>
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">月度表现热力图</h3>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="px-3 py-1 border rounded text-sm"
-                  >
-                    <option value="all">全部</option>
-                    {availableYears.map(year => (
-                      <option key={year} value={year.toString()}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                  
-                  <select
-                    value={selectedMetric}
-                    onChange={(e) => setSelectedMetric(e.target.value as 'return' | 'volatility' | 'sharpe')}
-                    className="px-3 py-1 border rounded text-sm"
-                  >
-                    <option value="return">收益率</option>
-                    <option value="volatility">波动率</option>
-                    <option value="sharpe">夏普比率</option>
-                  </select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardBody>
-              <div ref={heatmapChartRef} style={{ height: '400px', width: '100%' }} />
-            </CardBody>
-          </Card>
-        </Tab>
+      <Box>
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} variant="scrollable" scrollButtons="auto">
+          <Tab label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Calendar size={16} />
+              <span>月度热力图</span>
+            </Box>
+          } value="heatmap" />
+          <Tab label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <BarChart3 size={16} />
+              <span>季节性分析</span>
+            </Box>
+          } value="seasonal" />
+          <Tab label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Target size={16} />
+              <span>年度表现</span>
+            </Box>
+          } value="yearly" />
+          <Tab label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Activity size={16} />
+              <span>基准对比</span>
+            </Box>
+          } value="benchmark" />
+        </Tabs>
 
-        {/* 季节性分析 */}
-        <Tab key="seasonal" title={
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" />
-            季节性分析
-          </div>
-        }>
-          <div className="space-y-6">
-            {/* 季节性图表 */}
+        <Box sx={{ mt: 2 }}>
+          {activeTab === 'heatmap' && (
             <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">月度季节性表现</h3>
-              </CardHeader>
-              <CardBody>
-                <div ref={seasonalChartRef} style={{ height: '400px', width: '100%' }} />
-              </CardBody>
+              <CardHeader
+                title={
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                      月度表现热力图
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel>年份</InputLabel>
+                        <Select
+                          value={selectedYear}
+                          label="年份"
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                        >
+                          <MenuItem value="all">全部</MenuItem>
+                          {availableYears.map(year => (
+                            <MenuItem key={year} value={year.toString()}>
+                              {year}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      
+                      <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel>指标</InputLabel>
+                        <Select
+                          value={selectedMetric}
+                          label="指标"
+                          onChange={(e) => setSelectedMetric(e.target.value as 'return' | 'volatility' | 'sharpe')}
+                        >
+                          <MenuItem value="return">收益率</MenuItem>
+                          <MenuItem value="volatility">波动率</MenuItem>
+                          <MenuItem value="sharpe">夏普比率</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  </Box>
+                }
+              />
+              <CardContent>
+                <Box ref={heatmapChartRef} sx={{ height: 400, width: '100%' }} />
+              </CardContent>
             </Card>
+          )}
 
-            {/* 季度统计 */}
-            {seasonalAnalysis && (
+          {activeTab === 'seasonal' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* 季节性图表 */}
               <Card>
-                <CardHeader>
-                  <h3 className="text-lg font-semibold">季度表现统计</h3>
-                </CardHeader>
-                <CardBody>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {Object.entries(seasonalAnalysis.quarterly_performance).map(([quarter, performance]) => (
-                      <div key={quarter} className="text-center p-4 border rounded-lg">
-                        <p className="text-sm text-gray-500">{quarter.toUpperCase()}</p>
-                        <p className={`text-xl font-bold ${performance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatPercent(performance)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <h4 className="font-medium text-green-800 mb-2">最佳月份</h4>
-                      <div className="flex justify-between items-center">
-                        <span className="text-green-700">
-                          {monthNames[seasonalAnalysis.best_month.month - 1]}
-                        </span>
-                        <span className="font-bold text-green-800">
-                          {formatPercent(seasonalAnalysis.best_month.avg_return)}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="p-4 bg-red-50 rounded-lg">
-                      <h4 className="font-medium text-red-800 mb-2">最差月份</h4>
-                      <div className="flex justify-between items-center">
-                        <span className="text-red-700">
-                          {monthNames[seasonalAnalysis.worst_month.month - 1]}
-                        </span>
-                        <span className="font-bold text-red-800">
-                          {formatPercent(seasonalAnalysis.worst_month.avg_return)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </CardBody>
+                <CardHeader title="月度季节性表现" />
+                <CardContent>
+                  <Box ref={seasonalChartRef} sx={{ height: 400, width: '100%' }} />
+                </CardContent>
               </Card>
-            )}
-          </div>
-        </Tab>
 
-        {/* 年度表现表格 */}
-        <Tab key="yearly" title={
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4" />
-            年度表现
-          </div>
-        }>
-          <Card>
-            <CardHeader>
-              <h3 className="text-lg font-semibold">年度绩效统计</h3>
-            </CardHeader>
-            <CardBody className="p-0">
-              <Table aria-label="年度绩效表格">
-                <TableHeader>
-                  <TableColumn>年份</TableColumn>
-                  <TableColumn>年化收益</TableColumn>
-                  <TableColumn>波动率</TableColumn>
-                  <TableColumn>夏普比率</TableColumn>
-                  <TableColumn>最大回撤</TableColumn>
-                  <TableColumn>卡玛比率</TableColumn>
-                  <TableColumn>胜率</TableColumn>
-                  <TableColumn>交易次数</TableColumn>
-                </TableHeader>
-                <TableBody>
-                  {yearlyPerformance.map((year) => (
-                    <TableRow key={year.year}>
-                      <TableCell>
-                        <span className="font-bold">{year.year}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-mono ${year.annual_return >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatPercent(year.annual_return)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{formatPercent(year.volatility)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{formatRatio(year.sharpe_ratio)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-red-600">
-                          {formatPercent(Math.abs(year.max_drawdown))}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{formatRatio(year.calmar_ratio)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{formatPercent(year.win_rate)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{year.total_trades}</span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardBody>
-          </Card>
-        </Tab>
+              {/* 季度统计 */}
+              {seasonalAnalysis && (
+                <Card>
+                  <CardHeader title="季度表现统计" />
+                  <CardContent>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
+                      {Object.entries(seasonalAnalysis.quarterly_performance).map(([quarter, performance]) => (
+                        <Box key={quarter} sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                          <Typography variant="caption" color="text.secondary">{quarter.toUpperCase()}</Typography>
+                          <Typography variant="h5" sx={{ fontWeight: 600, color: performance >= 0 ? 'success.main' : 'error.main' }}>
+                            {formatPercent(performance)}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                    
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                      <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.dark', mb: 1 }}>
+                          最佳月份
+                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ color: 'success.dark' }}>
+                            {monthNames[seasonalAnalysis.best_month.month - 1]}
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                            {formatPercent(seasonalAnalysis.best_month.avg_return)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      
+                      <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.dark', mb: 1 }}>
+                          最差月份
+                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ color: 'error.dark' }}>
+                            {monthNames[seasonalAnalysis.worst_month.month - 1]}
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.dark' }}>
+                            {formatPercent(seasonalAnalysis.worst_month.avg_return)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )}
+            </Box>
+          )}
 
-        {/* 基准对比 */}
-        <Tab key="benchmark" title={
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4" />
-            基准对比
-          </div>
-        }>
-          <div className="space-y-6">
-            {/* 基准对比图表 */}
+          {activeTab === 'yearly' && (
             <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">策略 vs 基准表现</h3>
-              </CardHeader>
-              <CardBody>
-                <div ref={benchmarkChartRef} style={{ height: '400px', width: '100%' }} />
-              </CardBody>
+              <CardHeader title="年度绩效统计" />
+              <CardContent sx={{ p: 0 }}>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>年份</TableCell>
+                        <TableCell align="right">年化收益</TableCell>
+                        <TableCell align="right">波动率</TableCell>
+                        <TableCell align="right">夏普比率</TableCell>
+                        <TableCell align="right">最大回撤</TableCell>
+                        <TableCell align="right">卡玛比率</TableCell>
+                        <TableCell align="right">胜率</TableCell>
+                        <TableCell align="right">交易次数</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {yearlyPerformance.map((year) => (
+                        <TableRow key={year.year} hover>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{year.year}</Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', color: year.annual_return >= 0 ? 'success.main' : 'error.main' }}>
+                              {formatPercent(year.annual_return)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {formatPercent(year.volatility)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {formatRatio(year.sharpe_ratio)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'error.main' }}>
+                              {formatPercent(Math.abs(year.max_drawdown))}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {formatRatio(year.calmar_ratio)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {formatPercent(year.win_rate)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {year.total_trades}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
             </Card>
+          )}
 
-            {/* 基准对比统计 */}
-            {benchmarkComparison && (
+          {activeTab === 'benchmark' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* 基准对比图表 */}
               <Card>
-                <CardHeader>
-                  <h3 className="text-lg font-semibold">相对基准统计</h3>
-                </CardHeader>
-                <CardBody>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-sm text-gray-500">跟踪误差</p>
-                      <p className="text-xl font-bold">{formatPercent(benchmarkComparison.tracking_error)}</p>
-                    </div>
-                    
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-sm text-gray-500">信息比率</p>
-                      <p className="text-xl font-bold">{formatRatio(benchmarkComparison.information_ratio)}</p>
-                    </div>
-                    
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-sm text-gray-500">Beta系数</p>
-                      <p className="text-xl font-bold">{formatRatio(benchmarkComparison.beta)}</p>
-                    </div>
-                    
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-sm text-gray-500">Alpha系数</p>
-                      <p className={`text-xl font-bold ${benchmarkComparison.alpha >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatPercent(benchmarkComparison.alpha)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-blue-700">相关系数</span>
-                      <span className="font-bold text-blue-800">
-                        {formatRatio(benchmarkComparison.correlation)}
-                      </span>
-                    </div>
-                  </div>
-                </CardBody>
+                <CardHeader title="策略 vs 基准表现" />
+                <CardContent>
+                  <Box ref={benchmarkChartRef} sx={{ height: 400, width: '100%' }} />
+                </CardContent>
               </Card>
-            )}
-          </div>
-        </Tab>
-      </Tabs>
-    </div>
+
+              {/* 基准对比统计 */}
+              {benchmarkComparison && (
+                <Card>
+                  <CardHeader title="相对基准统计" />
+                  <CardContent>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 2 }}>
+                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">跟踪误差</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                          {formatPercent(benchmarkComparison.tracking_error)}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">信息比率</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                          {formatRatio(benchmarkComparison.information_ratio)}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Beta系数</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                          {formatRatio(benchmarkComparison.beta)}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Alpha系数</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 600, color: benchmarkComparison.alpha >= 0 ? 'success.main' : 'error.main' }}>
+                          {formatPercent(benchmarkComparison.alpha)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ color: 'primary.dark' }}>相关系数</Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.dark' }}>
+                          {formatRatio(benchmarkComparison.correlation)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )}
+            </Box>
+          )}
+        </Box>
+      </Box>
+    </Box>
   );
 }
