@@ -232,6 +232,35 @@ export interface TradeStatistics {
   total_pnl: number;
 }
 
+// 信号记录接口
+export interface SignalRecord {
+  id: number;
+  task_id: string;
+  backtest_id: string;
+  signal_id: string;
+  stock_code: string;
+  stock_name?: string;
+  signal_type: 'BUY' | 'SELL';
+  timestamp: string;
+  price: number;
+  strength: number;
+  reason?: string;
+  metadata?: Record<string, any>;
+  executed: boolean;
+  created_at: string;
+}
+
+// 信号统计接口
+export interface SignalStatistics {
+  total_signals: number;
+  buy_signals: number;
+  sell_signals: number;
+  executed_signals: number;
+  unexecuted_signals: number;
+  execution_rate: number;
+  avg_strength: number;
+}
+
 // 基准数据接口
 export interface BenchmarkData {
   id: number;
@@ -333,6 +362,53 @@ export class BacktestService {
    */
   static async getTradeStatistics(taskId: string): Promise<TradeStatistics> {
     return apiRequest.get<TradeStatistics>(`/backtest-detailed/${taskId}/trade-statistics`);
+  }
+
+  /**
+   * 获取信号记录
+   */
+  static async getSignalRecords(
+    taskId: string,
+    options: {
+      stockCode?: string;
+      signalType?: 'BUY' | 'SELL';
+      startDate?: string;
+      endDate?: string;
+      executed?: boolean;
+      offset?: number;
+      limit?: number;
+      orderBy?: string;
+      orderDesc?: boolean;
+    } = {}
+  ): Promise<{
+    signals: SignalRecord[];
+    pagination: {
+      offset: number;
+      limit: number;
+      count: number;
+    };
+  }> {
+    const params: any = {
+      offset: options.offset || 0,
+      limit: options.limit || 50,
+      order_by: options.orderBy || 'timestamp',
+      order_desc: options.orderDesc !== false,
+    };
+
+    if (options.stockCode) params.stock_code = options.stockCode;
+    if (options.signalType) params.signal_type = options.signalType;
+    if (options.startDate) params.start_date = options.startDate;
+    if (options.endDate) params.end_date = options.endDate;
+    if (options.executed !== undefined) params.executed = options.executed;
+
+    return apiRequest.get(`/backtest-detailed/${taskId}/signal-records`, params);
+  }
+
+  /**
+   * 获取信号统计信息
+   */
+  static async getSignalStatistics(taskId: string): Promise<SignalStatistics> {
+    return apiRequest.get<SignalStatistics>(`/backtest-detailed/${taskId}/signal-statistics`);
   }
 
   /**

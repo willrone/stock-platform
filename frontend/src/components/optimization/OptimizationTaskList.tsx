@@ -120,7 +120,7 @@ export default function OptimizationTaskList({
                     <Box sx={{ width: 96 }}>
                       <LinearProgress
                         variant="determinate"
-                        value={task.progress}
+                        value={task.progress ?? 0}
                         color={task.status === 'failed' ? 'error' : 'primary'}
                         sx={{ height: 6, borderRadius: 3 }}
                       />
@@ -129,18 +129,18 @@ export default function OptimizationTaskList({
                   <TableCell>
                     {task.status === 'completed' ? (
                       <Typography variant="body2">
-                        {task.n_trials} / {task.n_trials}
+                        {task.n_trials ?? 0} / {task.n_trials ?? 0}
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
-                        - / {task.n_trials}
+                        - / {task.n_trials ?? 0}
                       </Typography>
                     )}
                   </TableCell>
                   <TableCell>
-                    {task.best_score !== undefined ? (
+                    {task.best_score !== undefined && task.best_score !== null ? (
                       <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                        {task.best_score.toFixed(4)}
+                        {typeof task.best_score === 'number' ? task.best_score.toFixed(4) : String(task.best_score)}
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary">

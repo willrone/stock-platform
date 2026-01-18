@@ -206,6 +206,94 @@ async def get_trade_statistics(
         raise HTTPException(status_code=500, detail=f"获取交易统计失败: {str(e)}")
 
 
+@router.get("/{task_id}/signal-records", response_model=StandardResponse)
+async def get_signal_records(
+    task_id: str,
+    stock_code: Optional[str] = Query(None, description="股票代码筛选"),
+    signal_type: Optional[str] = Query(None, description="信号类型筛选 (BUY/SELL)"),
+    start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    executed: Optional[bool] = Query(None, description="是否已执行筛选"),
+    offset: int = Query(0, description="偏移量"),
+    limit: int = Query(50, description="返回记录数限制"),
+    order_by: str = Query("timestamp", description="排序字段"),
+    order_desc: bool = Query(True, description="是否降序排列"),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """获取信号记录"""
+    try:
+        repository = BacktestDetailedRepository(session)
+        
+        # 解析日期参数
+        start_dt = datetime.fromisoformat(start_date) if start_date else None
+        end_dt = datetime.fromisoformat(end_date) if end_date else None
+        
+        signals = await repository.get_signal_records(
+            task_id=task_id,
+            stock_code=stock_code,
+            signal_type=signal_type,
+            start_date=start_dt,
+            end_date=end_dt,
+            executed=executed,
+            offset=offset,
+            limit=limit,
+            order_by=order_by,
+            order_desc=order_desc
+        )
+        
+        # 获取总记录数
+        total_count = await repository.get_signal_records_count(
+            task_id=task_id,
+            stock_code=stock_code,
+            signal_type=signal_type,
+            start_date=start_dt,
+            end_date=end_dt,
+            executed=executed
+        )
+        
+        signals_data = [signal.to_dict() for signal in signals]
+        
+        return StandardResponse(
+            success=True,
+            message=f"获取信号记录成功，共{total_count}条记录",
+            data={
+                "signals": signals_data,
+                "pagination": {
+                    "offset": offset,
+                    "limit": limit,
+                    "count": total_count
+                }
+            }
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
+    except Exception as e:
+        logger.error(f"获取信号记录失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取信号记录失败: {str(e)}")
+
+
+@router.get("/{task_id}/signal-statistics", response_model=StandardResponse)
+async def get_signal_statistics(
+    task_id: str,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """获取信号统计信息"""
+    try:
+        repository = BacktestDetailedRepository(session)
+        stats = await repository.get_signal_statistics(task_id)
+        
+        return StandardResponse(
+            success=True,
+            message="获取信号统计成功",
+            data=stats
+        )
+        
+    except Exception as e:
+        logger.error(f"获取信号统计失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取信号统计失败: {str(e)}")
+
+
 @router.get("/{task_id}/benchmark-data", response_model=StandardResponse)
 async def get_benchmark_data(
     task_id: str,

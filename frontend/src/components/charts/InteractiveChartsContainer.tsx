@@ -34,7 +34,7 @@ import {
 import EquityCurveChart from './EquityCurveChart';
 import DrawdownChart from './DrawdownChart';
 import MonthlyHeatmapChart from './MonthlyHeatmapChart';
-import { BacktestService, TradeRecord } from '../../services/backtestService';
+import { BacktestService, TradeRecord, SignalRecord } from '../../services/backtestService';
 import TradingViewChart from './TradingViewChart';
 
 interface InteractiveChartsContainerProps {
@@ -86,7 +86,9 @@ export default function InteractiveChartsContainer({
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('equity');
   const [tradeRecords, setTradeRecords] = useState<TradeRecord[]>([]);
+  const [signalRecords, setSignalRecords] = useState<SignalRecord[]>([]);
   const [tradeLoading, setTradeLoading] = useState(false);
+  const [signalLoading, setSignalLoading] = useState(false);
   const [selectedStock, setSelectedStock] = useState<string>('');
 
   // 加载图表数据
@@ -281,6 +283,7 @@ export default function InteractiveChartsContainer({
   useEffect(() => {
     if (!taskId || !selectedStock) {
       setTradeRecords([]);
+      setSignalRecords([]);
       return;
     }
 
@@ -302,7 +305,26 @@ export default function InteractiveChartsContainer({
       }
     };
 
+    const fetchSignals = async () => {
+      try {
+        setSignalLoading(true);
+        const signalsResponse = await BacktestService.getSignalRecords(taskId, {
+          stockCode: selectedStock,
+          limit: 1000,
+          orderBy: 'timestamp',
+          orderDesc: false,
+        });
+        setSignalRecords(signalsResponse.signals);
+      } catch (signalError) {
+        console.warn('[InteractiveChartsContainer] 无法加载信号记录:', signalError);
+        setSignalRecords([]);
+      } finally {
+        setSignalLoading(false);
+      }
+    };
+
     fetchTrades();
+    fetchSignals();
   }, [taskId, selectedStock]);
 
   // 刷新数据
@@ -464,6 +486,7 @@ export default function InteractiveChartsContainer({
                       return endDate;
                     })()}
                     trades={tradeRecords}
+                    signals={signalRecords}
                     height={420}
                   />
                 ) : (

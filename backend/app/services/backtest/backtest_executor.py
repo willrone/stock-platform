@@ -282,7 +282,7 @@ class BacktestExecutor:
                 )
             
             backtest_results = await self._execute_backtest_loop(
-                strategy, portfolio_manager, stock_data, trading_dates, task_id
+                strategy, portfolio_manager, stock_data, trading_dates, task_id, backtest_id
             )
             
             if task_id:
@@ -366,7 +366,8 @@ class BacktestExecutor:
                              portfolio_manager: PortfolioManager,
                              stock_data: Dict[str, pd.DataFrame],
                              trading_dates: List[datetime],
-                             task_id: str = None) -> Dict[str, Any]:
+                             task_id: str = None,
+                             backtest_id: str = None) -> Dict[str, Any]:
         """执行回测主循环"""
         total_signals = 0
         executed_trades = 0
@@ -429,8 +430,54 @@ class BacktestExecutor:
                 
                 total_signals += len(all_signals)
                 
+                # 保存信号记录到数据库
+                if task_id and all_signals:
+                    try:
+                        from app.core.database import get_async_session
+                        from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
+                        import uuid
+                        
+                        # 使用传入的backtest_id或生成一个
+                        current_backtest_id = backtest_id or (f"bt_{task_id[:8]}" if task_id else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                        
+                        # 批量保存信号记录
+                        signals_data = []
+                        for signal in all_signals:
+                            signal_data = {
+                                'signal_id': f"sig_{uuid.uuid4().hex[:12]}",
+                                'stock_code': signal.stock_code,
+                                'stock_name': None,  # 可以从股票数据中获取
+                                'signal_type': signal.signal_type.name,
+                                'timestamp': signal.timestamp,
+                                'price': signal.price,
+                                'strength': signal.strength,
+                                'reason': signal.reason,
+                                'metadata': signal.metadata,
+                                'executed': False
+                            }
+                            signals_data.append(signal_data)
+                        
+                        # 异步保存信号记录
+                        async for session in get_async_session():
+                            try:
+                                repository = BacktestDetailedRepository(session)
+                                await repository.batch_save_signal_records(
+                                    task_id=task_id,
+                                    backtest_id=current_backtest_id,
+                                    signals_data=signals_data
+                                )
+                                await session.commit()
+                                break
+                            except Exception as e:
+                                await session.rollback()
+                                logger.warning(f"保存信号记录失败: {e}")
+                                break
+                    except Exception as e:
+                        logger.warning(f"保存信号记录时出错: {e}")
+                
                 # 执行交易信号
                 trades_this_day = 0
+                executed_trade_signals = []  # 记录已执行的交易对应的信号
                 for signal in all_signals:
                     if strategy.validate_signal(signal, 
                                               portfolio_manager.get_portfolio_value(current_prices),
@@ -439,6 +486,37 @@ class BacktestExecutor:
                         if trade:
                             executed_trades += 1
                             trades_this_day += 1
+                            # 记录已执行的信号，用于后续标记
+                            executed_trade_signals.append({
+                                'stock_code': signal.stock_code,
+                                'timestamp': signal.timestamp,
+                                'signal_type': signal.signal_type.name
+                            })
+                
+                # 标记已执行的信号
+                if task_id and executed_trade_signals:
+                    try:
+                        from app.core.database import get_async_session
+                        from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
+                        
+                        async for session in get_async_session():
+                            try:
+                                repository = BacktestDetailedRepository(session)
+                                for executed_signal in executed_trade_signals:
+                                    await repository.mark_signal_as_executed(
+                                        task_id=task_id,
+                                        stock_code=executed_signal['stock_code'],
+                                        timestamp=executed_signal['timestamp'],
+                                        signal_type=executed_signal['signal_type']
+                                    )
+                                await session.commit()
+                                break
+                            except Exception as e:
+                                await session.rollback()
+                                logger.warning(f"标记信号为已执行失败: {e}")
+                                break
+                    except Exception as e:
+                        logger.warning(f"标记信号为已执行时出错: {e}")
                 
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(current_date, current_prices)

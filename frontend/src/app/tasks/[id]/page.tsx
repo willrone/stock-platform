@@ -72,6 +72,7 @@ import { CostAnalysis } from '../../../components/backtest/CostAnalysis';
 import BacktestTaskStatus from '../../../components/backtest/BacktestTaskStatus';
 import BacktestProgressMonitor from '../../../components/backtest/BacktestProgressMonitor';
 import { TradeHistoryTable } from '../../../components/backtest/TradeHistoryTable';
+import { SignalHistoryTable } from '../../../components/backtest/SignalHistoryTable';
 import { PositionAnalysis } from '../../../components/backtest/PositionAnalysis';
 import { RiskAnalysis } from '../../../components/backtest/RiskAnalysis';
 import { PerformanceBreakdown } from '../../../components/backtest/PerformanceBreakdown';
@@ -682,6 +683,12 @@ export default function TaskDetailPage() {
                     } value="trades" />
                     <Tab label={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <AlertTriangle size={16} />
+                        <span>信号记录</span>
+                      </Box>
+                    } value="signals" />
+                    <Tab label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <PieChart size={16} />
                         <span>持仓分析</span>
                       </Box>
@@ -795,6 +802,17 @@ export default function TaskDetailPage() {
                           taskId={taskId}
                           onTradeClick={(trade) => {
                             console.log('查看交易详情:', trade);
+                          }}
+                        />
+                      </Box>
+                    )}
+
+                    {selectedBacktestTab === 'signals' && (
+                      <Box sx={{ mt: 2 }}>
+                        <SignalHistoryTable 
+                          taskId={taskId}
+                          onSignalClick={(signal) => {
+                            console.log('查看信号详情:', signal);
                           }}
                         />
                       </Box>
