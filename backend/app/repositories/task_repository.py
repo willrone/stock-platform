@@ -210,10 +210,11 @@ class TaskRepository:
         try:
             task = self.get_task_by_id(task_id)
             if not task:
+                logger.warning(f"任务不存在: {task_id}")
                 return False
             
-            # 验证用户权限
-            if task.user_id != user_id:
+            # 验证用户权限（强制模式下跳过权限检查）
+            if not force and task.user_id != user_id:
                 raise TaskError(
                     message="无权限删除此任务",
                     severity=ErrorSeverity.MEDIUM,
@@ -241,7 +242,7 @@ class TaskRepository:
                 if task.status not in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value]:
                     if not is_zombie_task:
                         raise TaskError(
-                            message="该任务正在运行中，请使用强制删除或等待任务完成",
+                            message=f"该任务正在运行中（状态: {task.status}），请使用强制删除（force=true）或等待任务完成",
                             severity=ErrorSeverity.MEDIUM,
                             context=ErrorContext(task_id=task_id)
                         )
@@ -250,6 +251,44 @@ class TaskRepository:
             else:
                 logger.info(f"强制删除任务: {task_id}, 原状态: {task.status}")
             
+            # 先删除相关的详细数据（如果有的话）
+            # 使用同步方式删除，避免异步调用复杂性
+            try:
+                from app.models.backtest_detailed_models import (
+                    BacktestDetailedResult, PortfolioSnapshot, 
+                    TradeRecord, BacktestBenchmark
+                )
+                from sqlalchemy import delete as sql_delete
+                
+                # 删除各个详细数据表中的数据
+                related_tables = [
+                    (BacktestDetailedResult, "回测详细结果"),
+                    (PortfolioSnapshot, "组合快照"),
+                    (TradeRecord, "交易记录"),
+                    (BacktestBenchmark, "基准数据")
+                ]
+                
+                total_deleted = 0
+                for model_class, table_name in related_tables:
+                    try:
+                        stmt = sql_delete(model_class).where(model_class.task_id == task_id)
+                        result = self.db.execute(stmt)
+                        deleted_count = result.rowcount
+                        if deleted_count > 0:
+                            logger.info(f"删除{table_name}: {deleted_count}条记录")
+                            total_deleted += deleted_count
+                    except Exception as e:
+                        # 表可能不存在，忽略错误
+                        logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
+                
+                if total_deleted > 0:
+                    logger.info(f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录")
+                    self.db.flush()  # 刷新但先不提交，等主任务删除一起提交
+            except Exception as e:
+                # 删除详细数据失败不影响主任务删除
+                logger.warning(f"删除任务详细数据时出错（继续删除主任务）: {e}")
+            
+            # 删除主任务
             self.db.delete(task)
             self.db.commit()
             
@@ -268,12 +307,23 @@ class TaskRepository:
             raise
         except Exception as e:
             self.db.rollback()
-            raise TaskError(
-                message=f"删除任务失败: {str(e)}",
-                severity=ErrorSeverity.HIGH,
-                context=ErrorContext(task_id=task_id, user_id=user_id),
-                original_exception=e
-            )
+            error_msg = str(e)
+            # 检查是否是数据库约束错误
+            if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
+                logger.error(f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}")
+                raise TaskError(
+                    message=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除。错误详情: {error_msg}",
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(task_id=task_id, user_id=user_id),
+                    original_exception=e
+                )
+            else:
+                raise TaskError(
+                    message=f"删除任务失败: {error_msg}",
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(task_id=task_id, user_id=user_id),
+                    original_exception=e
+                )
     
     def get_task_statistics(self, user_id: Optional[str] = None, 
                            days: int = 30) -> Dict[str, Any]:

@@ -13,6 +13,7 @@ from app.api.v1.schemas import StandardResponse, TaskCreateRequest, BacktestComp
 from app.core.database import SessionLocal
 from app.repositories.task_repository import TaskRepository, PredictionResultRepository
 from app.models.task_models import TaskStatus, TaskType
+from app.core.error_handler import TaskError
 from app.api.v1.dependencies import execute_prediction_task_simple, execute_backtest_task_simple
 from app.services.tasks.task_monitor import task_monitor
 from app.services.tasks.process_executor import get_process_executor
@@ -710,26 +711,61 @@ async def delete_task(task_id: str, force: bool = Query(False, description="是�
     session = SessionLocal()
     try:
         task_repository = TaskRepository(session)
-        success = task_repository.delete_task(
-            task_id=task_id,
-            user_id="default_user",
-            force=force
-        )
         
-        if not success:
-            raise HTTPException(status_code=404, detail=f"任务不存在或无法删除: {task_id}")
-        
-        return StandardResponse(
-            success=True,
-            message="任务删除成功",
-            data={"task_id": task_id, "force": force}
-        )
+        try:
+            success = task_repository.delete_task(
+                task_id=task_id,
+                user_id="default_user",
+                force=force
+            )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"任务不存在: {task_id}"
+                )
+            
+            return StandardResponse(
+                success=True,
+                message="任务删除成功",
+                data={"task_id": task_id, "force": force}
+            )
+            
+        except TaskError as e:
+            # TaskError 包含更详细的错误信息
+            error_message = e.message
+            if "正在运行中" in error_message or "无权限" in error_message:
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_message
+                )
+            elif "数据库约束" in error_message or "关联数据" in error_message:
+                raise HTTPException(
+                    status_code=409,  # Conflict
+                    detail=error_message
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=error_message
+                )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"删除任务失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"删除任务失败: {str(e)}")
+        error_msg = str(e)
+        # 检查是否是数据库约束错误
+        if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
+            raise HTTPException(
+                status_code=409,
+                detail=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"删除任务失败: {error_msg}"
+            )
     finally:
         session.close()
 
