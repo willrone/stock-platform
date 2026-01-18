@@ -612,7 +612,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
     if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
     
     // 如果不在持仓权重Tab，不初始化
-    if (selectedTab !== 'weights') return;
+    if (selectedTab !== 'weight') return;
 
     const initChart = () => {
       if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
@@ -693,7 +693,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
     if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
     
     // 如果不在交易模式Tab，不初始化
-    if (selectedTab !== 'trading-patterns') return;
+    if (selectedTab !== 'trading') return;
 
     const initChart = () => {
       if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
@@ -772,7 +772,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
     if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
     
     // 如果不在持仓时间Tab，不初始化
-    if (selectedTab !== 'holding-periods') return;
+    if (selectedTab !== 'holding') return;
 
     const initChart = () => {
       if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
@@ -900,7 +900,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
     if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) return;
     
     // 如果不在资金分配Tab，不初始化
-    if (selectedTab !== 'capital-allocation') return;
+    if (selectedTab !== 'capital') return;
 
     const initChart = () => {
       if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) return;
@@ -1260,7 +1260,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               </Box>
             } value="holding" />
           )}
-          {portfolioSnapshots.length > 0 && (
+          {taskId && (
             <Tab label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <DollarSign size={16} />

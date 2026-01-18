@@ -4,6 +4,7 @@
 
 from pathlib import Path
 from typing import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -52,7 +53,17 @@ SessionLocal = sessionmaker(
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """获取异步数据库会话"""
+    """获取异步数据库会话（异步生成器，用于依赖注入）"""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+@asynccontextmanager
+async def get_async_session_context() -> AsyncGenerator[AsyncSession, None]:
+    """获取异步数据库会话（异步上下文管理器，用于直接使用）"""
     async with AsyncSessionLocal() as session:
         try:
             yield session

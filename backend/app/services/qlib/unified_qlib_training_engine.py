@@ -27,8 +27,40 @@ try:
     from qlib.data.filter import NameDFilter, ExpressionDFilter
     from qlib.utils import init_instance_by_config
     QLIB_AVAILABLE = True
-except ImportError:
-    logger.warning("Qlib未安装，某些功能将不可用")
+    logger.info("Qlib库已成功导入")
+except ImportError as e:
+    error_msg = str(e)
+    missing_module = None
+    
+    # 检测缺失的模块
+    if "setuptools_scm" in error_msg:
+        missing_module = "setuptools_scm"
+    elif "ruamel" in error_msg or "ruamel.yaml" in error_msg:
+        missing_module = "ruamel.yaml"
+    elif "cvxpy" in error_msg:
+        missing_module = "cvxpy"
+    elif "lightgbm" in error_msg:
+        missing_module = "lightgbm"
+    
+    if missing_module:
+        logger.warning(
+            f"Qlib缺少依赖 {missing_module}。导入错误: {e}\n"
+            f"解决方法: pip install {missing_module}\n"
+            f"如果还有其他依赖缺失，请运行修复脚本: ./fix_qlib_dependencies.sh\n"
+            f"或手动安装所有依赖: pip install setuptools_scm cvxpy dill fire gym jupyter lightgbm matplotlib mlflow nbconvert pymongo python-redis-lock redis 'ruamel.yaml>=0.17.38'\n"
+            f"详细说明: 查看 backend/QLIB_INSTALLATION.md"
+        )
+    else:
+        logger.warning(
+            f"Qlib未安装或缺少依赖。导入错误: {e}\n"
+            f"安装方法: pip install git+https://github.com/microsoft/qlib.git\n"
+            f"或使用 Gitee 镜像: pip install git+https://gitee.com/mirrors/qlib.git\n"
+            f"如果已安装但缺少依赖，请运行: ./fix_qlib_dependencies.sh\n"
+            f"详细说明: 查看 backend/QLIB_INSTALLATION.md"
+        )
+    QLIB_AVAILABLE = False
+except Exception as e:
+    logger.error(f"Qlib导入时发生未知错误: {e}")
     QLIB_AVAILABLE = False
 
 from .enhanced_qlib_provider import EnhancedQlibDataProvider
@@ -184,6 +216,25 @@ class UnifiedQlibTrainingEngine:
         start_time = datetime.now()
         
         try:
+            # 0. 检查Qlib是否可用
+            if not QLIB_AVAILABLE:
+                error_msg = (
+                    "Qlib库未安装，无法进行模型训练。\n\n"
+                    "请按照以下步骤安装Qlib：\n"
+                    "1. 激活虚拟环境：\n"
+                    "   cd backend\n"
+                    "   source venv/bin/activate\n\n"
+                    "2. 安装Qlib：\n"
+                    "   pip install git+https://github.com/microsoft/qlib.git\n\n"
+                    "3. 验证安装：\n"
+                    "   python -c \"import qlib; print('Qlib安装成功！')\"\n\n"
+                    "详细安装说明请查看：backend/QLIB_INSTALLATION.md"
+                )
+                logger.error(error_msg)
+                if progress_callback:
+                    await progress_callback(model_id, 0.0, "failed", error_msg)
+                raise RuntimeError(error_msg)
+            
             # 1. 初始化Qlib环境
             if progress_callback:
                 await progress_callback(model_id, 5.0, "initializing", "初始化Qlib环境")
@@ -381,7 +432,14 @@ class UnifiedQlibTrainingEngine:
     ) -> Tuple[Any, Any]:
         """准备训练和验证数据集，返回qlib DatasetH对象"""
         if not QLIB_AVAILABLE:
-            raise RuntimeError("Qlib不可用，无法准备数据集")
+            error_msg = (
+                "Qlib不可用，无法准备数据集。\n"
+                "请安装Qlib库：\n"
+                "  pip install git+https://github.com/microsoft/qlib.git\n"
+                "或者查看安装文档：backend/QLIB_INSTALLATION.md"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
         
         # 按时间分割数据（时间序列数据不能随机分割）
         if isinstance(dataset.index, pd.MultiIndex):

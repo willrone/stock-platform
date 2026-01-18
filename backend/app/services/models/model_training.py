@@ -49,8 +49,26 @@ try:
     from qlib.data.filter import NameDFilter, ExpressionDFilter
     from qlib.utils import init_instance_by_config
     QLIB_AVAILABLE = True
-except ImportError:
-    logger.warning("Qlib未安装，某些功能将不可用")
+except ImportError as e:
+    error_msg = str(e)
+    missing_module = None
+    
+    # 检测缺失的模块
+    if "setuptools_scm" in error_msg:
+        missing_module = "setuptools_scm"
+    elif "ruamel" in error_msg or "ruamel.yaml" in error_msg:
+        missing_module = "ruamel.yaml"
+    elif "cvxpy" in error_msg:
+        missing_module = "cvxpy"
+    
+    if missing_module:
+        logger.warning(
+            f"Qlib缺少依赖 {missing_module}: {e}\n"
+            f"解决方法: pip install {missing_module}\n"
+            f"或运行修复脚本: ./fix_qlib_dependencies.sh"
+        )
+    else:
+        logger.warning(f"Qlib未安装，某些功能将不可用: {e}")
     QLIB_AVAILABLE = False
 
 # 导入其他依赖

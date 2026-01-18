@@ -433,7 +433,7 @@ class BacktestExecutor:
                 # 保存信号记录到数据库
                 if task_id and all_signals:
                     try:
-                        from app.core.database import get_async_session
+                        from app.core.database import get_async_session_context
                         from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
                         import uuid
                         
@@ -458,7 +458,7 @@ class BacktestExecutor:
                             signals_data.append(signal_data)
                         
                         # 异步保存信号记录
-                        async for session in get_async_session():
+                        async with get_async_session_context() as session:
                             try:
                                 repository = BacktestDetailedRepository(session)
                                 await repository.batch_save_signal_records(
@@ -467,11 +467,9 @@ class BacktestExecutor:
                                     signals_data=signals_data
                                 )
                                 await session.commit()
-                                break
                             except Exception as e:
                                 await session.rollback()
                                 logger.warning(f"保存信号记录失败: {e}")
-                                break
                     except Exception as e:
                         logger.warning(f"保存信号记录时出错: {e}")
                 
@@ -496,10 +494,10 @@ class BacktestExecutor:
                 # 标记已执行的信号
                 if task_id and executed_trade_signals:
                     try:
-                        from app.core.database import get_async_session
+                        from app.core.database import get_async_session_context
                         from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
                         
-                        async for session in get_async_session():
+                        async with get_async_session_context() as session:
                             try:
                                 repository = BacktestDetailedRepository(session)
                                 for executed_signal in executed_trade_signals:
@@ -510,11 +508,9 @@ class BacktestExecutor:
                                         signal_type=executed_signal['signal_type']
                                     )
                                 await session.commit()
-                                break
                             except Exception as e:
                                 await session.rollback()
                                 logger.warning(f"标记信号为已执行失败: {e}")
-                                break
                     except Exception as e:
                         logger.warning(f"标记信号为已执行时出错: {e}")
                 

@@ -10,14 +10,6 @@ from dataclasses import dataclass
 from loguru import logger
 from app.core.error_handler import DataError, ErrorSeverity, ErrorContext
 
-# 使用pandas-ta进行技术指标计算
-try:
-    import pandas_ta as ta
-    PANDAS_TA_AVAILABLE = True
-except ImportError:
-    PANDAS_TA_AVAILABLE = False
-    logger.warning("pandas-ta未安装，将使用基础pandas实现计算技术指标")
-
 
 @dataclass
 class FeatureConfig:
@@ -45,32 +37,16 @@ class TechnicalIndicators:
     @staticmethod
     def calculate_rsi(prices: pd.Series, window: int = 14) -> pd.Series:
         """相对强弱指数"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'close': prices})
-            rsi = df.ta.rsi(length=window)
-            return rsi if rsi is not None else pd.Series(index=prices.index, dtype=float)
-        else:
-            # 基础实现：使用pandas计算RSI
-            delta = prices.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            return rsi
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
     
     @staticmethod
     def calculate_macd(prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict[str, pd.Series]:
         """MACD指标"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'close': prices})
-            macd_df = df.ta.macd(fast=fast, slow=slow, signal=signal)
-            if macd_df is not None and not macd_df.empty:
-                return {
-                    'macd': macd_df.get(f'MACD_{fast}_{slow}_{signal}', pd.Series(index=prices.index, dtype=float)),
-                    'macd_signal': macd_df.get(f'MACDs_{fast}_{slow}_{signal}', pd.Series(index=prices.index, dtype=float)),
-                    'macd_hist': macd_df.get(f'MACDh_{fast}_{slow}_{signal}', pd.Series(index=prices.index, dtype=float))
-                }
-        # 基础实现：使用pandas计算MACD
         ema_fast = prices.ewm(span=fast).mean()
         ema_slow = prices.ewm(span=slow).mean()
         macd = ema_fast - ema_slow
@@ -85,16 +61,6 @@ class TechnicalIndicators:
     @staticmethod
     def calculate_bollinger_bands(prices: pd.Series, window: int = 20, std_dev: int = 2) -> Dict[str, pd.Series]:
         """布林带"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'close': prices})
-            bb_df = df.ta.bbands(length=window, std=std_dev)
-            if bb_df is not None and not bb_df.empty:
-                return {
-                    'bb_upper': bb_df.get(f'BBU_{window}_{std_dev}.0', pd.Series(index=prices.index, dtype=float)),
-                    'bb_middle': bb_df.get(f'BBM_{window}_{std_dev}.0', pd.Series(index=prices.index, dtype=float)),
-                    'bb_lower': bb_df.get(f'BBL_{window}_{std_dev}.0', pd.Series(index=prices.index, dtype=float))
-                }
-        # 基础实现：使用pandas计算布林带
         middle = prices.rolling(window=window).mean()
         std = prices.rolling(window=window).std()
         upper = middle + (std * std_dev)
@@ -109,18 +75,6 @@ class TechnicalIndicators:
     def calculate_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, 
                            k_period: int = 14, d_period: int = 3) -> Dict[str, pd.Series]:
         """随机指标"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'high': high, 'low': low, 'close': close})
-            stoch_df = df.ta.stoch(k=k_period, d=d_period)
-            if stoch_df is not None and not stoch_df.empty:
-                # pandas-ta返回的列名可能是STOCHk_14_3_3或类似格式
-                k_col = [col for col in stoch_df.columns if 'STOCHk' in col or 'k' in col.lower()]
-                d_col = [col for col in stoch_df.columns if 'STOCHd' in col or 'd' in col.lower()]
-                return {
-                    'stoch_k': stoch_df[k_col[0]] if k_col else pd.Series(index=close.index, dtype=float),
-                    'stoch_d': stoch_df[d_col[0]] if d_col else pd.Series(index=close.index, dtype=float)
-                }
-        # 基础实现：使用pandas计算随机指标
         lowest_low = low.rolling(window=k_period).min()
         highest_high = high.rolling(window=k_period).max()
         stoch_k = 100 * ((close - lowest_low) / (highest_high - lowest_low))
@@ -133,71 +87,43 @@ class TechnicalIndicators:
     @staticmethod
     def calculate_atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
         """平均真实波幅"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'high': high, 'low': low, 'close': close})
-            atr = df.ta.atr(length=window)
-            return atr if atr is not None else pd.Series(index=close.index, dtype=float)
-        else:
-            # 基础实现：使用pandas计算ATR
-            high_low = high - low
-            high_close = np.abs(high - close.shift())
-            low_close = np.abs(low - close.shift())
-            tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-            atr = tr.rolling(window=window).mean()
-            return atr
+        high_low = high - low
+        high_close = np.abs(high - close.shift())
+        low_close = np.abs(low - close.shift())
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = tr.rolling(window=window).mean()
+        return atr
     
     @staticmethod
     def calculate_adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
         """平均方向性指数"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'high': high, 'low': low, 'close': close})
-            adx = df.ta.adx(length=window)
-            # pandas-ta返回的可能是DataFrame，需要提取ADX列
-            if isinstance(adx, pd.DataFrame):
-                adx_col = [col for col in adx.columns if 'ADX' in col.upper()]
-                return adx[adx_col[0]] if adx_col else pd.Series(index=close.index, dtype=float)
-            return adx if adx is not None else pd.Series(index=close.index, dtype=float)
-        else:
-            # 基础实现：简化版ADX
-            atr = TechnicalIndicators.calculate_atr(high, low, close, window)
-            plus_dm = high.diff()
-            minus_dm = -low.diff()
-            plus_dm[plus_dm < 0] = 0
-            minus_dm[minus_dm < 0] = 0
-            plus_di = 100 * (plus_dm.rolling(window=window).mean() / atr)
-            minus_di = 100 * (minus_dm.rolling(window=window).mean() / atr)
-            dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
-            adx = dx.rolling(window=window).mean()
-            return adx
+        atr = TechnicalIndicators.calculate_atr(high, low, close, window)
+        plus_dm = high.diff()
+        minus_dm = -low.diff()
+        plus_dm[plus_dm < 0] = 0
+        minus_dm[minus_dm < 0] = 0
+        plus_di = 100 * (plus_dm.rolling(window=window).mean() / atr)
+        minus_di = 100 * (minus_dm.rolling(window=window).mean() / atr)
+        dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
+        adx = dx.rolling(window=window).mean()
+        return adx
     
     @staticmethod
     def calculate_cci(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
         """商品通道指数"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'high': high, 'low': low, 'close': close})
-            cci = df.ta.cci(length=window)
-            return cci if cci is not None else pd.Series(index=close.index, dtype=float)
-        else:
-            # 基础实现：使用pandas计算CCI
-            tp = (high + low + close) / 3
-            sma = tp.rolling(window=window).mean()
-            mad = tp.rolling(window=window).apply(lambda x: np.abs(x - x.mean()).mean())
-            cci = (tp - sma) / (0.015 * mad)
-            return cci
+        tp = (high + low + close) / 3
+        sma = tp.rolling(window=window).mean()
+        mad = tp.rolling(window=window).apply(lambda x: np.abs(x - x.mean()).mean())
+        cci = (tp - sma) / (0.015 * mad)
+        return cci
     
     @staticmethod
     def calculate_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
         """威廉指标"""
-        if PANDAS_TA_AVAILABLE:
-            df = pd.DataFrame({'high': high, 'low': low, 'close': close})
-            willr = df.ta.willr(length=window)
-            return willr if willr is not None else pd.Series(index=close.index, dtype=float)
-        else:
-            # 基础实现：使用pandas计算威廉指标
-            highest_high = high.rolling(window=window).max()
-            lowest_low = low.rolling(window=window).min()
-            willr = -100 * (highest_high - close) / (highest_high - lowest_low)
-            return willr
+        highest_high = high.rolling(window=window).max()
+        lowest_low = low.rolling(window=window).min()
+        willr = -100 * (highest_high - close) / (highest_high - lowest_low)
+        return willr
 
 
 class StatisticalFeatures:
