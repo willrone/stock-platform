@@ -5,7 +5,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -17,6 +17,7 @@ import {
   Box,
   Typography,
   Alert,
+  IconButton,
 } from '@mui/material';
 import {
   Clock,
@@ -28,6 +29,8 @@ import {
   Play,
   Pause,
   RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Task } from '../../stores/useTaskStore';
 
@@ -44,6 +47,7 @@ export default function BacktestTaskStatus({
   onStop, 
   loading = false 
 }: BacktestTaskStatusProps) {
+  const [selectedStocksPage, setSelectedStocksPage] = useState(1); // 已选股票分页
   // 获取状态配置
   const getStatusConfig = (status: Task['status']) => {
     const configs = {
@@ -328,10 +332,109 @@ export default function BacktestTaskStatus({
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
               选择的股票
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {task.stock_codes.map(code => (
-                <Chip key={code} label={code} size="small" />
-              ))}
+            <Box 
+              sx={{ 
+                height: 200,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 1.5
+              }}
+            >
+              {task.stock_codes && task.stock_codes.length > 0 ? (
+                <>
+                  <Box 
+                    sx={{ 
+                      flex: 1,
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 1,
+                      alignContent: 'flex-start',
+                      pb: 1
+                    }}
+                  >
+                    {(() => {
+                      const STOCKS_PER_PAGE = 12;
+                      const totalPages = Math.ceil(task.stock_codes.length / STOCKS_PER_PAGE);
+                      const startIndex = (selectedStocksPage - 1) * STOCKS_PER_PAGE;
+                      const endIndex = startIndex + STOCKS_PER_PAGE;
+                      const currentStocks = task.stock_codes.slice(startIndex, endIndex);
+                      
+                      return currentStocks.map(code => (
+                        <Chip key={code} label={code} size="small" />
+                      ));
+                    })()}
+                  </Box>
+                  
+                  {(() => {
+                    const STOCKS_PER_PAGE = 12;
+                    const totalPages = Math.ceil(task.stock_codes.length / STOCKS_PER_PAGE);
+                    
+                    if (totalPages > 1) {
+                      return (
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'center', 
+                          alignItems: 'center', 
+                          gap: 1,
+                          pt: 1,
+                          borderTop: '1px solid',
+                          borderColor: 'divider'
+                        }}>
+                          <IconButton
+                            size="small"
+                            disabled={selectedStocksPage === 1}
+                            onClick={() => setSelectedStocksPage(prev => Math.max(1, prev - 1))}
+                          >
+                            <ChevronLeft size={16} />
+                          </IconButton>
+                          
+                          <Typography variant="caption" color="text.secondary">
+                            第 {selectedStocksPage} / {totalPages} 页
+                          </Typography>
+                          
+                          <IconButton
+                            size="small"
+                            disabled={selectedStocksPage >= totalPages}
+                            onClick={() => setSelectedStocksPage(prev => Math.min(totalPages, prev + 1))}
+                          >
+                            <ChevronRight size={16} />
+                          </IconButton>
+                        </Box>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
+                  <Box sx={{ 
+                    pt: 1,
+                    mt: 1,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }}>
+                    <Typography variant="body2" color="text.secondary">
+                      已选择 <strong>{task.stock_codes.length}</strong> 只股票
+                    </Typography>
+                  </Box>
+                </>
+              ) : (
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '100%' 
+                }}>
+                  <Typography variant="body2" color="text.secondary">
+                    暂无选择的股票
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Box>
         </CardContent>

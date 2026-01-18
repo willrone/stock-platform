@@ -48,6 +48,8 @@ import {
   Play,
   Download,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -125,6 +127,7 @@ export default function TaskDetailPage() {
   const onSaveConfigClose = () => setIsSaveConfigOpen(false);
   const [deleteForce, setDeleteForce] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [selectedStocksPage, setSelectedStocksPage] = useState(1); // 已选股票分页
 
   // 加载回测详细数据
   const loadBacktestDetailedData = async (force: boolean = false) => {
@@ -1035,10 +1038,109 @@ export default function TaskDetailPage() {
 
                     <Box>
                       <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>选择的股票</Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {currentTask.stock_codes.map(code => (
-                          <Chip key={code} label={code} size="small" />
-                        ))}
+                      <Box 
+                        sx={{ 
+                          height: 200,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                          p: 1.5
+                        }}
+                      >
+                        {currentTask.stock_codes && currentTask.stock_codes.length > 0 ? (
+                          <>
+                            <Box 
+                              sx={{ 
+                                flex: 1,
+                                overflowY: 'auto',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 1,
+                                alignContent: 'flex-start',
+                                pb: 1
+                              }}
+                            >
+                              {(() => {
+                                const STOCKS_PER_PAGE = 12;
+                                const totalPages = Math.ceil(currentTask.stock_codes.length / STOCKS_PER_PAGE);
+                                const startIndex = (selectedStocksPage - 1) * STOCKS_PER_PAGE;
+                                const endIndex = startIndex + STOCKS_PER_PAGE;
+                                const currentStocks = currentTask.stock_codes.slice(startIndex, endIndex);
+                                
+                                return currentStocks.map(code => (
+                                  <Chip key={code} label={code} size="small" />
+                                ));
+                              })()}
+                            </Box>
+                            
+                            {(() => {
+                              const STOCKS_PER_PAGE = 12;
+                              const totalPages = Math.ceil(currentTask.stock_codes.length / STOCKS_PER_PAGE);
+                              
+                              if (totalPages > 1) {
+                                return (
+                                  <Box sx={{ 
+                                    display: 'flex', 
+                                    justifyContent: 'center', 
+                                    alignItems: 'center', 
+                                    gap: 1,
+                                    pt: 1,
+                                    borderTop: '1px solid',
+                                    borderColor: 'divider'
+                                  }}>
+                                    <IconButton
+                                      size="small"
+                                      disabled={selectedStocksPage === 1}
+                                      onClick={() => setSelectedStocksPage(prev => Math.max(1, prev - 1))}
+                                    >
+                                      <ChevronLeft size={16} />
+                                    </IconButton>
+                                    
+                                    <Typography variant="caption" color="text.secondary">
+                                      第 {selectedStocksPage} / {totalPages} 页
+                                    </Typography>
+                                    
+                                    <IconButton
+                                      size="small"
+                                      disabled={selectedStocksPage >= totalPages}
+                                      onClick={() => setSelectedStocksPage(prev => Math.min(totalPages, prev + 1))}
+                                    >
+                                      <ChevronRight size={16} />
+                                    </IconButton>
+                                  </Box>
+                                );
+                              }
+                              return null;
+                            })()}
+                            
+                            <Box sx={{ 
+                              pt: 1,
+                              mt: 1,
+                              borderTop: '1px solid',
+                              borderColor: 'divider',
+                              display: 'flex',
+                              justifyContent: 'center'
+                            }}>
+                              <Typography variant="body2" color="text.secondary">
+                                已选择 <strong>{currentTask.stock_codes.length}</strong> 只股票
+                              </Typography>
+                            </Box>
+                          </>
+                        ) : (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            height: '100%' 
+                          }}>
+                            <Typography variant="body2" color="text.secondary">
+                              暂无选择的股票
+                            </Typography>
+                          </Box>
+                        )}
                       </Box>
                     </Box>
                   </Box>

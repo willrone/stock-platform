@@ -328,20 +328,6 @@ export default function CreateTaskPage() {
                 {errors.stock_codes && (
                   <FormHelperText error>{errors.stock_codes}</FormHelperText>
                 )}
-                {selectedStocks.length > 0 && (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {selectedStocks.map(stock => (
-                      <Chip
-                        key={stock}
-                        label={stock}
-                        onDelete={() => {
-                          setSelectedStocks(prev => prev.filter(s => s !== stock));
-                        }}
-                        size="small"
-                      />
-                    ))}
-                  </Box>
-                )}
               </Box>
             </CardContent>
           </Card>

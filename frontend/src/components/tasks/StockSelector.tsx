@@ -49,6 +49,8 @@ interface StockSelectorProps {
 }
 
 const ITEMS_PER_PAGE = 10;
+const SELECTED_STOCKS_PER_PAGE = 12; // 已选股票每页显示数量
+const SELECTED_STOCKS_CARD_HEIGHT = 200; // 已选股票卡片固定高度
 
 export const StockSelector: React.FC<StockSelectorProps> = ({
   value = [],
@@ -60,6 +62,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   const [allStocks, setAllStocks] = useState<StockOption[]>([]);
   const [loadingAllStocks, setLoadingAllStocks] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedStocksPage, setSelectedStocksPage] = useState(1); // 已选股票分页
   const [randomCount, setRandomCount] = useState<string>('10');
 
   // 加载本地股票列表（只显示已存储的股票数据）
@@ -169,11 +172,18 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   const handleRemoveStock = (stockCode: string) => {
     const newValue = value.filter(code => code !== stockCode);
     onChange?.(newValue);
+    
+    // 如果删除后当前页没有股票了，且不是第一页，则回到上一页
+    const selectedStocksTotalPages = Math.ceil(newValue.length / SELECTED_STOCKS_PER_PAGE);
+    if (selectedStocksPage > selectedStocksTotalPages && selectedStocksTotalPages > 0) {
+      setSelectedStocksPage(selectedStocksTotalPages);
+    }
   };
 
   // 清空所有股票
   const handleClearAll = () => {
     onChange?.([]);
+    setSelectedStocksPage(1); // 重置分页
     console.log('已清空所有股票');
   };
 
@@ -235,7 +245,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
       {/* 已选股票 */}
       <Card>
         <CardHeader
-          title={`已选股票 (${value.length} 只)`}
+          title="已选股票"
           action={
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               {/* 随机选择 */}
@@ -274,25 +284,115 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
             </Box>
           }
         />
-        <CardContent>
-          <Box sx={{ minHeight: 64 }}>
+        <CardContent sx={{ p: 2, pb: 1 }}>
+          <Box 
+            sx={{ 
+              height: SELECTED_STOCKS_CARD_HEIGHT,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
             {value.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                请搜索或从下方列表选择股票，或使用随机选择功能
-              </Typography>
-            ) : (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {value.map(code => (
-                  <Chip
-                    key={code}
-                    label={getStockDisplayName(code)}
-                    onDelete={() => handleRemoveStock(code)}
-                    size="small"
-                  />
-                ))}
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '100%' 
+              }}>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+                  请搜索或从下方列表选择股票，或使用随机选择功能
+                </Typography>
               </Box>
+            ) : (
+              <>
+                {/* 已选股票列表区域（固定高度，可滚动） */}
+                <Box 
+                  sx={{ 
+                    flex: 1,
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    alignContent: 'flex-start',
+                    pb: 1
+                  }}
+                >
+                  {(() => {
+                    const selectedStocksTotalPages = Math.ceil(value.length / SELECTED_STOCKS_PER_PAGE);
+                    const selectedStartIndex = (selectedStocksPage - 1) * SELECTED_STOCKS_PER_PAGE;
+                    const selectedEndIndex = selectedStartIndex + SELECTED_STOCKS_PER_PAGE;
+                    const currentSelectedStocks = value.slice(selectedStartIndex, selectedEndIndex);
+                    
+                    return currentSelectedStocks.map(code => (
+                      <Chip
+                        key={code}
+                        label={getStockDisplayName(code)}
+                        onDelete={() => handleRemoveStock(code)}
+                        size="small"
+                      />
+                    ));
+                  })()}
+                </Box>
+                
+                {/* 分页控制（如果需要） */}
+                {(() => {
+                  const selectedStocksTotalPages = Math.ceil(value.length / SELECTED_STOCKS_PER_PAGE);
+                  
+                  if (selectedStocksTotalPages > 1) {
+                    return (
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'center', 
+                        alignItems: 'center', 
+                        gap: 1,
+                        pt: 1,
+                        borderTop: '1px solid',
+                        borderColor: 'divider'
+                      }}>
+                        <IconButton
+                          size="small"
+                          disabled={selectedStocksPage === 1}
+                          onClick={() => setSelectedStocksPage(prev => Math.max(1, prev - 1))}
+                        >
+                          <ChevronLeft size={16} />
+                        </IconButton>
+                        
+                        <Typography variant="caption" color="text.secondary">
+                          第 {selectedStocksPage} / {selectedStocksTotalPages} 页
+                        </Typography>
+                        
+                        <IconButton
+                          size="small"
+                          disabled={selectedStocksPage >= selectedStocksTotalPages}
+                          onClick={() => setSelectedStocksPage(prev => Math.min(selectedStocksTotalPages, prev + 1))}
+                        >
+                          <ChevronRight size={16} />
+                        </IconButton>
+                      </Box>
+                    );
+                  }
+                  return null;
+                })()}
+              </>
             )}
           </Box>
+          
+          {/* 底部显示已选择股票数量 */}
+          {value.length > 0 && (
+            <Box sx={{ 
+              pt: 1.5,
+              mt: 1,
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              justifyContent: 'center'
+            }}>
+              <Typography variant="body2" color="text.secondary">
+                已选择 <strong>{value.length}</strong> 只股票
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
