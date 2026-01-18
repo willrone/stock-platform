@@ -180,9 +180,11 @@ class QlibDataProvider:
             
             # 准备mount_path和provider_uri配置
             # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
+            # 确保所有路径都是绝对路径的字符串，避免Path对象传递
+            qlib_data_path_str = str(qlib_data_path.absolute())
             mount_path_config = {
-                "day": str(qlib_data_path),
-                "1min": str(qlib_data_path),
+                "day": qlib_data_path_str,
+                "1min": qlib_data_path_str,
             }
             
             provider_uri_config = {
@@ -192,10 +194,12 @@ class QlibDataProvider:
             
             # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
             # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
+            # 设置 auto_mount=False 避免 qlib 内部处理 NFS mount 时的 Path 对象问题
             qlib.init(
                 region=REG_CN,
                 provider_uri=provider_uri_config,
-                mount_path=mount_path_config
+                mount_path=mount_path_config,
+                auto_mount=False
             )
             logger.info("Qlib环境初始化成功")
         except Exception as e:
