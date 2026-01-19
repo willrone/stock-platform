@@ -17,6 +17,8 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 from loguru import logger
+import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # 检测Qlib可用性
 try:
@@ -65,6 +67,7 @@ except Exception as e:
 
 from .enhanced_qlib_provider import EnhancedQlibDataProvider
 from .qlib_model_manager import QlibModelManager
+from .performance_monitor import PerformanceMonitor, get_performance_monitor
 from ..data.simple_data_service import SimpleDataService
 from ..automl.early_stopping import EarlyStoppingManager, create_default_early_stopping
 
@@ -174,6 +177,7 @@ class UnifiedQlibTrainingEngine:
         self.data_provider = EnhancedQlibDataProvider()
         self.model_manager = QlibModelManager()
         self.early_stopping_manager = None
+        self.performance_monitor = get_performance_monitor()
         
         logger.info("统一Qlib训练引擎初始化完成")
     
@@ -215,6 +219,9 @@ class UnifiedQlibTrainingEngine:
         logger.info(f"开始Qlib统一训练流程: {model_id}, 模型类型: {config.model_type.value}")
         start_time = datetime.now()
         
+        # 开始整体性能监控
+        self.performance_monitor.start_stage("total_training")
+        
         try:
             # 0. 检查Qlib是否可用
             if not QLIB_AVAILABLE:
@@ -239,7 +246,9 @@ class UnifiedQlibTrainingEngine:
             if progress_callback:
                 await progress_callback(model_id, 5.0, "initializing", "初始化Qlib环境")
             
+            self.performance_monitor.start_stage("initialize_qlib")
             await self.initialize()
+            self.performance_monitor.end_stage("initialize_qlib")
             
             # 2. 准备数据集（包含Alpha158因子）
             if progress_callback:
@@ -248,6 +257,7 @@ class UnifiedQlibTrainingEngine:
                     "date_range": f"{start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}"
                 })
             
+            self.performance_monitor.start_stage("prepare_dataset")
             dataset = await self.data_provider.prepare_qlib_dataset(
                 stock_codes=stock_codes,
                 start_date=start_date,
@@ -255,6 +265,7 @@ class UnifiedQlibTrainingEngine:
                 include_alpha_factors=config.use_alpha_factors,
                 use_cache=config.cache_features
             )
+            self.performance_monitor.end_stage("prepare_dataset")
             
             if dataset.empty:
                 raise ValueError("无法获取训练数据")
@@ -286,9 +297,13 @@ class UnifiedQlibTrainingEngine:
                     "sample_count": dataset.shape[0]
                 })
             
+            self.performance_monitor.start_stage("create_model_config")
             model_config = await self._create_qlib_model_config(config)
+            self.performance_monitor.end_stage("create_model_config")
 
+            self.performance_monitor.start_stage("analyze_features")
             feature_correlation = self._analyze_feature_correlations(dataset)
+            self.performance_monitor.end_stage("analyze_features")
             
             # 4. 数据预处理和分割
             if progress_callback:
@@ -296,9 +311,11 @@ class UnifiedQlibTrainingEngine:
                     "validation_split": config.validation_split
                 })
             
+            self.performance_monitor.start_stage("prepare_training_datasets")
             train_dataset, val_dataset = await self._prepare_training_datasets(
                 dataset, config.validation_split, config
             )
+            self.performance_monitor.end_stage("prepare_training_datasets")
             
             # 记录数据集分割信息
             logger.info(f"数据集分割完成: 训练集样本数={len(train_dataset)}, 验证集样本数={len(val_dataset)}")
@@ -316,9 +333,11 @@ class UnifiedQlibTrainingEngine:
                     "early_stopping_enabled": config.enable_early_stopping
                 })
             
+            self.performance_monitor.start_stage("train_model")
             training_result = await self._train_qlib_model(
                 model_config, train_dataset, val_dataset, config, progress_callback, model_id
             )
+            self.performance_monitor.end_stage("train_model")
             
             # 解包训练结果
             if len(training_result) == 3:
@@ -337,9 +356,11 @@ class UnifiedQlibTrainingEngine:
             if progress_callback:
                 await progress_callback(model_id, 85.0, "evaluating", "评估模型性能")
             
+            self.performance_monitor.start_stage("evaluate_model")
             training_metrics, validation_metrics = await self._evaluate_model(
                 model, train_dataset, val_dataset, model_id
             )
+            self.performance_monitor.end_stage("evaluate_model")
             
             # 使用评估得到的准确率更新训练历史
             train_accuracy = training_metrics.get('accuracy', 0.0)
@@ -361,13 +382,17 @@ class UnifiedQlibTrainingEngine:
                 })
             
             # 7. 提取特征重要性
+            self.performance_monitor.start_stage("extract_feature_importance")
             feature_importance = await self._extract_feature_importance(model, config.model_type)
+            self.performance_monitor.end_stage("extract_feature_importance")
             
             # 8. 保存模型
             if progress_callback:
                 await progress_callback(model_id, 95.0, "saving", "保存模型")
             
+            self.performance_monitor.start_stage("save_model")
             model_path = await self._save_qlib_model(model, model_id, model_config)
+            self.performance_monitor.end_stage("save_model")
             
             # 9. 完成训练
             training_duration = (datetime.now() - start_time).total_seconds()
@@ -380,6 +405,10 @@ class UnifiedQlibTrainingEngine:
                     "early_stopped": early_stopping_info["early_stopped"],
                     "early_stopping_reason": early_stopping_info["early_stopping_reason"]
                 })
+            
+            # 结束整体性能监控并打印摘要
+            self.performance_monitor.end_stage("total_training")
+            self.performance_monitor.print_summary()
             
             result = QlibTrainingResult(
                 model_path=model_path,
@@ -410,6 +439,9 @@ class UnifiedQlibTrainingEngine:
             logger.error(f"Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
             if progress_callback:
                 await progress_callback(model_id, 0.0, "failed", f"训练失败: {str(e)}")
+            # 结束整体性能监控并打印摘要
+            self.performance_monitor.end_stage("total_training")
+            self.performance_monitor.print_summary()
             raise
     
     async def _create_qlib_model_config(self, config: QlibTrainingConfig) -> Dict[str, Any]:
@@ -423,6 +455,57 @@ class UnifiedQlibTrainingEngine:
         except Exception as e:
             logger.error(f"创建Qlib模型配置失败: {e}")
             raise
+    
+    def _process_stock_data(self, stock_data: pd.DataFrame, stock_code: str) -> pd.DataFrame:
+        """处理单个股票的数据，包括特征计算和标签生成"""
+        try:
+            # 复制数据以避免修改原始数据
+            processed_data = stock_data.copy()
+            
+            # 计算基本特征
+            if '$close' in processed_data.columns:
+                close = processed_data['$close']
+                # 计算收益率
+                processed_data['RET1'] = close.pct_change(1)
+                processed_data['RET5'] = close.pct_change(5)
+                processed_data['RET20'] = close.pct_change(20)
+                
+                # 计算移动平均线
+                processed_data['MA5'] = close.rolling(5).mean()
+                processed_data['MA20'] = close.rolling(20).mean()
+                
+                # 计算标准差
+                processed_data['STD5'] = close.rolling(5).std()
+                processed_data['STD20'] = close.rolling(20).std()
+            
+            if '$volume' in processed_data.columns:
+                volume = processed_data['$volume']
+                processed_data['VOL1'] = volume.pct_change(1)
+                processed_data['VOL5'] = volume.pct_change(5)
+            
+            # 生成标签
+            if '$close' in processed_data.columns:
+                # 计算未来收益率作为标签
+                if isinstance(processed_data.index, pd.MultiIndex):
+                    label_values = processed_data.groupby(level=0)['$close'].pct_change(periods=1).shift(-1)
+                else:
+                    label_values = processed_data['$close'].pct_change(periods=1).shift(-1)
+                
+                if isinstance(label_values, pd.Series):
+                    processed_data['label'] = label_values.fillna(0)
+                else:
+                    processed_data['label'] = pd.Series(
+                        label_values.iloc[:, 0].values if hasattr(label_values, 'iloc') else label_values,
+                        index=processed_data.index
+                    ).fillna(0)
+            
+            # 填充缺失值
+            processed_data = processed_data.fillna(0)
+            
+            return processed_data
+        except Exception as e:
+            logger.error(f"处理股票 {stock_code} 数据时发生错误: {e}")
+            return stock_data
     
     async def _prepare_training_datasets(
         self, 
@@ -440,6 +523,66 @@ class UnifiedQlibTrainingEngine:
             )
             logger.error(error_msg)
             raise RuntimeError(error_msg)
+        
+        # 确定数据索引类型
+        if isinstance(dataset.index, pd.MultiIndex) and dataset.index.nlevels == 2:
+            # MultiIndex: (stock_code, date)
+            logger.info("使用MultiIndex数据结构，按股票分组并行处理")
+            
+            # 按股票分割数据
+            stock_groups = {}
+            stock_codes = dataset.index.get_level_values(0).unique()
+            
+            for stock_code in stock_codes:
+                try:
+                    stock_data = dataset.xs(stock_code, level=0, drop_level=False)
+                    if not stock_data.empty:
+                        stock_groups[stock_code] = stock_data
+                except KeyError:
+                    logger.warning(f"股票 {stock_code} 不在数据中")
+                    continue
+            
+            # 使用多进程并行处理
+            processed_stocks = []
+            
+            max_workers = min(mp.cpu_count(), 8)
+            if len(stock_groups) > 1 and max_workers > 1:
+                # 多进程处理
+                logger.info(f"使用 {max_workers} 个进程并行处理数据")
+                
+                with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {}
+                    
+                    # 提交任务
+                    for stock_code, stock_data in stock_groups.items():
+                        future = executor.submit(self._process_stock_data, stock_data, stock_code)
+                        futures[future] = stock_code
+                    
+                    # 收集结果
+                    for future in as_completed(futures):
+                        stock_code = futures[future]
+                        try:
+                            processed_data = future.result()
+                            if not processed_data.empty:
+                                processed_stocks.append(processed_data)
+                                logger.debug(f"完成股票 {stock_code} 的数据处理")
+                        except Exception as e:
+                            logger.error(f"处理股票 {stock_code} 的数据时发生错误: {e}")
+            else:
+                # 单进程处理
+                logger.info("使用单进程处理数据")
+                for stock_code, stock_data in stock_groups.items():
+                    processed_data = self._process_stock_data(stock_data, stock_code)
+                    if not processed_data.empty:
+                        processed_stocks.append(processed_data)
+                        logger.debug(f"完成股票 {stock_code} 的数据处理")
+            
+            # 合并处理后的数据
+            if processed_stocks:
+                dataset = pd.concat(processed_stocks)
+                logger.info(f"数据处理完成，合并后数据形状: {dataset.shape}")
+            else:
+                logger.warning("没有处理任何股票数据")
         
         # 按时间分割数据（时间序列数据不能随机分割）
         if isinstance(dataset.index, pd.MultiIndex):
