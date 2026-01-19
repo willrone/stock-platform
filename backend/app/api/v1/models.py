@@ -978,13 +978,6 @@ async def delete_model(model_id: str):
         if not model:
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
         
-        # 不能删除正在训练中的模型
-        if model.status == "training":
-            raise HTTPException(
-                status_code=400,
-                detail="无法删除正在训练中的模型，请等待训练完成或取消训练"
-            )
-        
         # 删除模型文件（如果存在）
         if model.file_path:
             try:

@@ -156,16 +156,24 @@ export function ModelListTable({
                       查看报告
                     </Button>
                   )}
-                  {model.status !== 'training' && (
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => onDeleteModel(model.model_id)}
-                      disabled={deleting}
-                    >
-                      <Trash2 size={16} />
-                    </IconButton>
-                  )}
+                  <Tooltip
+                    title={
+                      model.status === 'training'
+                        ? '取消训练并删除该模型'
+                        : '删除模型'
+                    }
+                  >
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => onDeleteModel(model.model_id)}
+                        disabled={deleting}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </Box>
               </TableCell>
             </TableRow>
