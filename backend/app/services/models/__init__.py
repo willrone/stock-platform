@@ -56,10 +56,18 @@ except ImportError as e:
 
 # 模型存储
 from .model_storage import (
-    ModelStorage,
+    ModelStorage
+)
+
+# 模型评估和版本管理
+from .model_evaluation import (
     ModelVersionManager,
+    ModelStatus
+)
+
+# 从shared_types导入ModelMetadata和ModelType
+from .shared_types import (
     ModelMetadata,
-    ModelStatus,
     ModelType as StorageModelType
 )
 

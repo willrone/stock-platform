@@ -18,20 +18,26 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import torch
-
-# 避免循环导入，在此处重新定义ModelType
-class ModelType(Enum):
-    """支持的模型类型"""
-    TRANSFORMER = "transformer"
-    TIMESNET = "timesnet"
-    PATCHTST = "patchtst"
-    INFORMER = "informer"
-    LSTM = "lstm"
-    XGBOOST = "xgboost"
 import torch.nn as nn
 from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 import xgboost as xgb
+
+# 从shared_types.py导入共享类型
+try:
+    from .shared_types import (
+        ModelType, ModelStatus, EnsembleMethod, 
+        EnsembleConfig, OnlineLearningConfig, BacktestMetrics
+    )
+    SHARED_TYPES_AVAILABLE = True
+except ImportError:
+    SHARED_TYPES_AVAILABLE = False
+    ModelType = None
+    ModelStatus = None
+    EnsembleMethod = None
+    EnsembleConfig = None
+    OnlineLearningConfig = None
+    BacktestMetrics = None
 
 # 可选导入ModelEvaluator
 try:
@@ -41,32 +47,17 @@ except ImportError:
     MODEL_EVALUATOR_AVAILABLE = False
     ModelEvaluator = None
 
-
-class EnsembleMethod(Enum):
-    """集成方法类型"""
-    VOTING = "voting"           # 投票集成
-    WEIGHTED = "weighted"       # 加权集成
-    STACKING = "stacking"       # 堆叠集成
-    BAGGING = "bagging"         # 装袋集成
-
-
-@dataclass
-class EnsembleConfig:
-    """集成模型配置"""
-    method: EnsembleMethod
-    base_models: List[str]      # 基础模型ID列表
-    weights: Optional[List[float]] = None  # 权重（用于加权集成）
-    meta_model_type: Optional[ModelType] = None  # 元模型类型（用于堆叠集成）
-    voting_strategy: str = "soft"  # 投票策略：hard或soft
-
-
-@dataclass
-class OnlineLearningConfig:
-    """在线学习配置"""
-    update_frequency: int = 5   # 更新频率（天）
-    learning_rate_decay: float = 0.95  # 学习率衰减
-    memory_size: int = 1000     # 记忆缓冲区大小
-    adaptation_threshold: float = 0.1  # 性能下降阈值
+# 导入统一的错误处理机制
+try:
+    from app.core.error_handler import ModelError, DataError, TaskError, ErrorSeverity, ErrorContext, handle_async_exception
+except ImportError:
+    logger.warning("错误处理模块未找到，使用默认错误处理")
+    ModelError = Exception
+    DataError = Exception
+    TaskError = Exception
+    ErrorSeverity = None
+    ErrorContext = None
+    handle_async_exception = lambda func: func
 
 
 class EnsembleModelManager:
@@ -96,6 +87,7 @@ class EnsembleModelManager:
             self.ensemble_dir = (backend_dir / "data" / "ensembles").resolve()
             self.ensemble_dir.mkdir(parents=True, exist_ok=True)
     
+    @handle_async_exception
     async def create_ensemble(
         self,
         ensemble_id: str,
@@ -166,6 +158,7 @@ class EnsembleModelManager:
         logger.info(f"集成模型 {ensemble_id} 创建完成，准确率: {metrics['accuracy']:.4f}")
         return ensemble_info
     
+    @handle_async_exception
     async def _load_base_models(self, model_ids: List[str]) -> List[Any]:
         """加载基础模型"""
         models = []
@@ -200,6 +193,7 @@ class EnsembleModelManager:
         
         return models
     
+    @handle_async_exception
     async def _create_voting_ensemble(
         self,
         base_models: List[Dict],
@@ -249,6 +243,7 @@ class EnsembleModelManager:
         
         return ensemble_model
     
+    @handle_async_exception
     async def _create_weighted_ensemble(
         self,
         base_models: List[Dict],
@@ -284,6 +279,7 @@ class EnsembleModelManager:
         
         return ensemble_model
     
+    @handle_async_exception
     async def _create_stacking_ensemble(
         self,
         base_models: List[Dict],
@@ -350,6 +346,7 @@ class EnsembleModelManager:
         
         return ensemble_model
     
+    @handle_async_exception
     async def _create_bagging_ensemble(
         self,
         base_models: List[Dict],
@@ -368,6 +365,7 @@ class EnsembleModelManager:
         
         return ensemble_model
     
+    @handle_async_exception
     async def _get_model_predictions(
         self, 
         model: Any, 
@@ -395,6 +393,7 @@ class EnsembleModelManager:
                 predictions = torch.argmax(outputs, dim=1).numpy()
             return predictions
     
+    @handle_async_exception
     async def _predict_ensemble(
         self, 
         ensemble_model: Dict[str, Any], 
@@ -477,6 +476,7 @@ class OnlineLearningManager:
         self.memory_buffer = {}  # 存储最近的训练数据
         self.model_performance_history = {}  # 模型性能历史
         
+    @handle_async_exception
     async def setup_online_learning(
         self,
         model_id: str,
@@ -519,6 +519,7 @@ class OnlineLearningManager:
         logger.info(f"模型 {model_id} 在线学习设置完成")
         return setup_info
     
+    @handle_async_exception
     async def update_model_online(
         self,
         model_id: str,
@@ -593,6 +594,7 @@ class OnlineLearningManager:
             logger.info(f"数据不足，跳过模型 {model_id} 的在线更新")
             return current_model, {"accuracy": 0.0, "message": "insufficient_data"}
     
+    @handle_async_exception
     async def _incremental_training(
         self,
         model: Any,
@@ -654,6 +656,7 @@ class OnlineLearningManager:
             logger.warning(f"不支持的模型类型进行增量训练: {type(model)}")
             return model
     
+    @handle_async_exception
     async def _evaluate_online_model(
         self,
         model: Any,
@@ -691,6 +694,7 @@ class OnlineLearningManager:
             logger.error(f"在线模型评估失败: {e}")
             return {"accuracy": 0.0, "error": str(e)}
     
+    @handle_async_exception
     async def _should_retrain(
         self,
         model_id: str,
@@ -729,6 +733,7 @@ class AdvancedTrainingService:
         self.ensemble_manager = None
         self.online_learning_manager = None
     
+    @handle_async_exception
     async def initialize(self):
         """初始化服务"""
         # 如果已经有model_training_service实例，直接使用
@@ -742,6 +747,7 @@ class AdvancedTrainingService:
         
         logger.info("高级训练服务初始化完成")
     
+    @handle_async_exception
     async def create_ensemble_model(
         self,
         ensemble_id: str,

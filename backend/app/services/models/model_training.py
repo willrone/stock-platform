@@ -42,16 +42,28 @@ def get_device():
         logger.info("未检测到GPU，使用CPU")
         return torch.device('cpu')
 try:
-    import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import NameDFilter, ExpressionDFilter
-    from qlib.utils import init_instance_by_config
-    QLIB_AVAILABLE = True
+            import qlib
+            from qlib.config import REG_CN, C
+            from qlib.data import D
+            from qlib.data.dataset import DatasetH
+            from qlib.data.filter import NameDFilter, ExpressionDFilter
+            from qlib.utils import init_instance_by_config
+            QLIB_AVAILABLE = True
 except ImportError:
     logger.warning("Qlib未安装，某些功能将不可用")
     QLIB_AVAILABLE = False
+
+# 导入统一的错误处理机制
+try:
+    from app.core.error_handler import ModelError, DataError, TaskError, ErrorSeverity, ErrorContext, handle_async_exception
+except ImportError:
+    logger.warning("错误处理模块未找到，使用默认错误处理")
+    ModelError = Exception
+    DataError = Exception
+    TaskError = Exception
+    ErrorSeverity = None
+    ErrorContext = None
+    handle_async_exception = lambda func: func
 
 # 导入其他依赖
 from ..data.simple_data_service import SimpleDataService
@@ -87,103 +99,100 @@ except ImportError:
 # 使用 loguru 日志记录器（已在文件顶部导入）
 
 
-class ModelType(Enum):
-    """支持的模型类型"""
-    TRANSFORMER = "transformer"
-    TIMESNET = "timesnet"
-    PATCHTST = "patchtst"
-    INFORMER = "informer"
-    LSTM = "lstm"
-    XGBOOST = "xgboost"
-
-
-@dataclass
-class TrainingConfig:
-    """模型训练配置"""
-    model_type: ModelType
-    sequence_length: int = 60  # 输入序列长度
-    prediction_horizon: int = 5  # 预测天数
-    batch_size: int = 32
-    epochs: int = 100
-    learning_rate: float = 0.001
-    validation_split: float = 0.2
-    early_stopping_patience: int = 10
-    feature_columns: List[str] = None
-    target_column: str = "close"
+# 从shared_types.py导入共享类型
+try:
+    from .shared_types import ModelType, TrainingConfig, ModelMetrics, BacktestMetrics
+    SHARED_TYPES_AVAILABLE = True
+except ImportError:
+    SHARED_TYPES_AVAILABLE = False
+    # 如果导入失败，使用本地定义作为备选
+    class ModelType(Enum):
+        """支持的模型类型"""
+        TRANSFORMER = "transformer"
+        TIMESNET = "timesnet"
+        PATCHTST = "patchtst"
+        INFORMER = "informer"
+        LSTM = "lstm"
+        XGBOOST = "xgboost"
     
-    def __post_init__(self):
-        if self.feature_columns is None:
-            self.feature_columns = [
-                "open", "high", "low", "close", "volume",
-                "ma_5", "ma_10", "ma_20", "ma_60",
-                "rsi", "macd", "macd_signal", "bb_upper", "bb_lower"
-            ]
-
-
-@dataclass
-class ModelMetrics:
-    """模型评估指标"""
-    accuracy: float
-    precision: float
-    recall: float
-    sharpe_ratio: float
-    max_drawdown: float
-    total_return: float
-    win_rate: float
-    
-    def to_dict(self) -> Dict[str, float]:
-        return {
-            "accuracy": self.accuracy,
-            "precision": self.precision,
-            "recall": self.recall,
-            "sharpe_ratio": self.sharpe_ratio,
-            "max_drawdown": self.max_drawdown,
-            "total_return": self.total_return,
-            "win_rate": self.win_rate
-        }
-
-
-class QlibDataProvider:
-    """Qlib数据提供器，集成本地Parquet数据"""
-    
-    def __init__(self, data_service: SimpleDataService):
-        self.data_service = data_service
-        self.indicator_calculator = TechnicalIndicatorCalculator()
+    @dataclass
+    class TrainingConfig:
+        """模型训练配置"""
+        model_type: ModelType
+        sequence_length: int = 60  # 输入序列长度
+        prediction_horizon: int = 5  # 预测天数
+        batch_size: int = 32
+        epochs: int = 100
+        learning_rate: float = 0.001
+        validation_split: float = 0.2
+        early_stopping_patience: int = 10
+        feature_columns: List[str] = None
+        target_column: str = "close"
         
-    async def initialize_qlib(self):
-        """初始化Qlib环境"""
-        try:
-            # 在使用memory://模式时，需要先设置mount_path和provider_uri，否则qlib会报错
-            from app.core.config import settings
-            
-            # 使用配置中的QLIB_DATA_PATH，如果不存在则创建
-            qlib_data_path = Path(settings.QLIB_DATA_PATH).resolve()
-            qlib_data_path.mkdir(parents=True, exist_ok=True)
-            
-            # 准备mount_path和provider_uri配置
-            # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
-            mount_path_config = {
-                "day": str(qlib_data_path),
-                "1min": str(qlib_data_path),
-            }
-            
-            provider_uri_config = {
-                "day": "memory://",
-                "1min": "memory://",
-            }
-            
-            # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
-            # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
-            qlib.init(
-                region=REG_CN,
-                provider_uri=provider_uri_config,
-                mount_path=mount_path_config
-            )
-            logger.info("Qlib环境初始化成功")
-        except Exception as e:
-            logger.error(f"Qlib初始化失败: {e}")
-            raise
+        def __post_init__(self):
+            if self.feature_columns is None:
+                self.feature_columns = [
+                    "open", "high", "low", "close", "volume",
+                    "ma_5", "ma_10", "ma_20", "ma_60",
+                    "rsi", "macd", "macd_signal", "bb_upper", "bb_lower"
+                ]
     
+    @dataclass
+    class ModelMetrics:
+        """模型评估指标"""
+        accuracy: float
+        precision: float
+        recall: float
+        sharpe_ratio: float
+        max_drawdown: float
+        total_return: float
+        win_rate: float
+        
+        def to_dict(self) -> Dict[str, float]:
+            return {
+                "accuracy": self.accuracy,
+                "precision": self.precision,
+                "recall": self.recall,
+                "sharpe_ratio": self.sharpe_ratio,
+                "max_drawdown": self.max_drawdown,
+                "total_return": self.total_return,
+                "win_rate": self.win_rate
+            }
+    
+    BacktestMetrics = None
+
+
+# 从feature_engineering.py导入新的特征工程模块
+try:
+    from .feature_engineering import (
+        FeatureEngineer, QlibFeatureProvider, DataPreprocessor
+    )
+    FEATURE_ENGINEERING_AVAILABLE = True
+except ImportError:
+    logger.warning("特征工程模块未找到，使用默认实现")
+    FEATURE_ENGINEERING_AVAILABLE = False
+    FeatureEngineer = None
+    QlibFeatureProvider = None
+    DataPreprocessor = None
+
+
+class DataProvider:
+    """数据提供器"""
+    
+    def __init__(self, data_service: SimpleDataService, data_root: str):
+        self.data_service = data_service
+        self.data_root = data_root
+        self.feature_engineer = FeatureEngineer(data_service, data_root) if FEATURE_ENGINEERING_AVAILABLE else None
+        self.qlib_provider = QlibFeatureProvider() if FEATURE_ENGINEERING_AVAILABLE else None
+    
+    @handle_async_exception
+    async def initialize(self):
+        """初始化数据提供器"""
+        if self.qlib_provider:
+            await self.qlib_provider.initialize_qlib()
+        logger.info("数据提供器初始化完成")
+    
+    @handle_async_exception
     async def prepare_features(
         self, 
         stock_codes: List[str], 
@@ -201,15 +210,37 @@ class QlibDataProvider:
         Returns:
             包含所有特征的DataFrame
         """
+        if self.feature_engineer:
+            # 使用新的特征工程模块
+            features = await self.feature_engineer.prepare_features(
+                stock_codes, start_date, end_date
+            )
+            
+            # 清理数据
+            if DataPreprocessor:
+                features = DataPreprocessor.clean_data(features)
+            
+            return features
+        else:
+            # 降级到原始实现
+            logger.warning("特征工程模块不可用，使用降级实现")
+            return self._fallback_prepare_features(stock_codes, start_date, end_date)
+    
+    async def _fallback_prepare_features(
+        self, 
+        stock_codes: List[str], 
+        start_date: datetime, 
+        end_date: datetime
+    ) -> pd.DataFrame:
+        """降级实现：准备特征"""
         all_features = []
         
         for stock_code in stock_codes:
             try:
                 # 优先从本地文件加载数据
                 from app.services.data.stock_data_loader import StockDataLoader
-                from app.core.config import settings
                 
-                loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
+                loader = StockDataLoader(data_root=self.data_root)
                 stock_data = loader.load_stock_data(stock_code, start_date=start_date, end_date=end_date)
                 
                 # 如果本地没有数据，尝试从远端服务获取
@@ -240,7 +271,9 @@ class QlibDataProvider:
                     continue
                 
                 # 计算技术指标
-                indicators = await self.indicator_calculator.calculate_all_indicators(
+                from ..prediction.technical_indicators import TechnicalIndicatorCalculator
+                indicator_calculator = TechnicalIndicatorCalculator()
+                indicators = await indicator_calculator.calculate_all_indicators(
                     stock_data
                 )
                 
@@ -334,8 +367,10 @@ class ModelTrainingService:
         from ..data.simple_data_service import SimpleDataService
         data_service = SimpleDataService()
         
-        self.data_provider = QlibDataProvider(data_service)
-        # QlibDataProvider 的初始化在需要时进行，不需要提前初始化
+        # 使用新的DataProvider替代QlibDataProvider
+        from app.core.config import settings
+        self.data_provider = DataProvider(data_service, settings.DATA_ROOT_PATH)
+        await self.data_provider.initialize()
         
         # 初始化高级训练服务（传入self避免循环依赖）
         if ADVANCED_TRAINING_AVAILABLE and AdvancedTrainingService is not None:
@@ -345,6 +380,7 @@ class ModelTrainingService:
         
         logger.info("模型训练服务初始化完成")
     
+    @handle_async_exception
     async def train_model(
         self,
         model_id: str,
@@ -366,72 +402,107 @@ class ModelTrainingService:
         Returns:
             (模型版本信息, 评估指标)
         """
-        logger.info(f"开始训练模型 {model_id}，类型: {config.model_type.value}")
-        
-        # 准备训练数据
-        features_df = await self.data_provider.prepare_features(
-            stock_codes, start_date, end_date
-        )
-        
-        # 数据预处理
-        X, y = self._prepare_training_data(features_df, config)
-        
-        # 准备价格数据用于评估
-        actual_prices = self._extract_prices_for_evaluation(features_df, config)
-        
-        # 时间序列交叉验证分割
-        train_X, train_y, val_X, val_y = self._time_series_split(X, y, config.validation_split)
-        
-        # 根据模型类型训练
-        if config.model_type == ModelType.XGBOOST:
-            model = await self._train_xgboost(
-                train_X, train_y, val_X, val_y, config
+        try:
+            logger.info(f"开始训练模型 {model_id}，类型: {config.model_type.value}")
+            
+            # 验证输入参数
+            if not stock_codes or len(stock_codes) == 0:
+                raise ValueError("股票代码列表不能为空")
+            
+            if start_date >= end_date:
+                raise ValueError("开始日期必须早于结束日期")
+            
+            # 准备训练数据
+            logger.info(f"准备训练数据，股票数量: {len(stock_codes)}, 时间范围: {start_date} 到 {end_date}")
+            features_df = await self.data_provider.prepare_features(
+                stock_codes, start_date, end_date
             )
-        else:
-            model = await self._train_deep_learning_model(
-                train_X, train_y, val_X, val_y, config
-            )
-        
-        # 全面评估模型
-        logger.info("开始模型评估...")
-        if self.evaluator is not None:
-            metrics = await self.evaluator.evaluate_model(
-                model, X, y, actual_prices, config.model_type.value
-            )
-        else:
-            # 如果评估器不可用，创建基本的评估指标
-            logger.warning("ModelEvaluator不可用，使用基本评估指标")
-            from dataclasses import dataclass
-            @dataclass
-            class BasicMetrics:
-                accuracy: float = 0.0
-                precision: float = 0.0
-                recall: float = 0.0
-                f1_score: float = 0.0
-                total_return: float = 0.0
-                sharpe_ratio: float = 0.0
-                max_drawdown: float = 0.0
-            metrics = BasicMetrics()
-        
-        # 保存模型版本
-        if self.version_manager is not None:
-            model_version = self.version_manager.save_model_version(
-                model_id=model_id,
-                model=model,
-                model_type=config.model_type.value,
-                parameters=config.__dict__,
-                metrics=metrics,
-                training_data=(X, y)
-            )
-        else:
-            logger.warning("ModelVersionManager不可用，跳过版本保存")
-            model_version = None
-        
-        logger.info(f"模型 {model_id} 训练完成")
-        logger.info(f"评估结果 - 准确率: {metrics.accuracy:.4f}, 夏普比率: {metrics.sharpe_ratio:.4f}")
-        logger.info(f"总收益: {metrics.total_return:.4f}, 最大回撤: {metrics.max_drawdown:.4f}")
-        
-        return model_version.file_path, metrics
+            
+            if features_df.empty:
+                raise ValueError("无法获取有效的训练数据")
+            
+            # 数据预处理
+            logger.info("开始数据预处理...")
+            X, y = self._prepare_training_data(features_df, config)
+            
+            if len(X) == 0:
+                raise ValueError("预处理后的数据为空")
+            
+            # 准备价格数据用于评估
+            actual_prices = self._extract_prices_for_evaluation(features_df, config)
+            
+            # 时间序列交叉验证分割
+            logger.info(f"数据分割，总样本数: {len(X)}")
+            train_X, train_y, val_X, val_y = self._time_series_split(X, y, config.validation_split)
+            
+            if len(train_X) == 0:
+                raise ValueError("训练数据为空，请调整时间范围或验证集比例")
+            
+            if len(val_X) == 0:
+                raise ValueError("验证数据为空，请调整时间范围或验证集比例")
+            
+            # 根据模型类型训练
+            logger.info(f"开始模型训练，类型: {config.model_type.value}")
+            if config.model_type == ModelType.XGBOOST:
+                model = await self._train_xgboost(
+                    train_X, train_y, val_X, val_y, config
+                )
+            else:
+                model = await self._train_deep_learning_model(
+                    train_X, train_y, val_X, val_y, config
+                )
+            
+            # 全面评估模型
+            logger.info("开始模型评估...")
+            if self.evaluator is not None:
+                metrics = await self.evaluator.evaluate_model(
+                    model, X, y, actual_prices, config.model_type.value
+                )
+            else:
+                # 如果评估器不可用，创建基本的评估指标
+                logger.warning("ModelEvaluator不可用，使用基本评估指标")
+                from dataclasses import dataclass
+                @dataclass
+                class BasicMetrics:
+                    accuracy: float = 0.0
+                    precision: float = 0.0
+                    recall: float = 0.0
+                    f1_score: float = 0.0
+                    total_return: float = 0.0
+                    sharpe_ratio: float = 0.0
+                    max_drawdown: float = 0.0
+                metrics = BasicMetrics()
+            
+            # 保存模型版本
+            logger.info("保存模型版本...")
+            if self.version_manager is not None:
+                model_version = self.version_manager.save_model_version(
+                    model_id=model_id,
+                    model=model,
+                    model_type=config.model_type.value,
+                    parameters=config.__dict__,
+                    metrics=metrics,
+                    training_data=(X, y)
+                )
+            else:
+                logger.warning("ModelVersionManager不可用，跳过版本保存")
+                # 使用本地保存作为备选
+                model_path = await self._save_model(model_id, model, config, metrics)
+                # 创建一个简单的模型版本对象
+                class SimpleModelVersion:
+                    def __init__(self, file_path):
+                        self.file_path = file_path
+                model_version = SimpleModelVersion(model_path)
+            
+            logger.info(f"模型 {model_id} 训练完成")
+            logger.info(f"评估结果 - 准确率: {metrics.accuracy:.4f}, 夏普比率: {metrics.sharpe_ratio:.4f}")
+            logger.info(f"总收益: {metrics.total_return:.4f}, 最大回撤: {metrics.max_drawdown:.4f}")
+            
+            return model_version.file_path, metrics
+        except Exception as e:
+            logger.error(f"训练模型 {model_id} 失败: {e}")
+            # 重新抛出异常，让装饰器处理
+            raise
     
     def _extract_prices_for_evaluation(
         self, 
@@ -505,6 +576,7 @@ class ModelTrainingService:
         
         logger.info(f"数据分割完成，训练集: {len(train_X)}, 验证集: {len(val_X)}")
         return train_X, train_y, val_X, val_y
+    @handle_async_exception
     async def _train_xgboost(
         self,
         train_X: np.ndarray,
@@ -548,6 +620,7 @@ class ModelTrainingService:
         logger.info("XGBoost模型训练完成")
         return model
     
+    @handle_async_exception
     async def _train_deep_learning_model(
         self,
         train_X: np.ndarray,
@@ -726,6 +799,7 @@ class ModelTrainingService:
             win_rate=win_rate
         )
     
+    @handle_async_exception
     async def _save_model(
         self,
         model_id: str,
@@ -764,6 +838,7 @@ class ModelTrainingService:
         
         return str(model_path)
     
+    @handle_async_exception
     async def create_ensemble_model(
         self,
         ensemble_id: str,
@@ -825,6 +900,7 @@ class ModelTrainingService:
         logger.info(f"集成模型 {ensemble_id} 创建完成")
         return ensemble_info
     
+    @handle_async_exception
     async def setup_online_learning(
         self,
         model_id: str,
@@ -857,6 +933,7 @@ class ModelTrainingService:
         logger.info(f"模型 {model_id} 在线学习设置完成")
         return setup_info
     
+    @handle_async_exception
     async def update_model_with_new_data(
         self,
         model_id: str,
@@ -896,6 +973,7 @@ class ModelTrainingService:
         logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}")
         return updated_model, metrics
     
+    @handle_async_exception
     async def train_ensemble_models(
         self,
         ensemble_id: str,

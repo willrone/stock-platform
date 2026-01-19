@@ -25,80 +25,97 @@ from app.core.database import SessionLocal
 
 logger = app_logger
 
-
-class ModelStatus(Enum):
-    """模型状态"""
-    TRAINING = "training"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    DEPLOYED = "deployed"
-    ARCHIVED = "archived"
-
-
-@dataclass
-class BacktestMetrics:
-    """回测评估指标"""
-    # 基础分类指标
-    accuracy: float
-    precision: float
-    recall: float
-    f1_score: float
-    
-    # 金融指标
-    total_return: float
-    sharpe_ratio: float
-    max_drawdown: float
-    win_rate: float
-    profit_factor: float
-    
-    # 风险指标
-    volatility: float
-    var_95: float  # 95% VaR
-    calmar_ratio: float
-    
-    # 交易指标
-    total_trades: int
-    avg_trade_return: float
-    max_consecutive_losses: int
-    
-    def to_dict(self) -> Dict[str, float]:
-        return asdict(self)
+# 导入统一的错误处理机制
+try:
+    from app.core.error_handler import ModelError, DataError, TaskError, ErrorSeverity, ErrorContext, handle_async_exception
+except ImportError:
+    logger.warning("错误处理模块未找到，使用默认错误处理")
+    ModelError = Exception
+    DataError = Exception
+    TaskError = Exception
+    ErrorSeverity = None
+    ErrorContext = None
+    handle_async_exception = lambda func: func
 
 
-@dataclass
-class ModelVersion:
-    """模型版本信息"""
-    model_id: str
-    version: str
-    model_type: str
-    parameters: Dict[str, Any]
-    metrics: BacktestMetrics
-    file_path: str
-    created_at: datetime
-    status: ModelStatus
-    training_data_hash: str
+# 从shared_types.py导入共享类型
+try:
+    from .shared_types import ModelStatus, BacktestMetrics, ModelVersion
+    SHARED_TYPES_AVAILABLE = True
+except ImportError:
+    SHARED_TYPES_AVAILABLE = False
+    # 如果导入失败，使用本地定义作为备选
+    class ModelStatus(Enum):
+        """模型状态"""
+        TRAINING = "training"
+        COMPLETED = "completed"
+        FAILED = "failed"
+        DEPLOYED = "deployed"
+        ARCHIVED = "archived"
     
-    def to_dict(self) -> Dict[str, Any]:
-        result = asdict(self)
-        result['created_at'] = self.created_at.isoformat()
-        result['status'] = self.status.value
-        result['metrics'] = self.metrics.to_dict()
+    @dataclass
+    class BacktestMetrics:
+        """回测评估指标"""
+        # 基础分类指标
+        accuracy: float
+        precision: float
+        recall: float
+        f1_score: float
         
-        # 递归转换parameters中的枚举类型
-        def convert_enums(obj):
-            if isinstance(obj, dict):
-                return {k: convert_enums(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [convert_enums(item) for item in obj]
-            elif hasattr(obj, 'value'):  # 枚举类型
-                return obj.value
-            else:
-                return obj
+        # 金融指标
+        total_return: float
+        sharpe_ratio: float
+        max_drawdown: float
+        win_rate: float
+        profit_factor: float
         
-        if 'parameters' in result:
-            result['parameters'] = convert_enums(result['parameters'])
+        # 风险指标
+        volatility: float
+        var_95: float  # 95% VaR
+        calmar_ratio: float
         
-        return result
+        # 交易指标
+        total_trades: int
+        avg_trade_return: float
+        max_consecutive_losses: int
+        
+        def to_dict(self) -> Dict[str, float]:
+            return asdict(self)
+    
+    @dataclass
+    class ModelVersion:
+        """模型版本信息"""
+        model_id: str
+        version: str
+        model_type: str
+        parameters: Dict[str, Any]
+        metrics: BacktestMetrics
+        file_path: str
+        created_at: datetime
+        status: ModelStatus
+        training_data_hash: str
+        
+        def to_dict(self) -> Dict[str, Any]:
+            result = asdict(self)
+            result['created_at'] = self.created_at.isoformat()
+            result['status'] = self.status.value
+            result['metrics'] = self.metrics.to_dict()
+            
+            # 递归转换parameters中的枚举类型
+            def convert_enums(obj):
+                if isinstance(obj, dict):
+                    return {k: convert_enums(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_enums(item) for item in obj]
+                elif hasattr(obj, 'value'):  # 枚举类型
+                    return obj.value
+                else:
+                    return obj
+            
+            if 'parameters' in result:
+                result['parameters'] = convert_enums(result['parameters'])
+            
+            return result
 
 
 class TimeSeriesValidator:
@@ -229,6 +246,7 @@ class ModelEvaluator:
         self.validator = TimeSeriesValidator(n_splits=5)
         self.metrics_calculator = FinancialMetricsCalculator()
         
+    @handle_async_exception
     async def evaluate_model(
         self,
         model: Any,
@@ -366,10 +384,25 @@ class ModelEvaluator:
 class ModelVersionManager:
     """模型版本管理器"""
     
-    def __init__(self, models_dir: str = "backend/data/models"):
+    def __init__(self, models_dir: str = None, storage: 'ModelStorage' = None):
+        # 使用配置中的路径，如果没有提供则使用默认配置
+        from app.core.config import settings
+        if models_dir is None:
+            models_dir = settings.MODEL_STORAGE_PATH
+        
         self.models_dir = Path(models_dir)
+        # 解析相对路径为绝对路径
+        if not self.models_dir.is_absolute():
+            backend_dir = Path(__file__).parent.parent.parent
+            self.models_dir = (backend_dir / self.models_dir).resolve()
+        
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.versions_file = self.models_dir / "versions.json"
+        self.storage = storage
+        
+        # 创建版本目录（用于存储每个模型的版本信息）
+        self.versions_dir = self.models_dir / "versions"
+        self.versions_dir.mkdir(parents=True, exist_ok=True)
         
     def _load_versions(self) -> Dict[str, List[Dict]]:
         """加载版本信息"""
@@ -557,6 +590,72 @@ class ModelVersionManager:
             # Pickle模型
             with open(model_path, 'rb') as f:
                 return pickle.load(f)
+    
+    def create_version(self, model_id: str, version: str, description: str,
+                      created_by: str, performance_metrics: Dict[str, float]) -> bool:
+        """创建新版本"""
+        try:
+            # 检查模型是否存在
+            versions = self._load_versions()
+            model_versions = versions.get(model_id, [])
+            
+            # 检查版本是否已存在
+            for v in model_versions:
+                if v.get('version') == version:
+                    logger.warning(f"版本已存在: {model_id} v{version}")
+                    return False
+            
+            # 创建版本目录
+            version_dir = self.versions_dir / model_id
+            version_dir.mkdir(exist_ok=True)
+            
+            # 创建版本信息
+            version_info = {
+                'version': version,
+                'created_at': datetime.utcnow().isoformat(),
+                'created_by': created_by,
+                'description': description,
+                'performance_metrics': performance_metrics,
+                'is_active': False
+            }
+            
+            # 保存版本信息到文件
+            version_file = version_dir / f"{version}.json"
+            with open(version_file, 'w', encoding='utf-8') as f:
+                import json
+                json.dump(version_info, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"模型版本创建成功: {model_id} v{version}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"创建模型版本失败: {str(e)}")
+            return False
+    
+    def list_versions(self, model_id: str) -> List[Dict[str, Any]]:
+        """列出模型的所有版本"""
+        try:
+            version_dir = self.versions_dir / model_id
+            if not version_dir.exists():
+                return []
+            
+            versions = []
+            for version_file in version_dir.glob("*.json"):
+                try:
+                    with open(version_file, 'r', encoding='utf-8') as f:
+                        import json
+                        version_dict = json.load(f)
+                    versions.append(version_dict)
+                except Exception as e:
+                    logger.warning(f"读取版本信息失败: {version_file}, 错误: {e}")
+                    continue
+            
+            # 按创建时间排序
+            versions.sort(key=lambda x: x['created_at'], reverse=True)
+            return versions
+        except Exception as e:
+            logger.error(f"列出模型版本失败: {model_id}, 错误: {e}")
+            return []
 
 
 # 导出主要类

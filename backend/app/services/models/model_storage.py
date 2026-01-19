@@ -20,90 +20,112 @@ except ImportError:
 
 from loguru import logger
 
-from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext
+from app.core.error_handler import ModelError, ErrorSeverity, ErrorContext, handle_async_exception
 from app.core.logging_config import AuditLogger
 
-
-class ModelStatus(Enum):
-    """模型状态"""
-    TRAINING = "training"
-    TRAINED = "trained"
-    VALIDATING = "validating"
-    READY = "ready"
-    DEPLOYED = "deployed"
-    DEPRECATED = "deprecated"
-    FAILED = "failed"
+# 导入统一的错误处理机制
+try:
+    from app.core.error_handler import DataError, TaskError
+except ImportError:
+    DataError = Exception
+    TaskError = Exception
 
 
-class ModelType(Enum):
-    """模型类型"""
-    XGBOOST = "xgboost"
-    LIGHTGBM = "lightgbm"
-    RANDOM_FOREST = "random_forest"
-    LINEAR_REGRESSION = "linear_regression"
-    NEURAL_NETWORK = "neural_network"
-    ENSEMBLE = "ensemble"
-
-
-@dataclass
-class ModelMetadata:
-    """模型元数据"""
-    model_id: str
-    model_name: str
-    model_type: ModelType
-    version: str
-    description: str
-    created_by: str
-    created_at: datetime
-    updated_at: datetime
-    status: ModelStatus
+# 从shared_types.py导入共享类型
+try:
+    from .shared_types import ModelStatus, ModelType, ModelMetadata
+    SHARED_TYPES_AVAILABLE = True
+except ImportError:
+    SHARED_TYPES_AVAILABLE = False
+    # 如果导入失败，使用本地定义作为备选
+    class ModelStatus(Enum):
+        """模型状态"""
+        TRAINING = "training"
+        TRAINED = "trained"
+        VALIDATING = "validating"
+        READY = "ready"
+        DEPLOYED = "deployed"
+        DEPRECATED = "deprecated"
+        FAILED = "failed"
     
-    # 训练信息
-    training_data_info: Dict[str, Any]
-    hyperparameters: Dict[str, Any]
-    training_config: Dict[str, Any]
+    class ModelType(Enum):
+        """模型类型"""
+        XGBOOST = "xgboost"
+        LIGHTGBM = "lightgbm"
+        RANDOM_FOREST = "random_forest"
+        LINEAR_REGRESSION = "linear_regression"
+        NEURAL_NETWORK = "neural_network"
+        ENSEMBLE = "ensemble"
     
-    # 性能指标
-    performance_metrics: Dict[str, float]
-    validation_metrics: Dict[str, float]
-    
-    # 部署信息
-    deployment_info: Optional[Dict[str, Any]] = None
-    
-    # 文件信息
-    model_file_path: Optional[str] = None
-    model_file_size: Optional[int] = None
-    model_file_hash: Optional[str] = None
-    
-    # 依赖信息
-    dependencies: Optional[Dict[str, str]] = None
-    feature_columns: Optional[List[str]] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
-        data = asdict(self)
-        data['model_type'] = self.model_type.value
-        data['status'] = self.status.value
-        data['created_at'] = self.created_at.isoformat()
-        data['updated_at'] = self.updated_at.isoformat()
-        return data
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ModelMetadata':
-        """从字典创建"""
-        data = data.copy()
-        data['model_type'] = ModelType(data['model_type'])
-        data['status'] = ModelStatus(data['status'])
-        data['created_at'] = datetime.fromisoformat(data['created_at'])
-        data['updated_at'] = datetime.fromisoformat(data['updated_at'])
-        return cls(**data)
+    @dataclass
+    class ModelMetadata:
+        """模型元数据"""
+        model_id: str
+        model_name: str
+        model_type: ModelType
+        version: str
+        description: str
+        created_by: str
+        created_at: datetime
+        updated_at: datetime
+        status: ModelStatus
+        
+        # 训练信息
+        training_data_info: Dict[str, Any]
+        hyperparameters: Dict[str, Any]
+        training_config: Dict[str, Any]
+        
+        # 性能指标
+        performance_metrics: Dict[str, float]
+        validation_metrics: Dict[str, float]
+        
+        # 部署信息
+        deployment_info: Optional[Dict[str, Any]] = None
+        
+        # 文件信息
+        model_file_path: Optional[str] = None
+        model_file_size: Optional[int] = None
+        model_file_hash: Optional[str] = None
+        
+        # 依赖信息
+        dependencies: Optional[Dict[str, str]] = None
+        feature_columns: Optional[List[str]] = None
+        
+        def to_dict(self) -> Dict[str, Any]:
+            """转换为字典"""
+            data = asdict(self)
+            data['model_type'] = self.model_type.value
+            data['status'] = self.status.value
+            data['created_at'] = self.created_at.isoformat()
+            data['updated_at'] = self.updated_at.isoformat()
+            return data
+        
+        @classmethod
+        def from_dict(cls, data: Dict[str, Any]) -> 'ModelMetadata':
+            """从字典创建"""
+            data = data.copy()
+            data['model_type'] = ModelType(data['model_type'])
+            data['status'] = ModelStatus(data['status'])
+            data['created_at'] = datetime.fromisoformat(data['created_at'])
+            data['updated_at'] = datetime.fromisoformat(data['updated_at'])
+            return cls(**data)
 
 
 class ModelStorage:
     """模型存储管理器"""
     
-    def __init__(self, storage_root: str = "backend/models"):
+    def __init__(self, storage_root: str = None):
+        # 使用配置中的路径，如果没有提供则使用默认配置
+        from app.core.config import settings
+        if storage_root is None:
+            storage_root = settings.MODEL_STORAGE_PATH
+        
         self.storage_root = Path(storage_root)
+        # 解析相对路径为绝对路径
+        if not self.storage_root.is_absolute():
+            backend_dir = Path(__file__).parent.parent.parent
+            self.storage_root = (backend_dir / self.storage_root).resolve()
+        
         self.storage_root.mkdir(parents=True, exist_ok=True)
         
         # 创建子目录
@@ -121,6 +143,7 @@ class ModelStorage:
         
         logger.info(f"模型存储初始化完成: {self.storage_root}")
     
+    @handle_async_exception
     def save_model(self, model: Any, metadata: ModelMetadata, 
                   overwrite: bool = False) -> bool:
         """保存模型"""
@@ -203,6 +226,7 @@ class ModelStorage:
                 original_exception=e
             )
     
+    @handle_async_exception
     def load_model(self, model_id: str, version: Optional[str] = None) -> Tuple[Any, ModelMetadata]:
         """加载模型"""
         try:
@@ -260,6 +284,7 @@ class ModelStorage:
                 original_exception=e
             )
     
+    @handle_async_exception
     def get_model_metadata(self, model_id: str, version: Optional[str] = None) -> Optional[ModelMetadata]:
         """获取模型元数据"""
         try:
@@ -293,6 +318,7 @@ class ModelStorage:
             logger.error(f"获取模型元数据失败: {model_id}, 错误: {e}")
             return None
     
+    @handle_async_exception
     def list_models(self, model_type: Optional[ModelType] = None, 
                    status: Optional[ModelStatus] = None) -> List[ModelMetadata]:
         """列出模型"""
@@ -407,95 +433,4 @@ class ModelStorage:
             return {}
 
 
-class ModelVersionManager:
-    """模型版本管理器"""
-    
-    def __init__(self, storage: ModelStorage):
-        self.storage = storage
-    
-    def create_version(self, model_id: str, version: str, description: str,
-                      created_by: str, performance_metrics: Dict[str, float]) -> bool:
-        """创建新版本"""
-        try:
-            # 获取当前模型元数据
-            current_metadata = self.storage.get_model_metadata(model_id)
-            if not current_metadata:
-                raise ModelError(
-                    message=f"模型不存在: {model_id}",
-                    severity=ErrorSeverity.HIGH,
-                    context=ErrorContext(model_id=model_id)
-                )
-            
-            # 创建版本目录
-            version_dir = self.storage.versions_dir / model_id
-            version_dir.mkdir(exist_ok=True)
-            
-            # 检查版本是否已存在
-            version_file = version_dir / f"{version}.json"
-            if version_file.exists():
-                raise ModelError(
-                    message=f"版本已存在: {model_id} v{version}",
-                    severity=ErrorSeverity.MEDIUM,
-                    context=ErrorContext(model_id=model_id)
-                )
-            
-            # 创建版本信息
-            version_info = {
-                'version': version,
-                'created_at': datetime.utcnow().isoformat(),
-                'created_by': created_by,
-                'description': description,
-                'performance_metrics': performance_metrics,
-                'is_active': False
-            }
-            
-            # 保存版本信息
-            with open(version_file, 'w', encoding='utf-8') as f:
-                json.dump(version_info, f, ensure_ascii=False, indent=2)
-            
-            # 复制当前模型文件到版本目录
-            current_model_file = self.storage.models_dir / f"{model_id}.joblib"
-            version_model_file = version_dir / f"{version}.joblib"
-            if current_model_file.exists():
-                shutil.copy2(current_model_file, version_model_file)
-            
-            logger.info(f"模型版本创建成功: {model_id} v{version}")
-            return True
-            
-        except ModelError:
-            raise
-        except Exception as e:
-            raise ModelError(
-                message=f"创建模型版本失败: {str(e)}",
-                severity=ErrorSeverity.HIGH,
-                context=ErrorContext(model_id=model_id),
-                original_exception=e
-            )
-    
-    def list_versions(self, model_id: str) -> List[Dict[str, Any]]:
-        """列出模型的所有版本"""
-        try:
-            version_dir = self.storage.versions_dir / model_id
-            if not version_dir.exists():
-                return []
-            
-            versions = []
-            for version_file in version_dir.glob("*.json"):
-                try:
-                    with open(version_file, 'r', encoding='utf-8') as f:
-                        version_dict = json.load(f)
-                    
-                    versions.append(version_dict)
-                    
-                except Exception as e:
-                    logger.warning(f"读取版本信息失败: {version_file}, 错误: {e}")
-                    continue
-            
-            # 按创建时间排序
-            versions.sort(key=lambda x: x['created_at'], reverse=True)
-            
-            return versions
-            
-        except Exception as e:
-            logger.error(f"列出模型版本失败: {model_id}, 错误: {e}")
-            return []
+# ModelVersionManager 已移至 model_evaluation.py 文件，统一实现
