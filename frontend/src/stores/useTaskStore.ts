@@ -24,6 +24,22 @@ export interface Task {
   error_message?: string;
   result?: any;  // 添加原始结果字段
   backtest_results?: any;  // 添加顶层回测结果字段
+  config?: {
+    backtest_config?: {
+      strategy_name?: string;
+      strategy_config?: Record<string, any>;
+      start_date?: string;
+      end_date?: string;
+      initial_cash?: number;
+      commission_rate?: number;
+      slippage_rate?: number;
+    };
+    prediction_config?: any;
+    optimization_config?: any;
+    stock_codes?: string[];
+    model_id?: string;
+    [key: string]: any;
+  };
   results?: {
     total_stocks: number;
     successful_predictions: number;

@@ -6,8 +6,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
-import { Card, CardBody, Button, ButtonGroup, Spinner } from '@heroui/react';
+import { createChart, IChartApi, ISeriesApi, ColorType, SeriesMarkerPosition, SeriesMarkerShape } from 'lightweight-charts';
+import { Card, CardContent, Button, ButtonGroup, CircularProgress, Box, Typography } from '@mui/material';
 import { Calendar, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { DataService } from '@/services/dataService';
 
@@ -26,6 +26,16 @@ interface TradingViewChartProps {
     price?: number;
     timestamp: string;
   }>;
+  signals?: Array<{
+    signal_id?: string;
+    stock_code?: string;
+    signal_type: 'BUY' | 'SELL';
+    price: number;
+    timestamp: string;
+    executed?: boolean;
+  }>;
+  showSignals?: boolean;
+  showTrades?: boolean;
 }
 
 interface PriceData {
@@ -44,6 +54,9 @@ export default function TradingViewChart({
   startDate,
   endDate,
   trades,
+  signals,
+  showSignals = true,
+  showTrades = true,
 }: TradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -54,6 +67,8 @@ export default function TradingViewChart({
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M'>('1D');
   const [chartType, setChartType] = useState<'candlestick' | 'line'>('candlestick');
   const [priceData, setPriceData] = useState<PriceData[]>([]);
+  const [internalShowSignals, setInternalShowSignals] = useState(showSignals);
+  const [internalShowTrades, setInternalShowTrades] = useState(showTrades);
 
   // 获取股票数据
   const fetchStockData = async () => {
@@ -73,34 +88,22 @@ export default function TradingViewChart({
       let resolvedStart: Date;
       let resolvedEnd: Date;
       
-      // 处理startDate：可能是ISO字符串、Date对象或undefined
+      // 处理startDate：可能是ISO字符串或undefined
       if (startDate) {
-        if (typeof startDate === 'string') {
-          resolvedStart = new Date(startDate);
-          if (isNaN(resolvedStart.getTime())) {
-            console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
-            resolvedStart = fallbackStart;
-          }
-        } else if (startDate instanceof Date) {
-          resolvedStart = startDate;
-        } else {
+        resolvedStart = new Date(startDate);
+        if (isNaN(resolvedStart.getTime())) {
+          console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
           resolvedStart = fallbackStart;
         }
       } else {
         resolvedStart = fallbackStart;
       }
       
-      // 处理endDate：可能是ISO字符串、Date对象或undefined
+      // 处理endDate：可能是ISO字符串或undefined
       if (endDate) {
-        if (typeof endDate === 'string') {
-          resolvedEnd = new Date(endDate);
-          if (isNaN(resolvedEnd.getTime())) {
-            console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
-            resolvedEnd = fallbackEnd;
-          }
-        } else if (endDate instanceof Date) {
-          resolvedEnd = endDate;
-        } else {
+        resolvedEnd = new Date(endDate);
+        if (isNaN(resolvedEnd.getTime())) {
+          console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
           resolvedEnd = fallbackEnd;
         }
       } else {
@@ -270,19 +273,58 @@ export default function TradingViewChart({
   };
 
   const addTradeMarkers = () => {
-    if (!trades || trades.length === 0 || !candlestickSeriesRef.current) return;
+    // 这个函数现在被addSignalMarkers取代，因为它会合并交易和信号标记
+    // 保留函数签名以防其他地方调用，但实际逻辑在addSignalMarkers中
+    if (candlestickSeriesRef.current) {
+      addSignalMarkers();
+    }
+  };
 
-    const markers = trades
-      .filter((trade) => trade.timestamp)
-      .map((trade) => ({
-        time: trade.timestamp.split('T')[0],
-        position: trade.action === 'BUY' ? 'belowBar' : 'aboveBar',
-        color: trade.action === 'BUY' ? '#10b981' : '#ef4444',
-        shape: trade.action === 'BUY' ? 'arrowUp' : 'arrowDown',
-        text: trade.action === 'BUY' ? '买入' : '卖出',
-      }));
+  const addSignalMarkers = () => {
+    if (!candlestickSeriesRef.current) return;
 
-    candlestickSeriesRef.current.setMarkers(markers);
+    // 合并交易标记和信号标记
+    const allMarkers: any[] = [];
+    
+    // 先添加交易标记（如果显示）
+    if (internalShowTrades && trades && trades.length > 0) {
+      const tradeMarkers = trades
+        .filter((trade) => trade.timestamp)
+        .map((trade) => ({
+          time: trade.timestamp.split('T')[0],
+          position: (trade.action === 'BUY' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
+          color: trade.action === 'BUY' ? '#10b981' : '#ef4444',
+          shape: (trade.action === 'BUY' ? 'arrowUp' : 'arrowDown') as SeriesMarkerShape,
+          text: trade.action === 'BUY' ? '买入' : '卖出',
+        }));
+      allMarkers.push(...tradeMarkers);
+    }
+    
+    // 添加信号标记（如果显示）
+    if (internalShowSignals && signals && signals.length > 0) {
+      const signalMarkers = signals
+        .filter((signal) => signal.timestamp)
+        .map((signal) => ({
+          time: signal.timestamp.split('T')[0],
+          position: (signal.signal_type === 'BUY' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
+          color: signal.signal_type === 'BUY' 
+            ? (signal.executed ? '#4caf50' : '#8bc34a')  // 买入：已执行深绿，未执行浅绿
+            : (signal.executed ? '#f44336' : '#ff9800'), // 卖出：已执行深红，未执行橙色
+          shape: (signal.signal_type === 'BUY' ? 'circle' : 'circle') as SeriesMarkerShape,  // 使用圆形区分信号
+          text: `${signal.signal_type === 'BUY' ? '买' : '卖'}信号${signal.executed ? '' : '(未执行)'}`,
+          size: signal.executed ? 0.8 : 0.6,  // 已执行信号更大
+        }));
+      allMarkers.push(...signalMarkers);
+    }
+
+    // 按时间排序（必须升序）
+    allMarkers.sort((a, b) => {
+      const timeA = new Date(a.time).getTime();
+      const timeB = new Date(b.time).getTime();
+      return timeA - timeB;
+    });
+
+    candlestickSeriesRef.current.setMarkers(allMarkers);
   };
 
   // 初始化图表
@@ -328,11 +370,11 @@ export default function TradingViewChart({
     // 添加价格系列
     if (chartType === 'candlestick') {
       const candlestickSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a',
-        downColor: '#ef5350',
+        upColor: '#ef5350',  // 红色，上涨
+        downColor: '#26a69a',  // 绿色，下跌
         borderVisible: false,
-        wickUpColor: '#26a69a',
-        wickDownColor: '#ef5350',
+        wickUpColor: '#ef5350',
+        wickDownColor: '#26a69a',
       });
       candlestickSeriesRef.current = candlestickSeries;
     } else {
@@ -365,6 +407,7 @@ export default function TradingViewChart({
     // 添加买卖标记
     addTradingMarkers();
     addTradeMarkers();
+    addSignalMarkers();
 
     // 响应式调整
     const handleResize = () => {
@@ -403,7 +446,7 @@ export default function TradingViewChart({
     const volumeData = priceData.map(item => ({
       time: item.time,
       value: item.volume,
-      color: item.close >= item.open ? '#26a69a80' : '#ef535080',
+      color: item.close >= item.open ? '#ef535080' : '#26a69a80',  // 上涨时红色，下跌时绿色
     }));
     volumeSeriesRef.current.setData(volumeData);
   };
@@ -426,82 +469,111 @@ export default function TradingViewChart({
     if (priceData.length > 0 && candlestickSeriesRef.current) {
       addTradingMarkers();
       addTradeMarkers();
+      addSignalMarkers();
     }
-  }, [priceData, chartType, prediction, trades]);
+  }, [priceData, chartType, prediction, trades, signals, internalShowSignals, internalShowTrades]);
 
   return (
     <Card>
-      <CardBody>
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">{stockCode} 价格走势</h3>
-            <p className="text-sm text-default-500">
+      <CardContent>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+              {stockCode} 价格走势
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
               当前价格: ¥{priceData.length > 0 ? priceData[priceData.length - 1]?.close.toFixed(2) : '--'}
-            </p>
-          </div>
+            </Typography>
+          </Box>
           
-          <div className="flex space-x-2">
-            <ButtonGroup size="sm">
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <ButtonGroup size="small" variant="outlined">
               <Button
-                variant={timeframe === '1D' ? 'solid' : 'light'}
-                onPress={() => setTimeframe('1D')}
+                variant={timeframe === '1D' ? 'contained' : 'outlined'}
+                onClick={() => setTimeframe('1D')}
               >
                 日线
               </Button>
               <Button
-                variant={timeframe === '1W' ? 'solid' : 'light'}
-                onPress={() => setTimeframe('1W')}
+                variant={timeframe === '1W' ? 'contained' : 'outlined'}
+                onClick={() => setTimeframe('1W')}
               >
                 周线
               </Button>
               <Button
-                variant={timeframe === '1M' ? 'solid' : 'light'}
-                onPress={() => setTimeframe('1M')}
+                variant={timeframe === '1M' ? 'contained' : 'outlined'}
+                onClick={() => setTimeframe('1M')}
               >
                 月线
               </Button>
             </ButtonGroup>
             
-            <ButtonGroup size="sm">
+            <ButtonGroup size="small" variant="outlined">
               <Button
-                variant={chartType === 'candlestick' ? 'solid' : 'light'}
-                onPress={() => setChartType('candlestick')}
-                startContent={<BarChart3 className="w-4 h-4" />}
+                variant={chartType === 'candlestick' ? 'contained' : 'outlined'}
+                onClick={() => setChartType('candlestick')}
+                startIcon={<BarChart3 size={16} />}
               >
                 K线
               </Button>
               <Button
-                variant={chartType === 'line' ? 'solid' : 'light'}
-                onPress={() => setChartType('line')}
-                startContent={<TrendingUp className="w-4 h-4" />}
+                variant={chartType === 'line' ? 'contained' : 'outlined'}
+                onClick={() => setChartType('line')}
+                startIcon={<TrendingUp size={16} />}
               >
                 线图
               </Button>
             </ButtonGroup>
-          </div>
-        </div>
+            
+            {(signals && signals.length > 0) || (trades && trades.length > 0) ? (
+              <ButtonGroup size="small" variant="outlined">
+                <Button
+                  variant={internalShowSignals ? 'contained' : 'outlined'}
+                  onClick={() => {
+                    setInternalShowSignals(!internalShowSignals);
+                  }}
+                  startIcon={<AlertCircle size={16} />}
+                >
+                  信号
+                </Button>
+                <Button
+                  variant={internalShowTrades ? 'contained' : 'outlined'}
+                  onClick={() => {
+                    setInternalShowTrades(!internalShowTrades);
+                  }}
+                  startIcon={<TrendingUp size={16} />}
+                >
+                  交易
+                </Button>
+              </ButtonGroup>
+            ) : null}
+          </Box>
+        </Box>
         
-        <div className="relative">
+        <Box sx={{ position: 'relative' }}>
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-              <Spinner size="lg" />
-            </div>
+            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
+              <CircularProgress size={48} />
+            </Box>
           )}
           {!loading && priceData.length === 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-10">
-              <AlertCircle className="w-12 h-12 text-default-400 mb-2" />
-              <p className="text-default-500 text-sm">暂无数据</p>
-              <p className="text-default-400 text-xs mt-1">股票代码: {stockCode}</p>
-              <p className="text-default-400 text-xs">时间范围: {startDate || '默认'} 至 {endDate || '现在'}</p>
-            </div>
+            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
+              <AlertCircle size={48} color="#999" style={{ marginBottom: 8 }} />
+              <Typography variant="body2" color="text.secondary">暂无数据</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                股票代码: {stockCode}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                时间范围: {startDate || '默认'} 至 {endDate || '现在'}
+              </Typography>
+            </Box>
           )}
-          <div
+          <Box
             ref={chartContainerRef}
-            style={{ height: `${height}px` }}
-            className="w-full"
+            sx={{ height: `${height}px`, width: '100%' }}
           />
-        </div>
-      </CardBody>
+        </Box>
+      </CardContent>
     </Card>
   );
 }

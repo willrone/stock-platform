@@ -13,16 +13,18 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Button,
-  Progress,
+  LinearProgress,
   Chip,
   Divider,
-} from '@heroui/react';
+  Box,
+  Typography,
+  CircularProgress,
+} from '@mui/material';
 import {
   Clock,
   CheckCircle,
@@ -126,18 +128,18 @@ export function SyncProgressModal({
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): "primary" | "success" | "error" | "warning" => {
     switch (status) {
       case 'running':
         return 'primary';
       case 'completed':
         return 'success';
       case 'failed':
-        return 'danger';
+        return 'error';
       case 'paused':
         return 'warning';
       default:
-        return 'default';
+        return 'primary';
     }
   };
 
@@ -159,184 +161,196 @@ export function SyncProgressModal({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running':
-        return <Activity className="w-4 h-4 animate-pulse" />;
+        return <Activity size={16} className="animate-pulse" />;
       case 'completed':
-        return <CheckCircle className="w-4 h-4" />;
+        return <CheckCircle size={16} />;
       case 'failed':
-        return <XCircle className="w-4 h-4" />;
+        return <XCircle size={16} />;
       case 'paused':
-        return <Pause className="w-4 h-4" />;
+        return <Pause size={16} />;
       default:
-        return <Clock className="w-4 h-4" />;
+        return <Clock size={16} />;
     }
   };
 
   return (
-    <Modal 
-      isOpen={isOpen} 
+    <Dialog 
+      open={isOpen} 
       onClose={onClose}
-      size="lg"
-      isDismissable={progressData?.status === 'completed' || progressData?.status === 'failed'}
-      hideCloseButton={progressData?.status === 'running'}
+      maxWidth="md"
+      fullWidth
     >
-      <ModalContent>
-        {(onModalClose) => (
-          <>
-            <ModalHeader className="flex flex-col gap-1">
-              <div className="flex items-center space-x-2">
-                <Activity className="w-5 h-5 text-primary" />
-                <span>数据同步进度</span>
-              </div>
-              {syncId && (
-                <p className="text-sm text-default-500 font-normal">
-                  同步ID: {syncId}
-                </p>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Activity size={20} color="#1976d2" />
+            <span>数据同步进度</span>
+          </Box>
+          {syncId && (
+            <Typography variant="caption" color="text.secondary">
+              同步ID: {syncId}
+            </Typography>
+          )}
+        </Box>
+      </DialogTitle>
+      
+      <DialogContent>
+        {error ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <XCircle size={48} color="#d32f2f" style={{ margin: '0 auto 16px' }} />
+            <Typography variant="body2" color="error" sx={{ fontWeight: 500, mb: 2 }}>
+              {error}
+            </Typography>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={loadProgress}
+            >
+              重新加载
+            </Button>
+          </Box>
+        ) : progressData ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* 状态和进度 */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {getStatusIcon(progressData.status)}
+                  <Chip
+                    label={getStatusText(progressData.status)}
+                    color={getStatusColor(progressData.status)}
+                    size="small"
+                  />
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {progressData.progress_percentage.toFixed(1)}%
+                </Typography>
+              </Box>
+              
+              <LinearProgress
+                variant="determinate"
+                value={progressData.progress_percentage}
+                color={getStatusColor(progressData.status) as any}
+                sx={{ height: 10, borderRadius: 5 }}
+              />
+            </Box>
+
+            {/* 当前状态 */}
+            {progressData.current_stock && (
+              <Box sx={{ p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Activity size={16} color="#1976d2" className="animate-pulse" />
+                  <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main' }}>
+                    正在同步
+                  </Typography>
+                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {progressData.current_stock}
+                </Typography>
+              </Box>
+            )}
+
+            <Divider />
+
+            {/* 统计信息 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                  {progressData.total_stocks}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  总股票数
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  {progressData.completed_stocks}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  已完成
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+                  {progressData.failed_stocks}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  失败
+                </Typography>
+              </Box>
+            </Box>
+
+            <Divider />
+
+            {/* 时间信息 */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" color="text.secondary">
+                  开始时间
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {new Date(progressData.start_time).toLocaleString()}
+                </Typography>
+              </Box>
+              
+              {progressData.estimated_remaining_time_seconds && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    预估剩余时间
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {formatTime(progressData.estimated_remaining_time_seconds)}
+                  </Typography>
+                </Box>
               )}
-            </ModalHeader>
-            
-            <ModalBody>
-              {error ? (
-                <div className="text-center py-8">
-                  <XCircle className="w-12 h-12 text-danger mx-auto mb-4" />
-                  <p className="text-danger font-medium">{error}</p>
-                  <Button
-                    color="primary"
-                    variant="light"
-                    onPress={loadProgress}
-                    className="mt-4"
-                  >
-                    重新加载
-                  </Button>
-                </div>
-              ) : progressData ? (
-                <div className="space-y-6">
-                  {/* 状态和进度 */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(progressData.status)}
-                        <Chip
-                          color={getStatusColor(progressData.status) as any}
-                          variant="flat"
-                          size="sm"
-                        >
-                          {getStatusText(progressData.status)}
-                        </Chip>
-                      </div>
-                      <span className="text-sm text-default-500">
-                        {progressData.progress_percentage.toFixed(1)}%
-                      </span>
-                    </div>
-                    
-                    <Progress
-                      value={progressData.progress_percentage}
-                      color={getStatusColor(progressData.status) as any}
-                      className="w-full"
-                      size="lg"
-                    />
-                  </div>
-
-                  {/* 当前状态 */}
-                  {progressData.current_stock && (
-                    <div className="p-4 bg-primary-50 rounded-lg">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Activity className="w-4 h-4 text-primary animate-pulse" />
-                        <span className="text-sm font-medium text-primary">正在同步</span>
-                      </div>
-                      <p className="text-lg font-semibold">{progressData.current_stock}</p>
-                    </div>
-                  )}
-
-                  <Divider />
-
-                  {/* 统计信息 */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-default-700">
-                        {progressData.total_stocks}
-                      </p>
-                      <p className="text-sm text-default-500">总股票数</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-success">
-                        {progressData.completed_stocks}
-                      </p>
-                      <p className="text-sm text-default-500">已完成</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-danger">
-                        {progressData.failed_stocks}
-                      </p>
-                      <p className="text-sm text-default-500">失败</p>
-                    </div>
-                  </div>
-
-                  <Divider />
-
-                  {/* 时间信息 */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-default-500">开始时间</span>
-                      <span className="text-sm font-medium">
-                        {new Date(progressData.start_time).toLocaleString()}
-                      </span>
-                    </div>
-                    
-                    {progressData.estimated_remaining_time_seconds && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-default-500">预估剩余时间</span>
-                        <span className="text-sm font-medium">
-                          {formatTime(progressData.estimated_remaining_time_seconds)}
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-default-500">最后更新</span>
-                      <span className="text-sm font-medium">
-                        {new Date(progressData.last_update).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Activity className="w-12 h-12 text-primary mx-auto mb-4 animate-spin" />
-                  <p className="text-default-500">加载同步进度中...</p>
-                </div>
-              )}
-            </ModalBody>
-            
-            <ModalFooter>
-              <div className="flex items-center space-x-2 w-full">
-                {(progressData?.failed_stocks || 0) > 0 && progressData?.status !== 'running' && (
-                  <Button
-                    color="warning"
-                    variant="light"
-                    startContent={<RotateCcw className="w-4 h-4" />}
-                    onPress={handleRetry}
-                    isLoading={loading}
-                  >
-                    重试失败项
-                  </Button>
-                )}
-                
-                <div className="flex-1" />
-                
-                {progressData?.status === 'completed' || progressData?.status === 'failed' ? (
-                  <Button color="primary" onPress={onModalClose}>
-                    关闭
-                  </Button>
-                ) : (
-                  <Button variant="light" onPress={onModalClose}>
-                    后台运行
-                  </Button>
-                )}
-              </div>
-            </ModalFooter>
-          </>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" color="text.secondary">
+                  最后更新
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {new Date(progressData.last_update).toLocaleTimeString()}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <CircularProgress size={48} sx={{ mb: 2 }} />
+            <Typography variant="body2" color="text.secondary">
+              加载同步进度中...
+            </Typography>
+          </Box>
         )}
-      </ModalContent>
-    </Modal>
+      </DialogContent>
+      
+      <DialogActions>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+          {(progressData?.failed_stocks || 0) > 0 && progressData?.status !== 'running' && (
+            <Button
+              color="warning"
+              variant="outlined"
+              startIcon={<RotateCcw size={16} />}
+              onClick={handleRetry}
+              disabled={loading}
+            >
+              重试失败项
+            </Button>
+          )}
+          
+          <Box sx={{ flex: 1 }} />
+          
+          {progressData?.status === 'completed' || progressData?.status === 'failed' ? (
+            <Button variant="contained" color="primary" onClick={onClose}>
+              关闭
+            </Button>
+          ) : (
+            <Button variant="outlined" onClick={onClose}>
+              后台运行
+            </Button>
+          )}
+        </Box>
+      </DialogActions>
+    </Dialog>
   );
 }

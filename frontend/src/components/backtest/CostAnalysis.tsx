@@ -8,13 +8,18 @@
 import React, { useMemo } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Tabs,
   Tab,
   Chip,
   Tooltip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  LinearProgress,
+  Skeleton,
+  IconButton,
+} from '@mui/material';
 import {
   DollarSign,
   TrendingUp,
@@ -65,256 +70,300 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Card>
-          <CardBody>
-            <div className="animate-pulse space-y-4">
-              <div className="h-4 bg-default-200 rounded w-1/4"></div>
-              <div className="h-20 bg-default-200 rounded"></div>
-            </div>
-          </CardBody>
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Skeleton variant="text" width="25%" />
+              <Skeleton variant="rectangular" height={80} />
+            </Box>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
     );
   }
 
   if (!costComparison || !backtestData) {
     return (
       <Card>
-        <CardBody>
-          <div className="text-center text-default-500 py-8">
-            暂无成本分析数据
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" color="text.secondary">
+              暂无成本分析数据
+            </Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 成本对比概览 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
         {/* 含成本年化收益 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <TrendingDown className="w-5 h-5 text-danger" />
-            </div>
-            <Tooltip content="考虑交易成本后的年化超额收益率">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                含成本年化收益
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <TrendingDown size={20} color="#d32f2f" />
+            </Box>
+            <Tooltip title="考虑交易成本后的年化超额收益率">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  含成本年化收益
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className={`text-2xl font-bold ${
-              (costComparison.withCost.annualized_return || 0) >= 0 ? 'text-success' : 'text-danger'
-            }`}>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 600,
+                color: (costComparison.withCost.annualized_return || 0) >= 0 ? 'success.main' : 'error.main',
+              }}
+            >
               {((costComparison.withCost.annualized_return || 0) * 100).toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 无成本年化收益 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <TrendingUp className="w-5 h-5 text-success" />
-            </div>
-            <Tooltip content="不考虑交易成本的年化超额收益率">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                无成本年化收益
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <TrendingUp size={20} color="#2e7d32" />
+            </Box>
+            <Tooltip title="不考虑交易成本的年化超额收益率">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  无成本年化收益
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className={`text-2xl font-bold ${
-              (costComparison.withoutCost.annualized_return || 0) >= 0 ? 'text-success' : 'text-danger'
-            }`}>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 600,
+                color: (costComparison.withoutCost.annualized_return || 0) >= 0 ? 'success.main' : 'error.main',
+              }}
+            >
               {((costComparison.withoutCost.annualized_return || 0) * 100).toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 成本影响 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <DollarSign className="w-5 h-5 text-warning" />
-            </div>
-            <Tooltip content="交易成本对年化收益的影响">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                成本影响
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <DollarSign size={20} color="#ed6c02" />
+            </Box>
+            <Tooltip title="交易成本对年化收益的影响">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  成本影响
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className="text-2xl font-bold text-warning">
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
               {(costImpact?.impact || 0) * 100 >= 0 ? '-' : '+'}
               {Math.abs((costImpact?.impact || 0) * 100).toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 成本占比 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <PieChart className="w-5 h-5 text-secondary" />
-            </div>
-            <Tooltip content="总交易成本占初始资金的比例">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                成本占比
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <PieChart size={20} color="#9c27b0" />
+            </Box>
+            <Tooltip title="总交易成本占初始资金的比例">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  成本占比
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className="text-2xl font-bold">
+            <Typography variant="h4" sx={{ fontWeight: 600 }}>
               {((costImpact?.costRatio || 0) * 100).toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* 详细对比 */}
       <Card>
-        <CardHeader>
-          <h4 className="text-lg font-semibold">有成本/无成本收益对比</h4>
-        </CardHeader>
-        <CardBody>
-          <Tabs>
-            <Tab key="metrics" title="指标对比">
-              <div className="mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <h5 className="font-semibold text-danger">含成本指标</h5>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-default-500">平均收益:</span>
-                        <span className="font-mono">
-                          {((costComparison.withCost.mean || 0) * 100).toFixed(4)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">标准差:</span>
-                        <span className="font-mono">
-                          {((costComparison.withCost.std || 0) * 100).toFixed(4)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">年化收益:</span>
-                        <span className="font-mono">
-                          {((costComparison.withCost.annualized_return || 0) * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">信息比率:</span>
-                        <span className="font-mono">
-                          {(costComparison.withCost.information_ratio || 0).toFixed(3)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">最大回撤:</span>
-                        <span className="font-mono text-danger">
-                          {((costComparison.withCost.max_drawdown || 0) * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h5 className="font-semibold text-success">无成本指标</h5>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-default-500">平均收益:</span>
-                        <span className="font-mono">
-                          {((costComparison.withoutCost.mean || 0) * 100).toFixed(4)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">标准差:</span>
-                        <span className="font-mono">
-                          {((costComparison.withoutCost.std || 0) * 100).toFixed(4)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">年化收益:</span>
-                        <span className="font-mono">
-                          {((costComparison.withoutCost.annualized_return || 0) * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">信息比率:</span>
-                        <span className="font-mono">
-                          {(costComparison.withoutCost.information_ratio || 0).toFixed(3)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-default-500">最大回撤:</span>
-                        <span className="font-mono text-danger">
-                          {((costComparison.withoutCost.max_drawdown || 0) * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Tab>
-
-            <Tab key="costs" title="交易成本明细">
-              <div className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Card>
-                    <CardBody className="text-center">
-                      <p className="text-sm text-default-500 mb-2">总手续费</p>
-                      <p className="text-2xl font-bold">
-                        ¥{(costComparison.costStats.total_commission || 0).toLocaleString('zh-CN', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}
-                      </p>
-                    </CardBody>
-                  </Card>
-
-                  <Card>
-                    <CardBody className="text-center">
-                      <p className="text-sm text-default-500 mb-2">总滑点成本</p>
-                      <p className="text-2xl font-bold">
-                        ¥{(costComparison.costStats.total_slippage || 0).toLocaleString('zh-CN', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}
-                      </p>
-                    </CardBody>
-                  </Card>
-
-                  <Card>
-                    <CardBody className="text-center">
-                      <p className="text-sm text-default-500 mb-2">总交易成本</p>
-                      <p className="text-2xl font-bold text-warning">
-                        ¥{(costComparison.costStats.total_cost || 0).toLocaleString('zh-CN', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}
-                      </p>
-                    </CardBody>
-                  </Card>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-sm text-default-500 mb-2">
-                    成本占比: {((costComparison.costStats.cost_ratio || 0) * 100).toFixed(2)}%
-                  </p>
-                  <div className="w-full bg-default-100 rounded-full h-2.5">
-                    <div
-                      className="bg-warning h-2.5 rounded-full"
-                      style={{
-                        width: `${Math.min((costComparison.costStats.cost_ratio || 0) * 100, 100)}%`
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </Tab>
+        <CardHeader title="有成本/无成本收益对比" />
+        <CardContent>
+          <Tabs value="metrics">
+            <Tab label="指标对比" value="metrics" />
+            <Tab label="交易成本明细" value="costs" />
           </Tabs>
-        </CardBody>
+
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'error.main' }}>
+                  含成本指标
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      平均收益:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {((costComparison.withCost.mean || 0) * 100).toFixed(4)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      标准差:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {((costComparison.withCost.std || 0) * 100).toFixed(4)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      年化收益:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {((costComparison.withCost.annualized_return || 0) * 100).toFixed(2)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      信息比率:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {(costComparison.withCost.information_ratio || 0).toFixed(3)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      最大回撤:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'error.main' }}>
+                      {((costComparison.withCost.max_drawdown || 0) * 100).toFixed(2)}%
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  无成本指标
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      平均收益:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {((costComparison.withoutCost.mean || 0) * 100).toFixed(4)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      标准差:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {((costComparison.withoutCost.std || 0) * 100).toFixed(4)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      年化收益:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {((costComparison.withoutCost.annualized_return || 0) * 100).toFixed(2)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      信息比率:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {(costComparison.withoutCost.information_ratio || 0).toFixed(3)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      最大回撤:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'error.main' }}>
+                      {((costComparison.withoutCost.max_drawdown || 0) * 100).toFixed(2)}%
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+
+            {/* 交易成本明细 */}
+            <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <Card>
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    总手续费
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    ¥{(costComparison.costStats.total_commission || 0).toLocaleString('zh-CN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    总滑点成本
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    ¥{(costComparison.costStats.total_slippage || 0).toLocaleString('zh-CN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    总交易成本
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                    ¥{(costComparison.costStats.total_cost || 0).toLocaleString('zh-CN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  成本占比: {((costComparison.costStats.cost_ratio || 0) * 100).toFixed(2)}%
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min((costComparison.costStats.cost_ratio || 0) * 100, 100)}
+                color="warning"
+                sx={{ height: 10, borderRadius: 5 }}
+              />
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

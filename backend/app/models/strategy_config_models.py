@@ -15,7 +15,7 @@ class StrategyConfig(Base):
     """策略配置表"""
     __tablename__ = "strategy_configs"
     
-    config_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    config_id = Column(String, primary_key=True)  # 由API层手动生成
     config_name = Column(String(255), nullable=False)
     strategy_name = Column(String(100), nullable=False)
     parameters = Column(JSON, nullable=False)  # 策略参数配置

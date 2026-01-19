@@ -7,17 +7,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   Button,
-  Input,
+  TextField,
   Select,
-  SelectItem,
-  DatePicker,
+  MenuItem,
   Switch,
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Divider,
   Chip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+} from '@mui/material';
 import { Save, Loader2 } from 'lucide-react';
 import { OptimizationService, CreateOptimizationTaskRequest, ParamSpaceConfig } from '../../services/optimizationService';
 import { StockSelector } from '../tasks/StockSelector';
@@ -82,26 +86,42 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
       if (strategy?.parameters) {
         const defaultSpace: Record<string, ParamSpaceConfig> = {};
         Object.entries(strategy.parameters).forEach(([key, param]: [string, any]) => {
-          if (param.type === 'int') {
+          // 只处理可以优化的参数类型：int 和 float
+          if (param.type === 'int' && param.min !== undefined && param.max !== undefined) {
             defaultSpace[key] = {
               type: 'int',
-              low: param.min || 1,
-              high: param.max || 100,
+              low: param.min,
+              high: param.max,
               default: param.default,
               enabled: true,
             };
-          } else if (param.type === 'float') {
+          } else if (param.type === 'float' && param.min !== undefined && param.max !== undefined) {
             defaultSpace[key] = {
               type: 'float',
-              low: param.min || 0.0,
-              high: param.max || 1.0,
+              low: param.min,
+              high: param.max,
+              default: param.default,
+              enabled: true,
+            };
+          } else if (param.type === 'categorical' && param.options && Array.isArray(param.options)) {
+            // 处理分类参数
+            defaultSpace[key] = {
+              type: 'categorical',
+              choices: param.options,
               default: param.default,
               enabled: true,
             };
           }
         });
+        console.log('加载的参数空间:', defaultSpace);
         setParamSpace(defaultSpace);
+      } else {
+        // 如果策略没有参数定义，清空参数空间
+        setParamSpace({});
       }
+    } else {
+      // 未选择策略时，清空参数空间
+      setParamSpace({});
     }
   }, [formData.strategy_name, strategies]);
 
@@ -177,203 +197,280 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">创建超参优化任务</h2>
-        <p className="text-default-500">配置优化参数，寻找策略的最佳参数组合</p>
-      </div>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box>
+        <Typography variant="h5" component="h2" sx={{ fontWeight: 600, mb: 1 }}>
+          创建超参优化任务
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          配置优化参数，寻找策略的最佳参数组合
+        </Typography>
+      </Box>
 
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">基本信息</h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Input
+        <CardHeader title="基本信息" />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
             label="任务名称"
             placeholder="输入任务名称"
             value={formData.task_name}
             onChange={(e) => setFormData(prev => ({ ...prev, task_name: e.target.value }))}
-            isRequired
+            required
+            fullWidth
           />
 
-          <Select
-            label="选择策略"
-            placeholder={strategies.length === 0 ? "加载中..." : "选择要优化的策略"}
-            selectedKeys={formData.strategy_name ? [formData.strategy_name] : []}
-            onSelectionChange={(keys) => {
-              const selected = Array.from(keys)[0] as string;
-              setFormData(prev => ({ ...prev, strategy_name: selected }));
-            }}
-            isRequired
-            isDisabled={strategies.length === 0}
-          >
-            {strategies.map((strategy) => (
-              <SelectItem key={strategy.key} value={strategy.key}>
-                {strategy.name || strategy.key}
-              </SelectItem>
-            ))}
-          </Select>
-          {strategies.length === 0 && (
-            <p className="text-sm text-default-500">正在加载策略列表...</p>
-          )}
+          <FormControl fullWidth required disabled={strategies.length === 0}>
+            <InputLabel>选择策略</InputLabel>
+            <Select
+              value={formData.strategy_name}
+              label="选择策略"
+              onChange={(e) => setFormData(prev => ({ ...prev, strategy_name: e.target.value }))}
+            >
+              {strategies.map((strategy) => (
+                <MenuItem key={strategy.key} value={strategy.key}>
+                  {strategy.name || strategy.key}
+                </MenuItem>
+              ))}
+            </Select>
+            {strategies.length === 0 && (
+              <FormHelperText>正在加载策略列表...</FormHelperText>
+            )}
+          </FormControl>
 
-          <div>
-            <label className="text-sm font-medium mb-2 block">选择股票</label>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+              选择股票
+            </Typography>
             <StockSelector
               value={selectedStocks}
               onChange={setSelectedStocks}
             />
-          </div>
+          </Box>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+            <TextField
               type="date"
               label="开始日期"
               value={formData.start_date}
               onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-              isRequired
+              required
+              fullWidth
+              InputLabelProps={{ shrink: true }}
             />
-            <Input
+            <TextField
               type="date"
               label="结束日期"
               value={formData.end_date}
               onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-              isRequired
+              required
+              fullWidth
+              InputLabelProps={{ shrink: true }}
             />
-          </div>
-        </CardBody>
+          </Box>
+        </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">参数空间配置</h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          {Object.entries(paramSpace).length === 0 ? (
-            <p className="text-default-500">请先选择策略</p>
+        <CardHeader 
+          title="参数空间配置" 
+          subheader="配置需要优化的策略参数范围。只有数值型参数（整数、浮点数）和分类参数可以进行优化。"
+        />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {!formData.strategy_name ? (
+            <Typography variant="body2" color="text.secondary">
+              请先选择策略，系统将自动加载该策略的可优化参数
+            </Typography>
+          ) : Object.entries(paramSpace).length === 0 ? (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                当前策略没有可优化的参数（需要数值型参数：整数或浮点数）
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                提示：某些策略的参数可能是 JSON 对象、字符串或布尔值，这些参数类型不支持自动优化。
+                您可以在创建回测任务时手动配置这些参数。
+              </Typography>
+            </Box>
           ) : (
-            Object.entries(paramSpace).map(([paramName, config]) => (
-              <div key={paramName} className="p-4 border border-divider rounded-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium">{paramName}</h4>
-                  <Switch
-                    isSelected={config.enabled}
-                    onValueChange={(checked) => updateParamSpace(paramName, 'enabled', checked)}
-                  >
-                    启用优化
-                  </Switch>
-                </div>
-                {config.enabled && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      type="number"
-                      label="最小值"
-                      value={config.low?.toString() || ''}
-                      onChange={(e) => updateParamSpace(paramName, 'low', parseFloat(e.target.value))}
-                    />
-                    <Input
-                      type="number"
-                      label="最大值"
-                      value={config.high?.toString() || ''}
-                      onChange={(e) => updateParamSpace(paramName, 'high', parseFloat(e.target.value))}
-                    />
-                  </div>
-                )}
-              </div>
-            ))
+            Object.entries(paramSpace).map(([paramName, config]) => {
+              const strategy = strategies.find(s => s.key === formData.strategy_name);
+              const paramInfo = strategy?.parameters?.[paramName];
+              const paramDescription = paramInfo?.description || '';
+              
+              return (
+                <Box key={paramName} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {paramName}
+                      </Typography>
+                      {paramDescription && (
+                        <Typography variant="caption" color="text.secondary">
+                          {paramDescription}
+                        </Typography>
+                      )}
+                      {config.default !== undefined && (
+                        <Chip 
+                          label={`默认值: ${config.default}`} 
+                          size="small" 
+                          sx={{ mt: 0.5, mr: 1 }}
+                        />
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2">启用优化</Typography>
+                      <Switch
+                        checked={config.enabled}
+                        onChange={(e) => updateParamSpace(paramName, 'enabled', e.target.checked)}
+                      />
+                    </Box>
+                  </Box>
+                  {config.enabled && (
+                    <>
+                      {config.type === 'categorical' && config.choices ? (
+                        <FormControl fullWidth>
+                          <InputLabel>可选值</InputLabel>
+                          <Select
+                            multiple
+                            value={config.choices || []}
+                            label="可选值"
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {selected.map((value: any) => (
+                                  <Chip key={value} label={value} size="small" />
+                                ))}
+                              </Box>
+                            )}
+                            disabled
+                          >
+                            {config.choices.map((choice: any) => (
+                              <MenuItem key={choice} value={choice}>
+                                {choice}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                          <FormHelperText>
+                            分类参数：将从以上值中选择
+                          </FormHelperText>
+                        </FormControl>
+                      ) : (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                          <TextField
+                            type="number"
+                            label="最小值"
+                            value={config.low?.toString() || ''}
+                            onChange={(e) => updateParamSpace(paramName, 'low', parseFloat(e.target.value))}
+                            fullWidth
+                            helperText={config.type === 'int' ? '整数' : '浮点数'}
+                          />
+                          <TextField
+                            type="number"
+                            label="最大值"
+                            value={config.high?.toString() || ''}
+                            onChange={(e) => updateParamSpace(paramName, 'high', parseFloat(e.target.value))}
+                            fullWidth
+                            helperText={config.type === 'int' ? '整数' : '浮点数'}
+                          />
+                        </Box>
+                      )}
+                    </>
+                  )}
+                </Box>
+              );
+            })
           )}
-        </CardBody>
+        </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">优化目标</h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Select
-            label="目标指标"
-            selectedKeys={Array.isArray(formData.objective_metric) ? formData.objective_metric : [formData.objective_metric]}
-            onSelectionChange={(keys) => {
-              const selected = Array.from(keys);
-              setFormData(prev => ({ 
-                ...prev, 
-                objective_metric: selected.length === 1 ? selected[0] as string : selected as string[]
-              }));
-            }}
-          >
-            <SelectItem key="sharpe" value="sharpe">夏普比率 (Sharpe Ratio)</SelectItem>
-            <SelectItem key="calmar" value="calmar">卡玛比率 (Calmar Ratio)</SelectItem>
-            <SelectItem key="ic" value="ic">信息系数 (IC)</SelectItem>
-            <SelectItem key="custom" value="custom">自定义组合</SelectItem>
-          </Select>
+        <CardHeader title="优化目标" />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel>目标指标</InputLabel>
+            <Select
+              value={Array.isArray(formData.objective_metric) ? formData.objective_metric[0] : formData.objective_metric}
+              label="目标指标"
+              onChange={(e) => {
+                setFormData(prev => ({ 
+                  ...prev, 
+                  objective_metric: e.target.value
+                }));
+              }}
+            >
+              <MenuItem value="sharpe">夏普比率 (Sharpe Ratio)</MenuItem>
+              <MenuItem value="calmar">卡玛比率 (Calmar Ratio)</MenuItem>
+              <MenuItem value="ic">信息系数 (IC)</MenuItem>
+              <MenuItem value="custom">自定义组合</MenuItem>
+            </Select>
+          </FormControl>
 
-          <Select
-            label="优化方向"
-            selectedKeys={[formData.direction]}
-            onSelectionChange={(keys) => {
-              const selected = Array.from(keys)[0] as 'maximize' | 'minimize';
-              setFormData(prev => ({ ...prev, direction: selected }));
-            }}
-          >
-            <SelectItem key="maximize" value="maximize">最大化</SelectItem>
-            <SelectItem key="minimize" value="minimize">最小化</SelectItem>
-          </Select>
+          <FormControl fullWidth>
+            <InputLabel>优化方向</InputLabel>
+            <Select
+              value={formData.direction}
+              label="优化方向"
+              onChange={(e) => {
+                const selected = e.target.value as 'maximize' | 'minimize';
+                setFormData(prev => ({ ...prev, direction: selected }));
+              }}
+            >
+              <MenuItem value="maximize">最大化</MenuItem>
+              <MenuItem value="minimize">最小化</MenuItem>
+            </Select>
+          </FormControl>
 
           {formData.objective_metric === 'custom' && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">自定义权重</label>
-              <Input
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                自定义权重
+              </Typography>
+              <TextField
                 type="number"
                 label="夏普比率权重"
                 value={objectiveWeights.sharpe_ratio.toString()}
                 onChange={(e) => setObjectiveWeights(prev => ({ ...prev, sharpe_ratio: parseFloat(e.target.value) }))}
-                min={0}
-                max={1}
-                step={0.1}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
               />
-              <Input
+              <TextField
                 type="number"
                 label="总收益率权重"
                 value={objectiveWeights.total_return.toString()}
                 onChange={(e) => setObjectiveWeights(prev => ({ ...prev, total_return: parseFloat(e.target.value) }))}
-                min={0}
-                max={1}
-                step={0.1}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
               />
-            </div>
+            </Box>
           )}
-        </CardBody>
+        </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">优化配置</h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Input
+        <CardHeader title="优化配置" />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
             type="number"
             label="试验次数"
             value={formData.n_trials.toString()}
             onChange={(e) => setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))}
-            min={10}
-            max={200}
+            inputProps={{ min: 10, max: 200 }}
+            fullWidth
           />
 
-          <Select
-            label="优化方法"
-            selectedKeys={[formData.optimization_method]}
-            onSelectionChange={(keys) => {
-              const selected = Array.from(keys)[0] as string;
-              setFormData(prev => ({ ...prev, optimization_method: selected }));
-            }}
-          >
-            <SelectItem key="tpe" value="tpe">TPE (Tree-structured Parzen Estimator)</SelectItem>
-            <SelectItem key="random" value="random">随机搜索</SelectItem>
-            <SelectItem key="nsga2" value="nsga2">NSGA-II (多目标)</SelectItem>
-            <SelectItem key="motpe" value="motpe">MOTPE (多目标)</SelectItem>
-          </Select>
+          <FormControl fullWidth>
+            <InputLabel>优化方法</InputLabel>
+            <Select
+              value={formData.optimization_method}
+              label="优化方法"
+              onChange={(e) => setFormData(prev => ({ ...prev, optimization_method: e.target.value }))}
+            >
+              <MenuItem value="tpe">TPE (Tree-structured Parzen Estimator)</MenuItem>
+              <MenuItem value="random">随机搜索</MenuItem>
+              <MenuItem value="nsga2">NSGA-II (多目标)</MenuItem>
+              <MenuItem value="motpe">MOTPE (多目标)</MenuItem>
+            </Select>
+          </FormControl>
 
-          <Input
+          <TextField
             type="number"
             label="超时时间（秒，可选）"
             value={formData.timeout?.toString() || ''}
@@ -382,21 +479,22 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
               timeout: e.target.value ? parseInt(e.target.value) : undefined 
             }))}
             placeholder="不设置则无超时限制"
+            fullWidth
           />
-        </CardBody>
+        </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-4">
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
         <Button
+          variant="contained"
           color="primary"
-          onPress={handleSubmit}
-          isLoading={loading}
-          startContent={!loading && <Save />}
+          onClick={handleSubmit}
+          disabled={loading}
+          startIcon={!loading && <Save size={16} />}
         >
           {loading ? '创建中...' : '创建优化任务'}
         </Button>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
-

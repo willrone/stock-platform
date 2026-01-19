@@ -9,17 +9,23 @@
 import React, { useEffect, useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
-  Input,
+  TextField,
   Select,
-  SelectItem,
+  MenuItem,
   Switch,
   Slider,
   Button,
   Tooltip,
   Chip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  IconButton,
+} from '@mui/material';
 import { Info, RotateCcw } from 'lucide-react';
 
 export interface StrategyParameter {
@@ -175,119 +181,119 @@ export function StrategyConfigForm({
         const safeValue = isNaN(numValue) ? param.default : numValue;
         
         return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-4">
-              <Input
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <TextField
                 type="number"
                 value={safeValue?.toString() || ''}
-                onValueChange={(val) => {
-                  const numVal = param.type === 'int' ? parseInt(val, 10) : parseFloat(val);
+                onChange={(e) => {
+                  const numVal = param.type === 'int' ? parseInt(e.target.value, 10) : parseFloat(e.target.value);
                   if (!isNaN(numVal)) {
                     handleValueChange(key, numVal);
                   }
                 }}
-                isInvalid={!!error}
-                errorMessage={error}
-                step={param.type === 'float' ? 0.001 : 1}
-                min={param.min}
-                max={param.max}
-                className="flex-1"
+                error={!!error}
+                helperText={error}
+                inputProps={{ 
+                  step: param.type === 'float' ? 0.001 : 1,
+                  min: param.min,
+                  max: param.max,
+                }}
+                sx={{ flex: 1 }}
               />
               {param.min !== undefined && param.max !== undefined && (
-                <Slider
-                  value={safeValue}
-                  onChange={(val) => {
-                    // 滑块直接更新，避免通过handleValueChange的延迟
-                    const numVal = Number(val);
-                    if (!isNaN(numVal)) {
-                      const finalValue = param.type === 'int' ? Math.round(numVal) : numVal;
-                      // 直接更新state
-                      setValues(prev => {
-                        if (prev[key] === finalValue) return prev;
-                        const newValues = { ...prev, [key]: finalValue };
-                        // 调用onChange
-                        if (onChangeRef.current) {
-                          Promise.resolve().then(() => {
-                            onChangeRef.current?.(newValues);
-                          });
-                        }
-                        return newValues;
-                      });
-                      // 清除错误
-                      setErrors(prev => {
-                        const newErrors = { ...prev };
-                        delete newErrors[key];
-                        return newErrors;
-                      });
-                    }
-                  }}
-                  minValue={param.min}
-                  maxValue={param.max}
-                  step={param.type === 'float' ? 0.001 : 1}
-                  className="flex-1"
-                  aria-label={`${key} 滑块`}
-                />
+                <Box sx={{ flex: 1 }}>
+                  <Slider
+                    value={safeValue}
+                    onChange={(e, val) => {
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        const finalValue = param.type === 'int' ? Math.round(numVal) : numVal;
+                        setValues(prev => {
+                          if (prev[key] === finalValue) return prev;
+                          const newValues = { ...prev, [key]: finalValue };
+                          if (onChangeRef.current) {
+                            Promise.resolve().then(() => {
+                              onChangeRef.current?.(newValues);
+                            });
+                          }
+                          return newValues;
+                        });
+                        setErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors[key];
+                          return newErrors;
+                        });
+                      }
+                    }}
+                    min={param.min}
+                    max={param.max}
+                    step={param.type === 'float' ? 0.001 : 1}
+                    valueLabelDisplay="auto"
+                  />
+                </Box>
               )}
-            </div>
+            </Box>
             {(param.min !== undefined || param.max !== undefined) && (
-              <p className="text-xs text-default-500">
+              <Typography variant="caption" color="text.secondary">
                 范围: {param.min ?? '无限制'} - {param.max ?? '无限制'}
-              </p>
+              </Typography>
             )}
-          </div>
+          </Box>
         );
 
       case 'boolean':
         return (
           <Switch
-            isSelected={value}
-            onValueChange={(val) => handleValueChange(key, val)}
+            checked={value}
+            onChange={(e) => handleValueChange(key, e.target.checked)}
           />
         );
 
       case 'string':
         if (param.options && param.options.length > 0) {
           return (
-            <Select
-              selectedKeys={value ? [value] : []}
-              onSelectionChange={(keys) => {
-                const selected = Array.from(keys)[0] as string;
-                handleValueChange(key, selected);
-              }}
-              isInvalid={!!error}
-              errorMessage={error}
-            >
-              {param.options.map(option => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </Select>
+            <FormControl fullWidth error={!!error}>
+              <InputLabel>{key}</InputLabel>
+              <Select
+                value={value || ''}
+                label={key}
+                onChange={(e) => handleValueChange(key, e.target.value)}
+              >
+                {param.options.map(option => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </Select>
+              {error && <FormHelperText>{error}</FormHelperText>}
+            </FormControl>
           );
         }
         return (
-          <Input
+          <TextField
             value={value?.toString() || ''}
-            onValueChange={(val) => handleValueChange(key, val)}
-            isInvalid={!!error}
-            errorMessage={error}
+            onChange={(e) => handleValueChange(key, e.target.value)}
+            error={!!error}
+            helperText={error}
+            fullWidth
           />
         );
 
       case 'json':
         return (
-          <div className="space-y-2">
-            <Input
-              type="textarea"
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <TextField
+              multiline
+              rows={3}
               value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-              onValueChange={(val) => handleValueChange(key, val)}
-              isInvalid={!!error}
-              errorMessage={error}
+              onChange={(e) => handleValueChange(key, e.target.value)}
+              error={!!error}
+              helperText={error || '请输入有效的JSON格式'}
               placeholder='例如: [1, 2, 3] 或 {"key": "value"}'
-              minRows={3}
+              fullWidth
             />
-            <p className="text-xs text-default-500">请输入有效的JSON格式</p>
-          </div>
+          </Box>
         );
 
       default:
@@ -301,66 +307,92 @@ export function StrategyConfigForm({
 
   return (
     <Card>
-      <CardHeader className="flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          <h3 className="text-lg font-semibold">策略配置参数</h3>
-          <Chip variant="flat" size="sm" color="secondary">
-            {strategyName}
-          </Chip>
-        </div>
-        <Button
-          size="sm"
-          variant="light"
-          startContent={<RotateCcw className="w-4 h-4" />}
-          onPress={handleReset}
-        >
-          重置为默认值
-        </Button>
-      </CardHeader>
-      <CardBody className="space-y-4">
+      <CardHeader
+        title={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" component="span">
+              策略配置参数
+            </Typography>
+            <Chip label={strategyName} size="small" color="secondary" />
+          </Box>
+        }
+        action={
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<RotateCcw size={16} />}
+            onClick={handleReset}
+          >
+            重置为默认值
+          </Button>
+        }
+      />
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {/* 加载已保存配置 */}
-        {savedConfigs.length > 0 && onLoadConfig && (
-          <div className="mb-4">
-            <Select
-              label="加载已保存配置"
-              placeholder="选择已保存的配置"
-              onSelectionChange={(keys) => {
-                const configId = Array.from(keys)[0] as string;
-                if (configId && onLoadConfig) {
-                  onLoadConfig(configId);
-                }
-              }}
-              isDisabled={loading}
-            >
-              {savedConfigs.map(config => (
-                <SelectItem key={config.config_id} value={config.config_id}>
-                  {config.config_name} ({new Date(config.created_at).toLocaleDateString()})
-                </SelectItem>
-              ))}
-            </Select>
-          </div>
+        {onLoadConfig && (
+          <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+              加载已保存配置
+            </Typography>
+            {loading ? (
+              <Typography variant="body2" color="text.secondary">
+                加载中...
+              </Typography>
+            ) : savedConfigs.length > 0 ? (
+              <FormControl fullWidth size="small">
+                <InputLabel>选择已保存的配置</InputLabel>
+                <Select
+                  value=""
+                  label="选择已保存的配置"
+                  onChange={(e) => {
+                    const configId = e.target.value;
+                    if (configId && onLoadConfig) {
+                      onLoadConfig(configId);
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  {savedConfigs.map(config => (
+                    <MenuItem key={config.config_id} value={config.config_id}>
+                      {config.config_name} ({new Date(config.created_at).toLocaleDateString()})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                暂无已保存的配置。完成回测或超参优化后可以保存配置。
+              </Typography>
+            )}
+          </Box>
         )}
 
         {/* 参数表单 */}
-        <div className="space-y-4">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {Object.entries(parameters).map(([key, param]) => (
-            <div key={key} className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <label className="text-sm font-medium">{key}</label>
+            <Box key={key} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {key}
+                </Typography>
                 {param.description && (
-                  <Tooltip content={param.description}>
-                    <Info className="w-4 h-4 text-default-400" />
+                  <Tooltip title={param.description}>
+                    <IconButton size="small">
+                      <Info size={16} />
+                    </IconButton>
                   </Tooltip>
                 )}
-              </div>
+              </Box>
               {renderParameterInput(key, param)}
               {param.description && (
-                <p className="text-xs text-default-500">{param.description}</p>
+                <Typography variant="caption" color="text.secondary">
+                  {param.description}
+                </Typography>
               )}
-            </div>
+            </Box>
           ))}
-        </div>
-      </CardBody>
+        </Box>
+      </CardContent>
     </Card>
   );
 }

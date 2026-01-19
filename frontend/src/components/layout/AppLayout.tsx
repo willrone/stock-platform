@@ -12,19 +12,25 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Navbar,
-  NavbarBrand,
-  NavbarContent,
-  NavbarItem,
+  AppBar,
+  Toolbar,
+  IconButton,
+  Typography,
   Button,
   Avatar,
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
+  Menu,
+  MenuItem,
   Badge,
   Chip,
-} from '@heroui/react';
+  Drawer,
+  Box,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+} from '@mui/material';
 import {
   BarChart3,
   TrendingUp,
@@ -33,7 +39,7 @@ import {
   Settings,
   User,
   Bell,
-  Menu,
+  Menu as MenuIcon,
   X,
   LogOut,
   Wifi,
@@ -108,6 +114,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
 
   // 监听WebSocket连接状态
   useEffect(() => {
@@ -144,6 +151,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // 处理用户菜单点击
   const handleUserAction = (key: string) => {
+    setUserMenuAnchor(null);
     switch (key) {
       case 'profile':
         router.push('/profile');
@@ -165,160 +173,187 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {/* 顶部导航栏 */}
-      <Navbar isBordered className="bg-background/70 backdrop-blur-md">
-        <NavbarContent justify="start" className="flex-shrink-0">
-          <NavbarItem>
-            <Button
-              isIconOnly
-              variant="light"
-              onPress={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden"
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-          </NavbarItem>
+      <AppBar position="sticky" sx={{ bgcolor: 'background.paper', color: 'text.primary', boxShadow: 1 }}>
+        <Toolbar>
+          {/* 移动端菜单按钮 */}
+          <IconButton
+            edge="start"
+            color="inherit"
+            aria-label="menu"
+            onClick={() => setSidebarOpen(true)}
+            sx={{ display: { xs: 'block', lg: 'none' }, mr: 2 }}
+          >
+            <MenuIcon size={20} />
+          </IconButton>
           
-          <NavbarBrand className="flex items-center space-x-2">
-            <BarChart3 className="w-6 h-6 text-primary" />
-            <span className="font-bold text-lg hidden sm:block">股票预测平台</span>
-          </NavbarBrand>
-        </NavbarContent>
+          {/* Logo */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
+            <BarChart3 size={24} color="#1976d2" />
+            <Typography variant="h6" component="div" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>
+              股票预测平台
+            </Typography>
+          </Box>
 
-        <NavbarContent justify="center" className="hidden lg:flex flex-1 justify-center">
-          <div className="flex items-center space-x-1">
+          {/* 桌面端菜单 */}
+          <Box sx={{ flexGrow: 1, display: { xs: 'none', lg: 'flex' }, gap: 1, justifyContent: 'center' }}>
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.key;
               return (
-                <NavbarItem key={item.key}>
-                  <Button
-                    variant={isActive ? "solid" : "light"}
-                    color={isActive ? "primary" : "default"}
-                    startContent={<Icon className="w-4 h-4" />}
-                    onPress={() => handleMenuClick(item.key)}
-                    className="font-medium"
-                  >
-                    {item.label}
-                  </Button>
-                </NavbarItem>
+                <Button
+                  key={item.key}
+                  variant={isActive ? "contained" : "text"}
+                  color={isActive ? "primary" : "inherit"}
+                  startIcon={<Icon size={16} />}
+                  onClick={() => handleMenuClick(item.key)}
+                  sx={{ fontWeight: 500 }}
+                >
+                  {item.label}
+                </Button>
               );
             })}
-          </div>
-        </NavbarContent>
+          </Box>
 
-        <NavbarContent justify="end" className="flex-shrink-0">
-          {/* 连接状态指示器 */}
-          <NavbarItem className="hidden sm:flex">
+          {/* 右侧操作区 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* 连接状态指示器 */}
             <Chip
-              startContent={wsConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              color={wsConnected ? "success" : "danger"}
-              variant="flat"
-              size="sm"
+              icon={wsConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
+              label={wsConnected ? '已连接' : '未连接'}
+              color={wsConnected ? "success" : "error"}
+              size="small"
+              sx={{ display: { xs: 'none', sm: 'flex' } }}
+            />
+
+            {/* 通知铃铛 */}
+            <IconButton color="inherit" onClick={clearNotifications}>
+              <Badge badgeContent={notifications > 0 ? notifications : undefined} color="error">
+                <Bell size={20} />
+              </Badge>
+            </IconButton>
+
+            {/* 用户菜单 */}
+            <IconButton
+              onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+              sx={{ p: 0 }}
             >
-              {wsConnected ? '已连接' : '未连接'}
-            </Chip>
-          </NavbarItem>
-
-          {/* 通知铃铛 */}
-          <NavbarItem>
-            <Badge content={notifications > 0 ? notifications : undefined} color="danger">
-              <Button
-                isIconOnly
-                variant="light"
-                onPress={clearNotifications}
-              >
-                <Bell className="w-4 h-4" />
-              </Button>
-            </Badge>
-          </NavbarItem>
-
-          {/* 用户菜单 */}
-          <NavbarItem>
-            <Dropdown placement="bottom-end">
-              <DropdownTrigger>
-                <Avatar
-                  as="button"
-                  className="transition-transform"
-                  size="sm"
-                  src={user?.avatar}
-                  fallback={<User className="w-4 h-4" />}
-                />
-              </DropdownTrigger>
-              <DropdownMenu aria-label="用户菜单" onAction={(key) => handleUserAction(key as string)}>
-                <DropdownItem key="profile" startContent={<User className="w-4 h-4" />}>
-                  个人资料
-                </DropdownItem>
-                <DropdownItem key="settings" startContent={<Settings className="w-4 h-4" />}>
-                  账户设置
-                </DropdownItem>
-                <DropdownItem 
-                  key="logout" 
-                  color="danger" 
-                  startContent={<LogOut className="w-4 h-4" />}
-                >
-                  退出登录
-                </DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
-          </NavbarItem>
-        </NavbarContent>
-      </Navbar>
+              <Avatar src={user?.avatar} sx={{ width: 32, height: 32 }}>
+                <User size={16} />
+              </Avatar>
+            </IconButton>
+            <Menu
+              anchorEl={userMenuAnchor}
+              open={Boolean(userMenuAnchor)}
+              onClose={() => setUserMenuAnchor(null)}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'right',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+            >
+              <MenuItem onClick={() => handleUserAction('profile')}>
+                <ListItemIcon>
+                  <User size={16} />
+                </ListItemIcon>
+                <ListItemText>个人资料</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => handleUserAction('settings')}>
+                <ListItemIcon>
+                  <Settings size={16} />
+                </ListItemIcon>
+                <ListItemText>账户设置</ListItemText>
+              </MenuItem>
+              <Divider />
+              <MenuItem onClick={() => handleUserAction('logout')} sx={{ color: 'error.main' }}>
+                <ListItemIcon>
+                  <LogOut size={16} color="inherit" />
+                </ListItemIcon>
+                <ListItemText>退出登录</ListItemText>
+              </MenuItem>
+            </Menu>
+          </Box>
+        </Toolbar>
+      </AppBar>
 
       {/* 移动端侧边栏 */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <div className="fixed left-0 top-0 h-full w-64 bg-background border-r border-divider p-4">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-2">
-                <BarChart3 className="w-6 h-6 text-primary" />
-                <span className="font-bold text-lg">股票预测平台</span>
-              </div>
-              <Button
-                isIconOnly
-                variant="light"
-                onPress={() => setSidebarOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            <div className="space-y-2">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.key;
-                return (
-                  <Button
-                    key={item.key}
-                    variant={isActive ? "solid" : "light"}
-                    color={isActive ? "primary" : "default"}
-                    startContent={<Icon className="w-4 h-4" />}
-                    onPress={() => handleMenuClick(item.key)}
-                    className="w-full justify-start font-medium"
+      <Drawer
+        anchor="left"
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        sx={{ display: { lg: 'none' } }}
+      >
+        <Box sx={{ width: 256, p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BarChart3 size={24} color="#1976d2" />
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                股票预测平台
+              </Typography>
+            </Box>
+            <IconButton onClick={() => setSidebarOpen(false)}>
+              <X size={20} />
+            </IconButton>
+          </Box>
+          
+          <List>
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.key;
+              return (
+                <ListItem key={item.key} disablePadding>
+                  <ListItemButton
+                    selected={isActive}
+                    onClick={() => handleMenuClick(item.key)}
+                    sx={{
+                      borderRadius: 1,
+                      '&.Mui-selected': {
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        '&:hover': {
+                          bgcolor: 'primary.dark',
+                        },
+                      },
+                    }}
                   >
-                    {item.label}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      <Icon size={18} color={isActive ? 'white' : 'inherit'} />
+                    </ListItemIcon>
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+        </Box>
+      </Drawer>
 
       {/* 主内容区域 */}
-      <main className="container mx-auto px-4 py-6 max-w-7xl">
+      <Box component="main" sx={{ flexGrow: 1, p: 3, maxWidth: '1400px', mx: 'auto', width: '100%' }}>
         {children}
-      </main>
+      </Box>
 
       {/* 底部信息栏 */}
-      <footer className="border-t border-divider bg-background/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 text-center">
-          <p className="text-sm text-default-500">
+      <Box
+        component="footer"
+        sx={{
+          borderTop: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          py: 2,
+          mt: 'auto',
+        }}
+      >
+        <Box sx={{ maxWidth: '1400px', mx: 'auto', px: 2, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
             股票预测平台 ©2025 - 基于AI的智能投资决策系统
-          </p>
-        </div>
-      </footer>
-    </div>
-  );};
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+};

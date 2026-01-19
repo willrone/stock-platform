@@ -1,7 +1,7 @@
 # Mac Mini数据服务依赖
 
 # 数据获取
-tushare>=1.2.89
+tushare
 pandas>=2.1.0
 numpy>=1.26.0
 

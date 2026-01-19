@@ -39,9 +39,27 @@ export class WebSocketService {
 
   /**
    * 建立WebSocket连接
+   * WebSocket不能通过HTTP代理，需要直接连接到后端服务器
    */
   private connect(): void {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+    let wsUrl: string;
+    
+    // 优先使用环境变量配置
+    if (process.env.NEXT_PUBLIC_WS_URL) {
+      wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+    } else if (typeof window !== 'undefined') {
+      // 客户端：根据当前页面地址推断后端WebSocket地址
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const hostname = window.location.hostname;
+      // 从环境变量获取后端端口，或使用默认8000
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+      wsUrl = `${protocol}//${hostname}:${port}/ws`;
+    } else {
+      // 服务端：使用默认值
+      wsUrl = 'ws://localhost:8000/ws';
+    }
+    
+    console.log('[WebSocket] 连接到:', wsUrl);
     
     try {
       this.socket = new WebSocket(wsUrl);

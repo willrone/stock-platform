@@ -8,12 +8,15 @@
 import React from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Chip,
-  Progress,
+  LinearProgress,
   Tooltip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  Skeleton,
+} from '@mui/material';
 import {
   TrendingUp,
   TrendingDown,
@@ -72,17 +75,17 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
   const metrics = processMetrics();
 
   // 获取收益率颜色
-  const getReturnColor = (value: number) => {
-    if (value > 0) return 'text-success';
-    if (value < 0) return 'text-danger';
-    return 'text-default-500';
+  const getReturnColor = (value: number): string => {
+    if (value > 0) return 'success.main';
+    if (value < 0) return 'error.main';
+    return 'text.secondary';
   };
 
   // 获取收益率图标
   const getReturnIcon = (value: number) => {
-    if (value > 0) return <TrendingUp className="w-5 h-5 text-success" />;
-    if (value < 0) return <TrendingDown className="w-5 h-5 text-danger" />;
-    return <Activity className="w-5 h-5 text-default-500" />;
+    if (value > 0) return <TrendingUp size={20} color="#2e7d32" />;
+    if (value < 0) return <TrendingDown size={20} color="#d32f2f" />;
+    return <Activity size={20} color="#666" />;
   };
 
   // 获取夏普比率评级
@@ -90,36 +93,34 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
     if (sharpe >= 2) return { text: '优秀', color: 'success' as const };
     if (sharpe >= 1) return { text: '良好', color: 'primary' as const };
     if (sharpe >= 0.5) return { text: '一般', color: 'warning' as const };
-    return { text: '较差', color: 'danger' as const };
+    return { text: '较差', color: 'error' as const };
   };
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
         {Array.from({ length: 8 }).map((_, index) => (
           <Card key={index}>
-            <CardBody className="text-center">
-              <div className="animate-pulse">
-                <div className="w-8 h-8 bg-default-200 rounded-full mx-auto mb-3"></div>
-                <div className="h-4 bg-default-200 rounded mb-2"></div>
-                <div className="h-6 bg-default-200 rounded"></div>
-              </div>
-            </CardBody>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Skeleton variant="circular" width={32} height={32} sx={{ mx: 'auto', mb: 2 }} />
+              <Skeleton variant="text" width="60%" sx={{ mx: 'auto', mb: 1 }} />
+              <Skeleton variant="text" width="40%" sx={{ mx: 'auto' }} />
+            </CardContent>
           </Card>
         ))}
-      </div>
+      </Box>
     );
   }
 
   if (!backtestData) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex items-center justify-center h-32 text-default-500">
-            <AlertTriangle className="w-8 h-8 mr-2" />
-            <span>暂无回测数据</span>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 128, color: 'text.secondary' }}>
+            <AlertTriangle size={32} style={{ marginRight: 8 }} />
+            <Typography>暂无回测数据</Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
@@ -127,212 +128,281 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
   const sharpeRating = getSharpeRating(metrics.sharpeRatio);
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 核心指标卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
         {/* 总收益率 */}
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
+        <Card sx={{ '&:hover': { boxShadow: 4 }, transition: 'box-shadow 0.3s' }}>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
               {getReturnIcon(metrics.totalReturn)}
-            </div>
-            <Tooltip content="策略在整个回测期间的总收益率">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                总收益率
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+            </Box>
+            <Tooltip title="策略在整个回测期间的总收益率">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  总收益率
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className={`text-2xl font-bold ${getReturnColor(metrics.totalReturn)}`}>
+            <Typography variant="h4" sx={{ fontWeight: 600, color: getReturnColor(metrics.totalReturn) }}>
               {metrics.totalReturn >= 0 ? '+' : ''}{metrics.totalReturn.toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 年化收益率 */}
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <BarChart3 className="w-5 h-5 text-primary" />
-            </div>
-            <Tooltip content="将总收益率按年化计算的收益率">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                年化收益率
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+        <Card sx={{ '&:hover': { boxShadow: 4 }, transition: 'box-shadow 0.3s' }}>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <BarChart3 size={20} color="#1976d2" />
+            </Box>
+            <Tooltip title="将总收益率按年化计算的收益率">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  年化收益率
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className={`text-2xl font-bold ${getReturnColor(metrics.annualizedReturn)}`}>
+            <Typography variant="h4" sx={{ fontWeight: 600, color: getReturnColor(metrics.annualizedReturn) }}>
               {metrics.annualizedReturn >= 0 ? '+' : ''}{metrics.annualizedReturn.toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 夏普比率 */}
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <Target className="w-5 h-5 text-secondary" />
-            </div>
-            <Tooltip content="衡量风险调整后收益的指标，数值越高越好">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                夏普比率
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+        <Card sx={{ '&:hover': { boxShadow: 4 }, transition: 'box-shadow 0.3s' }}>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <Target size={20} color="#9c27b0" />
+            </Box>
+            <Tooltip title="衡量风险调整后收益的指标，数值越高越好">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  夏普比率
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <div className="flex items-center justify-center space-x-2">
-              <p className="text-2xl font-bold">{metrics.sharpeRatio.toFixed(3)}</p>
-              <Chip color={sharpeRating.color} variant="flat" size="sm">
-                {sharpeRating.text}
-              </Chip>
-            </div>
-          </CardBody>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                {metrics.sharpeRatio.toFixed(3)}
+              </Typography>
+              <Chip label={sharpeRating.text} color={sharpeRating.color} size="small" />
+            </Box>
+          </CardContent>
         </Card>
 
         {/* 最大回撤 */}
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <TrendingDown className="w-5 h-5 text-danger" />
-            </div>
-            <Tooltip content="策略在回测期间的最大亏损幅度">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                最大回撤
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+        <Card sx={{ '&:hover': { boxShadow: 4 }, transition: 'box-shadow 0.3s' }}>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <TrendingDown size={20} color="#d32f2f" />
+            </Box>
+            <Tooltip title="策略在回测期间的最大亏损幅度">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  最大回撤
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className="text-2xl font-bold text-danger">
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
               -{Math.abs(metrics.maxDrawdown).toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* 次要指标卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
         {/* 波动率 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <Activity className="w-5 h-5 text-warning" />
-            </div>
-            <Tooltip content="策略收益的波动程度，数值越低越稳定">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                波动率
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <Activity size={20} color="#ed6c02" />
+            </Box>
+            <Tooltip title="策略收益的波动程度，数值越低越稳定">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  波动率
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className="text-xl font-bold">{metrics.volatility.toFixed(2)}%</p>
-          </CardBody>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {metrics.volatility.toFixed(2)}%
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 胜率 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <Target className="w-5 h-5 text-success" />
-            </div>
-            <Tooltip content="盈利交易占总交易次数的比例">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                胜率
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <Target size={20} color="#2e7d32" />
+            </Box>
+            <Tooltip title="盈利交易占总交易次数的比例">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  胜率
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <div className="space-y-2">
-              <p className="text-xl font-bold">{metrics.winRate.toFixed(1)}%</p>
-              <Progress 
-                value={metrics.winRate} 
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                {metrics.winRate.toFixed(1)}%
+              </Typography>
+              <LinearProgress
+                variant="determinate"
+                value={metrics.winRate}
                 color={metrics.winRate >= 50 ? 'success' : 'warning'}
-                size="sm"
+                sx={{ height: 6, borderRadius: 3 }}
               />
-            </div>
-          </CardBody>
+            </Box>
+          </CardContent>
         </Card>
 
         {/* 交易次数 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <BarChart3 className="w-5 h-5 text-primary" />
-            </div>
-            <Tooltip content="回测期间的总交易次数">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                交易次数
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <BarChart3 size={20} color="#1976d2" />
+            </Box>
+            <Tooltip title="回测期间的总交易次数">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  交易次数
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className="text-xl font-bold">{metrics.totalTrades}</p>
-          </CardBody>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {metrics.totalTrades}
+            </Typography>
+          </CardContent>
         </Card>
 
         {/* 盈亏比 */}
         <Card>
-          <CardBody className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <DollarSign className="w-5 h-5 text-secondary" />
-            </div>
-            <Tooltip content="平均盈利交易与平均亏损交易的比值">
-              <p className="text-sm text-default-500 mb-2 cursor-help flex items-center justify-center">
-                盈亏比
-                <Info className="w-3 h-3 ml-1" />
-              </p>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <DollarSign size={20} color="#9c27b0" />
+            </Box>
+            <Tooltip title="平均盈利交易与平均亏损交易的比值">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+                <Typography variant="body2" color="text.secondary">
+                  盈亏比
+                </Typography>
+                <Info size={12} style={{ marginLeft: 4 }} />
+              </Box>
             </Tooltip>
-            <p className={`text-xl font-bold ${metrics.profitFactor >= 1 ? 'text-success' : 'text-danger'}`}>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 600, color: metrics.profitFactor >= 1 ? 'success.main' : 'error.main' }}
+            >
               {metrics.profitFactor.toFixed(2)}
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* 风险评估总结 */}
       <Card>
-        <CardHeader>
-          <h4 className="text-lg font-semibold">风险评估总结</h4>
-        </CardHeader>
-        <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <div className={`w-3 h-3 rounded-full mr-2 ${
-                  metrics.sharpeRatio >= 1 ? 'bg-success' : 
-                  metrics.sharpeRatio >= 0.5 ? 'bg-warning' : 'bg-danger'
-                }`}></div>
-                <span className="text-sm font-medium">风险调整收益</span>
-              </div>
-              <p className="text-xs text-default-500">
-                {metrics.sharpeRatio >= 1 ? '良好' : 
-                 metrics.sharpeRatio >= 0.5 ? '一般' : '需要改进'}
-              </p>
-            </div>
+        <CardHeader title="风险评估总结" />
+        <CardContent>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+            <Box sx={{ textAlign: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    mr: 1,
+                    bgcolor:
+                      metrics.sharpeRatio >= 1
+                        ? 'success.main'
+                        : metrics.sharpeRatio >= 0.5
+                        ? 'warning.main'
+                        : 'error.main',
+                  }}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  风险调整收益
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {metrics.sharpeRatio >= 1
+                  ? '良好'
+                  : metrics.sharpeRatio >= 0.5
+                  ? '一般'
+                  : '需要改进'}
+              </Typography>
+            </Box>
 
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <div className={`w-3 h-3 rounded-full mr-2 ${
-                  Math.abs(metrics.maxDrawdown) <= 10 ? 'bg-success' : 
-                  Math.abs(metrics.maxDrawdown) <= 20 ? 'bg-warning' : 'bg-danger'
-                }`}></div>
-                <span className="text-sm font-medium">回撤控制</span>
-              </div>
-              <p className="text-xs text-default-500">
-                {Math.abs(metrics.maxDrawdown) <= 10 ? '优秀' : 
-                 Math.abs(metrics.maxDrawdown) <= 20 ? '良好' : '需要改进'}
-              </p>
-            </div>
+            <Box sx={{ textAlign: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    mr: 1,
+                    bgcolor:
+                      Math.abs(metrics.maxDrawdown) <= 10
+                        ? 'success.main'
+                        : Math.abs(metrics.maxDrawdown) <= 20
+                        ? 'warning.main'
+                        : 'error.main',
+                  }}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  回撤控制
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {Math.abs(metrics.maxDrawdown) <= 10
+                  ? '优秀'
+                  : Math.abs(metrics.maxDrawdown) <= 20
+                  ? '良好'
+                  : '需要改进'}
+              </Typography>
+            </Box>
 
-            <div className="text-center">
-              <div className="flex items-center justify-center mb-2">
-                <div className={`w-3 h-3 rounded-full mr-2 ${
-                  metrics.winRate >= 50 ? 'bg-success' : 
-                  metrics.winRate >= 40 ? 'bg-warning' : 'bg-danger'
-                }`}></div>
-                <span className="text-sm font-medium">交易胜率</span>
-              </div>
-              <p className="text-xs text-default-500">
-                {metrics.winRate >= 50 ? '良好' : 
-                 metrics.winRate >= 40 ? '一般' : '需要改进'}
-              </p>
-            </div>
-          </div>
-        </CardBody>
+            <Box sx={{ textAlign: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    mr: 1,
+                    bgcolor:
+                      metrics.winRate >= 50
+                        ? 'success.main'
+                        : metrics.winRate >= 40
+                        ? 'warning.main'
+                        : 'error.main',
+                  }}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  交易胜率
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {metrics.winRate >= 50
+                  ? '良好'
+                  : metrics.winRate >= 40
+                  ? '一般'
+                  : '需要改进'}
+              </Typography>
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

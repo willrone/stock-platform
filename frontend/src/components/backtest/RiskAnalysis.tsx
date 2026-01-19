@@ -6,23 +6,25 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Card,
-  CardBody,
+  CardContent,
   CardHeader,
   Tabs,
   Tab,
-  Progress,
+  LinearProgress,
   Chip,
   Tooltip,
   Select,
-  SelectItem,
+  MenuItem,
   Button,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-} from '@heroui/react';
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
 import * as echarts from 'echarts';
 import { 
   TrendingUp, 
@@ -105,7 +107,9 @@ export function RiskAnalysis({
   const [selectedDistribution, setSelectedDistribution] = useState<'daily' | 'monthly'>('daily');
   const [selectedRiskLevel, setSelectedRiskLevel] = useState<'95' | '99'>('95');
   
-  const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const onDetailOpen = () => setIsDetailOpen(true);
+  const onDetailClose = () => setIsDetailOpen(false);
   const [selectedRiskMetric, setSelectedRiskMetric] = useState<string | null>(null);
   
   // 图表引用
@@ -423,279 +427,311 @@ export function RiskAnalysis({
   if (!riskMetrics || !returnDistribution || !rollingMetrics) {
     return (
       <Card>
-        <CardBody className="flex items-center justify-center h-64">
-          <div className="text-center text-gray-500">
-            <Calculator className="w-12 h-12 mx-auto mb-2" />
-            <p>暂无风险分析数据</p>
-          </div>
-        </CardBody>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Calculator size={48} color="#999" style={{ margin: '0 auto 8px' }} />
+            <Typography variant="body2" color="text.secondary">暂无风险分析数据</Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 风险指标概览 */}
-      <div className="space-y-4">
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {Object.entries(riskCategories).map(([categoryKey, category]) => {
           const IconComponent = category.icon;
           
           return (
             <Card key={categoryKey}>
-              <CardHeader className="pb-2">
-                <h3 className={`text-lg font-semibold flex items-center gap-2 ${category.color}`}>
-                  <IconComponent className="w-5 h-5" />
-                  {category.title}
-                </h3>
-              </CardHeader>
-              <CardBody className="pt-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <CardHeader
+                title={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <IconComponent size={20} />
+                    <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                      {category.title}
+                    </Typography>
+                  </Box>
+                }
+              />
+              <CardContent>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
                   {category.metrics.map((metric) => {
                     const value = riskMetrics[metric.key as keyof RiskMetrics];
                     const riskLevel = getRiskLevel(metric.key, value);
                     
                     return (
-                      <div
+                      <Box
                         key={metric.key}
-                        className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                        sx={{ 
+                          p: 2, 
+                          border: 1, 
+                          borderColor: 'divider', 
+                          borderRadius: 1, 
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: 'grey.50' },
+                          transition: 'background-color 0.2s'
+                        }}
                         onClick={() => handleRiskMetricClick(metric.key, metric.name, metric.description)}
                       >
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <p className="text-sm text-gray-500">{metric.name}</p>
-                            <p className="text-xl font-bold">
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{metric.name}</Typography>
+                            <Typography variant="h5" sx={{ fontWeight: 600 }}>
                               {formatValue(value, metric.format)}
-                            </p>
-                          </div>
+                            </Typography>
+                          </Box>
                           <Chip
-                            size="sm"
+                            label={riskLevel.level}
+                            size="small"
                             color={riskLevel.color as any}
-                            variant="flat"
-                          >
-                            {riskLevel.level}
-                          </Chip>
-                        </div>
-                        <Tooltip content={metric.description}>
-                          <p className="text-xs text-gray-400 truncate">
+                          />
+                        </Box>
+                        <Tooltip title={metric.description}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {metric.description}
-                          </p>
+                          </Typography>
                         </Tooltip>
-                      </div>
+                      </Box>
                     );
                   })}
-                </div>
-              </CardBody>
+                </Box>
+              </CardContent>
             </Card>
           );
         })}
-      </div>
+      </Box>
 
       {/* VaR 和 CVaR 特殊展示 */}
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold flex items-center gap-2 text-orange-500">
-            <AlertTriangle className="w-5 h-5" />
-            风险价值 (VaR) 分析
-          </h3>
-        </CardHeader>
-        <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h4 className="font-medium">风险价值 (VaR)</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">95% 置信度</span>
-                  <span className="font-mono font-medium text-red-600">
+        <CardHeader
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AlertTriangle size={20} color="#ed6c02" />
+              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                风险价值 (VaR) 分析
+              </Typography>
+            </Box>
+          }
+        />
+        <CardContent>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>风险价值 (VaR)</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">95% 置信度</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
                     {formatValue(riskMetrics.var_95, 'percent')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">99% 置信度</span>
-                  <span className="font-mono font-medium text-red-600">
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">99% 置信度</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
                     {formatValue(riskMetrics.var_99, 'percent')}
-                  </span>
-                </div>
-              </div>
-            </div>
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
             
-            <div className="space-y-4">
-              <h4 className="font-medium">条件风险价值 (CVaR)</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">95% 置信度</span>
-                  <span className="font-mono font-medium text-red-600">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>条件风险价值 (CVaR)</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">95% 置信度</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
                     {formatValue(riskMetrics.cvar_95, 'percent')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">99% 置信度</span>
-                  <span className="font-mono font-medium text-red-600">
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">99% 置信度</Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
                     {formatValue(riskMetrics.cvar_99, 'percent')}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardBody>
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 收益分布和正态性检验 */}
       <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              收益分布分析
-            </h3>
-            <select
-              value={selectedDistribution}
-              onChange={(e) => setSelectedDistribution(e.target.value as 'daily' | 'monthly')}
-              className="px-3 py-1 border rounded text-sm"
-            >
-              <option value="daily">日收益</option>
-              <option value="monthly">月收益</option>
-            </select>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <CardHeader
+          title={
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <BarChart3 size={20} />
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                  收益分布分析
+                </Typography>
+              </Box>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>分布类型</InputLabel>
+                <Select
+                  value={selectedDistribution}
+                  label="分布类型"
+                  onChange={(e) => setSelectedDistribution(e.target.value as 'daily' | 'monthly')}
+                >
+                  <MenuItem value="daily">日收益</MenuItem>
+                  <MenuItem value="monthly">月收益</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          }
+        />
+        <CardContent>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3 }}>
             {/* 分布图表 */}
-            <div className="lg:col-span-2">
-              <div ref={distributionChartRef} style={{ height: '300px', width: '100%' }} />
-            </div>
+            <Box>
+              <Box ref={distributionChartRef} sx={{ height: 300, width: '100%' }} />
+            </Box>
             
             {/* 统计信息 */}
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-2">分布特征</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">偏度</span>
-                    <span className="font-mono">{returnDistribution.skewness.toFixed(3)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">峰度</span>
-                    <span className="font-mono">{returnDistribution.kurtosis.toFixed(3)}</span>
-                  </div>
-                </div>
-              </div>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  分布特征
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">偏度</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                      {returnDistribution.skewness.toFixed(3)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">峰度</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                      {returnDistribution.kurtosis.toFixed(3)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
               
-              <div>
-                <h4 className="font-medium mb-2">分位数</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">5%</span>
-                    <span className="font-mono">{formatValue(returnDistribution.percentiles.p5, 'percent')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">25%</span>
-                    <span className="font-mono">{formatValue(returnDistribution.percentiles.p25, 'percent')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">50%</span>
-                    <span className="font-mono">{formatValue(returnDistribution.percentiles.p50, 'percent')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">75%</span>
-                    <span className="font-mono">{formatValue(returnDistribution.percentiles.p75, 'percent')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">95%</span>
-                    <span className="font-mono">{formatValue(returnDistribution.percentiles.p95, 'percent')}</span>
-                  </div>
-                </div>
-              </div>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  分位数
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {[5, 25, 50, 75, 95].map(percentile => (
+                    <Box key={percentile} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">{percentile}%</Typography>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                        {formatValue(returnDistribution.percentiles[`p${percentile}` as keyof typeof returnDistribution.percentiles], 'percent')}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
               
-              <div>
-                <h4 className="font-medium mb-2">正态性检验</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">检验统计量</span>
-                    <span className="font-mono text-sm">{returnDistribution.normality_test.statistic.toFixed(3)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">P值</span>
-                    <span className="font-mono text-sm">{returnDistribution.normality_test.p_value.toFixed(4)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">正态分布</span>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  正态性检验
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" color="text.secondary">检验统计量</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                      {returnDistribution.normality_test.statistic.toFixed(3)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" color="text.secondary">P值</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                      {returnDistribution.normality_test.p_value.toFixed(4)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" color="text.secondary">正态分布</Typography>
                     <Chip
-                      size="sm"
-                      color={returnDistribution.normality_test.is_normal ? 'success' : 'danger'}
-                      variant="flat"
-                    >
-                      {returnDistribution.normality_test.is_normal ? '是' : '否'}
-                    </Chip>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardBody>
+                      label={returnDistribution.normality_test.is_normal ? '是' : '否'}
+                      size="small"
+                      color={returnDistribution.normality_test.is_normal ? 'success' : 'error'}
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 滚动指标图表 */}
       <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Activity className="w-5 h-5" />
-              滚动风险指标
-            </h3>
-            <select
-              value={selectedMetric}
-              onChange={(e) => setSelectedMetric(e.target.value as keyof RollingMetrics)}
-              className="px-3 py-1 border rounded text-sm"
-            >
-              <option value="rolling_sharpe">滚动夏普比率</option>
-              <option value="rolling_volatility">滚动波动率</option>
-              <option value="rolling_drawdown">滚动回撤</option>
-              <option value="rolling_beta">滚动Beta</option>
-            </select>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div ref={rollingChartRef} style={{ height: '400px', width: '100%' }} />
-        </CardBody>
+        <CardHeader
+          title={
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Activity size={20} />
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                  滚动风险指标
+                </Typography>
+              </Box>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>指标类型</InputLabel>
+                <Select
+                  value={selectedMetric}
+                  label="指标类型"
+                  onChange={(e) => setSelectedMetric(e.target.value as keyof RollingMetrics)}
+                >
+                  <MenuItem value="rolling_sharpe">滚动夏普比率</MenuItem>
+                  <MenuItem value="rolling_volatility">滚动波动率</MenuItem>
+                  <MenuItem value="rolling_drawdown">滚动回撤</MenuItem>
+                  <MenuItem value="rolling_beta">滚动Beta</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          }
+        />
+        <CardContent>
+          <Box ref={rollingChartRef} sx={{ height: 400, width: '100%' }} />
+        </CardContent>
       </Card>
 
       {/* 风险指标详情模态框 */}
-      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="lg">
-        <ModalContent>
-          <ModalHeader className="flex items-center gap-2">
-            <Info className="w-5 h-5" />
+      <Dialog open={isDetailOpen} onClose={onDetailClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Info size={20} />
             风险指标详情
-          </ModalHeader>
-          <ModalBody>
-            {selectedRiskMetric && (
-              <div className="space-y-4">
-                <p className="text-gray-700">{selectedRiskMetric}</p>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2">计算说明</h4>
-                  <p className="text-sm text-gray-600">
-                    该指标基于历史回测数据计算得出，用于评估策略的风险收益特征。
-                    请结合其他指标综合分析，避免单一指标判断。
-                  </p>
-                </div>
-                
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2 text-blue-800">使用建议</h4>
-                  <p className="text-sm text-blue-700">
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedRiskMetric && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography variant="body2">{selectedRiskMetric}</Typography>
+              
+              <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                  计算说明
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  该指标基于历史回测数据计算得出，用于评估策略的风险收益特征。
+                  请结合其他指标综合分析，避免单一指标判断。
+                </Typography>
+              </Box>
+              
+              <Box sx={{ bgcolor: 'primary.light', p: 2, borderRadius: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: 'primary.dark' }}>
+                  使用建议
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'primary.dark' }}>
                     建议将该指标与同类策略或基准进行对比，
                     并考虑市场环境变化对指标的影响。
-                  </p>
-                </div>
-              </div>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button color="primary" onPress={onDetailClose}>
-              关闭
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </div>
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" color="primary" onClick={onDetailClose}>
+            关闭
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

@@ -130,12 +130,12 @@ export class TaskService {
       predicted_return: pred.predicted_return || 0,
       confidence_score: pred.confidence_score,
       confidence_interval: pred.confidence_interval || { lower: 0, upper: 0 },
-      risk_assessment: {
-        value_at_risk: pred.risk_assessment?.value_at_risk || 0,
-        volatility: pred.risk_assessment?.volatility || 0,
-        max_drawdown: pred.risk_assessment?.max_drawdown || 0,
-        sharpe_ratio: pred.risk_assessment?.sharpe_ratio || 0,
-      },
+        risk_assessment: {
+          value_at_risk: pred.risk_assessment?.value_at_risk || 0,
+          volatility: pred.risk_assessment?.volatility || 0,
+          max_drawdown: (pred.risk_assessment as any)?.max_drawdown || 0,
+          sharpe_ratio: (pred.risk_assessment as any)?.sharpe_ratio || 0,
+        },
     })) || [];
   }
 

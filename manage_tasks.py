@@ -85,15 +85,25 @@ def stop_task(task_id):
     except Exception as e:
         print(f"停止任务异常: {e}")
 
-def delete_task(task_id):
+def delete_task(task_id, force=False):
     """删除任务"""
     try:
-        response = requests.delete(f'http://localhost:8000/api/v1/tasks/{task_id}', timeout=10)
+        url = f'http://localhost:8000/api/v1/tasks/{task_id}'
+        if force:
+            url += '?force=true'
+        
+        response = requests.delete(url, timeout=10)
         if response.status_code == 200:
-            print(f"✅ 任务已删除: {task_id}")
+            print(f"✅ 任务已删除: {task_id}" + ("（强制删除）" if force else ""))
         else:
             print(f"❌ 删除任务失败: {response.status_code}")
-            print(response.text)
+            error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
+            error_detail = error_data.get('detail', response.text)
+            print(f"错误详情: {error_detail}")
+            
+            # 如果错误提示需要使用强制删除，给出建议
+            if '强制删除' in error_detail or '正在运行中' in error_detail:
+                print(f"\n💡 提示: 该任务可能需要强制删除，请使用: python manage_tasks.py delete --task-id {task_id} --force")
     except Exception as e:
         print(f"删除任务异常: {e}")
 
@@ -175,6 +185,7 @@ def main():
     parser.add_argument('--status', default='cancelled', choices=['cancelled', 'failed', 'completed'], help='强制设置的状态')
     parser.add_argument('--timeout', type=int, default=30, help='任务超时时间（分钟）')
     parser.add_argument('--auto-fix', action='store_true', help='自动修复卡住的任务')
+    parser.add_argument('--force', action='store_true', help='强制删除（用于删除运行中的任务或存在关联数据的任务）')
     
     args = parser.parse_args()
     
@@ -199,7 +210,7 @@ def main():
         if not args.task_id:
             print("❌ 请提供任务ID: --task-id <task_id>")
             sys.exit(1)
-        delete_task(args.task_id)
+        delete_task(args.task_id, force=args.force)
     elif args.command == 'force':
         if not args.task_id:
             print("❌ 请提供任务ID: --task-id <task_id>")

@@ -6,16 +6,17 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Button,
-  Input,
-  Textarea,
+  TextField,
   Chip,
-} from '@heroui/react';
+  Box,
+  Typography,
+  Alert,
+} from '@mui/material';
 import { Save } from 'lucide-react';
 
 export interface SaveStrategyConfigDialogProps {
@@ -85,74 +86,82 @@ export function SaveStrategyConfigDialog({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl">
-      <ModalContent>
-        {(onClose) => (
-          <>
-            <ModalHeader className="flex flex-col gap-1">
-              <div className="flex items-center space-x-2">
-                <Save className="w-5 h-5" />
-                <span>保存策略配置</span>
-              </div>
-            </ModalHeader>
-            <ModalBody>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-default-500 mb-2">策略名称</p>
-                  <Chip variant="flat" color="secondary">{strategyName}</Chip>
-                </div>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Save size={20} />
+          <span>保存策略配置</span>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              策略名称
+            </Typography>
+            <Chip label={strategyName} color="secondary" size="small" />
+          </Box>
 
-                <Input
-                  label="配置名称"
-                  placeholder="请输入配置名称"
-                  value={configName}
-                  onValueChange={setConfigName}
-                  isRequired
-                  isInvalid={!!error && !configName.trim()}
-                  errorMessage={error && !configName.trim() ? error : undefined}
-                />
+          <TextField
+            label="配置名称"
+            placeholder="请输入配置名称"
+            value={configName}
+            onChange={(e) => setConfigName(e.target.value)}
+            required
+            error={!!error && !configName.trim()}
+            helperText={error && !configName.trim() ? error : undefined}
+            fullWidth
+          />
 
-                <Textarea
-                  label="配置描述"
-                  placeholder="请输入配置描述（可选）"
-                  value={description}
-                  onValueChange={setDescription}
-                  minRows={2}
-                />
+          <TextField
+            label="配置描述"
+            placeholder="请输入配置描述（可选）"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            multiline
+            rows={2}
+            fullWidth
+          />
 
-                <div>
-                  <p className="text-sm text-default-500 mb-2">参数预览</p>
-                  <div className="bg-default-100 rounded-lg p-3">
-                    <pre className="text-xs text-default-600 whitespace-pre-wrap font-mono">
-                      {formatParameters()}
-                    </pre>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="bg-danger-50 border border-danger-200 rounded-lg p-3">
-                    <p className="text-sm text-danger">{error}</p>
-                  </div>
-                )}
-              </div>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={onClose} isDisabled={saving || loading}>
-                取消
-              </Button>
-              <Button
-                color="primary"
-                onPress={handleSave}
-                isLoading={saving || loading}
-                startContent={!saving && !loading ? <Save className="w-4 h-4" /> : undefined}
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              参数预览
+            </Typography>
+            <Box sx={{ bgcolor: 'grey.100', borderRadius: 1, p: 2 }}>
+              <Typography
+                variant="caption"
+                component="pre"
+                sx={{
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  m: 0,
+                  fontSize: '0.75rem',
+                }}
               >
-                保存
-              </Button>
-            </ModalFooter>
-          </>
-        )}
-      </ModalContent>
-    </Modal>
+                {formatParameters()}
+              </Typography>
+            </Box>
+          </Box>
+
+          {error && (
+            <Alert severity="error">{error}</Alert>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving || loading}>
+          取消
+        </Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleSave}
+          disabled={saving || loading}
+          startIcon={!saving && !loading ? <Save size={16} /> : undefined}
+        >
+          {saving || loading ? '保存中...' : '保存'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
-

@@ -199,6 +199,53 @@ class TradeRecord(Base):
         }
 
 
+class SignalRecord(Base):
+    """信号记录表（存储回测过程中生成的交易信号）"""
+    __tablename__ = "signal_records"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(String(50), nullable=False, index=True)
+    backtest_id = Column(String(50), nullable=False, index=True)
+    signal_id = Column(String(50), nullable=False, comment="信号ID")
+    stock_code = Column(String(20), nullable=False, comment="股票代码")
+    stock_name = Column(String(100), nullable=True, comment="股票名称")
+    signal_type = Column(String(10), nullable=False, comment="信号类型：BUY/SELL")
+    timestamp = Column(DateTime, nullable=False, comment="信号时间")
+    price = Column(Float, nullable=False, comment="信号价格")
+    strength = Column(Float, nullable=False, default=0.0, comment="信号强度")
+    reason = Column(Text, nullable=True, comment="信号原因")
+    signal_metadata = Column(JSON, nullable=True, comment="元数据（JSON格式）")
+    executed = Column(Boolean, nullable=False, default=False, comment="是否被执行")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    # 创建索引
+    __table_args__ = (
+        Index('idx_signal_task_stock', 'task_id', 'stock_code'),
+        Index('idx_signal_backtest_time', 'backtest_id', 'timestamp'),
+        Index('idx_signal_stock_time', 'stock_code', 'timestamp'),
+        Index('idx_signal_type', 'signal_type'),
+        Index('idx_signal_executed', 'executed'),
+    )
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "task_id": self.task_id,
+            "backtest_id": self.backtest_id,
+            "signal_id": self.signal_id,
+            "stock_code": self.stock_code,
+            "stock_name": self.stock_name,
+            "signal_type": self.signal_type,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "price": self.price,
+            "strength": self.strength,
+            "reason": self.reason,
+            "metadata": self.signal_metadata,  # 对外接口仍使用metadata名称
+            "executed": self.executed,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+
 class BacktestBenchmark(Base):
     """回测基准数据表（存储基准指数数据用于对比）"""
     __tablename__ = "backtest_benchmarks"

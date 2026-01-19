@@ -14,22 +14,26 @@
 import React, { useEffect, useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Button,
   Tabs,
   Tab,
   Chip,
-  Progress,
+  LinearProgress,
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Select,
-  SelectItem,
-} from '@heroui/react';
+  MenuItem,
+  Box,
+  Typography,
+  IconButton,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
 import {
   Activity,
   AlertTriangle,
@@ -107,10 +111,10 @@ export default function MonitoringPage() {
     return () => clearInterval(interval);
   }, [timeRange]);
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = (severity: string): "error" | "warning" | "primary" | "default" => {
     switch (severity) {
       case 'high':
-        return 'danger';
+        return 'error';
       case 'medium':
         return 'warning';
       case 'low':
@@ -139,368 +143,416 @@ export default function MonitoringPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold mb-2">系统监控</h1>
-          <p className="text-default-500">实时监控系统健康状态、性能指标和异常情况</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Select
-            label="时间范围"
-            selectedKeys={[timeRange]}
-            onSelectionChange={(keys) => setTimeRange(Array.from(keys)[0] as string)}
-            className="w-32"
-            size="sm"
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
+            系统监控
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            实时监控系统健康状态、性能指标和异常情况
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>时间范围</InputLabel>
+            <Select
+              value={timeRange}
+              label="时间范围"
+              onChange={(e) => setTimeRange(e.target.value)}
+            >
+              <MenuItem value="1">1小时</MenuItem>
+              <MenuItem value="6">6小时</MenuItem>
+              <MenuItem value="24">24小时</MenuItem>
+              <MenuItem value="168">7天</MenuItem>
+            </Select>
+          </FormControl>
+          <IconButton
+            onClick={loadMonitoringData}
+            disabled={loading}
           >
-            <SelectItem key="1">1小时</SelectItem>
-            <SelectItem key="6">6小时</SelectItem>
-            <SelectItem key="24">24小时</SelectItem>
-            <SelectItem key="168">7天</SelectItem>
-          </Select>
-          <Button
-            isIconOnly
-            variant="light"
-            onPress={loadMonitoringData}
-            isLoading={loading}
-          >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
+            <RefreshCw size={16} />
+          </IconButton>
+        </Box>
+      </Box>
 
       {/* 主要内容 */}
       <Tabs
-        selectedKey={selectedTab}
-        onSelectionChange={(key) => setSelectedTab(key as string)}
-        variant="underlined"
-        classNames={{
-          tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
-          cursor: "w-full bg-primary",
-          tab: "max-w-fit px-0 h-12",
-        }}
+        value={selectedTab}
+        onChange={(e, newValue) => setSelectedTab(newValue)}
+        variant="scrollable"
+        scrollButtons="auto"
       >
         <Tab
-          key="overview"
-          title={
-            <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4" />
-              <span>系统概览</span>
-            </div>
-          }
-        >
-          <div className="space-y-6 pt-6">
-            {/* 健康状态和性能指标 */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <SystemHealthCard />
-              <PerformanceMetricsCard />
-            </div>
-
-            {/* 关键指标概览 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card>
-                <CardBody className="text-center p-4">
-                  <div className="flex items-center justify-center mb-2">
-                    <AlertTriangle className="w-6 h-6 text-danger" />
-                  </div>
-                  <p className="text-2xl font-bold text-danger">
-                    {errorStats?.total_errors || 0}
-                  </p>
-                  <p className="text-sm text-default-500">总错误数</p>
-                  <p className="text-xs text-default-400">
-                    过去{timeRange}小时
-                  </p>
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardBody className="text-center p-4">
-                  <div className="flex items-center justify-center mb-2">
-                    <Shield className="w-6 h-6 text-warning" />
-                  </div>
-                  <p className="text-2xl font-bold text-warning">
-                    {anomalies?.total_anomalies || 0}
-                  </p>
-                  <p className="text-sm text-default-500">异常检测</p>
-                  <p className="text-xs text-default-400">
-                    高危: {anomalies?.by_severity.high || 0}
-                  </p>
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardBody className="text-center p-4">
-                  <div className="flex items-center justify-center mb-2">
-                    <Database className="w-6 h-6 text-success" />
-                  </div>
-                  <p className="text-2xl font-bold text-success">
-                    {dataQuality?.overall_score || '--'}
-                  </p>
-                  <p className="text-sm text-default-500">数据质量</p>
-                  <p className="text-xs text-default-400">
-                    综合评分
-                  </p>
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardBody className="text-center p-4">
-                  <div className="flex items-center justify-center mb-2">
-                    <Server className="w-6 h-6 text-primary" />
-                  </div>
-                  <p className="text-2xl font-bold text-primary">
-                    99.9%
-                  </p>
-                  <p className="text-sm text-default-500">系统可用性</p>
-                  <p className="text-xs text-default-400">
-                    过去30天
-                  </p>
-                </CardBody>
-              </Card>
-            </div>
-          </div>
-        </Tab>
-
+          value="overview"
+          icon={<Activity size={16} />}
+          iconPosition="start"
+          label="系统概览"
+        />
         <Tab
-          key="errors"
-          title={
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="w-4 h-4" />
+          value="errors"
+          icon={<AlertTriangle size={16} />}
+          iconPosition="start"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <span>错误分析</span>
               {errorStats && errorStats.total_errors > 0 && (
-                <Chip color="danger" size="sm" variant="flat">
-                  {errorStats.total_errors}
-                </Chip>
+                <Chip label={errorStats.total_errors} color="error" size="small" />
               )}
-            </div>
+            </Box>
           }
-        >
-          <div className="space-y-6 pt-6">
-            {/* 错误统计概览 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        />
+        <Tab
+          value="anomalies"
+          icon={<Shield size={16} />}
+          iconPosition="start"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <span>异常检测</span>
+              {anomalies && anomalies.total_anomalies > 0 && (
+                <Chip label={anomalies.total_anomalies} color="warning" size="small" />
+              )}
+            </Box>
+          }
+        />
+        <Tab
+          value="quality"
+          icon={<Database size={16} />}
+          iconPosition="start"
+          label="数据质量"
+        />
+      </Tabs>
+
+      <Box sx={{ mt: 2 }}>
+        {selectedTab === 'overview' && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* 健康状态和性能指标 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: 'repeat(2, 1fr)' }, gap: 3 }}>
+              <SystemHealthCard />
+              <PerformanceMetricsCard />
+            </Box>
+
+            {/* 关键指标概览 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold text-danger">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <AlertTriangle size={24} color="#d32f2f" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
                     {errorStats?.total_errors || 0}
-                  </p>
-                  <p className="text-sm text-default-500">总错误数</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    总错误数
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    过去{timeRange}小时
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Shield size={24} color="#ed6c02" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                    {anomalies?.total_anomalies || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    异常检测
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    高危: {anomalies?.by_severity.high || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Database size={24} color="#2e7d32" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                    {dataQuality?.overall_score || '--'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    数据质量
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    综合评分
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Server size={24} color="#1976d2" />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                    99.9%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    系统可用性
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    过去30天
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Box>
+          </Box>
+        )}
+
+        {selectedTab === 'errors' && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* 错误统计概览 */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <Card>
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+                    {errorStats?.total_errors || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    总错误数
+                  </Typography>
+                </CardContent>
               </Card>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold text-warning">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
                     {errorStats?.total_error_types || 0}
-                  </p>
-                  <p className="text-sm text-default-500">错误类型</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    错误类型
+                  </Typography>
+                </CardContent>
               </Card>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold text-primary">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
                     {errorStats?.time_range_hours || 0}h
-                  </p>
-                  <p className="text-sm text-default-500">统计时间范围</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    统计时间范围
+                  </Typography>
+                </CardContent>
               </Card>
-            </div>
+            </Box>
 
             {/* 错误详情表格 */}
             <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">错误详情</h3>
-              </CardHeader>
-              <CardBody>
-                <Table aria-label="错误统计表格">
-                  <TableHeader>
-                    <TableColumn>错误类型</TableColumn>
-                    <TableColumn>发生次数</TableColumn>
-                    <TableColumn>最后发生时间</TableColumn>
-                    <TableColumn>示例消息</TableColumn>
-                  </TableHeader>
-                  <TableBody
-                    emptyContent="暂无错误记录"
-                  >
-                    {errorStats?.error_statistics.map((error, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <AlertTriangle className="w-4 h-4 text-danger" />
-                            <span className="font-medium">{error.error_type}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Chip color="danger" variant="flat" size="sm">
-                            {error.count}
-                          </Chip>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{new Date(error.last_occurrence).toLocaleString()}</div>
-                            <div className="text-default-500">
-                              {formatTimeAgo(error.last_occurrence)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm text-default-600 max-w-xs truncate">
-                            {error.sample_message}
-                          </div>
-                        </TableCell>
+              <CardHeader title="错误详情" />
+              <CardContent>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>错误类型</TableCell>
+                        <TableCell>发生次数</TableCell>
+                        <TableCell>最后发生时间</TableCell>
+                        <TableCell>示例消息</TableCell>
                       </TableRow>
-                    )) || []}
-                  </TableBody>
-                </Table>
-              </CardBody>
+                    </TableHead>
+                    <TableBody>
+                      {errorStats?.error_statistics.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} align="center">
+                            <Typography variant="body2" color="text.secondary">
+                              暂无错误记录
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        errorStats?.error_statistics.map((error, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <AlertTriangle size={16} color="#d32f2f" />
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {error.error_type}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={error.count} color="error" size="small" />
+                            </TableCell>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2">
+                                  {new Date(error.last_occurrence).toLocaleString()}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatTimeAgo(error.last_occurrence)}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {error.sample_message}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </CardContent>
             </Card>
-          </div>
-        </Tab>
+          </Box>
+        )}
 
-        <Tab
-          key="anomalies"
-          title={
-            <div className="flex items-center space-x-2">
-              <Shield className="w-4 h-4" />
-              <span>异常检测</span>
-              {anomalies && anomalies.total_anomalies > 0 && (
-                <Chip color="warning" size="sm" variant="flat">
-                  {anomalies.total_anomalies}
-                </Chip>
-              )}
-            </div>
-          }
-        >
-          <div className="space-y-6 pt-6">
+        {selectedTab === 'anomalies' && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* 异常统计 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
                     {anomalies?.total_anomalies || 0}
-                  </p>
-                  <p className="text-sm text-default-500">总异常数</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    总异常数
+                  </Typography>
+                </CardContent>
               </Card>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold text-danger">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
                     {anomalies?.by_severity.high || 0}
-                  </p>
-                  <p className="text-sm text-default-500">高危异常</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    高危异常
+                  </Typography>
+                </CardContent>
               </Card>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold text-warning">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
                     {anomalies?.by_severity.medium || 0}
-                  </p>
-                  <p className="text-sm text-default-500">中危异常</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    中危异常
+                  </Typography>
+                </CardContent>
               </Card>
               <Card>
-                <CardBody className="text-center p-4">
-                  <p className="text-2xl font-bold text-primary">
+                <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
                     {anomalies?.by_severity.low || 0}
-                  </p>
-                  <p className="text-sm text-default-500">低危异常</p>
-                </CardBody>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    低危异常
+                  </Typography>
+                </CardContent>
               </Card>
-            </div>
+            </Box>
 
             {/* 异常详情 */}
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">异常详情</h3>
-                  {anomalies?.detection_time && (
-                    <p className="text-sm text-default-500">
+              <CardHeader
+                title="异常详情"
+                action={
+                  anomalies?.detection_time && (
+                    <Typography variant="body2" color="text.secondary">
                       检测时间: {new Date(anomalies.detection_time).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              </CardHeader>
-              <CardBody>
-                <Table aria-label="异常检测表格">
-                  <TableHeader>
-                    <TableColumn>异常类型</TableColumn>
-                    <TableColumn>严重程度</TableColumn>
-                    <TableColumn>影响组件</TableColumn>
-                    <TableColumn>检测时间</TableColumn>
-                    <TableColumn>描述</TableColumn>
-                  </TableHeader>
-                  <TableBody
-                    emptyContent="暂无异常检测"
-                  >
-                    {anomalies?.anomalies.map((anomaly, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Shield className="w-4 h-4 text-warning" />
-                            <span className="font-medium">{anomaly.type}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            color={getSeverityColor(anomaly.severity) as any}
-                            variant="flat"
-                            size="sm"
-                          >
-                            {anomaly.severity === 'high' ? '高危' :
-                             anomaly.severity === 'medium' ? '中危' : '低危'}
-                          </Chip>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-medium">{anomaly.affected_component}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{new Date(anomaly.detected_at).toLocaleString()}</div>
-                            <div className="text-default-500">
-                              {formatTimeAgo(anomaly.detected_at)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm text-default-600 max-w-xs">
-                            {anomaly.description}
-                          </div>
-                        </TableCell>
+                    </Typography>
+                  )
+                }
+              />
+              <CardContent>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>异常类型</TableCell>
+                        <TableCell>严重程度</TableCell>
+                        <TableCell>影响组件</TableCell>
+                        <TableCell>检测时间</TableCell>
+                        <TableCell>描述</TableCell>
                       </TableRow>
-                    )) || []}
-                  </TableBody>
-                </Table>
-              </CardBody>
+                    </TableHead>
+                    <TableBody>
+                      {anomalies?.anomalies.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            <Typography variant="body2" color="text.secondary">
+                              暂无异常检测
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        anomalies?.anomalies.map((anomaly, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Shield size={16} color="#ed6c02" />
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {anomaly.type}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={anomaly.severity === 'high' ? '高危' :
+                                       anomaly.severity === 'medium' ? '中危' : '低危'}
+                                color={getSeverityColor(anomaly.severity)}
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {anomaly.affected_component}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2">
+                                  {new Date(anomaly.detected_at).toLocaleString()}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatTimeAgo(anomaly.detected_at)}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
+                                {anomaly.description}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </CardContent>
             </Card>
-          </div>
-        </Tab>
+          </Box>
+        )}
 
-        <Tab
-          key="quality"
-          title={
-            <div className="flex items-center space-x-2">
-              <Database className="w-4 h-4" />
-              <span>数据质量</span>
-            </div>
-          }
-        >
-          <div className="space-y-6 pt-6">
+        {selectedTab === 'quality' && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">数据质量检查</h3>
-              </CardHeader>
-              <CardBody>
-                <div className="text-center py-8">
-                  <Database className="w-12 h-12 text-default-300 mx-auto mb-4" />
-                  <p className="text-default-500">数据质量检查功能开发中...</p>
-                  <p className="text-sm text-default-400 mt-2">
+              <CardHeader title="数据质量检查" />
+              <CardContent>
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Database size={48} color="#ccc" style={{ margin: '0 auto 16px' }} />
+                  <Typography variant="body1" color="text.secondary">
+                    数据质量检查功能开发中...
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                     将包括数据完整性、准确性、一致性等指标
-                  </p>
-                </div>
-              </CardBody>
+                  </Typography>
+                </Box>
+              </CardContent>
             </Card>
-          </div>
-        </Tab>
-      </Tabs>
-    </div>
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 }

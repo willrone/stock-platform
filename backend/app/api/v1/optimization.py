@@ -249,12 +249,17 @@ async def get_optimization_status(task_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="任务不存在")
         
         result = task.result or {}
+        config = task.config or {}
+        optimization_config = config.get('optimization_config', {})
+        
+        # 从 result 或 config 中获取 n_trials
+        n_trials = result.get("n_trials") or optimization_config.get("n_trials", 0)
         
         status_data = {
             "task_id": task_id,
             "status": task.status,
-            "progress": task.progress,
-            "n_trials": result.get("n_trials", 0),
+            "progress": task.progress or 0.0,
+            "n_trials": n_trials,
             "completed_trials": result.get("completed_trials", 0),
             "running_trials": result.get("running_trials", 0),
             "pruned_trials": result.get("pruned_trials", 0),
@@ -263,6 +268,10 @@ async def get_optimization_status(task_id: str, db: Session = Depends(get_db)):
             "best_trial_number": result.get("best_trial_number"),
             "best_params": result.get("best_params")
         }
+        
+        logger.debug(f"优化任务状态: task_id={task_id}, status={task.status}, progress={task.progress}, "
+                    f"n_trials={n_trials}, completed={status_data['completed_trials']}, "
+                    f"running={status_data['running_trials']}, result_keys={list(result.keys())}")
         
         return StandardResponse(
             success=True,

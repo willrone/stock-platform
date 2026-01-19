@@ -9,15 +9,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Button,
   ButtonGroup,
   Switch,
   Tooltip,
   Select,
-  SelectItem,
-} from '@heroui/react';
+  MenuItem,
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  CircularProgress,
+  IconButton,
+} from '@mui/material';
 import {
   ZoomIn,
   ZoomOut,
@@ -249,16 +255,16 @@ export default function EquityCurveChart({
       },
       grid: {
         left: '3%',
-        right: '4%', // 移除Y轴滑块后减少右边距
-        bottom: '10%', // 为X轴缩放滑块留出空间
+        right: '4%',
+        bottom: '10%',
         top: '15%',
         containLabel: true,
       },
       toolbox: {
         feature: {
           dataZoom: {
-            yAxisIndex: [0], // 启用Y轴缩放
-            xAxisIndex: [0], // 启用X轴缩放
+            yAxisIndex: [0],
+            xAxisIndex: [0],
           },
           restore: {},
           saveAsImage: {},
@@ -279,13 +285,12 @@ export default function EquityCurveChart({
               day: 'numeric',
             });
           },
-          rotate: 45, // 旋转标签以避免重叠
+          rotate: 45,
         },
       },
       yAxis: {
         type: 'value',
         scale: false,
-        // 初始时根据当前数据计算范围
         min: (() => {
           if (chartType === 'value') {
             const allValues = [...filteredData.portfolioValues];
@@ -357,8 +362,8 @@ export default function EquityCurveChart({
           type: 'inside',
           start: 0,
           end: 100,
-          xAxisIndex: [0], // X轴缩放
-          yAxisIndex: [0], // Y轴缩放（鼠标滚轮）
+          xAxisIndex: [0],
+          yAxisIndex: [0],
         },
         {
           type: 'slider',
@@ -366,7 +371,7 @@ export default function EquityCurveChart({
           end: 100,
           height: 30,
           bottom: 20,
-          xAxisIndex: [0], // 只保留X轴缩放滑块
+          xAxisIndex: [0],
         },
       ],
       series: series,
@@ -378,13 +383,11 @@ export default function EquityCurveChart({
     const handleDataZoom = () => {
       if (!chartInstance.current) return;
       
-      // 获取当前dataZoom状态
       const option = chartInstance.current.getOption();
       const dataZoom = option.dataZoom as any[];
       
       if (!dataZoom || dataZoom.length === 0) return;
       
-      // 找到X轴的dataZoom
       const xDataZoom = dataZoom.find((dz: any) => {
         if (dz.xAxisIndex !== undefined) {
           return Array.isArray(dz.xAxisIndex) ? dz.xAxisIndex.includes(0) : dz.xAxisIndex === 0;
@@ -396,23 +399,19 @@ export default function EquityCurveChart({
         const startPercent = xDataZoom.start || 0;
         const endPercent = xDataZoom.end || 100;
         
-        // 计算当前显示范围内的数据索引
         const dataLength = filteredData.dates.length;
         const startIndex = Math.max(0, Math.floor((startPercent / 100) * dataLength));
         const endIndex = Math.min(dataLength, Math.ceil((endPercent / 100) * dataLength));
         
-        // 根据图表类型获取当前显示范围内的数据
         let visibleValues: number[] = [];
         
         if (chartType === 'value') {
-          // 权益曲线模式
           visibleValues = filteredData.portfolioValues.slice(startIndex, endIndex);
           if (showBenchmark && filteredBenchmarkData) {
             const visibleBenchmarkValues = filteredBenchmarkData.values.slice(startIndex, endIndex);
             visibleValues.push(...visibleBenchmarkValues);
           }
         } else {
-          // 收益率模式
           const visibleReturns = filteredData.returns.slice(startIndex, endIndex).map((r: number) => r * 100);
           visibleValues = visibleReturns;
           if (showBenchmark && filteredBenchmarkData) {
@@ -426,33 +425,27 @@ export default function EquityCurveChart({
           const maxValue = Math.max(...visibleValues);
           const range = maxValue - minValue;
           
-          // 如果范围太小（接近0），设置最小范围
-          let padding = range * 0.1; // 10%边距
+          let padding = range * 0.1;
           if (range < 0.01) {
-            // 对于非常小的范围（如收益率），使用固定边距
             padding = Math.max(0.5, Math.abs(minValue) * 0.1);
           }
           
-          // 更新Y轴范围
           chartInstance.current.setOption({
             yAxis: {
               min: minValue - padding,
               max: maxValue + padding,
             }
-          }, false); // false表示不合并，只更新指定部分
+          }, false);
         }
       }
     };
 
-    // 监听dataZoom事件
     chartInstance.current.on('dataZoom', handleDataZoom);
     
-    // 初始计算Y轴范围
     setTimeout(() => {
       handleDataZoom();
     }, 100);
 
-    // 响应式调整
     const handleResize = () => {
       if (chartInstance.current) {
         chartInstance.current.resize();
@@ -475,7 +468,6 @@ export default function EquityCurveChart({
   // 图表操作函数
   const handleZoomIn = () => {
     if (chartInstance.current) {
-      // X轴和Y轴都放大到中心区域
       chartInstance.current.dispatchAction({
         type: 'dataZoom',
         xAxisIndex: [0],
@@ -493,7 +485,6 @@ export default function EquityCurveChart({
 
   const handleZoomOut = () => {
     if (chartInstance.current) {
-      // X轴和Y轴都恢复到完整范围
       chartInstance.current.dispatchAction({
         type: 'dataZoom',
         xAxisIndex: [0],
@@ -520,115 +511,119 @@ export default function EquityCurveChart({
   if (loading) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex items-center justify-center" style={{ height }}>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height }}>
+            <CircularProgress size={32} />
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
     <Card>
-      <CardHeader className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-semibold">收益曲线分析</h3>
-            <Tooltip content="显示组合价值或收益率随时间的变化">
-              <Info className="w-4 h-4 text-default-400 cursor-help" />
-            </Tooltip>
-          </div>
+      <CardHeader
+        title={
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingUp size={20} color="#1976d2" />
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                  收益曲线分析
+                </Typography>
+                <Tooltip title="显示组合价值或收益率随时间的变化">
+                  <IconButton size="small">
+                    <Info size={16} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
 
-          {/* 图表控制按钮 */}
-          <div className="flex items-center space-x-2">
-            <ButtonGroup size="sm" variant="flat">
-              <Button
-                onPress={handleZoomIn}
-                startContent={<ZoomIn className="w-4 h-4" />}
-              >
-                放大
-              </Button>
-              <Button
-                onPress={handleZoomOut}
-                startContent={<ZoomOut className="w-4 h-4" />}
-              >
-                缩小
-              </Button>
-              <Button
-                onPress={handleReset}
-                startContent={<RotateCcw className="w-4 h-4" />}
-              >
-                重置
-              </Button>
-            </ButtonGroup>
-          </div>
-        </div>
+              {/* 图表控制按钮 */}
+              <ButtonGroup size="small" variant="outlined">
+                <Button
+                  onClick={handleZoomIn}
+                  startIcon={<ZoomIn size={16} />}
+                >
+                  放大
+                </Button>
+                <Button
+                  onClick={handleZoomOut}
+                  startIcon={<ZoomOut size={16} />}
+                >
+                  缩小
+                </Button>
+                <Button
+                  onClick={handleReset}
+                  startIcon={<RotateCcw size={16} />}
+                >
+                  重置
+                </Button>
+              </ButtonGroup>
+            </Box>
 
-        {/* 图表选项 */}
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-4">
-            {/* 时间范围选择 */}
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-default-500" />
-              <Select
-                size="sm"
-                placeholder="选择时间范围"
-                selectedKeys={[selectedTimeRange]}
-                onSelectionChange={(keys) => {
-                  const selected = Array.from(keys)[0] as string;
-                  setSelectedTimeRange(selected);
-                }}
-                className="w-32"
-                items={TIME_RANGES}
-              >
-                {(range) => (
-                  <SelectItem key={range.value}>
-                    {range.label}
-                  </SelectItem>
-                )}
-              </Select>
-            </div>
+            {/* 图表选项 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {/* 时间范围选择 */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Calendar size={16} color="#666" />
+                  <FormControl size="small" sx={{ minWidth: 128 }}>
+                    <InputLabel>选择时间范围</InputLabel>
+                    <Select
+                      value={selectedTimeRange}
+                      label="选择时间范围"
+                      onChange={(e) => setSelectedTimeRange(e.target.value)}
+                    >
+                      {TIME_RANGES.map((range) => (
+                        <MenuItem key={range.value} value={range.value}>
+                          {range.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
 
-            {/* 图表类型切换 */}
-            <ButtonGroup size="sm" variant="flat">
-              <Button
-                color={chartType === 'value' ? 'primary' : 'default'}
-                onPress={() => setChartType('value')}
-              >
-                权益曲线
-              </Button>
-              <Button
-                color={chartType === 'return' ? 'primary' : 'default'}
-                onPress={() => setChartType('return')}
-              >
-                收益率
-              </Button>
-            </ButtonGroup>
-          </div>
+                {/* 图表类型切换 */}
+                <ButtonGroup size="small" variant="outlined">
+                  <Button
+                    variant={chartType === 'value' ? 'contained' : 'outlined'}
+                    onClick={() => setChartType('value')}
+                  >
+                    权益曲线
+                  </Button>
+                  <Button
+                    variant={chartType === 'return' ? 'contained' : 'outlined'}
+                    onClick={() => setChartType('return')}
+                  >
+                    收益率
+                  </Button>
+                </ButtonGroup>
+              </Box>
 
-          {/* 基准对比开关 */}
-          {benchmarkData && (
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-default-500">基准对比</span>
-              <Switch
-                size="sm"
-                isSelected={showBenchmark}
-                onValueChange={setShowBenchmark}
-              />
-            </div>
-          )}
-        </div>
-      </CardHeader>
+              {/* 基准对比开关 */}
+              {benchmarkData && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    基准对比
+                  </Typography>
+                  <Switch
+                    size="small"
+                    checked={showBenchmark}
+                    onChange={(e) => setShowBenchmark(e.target.checked)}
+                  />
+                </Box>
+              )}
+            </Box>
+          </Box>
+        }
+      />
 
-      <CardBody>
-        <div
+      <CardContent>
+        <Box
           ref={chartRef}
-          style={{ height, width: '100%' }}
-          className="min-h-[400px]"
+          sx={{ height, width: '100%', minHeight: 400 }}
         />
-      </CardBody>
+      </CardContent>
     </Card>
   );
 }

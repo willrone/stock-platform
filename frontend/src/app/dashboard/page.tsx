@@ -11,15 +11,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { 
+import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
+  CardActions,
   Button,
-  Progress,
+  LinearProgress,
   Chip,
   Avatar,
-} from '@heroui/react';
+  Box,
+  Typography,
+} from '@mui/material';
 import {
   Bot,
   CheckCircle,
@@ -88,11 +91,11 @@ export default function DashboardPage() {
   }, [tasks]);
 
   // 获取任务状态颜色
-  const getTaskStatusColor = (status: string) => {
+  const getTaskStatusColor = (status: string): "primary" | "success" | "error" | "default" => {
     switch (status) {
       case 'running': return 'primary';
       case 'completed': return 'success';
-      case 'failed': return 'danger';
+      case 'failed': return 'error';
       default: return 'default';
     }
   };
@@ -110,10 +113,10 @@ export default function DashboardPage() {
   // 获取任务状态图标
   const getTaskStatusIcon = (status: string) => {
     switch (status) {
-      case 'running': return <Clock className="w-4 h-4" />;
-      case 'completed': return <CheckCircle className="w-4 h-4" />;
-      case 'failed': return <AlertTriangle className="w-4 h-4" />;
-      default: return <Bot className="w-4 h-4" />;
+      case 'running': return <Clock size={16} />;
+      case 'completed': return <CheckCircle size={16} />;
+      case 'failed': return <AlertTriangle size={16} />;
+      default: return <Bot size={16} />;
     }
   };
 
@@ -122,223 +125,261 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
-      <div>
-        <h1 className="text-2xl font-bold mb-2">仪表板</h1>
-        <p className="text-default-500">系统概览和快速操作</p>
-      </div>
+      <Box>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
+          仪表板
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          系统概览和快速操作
+        </Typography>
+      </Box>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
         <Card>
-          <CardBody className="flex items-center space-x-4">
-            <div className="p-3 bg-primary-100 rounded-lg">
-              <Bot className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{systemStats.totalTasks}</p>
-              <p className="text-sm text-default-500">总任务数</p>
-            </div>
-          </CardBody>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'primary.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+                <Bot size={24} color="white" />
+              </Box>
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                  {systemStats.totalTasks}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  总任务数
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="flex items-center space-x-4">
-            <div className="p-3 bg-success-100 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-success">{systemStats.completedTasks}</p>
-              <p className="text-sm text-default-500">已完成</p>
-            </div>
-          </CardBody>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'success.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+                <CheckCircle size={24} color="white" />
+              </Box>
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  {systemStats.completedTasks}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  已完成
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="flex items-center space-x-4">
-            <div className="p-3 bg-warning-100 rounded-lg">
-              <Clock className="w-6 h-6 text-warning" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-warning">{systemStats.runningTasks}</p>
-              <p className="text-sm text-default-500">运行中</p>
-            </div>
-          </CardBody>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'warning.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+                <Clock size={24} color="white" />
+              </Box>
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                  {systemStats.runningTasks}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  运行中
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="flex items-center space-x-4">
-            <div className="p-3 bg-danger-100 rounded-lg">
-              <AlertTriangle className="w-6 h-6 text-danger" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-danger">{systemStats.failedTasks}</p>
-              <p className="text-sm text-default-500">失败</p>
-            </div>
-          </CardBody>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'error.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+                <AlertTriangle size={24} color="white" />
+              </Box>
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+                  {systemStats.failedTasks}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  失败
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mt: 3 }}>
         {/* 最近任务 */}
-        <div className="lg:col-span-2">
+        <Box>
           <Card>
-            <CardHeader className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">最近任务</h3>
-              <Button
-                size="sm"
-                variant="light"
-                onPress={() => router.push('/tasks')}
-              >
-                查看全部
-              </Button>
-            </CardHeader>
-            <CardBody>
+            <CardHeader
+              title="最近任务"
+              action={
+                <Button size="small" onClick={() => router.push('/tasks')}>
+                  查看全部
+                </Button>
+              }
+            />
+            <CardContent>
               {recentTasks.length === 0 ? (
-                <div className="text-center py-8">
-                  <Bot className="w-12 h-12 text-default-300 mx-auto mb-4" />
-                  <p className="text-default-500">暂无任务</p>
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Bot size={48} color="#ccc" style={{ margin: '0 auto 16px' }} />
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    暂无任务
+                  </Typography>
                   <Button
+                    variant="contained"
                     color="primary"
-                    className="mt-4"
-                    startContent={<Plus className="w-4 h-4" />}
-                    onPress={() => router.push('/tasks/create')}
+                    startIcon={<Plus size={16} />}
+                    onClick={() => router.push('/tasks/create')}
                   >
                     创建任务
                   </Button>
-                </div>
+                </Box>
               ) : (
-                <div className="space-y-3">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {recentTasks.map((task) => (
-                    <div
+                    <Box
                       key={task.task_id}
-                      className="flex items-center justify-between p-3 border border-divider rounded-lg hover:bg-default-50 cursor-pointer"
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        p: 2,
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
                       onClick={() => router.push(`/tasks/${task.task_id}`)}
                     >
-                      <div className="flex items-center space-x-3">
-                        <Avatar
-                          size="sm"
-                          fallback={getTaskStatusIcon(task.status)}
-                          className="bg-default-100"
-                        />
-                        <div>
-                          <p className="font-medium">{task.task_name}</p>
-                          <p className="text-sm text-default-500">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: 'grey.200', width: 32, height: 32 }}>
+                          {getTaskStatusIcon(task.status)}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {task.task_name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
                             {task.stock_codes?.length || 0} 只股票
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Chip
+                          label={getTaskStatusText(task.status)}
                           color={getTaskStatusColor(task.status)}
-                          variant="flat"
-                          size="sm"
-                        >
-                          {getTaskStatusText(task.status)}
-                        </Chip>
+                          size="small"
+                        />
                         {task.status === 'running' && (
-                          <Progress
-                            value={task.progress}
-                            size="sm"
-                            className="w-16"
-                          />
+                          <Box sx={{ width: 64 }}>
+                            <LinearProgress variant="determinate" value={task.progress} />
+                          </Box>
                         )}
-                      </div>
-                    </div>
+                      </Box>
+                    </Box>
                   ))}
-                </div>
+                </Box>
               )}
-            </CardBody>
+            </CardContent>
           </Card>
-        </div>
+        </Box>
 
         {/* 系统状态和快速操作 */}
-        <div className="space-y-6">
-          {/* 系统状态 */}
-          <Card>
-            <CardHeader>
-              <h3 className="text-lg font-semibold">系统状态</h3>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Wifi className="w-4 h-4 text-success" />
-                  <span className="text-sm">API服务</span>
-                </div>
-                <Chip color="success" variant="flat" size="sm">正常</Chip>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Database className="w-4 h-4 text-success" />
-                  <span className="text-sm">数据服务</span>
-                </div>
-                <Chip color="success" variant="flat" size="sm">正常</Chip>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Activity className="w-4 h-4 text-warning" />
-                  <span className="text-sm">模型服务</span>
-                </div>
-                <Chip color="warning" variant="flat" size="sm">负载高</Chip>
-              </div>
-              
-              <div className="pt-2 border-t border-divider">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-default-600">系统负载</span>
-                  <span className="text-sm font-medium">65%</span>
-                </div>
-                <Progress value={65} size="sm" />
-              </div>
-            </CardBody>
-          </Card>
+        <Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* 系统状态 */}
+            <Card>
+              <CardHeader title="系统状态" />
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Wifi size={16} color="#2e7d32" />
+                    <Typography variant="body2">API服务</Typography>
+                  </Box>
+                  <Chip label="正常" color="success" size="small" />
+                </Box>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Database size={16} color="#2e7d32" />
+                    <Typography variant="body2">数据服务</Typography>
+                  </Box>
+                  <Chip label="正常" color="success" size="small" />
+                </Box>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Activity size={16} color="#ed6c02" />
+                    <Typography variant="body2">模型服务</Typography>
+                  </Box>
+                  <Chip label="负载高" color="warning" size="small" />
+                </Box>
+                
+                <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      系统负载
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      65%
+                    </Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={65} />
+                </Box>
+              </CardContent>
+            </Card>
 
-          {/* 快速操作 */}
-          <Card>
-            <CardHeader>
-              <h3 className="text-lg font-semibold">快速操作</h3>
-            </CardHeader>
-            <CardBody className="space-y-3">
-              <Button
-                color="primary"
-                startContent={<Plus className="w-4 h-4" />}
-                onPress={() => router.push('/tasks/create')}
-                fullWidth
-              >
-                创建预测任务
-              </Button>
-              
-              <Button
-                variant="light"
-                startContent={<Eye className="w-4 h-4" />}
-                onPress={() => router.push('/tasks')}
-                fullWidth
-              >
-                查看所有任务
-              </Button>
-              
-              <Button
-                variant="light"
-                startContent={<Database className="w-4 h-4" />}
-                onPress={() => router.push('/data')}
-                fullWidth
-              >
-                数据管理
-              </Button>
-              
-              <Button
-                variant="light"
-                startContent={<TrendingUp className="w-4 h-4" />}
-                onPress={() => router.push('/predictions')}
-                fullWidth
-              >
-                预测分析
-              </Button>
-            </CardBody>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );}
+            {/* 快速操作 */}
+            <Card>
+              <CardHeader title="快速操作" />
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Plus size={16} />}
+                  onClick={() => router.push('/tasks/create')}
+                  fullWidth
+                >
+                  创建预测任务
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<Eye size={16} />}
+                  onClick={() => router.push('/tasks')}
+                  fullWidth
+                >
+                  查看所有任务
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<Database size={16} />}
+                  onClick={() => router.push('/data')}
+                  fullWidth
+                >
+                  数据管理
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<TrendingUp size={16} />}
+                  onClick={() => router.push('/predictions')}
+                  fullWidth
+                >
+                  预测分析
+                </Button>
+              </CardContent>
+            </Card>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+}

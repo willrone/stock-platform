@@ -1,10 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Button } from '@heroui/button';
-import { Chip } from '@heroui/chip';
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from '@heroui/modal';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Button,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
+  Box,
+  Typography,
+  IconButton,
+} from '@mui/material';
 import { 
   ExclamationTriangleIcon,
   XCircleIcon,
@@ -42,7 +52,7 @@ const notificationIcons = {
 const notificationColors = {
   info: 'primary',
   warning: 'warning',
-  error: 'danger',
+  error: 'error',
   success: 'success'
 } as const;
 
@@ -53,7 +63,7 @@ export default function BacktestErrorHandler({
   className = ''
 }: BacktestErrorHandlerProps) {
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
-  const { isOpen: isModalOpen, onOpen: onModalOpen, onClose: onModalClose } = useDisclosure();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 自动关闭通知
   useEffect(() => {
@@ -114,238 +124,260 @@ export default function BacktestErrorHandler({
   return (
     <>
       <Card className={className}>
-        <CardHeader className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <BellIcon className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">通知中心</h3>
-            <Chip size="sm" color="default" variant="flat">
-              {stats.total}
-            </Chip>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="light"
-              onPress={onModalOpen}
-            >
-              查看全部
-            </Button>
-            
-            {notifications.length > 0 && (
+        <CardHeader
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BellIcon className="w-5 h-5" />
+              <Typography variant="h6" component="span">
+                通知中心
+              </Typography>
+              <Chip label={stats.total} size="small" />
+            </Box>
+          }
+          action={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Button
-                size="sm"
-                color="danger"
-                variant="light"
-                onPress={onClearAll}
+                size="small"
+                variant="outlined"
+                onClick={() => setIsModalOpen(true)}
               >
-                清空
+                查看全部
               </Button>
-            )}
-          </div>
-        </CardHeader>
+              
+              {notifications.length > 0 && (
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={onClearAll}
+                >
+                  清空
+                </Button>
+              )}
+            </Box>
+          }
+        />
 
-        <CardBody className="space-y-3">
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* 统计概览 */}
-          <div className="flex gap-2 flex-wrap">
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {stats.error > 0 && (
-              <Chip size="sm" color="danger" variant="flat">
-                错误 {stats.error}
-              </Chip>
+              <Chip label={`错误 ${stats.error}`} color="error" size="small" />
             )}
             {stats.warning > 0 && (
-              <Chip size="sm" color="warning" variant="flat">
-                警告 {stats.warning}
-              </Chip>
+              <Chip label={`警告 ${stats.warning}`} color="warning" size="small" />
             )}
             {stats.success > 0 && (
-              <Chip size="sm" color="success" variant="flat">
-                成功 {stats.success}
-              </Chip>
+              <Chip label={`成功 ${stats.success}`} color="success" size="small" />
             )}
             {stats.info > 0 && (
-              <Chip size="sm" color="primary" variant="flat">
-                信息 {stats.info}
-              </Chip>
+              <Chip label={`信息 ${stats.info}`} color="primary" size="small" />
             )}
-          </div>
+          </Box>
 
           {/* 最近的通知（最多显示3个） */}
-          <div className="space-y-2">
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {notifications.slice(0, 3).map(notification => (
-              <div
+              <Box
                 key={notification.id}
-                className={`
-                  p-3 rounded-lg border cursor-pointer transition-colors
-                  ${notification.type === 'error' ? 'bg-danger-50 border-danger-200 hover:bg-danger-100' :
-                    notification.type === 'warning' ? 'bg-warning-50 border-warning-200 hover:bg-warning-100' :
-                    notification.type === 'success' ? 'bg-success-50 border-success-200 hover:bg-success-100' :
-                    'bg-primary-50 border-primary-200 hover:bg-primary-100'
-                  }
-                `}
                 onClick={() => toggleExpanded(notification.id)}
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  border: 1,
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  ...(notification.type === 'error' ? {
+                    bgcolor: 'error.light',
+                    borderColor: 'error.main',
+                    '&:hover': { bgcolor: 'error.lighter' },
+                  } : notification.type === 'warning' ? {
+                    bgcolor: 'warning.light',
+                    borderColor: 'warning.main',
+                    '&:hover': { bgcolor: 'warning.lighter' },
+                  } : notification.type === 'success' ? {
+                    bgcolor: 'success.light',
+                    borderColor: 'success.main',
+                    '&:hover': { bgcolor: 'success.lighter' },
+                  } : {
+                    bgcolor: 'primary.light',
+                    borderColor: 'primary.main',
+                    '&:hover': { bgcolor: 'primary.lighter' },
+                  }),
+                }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, flex: 1, minWidth: 0 }}>
                     {notificationIcons[notification.type]}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-sm truncate">
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {notification.title}
-                        </h4>
-                        <span className="text-xs text-default-500 ml-2">
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                           {formatTime(notification.timestamp)}
-                        </span>
-                      </div>
+                        </Typography>
+                      </Box>
                       
-                      <p className={`
-                        text-sm mt-1
-                        ${expandedNotifications.has(notification.id) ? '' : 'line-clamp-2'}
-                        ${notification.type === 'error' ? 'text-danger-700' :
-                          notification.type === 'warning' ? 'text-warning-700' :
-                          notification.type === 'success' ? 'text-success-700' :
-                          'text-primary-700'
-                        }
-                      `}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          mt: 0.5,
+                          ...(!expandedNotifications.has(notification.id) && {
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }),
+                          ...(notification.type === 'error' ? { color: 'error.dark' } :
+                            notification.type === 'warning' ? { color: 'warning.dark' } :
+                            notification.type === 'success' ? { color: 'success.dark' } :
+                            { color: 'primary.dark' }),
+                        }}
+                      >
                         {notification.message}
-                      </p>
+                      </Typography>
                       
                       {notification.taskId && (
-                        <p className="text-xs text-default-500 mt-1">
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                           任务ID: {notification.taskId}
-                        </p>
+                        </Typography>
                       )}
-                    </div>
-                  </div>
+                    </Box>
+                  </Box>
                   
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    variant="light"
-                    className="ml-2"
-                    onPress={(e) => {
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
                       e.stopPropagation();
                       onDismiss(notification.id);
                     }}
+                    sx={{ ml: 1 }}
                   >
                     <XMarkIcon className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
+                  </IconButton>
+                </Box>
+              </Box>
             ))}
-          </div>
+          </Box>
 
           {notifications.length > 3 && (
-            <div className="text-center">
+            <Box sx={{ textAlign: 'center' }}>
               <Button
-                size="sm"
-                variant="light"
-                onPress={onModalOpen}
+                size="small"
+                variant="outlined"
+                onClick={() => setIsModalOpen(true)}
               >
                 查看更多 ({notifications.length - 3} 条)
               </Button>
-            </div>
+            </Box>
           )}
-        </CardBody>
+        </CardContent>
       </Card>
 
       {/* 全部通知模态框 */}
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={onModalClose}
-        size="2xl"
-        scrollBehavior="inside"
+      <Dialog 
+        open={isModalOpen} 
+        onClose={() => setIsModalOpen(false)}
+        maxWidth="md"
+        fullWidth
       >
-        <ModalContent>
-          <ModalHeader className="flex justify-between items-center">
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>所有通知</span>
-            <div className="flex items-center gap-2">
-              <Chip size="sm" color="default" variant="flat">
-                共 {notifications.length} 条
-              </Chip>
-            </div>
-          </ModalHeader>
-          
-          <ModalBody>
-            <div className="space-y-3">
-              {notifications.map(notification => (
-                <div
-                  key={notification.id}
-                  className={`
-                    p-4 rounded-lg border
-                    ${notification.type === 'error' ? 'bg-danger-50 border-danger-200' :
-                      notification.type === 'warning' ? 'bg-warning-50 border-warning-200' :
-                      notification.type === 'success' ? 'bg-success-50 border-success-200' :
-                      'bg-primary-50 border-primary-200'
-                    }
-                  `}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      {notificationIcons[notification.type]}
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium">
-                            {notification.title}
-                          </h4>
-                          <Chip 
-                            size="sm" 
-                            color={notificationColors[notification.type]}
-                            variant="flat"
-                          >
-                            {notification.type === 'error' ? '错误' :
-                             notification.type === 'warning' ? '警告' :
-                             notification.type === 'success' ? '成功' : '信息'}
-                          </Chip>
-                        </div>
-                        
-                        <p className={`
-                          text-sm mb-2
-                          ${notification.type === 'error' ? 'text-danger-700' :
-                            notification.type === 'warning' ? 'text-warning-700' :
-                            notification.type === 'success' ? 'text-success-700' :
-                            'text-primary-700'
+            <Chip label={`共 ${notifications.length} 条`} size="small" />
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {notifications.map(notification => (
+              <Box
+                key={notification.id}
+                sx={{
+                  p: 2,
+                  borderRadius: 1,
+                  border: 1,
+                  ...(notification.type === 'error' ? {
+                    bgcolor: 'error.light',
+                    borderColor: 'error.main',
+                  } : notification.type === 'warning' ? {
+                    bgcolor: 'warning.light',
+                    borderColor: 'warning.main',
+                  } : notification.type === 'success' ? {
+                    bgcolor: 'success.light',
+                    borderColor: 'success.main',
+                  } : {
+                    bgcolor: 'primary.light',
+                    borderColor: 'primary.main',
+                  }),
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
+                    {notificationIcons[notification.type]}
+                    <Box sx={{ flex: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {notification.title}
+                        </Typography>
+                        <Chip 
+                          label={
+                            notification.type === 'error' ? '错误' :
+                            notification.type === 'warning' ? '警告' :
+                            notification.type === 'success' ? '成功' : '信息'
                           }
-                        `}>
-                          {notification.message}
-                        </p>
-                        
-                        <div className="flex items-center justify-between text-xs text-default-500">
-                          <span>
-                            {notification.timestamp.toLocaleString('zh-CN')}
-                          </span>
-                          {notification.taskId && (
-                            <span>任务ID: {notification.taskId}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="light"
-                      className="ml-2"
-                      onPress={() => onDismiss(notification.id)}
-                    >
-                      <XMarkIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ModalBody>
-          
-          <ModalFooter>
-            <Button variant="light" onPress={onModalClose}>
-              关闭
-            </Button>
-            <Button color="danger" variant="light" onPress={onClearAll}>
-              清空所有通知
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+                          color={notificationColors[notification.type]}
+                          size="small"
+                        />
+                      </Box>
+                      
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          mb: 1,
+                          ...(notification.type === 'error' ? { color: 'error.dark' } :
+                            notification.type === 'warning' ? { color: 'warning.dark' } :
+                            notification.type === 'success' ? { color: 'success.dark' } :
+                            { color: 'primary.dark' }),
+                        }}
+                      >
+                        {notification.message}
+                      </Typography>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {notification.timestamp.toLocaleString('zh-CN')}
+                        </Typography>
+                        {notification.taskId && (
+                          <Typography variant="caption" color="text.secondary">
+                            任务ID: {notification.taskId}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </Box>
+                  
+                  <IconButton
+                    size="small"
+                    onClick={() => onDismiss(notification.id)}
+                    sx={{ ml: 1 }}
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </IconButton>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setIsModalOpen(false)}>关闭</Button>
+          <Button color="error" onClick={onClearAll}>
+            清空所有通知
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

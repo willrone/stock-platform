@@ -42,15 +42,33 @@ def get_device():
         logger.info("未检测到GPU，使用CPU")
         return torch.device('cpu')
 try:
-            import qlib
-            from qlib.config import REG_CN, C
-            from qlib.data import D
-            from qlib.data.dataset import DatasetH
-            from qlib.data.filter import NameDFilter, ExpressionDFilter
-            from qlib.utils import init_instance_by_config
-            QLIB_AVAILABLE = True
-except ImportError:
-    logger.warning("Qlib未安装，某些功能将不可用")
+    import qlib
+    from qlib.config import REG_CN, C
+    from qlib.data import D
+    from qlib.data.dataset import DatasetH
+    from qlib.data.filter import NameDFilter, ExpressionDFilter
+    from qlib.utils import init_instance_by_config
+    QLIB_AVAILABLE = True
+except ImportError as e:
+    error_msg = str(e)
+    missing_module = None
+    
+    # 检测缺失的模块
+    if "setuptools_scm" in error_msg:
+        missing_module = "setuptools_scm"
+    elif "ruamel" in error_msg or "ruamel.yaml" in error_msg:
+        missing_module = "ruamel.yaml"
+    elif "cvxpy" in error_msg:
+        missing_module = "cvxpy"
+    
+    if missing_module:
+        logger.warning(
+            f"Qlib缺少依赖 {missing_module}: {e}\n"
+            f"解决方法: pip install {missing_module}\n"
+            f"或运行修复脚本: ./fix_qlib_dependencies.sh"
+        )
+    else:
+        logger.warning(f"Qlib未安装，某些功能将不可用: {e}")
     QLIB_AVAILABLE = False
 
 # 导入统一的错误处理机制
@@ -99,100 +117,107 @@ except ImportError:
 # 使用 loguru 日志记录器（已在文件顶部导入）
 
 
-# 从shared_types.py导入共享类型
-try:
-    from .shared_types import ModelType, TrainingConfig, ModelMetrics, BacktestMetrics
-    SHARED_TYPES_AVAILABLE = True
-except ImportError:
-    SHARED_TYPES_AVAILABLE = False
-    # 如果导入失败，使用本地定义作为备选
-    class ModelType(Enum):
-        """支持的模型类型"""
-        TRANSFORMER = "transformer"
-        TIMESNET = "timesnet"
-        PATCHTST = "patchtst"
-        INFORMER = "informer"
-        LSTM = "lstm"
-        XGBOOST = "xgboost"
-    
-    @dataclass
-    class TrainingConfig:
-        """模型训练配置"""
-        model_type: ModelType
-        sequence_length: int = 60  # 输入序列长度
-        prediction_horizon: int = 5  # 预测天数
-        batch_size: int = 32
-        epochs: int = 100
-        learning_rate: float = 0.001
-        validation_split: float = 0.2
-        early_stopping_patience: int = 10
-        feature_columns: List[str] = None
-        target_column: str = "close"
-        
-        def __post_init__(self):
-            if self.feature_columns is None:
-                self.feature_columns = [
-                    "open", "high", "low", "close", "volume",
-                    "ma_5", "ma_10", "ma_20", "ma_60",
-                    "rsi", "macd", "macd_signal", "bb_upper", "bb_lower"
-                ]
-    
-    @dataclass
-    class ModelMetrics:
-        """模型评估指标"""
-        accuracy: float
-        precision: float
-        recall: float
-        sharpe_ratio: float
-        max_drawdown: float
-        total_return: float
-        win_rate: float
-        
-        def to_dict(self) -> Dict[str, float]:
-            return {
-                "accuracy": self.accuracy,
-                "precision": self.precision,
-                "recall": self.recall,
-                "sharpe_ratio": self.sharpe_ratio,
-                "max_drawdown": self.max_drawdown,
-                "total_return": self.total_return,
-                "win_rate": self.win_rate
-            }
-    
-    BacktestMetrics = None
+class ModelType(Enum):
+    """支持的模型类型"""
+    TRANSFORMER = "transformer"
+    TIMESNET = "timesnet"
+    PATCHTST = "patchtst"
+    INFORMER = "informer"
+    LSTM = "lstm"
+    XGBOOST = "xgboost"
 
 
-# 从feature_engineering.py导入新的特征工程模块
-try:
-    from .feature_engineering import (
-        FeatureEngineer, QlibFeatureProvider, DataPreprocessor
-    )
-    FEATURE_ENGINEERING_AVAILABLE = True
-except ImportError:
-    logger.warning("特征工程模块未找到，使用默认实现")
-    FEATURE_ENGINEERING_AVAILABLE = False
-    FeatureEngineer = None
-    QlibFeatureProvider = None
-    DataPreprocessor = None
-
-
-class DataProvider:
-    """数据提供器"""
+@dataclass
+class TrainingConfig:
+    """模型训练配置"""
+    model_type: ModelType
+    sequence_length: int = 60  # 输入序列长度
+    prediction_horizon: int = 5  # 预测天数
+    batch_size: int = 32
+    epochs: int = 100
+    learning_rate: float = 0.001
+    validation_split: float = 0.2
+    early_stopping_patience: int = 10
+    feature_columns: List[str] = None
+    target_column: str = "close"
     
-    def __init__(self, data_service: SimpleDataService, data_root: str):
+    def __post_init__(self):
+        if self.feature_columns is None:
+            self.feature_columns = [
+                "open", "high", "low", "close", "volume",
+                "ma_5", "ma_10", "ma_20", "ma_60",
+                "rsi", "macd", "macd_signal", "bb_upper", "bb_lower"
+            ]
+
+
+@dataclass
+class ModelMetrics:
+    """模型评估指标"""
+    accuracy: float
+    precision: float
+    recall: float
+    sharpe_ratio: float
+    max_drawdown: float
+    total_return: float
+    win_rate: float
+    
+    def to_dict(self) -> Dict[str, float]:
+        return {
+            "accuracy": self.accuracy,
+            "precision": self.precision,
+            "recall": self.recall,
+            "sharpe_ratio": self.sharpe_ratio,
+            "max_drawdown": self.max_drawdown,
+            "total_return": self.total_return,
+            "win_rate": self.win_rate
+        }
+
+
+class QlibDataProvider:
+    """Qlib数据提供器，集成本地Parquet数据"""
+    
+    def __init__(self, data_service: SimpleDataService):
         self.data_service = data_service
-        self.data_root = data_root
-        self.feature_engineer = FeatureEngineer(data_service, data_root) if FEATURE_ENGINEERING_AVAILABLE else None
-        self.qlib_provider = QlibFeatureProvider() if FEATURE_ENGINEERING_AVAILABLE else None
+        self.indicator_calculator = TechnicalIndicatorCalculator()
+        
+    async def initialize_qlib(self):
+        """初始化Qlib环境"""
+        try:
+            # 在使用memory://模式时，需要先设置mount_path和provider_uri，否则qlib会报错
+            from app.core.config import settings
+            
+            # 使用配置中的QLIB_DATA_PATH，如果不存在则创建
+            qlib_data_path = Path(settings.QLIB_DATA_PATH).resolve()
+            qlib_data_path.mkdir(parents=True, exist_ok=True)
+            
+            # 准备mount_path和provider_uri配置
+            # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
+            # 确保所有路径都是绝对路径的字符串，避免Path对象传递
+            qlib_data_path_str = str(qlib_data_path.absolute())
+            mount_path_config = {
+                "day": qlib_data_path_str,
+                "1min": qlib_data_path_str,
+            }
+            
+            provider_uri_config = {
+                "day": "memory://",
+                "1min": "memory://",
+            }
+            
+            # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
+            # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
+            # 设置 auto_mount=False 避免 qlib 内部处理 NFS mount 时的 Path 对象问题
+            qlib.init(
+                region=REG_CN,
+                provider_uri=provider_uri_config,
+                mount_path=mount_path_config,
+                auto_mount=False
+            )
+            logger.info("Qlib环境初始化成功")
+        except Exception as e:
+            logger.error(f"Qlib初始化失败: {e}")
+            raise
     
-    @handle_async_exception
-    async def initialize(self):
-        """初始化数据提供器"""
-        if self.qlib_provider:
-            await self.qlib_provider.initialize_qlib()
-        logger.info("数据提供器初始化完成")
-    
-    @handle_async_exception
     async def prepare_features(
         self, 
         stock_codes: List[str], 

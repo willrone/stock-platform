@@ -12,22 +12,24 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Button,
   Table,
-  TableHeader,
-  TableColumn,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
   Chip,
   Tooltip,
   Pagination,
-} from '@heroui/react';
+  Box,
+  Typography,
+  IconButton,
+  CircularProgress,
+} from '@mui/material';
 import {
   History,
   CheckCircle,
@@ -120,15 +122,15 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
     }
   };
 
-  const getStatusColor = (success: boolean) => {
-    return success ? 'success' : 'danger';
+  const getStatusColor = (success: boolean): "success" | "error" => {
+    return success ? 'success' : 'error';
   };
 
   const getStatusIcon = (success: boolean) => {
     return success ? (
-      <CheckCircle className="w-4 h-4" />
+      <CheckCircle size={16} />
     ) : (
-      <XCircle className="w-4 h-4" />
+      <XCircle size={16} />
     );
   };
 
@@ -144,270 +146,300 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
   const currentItems = historyData?.history.slice(startIndex, endIndex) || [];
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose}
-      size="5xl"
-      scrollBehavior="inside"
-    >
-      <ModalContent>
-        {(onModalClose) => (
-          <>
-            <ModalHeader className="flex flex-col gap-1">
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center space-x-2">
-                  <History className="w-5 h-5 text-primary" />
-                  <span>同步历史记录</span>
-                </div>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  size="sm"
-                  onPress={loadHistory}
-                  isLoading={loading}
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              </div>
-              {historyData && (
-                <p className="text-sm text-default-500 font-normal">
-                  共 {historyData.total} 条记录
-                </p>
-              )}
-            </ModalHeader>
-            
-            <ModalBody>
-              {loading && !historyData ? (
-                <div className="text-center py-8">
-                  <RefreshCw className="w-8 h-8 text-primary mx-auto mb-4 animate-spin" />
-                  <p className="text-default-500">加载同步历史中...</p>
-                </div>
-              ) : historyData && historyData.history.length > 0 ? (
-                <div className="space-y-4">
-                  <Table aria-label="同步历史记录">
-                    <TableHeader>
-                      <TableColumn>同步ID</TableColumn>
-                      <TableColumn>股票数量</TableColumn>
-                      <TableColumn>同步模式</TableColumn>
-                      <TableColumn>结果</TableColumn>
-                      <TableColumn>记录数</TableColumn>
-                      <TableColumn>创建时间</TableColumn>
-                      <TableColumn>操作</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {currentItems.map((entry) => (
-                        <TableRow key={entry.sync_id}>
-                          <TableCell>
-                            <div className="font-mono text-sm">
-                              {entry.sync_id.substring(0, 8)}...
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <span className="font-medium">{entry.request.stock_codes.length}</span>
-                              <span className="text-default-500 ml-1">只股票</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
+    <>
+      <Dialog 
+        open={isOpen} 
+        onClose={onClose}
+        maxWidth="xl"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <History size={20} color="#1976d2" />
+                <span>同步历史记录</span>
+              </Box>
+              <IconButton
+                size="small"
+                onClick={loadHistory}
+                disabled={loading}
+              >
+                <RefreshCw size={16} />
+              </IconButton>
+            </Box>
+            {historyData && (
+              <Typography variant="caption" color="text.secondary">
+                共 {historyData.total} 条记录
+              </Typography>
+            )}
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent>
+          {loading && !historyData ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <CircularProgress size={32} sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary">
+                加载同步历史中...
+              </Typography>
+            </Box>
+          ) : historyData && historyData.history.length > 0 ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>同步ID</TableCell>
+                      <TableCell>股票数量</TableCell>
+                      <TableCell>同步模式</TableCell>
+                      <TableCell>结果</TableCell>
+                      <TableCell>记录数</TableCell>
+                      <TableCell>创建时间</TableCell>
+                      <TableCell>操作</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {currentItems.map((entry) => (
+                      <TableRow key={entry.sync_id} hover>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                            {entry.sync_id.substring(0, 8)}...
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            <strong>{entry.request.stock_codes.length}</strong>
+                            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                              只股票
+                            </Typography>
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={getSyncModeText(entry.request.sync_mode)}
+                            color={entry.request.sync_mode === 'incremental' ? 'primary' : 'secondary'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Chip
-                              size="sm"
-                              variant="flat"
-                              color={entry.request.sync_mode === 'incremental' ? 'primary' : 'secondary'}
-                            >
-                              {getSyncModeText(entry.request.sync_mode)}
-                            </Chip>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                color={getStatusColor(entry.result.success)}
-                                startContent={getStatusIcon(entry.result.success)}
+                              label={entry.result.success ? '成功' : '失败'}
+                              color={getStatusColor(entry.result.success)}
+                              size="small"
+                              icon={getStatusIcon(entry.result.success)}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {entry.result.success_count}/{entry.result.total_stocks}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {entry.result.total_records.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box>
+                            <Typography variant="body2">
+                              {new Date(entry.created_at).toLocaleDateString()}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(entry.created_at).toLocaleTimeString()}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Tooltip title="查看详情">
+                              <IconButton
+                                size="small"
+                                onClick={() => setSelectedEntry(entry)}
                               >
-                                {entry.result.success ? '成功' : '失败'}
-                              </Chip>
-                              <span className="text-xs text-default-500">
-                                {entry.result.success_count}/{entry.result.total_stocks}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm font-medium">
-                              {entry.result.total_records.toLocaleString()}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <div>{new Date(entry.created_at).toLocaleDateString()}</div>
-                              <div className="text-xs text-default-500">
-                                {new Date(entry.created_at).toLocaleTimeString()}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-1">
-                              <Tooltip content="查看详情">
-                                <Button
-                                  isIconOnly
-                                  variant="light"
-                                  size="sm"
-                                  onPress={() => setSelectedEntry(entry)}
+                                <Eye size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            {entry.result.failure_count > 0 && (
+                              <Tooltip title="重试失败项">
+                                <IconButton
+                                  size="small"
+                                  color="warning"
+                                  onClick={() => handleRetry(entry.sync_id)}
                                 >
-                                  <Eye className="w-4 h-4" />
-                                </Button>
+                                  <RotateCcw size={16} />
+                                </IconButton>
                               </Tooltip>
-                              {entry.result.failure_count > 0 && (
-                                <Tooltip content="重试失败项">
-                                  <Button
-                                    isIconOnly
-                                    variant="light"
-                                    size="sm"
-                                    color="warning"
-                                    onPress={() => handleRetry(entry.sync_id)}
-                                  >
-                                    <RotateCcw className="w-4 h-4" />
-                                  </Button>
-                                </Tooltip>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                            )}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
 
-                  {totalPages > 1 && (
-                    <div className="flex justify-center">
-                      <Pagination
-                        total={totalPages}
-                        page={page}
-                        onChange={setPage}
-                        showControls
-                        showShadow
-                        color="primary"
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <History className="w-12 h-12 text-default-300 mx-auto mb-4" />
-                  <p className="text-default-500">暂无同步历史记录</p>
-                </div>
+              {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(e, newPage) => setPage(newPage)}
+                    color="primary"
+                  />
+                </Box>
               )}
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <History size={48} color="#ccc" style={{ margin: '0 auto 16px' }} />
+              <Typography variant="body2" color="text.secondary">
+                暂无同步历史记录
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={onClose}>关闭</Button>
+        </DialogActions>
+      </Dialog>
 
-              {/* 详情模态框 */}
-              {selectedEntry && (
-                <Modal
-                  isOpen={!!selectedEntry}
-                  onClose={() => setSelectedEntry(null)}
-                  size="2xl"
-                >
-                  <ModalContent>
-                    <ModalHeader>
-                      同步详情 - {selectedEntry.sync_id.substring(0, 12)}...
-                    </ModalHeader>
-                    <ModalBody>
-                      <div className="space-y-4">
-                        {/* 基本信息 */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-default-500">同步模式</p>
-                            <p className="font-medium">{getSyncModeText(selectedEntry.request.sync_mode)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-default-500">强制更新</p>
-                            <p className="font-medium">{selectedEntry.request.force_update ? '是' : '否'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-default-500">最大并发</p>
-                            <p className="font-medium">{selectedEntry.request.max_concurrent}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-default-500">重试次数</p>
-                            <p className="font-medium">{selectedEntry.request.retry_count}</p>
-                          </div>
-                        </div>
+      {/* 详情模态框 */}
+      {selectedEntry && (
+        <Dialog
+          open={!!selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            同步详情 - {selectedEntry.sync_id.substring(0, 12)}...
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* 基本信息 */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    同步模式
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {getSyncModeText(selectedEntry.request.sync_mode)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    强制更新
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {selectedEntry.request.force_update ? '是' : '否'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    最大并发
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {selectedEntry.request.max_concurrent}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    重试次数
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {selectedEntry.request.retry_count}
+                  </Typography>
+                </Box>
+              </Box>
 
-                        {/* 结果统计 */}
-                        <div className="p-4 bg-default-50 rounded-lg">
-                          <h4 className="font-medium mb-3">同步结果</h4>
-                          <div className="grid grid-cols-4 gap-4 text-center">
-                            <div>
-                              <p className="text-lg font-bold">{selectedEntry.result.total_stocks}</p>
-                              <p className="text-xs text-default-500">总数</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-success">{selectedEntry.result.success_count}</p>
-                              <p className="text-xs text-default-500">成功</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-danger">{selectedEntry.result.failure_count}</p>
-                              <p className="text-xs text-default-500">失败</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-primary">{selectedEntry.result.total_records.toLocaleString()}</p>
-                              <p className="text-xs text-default-500">记录数</p>
-                            </div>
-                          </div>
-                        </div>
+              {/* 结果统计 */}
+              <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 2 }}>
+                  同步结果
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, textAlign: 'center' }}>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {selectedEntry.result.total_stocks}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      总数
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                      {selectedEntry.result.success_count}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      成功
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                      {selectedEntry.result.failure_count}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      失败
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                      {selectedEntry.result.total_records.toLocaleString()}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      记录数
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
 
-                        {/* 股票列表 */}
-                        <div>
-                          <h4 className="font-medium mb-2">同步股票列表</h4>
-                          <div className="max-h-32 overflow-y-auto p-3 bg-default-50 rounded-lg">
-                            <div className="flex flex-wrap gap-1">
-                              {selectedEntry.request.stock_codes.map((code) => (
-                                <Chip key={code} size="sm" variant="flat">
-                                  {code}
-                                </Chip>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
+              {/* 股票列表 */}
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  同步股票列表
+                </Typography>
+                <Box sx={{ maxHeight: 128, overflowY: 'auto', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selectedEntry.request.stock_codes.map((code) => (
+                      <Chip key={code} label={code} size="small" />
+                    ))}
+                  </Box>
+                </Box>
+              </Box>
 
-                        {/* 消息 */}
-                        {selectedEntry.result.message && (
-                          <div>
-                            <h4 className="font-medium mb-2">结果消息</h4>
-                            <p className="text-sm p-3 bg-default-50 rounded-lg">
-                              {selectedEntry.result.message}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </ModalBody>
-                    <ModalFooter>
-                      <Button variant="light" onPress={() => setSelectedEntry(null)}>
-                        关闭
-                      </Button>
-                      {selectedEntry.result.failure_count > 0 && (
-                        <Button
-                          color="warning"
-                          startContent={<RotateCcw className="w-4 h-4" />}
-                          onPress={() => {
-                            handleRetry(selectedEntry.sync_id);
-                            setSelectedEntry(null);
-                          }}
-                        >
-                          重试失败项
-                        </Button>
-                      )}
-                    </ModalFooter>
-                  </ModalContent>
-                </Modal>
+              {/* 消息 */}
+              {selectedEntry.result.message && (
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                    结果消息
+                  </Typography>
+                  <Typography variant="body2" sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    {selectedEntry.result.message}
+                  </Typography>
+                </Box>
               )}
-            </ModalBody>
-            
-            <ModalFooter>
-              <Button variant="light" onPress={onModalClose}>
-                关闭
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSelectedEntry(null)}>关闭</Button>
+            {selectedEntry.result.failure_count > 0 && (
+              <Button
+                color="warning"
+                variant="outlined"
+                startIcon={<RotateCcw size={16} />}
+                onClick={() => {
+                  handleRetry(selectedEntry.sync_id);
+                  setSelectedEntry(null);
+                }}
+              >
+                重试失败项
               </Button>
-            </ModalFooter>
-          </>
-        )}
-      </ModalContent>
-    </Modal>
+            )}
+          </DialogActions>
+        </Dialog>
+      )}
+    </>
   );
 }

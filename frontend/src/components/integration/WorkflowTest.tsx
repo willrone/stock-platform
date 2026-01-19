@@ -13,17 +13,20 @@
 import React, { useState, useCallback } from 'react';
 import {
   Card,
-  CardBody,
+  CardContent,
   CardHeader,
   Button,
-  Progress,
+  LinearProgress,
   Chip,
   Divider,
   Accordion,
-  AccordionItem,
-  Code,
-  Spinner,
-} from '@heroui/react';
+  AccordionSummary,
+  AccordionDetails,
+  Box,
+  Typography,
+  CircularProgress,
+} from '@mui/material';
+import { ExpandMore } from '@mui/icons-material';
 import {
   Play,
   CheckCircle,
@@ -111,15 +114,15 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
   // 获取测试状态图标
   const getStatusIcon = (success: boolean) => {
     return success ? (
-      <CheckCircle className="w-5 h-5 text-success" />
+      <CheckCircle size={20} color="#2e7d32" />
     ) : (
-      <XCircle className="w-5 h-5 text-danger" />
+      <XCircle size={20} color="#d32f2f" />
     );
   };
 
   // 获取测试状态颜色
-  const getStatusColor = (success: boolean) => {
-    return success ? 'success' : 'danger';
+  const getStatusColor = (success: boolean): "success" | "error" => {
+    return success ? 'success' : 'error';
   };
 
   // 格式化持续时间
@@ -129,201 +132,236 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 测试控制面板 */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <h3 className="text-lg font-semibold">前后端集成测试</h3>
-              <p className="text-sm text-default-600">
+        <CardHeader
+          title={
+            <Box>
+              <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                前后端集成测试
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
                 测试前后端集成功能和完整用户工作流程
-              </p>
-            </div>
-            <div className="flex gap-2">
+              </Typography>
+            </Box>
+          }
+          action={
+            <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
+                variant="contained"
                 color="primary"
-                startContent={<Play className="w-4 h-4" />}
-                onPress={runTests}
-                isDisabled={isRunning}
-                isLoading={isRunning}
+                startIcon={<Play size={16} />}
+                onClick={runTests}
+                disabled={isRunning}
               >
                 {isRunning ? '测试中...' : '开始测试'}
               </Button>
               {result && (
                 <Button
-                  variant="light"
-                  startContent={<Download className="w-4 h-4" />}
-                  onPress={downloadReport}
+                  variant="outlined"
+                  startIcon={<Download size={16} />}
+                  onClick={downloadReport}
                 >
                   下载报告
                 </Button>
               )}
-            </div>
-          </div>
-        </CardHeader>
+            </Box>
+          }
+        />
 
         {isRunning && (
-          <CardBody>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">测试进度</span>
-                  <span className="text-sm text-default-600">{progress}%</span>
-                </div>
-                <Progress value={progress} color="primary" />
-              </div>
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    测试进度
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {progress}%
+                  </Typography>
+                </Box>
+                <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
+              </Box>
               
               {currentTest && (
-                <div className="flex items-center gap-2">
-                  <Spinner size="sm" />
-                  <span className="text-sm">{currentTest}</span>
-                </div>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="body2">{currentTest}</Typography>
+                </Box>
               )}
-            </div>
-          </CardBody>
+            </Box>
+          </CardContent>
         )}
       </Card>
 
       {/* 测试结果概览 */}
       {result && (
         <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              {getStatusIcon(result.success)}
-              <h4 className="text-lg font-semibold">
-                测试结果 {result.success ? '通过' : '失败'}
-              </h4>
-            </div>
-          </CardHeader>
-          <CardBody>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-default-900">
+          <CardHeader
+            title={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {getStatusIcon(result.success)}
+                <Typography variant="h6" component="h4" sx={{ fontWeight: 600 }}>
+                  测试结果 {result.success ? '通过' : '失败'}
+                </Typography>
+              </Box>
+            }
+          />
+          <CardContent>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600 }}>
                   {result.totalTests}
-                </div>
-                <div className="text-sm text-default-600">总测试数</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-success">
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  总测试数
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
                   {result.passedTests}
-                </div>
-                <div className="text-sm text-default-600">通过</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-danger">
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  通过
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
                   {result.failedTests}
-                </div>
-                <div className="text-sm text-default-600">失败</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  失败
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
                   {formatDuration(result.duration)}
-                </div>
-                <div className="text-sm text-default-600">总耗时</div>
-              </div>
-            </div>
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  总耗时
+                </Typography>
+              </Box>
+            </Box>
 
-            <Divider className="my-4" />
+            <Divider sx={{ my: 2 }} />
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">成功率:</span>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  成功率:
+                </Typography>
                 <Chip
-                  color={result.success ? 'success' : 'danger'}
-                  variant="flat"
-                  size="sm"
-                >
-                  {((result.passedTests / result.totalTests) * 100).toFixed(1)}%
-                </Chip>
-              </div>
-              <div className="text-sm text-default-600">
+                  label={`${((result.passedTests / result.totalTests) * 100).toFixed(1)}%`}
+                  color={result.success ? 'success' : 'error'}
+                  size="small"
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
                 测试时间: {new Date().toLocaleString()}
-              </div>
-            </div>
-          </CardBody>
+              </Typography>
+            </Box>
+          </CardContent>
         </Card>
       )}
 
       {/* 详细测试结果 */}
       {result && (
         <Card>
-          <CardHeader>
-            <h4 className="text-lg font-semibold">详细测试结果</h4>
-          </CardHeader>
-          <CardBody>
-            <Accordion variant="splitted">
+          <CardHeader title="详细测试结果" />
+          <CardContent>
+            <Box>
               {result.results.map((testResult, index) => (
-                <AccordionItem
-                  key={index}
-                  title={
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
+                <Accordion key={index}>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {getStatusIcon(testResult.success)}
-                        <span>{testResult.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                        <Typography variant="body2">{testResult.name}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Chip
+                          label={testResult.success ? '通过' : '失败'}
                           color={getStatusColor(testResult.success)}
-                          variant="flat"
-                          size="sm"
-                        >
-                          {testResult.success ? '通过' : '失败'}
-                        </Chip>
-                        <span className="text-sm text-default-600">
+                          size="small"
+                        />
+                        <Typography variant="caption" color="text.secondary">
                           {formatDuration(testResult.duration)}
-                        </span>
-                      </div>
-                    </div>
-                  }
-                >
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Info className="w-4 h-4 text-primary" />
-                        <span className="font-medium">测试消息</span>
-                      </div>
-                      <p className="text-sm text-default-700">
-                        {testResult.message}
-                      </p>
-                    </div>
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Info size={16} color="#1976d2" />
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            测试消息
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2">
+                          {testResult.message}
+                        </Typography>
+                      </Box>
 
-                    {testResult.details && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className="w-4 h-4 text-default-500" />
-                          <span className="font-medium">详细信息</span>
-                        </div>
-                        <Code className="block w-full">
-                          {JSON.stringify(testResult.details, null, 2)}
-                        </Code>
-                      </div>
-                    )}
+                      {testResult.details && (
+                        <Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <Clock size={16} color="#666" />
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              详细信息
+                            </Typography>
+                          </Box>
+                          <Box
+                            component="pre"
+                            sx={{
+                              bgcolor: 'grey.900',
+                              color: '#4ade80',
+                              p: 2,
+                              borderRadius: 1,
+                              overflowX: 'auto',
+                              fontFamily: 'monospace',
+                              fontSize: '0.875rem',
+                            }}
+                          >
+                            {JSON.stringify(testResult.details, null, 2)}
+                          </Box>
+                        </Box>
+                      )}
 
-                    {!testResult.success && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlertTriangle className="w-4 h-4 text-warning" />
-                          <span className="font-medium">修复建议</span>
-                        </div>
-                        <div className="text-sm text-default-700 space-y-1">
-                          {getFixSuggestions(testResult.name)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </AccordionItem>
+                      {!testResult.success && (
+                        <Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <AlertTriangle size={16} color="#ed6c02" />
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              修复建议
+                            </Typography>
+                          </Box>
+                          <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            {getFixSuggestions(testResult.name).map((suggestion, idx) => (
+                              <Typography key={idx} component="li" variant="body2">
+                                {suggestion}
+                              </Typography>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
               ))}
-            </Accordion>
-          </CardBody>
+            </Box>
+          </CardContent>
         </Card>
       )}
-    </div>
+    </Box>
   );
 };
 
 // 获取修复建议
-function getFixSuggestions(testName: string): React.ReactNode {
+function getFixSuggestions(testName: string): string[] {
   const suggestions: Record<string, string[]> = {
     'API连接测试': [
       '检查后端服务是否正常运行',
@@ -351,18 +389,10 @@ function getFixSuggestions(testName: string): React.ReactNode {
     ],
   };
 
-  const testSuggestions = suggestions[testName] || [
+  return suggestions[testName] || [
     '检查相关服务状态',
     '查看详细错误日志',
     '验证配置参数',
     '联系技术支持',
   ];
-
-  return (
-    <ul className="list-disc list-inside space-y-1">
-      {testSuggestions.map((suggestion, index) => (
-        <li key={index}>{suggestion}</li>
-      ))}
-    </ul>
-  );
 }

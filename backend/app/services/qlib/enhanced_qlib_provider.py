@@ -28,8 +28,55 @@ try:
     from qlib.data.dataset.loader import QlibDataLoader
     QLIB_AVAILABLE = True
     ALPHA158_AVAILABLE = True
+    
+    # 修复 qlib 内部的 Path 对象问题
+    # qlib 的 _mount_nfs_uri 函数在处理 C.dpm.get_data_uri() 返回的路径时，
+    # 如果返回的是 Path 对象，会导致 ' '.join() 失败
+    # 我们需要 monkey patch 来修复这个问题
+    try:
+        # 尝试 monkey patch _mount_nfs_uri 函数
+        if hasattr(qlib, '_mount_nfs_uri'):
+            _original_mount_nfs_uri = qlib._mount_nfs_uri
+            def _patched_mount_nfs_uri(provider_uri, mount_path, auto_mount):
+                """修复后的 _mount_nfs_uri，处理 Path 对象"""
+                # 确保 mount_path 是字符串，而不是 Path 对象
+                if isinstance(mount_path, Path):
+                    mount_path = str(mount_path.absolute())
+                elif isinstance(mount_path, (list, tuple)):
+                    # 如果 mount_path 是列表，确保所有元素都是字符串
+                    mount_path = [str(item) if isinstance(item, Path) else item for item in mount_path]
+                
+                # 如果路径不存在，创建它（避免 FileNotFoundError）
+                if isinstance(mount_path, str):
+                    # 清理路径末尾的异常字符（如 :\）
+                    mount_path = mount_path.rstrip(':\\')
+                    Path(mount_path).mkdir(parents=True, exist_ok=True)
+                
+                return _original_mount_nfs_uri(provider_uri, mount_path, auto_mount)
+            qlib._mount_nfs_uri = _patched_mount_nfs_uri
+    except Exception:
+        pass  # 如果无法 patch，继续执行
+    
 except ImportError as e:
-    logger.warning(f"Qlib未安装或Alpha158不可用: {e}")
+    error_msg = str(e)
+    missing_module = None
+    
+    # 检测缺失的模块
+    if "setuptools_scm" in error_msg:
+        missing_module = "setuptools_scm"
+    elif "ruamel" in error_msg or "ruamel.yaml" in error_msg:
+        missing_module = "ruamel.yaml"
+    elif "cvxpy" in error_msg:
+        missing_module = "cvxpy"
+    
+    if missing_module:
+        logger.warning(
+            f"Qlib缺少依赖 {missing_module}: {e}\n"
+            f"解决方法: pip install {missing_module}\n"
+            f"或运行修复脚本: ./fix_qlib_dependencies.sh"
+        )
+    else:
+        logger.warning(f"Qlib未安装或Alpha158不可用: {e}")
     QLIB_AVAILABLE = False
     ALPHA158_AVAILABLE = False
     Alpha158DL = None
@@ -588,9 +635,11 @@ class EnhancedQlibDataProvider:
             
             # 准备mount_path和provider_uri配置
             # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
+            # 确保所有路径都是绝对路径的字符串，避免Path对象传递
+            qlib_data_path_str = str(qlib_data_path.absolute())
             mount_path_config = {
-                "day": str(qlib_data_path),
-                "1min": str(qlib_data_path),
+                "day": qlib_data_path_str,
+                "1min": qlib_data_path_str,
             }
             
             provider_uri_config = {
@@ -598,16 +647,52 @@ class EnhancedQlibDataProvider:
                 "1min": "memory://",
             }
             
+            # 在调用 qlib.init() 之前，尝试修复 C.dpm 配置中的 Path 对象
+            # 这是一个临时解决方案，用于处理 qlib 内部配置系统的 Path 对象问题
+            try:
+                # 如果 C.dpm 存在且包含 Path 对象，尝试转换为字符串
+                if hasattr(C, 'dpm') and hasattr(C.dpm, 'get_data_uri'):
+                    # 获取所有频率的数据 URI，并确保它们是字符串
+                    for freq in ["day", "1min"]:
+                        try:
+                            data_uri = C.dpm.get_data_uri(freq)
+                            if isinstance(data_uri, (list, tuple)):
+                                # 如果返回列表，确保所有元素都是字符串
+                                data_uri = [str(item) if isinstance(item, Path) else item for item in data_uri]
+                        except Exception:
+                            pass
+            except Exception:
+                pass  # 忽略配置修复错误
+            
             # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
             # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
+            # 设置 auto_mount=False 避免 qlib 内部处理 NFS mount 时的 Path 对象问题
             qlib.init(
                 region=REG_CN,
                 provider_uri=provider_uri_config,
-                mount_path=mount_path_config
+                mount_path=mount_path_config,
+                auto_mount=False
             )
             _QLIB_GLOBAL_INITIALIZED = True
             self._qlib_initialized = True
             logger.info("Qlib环境初始化成功")
+        except TypeError as e:
+            # 处理 qlib 内部的 Path 对象问题
+            if "expected str instance, PosixPath found" in str(e):
+                # 这是一个已知的 qlib bug，与 C.dpm.get_data_uri() 返回 Path 对象有关
+                # 尝试使用 monkey patch 或绕过初始化
+                logger.warning(f"检测到 qlib Path 对象问题，尝试替代初始化方式: {e}")
+                try:
+                    # 尝试不传递 mount_path，让 qlib 使用默认值
+                    qlib.init(region=REG_CN, provider_uri="memory://", auto_mount=False)
+                    _QLIB_GLOBAL_INITIALIZED = True
+                    self._qlib_initialized = True
+                    logger.info("Qlib环境初始化成功（使用替代方式）")
+                except Exception as e2:
+                    logger.error(f"替代初始化方式也失败: {e2}")
+                    raise e  # 抛出原始错误
+            else:
+                raise
         except Exception as e:
             error_msg = str(e)
             # 如果Qlib已经初始化，忽略错误并标记为已初始化

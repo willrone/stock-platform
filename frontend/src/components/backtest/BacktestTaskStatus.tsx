@@ -5,16 +5,20 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
+  CardContent,
   CardHeader,
-  CardBody,
   Chip,
-  Progress,
+  LinearProgress,
   Divider,
   Button,
-} from '@heroui/react';
+  Box,
+  Typography,
+  Alert,
+  IconButton,
+} from '@mui/material';
 import {
   Clock,
   Calendar,
@@ -25,6 +29,8 @@ import {
   Play,
   Pause,
   RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Task } from '../../stores/useTaskStore';
 
@@ -41,31 +47,32 @@ export default function BacktestTaskStatus({
   onStop, 
   loading = false 
 }: BacktestTaskStatusProps) {
+  const [selectedStocksPage, setSelectedStocksPage] = useState(1); // 已选股票分页
   // 获取状态配置
   const getStatusConfig = (status: Task['status']) => {
     const configs = {
       created: {
         color: 'default' as const,
         text: '已创建',
-        icon: <Clock className="w-4 h-4" />,
+        icon: <Clock size={16} />,
         description: '任务已创建，等待执行'
       },
       running: {
         color: 'primary' as const,
         text: '运行中',
-        icon: <Play className="w-4 h-4" />,
+        icon: <Play size={16} />,
         description: '回测正在执行中，请耐心等待'
       },
       completed: {
         color: 'success' as const,
         text: '已完成',
-        icon: <CheckCircle className="w-4 h-4" />,
+        icon: <CheckCircle size={16} />,
         description: '回测执行完成，可以查看结果'
       },
       failed: {
-        color: 'danger' as const,
+        color: 'error' as const,
         text: '执行失败',
-        icon: <AlertTriangle className="w-4 h-4" />,
+        icon: <AlertTriangle size={16} />,
         description: '回测执行失败，请检查配置或重新运行'
       },
     };
@@ -134,7 +141,7 @@ export default function BacktestTaskStatus({
   // 获取回测配置信息
   const getBacktestConfig = () => {
     const result = task.result;
-    const config = result?.backtest_config || {};
+    const config = result?.backtest_config || task.config?.backtest_config || {};
     
     // 获取原始策略名称并转换为中文
     const rawStrategyName = config.strategy_name || result?.strategy_name || task.model_id || '默认策略';
@@ -154,58 +161,66 @@ export default function BacktestTaskStatus({
   const backtestConfig = getBacktestConfig();
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 任务状态卡片 */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between w-full">
-            <h3 className="text-lg font-semibold">任务状态</h3>
-            <div className="flex items-center space-x-2">
+        <CardHeader
+          title="任务状态"
+          action={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {statusConfig.icon}
-              <Chip color={statusConfig.color} variant="flat">
-                {statusConfig.text}
-              </Chip>
-            </div>
-          </div>
-        </CardHeader>
-        <CardBody className="space-y-4">
+              <Chip
+                label={statusConfig.text}
+                color={statusConfig.color}
+                size="small"
+              />
+            </Box>
+          }
+        />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* 进度条 */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-default-500">执行进度</span>
-              <span className="text-sm font-medium">{task.progress}%</span>
-            </div>
-            <Progress
+          <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                执行进度
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {task.progress}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
               value={task.progress}
-              color={task.status === 'failed' ? 'danger' : 'primary'}
-              className="mb-2"
+              color={task.status === 'failed' ? 'error' : 'primary'}
+              sx={{ height: 8, borderRadius: 4, mb: 1 }}
             />
-            <p className="text-sm text-default-500">{statusConfig.description}</p>
-          </div>
+            <Typography variant="body2" color="text.secondary">
+              {statusConfig.description}
+            </Typography>
+          </Box>
 
           {/* 错误信息 */}
           {task.status === 'failed' && task.error_message && (
-            <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
-              <div className="flex items-start space-x-2">
-                <AlertTriangle className="w-5 h-5 text-danger mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-medium text-danger">执行失败</p>
-                  <p className="text-sm text-danger-600 mt-1">{task.error_message}</p>
-                </div>
-              </div>
-            </div>
+            <Alert severity="error" icon={<AlertTriangle size={20} />}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                执行失败
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {task.error_message}
+              </Typography>
+            </Alert>
           )}
 
           {/* 操作按钮 */}
-          <div className="flex space-x-2">
+          <Box sx={{ display: 'flex', gap: 1 }}>
             {task.status === 'failed' && onRetry && (
               <Button
+                variant="outlined"
                 color="primary"
-                variant="flat"
-                startContent={<RotateCcw className="w-4 h-4" />}
-                onPress={onRetry}
-                isLoading={loading}
-                size="sm"
+                startIcon={<RotateCcw size={16} />}
+                onClick={onRetry}
+                disabled={loading}
+                size="small"
               >
                 重新运行
               </Button>
@@ -213,134 +228,273 @@ export default function BacktestTaskStatus({
             
             {task.status === 'running' && onStop && (
               <Button
+                variant="outlined"
                 color="warning"
-                variant="flat"
-                startContent={<Pause className="w-4 h-4" />}
-                onPress={onStop}
-                isLoading={loading}
-                size="sm"
+                startIcon={<Pause size={16} />}
+                onClick={onStop}
+                disabled={loading}
+                size="small"
               >
                 停止任务
               </Button>
             )}
-          </div>
-        </CardBody>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 任务基础信息 */}
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">基础信息</h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-default-500 mb-1">任务名称</p>
-              <p className="font-medium">{task.task_name}</p>
-            </div>
+        <CardHeader title="基础信息" />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                任务名称
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {task.task_name}
+              </Typography>
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">任务ID</p>
-              <p className="font-mono text-sm">{task.task_id}</p>
-            </div>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                任务ID
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                {task.task_id}
+              </Typography>
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">策略模型</p>
-              <Chip variant="flat" color="secondary" size="sm">
-                {backtestConfig.strategyName}
-              </Chip>
-            </div>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                策略模型
+              </Typography>
+              <Chip label={backtestConfig.strategyName} color="secondary" size="small" sx={{ mt: 0.5 }} />
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">股票数量</p>
-              <p className="font-medium">{task.stock_codes.length} 只</p>
-            </div>
-          </div>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                股票数量
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {task.stock_codes.length} 只
+              </Typography>
+            </Box>
+          </Box>
 
           <Divider />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-default-500 mb-1 flex items-center">
-                <Calendar className="w-4 h-4 mr-1" />
-                创建时间
-              </p>
-              <p className="font-medium">{formatDateTime(task.created_at)}</p>
-            </div>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <Calendar size={16} />
+                <Typography variant="caption" color="text.secondary">
+                  创建时间
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {formatDateTime(task.created_at)}
+              </Typography>
+            </Box>
             
             {task.completed_at && (
-              <div>
-                <p className="text-sm text-default-500 mb-1 flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                  完成时间
-                </p>
-                <p className="font-medium">{formatDateTime(task.completed_at)}</p>
-              </div>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                  <CheckCircle size={16} />
+                  <Typography variant="caption" color="text.secondary">
+                    完成时间
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {formatDateTime(task.completed_at)}
+                </Typography>
+              </Box>
             )}
             
             {duration && (
-              <div>
-                <p className="text-sm text-default-500 mb-1 flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
-                  执行时长
-                </p>
-                <p className="font-medium">{duration}</p>
-              </div>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                  <Clock size={16} />
+                  <Typography variant="caption" color="text.secondary">
+                    执行时长
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {duration}
+                </Typography>
+              </Box>
             )}
-          </div>
+          </Box>
 
           <Divider />
 
-          <div>
-            <p className="text-sm text-default-500 mb-2">选择的股票</p>
-            <div className="flex flex-wrap gap-2">
-              {task.stock_codes.map(code => (
-                <Chip key={code} variant="flat" size="sm">
-                  {code}
-                </Chip>
-              ))}
-            </div>
-          </div>
-        </CardBody>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              选择的股票
+            </Typography>
+            <Box 
+              sx={{ 
+                height: 200,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 1.5
+              }}
+            >
+              {task.stock_codes && task.stock_codes.length > 0 ? (
+                <>
+                  <Box 
+                    sx={{ 
+                      flex: 1,
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 1,
+                      alignContent: 'flex-start',
+                      pb: 1
+                    }}
+                  >
+                    {(() => {
+                      const STOCKS_PER_PAGE = 12;
+                      const totalPages = Math.ceil(task.stock_codes.length / STOCKS_PER_PAGE);
+                      const startIndex = (selectedStocksPage - 1) * STOCKS_PER_PAGE;
+                      const endIndex = startIndex + STOCKS_PER_PAGE;
+                      const currentStocks = task.stock_codes.slice(startIndex, endIndex);
+                      
+                      return currentStocks.map(code => (
+                        <Chip key={code} label={code} size="small" />
+                      ));
+                    })()}
+                  </Box>
+                  
+                  {(() => {
+                    const STOCKS_PER_PAGE = 12;
+                    const totalPages = Math.ceil(task.stock_codes.length / STOCKS_PER_PAGE);
+                    
+                    if (totalPages > 1) {
+                      return (
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'center', 
+                          alignItems: 'center', 
+                          gap: 1,
+                          pt: 1,
+                          borderTop: '1px solid',
+                          borderColor: 'divider'
+                        }}>
+                          <IconButton
+                            size="small"
+                            disabled={selectedStocksPage === 1}
+                            onClick={() => setSelectedStocksPage(prev => Math.max(1, prev - 1))}
+                          >
+                            <ChevronLeft size={16} />
+                          </IconButton>
+                          
+                          <Typography variant="caption" color="text.secondary">
+                            第 {selectedStocksPage} / {totalPages} 页
+                          </Typography>
+                          
+                          <IconButton
+                            size="small"
+                            disabled={selectedStocksPage >= totalPages}
+                            onClick={() => setSelectedStocksPage(prev => Math.min(totalPages, prev + 1))}
+                          >
+                            <ChevronRight size={16} />
+                          </IconButton>
+                        </Box>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
+                  <Box sx={{ 
+                    pt: 1,
+                    mt: 1,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }}>
+                    <Typography variant="body2" color="text.secondary">
+                      已选择 <strong>{task.stock_codes.length}</strong> 只股票
+                    </Typography>
+                  </Box>
+                </>
+              ) : (
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '100%' 
+                }}>
+                  <Typography variant="body2" color="text.secondary">
+                    暂无选择的股票
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
 
       {/* 回测配置信息 */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <Settings className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">回测配置</h3>
-          </div>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-default-500 mb-1">回测开始日期</p>
-              <p className="font-medium">{backtestConfig.startDate}</p>
-            </div>
+        <CardHeader
+          avatar={<Settings size={24} />}
+          title="回测配置"
+        />
+        <CardContent>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                回测开始日期
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {backtestConfig.startDate}
+              </Typography>
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">回测结束日期</p>
-              <p className="font-medium">{backtestConfig.endDate}</p>
-            </div>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                回测结束日期
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {backtestConfig.endDate}
+              </Typography>
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">初始资金</p>
-              <p className="font-medium">¥{backtestConfig.initialCash.toLocaleString()}</p>
-            </div>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                初始资金
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                ¥{backtestConfig.initialCash.toLocaleString()}
+              </Typography>
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">手续费率</p>
-              <p className="font-medium">{backtestConfig.commissionRate.toFixed(3)}%</p>
-            </div>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                手续费率
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {backtestConfig.commissionRate.toFixed(3)}%
+              </Typography>
+            </Box>
             
-            <div>
-              <p className="text-sm text-default-500 mb-1">滑点率</p>
-              <p className="font-medium">{backtestConfig.slippageRate.toFixed(3)}%</p>
-            </div>
-          </div>
-        </CardBody>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                滑点率
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {backtestConfig.slippageRate.toFixed(3)}%
+              </Typography>
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

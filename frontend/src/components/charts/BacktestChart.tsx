@@ -7,7 +7,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
-import { Card, CardBody, CardHeader, Chip, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@heroui/react';
+import { Card, CardContent, CardHeader, Chip, Table, TableHead, TableBody, TableRow, TableCell, Box, Typography, TableContainer, Paper } from '@mui/material';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, AlertCircle } from 'lucide-react';
 
 interface BacktestChartProps {
@@ -418,132 +418,138 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
   if (!backtestData && !data) {
     return (
       <Card>
-        <CardBody>
-          <div className="flex items-center justify-center h-64 text-default-500">
-            <AlertCircle className="w-8 h-8 mr-2" />
-            <span>暂无回测数据</span>
-          </div>
-        </CardBody>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+            <AlertCircle size={32} style={{ marginRight: 8 }} />
+            <Typography variant="body2" color="text.secondary">暂无回测数据</Typography>
+          </Box>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 性能指标概览 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' }, gap: 2 }}>
         <Card>
-          <CardBody className="text-center">
-            <DollarSign className="w-6 h-6 mx-auto mb-2 text-primary" />
-            <p className="text-sm text-default-500">总收益率</p>
-            <p className={`font-bold ${data.metrics.total_return >= 0 ? 'text-success' : 'text-danger'}`}>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <DollarSign size={24} color="#1976d2" style={{ margin: '0 auto 8px' }} />
+            <Typography variant="caption" color="text.secondary">总收益率</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: data.metrics.total_return >= 0 ? 'success.main' : 'error.main' }}>
               {data.metrics.total_return.toFixed(2)}%
-            </p>
-          </CardBody>
+            </Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <TrendingUp className="w-6 h-6 mx-auto mb-2 text-secondary" />
-            <p className="text-sm text-default-500">夏普比率</p>
-            <p className="font-bold">{data.metrics.sharpe_ratio.toFixed(3)}</p>
-          </CardBody>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <TrendingUp size={24} color="#9c27b0" style={{ margin: '0 auto 8px' }} />
+            <Typography variant="caption" color="text.secondary">夏普比率</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>{data.metrics.sharpe_ratio.toFixed(3)}</Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <TrendingDown className="w-6 h-6 mx-auto mb-2 text-danger" />
-            <p className="text-sm text-default-500">最大回撤</p>
-            <p className="font-bold text-danger">{data.metrics.max_drawdown.toFixed(2)}%</p>
-          </CardBody>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <TrendingDown size={24} color="#d32f2f" style={{ margin: '0 auto 8px' }} />
+            <Typography variant="caption" color="text.secondary">最大回撤</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+              {data.metrics.max_drawdown.toFixed(2)}%
+            </Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <BarChart3 className="w-6 h-6 mx-auto mb-2 text-warning" />
-            <p className="text-sm text-default-500">胜率</p>
-            <p className="font-bold">{data.metrics.win_rate.toFixed(1)}%</p>
-          </CardBody>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <BarChart3 size={24} color="#ed6c02" style={{ margin: '0 auto 8px' }} />
+            <Typography variant="caption" color="text.secondary">胜率</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>{data.metrics.win_rate.toFixed(1)}%</Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <p className="text-2xl font-bold text-primary mb-1">{data.metrics.total_trades}</p>
-            <p className="text-sm text-default-500">总交易次数</p>
-          </CardBody>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', mb: 0.5 }}>
+              {data.metrics.total_trades}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">总交易次数</Typography>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody className="text-center">
-            <p className="text-lg font-bold text-secondary mb-1">{data.metrics.profit_factor.toFixed(2)}</p>
-            <p className="text-sm text-default-500">盈亏比</p>
-          </CardBody>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: 'secondary.main', mb: 0.5 }}>
+              {data.metrics.profit_factor.toFixed(2)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">盈亏比</Typography>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* 图表区域 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 3 }}>
         <Card>
-          <CardBody>
-            <div
+          <CardContent>
+            <Box
               ref={equityChartRef}
-              style={{ height: '300px', width: '100%' }}
+              sx={{ height: 300, width: '100%' }}
             />
-          </CardBody>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody>
-            <div
+          <CardContent>
+            <Box
               ref={drawdownChartRef}
-              style={{ height: '300px', width: '100%' }}
+              sx={{ height: 300, width: '100%' }}
             />
-          </CardBody>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* 交易记录 */}
       <Card>
-        <CardHeader>
-          <h4 className="text-lg font-semibold">最近交易记录</h4>
-        </CardHeader>
-        <CardBody>
-          <Table aria-label="交易记录表格">
-            <TableHeader>
-              <TableColumn>日期</TableColumn>
-              <TableColumn>操作</TableColumn>
-              <TableColumn>价格</TableColumn>
-              <TableColumn>数量</TableColumn>
-              <TableColumn>盈亏</TableColumn>
-            </TableHeader>
-            <TableBody>
-              {data.trades.map((trade, index) => (
-                <TableRow key={index}>
-                  <TableCell>{new Date(trade.date).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Chip
-                      color={trade.action === 'buy' ? 'success' : 'danger'}
-                      variant="flat"
-                      size="sm"
-                    >
-                      {trade.action === 'buy' ? '买入' : '卖出'}
-                    </Chip>
-                  </TableCell>
-                  <TableCell>¥{trade.price.toFixed(2)}</TableCell>
-                  <TableCell>{trade.quantity}</TableCell>
-                  <TableCell>
-                    {trade.action === 'sell' && (
-                      <span className={trade.pnl >= 0 ? 'text-success' : 'text-danger'}>
-                        ¥{trade.pnl.toFixed(2)}
-                      </span>
-                    )}
-                  </TableCell>
+        <CardHeader title="最近交易记录" />
+        <CardContent>
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>日期</TableCell>
+                  <TableCell>操作</TableCell>
+                  <TableCell>价格</TableCell>
+                  <TableCell>数量</TableCell>
+                  <TableCell>盈亏</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardBody>
+              </TableHead>
+              <TableBody>
+                {data.trades.map((trade, index) => (
+                  <TableRow key={index} hover>
+                    <TableCell>{new Date(trade.date).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={trade.action === 'buy' ? '买入' : '卖出'}
+                        color={trade.action === 'buy' ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>¥{trade.price.toFixed(2)}</TableCell>
+                    <TableCell>{trade.quantity}</TableCell>
+                    <TableCell>
+                      {trade.action === 'sell' && (
+                        <Typography variant="body2" sx={{ color: trade.pnl >= 0 ? 'success.main' : 'error.main' }}>
+                          ¥{trade.pnl.toFixed(2)}
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

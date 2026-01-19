@@ -24,6 +24,7 @@ router = APIRouter(prefix="/data", tags=["数据管理"])
 @router.get("/status", response_model=StandardResponse, summary="获取数据服务状态", description="获取远端数据服务连接状态和响应时间")
 async def get_data_service_status(data_service: SimpleDataService = Depends(get_data_service)):
     """获取数据服务状态"""
+    logger.info("收到数据服务状态检查请求")
     try:
         status = await data_service.check_remote_service_status()
         
@@ -35,6 +36,8 @@ async def get_data_service_status(data_service: SimpleDataService = Depends(get_
             "error_message": status.error_message
         }
         
+        logger.info(f"数据服务状态检查完成: 连接状态={status.is_available}, URL={status.service_url}, 响应时间={status.response_time_ms}ms")
+        
         return StandardResponse(
             success=status.is_available,
             message="数据服务状态检查完成" if status.is_available else f"数据服务不可用: {status.error_message}",
@@ -42,7 +45,7 @@ async def get_data_service_status(data_service: SimpleDataService = Depends(get_
         )
         
     except Exception as e:
-        logger.error(f"获取数据服务状态失败: {e}")
+        logger.error(f"获取数据服务状态失败: {e}", exc_info=True)
         return StandardResponse(
             success=False,
             message=f"获取数据服务状态失败: {str(e)}",
@@ -59,10 +62,13 @@ async def get_data_service_status(data_service: SimpleDataService = Depends(get_
 @router.get("/remote/stocks", response_model=StandardResponse, summary="获取远端服务股票列表", description="从远端数据服务获取可用的股票列表")
 async def get_remote_stock_list(data_service: SimpleDataService = Depends(get_data_service)):
     """获取远端服务的股票列表"""
+    logger.info("收到获取远端股票列表请求")
     try:
+        logger.info("开始从远端服务获取股票列表...")
         stocks = await data_service.get_remote_stock_list()
         
         if stocks is None:
+            logger.warning("无法从远端服务获取股票列表，返回空列表")
             return StandardResponse(
                 success=False,
                 message="无法从远端服务获取股票列表",
@@ -72,20 +78,30 @@ async def get_remote_stock_list(data_service: SimpleDataService = Depends(get_da
                 }
             )
         
+        logger.info(f"成功从远端服务获取股票列表: {len(stocks)} 只股票")
         stock_codes = [stock.get("ts_code", "") for stock in stocks if stock.get("ts_code")]
+        
+        # 计算响应大小（估算）
+        import json
+        response_data = {
+            "stocks": stocks,
+            "stock_codes": stock_codes,
+            "total_stocks": len(stocks)
+        }
+        estimated_size = len(json.dumps(response_data))
+        logger.info(f"准备返回股票列表，股票数量: {len(stocks)}, 股票代码数量: {len(stock_codes)}, 估算响应大小: {estimated_size/1024:.2f} KB")
+        
+        if estimated_size > 5 * 1024 * 1024:  # 5MB
+            logger.warning(f"响应数据较大 ({estimated_size/1024/1024:.2f} MB)，可能导致前端处理失败")
         
         return StandardResponse(
             success=True,
             message=f"成功获取远端股票列表: {len(stocks)} 只股票",
-            data={
-                "stocks": stocks,
-                "stock_codes": stock_codes,
-                "total_stocks": len(stocks)
-            }
+            data=response_data
         )
     
     except Exception as e:
-        logger.error(f"获取远端股票列表失败: {e}")
+        logger.error(f"获取远端股票列表失败: {e}", exc_info=True)
         return StandardResponse(
             success=False,
             message=f"获取远端股票列表失败: {str(e)}",
@@ -162,7 +178,16 @@ async def get_local_stock_list():
         for file_path in parquet_files:
             try:
                 file_count += 1
-                df = pd.read_parquet(file_path)
+                # 尝试使用 pyarrow 引擎，如果失败则使用 fastparquet
+                try:
+                    df = pd.read_parquet(file_path, engine='pyarrow')
+                except Exception as e:
+                    logger.debug(f"使用 pyarrow 引擎读取失败: {e}，尝试使用 fastparquet")
+                    try:
+                        df = pd.read_parquet(file_path, engine='fastparquet')
+                    except Exception as e2:
+                        logger.error(f"使用 fastparquet 引擎也失败: {e2}")
+                        raise
                 if df.empty:
                     logger.debug(f"文件为空: {file_path}")
                     continue

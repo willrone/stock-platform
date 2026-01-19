@@ -6,11 +6,16 @@
 
 import React from 'react';
 import {
-  Input,
+  TextField,
   Select,
-  SelectItem,
+  MenuItem,
   Checkbox,
-} from '@heroui/react';
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  Box,
+  Typography,
+} from '@mui/material';
 import { StockSelector } from '../tasks/StockSelector';
 import { FeatureSelector } from './FeatureSelector';
 
@@ -43,101 +48,136 @@ export function CreateModelForm({
   onSelectedFeaturesChange,
 }: CreateModelFormProps) {
   return (
-    <div className="space-y-4">
-      <Input
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <TextField
         label="模型名称"
         placeholder="请输入模型名称"
         value={formData.model_name}
-        onValueChange={(value) => onFormDataChange('model_name', value)}
-        isInvalid={!!errors.model_name}
-        errorMessage={errors.model_name}
-        isRequired
+        onChange={(e) => onFormDataChange('model_name', e.target.value)}
+        error={!!errors.model_name}
+        helperText={errors.model_name}
+        required
+        fullWidth
       />
 
-      <Select
-        label="模型类型"
-        selectedKeys={[formData.model_type]}
-        onSelectionChange={(keys) => {
-          const type = Array.from(keys)[0] as string;
-          onFormDataChange('model_type', type);
-        }}
-        description="选择要训练的模型类型（基于Qlib框架统一训练）"
-      >
-        <SelectItem key="lightgbm" description="推荐：高效的梯度提升模型，适合表格数据">
-          LightGBM (推荐)
-        </SelectItem>
-        <SelectItem key="xgboost" description="经典的梯度提升模型，性能稳定">
-          XGBoost
-        </SelectItem>
-        <SelectItem key="linear_regression" description="简单的线性回归模型，训练快速">
-          线性回归
-        </SelectItem>
-        <SelectItem key="transformer" description="Transformer模型，适合复杂时序模式">
-          Transformer
-        </SelectItem>
-      </Select>
+      <FormControl fullWidth>
+        <InputLabel>模型类型</InputLabel>
+        <Select
+          value={formData.model_type}
+          label="模型类型"
+          onChange={(e) => onFormDataChange('model_type', e.target.value)}
+        >
+          <MenuItem value="lightgbm">
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                LightGBM (推荐)
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                推荐：高效的梯度提升模型，适合表格数据
+              </Typography>
+            </Box>
+          </MenuItem>
+          <MenuItem value="xgboost">
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                XGBoost
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                经典的梯度提升模型，性能稳定
+              </Typography>
+            </Box>
+          </MenuItem>
+          <MenuItem value="linear_regression">
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                线性回归
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                简单的线性回归模型，训练快速
+              </Typography>
+            </Box>
+          </MenuItem>
+          <MenuItem value="transformer">
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Transformer
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Transformer模型，适合复杂时序模式
+              </Typography>
+            </Box>
+          </MenuItem>
+        </Select>
+        <FormHelperText>选择要训练的模型类型（基于Qlib框架统一训练）</FormHelperText>
+      </FormControl>
 
       <StockSelector
         value={formData.stock_codes}
         onChange={(codes) => onFormDataChange('stock_codes', codes)}
       />
       {errors.stock_codes && (
-        <p className="text-danger text-sm mt-1">{errors.stock_codes}</p>
+        <FormHelperText error>{errors.stock_codes}</FormHelperText>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <Input
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+        <TextField
           type="date"
           label="训练数据开始日期"
           value={formData.start_date}
-          onValueChange={(value) => onFormDataChange('start_date', value)}
-          isInvalid={!!errors.start_date}
-          errorMessage={errors.start_date}
-          isRequired
+          onChange={(e) => onFormDataChange('start_date', e.target.value)}
+          error={!!errors.start_date}
+          helperText={errors.start_date}
+          required
+          fullWidth
+          InputLabelProps={{ shrink: true }}
         />
-        <Input
+        <TextField
           type="date"
           label="训练数据结束日期"
           value={formData.end_date}
-          onValueChange={(value) => onFormDataChange('end_date', value)}
-          isInvalid={!!errors.end_date}
-          errorMessage={errors.end_date}
-          isRequired
+          onChange={(e) => onFormDataChange('end_date', e.target.value)}
+          error={!!errors.end_date}
+          helperText={errors.end_date}
+          required
+          fullWidth
+          InputLabelProps={{ shrink: true }}
         />
-      </div>
+      </Box>
 
-      <Input
+      <TextField
         label="模型描述（可选）"
         placeholder="请输入模型描述"
         value={formData.description}
-        onValueChange={(value) => onFormDataChange('description', value)}
+        onChange={(e) => onFormDataChange('description', e.target.value)}
+        fullWidth
       />
 
-      <Input
+      <TextField
         type="number"
         label="训练迭代次数（Epochs）"
         placeholder="请输入训练迭代次数"
-        value={String(formData.num_iterations)}
-        onValueChange={(value) => {
-          const num = parseInt(value) || 100;
+        value={formData.num_iterations}
+        onChange={(e) => {
+          const num = parseInt(e.target.value) || 100;
           onFormDataChange('num_iterations', num);
           onFormDataChange('hyperparameters', {
             ...formData.hyperparameters,
             num_iterations: num
           });
         }}
-        description="控制模型训练的迭代次数，LightGBM/XGBoost使用此参数。建议范围：50-1000，默认100"
-        min={10}
-        max={1000}
-        isRequired
+        helperText="控制模型训练的迭代次数，LightGBM/XGBoost使用此参数。建议范围：50-1000，默认100"
+        inputProps={{ min: 10, max: 1000 }}
+        required
+        fullWidth
       />
 
-      <Checkbox
-        isSelected={formData.enable_hyperparameter_tuning}
-        onValueChange={(checked) => onFormDataChange('enable_hyperparameter_tuning', checked)}
-      >
-        启用自动超参数调优
-      </Checkbox>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Checkbox
+          checked={formData.enable_hyperparameter_tuning}
+          onChange={(e) => onFormDataChange('enable_hyperparameter_tuning', e.target.checked)}
+        />
+        <Typography variant="body2">启用自动超参数调优</Typography>
+      </Box>
 
       {/* 特征选择部分 */}
       <FeatureSelector
@@ -149,7 +189,6 @@ export function CreateModelForm({
         useAllFeatures={useAllFeatures}
         onUseAllFeaturesChange={onUseAllFeaturesChange}
       />
-    </div>
+    </Box>
   );
 }
-

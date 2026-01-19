@@ -15,6 +15,7 @@ from app.models.backtest_detailed_models import (
     BacktestChartCache,
     PortfolioSnapshot,
     TradeRecord,
+    SignalRecord,
     BacktestBenchmark
 )
 
@@ -407,6 +408,263 @@ class BacktestDetailedRepository:
             self.logger.error("获取交易统计失败: {}", e, exc_info=True)
             return {}
     
+    # ==================== SignalRecord 相关操作 ====================
+    
+    async def save_signal_record(
+        self,
+        task_id: str,
+        backtest_id: str,
+        signal_id: str,
+        stock_code: str,
+        stock_name: Optional[str],
+        signal_type: str,
+        timestamp: datetime,
+        price: float,
+        strength: float,
+        reason: Optional[str] = None,
+        signal_metadata: Optional[Dict[str, Any]] = None,
+        executed: bool = False
+    ) -> Optional[SignalRecord]:
+        """保存信号记录"""
+        try:
+            signal_record = SignalRecord(
+                task_id=task_id,
+                backtest_id=backtest_id,
+                signal_id=signal_id,
+                stock_code=stock_code,
+                stock_name=stock_name,
+                signal_type=signal_type,
+                timestamp=self._ensure_datetime(timestamp),
+                price=price,
+                strength=strength,
+                reason=reason,
+                signal_metadata=signal_metadata,
+                executed=executed
+            )
+            
+            self.session.add(signal_record)
+            await self.session.flush()
+            
+            self.logger.debug(f"保存信号记录: task_id={task_id}, signal_id={signal_id}, type={signal_type}")
+            return signal_record
+            
+        except Exception as e:
+            self.logger.error("保存信号记录失败: {}", e, exc_info=True)
+            return None
+    
+    async def batch_save_signal_records(
+        self,
+        task_id: str,
+        backtest_id: str,
+        signals_data: List[Dict[str, Any]]
+    ) -> bool:
+        """批量保存信号记录"""
+        try:
+            signals = []
+            for signal_data in signals_data:
+                signal = SignalRecord(
+                    task_id=task_id,
+                    backtest_id=backtest_id,
+                    signal_id=signal_data['signal_id'],
+                    stock_code=signal_data['stock_code'],
+                    stock_name=signal_data.get('stock_name'),
+                    signal_type=signal_data['signal_type'],
+                    timestamp=self._ensure_datetime(signal_data['timestamp']),
+                    price=signal_data['price'],
+                    strength=signal_data.get('strength', 0.0),
+                    reason=signal_data.get('reason'),
+                    signal_metadata=signal_data.get('metadata'),  # 从metadata字段读取，但存储为signal_metadata
+                    executed=signal_data.get('executed', False)
+                )
+                signals.append(signal)
+            
+            self.session.add_all(signals)
+            await self.session.flush()
+            
+            self.logger.info(f"批量保存信号记录: task_id={task_id}, count={len(signals)}")
+            return True
+            
+        except Exception as e:
+            self.logger.error("批量保存信号记录失败: {}", e, exc_info=True)
+            return False
+    
+    async def get_signal_records(
+        self,
+        task_id: str,
+        stock_code: Optional[str] = None,
+        signal_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        executed: Optional[bool] = None,
+        offset: int = 0,
+        limit: int = 50,
+        order_by: str = "timestamp",
+        order_desc: bool = True
+    ) -> List[SignalRecord]:
+        """获取信号记录列表"""
+        try:
+            stmt = select(SignalRecord).where(SignalRecord.task_id == task_id)
+            
+            if stock_code:
+                stmt = stmt.where(SignalRecord.stock_code == stock_code)
+            if signal_type:
+                stmt = stmt.where(SignalRecord.signal_type == signal_type)
+            if start_date:
+                stmt = stmt.where(SignalRecord.timestamp >= start_date)
+            if end_date:
+                stmt = stmt.where(SignalRecord.timestamp <= end_date)
+            if executed is not None:
+                stmt = stmt.where(SignalRecord.executed == executed)
+            
+            # 排序
+            if order_by == "timestamp":
+                order_col = SignalRecord.timestamp
+            elif order_by == "price":
+                order_col = SignalRecord.price
+            elif order_by == "strength":
+                order_col = SignalRecord.strength
+            else:
+                order_col = SignalRecord.timestamp
+            
+            if order_desc:
+                stmt = stmt.order_by(desc(order_col))
+            else:
+                stmt = stmt.order_by(asc(order_col))
+            
+            stmt = stmt.offset(offset).limit(limit)
+            
+            result = await self.session.execute(stmt)
+            return result.scalars().all()
+            
+        except Exception as e:
+            self.logger.error("获取信号记录失败: {}", e, exc_info=True)
+            return []
+    
+    async def get_signal_records_count(
+        self,
+        task_id: str,
+        stock_code: Optional[str] = None,
+        signal_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        executed: Optional[bool] = None
+    ) -> int:
+        """获取信号记录总数"""
+        try:
+            stmt = select(func.count(SignalRecord.id)).where(SignalRecord.task_id == task_id)
+            
+            if stock_code:
+                stmt = stmt.where(SignalRecord.stock_code == stock_code)
+            if signal_type:
+                stmt = stmt.where(SignalRecord.signal_type == signal_type)
+            if start_date:
+                stmt = stmt.where(SignalRecord.timestamp >= start_date)
+            if end_date:
+                stmt = stmt.where(SignalRecord.timestamp <= end_date)
+            if executed is not None:
+                stmt = stmt.where(SignalRecord.executed == executed)
+            
+            result = await self.session.execute(stmt)
+            return result.scalar() or 0
+            
+        except Exception as e:
+            self.logger.error("获取信号记录总数失败: {}", e, exc_info=True)
+            return 0
+    
+    async def get_signal_statistics(self, task_id: str) -> Dict[str, Any]:
+        """获取信号统计信息"""
+        try:
+            # 总信号数
+            total_stmt = select(func.count(SignalRecord.id)).where(SignalRecord.task_id == task_id)
+            total_result = await self.session.execute(total_stmt)
+            total_signals = total_result.scalar() or 0
+
+            # 买入/卖出信号数
+            buy_stmt = select(func.count(SignalRecord.id)).where(
+                and_(SignalRecord.task_id == task_id, SignalRecord.signal_type == "BUY")
+            )
+            buy_result = await self.session.execute(buy_stmt)
+            buy_signals = buy_result.scalar() or 0
+
+            sell_stmt = select(func.count(SignalRecord.id)).where(
+                and_(SignalRecord.task_id == task_id, SignalRecord.signal_type == "SELL")
+            )
+            sell_result = await self.session.execute(sell_stmt)
+            sell_signals = sell_result.scalar() or 0
+            
+            # 已执行信号数
+            executed_stmt = select(func.count(SignalRecord.id)).where(
+                and_(SignalRecord.task_id == task_id, SignalRecord.executed == True)
+            )
+            executed_result = await self.session.execute(executed_stmt)
+            executed_signals = executed_result.scalar() or 0
+            
+            # 未执行信号数
+            unexecuted_signals = total_signals - executed_signals
+            
+            # 平均信号强度
+            avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(SignalRecord.task_id == task_id)
+            avg_strength_result = await self.session.execute(avg_strength_stmt)
+            avg_strength = avg_strength_result.scalar() or 0.0
+            
+            # 执行率
+            execution_rate = executed_signals / total_signals if total_signals > 0 else 0.0
+
+            return {
+                "total_signals": total_signals,
+                "buy_signals": buy_signals,
+                "sell_signals": sell_signals,
+                "executed_signals": executed_signals,
+                "unexecuted_signals": unexecuted_signals,
+                "execution_rate": execution_rate,
+                "avg_strength": float(avg_strength)
+            }
+            
+        except Exception as e:
+            self.logger.error("获取信号统计失败: {}", e, exc_info=True)
+            return {}
+    
+    async def mark_signal_as_executed(
+        self,
+        task_id: str,
+        stock_code: str,
+        timestamp: datetime,
+        signal_type: str
+    ) -> bool:
+        """标记信号为已执行（基于股票代码、时间和类型匹配）"""
+        try:
+            # 查找匹配的信号（在相同日期和时间窗口内）
+            timestamp_start = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+            timestamp_end = timestamp_start + timedelta(days=1)
+            
+            stmt = select(SignalRecord).where(
+                and_(
+                    SignalRecord.task_id == task_id,
+                    SignalRecord.stock_code == stock_code,
+                    SignalRecord.signal_type == signal_type,
+                    SignalRecord.timestamp >= timestamp_start,
+                    SignalRecord.timestamp < timestamp_end,
+                    SignalRecord.executed == False
+                )
+            ).order_by(SignalRecord.timestamp)
+            
+            result = await self.session.execute(stmt)
+            signals = result.scalars().all()
+            
+            if signals:
+                # 标记第一个匹配的信号为已执行
+                signal = signals[0]
+                signal.executed = True
+                await self.session.flush()
+                self.logger.debug(f"标记信号为已执行: task_id={task_id}, signal_id={signal.signal_id}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error("标记信号为已执行失败: {}", e, exc_info=True)
+            return False
+    
     # ==================== BacktestBenchmark 相关操作 ====================
     
     async def create_benchmark_data(
@@ -470,6 +728,7 @@ class BacktestDetailedRepository:
                 (BacktestDetailedResult, "回测详细结果"),
                 (PortfolioSnapshot, "组合快照"),
                 (TradeRecord, "交易记录"),
+                (SignalRecord, "信号记录"),
                 (BacktestBenchmark, "基准数据")
             ]
             

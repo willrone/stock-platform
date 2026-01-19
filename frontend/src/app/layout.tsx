@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AppLayout } from '../components/layout/AppLayout';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
+import { MUIThemeProvider } from '../theme/muiTheme';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -20,9 +21,11 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className={inter.className}>
-        <ErrorBoundary>
-          <AppLayout>{children}</AppLayout>
-        </ErrorBoundary>
+        <MUIThemeProvider>
+          <ErrorBoundary>
+            <AppLayout>{children}</AppLayout>
+          </ErrorBoundary>
+        </MUIThemeProvider>
       </body>
     </html>
   );}

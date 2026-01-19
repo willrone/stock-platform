@@ -8,18 +8,21 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
   Button,
   Card,
-  CardBody,
+  CardContent,
   Chip,
   Accordion,
-  AccordionItem,
-} from '@heroui/react';
+  AccordionSummary,
+  AccordionDetails,
+  Box,
+  Typography,
+} from '@mui/material';
+import { ExpandMore } from '@mui/icons-material';
 import {
   Brain,
   TrendingUp,
@@ -229,13 +232,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
 
   if (loading) {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} size="5xl">
-        <ModalContent>
-          <ModalBody className="py-8">
-            <LoadingSpinner />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+      <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth>
+        <DialogContent sx={{ py: 4 }}>
+          <LoadingSpinner />
+        </DialogContent>
+      </Dialog>
     );
   }
 
@@ -247,84 +248,88 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
   const highCorrelationPairs = report?.feature_correlation?.high_correlation_pairs || [];
 
   return (
-    <Modal 
-      isOpen={isOpen} 
+    <Dialog 
+      open={isOpen} 
       onClose={onClose} 
-      size="5xl" 
-      scrollBehavior="inside"
+      maxWidth="xl" 
+      fullWidth
+      scroll="paper"
     >
-      <ModalContent>
-        <ModalHeader>
-          <div className="flex items-center gap-2">
-            <Brain className="w-5 h-5" />
-            <span>训练报告 - {report?.model_name}</span>
-          </div>
-        </ModalHeader>
-        <ModalBody>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Brain size={20} />
+          <span>训练报告 - {report?.model_name}</span>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
           {report ? (
-            <div className="space-y-6">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* 训练概览 */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">训练概览</h3>
-                <div className="grid grid-cols-4 gap-4">
+              <Box>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                  训练概览
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                   <Card>
-                    <CardBody className="p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm text-default-500">训练时长</span>
-                      </div>
-                      <div className="text-lg font-semibold">
+                    <CardContent sx={{ p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Clock size={16} color="#1976d2" />
+                        <Typography variant="caption" color="text.secondary">训练时长</Typography>
+                      </Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {formatDuration(report.training_summary?.training_duration || report.training_duration || 0)}
-                      </div>
-                    </CardBody>
+                      </Typography>
+                    </CardContent>
                   </Card>
                   
                   <Card>
-                    <CardBody className="p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Target className="w-4 h-4 text-green-500" />
-                        <span className="text-sm text-default-500">最终准确率</span>
-                      </div>
-                      <div className="text-lg font-semibold">
+                    <CardContent sx={{ p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Target size={16} color="#2e7d32" />
+                        <Typography variant="caption" color="text.secondary">最终准确率</Typography>
+                      </Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {((report.performance_metrics?.accuracy || report.final_metrics?.accuracy || 0) * 100).toFixed(2)}%
-                      </div>
-                    </CardBody>
+                      </Typography>
+                    </CardContent>
                   </Card>
                   
                   {(report.training_summary?.epochs || report.total_epochs) && (
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Activity className="w-4 h-4 text-purple-500" />
-                          <span className="text-sm text-default-500">总轮次</span>
-                        </div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Activity size={16} color="#9c27b0" />
+                          <Typography variant="caption" color="text.secondary">总轮次</Typography>
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {report.training_summary?.epochs || report.total_epochs}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
                   )}
                   
                   {report.training_summary?.total_samples && (
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Zap className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm text-default-500">训练样本</span>
-                        </div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Zap size={16} color="#ed6c02" />
+                          <Typography variant="caption" color="text.secondary">训练样本</Typography>
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {report.training_summary.total_samples.toLocaleString()}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
                   )}
-                </div>
-              </div>
+                </Box>
+              </Box>
               
               {/* 性能指标 */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">性能指标</h3>
-                <div className="grid grid-cols-2 gap-4">
+              <Box>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                  性能指标
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
                   {Object.entries(report.performance_metrics || report.final_metrics || {}).map(([key, value]) => {
                     // 格式化显示值
                     let displayValue: string;
@@ -343,24 +348,26 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                     }
                     
                     return (
-                      <div key={key} className="bg-default-50 p-4 rounded-lg">
-                        <div className="text-sm text-default-500 mb-1">
+                      <Box key={key} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
                           {key.toUpperCase().replace(/_/g, ' ')}
-                        </div>
-                        <div className={`text-xl font-semibold ${value === null || value === undefined ? 'text-default-400' : ''}`}>
+                        </Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 600, color: value === null || value === undefined ? 'text.disabled' : 'text.primary' }}>
                           {displayValue}
-                        </div>
-                      </div>
+                        </Typography>
+                      </Box>
                     );
                   })}
-                </div>
-              </div>
+                </Box>
+              </Box>
 
               {/* 训练曲线 */}
               {report.training_history && report.training_history.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">训练曲线</h3>
-                  <div className="h-80 bg-default-50 rounded-lg p-4">
+                <Box>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                    训练曲线
+                  </Typography>
+                  <Box sx={{ height: 320, bgcolor: 'grey.50', borderRadius: 1, p: 2 }}>
                     <ReactECharts
                       option={{
                         title: {
@@ -445,18 +452,20 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       }}
                       style={{ height: '100%', width: '100%' }}
                     />
-                  </div>
-                </div>
+                  </Box>
+                </Box>
               )}
 
               {/* 特征重要性 */}
               {report.feature_importance && (
                 (Array.isArray(report.feature_importance) ? report.feature_importance.length > 0 : Object.keys(report.feature_importance).length > 0) && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">特征重要性</h3>
+                <Box>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                    特征重要性
+                  </Typography>
                   
                   {/* 特征重要性图表 */}
-                  <div className="h-64 bg-default-50 rounded-lg p-4 mb-4">
+                  <Box sx={{ height: 256, bgcolor: 'grey.50', borderRadius: 1, p: 2, mb: 2 }}>
                     <ReactECharts
                       option={{
                         title: {
@@ -511,12 +520,14 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       }}
                       style={{ height: '100%', width: '100%' }}
                     />
-                  </div>
+                  </Box>
                   
                   {/* 特征重要性列表 */}
-                  <div className="mt-4">
-                    <h4 className="font-medium mb-2">特征重要性排序</h4>
-                    <div className="space-y-2">
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                      特征重要性排序
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       {(Array.isArray(report.feature_importance)
                         ? report.feature_importance
                             .sort((a: any, b: any) => (b.importance || b) - (a.importance || a))
@@ -533,59 +544,71 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                           : Math.max(...Object.values(report.feature_importance as Record<string, number>));
                         
                         return (
-                          <div key={feature} className="flex items-center justify-between">
-                            <span className="text-sm">{feature}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 bg-default-200 rounded-full h-2">
-                                <div 
-                                  className="bg-primary h-2 rounded-full"
-                                  style={{ width: `${(importance / maxImportance) * 100}%` }}
+                          <Box key={feature} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="body2">{feature}</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box sx={{ width: 80, bgcolor: 'grey.200', borderRadius: '999px', height: 8 }}>
+                                <Box 
+                                  sx={{ 
+                                    bgcolor: 'primary.main', 
+                                    height: 8, 
+                                    borderRadius: '999px',
+                                    width: `${(importance / maxImportance) * 100}%` 
+                                  }}
                                 />
-                              </div>
-                              <span className="text-xs text-default-500 w-12">
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ width: 48 }}>
                                 {(importance * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                          </div>
+                              </Typography>
+                            </Box>
+                          </Box>
                         );
                       })}
-                    </div>
-                  </div>
-                </div>
+                    </Box>
+                  </Box>
+                </Box>
               ))}
 
               {/* 特征相关性 */}
               {report.feature_correlation && !report.feature_correlation.error && correlationEntries.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">特征相关性</h3>
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                <Box>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                    特征相关性
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2, mb: 2 }}>
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="text-sm text-default-500 mb-1">平均相关性</div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                          平均相关性
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {(report.feature_correlation.avg_target_correlation || 0).toFixed(4)}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="text-sm text-default-500 mb-1">最大相关性</div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                          最大相关性
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {(report.feature_correlation.max_target_correlation || 0).toFixed(4)}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="text-sm text-default-500 mb-1">高相关特征对</div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                          高相关特征对
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {highCorrelationPairs.length}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
-                  </div>
+                  </Box>
 
-                  <div className="h-64 bg-default-50 rounded-lg p-4 mb-4">
+                  <Box sx={{ height: 256, bgcolor: 'grey.50', borderRadius: 1, p: 2, mb: 2 }}>
                     <ReactECharts
                       option={{
                         title: {
@@ -626,160 +649,226 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       }}
                       style={{ height: '100%', width: '100%' }}
                     />
-                  </div>
+                  </Box>
 
                   {highCorrelationPairs.length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-2">高相关特征对（|corr| > 0.8）</h4>
-                      <div className="grid grid-cols-2 gap-2">
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                        高相关特征对（|corr| &gt; 0.8）
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1 }}>
                         {highCorrelationPairs.slice(0, 6).map((pair, idx) => (
-                          <div key={`${pair.feature1}-${pair.feature2}-${idx}`} className="text-sm text-default-600">
+                          <Typography key={`${pair.feature1}-${pair.feature2}-${idx}`} variant="body2" color="text.secondary">
                             {pair.feature1} × {pair.feature2}: {pair.correlation.toFixed(3)}
-                          </div>
+                          </Typography>
                         ))}
-                      </div>
-                    </div>
+                      </Box>
+                    </Box>
                   )}
-                </div>
+                </Box>
               )}
 
               {/* 超参数调优 */}
               {report.hyperparameter_tuning && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">超参数调优</h3>
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                <Box>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                    超参数调优
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2, mb: 2 }}>
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="text-sm text-default-500 mb-1">搜索策略</div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                          搜索策略
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {report.hyperparameter_tuning.strategy || 'unknown'}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="text-sm text-default-500 mb-1">试验次数</div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                          试验次数
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {report.hyperparameter_tuning.trials ?? 0}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
                     <Card>
-                      <CardBody className="p-4">
-                        <div className="text-sm text-default-500 mb-1">最佳得分</div>
-                        <div className="text-lg font-semibold">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                          最佳得分
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {report.hyperparameter_tuning.best_score !== undefined && report.hyperparameter_tuning.best_score !== null
                             ? report.hyperparameter_tuning.best_score.toFixed(4)
                             : 'N/A'}
-                        </div>
-                      </CardBody>
+                        </Typography>
+                      </CardContent>
                     </Card>
-                  </div>
+                  </Box>
                   {report.hyperparameter_tuning.best_hyperparameters && (
                     <Card>
-                      <CardBody>
-                        <div className="text-sm text-default-500 mb-2">最佳超参数</div>
-                        <pre className="text-xs whitespace-pre-wrap">
+                      <CardContent>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                          最佳超参数
+                        </Typography>
+                        <Box component="pre" sx={{ fontSize: '0.75rem', whiteSpace: 'pre-wrap', m: 0 }}>
                           {JSON.stringify(report.hyperparameter_tuning.best_hyperparameters, null, 2)}
-                        </pre>
-                      </CardBody>
+                        </Box>
+                      </CardContent>
                     </Card>
                   )}
-                </div>
+                </Box>
               )}
 
               {/* 建议和改进 */}
               {report.recommendations && report.recommendations.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">建议和改进</h3>
+                <Box>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2 }}>
+                    建议和改进
+                  </Typography>
                   <Card>
-                    <CardBody>
-                      <ul className="space-y-2">
+                    <CardContent>
+                      <Box component="ul" sx={{ m: 0, pl: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
                         {report.recommendations.map((rec, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-primary mt-1">•</span>
-                            <span className="text-sm">{rec}</span>
-                          </li>
+                          <Typography key={idx} component="li" variant="body2" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                            <Box component="span" sx={{ color: 'primary.main', mt: 0.5 }}>•</Box>
+                            <Box component="span">{rec}</Box>
+                          </Typography>
                         ))}
-                      </ul>
-                    </CardBody>
+                      </Box>
+                    </CardContent>
                   </Card>
-                </div>
+                </Box>
               )}
 
               {/* 详细配置 */}
-              <Accordion>
-                <AccordionItem title="超参数配置" subtitle="查看训练时使用的超参数">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <pre className="text-sm overflow-x-auto">
-                      {JSON.stringify(report.hyperparameters, null, 2)}
-                    </pre>
-                  </div>
-                </AccordionItem>
+              <Box>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        超参数配置
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        查看训练时使用的超参数
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+                      <Box component="pre" sx={{ fontSize: '0.875rem', overflowX: 'auto', m: 0 }}>
+                        {JSON.stringify(report.hyperparameters, null, 2)}
+                      </Box>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
                 
-                <AccordionItem title="训练数据信息" subtitle="查看训练数据的详细信息">
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-sm text-default-500">股票代码: </span>
-                      <span>{report.training_data_info.stock_codes?.join(', ') || '无'}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm text-default-500">数据范围: </span>
-                      <span>{report.training_data_info.start_date || '未知'} 至 {report.training_data_info.end_date || '未知'}</span>
-                    </div>
-                    {report.training_summary && (
-                      <>
-                        <div>
-                          <span className="text-sm text-default-500">训练样本数: </span>
-                          <span>{report.training_summary.train_samples?.toLocaleString() || '未知'}</span>
-                        </div>
-                        <div>
-                          <span className="text-sm text-default-500">验证样本数: </span>
-                          <span>{report.training_summary.validation_samples?.toLocaleString() || '未知'}</span>
-                        </div>
-                        <div>
-                          <span className="text-sm text-default-500">测试样本数: </span>
-                          <span>{report.training_summary.test_samples?.toLocaleString() || '未知'}</span>
-                        </div>
-                        {report.training_summary.batch_size && (
-                          <div>
-                            <span className="text-sm text-default-500">批次大小: </span>
-                            <span>{report.training_summary.batch_size}</span>
-                          </div>
-                        )}
-                        {report.training_summary.learning_rate && (
-                          <div>
-                            <span className="text-sm text-default-500">学习率: </span>
-                            <span>{report.training_summary.learning_rate}</span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </AccordionItem>
-              </Accordion>
-            </div>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        训练数据信息
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        查看训练数据的详细信息
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" component="span">
+                          股票代码:{' '}
+                        </Typography>
+                        <Typography variant="body2" component="span">
+                          {report.training_data_info.stock_codes?.join(', ') || '无'}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" component="span">
+                          数据范围:{' '}
+                        </Typography>
+                        <Typography variant="body2" component="span">
+                          {report.training_data_info.start_date || '未知'} 至 {report.training_data_info.end_date || '未知'}
+                        </Typography>
+                      </Box>
+                      {report.training_summary && (
+                        <>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" component="span">
+                              训练样本数:{' '}
+                            </Typography>
+                            <Typography variant="body2" component="span">
+                              {report.training_summary.train_samples?.toLocaleString() || '未知'}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" component="span">
+                              验证样本数:{' '}
+                            </Typography>
+                            <Typography variant="body2" component="span">
+                              {report.training_summary.validation_samples?.toLocaleString() || '未知'}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" component="span">
+                              测试样本数:{' '}
+                            </Typography>
+                            <Typography variant="body2" component="span">
+                              {report.training_summary.test_samples?.toLocaleString() || '未知'}
+                            </Typography>
+                          </Box>
+                          {report.training_summary.batch_size && (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" component="span">
+                                批次大小:{' '}
+                              </Typography>
+                              <Typography variant="body2" component="span">
+                                {report.training_summary.batch_size}
+                              </Typography>
+                            </Box>
+                          )}
+                          {report.training_summary.learning_rate && (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" component="span">
+                                学习率:{' '}
+                              </Typography>
+                              <Typography variant="body2" component="span">
+                                {report.training_summary.learning_rate}
+                              </Typography>
+                            </Box>
+                          )}
+                        </>
+                      )}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              </Box>
+            </Box>
           ) : (
-            <div className="text-center py-8">
-              <div className="text-default-500">无法加载训练报告</div>
-            </div>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                无法加载训练报告
+              </Typography>
+            </Box>
           )}
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="light" onPress={onClose}>
-            关闭
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>关闭</Button>
+        {report && (
+          <Button 
+            variant="contained"
+            color="primary"
+            startIcon={<Download size={16} />}
+            onClick={downloadReport}
+          >
+            下载报告
           </Button>
-          {report && (
-            <Button 
-              color="primary"
-              startContent={<Download className="w-4 h-4" />}
-              onPress={downloadReport}
-            >
-              下载报告
-            </Button>
-          )}
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        )}
+      </DialogActions>
+    </Dialog>
   );
 };

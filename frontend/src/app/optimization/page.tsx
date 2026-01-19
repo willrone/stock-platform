@@ -13,12 +13,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card,
-  CardHeader,
-  CardBody,
+  CardContent,
   Tabs,
   Tab,
-  Button,
-} from '@heroui/react';
+  Box,
+  Typography,
+} from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { OptimizationService, OptimizationTask } from '../../services/optimizationService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -61,22 +61,30 @@ export default function OptimizationPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">超参优化</h1>
-        <p className="text-default-500 mt-2">
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 3 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+          超参优化
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           使用 Optuna 对策略参数进行优化，寻找最佳参数配置
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
       <Tabs
-        selectedKey={activeTab}
-        onSelectionChange={(key) => setActiveTab(key as string)}
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
         aria-label="优化任务标签页"
       >
-        <Tab key="list" title="任务列表">
-          <Card className="mt-4">
-            <CardBody>
+        <Tab label="任务列表" value="list" />
+        <Tab label="创建任务" value="create" />
+        {selectedTaskId && <Tab label="任务详情" value="detail" />}
+      </Tabs>
+
+      <Box sx={{ mt: 2 }}>
+        {activeTab === 'list' && (
+          <Card>
+            <CardContent>
               {loading ? (
                 <LoadingSpinner text="加载任务列表..." />
               ) : (
@@ -86,32 +94,29 @@ export default function OptimizationPage() {
                   onRefresh={loadTasks}
                 />
               )}
-            </CardBody>
+            </CardContent>
           </Card>
-        </Tab>
+        )}
 
-        <Tab key="create" title="创建任务">
-          <Card className="mt-4">
-            <CardBody>
+        {activeTab === 'create' && (
+          <Card>
+            <CardContent>
               <CreateOptimizationTaskForm onTaskCreated={handleTaskCreated} />
-            </CardBody>
+            </CardContent>
           </Card>
-        </Tab>
+        )}
 
-        <Tab key="detail" title="任务详情" isDisabled={!selectedTaskId}>
-          {selectedTaskId && (
-            <Card className="mt-4">
-              <CardBody>
-                <OptimizationTaskDetail
-                  taskId={selectedTaskId}
-                  onBack={() => setActiveTab('list')}
-                />
-              </CardBody>
-            </Card>
-          )}
-        </Tab>
-      </Tabs>
-    </div>
+        {activeTab === 'detail' && selectedTaskId && (
+          <Card>
+            <CardContent>
+              <OptimizationTaskDetail
+                taskId={selectedTaskId}
+                onBack={() => setActiveTab('list')}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </Box>
+    </Box>
   );
 }
-

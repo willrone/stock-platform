@@ -25,8 +25,8 @@ reportlab>=4.0.0  # PDF报告生成
 # pyqlib>=0.9.8.dev18  # Microsoft Qlib量化投资平台，从GitHub安装（需要单独安装）
 git+https://github.com/microsoft/qlib.git  # Microsoft Qlib量化投资平台
 vectorbt>=0.26.0
-# ta-lib==0.4.28  # 暂时注释掉，因为编译问题，使用pandas-ta替代
-pandas-ta>=0.4.67b0  # 技术分析库，纯Python实现，无需编译
+# ta-lib==0.4.28  # 暂时注释掉，因为编译问题
+# pandas-ta>=0.4.67b0  # 已移除，使用内置的pandas/numpy实现替代
 scikit-learn>=1.4.0
 joblib>=1.3.0  # scikit-learn的依赖，用于模型序列化
 optuna>=3.4.0  # 超参数优化框架
@@ -40,6 +40,9 @@ xgboost==2.0.2
 # HTTP 客户端
 httpx==0.25.2
 aiohttp==3.9.1
+
+# 异步事件循环支持
+nest-asyncio>=1.6.0  # 允许在已有事件循环中嵌套运行异步代码
 
 # SFTP 客户端
 paramiko==3.4.0

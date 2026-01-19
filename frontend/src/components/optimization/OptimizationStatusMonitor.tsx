@@ -8,10 +8,12 @@ import React from 'react';
 import {
   Card,
   CardHeader,
-  CardBody,
-  Progress,
+  CardContent,
+  LinearProgress,
   Chip,
-} from '@heroui/react';
+  Box,
+  Typography,
+} from '@mui/material';
 import { OptimizationStatus } from '../../services/optimizationService';
 
 interface OptimizationStatusMonitorProps {
@@ -30,118 +32,120 @@ export default function OptimizationStatusMonitor({
       case 'running':
         return 'primary';
       case 'failed':
-        return 'danger';
+        return 'error';
       default:
         return 'default';
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
         <Card>
-          <CardBody>
-            <div className="text-center">
-              <p className="text-2xl font-bold">
+          <CardContent>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600 }}>
                 {status.completed_trials || 0} / {status.n_trials || 0}
-              </p>
-              <p className="text-sm text-default-500">已完成试验</p>
-            </div>
-          </CardBody>
+              </Typography>
+              <Typography variant="caption" color="text.secondary">已完成试验</Typography>
+            </Box>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-primary">
+          <CardContent>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
                 {status.running_trials || 0}
-              </p>
-              <p className="text-sm text-default-500">运行中</p>
-            </div>
-          </CardBody>
+              </Typography>
+              <Typography variant="caption" color="text.secondary">运行中</Typography>
+            </Box>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-warning">
+          <CardContent>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
                 {status.pruned_trials || 0}
-              </p>
-              <p className="text-sm text-default-500">已剪枝</p>
-            </div>
-          </CardBody>
+              </Typography>
+              <Typography variant="caption" color="text.secondary">已剪枝</Typography>
+            </Box>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardBody>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-danger">
+          <CardContent>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
                 {status.failed_trials || 0}
-              </p>
-              <p className="text-sm text-default-500">失败</p>
-            </div>
-          </CardBody>
+              </Typography>
+              <Typography variant="caption" color="text.secondary">失败</Typography>
+            </Box>
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">优化进度</h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Progress
-            value={status.progress || 0}
-            color={getStatusColor(status.status)}
-            size="lg"
-            label={`${(status.progress || 0).toFixed(1)}%`}
-            showValueLabel
-          />
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-default-600">状态:</span>
-            <Chip color={getStatusColor(status.status)} size="sm">
-              {status.status}
-            </Chip>
-          </div>
-        </CardBody>
+        <CardHeader title="优化进度" />
+        <CardContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {`${(status.progress || 0).toFixed(1)}%`}
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={status.progress || 0}
+                color={getStatusColor(status.status) as any}
+                sx={{ height: 10, borderRadius: 5 }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">状态:</Typography>
+              <Chip label={status.status} color={getStatusColor(status.status) as any} size="small" />
+            </Box>
+          </Box>
+        </CardContent>
       </Card>
 
       {status.best_score !== undefined && status.best_score !== null && (
         <Card>
-          <CardHeader>
-            <h3 className="text-lg font-semibold">最佳结果</h3>
-          </CardHeader>
-          <CardBody>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-default-600">最佳得分:</span>
-                <span className="font-bold text-success text-lg">
+          <CardHeader title="最佳结果" />
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" color="text.secondary">最佳得分:</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
                   {(status.best_score || 0).toFixed(4)}
-                </span>
-              </div>
+                </Typography>
+              </Box>
               {status.best_trial_number !== undefined && (
-                <div className="flex justify-between">
-                  <span className="text-default-600">最佳试验编号:</span>
-                  <span className="font-medium">#{status.best_trial_number}</span>
-                </div>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">最佳试验编号:</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>#{status.best_trial_number}</Typography>
+                </Box>
               )}
               {status.best_params && (
-                <div className="mt-4">
-                  <p className="text-sm font-medium mb-2">最佳参数:</p>
-                  <div className="grid grid-cols-2 gap-2">
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>最佳参数:</Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
                     {Object.entries(status.best_params).map(([key, value]) => (
-                      <div key={key} className="flex justify-between text-sm">
-                        <span className="text-default-600">{key}:</span>
-                        <span className="font-medium">{String(value)}</span>
-                      </div>
+                      <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">{key}:</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 500 }}>{String(value)}</Typography>
+                      </Box>
                     ))}
-                  </div>
-                </div>
+                  </Box>
+                </Box>
               )}
-            </div>
-          </CardBody>
+            </Box>
+          </CardContent>
         </Card>
       )}
-    </div>
+    </Box>
   );
 }
 

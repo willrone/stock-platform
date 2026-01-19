@@ -19,6 +19,7 @@ from app.models.backtest_detailed_models import (
     BacktestChartCache,
     PortfolioSnapshot,
     TradeRecord,
+    SignalRecord,
     BacktestBenchmark
 )
 
@@ -212,6 +213,53 @@ class BacktestDetailedTablesMigration:
             self.logger.error(f"创建表 trade_records 失败: {e}")
             return False
     
+    async def create_signal_records_table(self, session: AsyncSession) -> bool:
+        """创建信号记录表"""
+        try:
+            if await self.check_table_exists(session, "signal_records"):
+                self.logger.info("表 signal_records 已存在，跳过创建")
+                return True
+            
+            create_sql = """
+            CREATE TABLE signal_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id VARCHAR(50) NOT NULL,
+                backtest_id VARCHAR(50) NOT NULL,
+                signal_id VARCHAR(50) NOT NULL,
+                stock_code VARCHAR(20) NOT NULL,
+                stock_name VARCHAR(100),
+                signal_type VARCHAR(10) NOT NULL,
+                timestamp TIMESTAMP NOT NULL,
+                price REAL NOT NULL,
+                strength REAL DEFAULT 0.0,
+                reason TEXT,
+                signal_metadata JSON,
+                executed BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+            
+            await session.execute(text(create_sql))
+            
+            # 创建索引
+            index_sqls = [
+                "CREATE INDEX idx_signal_task_stock ON signal_records(task_id, stock_code);",
+                "CREATE INDEX idx_signal_backtest_time ON signal_records(backtest_id, timestamp);",
+                "CREATE INDEX idx_signal_stock_time ON signal_records(stock_code, timestamp);",
+                "CREATE INDEX idx_signal_type ON signal_records(signal_type);",
+                "CREATE INDEX idx_signal_executed ON signal_records(executed);"
+            ]
+            
+            for index_sql in index_sqls:
+                await session.execute(text(index_sql))
+            
+            self.logger.info("成功创建表 signal_records 及其索引")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"创建表 signal_records 失败: {e}")
+            return False
+    
     async def create_backtest_benchmarks_table(self, session: AsyncSession) -> bool:
         """创建回测基准表"""
         try:
@@ -284,7 +332,11 @@ class BacktestDetailedTablesMigration:
                 if await self.create_trade_records_table(session):
                     tables_created.append("trade_records")
                 
-                # 5. 创建基准对比表
+                # 5. 创建信号记录表
+                if await self.create_signal_records_table(session):
+                    tables_created.append("signal_records")
+                
+                # 6. 创建基准对比表
                 if await self.create_backtest_benchmarks_table(session):
                     tables_created.append("backtest_benchmarks")
                 
@@ -305,6 +357,7 @@ class BacktestDetailedTablesMigration:
         
         tables_to_drop = [
             "backtest_benchmarks",
+            "signal_records",
             "trade_records", 
             "portfolio_snapshots",
             "backtest_chart_cache",
@@ -340,6 +393,7 @@ class BacktestDetailedTablesMigration:
             "backtest_chart_cache", 
             "portfolio_snapshots",
             "trade_records",
+            "signal_records",
             "backtest_benchmarks"
         ]
         
