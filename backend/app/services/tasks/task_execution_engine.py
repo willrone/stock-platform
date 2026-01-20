@@ -275,8 +275,24 @@ class BacktestTaskExecutor:
                 # 使用真实的回测执行器
                 from app.services.backtest import BacktestExecutor, BacktestConfig
                 from app.core.config import settings
+                import os
+
+                def _parse_bool_env(var_name: str, default: bool = False) -> bool:
+                    val = os.getenv(var_name)
+                    if val is None:
+                        return default
+                    return val.strip().lower() in {"1", "true", "yes", "y", "on"}
                 
-                executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+                # 性能监控开关：任务级配置优先，其次环境变量兜底
+                enable_perf = bool(
+                    config_dict.get("enable_performance_profiling",
+                                    _parse_bool_env("ENABLE_BACKTEST_PERFORMANCE_PROFILING", default=False))
+                )
+
+                executor = BacktestExecutor(
+                    data_dir=str(settings.DATA_ROOT_PATH),
+                    enable_performance_profiling=enable_perf
+                )
                 
                 # 创建回测配置
                 strategy_config = config_dict.get('strategy_config', {})

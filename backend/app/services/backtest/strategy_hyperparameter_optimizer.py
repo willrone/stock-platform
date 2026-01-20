@@ -110,7 +110,12 @@ class StrategyHyperparameterOptimizer:
         
         # 创建回测执行器
         try:
-            executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+            import os
+            enable_perf = os.getenv("ENABLE_BACKTEST_PERFORMANCE_PROFILING", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
+            executor = BacktestExecutor(
+                data_dir=str(settings.DATA_ROOT_PATH),
+                enable_performance_profiling=enable_perf
+            )
             logger.info(f"回测执行器已创建，数据目录: {settings.DATA_ROOT_PATH}")
         except Exception as e:
             logger.error(f"创建回测执行器失败: {e}", exc_info=True)

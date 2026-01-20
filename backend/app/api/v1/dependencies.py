@@ -54,6 +54,14 @@ def get_model_info_repository():
         raise
 
 
+def _parse_bool_env(var_name: str, default: bool = False) -> bool:
+    """从环境变量解析布尔值（支持 1/true/yes/on）。"""
+    val = os.getenv(var_name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 # 简化的任务执行函数（用于进程池执行）
 # 注意：此函数在独立进程中执行，不能使用全局变量或单例
 def execute_prediction_task_simple(task_id: str):
@@ -309,10 +317,18 @@ def execute_backtest_task_simple(task_id: str):
         # 使用配置中的并行化设置
         enable_parallel = getattr(settings, 'BACKTEST_PARALLEL_ENABLED', True)
         max_workers = getattr(settings, 'BACKTEST_MAX_WORKERS', 4)
+
+        # 性能监控开关：任务级配置优先，其次环境变量兜底
+        enable_performance_profiling = bool(
+            config.get("enable_performance_profiling",
+                       _parse_bool_env("ENABLE_BACKTEST_PERFORMANCE_PROFILING", default=False))
+        )
+
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
             enable_parallel=enable_parallel,
-            max_workers=max_workers
+            max_workers=max_workers,
+            enable_performance_profiling=enable_performance_profiling
         )
         
         # 创建回测配置

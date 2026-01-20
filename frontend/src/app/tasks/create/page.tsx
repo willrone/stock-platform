@@ -76,6 +76,7 @@ export default function CreateTaskPage() {
     initial_cash: 100000,
     commission_rate: 0.0003,
     slippage_rate: 0.0001,
+    enable_performance_profiling: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -215,6 +216,7 @@ export default function CreateTaskPage() {
             commission_rate: formData.commission_rate,
             slippage_rate: formData.slippage_rate,
             strategy_config: strategyConfig,
+            enable_performance_profiling: formData.enable_performance_profiling,
           },
         }),
       };
@@ -526,6 +528,26 @@ export default function CreateTaskPage() {
                     onChange={(e) => updateFormData('slippage_rate', parseFloat(e.target.value) || 0.0001)}
                     inputProps={{ min: 0, max: 0.01, step: 0.0001 }}
                     fullWidth
+                  />
+                </Box>
+
+                <Divider />
+
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Activity size={20} color="#1976d2" />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        性能监控
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        启用后将收集回测各阶段耗时/CPU/内存，并在任务详情页「性能分析」Tab 展示
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Switch
+                    checked={formData.enable_performance_profiling}
+                    onChange={(e) => updateFormData('enable_performance_profiling', e.target.checked)}
                   />
                 </Box>
               </CardContent>

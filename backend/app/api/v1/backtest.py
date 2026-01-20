@@ -5,12 +5,21 @@
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 from datetime import datetime
+import os
 from app.core.config import settings
 
 from app.api.v1.schemas import StandardResponse, BacktestRequest
 from app.services.backtest import BacktestExecutor, BacktestConfig
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
+
+
+def _parse_bool_env(var_name: str, default: bool = False) -> bool:
+    """从环境变量解析布尔值（支持 1/true/yes/on）。"""
+    val = os.getenv(var_name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 @router.get("/strategies", response_model=StandardResponse)
@@ -211,7 +220,10 @@ async def run_backtest(request: BacktestRequest):
         logger.info(f"开始回测: 策略={request.strategy_name}, 股票={request.stock_codes}, 期间={request.start_date} - {request.end_date}")
         
         # 创建回测执行器
-        executor = BacktestExecutor(data_dir=str(settings.DATA_ROOT_PATH))
+        executor = BacktestExecutor(
+            data_dir=str(settings.DATA_ROOT_PATH),
+            enable_performance_profiling=_parse_bool_env("ENABLE_BACKTEST_PERFORMANCE_PROFILING", default=False),
+        )
         
         # 验证参数
         executor.validate_backtest_parameters(

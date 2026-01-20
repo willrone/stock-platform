@@ -4,6 +4,7 @@
 
 import pandas as pd
 import numpy as np
+import time
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,6 +21,15 @@ from .strategies import AdvancedStrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
 from app.core.error_handler import TaskError, ErrorSeverity, ErrorContext
 from app.models.task_models import BacktestResult
+
+# 性能监控（可选导入，避免依赖问题）
+try:
+    from .performance_profiler import BacktestPerformanceProfiler, PerformanceContext
+    PERFORMANCE_PROFILING_AVAILABLE = True
+except ImportError:
+    PERFORMANCE_PROFILING_AVAILABLE = False
+    BacktestPerformanceProfiler = None
+    PerformanceContext = None
 
 
 class DataLoader:
@@ -145,7 +155,7 @@ class BacktestExecutor:
     """回测执行器"""
     
     def __init__(self, data_dir: str = "backend/data", enable_parallel: bool = True, 
-                 max_workers: Optional[int] = None):
+                 max_workers: Optional[int] = None, enable_performance_profiling: bool = False):
         """
         初始化回测执行器
         
@@ -153,6 +163,7 @@ class BacktestExecutor:
             data_dir: 数据目录
             enable_parallel: 是否启用并行化（默认True）
             max_workers: 最大工作线程数，默认使用CPU核心数
+            enable_performance_profiling: 是否启用性能分析（默认False）
         """
         import os
         if max_workers is None:
@@ -167,8 +178,15 @@ class BacktestExecutor:
             "failed_backtests": 0
         }
         
+        # 性能分析器（可选）
+        self.enable_performance_profiling = enable_performance_profiling and PERFORMANCE_PROFILING_AVAILABLE
+        self.performance_profiler: Optional[BacktestPerformanceProfiler] = None
+        
         if enable_parallel:
             logger.info(f"回测执行器已启用并行化，最大工作线程数: {max_workers}")
+        
+        if self.enable_performance_profiling:
+            logger.info("回测执行器已启用性能分析")
     
     async def run_backtest(self, strategy_name: str, stock_codes: List[str],
                     start_date: datetime, end_date: datetime,
@@ -176,6 +194,12 @@ class BacktestExecutor:
                     backtest_config: Optional[BacktestConfig] = None,
                     task_id: str = None) -> Dict[str, Any]:
         """运行回测"""
+        # 初始化性能分析器
+        if self.enable_performance_profiling:
+            self.performance_profiler = BacktestPerformanceProfiler(enable_memory_tracking=True)
+            self.performance_profiler.start_backtest()
+            self.performance_profiler.take_memory_snapshot("backtest_start")
+        
         try:
             self.execution_stats["total_backtests"] += 1
             
@@ -196,7 +220,13 @@ class BacktestExecutor:
                     task_id, "initialization", progress=100, status="completed"
                 )
             
-            # 创建策略
+            # 创建策略（性能监控）
+            if self.enable_performance_profiling:
+                self.performance_profiler.start_stage("strategy_setup", {
+                    "strategy_name": strategy_name,
+                    "stock_count": len(stock_codes)
+                })
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "strategy_setup", status="running"
@@ -209,6 +239,9 @@ class BacktestExecutor:
                 # 如果高级策略工厂没有该策略，回退到基础策略工厂
                 strategy = StrategyFactory.create_strategy(strategy_name, strategy_config)
             
+            if self.enable_performance_profiling:
+                self.performance_profiler.end_stage("strategy_setup")
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "strategy_setup", progress=100, status="completed"
@@ -217,7 +250,14 @@ class BacktestExecutor:
             # 创建组合管理器
             portfolio_manager = PortfolioManager(backtest_config)
             
-            # 加载数据
+            # 加载数据（性能监控）
+            if self.enable_performance_profiling:
+                self.performance_profiler.start_stage("data_loading", {
+                    "stock_codes": stock_codes,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat()
+                })
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "data_loading", status="running"
@@ -225,6 +265,13 @@ class BacktestExecutor:
             
             logger.info(f"开始回测: {strategy_name}, 股票: {stock_codes}, 期间: {start_date} - {end_date}")
             stock_data = self.data_loader.load_multiple_stocks(stock_codes, start_date, end_date)
+            
+            if self.enable_performance_profiling:
+                self.performance_profiler.end_stage("data_loading", {
+                    "loaded_stocks": len(stock_data),
+                    "total_records": sum(len(df) for df in stock_data.values())
+                })
+                self.performance_profiler.take_memory_snapshot("after_data_loading")
             
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -275,7 +322,13 @@ class BacktestExecutor:
                 except Exception as e:
                     logger.warning(f"更新总交易日数失败: {e}")
             
-            # 执行回测
+            # 执行回测（性能监控）
+            if self.enable_performance_profiling:
+                self.performance_profiler.start_stage("backtest_execution", {
+                    "total_trading_days": len(trading_dates),
+                    "stock_count": len(stock_data)
+                })
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "backtest_execution", status="running"
@@ -285,12 +338,28 @@ class BacktestExecutor:
                 strategy, portfolio_manager, stock_data, trading_dates, task_id, backtest_id
             )
             
+            if self.enable_performance_profiling:
+                self.performance_profiler.end_stage("backtest_execution", {
+                    "total_signals": backtest_results.get("total_signals", 0),
+                    "executed_trades": backtest_results.get("executed_trades", 0),
+                    "trading_days": backtest_results.get("trading_days", 0)
+                })
+                self.performance_profiler.update_backtest_stats(
+                    signals=backtest_results.get("total_signals", 0),
+                    trades=backtest_results.get("executed_trades", 0),
+                    days=backtest_results.get("trading_days", 0)
+                )
+                self.performance_profiler.take_memory_snapshot("after_backtest_execution")
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "backtest_execution", progress=100, status="completed"
                 )
             
-            # 计算绩效指标
+            # 计算绩效指标（性能监控）
+            if self.enable_performance_profiling:
+                self.performance_profiler.start_stage("metrics_calculation")
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "metrics_calculation", status="running"
@@ -298,12 +367,18 @@ class BacktestExecutor:
             
             performance_metrics = portfolio_manager.get_performance_metrics()
             
+            if self.enable_performance_profiling:
+                self.performance_profiler.end_stage("metrics_calculation")
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "metrics_calculation", progress=100, status="completed"
                 )
             
-            # 生成回测报告
+            # 生成回测报告（性能监控）
+            if self.enable_performance_profiling:
+                self.performance_profiler.start_stage("report_generation")
+            
             if task_id:
                 await backtest_progress_monitor.update_stage(
                     task_id, "report_generation", status="running"
@@ -313,6 +388,11 @@ class BacktestExecutor:
                 strategy_name, stock_codes, start_date, end_date,
                 backtest_config, portfolio_manager, performance_metrics
             )
+            
+            if self.enable_performance_profiling:
+                self.performance_profiler.end_stage("report_generation", {
+                    "report_size": len(str(backtest_report))
+                })
             
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -331,11 +411,43 @@ class BacktestExecutor:
                     task_id, {"total_return": performance_metrics.get('total_return', 0)}
                 )
             
+            # 生成性能报告
+            if self.enable_performance_profiling:
+                self.performance_profiler.end_backtest()
+                self.performance_profiler.take_memory_snapshot("backtest_end")
+                
+                # 将性能报告添加到回测报告中
+                performance_report = self.performance_profiler.generate_report()
+                backtest_report['performance_analysis'] = performance_report
+                
+                # 打印性能摘要
+                self.performance_profiler.print_summary()
+                
+                # 保存性能报告到文件（如果提供了task_id）
+                if task_id:
+                    try:
+                        import os
+                        performance_dir = Path("backend/data/performance_reports")
+                        performance_dir.mkdir(parents=True, exist_ok=True)
+                        performance_file = performance_dir / f"backtest_{task_id}_performance.json"
+                        self.performance_profiler.save_report(str(performance_file))
+                        logger.info(f"性能报告已保存到: {performance_file}")
+                    except Exception as e:
+                        logger.warning(f"保存性能报告失败: {e}")
+            
             return backtest_report
             
         except Exception as e:
             self.execution_stats["failed_backtests"] += 1
             error_msg = f"回测执行失败: {str(e)}"
+            
+            # 即使出错也结束性能分析
+            if self.enable_performance_profiling and self.performance_profiler:
+                try:
+                    self.performance_profiler.end_backtest()
+                    logger.warning("回测失败，但性能分析已完成")
+                except Exception as perf_error:
+                    logger.warning(f"结束性能分析时出错: {perf_error}")
             
             if task_id:
                 await backtest_progress_monitor.set_error(task_id, error_msg)
@@ -372,6 +484,10 @@ class BacktestExecutor:
         total_signals = 0
         executed_trades = 0
         
+        # 性能统计：信号生成时间
+        signal_generation_times = []
+        trade_execution_times = []
+        
         for i, current_date in enumerate(trading_dates):
             try:
                 # 获取当前价格
@@ -385,6 +501,9 @@ class BacktestExecutor:
                 
                 # 生成交易信号（支持并行生成多股票信号）
                 all_signals = []
+                
+                # 性能监控：记录信号生成时间
+                signal_start_time = time.perf_counter() if self.enable_performance_profiling else None
                 
                 if self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号
@@ -401,6 +520,8 @@ class BacktestExecutor:
                         return []
                     
                     # 使用线程池并行生成信号
+                    sequential_start = time.perf_counter() if self.enable_performance_profiling else None
+                    
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                         futures = {
                             executor.submit(generate_stock_signals, code, data): code 
@@ -414,6 +535,19 @@ class BacktestExecutor:
                             except Exception as e:
                                 stock_code = futures[future]
                                 logger.error(f"并行生成信号失败 {stock_code}: {e}")
+                    
+                    # 记录并行化效率（估算顺序执行时间）
+                    if self.enable_performance_profiling and sequential_start:
+                        parallel_time = time.perf_counter() - sequential_start
+                        # 估算顺序执行时间（假设每只股票耗时相同）
+                        estimated_sequential_time = parallel_time * len(stock_data) / self.max_workers
+                        if i == 0:  # 只在第一次记录
+                            self.performance_profiler.record_parallel_efficiency(
+                                operation_name="signal_generation",
+                                sequential_time=estimated_sequential_time,
+                                parallel_time=parallel_time,
+                                worker_count=self.max_workers
+                            )
                 else:
                     # 顺序生成信号（股票数量少或禁用并行）
                     for stock_code, data in stock_data.items():
@@ -427,6 +561,12 @@ class BacktestExecutor:
                                 except Exception as e:
                                     logger.warning(f"生成信号失败 {stock_code}: {e}")
                                     continue
+                
+                # 记录信号生成时间
+                if self.enable_performance_profiling and signal_start_time:
+                    signal_duration = time.perf_counter() - signal_start_time
+                    signal_generation_times.append(signal_duration)
+                    self.performance_profiler.record_function_call("generate_signals", signal_duration)
                 
                 total_signals += len(all_signals)
                 
@@ -473,14 +613,21 @@ class BacktestExecutor:
                     except Exception as e:
                         logger.warning(f"保存信号记录时出错: {e}")
                 
-                # 执行交易信号
+                # 执行交易信号（性能监控）
+                trade_start_time = time.perf_counter() if self.enable_performance_profiling else None
                 trades_this_day = 0
                 executed_trade_signals = []  # 记录已执行的交易对应的信号
                 for signal in all_signals:
                     if strategy.validate_signal(signal, 
                                               portfolio_manager.get_portfolio_value(current_prices),
                                               portfolio_manager.positions):
+                        trade_exec_start = time.perf_counter() if self.enable_performance_profiling else None
                         trade = portfolio_manager.execute_signal(signal, current_prices)
+                        if self.enable_performance_profiling and trade_exec_start:
+                            trade_exec_duration = time.perf_counter() - trade_exec_start
+                            trade_execution_times.append(trade_exec_duration)
+                            self.performance_profiler.record_function_call("execute_signal", trade_exec_duration)
+                        
                         if trade:
                             executed_trades += 1
                             trades_this_day += 1
@@ -490,6 +637,11 @@ class BacktestExecutor:
                                 'timestamp': signal.timestamp,
                                 'signal_type': signal.signal_type.name
                             })
+                
+                # 记录交易执行总时间
+                if self.enable_performance_profiling and trade_start_time:
+                    trade_duration = time.perf_counter() - trade_start_time
+                    self.performance_profiler.record_function_call("execute_trades_batch", trade_duration)
                 
                 # 标记已执行的信号
                 if task_id and executed_trade_signals:
@@ -623,6 +775,21 @@ class BacktestExecutor:
                 trades_executed=0,
                 portfolio_value=final_portfolio_value
             )
+        
+        # 记录性能统计到性能分析器
+        if self.enable_performance_profiling and self.performance_profiler:
+            if signal_generation_times:
+                avg_signal_time = sum(signal_generation_times) / len(signal_generation_times)
+                self.performance_profiler.end_stage("backtest_execution", {
+                    "avg_signal_generation_time": avg_signal_time,
+                    "total_signal_generation_calls": len(signal_generation_times)
+                })
+            if trade_execution_times:
+                avg_trade_time = sum(trade_execution_times) / len(trade_execution_times)
+                self.performance_profiler.end_stage("backtest_execution", {
+                    "avg_trade_execution_time": avg_trade_time,
+                    "total_trade_execution_calls": len(trade_execution_times)
+                })
         
         return {
             "total_signals": total_signals,

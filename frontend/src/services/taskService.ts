@@ -30,6 +30,7 @@ export interface CreateTaskRequest {
     commission_rate?: number;
     slippage_rate?: number;
     strategy_config?: Record<string, any>;
+    enable_performance_profiling?: boolean;
   };
 }
 
