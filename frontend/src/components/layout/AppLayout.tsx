@@ -48,6 +48,7 @@ import {
   Activity,
   Brain,
   Sparkles,
+  Signal,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore } from '../../stores/useAppStore';
@@ -93,6 +94,11 @@ const menuItems = [
     key: '/backtest',
     icon: Activity,
     label: '策略回测',
+  },
+  {
+    key: '/signals',
+    icon: Signal,
+    label: '策略信号',
   },
   {
     key: '/optimization',

@@ -97,6 +97,46 @@ export interface BacktestResult {
   };
 }
 
+// 策略信号 - 最新信号
+export interface LatestSignalItem {
+  stock_code: string;
+  latest_signal: 'BUY' | 'SELL' | 'HOLD';
+  signal_date: string | null;
+  strength: number;
+  price: number | null;
+  reason: string | null;
+}
+
+export interface LatestSignalsResponse {
+  strategy_name: string;
+  days: number;
+  source: 'local' | 'remote';
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+  signals: LatestSignalItem[];
+  failures?: string[];
+}
+
+// 策略信号 - 历史事件
+export interface SignalEvent {
+  timestamp: string;
+  signal: 'BUY' | 'SELL';
+  strength: number;
+  price: number;
+  reason: string;
+  metadata?: Record<string, any>;
+}
+
+export interface SignalHistoryResponse {
+  stock_code: string;
+  strategy_name: string;
+  days: number;
+  events: SignalEvent[];
+}
+
 // 数据服务类
 export class DataService {
   /**
@@ -289,6 +329,47 @@ export class DataService {
    */
   static async runBacktest(request: BacktestRequest): Promise<BacktestResult> {
     return apiRequest.post<BacktestResult>('/backtest', request);
+  }
+
+  /**
+   * 获取可用策略列表（用于策略信号页）
+   */
+  static async getAvailableStrategies(): Promise<
+    Array<{
+      key: string;
+      name: string;
+      description?: string;
+      category?: string;
+      parameters?: Record<string, any>;
+    }>
+  > {
+    const resp = await apiRequest.get<any>('/backtest/strategies');
+    // 后端返回的是 { key, name, ... } 数组
+    return Array.isArray(resp) ? resp : (resp ?? []);
+  }
+
+  /**
+   * 获取全市场（分页）最新信号
+   */
+  static async getLatestSignals(params: {
+    strategy_name: string;
+    days?: number;
+    source?: 'local' | 'remote';
+    limit?: number;
+    offset?: number;
+  }): Promise<LatestSignalsResponse> {
+    return apiRequest.get<LatestSignalsResponse>('/signals/latest', params);
+  }
+
+  /**
+   * 获取单只股票信号历史（近N个交易日 BUY/SELL 事件）
+   */
+  static async getSignalHistory(params: {
+    stock_code: string;
+    strategy_name: string;
+    days?: number;
+  }): Promise<SignalHistoryResponse> {
+    return apiRequest.get<SignalHistoryResponse>('/signals/history', params);
   }
 
   /**
