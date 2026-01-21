@@ -24,6 +24,7 @@ import {
   Typography,
 } from '@mui/material';
 import { DataService, LatestSignalItem, SignalEvent } from '../../services/dataService';
+import TradingViewChart from '@/components/charts/TradingViewChart';
 
 export default function SignalsPage() {
   const [strategies, setStrategies] = useState<Array<{ key: string; name: string }>>([]);
@@ -51,6 +52,33 @@ export default function SignalsPage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyStock, setHistoryStock] = useState<string>('');
   const [historyEvents, setHistoryEvents] = useState<SignalEvent[]>([]);
+
+  // 将历史信号事件转换为价格图表可用的信号标记（与回测结果中的图表风格保持一致）
+  const chartSignals = useMemo(
+    () =>
+      historyEvents.map((ev) => ({
+        signal_id: `${ev.timestamp}-${ev.signal}-${ev.price}`,
+        stock_code: historyStock,
+        signal_type: ev.signal,
+        price: ev.price,
+        timestamp: ev.timestamp,
+        executed: true,
+      })),
+    [historyEvents, historyStock],
+  );
+
+  // 为价格图表构造时间窗口：以当前时间往前扩展 days + 缓冲天数
+  const chartStartDate = useMemo(() => {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days + 60)); // 多给一些缓冲天数，避免实际交易日不足
+    return start.toISOString().slice(0, 10);
+  }, [days]);
+
+  const chartEndDate = useMemo(() => {
+    const end = new Date();
+    return end.toISOString().slice(0, 10);
+  }, []);
 
   const page = useMemo(() => Math.floor(offset / Math.max(1, limit)) + 1, [offset, limit]);
 
@@ -392,34 +420,48 @@ export default function SignalsPage() {
               窗口内无 BUY/SELL 事件
             </Typography>
           ) : (
-            <Box sx={{ overflowX: 'auto', py: 1 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>时间</TableCell>
-                    <TableCell>信号</TableCell>
-                    <TableCell align="right">强度</TableCell>
-                    <TableCell align="right">价格</TableCell>
-                    <TableCell>原因</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {historyEvents.map((ev, idx) => (
-                    <TableRow key={`${ev.timestamp}-${idx}`}>
-                      <TableCell>{ev.timestamp}</TableCell>
-                      <TableCell>{ev.signal}</TableCell>
-                      <TableCell align="right">{Number(ev.strength || 0).toFixed(3)}</TableCell>
-                      <TableCell align="right">{ev.price}</TableCell>
-                      <TableCell sx={{ maxWidth: 520 }}>
-                        <Typography variant="body2" noWrap title={ev.reason || ''}>
-                          {ev.reason || '-'}
-                        </Typography>
-                      </TableCell>
+            <Stack spacing={2} sx={{ py: 1 }}>
+              {/* 价格走势图（从后端/本地 parquet 读取K线数据），并叠加 BUY/SELL 信号标记 */}
+              <TradingViewChart
+                stockCode={historyStock}
+                startDate={chartStartDate}
+                endDate={chartEndDate}
+                signals={chartSignals}
+                showSignals
+                showTrades={false}
+                height={320}
+              />
+
+              {/* 信号明细表，与回测结果中的信号记录表现一致 */}
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>时间</TableCell>
+                      <TableCell>信号</TableCell>
+                      <TableCell align="right">强度</TableCell>
+                      <TableCell align="right">价格</TableCell>
+                      <TableCell>原因</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Box>
+                  </TableHead>
+                  <TableBody>
+                    {historyEvents.map((ev, idx) => (
+                      <TableRow key={`${ev.timestamp}-${idx}`}>
+                        <TableCell>{ev.timestamp}</TableCell>
+                        <TableCell>{ev.signal}</TableCell>
+                        <TableCell align="right">{Number(ev.strength || 0).toFixed(3)}</TableCell>
+                        <TableCell align="right">{ev.price}</TableCell>
+                        <TableCell sx={{ maxWidth: 520 }}>
+                          <Typography variant="body2" noWrap title={ev.reason || ''}>
+                            {ev.reason || '-'}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            </Stack>
           )}
         </DialogContent>
       </Dialog>

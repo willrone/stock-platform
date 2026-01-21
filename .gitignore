@@ -292,6 +292,7 @@ frontend/logs/
 backend/data/
 !backend/data/.gitkeep
 !/data/.gitkeep
+backend/backend/data/performance_reports/
 
 # 模型文件
 /models/
