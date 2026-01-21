@@ -23,12 +23,17 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { DataService, LatestSignalItem, SignalEvent } from '../../services/dataService';
+import {
+  DataService,
+  MultiLatestSignalRow,
+  MultiSignalHistoryResponse,
+  SignalEvent,
+} from '../../services/dataService';
 import TradingViewChart from '@/components/charts/TradingViewChart';
 
 export default function SignalsPage() {
   const [strategies, setStrategies] = useState<Array<{ key: string; name: string }>>([]);
-  const [strategyName, setStrategyName] = useState<string>('');
+  const [selectedStrategyNames, setSelectedStrategyNames] = useState<string[]>([]);
   const [days, setDays] = useState<number>(60);
   const [source, setSource] = useState<'local' | 'remote'>('local');
 
@@ -39,7 +44,7 @@ export default function SignalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [total, setTotal] = useState<number>(0);
-  const [rows, setRows] = useState<LatestSignalItem[]>([]);
+  const [rows, setRows] = useState<MultiLatestSignalRow[]>([]);
   const [failures, setFailures] = useState<string[]>([]);
 
   // 前端筛选：按信号类型、日期范围
@@ -51,21 +56,39 @@ export default function SignalsPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyStock, setHistoryStock] = useState<string>('');
-  const [historyEvents, setHistoryEvents] = useState<SignalEvent[]>([]);
+  const [historyEventsByStrategy, setHistoryEventsByStrategy] = useState<
+    MultiSignalHistoryResponse['events_by_strategy']
+  >({});
+  const [historyStrategies, setHistoryStrategies] = useState<string[]>([]);
 
-  // 将历史信号事件转换为价格图表可用的信号标记（与回测结果中的图表风格保持一致）
-  const chartSignals = useMemo(
-    () =>
-      historyEvents.map((ev) => ({
-        signal_id: `${ev.timestamp}-${ev.signal}-${ev.price}`,
-        stock_code: historyStock,
-        signal_type: ev.signal,
-        price: ev.price,
-        timestamp: ev.timestamp,
-        executed: true,
-      })),
-    [historyEvents, historyStock],
-  );
+  // 将历史信号事件转换为价格图表可用的信号标记（多策略）
+  const chartSignals = useMemo(() => {
+    const signals: Array<{
+      signal_id: string;
+      stock_code: string;
+      signal_type: 'BUY' | 'SELL';
+      price: number;
+      timestamp: string;
+      executed?: boolean;
+      strategy_name?: string;
+      strategy_id?: string;
+    }> = [];
+    Object.entries(historyEventsByStrategy || {}).forEach(([strategyName, events]) => {
+      events.forEach((ev: SignalEvent) => {
+        signals.push({
+          signal_id: `${strategyName}-${ev.timestamp}-${ev.signal}-${ev.price}`,
+          stock_code: historyStock,
+          signal_type: ev.signal,
+          price: ev.price,
+          timestamp: ev.timestamp,
+          executed: true,
+          strategy_name: strategyName,
+          strategy_id: strategyName,
+        });
+      });
+    });
+    return signals;
+  }, [historyEventsByStrategy, historyStock]);
 
   // 为价格图表构造时间窗口：以当前时间往前扩展 days + 缓冲天数
   const chartStartDate = useMemo(() => {
@@ -83,20 +106,29 @@ export default function SignalsPage() {
   const page = useMemo(() => Math.floor(offset / Math.max(1, limit)) + 1, [offset, limit]);
 
   const filteredRows = useMemo(() => {
-    return rows.filter((r) => {
-      // 信号类型筛选
-      if (signalFilter !== 'ALL' && r.latest_signal !== signalFilter) {
-        return false;
-      }
-      // 日期范围筛选
-      if (r.signal_date) {
-        const d = r.signal_date.slice(0, 10); // YYYY-MM-DD
-        if (dateFrom && d < dateFrom) return false;
-        if (dateTo && d > dateTo) return false;
-      }
-      return true;
+    if (!rows.length) return [];
+    return rows.filter((row) => {
+      const perStrategy = row.per_strategy || {};
+      const entries = Object.entries(perStrategy).filter(([name]) =>
+        selectedStrategyNames.includes(name),
+      );
+      if (!entries.length) return false;
+
+      // 只要有任意一个策略在当前筛选条件下命中，就保留该股票
+      return entries.some(([, val]) => {
+        if (!val) return false;
+        if (signalFilter !== 'ALL' && val.latest_signal !== signalFilter) {
+          return false;
+        }
+        if (val.signal_date) {
+          const d = val.signal_date.slice(0, 10); // YYYY-MM-DD
+          if (dateFrom && d < dateFrom) return false;
+          if (dateTo && d > dateTo) return false;
+        }
+        return true;
+      });
     });
-  }, [rows, signalFilter, dateFrom, dateTo]);
+  }, [rows, selectedStrategyNames, signalFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     let mounted = true;
@@ -104,10 +136,10 @@ export default function SignalsPage() {
       try {
         const list = await DataService.getAvailableStrategies();
         if (!mounted) return;
-        const simplified = list.map(s => ({ key: s.key, name: s.name || s.key }));
+        const simplified = list.map((s) => ({ key: s.key, name: s.name || s.key }));
         setStrategies(simplified);
-        if (!strategyName && simplified.length > 0) {
-          setStrategyName(simplified[0].key);
+        if (simplified.length > 0) {
+          setSelectedStrategyNames((prev) => (prev.length ? prev : [simplified[0].key]));
         }
       } catch (e: any) {
         if (!mounted) return;
@@ -122,12 +154,12 @@ export default function SignalsPage() {
 
   const fetchLatest = async (customOffset?: number) => {
     const realOffset = customOffset ?? offset;
-    if (!strategyName) return;
+    if (!selectedStrategyNames.length) return;
     setLoading(true);
     setError(null);
     try {
-      const resp = await DataService.getLatestSignals({
-        strategy_name: strategyName,
+      const resp = await DataService.getLatestSignalsMulti({
+        strategy_names: selectedStrategyNames,
         days,
         source,
         limit,
@@ -147,16 +179,18 @@ export default function SignalsPage() {
   const openHistory = async (stockCode: string) => {
     setHistoryOpen(true);
     setHistoryStock(stockCode);
-    setHistoryEvents([]);
+    setHistoryEventsByStrategy({});
+    setHistoryStrategies([]);
     setHistoryError(null);
     setHistoryLoading(true);
     try {
-      const resp = await DataService.getSignalHistory({
+      const resp = await DataService.getSignalHistoryMulti({
         stock_code: stockCode,
-        strategy_name: strategyName,
+        strategy_names: selectedStrategyNames,
         days,
       });
-      setHistoryEvents(resp.events || []);
+      setHistoryEventsByStrategy(resp.events_by_strategy || {});
+      setHistoryStrategies(resp.strategy_names || selectedStrategyNames);
     } catch (e: any) {
       setHistoryError(e?.message || '获取信号历史失败');
     } finally {
@@ -171,7 +205,7 @@ export default function SignalsPage() {
           策略信号
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          选择策略后，生成全市场（分页）最近N个交易日窗口内的“最新信号”，点击某只股票可查看近N日信号事件历史。
+          选择一个或多个策略后，生成全市场（分页）最近N个交易日窗口内的“最新信号”，点击某只股票可查看多策略近N日信号事件历史与价格走势。
         </Typography>
       </Box>
 
@@ -183,13 +217,16 @@ export default function SignalsPage() {
               <Select
                 labelId="strategy-select-label"
                 label="策略"
-                value={strategyName}
+                multiple
+                value={selectedStrategyNames}
                 onChange={(e) => {
-                  setStrategyName(String(e.target.value));
+                  const value = e.target.value as string[];
+                  const next = value.slice(0, 8); // 一次最多选择8个策略
+                  setSelectedStrategyNames(next);
                   setOffset(0);
                 }}
               >
-                {strategies.map(s => (
+                {strategies.map((s) => (
                   <MenuItem key={s.key} value={s.key}>
                     {s.name}（{s.key}）
                   </MenuItem>
@@ -238,7 +275,7 @@ export default function SignalsPage() {
             <Button
               variant="contained"
               onClick={() => fetchLatest(0)}
-              disabled={!strategyName || loading}
+              disabled={!selectedStrategyNames.length || loading}
             >
               {loading ? '生成中...' : '生成信号'}
             </Button>
@@ -296,7 +333,8 @@ export default function SignalsPage() {
         <CardContent>
           <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              最新信号（第 {page} 页，{filteredRows.length} / {rows.length} / {total}）
+              最新信号（第 {page} 页，{filteredRows.length} / {rows.length} / {total}，已选策略：
+              {selectedStrategyNames.join('，') || '无'}）
             </Typography>
             <Stack direction="row" spacing={1}>
               <Button
@@ -329,11 +367,13 @@ export default function SignalsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>股票</TableCell>
-                  <TableCell>最新信号</TableCell>
-                  <TableCell>信号日期</TableCell>
-                  <TableCell align="right">强度</TableCell>
-                  <TableCell align="right">价格</TableCell>
-                  <TableCell>原因</TableCell>
+                  {selectedStrategyNames.map((name) => {
+                    const meta = strategies.find((s) => s.key === name);
+                    const label = meta ? `${meta.name}（${meta.key}）` : name;
+                    return (
+                      <TableCell key={name}>{label} · 最新信号</TableCell>
+                    );
+                  })}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -365,23 +405,39 @@ export default function SignalsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredRows.map((r) => (
+                  filteredRows.map((row) => (
                     <TableRow
-                      key={r.stock_code}
+                      key={row.stock_code}
                       hover
                       sx={{ cursor: 'pointer' }}
-                      onClick={() => openHistory(r.stock_code)}
+                      onClick={() => openHistory(row.stock_code)}
                     >
-                      <TableCell>{r.stock_code}</TableCell>
-                      <TableCell>{r.latest_signal}</TableCell>
-                      <TableCell>{r.signal_date || '-'}</TableCell>
-                      <TableCell align="right">{Number(r.strength || 0).toFixed(3)}</TableCell>
-                      <TableCell align="right">{r.price ?? '-'}</TableCell>
-                      <TableCell sx={{ maxWidth: 520 }}>
-                        <Typography variant="body2" noWrap title={r.reason || ''}>
-                          {r.reason || '-'}
-                        </Typography>
-                      </TableCell>
+                      <TableCell>{row.stock_code}</TableCell>
+                      {selectedStrategyNames.map((name) => {
+                        const val = row.per_strategy?.[name] || null;
+                        if (!val) {
+                          return <TableCell key={name}>-</TableCell>;
+                        }
+                        const shortDate = val.signal_date ? val.signal_date.slice(0, 10) : '-';
+                        const desc = `${val.latest_signal} @ ${shortDate}${
+                          val.price != null ? ` · ${val.price}` : ''
+                        }`;
+                        return (
+                          <TableCell key={name}>
+                            <Typography
+                              variant="body2"
+                              noWrap
+                              title={
+                                val.reason
+                                  ? `${desc}\n原因：${val.reason}`
+                                  : desc
+                              }
+                            >
+                              {desc}
+                            </Typography>
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   ))
                 )}
@@ -401,7 +457,7 @@ export default function SignalsPage() {
 
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          {historyStock} · {strategyName} · 近{days}个交易日信号事件
+          {historyStock} · 多策略 · 近{days}个交易日信号事件
         </DialogTitle>
         <DialogContent>
           {historyLoading ? (
@@ -415,7 +471,7 @@ export default function SignalsPage() {
             <Typography color="error" sx={{ py: 1 }}>
               {historyError}
             </Typography>
-          ) : historyEvents.length === 0 ? (
+          ) : !historyStrategies.length ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
               窗口内无 BUY/SELL 事件
             </Typography>
@@ -438,6 +494,7 @@ export default function SignalsPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>时间</TableCell>
+                      <TableCell>策略</TableCell>
                       <TableCell>信号</TableCell>
                       <TableCell align="right">强度</TableCell>
                       <TableCell align="right">价格</TableCell>
@@ -445,19 +502,25 @@ export default function SignalsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {historyEvents.map((ev, idx) => (
-                      <TableRow key={`${ev.timestamp}-${idx}`}>
-                        <TableCell>{ev.timestamp}</TableCell>
-                        <TableCell>{ev.signal}</TableCell>
-                        <TableCell align="right">{Number(ev.strength || 0).toFixed(3)}</TableCell>
-                        <TableCell align="right">{ev.price}</TableCell>
-                        <TableCell sx={{ maxWidth: 520 }}>
-                          <Typography variant="body2" noWrap title={ev.reason || ''}>
-                            {ev.reason || '-'}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {historyStrategies.flatMap((strategyName) => {
+                      const events = historyEventsByStrategy?.[strategyName] || [];
+                      return events.map((ev: SignalEvent, idx: number) => (
+                        <TableRow key={`${strategyName}-${ev.timestamp}-${idx}`}>
+                          <TableCell>{ev.timestamp}</TableCell>
+                          <TableCell>{strategyName}</TableCell>
+                          <TableCell>{ev.signal}</TableCell>
+                          <TableCell align="right">
+                            {Number(ev.strength || 0).toFixed(3)}
+                          </TableCell>
+                          <TableCell align="right">{ev.price}</TableCell>
+                          <TableCell sx={{ maxWidth: 520 }}>
+                            <Typography variant="body2" noWrap title={ev.reason || ''}>
+                              {ev.reason || '-'}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ));
+                    })}
                   </TableBody>
                 </Table>
               </Box>

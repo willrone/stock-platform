@@ -42,6 +42,15 @@ interface BacktestMetrics {
   winRate: number;
   totalTrades: number;
   profitFactor: number;
+  // 新增：交易分布与时间分段的概要统计（如果后端提供则展示）
+  tradePnlMean: number;
+  tradePnlMedian: number;
+  tradePnlStd: number;
+  monthlyReturnMean: number;
+  monthlyReturnStd: number;
+  positiveMonths: number;
+  negativeMonths: number;
+  stocksTraded: number;
 }
 
 export default function BacktestOverview({ backtestData, loading = false }: BacktestOverviewProps) {
@@ -57,8 +66,18 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
         winRate: 0,
         totalTrades: 0,
         profitFactor: 0,
+        tradePnlMean: 0,
+        tradePnlMedian: 0,
+        tradePnlStd: 0,
+        monthlyReturnMean: 0,
+        monthlyReturnStd: 0,
+        positiveMonths: 0,
+        negativeMonths: 0,
+        stocksTraded: 0,
       };
     }
+
+    const additional = backtestData || {};
 
     return {
       totalReturn: (backtestData.total_return || 0) * 100,
@@ -69,6 +88,14 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       winRate: (backtestData.win_rate || 0) * 100,
       totalTrades: backtestData.total_trades || 0,
       profitFactor: backtestData.profit_factor || 0,
+      tradePnlMean: (additional.trade_pnl_mean || 0) * 100,
+      tradePnlMedian: (additional.trade_pnl_median || 0) * 100,
+      tradePnlStd: (additional.trade_pnl_std || 0) * 100,
+      monthlyReturnMean: (additional.monthly_return_mean || 0) * 100,
+      monthlyReturnStd: (additional.monthly_return_std || 0) * 100,
+      positiveMonths: additional.positive_months || 0,
+      negativeMonths: additional.negative_months || 0,
+      stocksTraded: additional.stocks_traded || 0,
     };
   };
 
@@ -308,6 +335,83 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
           </CardContent>
         </Card>
       </Box>
+
+      {/* 扩展统计：交易分布与时间分段摘要（如果有数据才显示） */}
+      {(metrics.tradePnlMean !== 0 ||
+        metrics.tradePnlMedian !== 0 ||
+        metrics.monthlyReturnMean !== 0 ||
+        metrics.stocksTraded !== 0) && (
+        <Card>
+          <CardHeader title="交易与时间分段摘要" />
+          <CardContent>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                gap: 2,
+              }}
+            >
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  平均单笔盈亏
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 600,
+                    color: metrics.tradePnlMean >= 0 ? 'success.main' : 'error.main',
+                  }}
+                >
+                  {metrics.tradePnlMean >= 0 ? '+' : ''}
+                  {metrics.tradePnlMean.toFixed(2)}%
+                </Typography>
+              </Box>
+
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  单笔盈亏中位数
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 600,
+                    color: metrics.tradePnlMedian >= 0 ? 'success.main' : 'error.main',
+                  }}
+                >
+                  {metrics.tradePnlMedian >= 0 ? '+' : ''}
+                  {metrics.tradePnlMedian.toFixed(2)}%
+                </Typography>
+              </Box>
+
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  月度平均收益 / 波动
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {metrics.monthlyReturnMean.toFixed(2)}% ± {metrics.monthlyReturnStd.toFixed(2)}%
+                </Typography>
+              </Box>
+
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  交易股票数 / 正负月份
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {metrics.stocksTraded}
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ ml: 0.5 }}
+                  >
+                    （{metrics.positiveMonths} 正 / {metrics.negativeMonths} 负）
+                  </Typography>
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 风险评估总结 */}
       <Card>

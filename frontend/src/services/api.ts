@@ -27,6 +27,24 @@ const createApiInstance = (): AxiosInstance => {
     headers: {
       'Content-Type': 'application/json',
     },
+    // 配置参数序列化：FastAPI期望数组参数格式为 ?key=a&key=b，而不是 ?key[]=a&key[]=b
+    paramsSerializer: (params) => {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value === null || value === undefined) {
+          continue;
+        }
+        if (Array.isArray(value)) {
+          // 数组参数：每个值作为一个独立的 key=value
+          value.forEach((item) => {
+            searchParams.append(key, String(item));
+          });
+        } else {
+          searchParams.append(key, String(value));
+        }
+      }
+      return searchParams.toString();
+    },
   });
 
   // 请求拦截器

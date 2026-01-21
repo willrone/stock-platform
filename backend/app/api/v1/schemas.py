@@ -111,7 +111,17 @@ class ParamSpaceConfig(BaseModel):
 
 class ObjectiveConfig(BaseModel):
     """优化目标配置"""
-    objective_metric: Any = Field(..., description="目标指标: 'sharpe' | 'calmar' | 'ic' | 'custom' | ['sharpe', 'calmar'] (多目标)")
+    objective_metric: Any = Field(
+        ...,
+        description=(
+            "目标指标: "
+            "'sharpe' | 'calmar' | 'ic' | 'ic_ir' | "
+            "'total_return' | 'annualized_return' | "
+            "'win_rate' | 'profit_factor' | "
+            "'max_drawdown' | 'cost' | 'custom' "
+            "| ['sharpe', 'calmar', 'ic'] (多目标)"
+        ),
+    )
     direction: str = Field(default="maximize", description="优化方向: maximize 或 minimize")
     objective_weights: Optional[Dict[str, float]] = Field(None, description="自定义权重（custom 时使用）")
 

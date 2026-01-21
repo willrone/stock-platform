@@ -120,6 +120,35 @@ export interface LatestSignalsResponse {
   failures?: string[];
 }
 
+// 多策略 - 最新信号：每只股票的多策略结果
+export interface MultiLatestSignalPerStrategyItem {
+  latest_signal: 'BUY' | 'SELL' | 'HOLD';
+  signal_date: string | null;
+  strength: number;
+  price: number | null;
+  reason: string | null;
+}
+
+export interface MultiLatestSignalRow {
+  stock_code: string;
+  per_strategy: {
+    [strategyName: string]: MultiLatestSignalPerStrategyItem | null;
+  };
+}
+
+export interface MultiLatestSignalsResponse {
+  strategy_names: string[];
+  days: number;
+  source: 'local' | 'remote';
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+  signals: MultiLatestSignalRow[];
+  failures?: string[];
+}
+
 // 策略信号 - 历史事件
 export interface SignalEvent {
   timestamp: string;
@@ -135,6 +164,13 @@ export interface SignalHistoryResponse {
   strategy_name: string;
   days: number;
   events: SignalEvent[];
+}
+
+export interface MultiSignalHistoryResponse {
+  stock_code: string;
+  strategy_names: string[];
+  days: number;
+  events_by_strategy: Record<string, SignalEvent[]>;
 }
 
 // 数据服务类
@@ -362,6 +398,19 @@ export class DataService {
   }
 
   /**
+   * 获取全市场（分页）多策略最新信号
+   */
+  static async getLatestSignalsMulti(params: {
+    strategy_names: string[];
+    days?: number;
+    source?: 'local' | 'remote';
+    limit?: number;
+    offset?: number;
+  }): Promise<MultiLatestSignalsResponse> {
+    return apiRequest.get<MultiLatestSignalsResponse>('/signals/latest-multi', params);
+  }
+
+  /**
    * 获取单只股票信号历史（近N个交易日 BUY/SELL 事件）
    */
   static async getSignalHistory(params: {
@@ -370,6 +419,17 @@ export class DataService {
     days?: number;
   }): Promise<SignalHistoryResponse> {
     return apiRequest.get<SignalHistoryResponse>('/signals/history', params);
+  }
+
+  /**
+   * 获取单只股票多策略信号历史（近N个交易日 BUY/SELL 事件）
+   */
+  static async getSignalHistoryMulti(params: {
+    stock_code: string;
+    strategy_names: string[];
+    days?: number;
+  }): Promise<MultiSignalHistoryResponse> {
+    return apiRequest.get<MultiSignalHistoryResponse>('/signals/history-multi', params);
   }
 
   /**

@@ -55,9 +55,16 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
   });
   const [paramSpace, setParamSpace] = useState<Record<string, ParamSpaceConfig>>({});
   const [objectiveWeights, setObjectiveWeights] = useState<Record<string, number>>({
-    sharpe_ratio: 0.6,
-    total_return: 0.4,
+    sharpe_ratio: 0.4,
+    total_return: 0.2,
+    win_rate: 0.1,
+    profit_factor: 0.1,
+    information_ratio: 0.1,
+    cost_ratio: 0.1,
   });
+
+  const isMultiObjectiveMethod =
+    formData.optimization_method === 'nsga2' || formData.optimization_method === 'motpe';
 
   // 加载策略列表
   useEffect(() => {
@@ -387,18 +394,52 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
           <FormControl fullWidth>
             <InputLabel>目标指标</InputLabel>
             <Select
-              value={Array.isArray(formData.objective_metric) ? formData.objective_metric[0] : formData.objective_metric}
+              multiple={isMultiObjectiveMethod}
+              value={
+                isMultiObjectiveMethod
+                  ? Array.isArray(formData.objective_metric)
+                    ? formData.objective_metric
+                    : [formData.objective_metric]
+                  : Array.isArray(formData.objective_metric)
+                    ? formData.objective_metric[0]
+                    : formData.objective_metric
+              }
               label="目标指标"
               onChange={(e) => {
-                setFormData(prev => ({ 
-                  ...prev, 
-                  objective_metric: e.target.value
+                const value = e.target.value;
+                setFormData(prev => ({
+                  ...prev,
+                  objective_metric: isMultiObjectiveMethod
+                    ? Array.isArray(value)
+                      ? value
+                      : [value]
+                    : Array.isArray(value)
+                      ? value[0]
+                      : value,
                 }));
               }}
+              renderValue={(selected) =>
+                isMultiObjectiveMethod && Array.isArray(selected) ? (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value: any) => (
+                      <Chip key={value} label={value} size="small" />
+                    ))}
+                  </Box>
+                ) : (
+                  selected as any
+                )
+              }
             >
               <MenuItem value="sharpe">夏普比率 (Sharpe Ratio)</MenuItem>
               <MenuItem value="calmar">卡玛比率 (Calmar Ratio)</MenuItem>
               <MenuItem value="ic">信息系数 (IC)</MenuItem>
+              <MenuItem value="ic_ir">信息比率 (IC_IR)</MenuItem>
+              <MenuItem value="total_return">总收益率 (Total Return)</MenuItem>
+              <MenuItem value="annualized_return">年化收益率 (Annualized Return)</MenuItem>
+              <MenuItem value="win_rate">胜率 (Win Rate)</MenuItem>
+              <MenuItem value="profit_factor">盈亏比 (Profit Factor)</MenuItem>
+              <MenuItem value="max_drawdown">最大回撤 (Max Drawdown)</MenuItem>
+              <MenuItem value="cost">交易成本占比 (Cost Ratio)</MenuItem>
               <MenuItem value="custom">自定义组合</MenuItem>
             </Select>
           </FormControl>
@@ -426,16 +467,56 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
               <TextField
                 type="number"
                 label="夏普比率权重"
-                value={objectiveWeights.sharpe_ratio.toString()}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, sharpe_ratio: parseFloat(e.target.value) }))}
+                value={objectiveWeights.sharpe_ratio?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, sharpe_ratio: parseFloat(e.target.value) || 0 }))}
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
               <TextField
                 type="number"
                 label="总收益率权重"
-                value={objectiveWeights.total_return.toString()}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, total_return: parseFloat(e.target.value) }))}
+                value={objectiveWeights.total_return?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, total_return: parseFloat(e.target.value) || 0 }))}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="胜率权重"
+                value={objectiveWeights.win_rate?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, win_rate: parseFloat(e.target.value) || 0 }))}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="盈亏比权重 (Profit Factor)"
+                value={objectiveWeights.profit_factor?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, profit_factor: parseFloat(e.target.value) || 0 }))}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="信息比率权重 (IC_IR)"
+                value={objectiveWeights.information_ratio?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, information_ratio: parseFloat(e.target.value) || 0 }))}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="最大回撤权重"
+                value={objectiveWeights.max_drawdown?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, max_drawdown: parseFloat(e.target.value) || 0 }))}
+                inputProps={{ min: 0, max: 1, step: 0.1 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="交易成本权重 (Cost Ratio)"
+                value={objectiveWeights.cost_ratio?.toString() ?? '0'}
+                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, cost_ratio: parseFloat(e.target.value) || 0 }))}
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -461,7 +542,24 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             <Select
               value={formData.optimization_method}
               label="优化方法"
-              onChange={(e) => setFormData(prev => ({ ...prev, optimization_method: e.target.value }))}
+              onChange={(e) => {
+                const method = e.target.value as string;
+                setFormData(prev => {
+                  const nextIsMulti =
+                    method === 'nsga2' || method === 'motpe';
+                  let objective_metric = prev.objective_metric;
+                  if (nextIsMulti && !Array.isArray(objective_metric)) {
+                    objective_metric = [objective_metric];
+                  } else if (!nextIsMulti && Array.isArray(objective_metric)) {
+                    objective_metric = objective_metric[0] || 'sharpe';
+                  }
+                  return {
+                    ...prev,
+                    optimization_method: method,
+                    objective_metric,
+                  };
+                });
+              }}
             >
               <MenuItem value="tpe">TPE (Tree-structured Parzen Estimator)</MenuItem>
               <MenuItem value="random">随机搜索</MenuItem>

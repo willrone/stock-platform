@@ -56,7 +56,21 @@ class StrategyHyperparameterOptimizer:
             start_date: 回测开始日期
             end_date: 回测结束日期
             objective_config: 目标函数配置
-                - objective_metric: "sharpe" | "calmar" | "ic" | "custom" | ["sharpe", "calmar"] (多目标)
+                - objective_metric:
+                    单目标:
+                        "sharpe"             夏普比率
+                        "calmar"             卡玛比率（年化收益 / 最大回撤）
+                        "ic"                 信息系数近似（当前用胜率近似）
+                        "ic_ir"              信息比率（使用无成本组合的 IR）
+                        "total_return"       总收益率
+                        "annualized_return"  年化收益率
+                        "win_rate"           胜率
+                        "profit_factor"      盈亏比（Profit Factor）
+                        "max_drawdown"       最大回撤（内部转换为“越小越好”的得分）
+                        "cost"               交易成本（手续费+滑点，占初始资金比例，越低越好）
+                        "custom"             自定义加权组合
+                    多目标:
+                        由上述字符串组成的列表，例如 ["sharpe", "calmar", "ic"]
                 - objective_weights: 自定义权重（custom 时使用）
                 - direction: "maximize" | "minimize"
             backtest_config: 回测配置（初始资金、手续费等）
@@ -445,11 +459,13 @@ class StrategyHyperparameterOptimizer:
         
         Args:
             backtest_report: 回测报告
-            objective_metric: 目标指标 ("sharpe", "calmar", "ic", "custom")
+            objective_metric: 目标指标 ("sharpe", "calmar", "ic", "ic_ir", "total_return",
+                                       "annualized_return", "win_rate", "profit_factor",
+                                       "max_drawdown", "cost", "custom")
             objective_weights: 自定义权重（custom 时使用）
             
         Returns:
-            float: 目标函数得分
+            float: 目标函数得分（统一归一化到 0-1，越大越好）
         """
         # 回测报告可能直接包含指标，也可能在 metrics 字段中
         metrics = backtest_report.get("metrics", {})
@@ -491,6 +507,56 @@ class StrategyHyperparameterOptimizer:
             normalized = (ic + 1) / 2  # 归一化到 0-1
             return max(0.0, min(1.0, normalized))
         
+        elif objective_metric == "ic_ir":
+            # 使用无成本组合的 information_ratio 作为信息比率
+            ir_info = backtest_report.get("excess_return_without_cost", {})
+            information_ratio = ir_info.get("information_ratio", 0.0)
+            # 与夏普类似的范围假设 [-2, 5]
+            normalized = (information_ratio + 2) / 7
+            return max(0.0, min(1.0, normalized))
+        
+        elif objective_metric == "total_return":
+            # 总收益率，假设范围 [-0.5, 1.0]
+            total_return = metrics.get("total_return", 0.0)
+            normalized = (total_return + 0.5) / 1.5
+            return max(0.0, min(1.0, normalized))
+        
+        elif objective_metric == "annualized_return":
+            # 年化收益率，假设范围 [-0.5, 1.0]
+            annualized_return = metrics.get("annualized_return", 0.0)
+            normalized = (annualized_return + 0.5) / 1.5
+            return max(0.0, min(1.0, normalized))
+        
+        elif objective_metric == "win_rate":
+            # 胜率本身已经在 0-1 之间
+            win_rate = metrics.get("win_rate", 0.0)
+            return max(0.0, min(1.0, win_rate))
+        
+        elif objective_metric == "profit_factor":
+            # Profit Factor，通常 0-5 之间，>1 才有意义
+            profit_factor = metrics.get("profit_factor", 0.0)
+            if not isinstance(profit_factor, (int, float)) or profit_factor <= 0:
+                return 0.0
+            # 将 [0, 3] 映射到 [0, 1]，>3 视为 1
+            normalized = min(1.0, profit_factor / 3.0)
+            return max(0.0, normalized)
+        
+        elif objective_metric == "max_drawdown":
+            # 最大回撤（负数或0），越小越好，这里转换为“越大越好”的得分
+            max_drawdown = metrics.get("max_drawdown", 0.0)
+            dd = abs(max_drawdown)
+            # 假设 0-60% 的回撤区间，将 0 回撤映射到 1，60% 回撤映射到 0
+            normalized = 1.0 - min(1.0, dd / 0.6)
+            return max(0.0, normalized)
+        
+        elif objective_metric == "cost":
+            # 交易成本：手续费 + 滑点，占初始资金比例，越低越好
+            cost_stats = backtest_report.get("cost_statistics", {})
+            cost_ratio = cost_stats.get("cost_ratio", 0.0)
+            # 0 成本 → 1 分，5% 成本 → 0 分，线性下降
+            normalized = 1.0 - min(1.0, max(0.0, cost_ratio) / 0.05)
+            return max(0.0, normalized)
+        
         elif objective_metric == "custom":
             # 自定义组合
             if not objective_weights:
@@ -518,6 +584,32 @@ class StrategyHyperparameterOptimizer:
                         calmar = annualized_return / max_drawdown
                     normalized = min(1.0, calmar / 10)
                     total_score += weight * max(0.0, normalized)
+                elif metric_name == "win_rate":
+                    win_rate = metrics.get("win_rate", 0.0)
+                    total_score += weight * max(0.0, min(1.0, win_rate))
+                elif metric_name == "profit_factor":
+                    profit_factor = metrics.get("profit_factor", 0.0)
+                    if isinstance(profit_factor, (int, float)) and profit_factor > 0:
+                        normalized = min(1.0, profit_factor / 3.0)
+                        total_score += weight * max(0.0, normalized)
+                elif metric_name == "information_ratio":
+                    ir_info = backtest_report.get("excess_return_without_cost", {})
+                    information_ratio = ir_info.get("information_ratio", 0.0)
+                    normalized = (information_ratio + 2) / 7
+                    total_score += weight * max(0.0, min(1.0, normalized))
+                elif metric_name == "cost_ratio":
+                    cost_stats = backtest_report.get("cost_statistics", {})
+                    cost_ratio = cost_stats.get("cost_ratio", 0.0)
+                    normalized = 1.0 - min(1.0, max(0.0, cost_ratio) / 0.05)
+                    total_score += weight * max(0.0, normalized)
+                elif metric_name == "max_drawdown":
+                    max_drawdown_val = abs(metrics.get("max_drawdown", 0.0))
+                    normalized = 1.0 - min(1.0, max_drawdown_val / 0.6)
+                    total_score += weight * max(0.0, normalized)
+                elif metric_name == "annualized_return":
+                    annualized_return_val = metrics.get("annualized_return", 0.0)
+                    normalized = (annualized_return_val + 0.5) / 1.5
+                    total_score += weight * max(0.0, min(1.0, normalized))
                 
                 total_weight += weight
             

@@ -33,6 +33,8 @@ interface TradingViewChartProps {
     price: number;
     timestamp: string;
     executed?: boolean;
+    strategy_name?: string;
+    strategy_id?: string;
   }>;
   showSignals?: boolean;
   showTrades?: boolean;
@@ -285,6 +287,74 @@ export default function TradingViewChart({
 
     // 合并交易标记和信号标记
     const allMarkers: any[] = [];
+
+    // 为多策略信号准备颜色映射（按 strategy_name / strategy_id）
+    // 常用策略固定颜色映射（保证视觉一致性和易于识别）
+    const fixedColorMap: Record<string, string> = {
+      // 基础技术策略
+      moving_average: '#2196F3', // 蓝色
+      rsi: '#FF9800', // 橙色
+      macd: '#4CAF50', // 绿色
+      
+      // 高级技术分析策略
+      bollinger: '#9C27B0', // 紫色
+      stochastic: '#00BCD4', // 青色
+      cci: '#FF5722', // 深橙红
+      
+      // 统计套利策略
+      pairs_trading: '#795548', // 棕色
+      mean_reversion: '#607D8B', // 蓝灰
+      cointegration: '#E91E63', // 粉红
+      
+      // 因子投资策略
+      value_factor: '#3F51B5', // 靛蓝
+      momentum_factor: '#FFC107', // 琥珀
+      low_volatility: '#009688', // 青绿
+      multi_factor: '#F44336', // 红色
+    };
+    
+    // 扩展调色板（用于未映射的策略，使用稳定哈希分配）
+    const extendedPalette = [
+      '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+      '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+      '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+      '#c49c94', '#f7b6d3', '#c7c7c7', '#dbdb8d', '#9edae5',
+      '#6b6ecf', '#b5cf6b', '#bd9e39', '#e7ba52', '#637939',
+    ];
+    
+    // 基于字符串生成稳定哈希值（用于未映射的策略）
+    const stringHash = (str: string): number => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return Math.abs(hash);
+    };
+    
+    const strategyColorMap: Record<string, string> = {};
+    const strategyKeys: string[] = [];
+    if (internalShowSignals && signals && signals.length > 0) {
+      for (const s of signals) {
+        const key = s.strategy_id || s.strategy_name;
+        if (key && !strategyKeys.includes(key)) {
+          strategyKeys.push(key);
+        }
+      }
+    }
+    
+    // 为每个策略分配颜色：优先使用固定映射，否则使用稳定哈希
+    strategyKeys.forEach((key) => {
+      const normalizedKey = key.toLowerCase().trim();
+      if (fixedColorMap[normalizedKey]) {
+        strategyColorMap[key] = fixedColorMap[normalizedKey];
+      } else {
+        // 使用哈希值从扩展调色板中选择颜色，确保同一策略总是得到相同颜色
+        const hash = stringHash(normalizedKey);
+        strategyColorMap[key] = extendedPalette[hash % extendedPalette.length];
+      }
+    });
     
     // 先添加交易标记（如果显示）
     if (internalShowTrades && trades && trades.length > 0) {
@@ -307,11 +377,30 @@ export default function TradingViewChart({
         .map((signal) => ({
           time: signal.timestamp.split('T')[0],
           position: (signal.signal_type === 'BUY' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
-          color: signal.signal_type === 'BUY' 
-            ? (signal.executed ? '#4caf50' : '#8bc34a')  // 买入：已执行深绿，未执行浅绿
-            : (signal.executed ? '#f44336' : '#ff9800'), // 卖出：已执行深红，未执行橙色
           shape: (signal.signal_type === 'BUY' ? 'circle' : 'circle') as SeriesMarkerShape,  // 使用圆形区分信号
-          text: `${signal.signal_type === 'BUY' ? '买' : '卖'}信号${signal.executed ? '' : '(未执行)'}`,
+          color: (() => {
+            const key = signal.strategy_id || signal.strategy_name;
+            if (key && strategyColorMap[key]) {
+              // 根据执行与否调整透明度
+              const base = strategyColorMap[key];
+              if (signal.executed === false) {
+                // 未执行加一点透明度
+                return base + '80';
+              }
+              return base;
+            }
+            // 回退到旧的按信号方向配色
+            return signal.signal_type === 'BUY'
+              ? signal.executed
+                ? '#4caf50'
+                : '#8bc34a'
+              : signal.executed
+              ? '#f44336'
+              : '#ff9800';
+          })(),
+          text: `${signal.strategy_name ? signal.strategy_name + '·' : ''}${
+            signal.signal_type === 'BUY' ? '买' : '卖'
+          }信号${signal.executed ? '' : '(未执行)'}`,
           size: signal.executed ? 0.8 : 0.6,  // 已执行信号更大
         }));
       allMarkers.push(...signalMarkers);
