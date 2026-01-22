@@ -53,13 +53,19 @@ async def get_available_strategies():
                 }
             },
             'rsi': {
-                'name': 'RSI策略',
-                'description': '基于相对强弱指数的超买超卖策略，RSI低于超卖阈值买入，高于超买阈值卖出',
+                'name': 'RSI策略（优化版）',
+                'description': '基于业界最佳实践的RSI策略，包含趋势对齐、背离检测和RSI穿越信号。在上升趋势中等待RSI回调买入，在下降趋势中等待RSI反弹卖出，避免逆势交易。',
                 'category': 'technical',
                 'parameters': {
                     'rsi_period': {'type': 'int', 'default': 14, 'description': 'RSI周期', 'min': 2, 'max': 50},
                     'oversold_threshold': {'type': 'int', 'default': 30, 'description': '超卖阈值', 'min': 10, 'max': 40},
-                    'overbought_threshold': {'type': 'int', 'default': 70, 'description': '超买阈值', 'min': 60, 'max': 90}
+                    'overbought_threshold': {'type': 'int', 'default': 70, 'description': '超买阈值', 'min': 60, 'max': 90},
+                    'trend_ma_period': {'type': 'int', 'default': 50, 'description': '趋势判断均线周期（用于判断趋势方向）', 'min': 20, 'max': 200},
+                    'enable_trend_alignment': {'type': 'boolean', 'default': True, 'description': '启用趋势对齐（在上升趋势中只在回调时买入，在下降趋势中只在反弹时卖出）'},
+                    'enable_divergence': {'type': 'boolean', 'default': True, 'description': '启用背离检测（检测价格与RSI的背离作为反转信号）'},
+                    'enable_crossover': {'type': 'boolean', 'default': True, 'description': '启用RSI穿越信号（等待RSI从超买超卖区域穿越回来，而不是仅仅在超买超卖区域就交易）'},
+                    'uptrend_buy_threshold': {'type': 'int', 'default': 40, 'description': '上升趋势中的买入阈值（RSI回调到此值以上时买入）', 'min': 30, 'max': 60},
+                    'downtrend_sell_threshold': {'type': 'int', 'default': 60, 'description': '下降趋势中的卖出阈值（RSI反弹到此值以下时卖出）', 'min': 40, 'max': 70}
                 }
             },
             'macd': {

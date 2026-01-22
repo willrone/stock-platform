@@ -111,77 +111,353 @@ class MovingAverageStrategy(BaseStrategy):
 
 
 class RSIStrategy(BaseStrategy):
-    """RSI策略"""
+    """
+    优化的RSI策略 - 基于业界最佳实践
+    
+    核心改进：
+    1. 趋势对齐：在上升趋势中，只在RSI回调时买入；在下降趋势中，只在RSI反弹时卖出
+    2. RSI穿越信号：等待RSI从超买超卖区域穿越回来，而不是仅仅在超买超卖区域就交易
+    3. 背离检测：检测价格与RSI的背离作为反转信号
+    4. 结合移动平均线判断趋势方向
+    """
     
     def __init__(self, config: Dict[str, Any]):
         super().__init__("RSI", config)
         self.rsi_period = config.get('rsi_period', 14)
         self.oversold_threshold = config.get('oversold_threshold', 30)
         self.overbought_threshold = config.get('overbought_threshold', 70)
+        # 趋势对齐参数
+        self.trend_ma_period = config.get('trend_ma_period', 50)  # 用于判断趋势的均线周期
+        self.enable_trend_alignment = config.get('enable_trend_alignment', True)
+        self.enable_divergence = config.get('enable_divergence', True)
+        self.enable_crossover = config.get('enable_crossover', True)  # 启用RSI穿越信号
+        # 趋势对齐的RSI阈值
+        self.uptrend_buy_threshold = config.get('uptrend_buy_threshold', 40)  # 上升趋势中的买入阈值
+        self.downtrend_sell_threshold = config.get('downtrend_sell_threshold', 60)  # 下降趋势中的卖出阈值
     
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算RSI指标"""
+        """计算RSI指标及相关指标"""
         close_prices = data['close']
         
-        # 使用talib或pandas计算RSI
+        # 计算RSI
         if TALIB_AVAILABLE:
             rsi = pd.Series(talib.RSI(close_prices.values, timeperiod=self.rsi_period), 
                            index=close_prices.index)
         else:
-            # 使用pandas实现RSI
+            # 使用pandas实现RSI（Wilder's smoothing method）
             delta = close_prices.diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
             rs = gain / loss
             rsi = 100 - (100 / (1 + rs))
         
-        return {
+        # 计算趋势均线
+        trend_ma = close_prices.rolling(window=self.trend_ma_period).mean()
+        
+        # 计算价格变化率（用于背离检测）
+        price_change = close_prices.pct_change()
+        
+        indicators = {
             'rsi': rsi,
-            'price': close_prices
+            'price': close_prices,
+            'trend_ma': trend_ma,
+            'price_change': price_change
+        }
+        
+        # 如果有成交量数据，加入成交量
+        if 'volume' in data.columns:
+            indicators['volume'] = data['volume']
+            # 计算成交量移动平均
+            indicators['volume_ma'] = data['volume'].rolling(window=20).mean()
+        
+        return indicators
+    
+    def _detect_trend(self, indicators: Dict[str, pd.Series], current_idx: int) -> str:
+        """检测当前趋势：'uptrend', 'downtrend', 'sideways'"""
+        if current_idx < self.trend_ma_period:
+            return 'sideways'
+        
+        current_price = indicators['price'].iloc[current_idx]
+        current_ma = indicators['trend_ma'].iloc[current_idx]
+        
+        # 计算最近的价格趋势（使用短期均线）
+        if current_idx >= 20:
+            short_ma = indicators['price'].iloc[current_idx-19:current_idx+1].mean()
+            prev_short_ma = indicators['price'].iloc[current_idx-20:current_idx].mean()
+            
+            # 价格在趋势均线之上且短期均线上涨 -> 上升趋势
+            if current_price > current_ma and short_ma > prev_short_ma:
+                return 'uptrend'
+            # 价格在趋势均线之下且短期均线下跌 -> 下降趋势
+            elif current_price < current_ma and short_ma < prev_short_ma:
+                return 'downtrend'
+        
+        # 简单判断：价格相对于趋势均线的位置
+        if current_price > current_ma * 1.02:
+            return 'uptrend'
+        elif current_price < current_ma * 0.98:
+            return 'downtrend'
+        
+        return 'sideways'
+    
+    def _detect_divergence(self, indicators: Dict[str, pd.Series], current_idx: int, lookback: int = 20) -> Dict[str, bool]:
+        """
+        检测背离
+        返回: {'bullish_divergence': bool, 'bearish_divergence': bool}
+        """
+        if current_idx < lookback:
+            return {'bullish_divergence': False, 'bearish_divergence': False}
+        
+        # 获取最近的价格和RSI数据
+        price_window = indicators['price'].iloc[current_idx - lookback:current_idx + 1]
+        rsi_window = indicators['rsi'].iloc[current_idx - lookback:current_idx + 1]
+        
+        # 找到价格和RSI的局部极值
+        price_lows = []
+        price_highs = []
+        rsi_lows = []
+        rsi_highs = []
+        
+        for i in range(2, len(price_window) - 2):
+            # 价格低点
+            if (price_window.iloc[i] < price_window.iloc[i-1] and 
+                price_window.iloc[i] < price_window.iloc[i+1] and
+                price_window.iloc[i] < price_window.iloc[i-2] and
+                price_window.iloc[i] < price_window.iloc[i+2]):
+                price_lows.append((i, price_window.iloc[i]))
+            # 价格高点
+            if (price_window.iloc[i] > price_window.iloc[i-1] and 
+                price_window.iloc[i] > price_window.iloc[i+1] and
+                price_window.iloc[i] > price_window.iloc[i-2] and
+                price_window.iloc[i] > price_window.iloc[i+2]):
+                price_highs.append((i, price_window.iloc[i]))
+            # RSI低点
+            if (rsi_window.iloc[i] < rsi_window.iloc[i-1] and 
+                rsi_window.iloc[i] < rsi_window.iloc[i+1]):
+                rsi_lows.append((i, rsi_window.iloc[i]))
+            # RSI高点
+            if (rsi_window.iloc[i] > rsi_window.iloc[i-1] and 
+                rsi_window.iloc[i] > rsi_window.iloc[i+1]):
+                rsi_highs.append((i, rsi_window.iloc[i]))
+        
+        # 检测看涨背离：价格创新低，但RSI没有创新低
+        bullish_divergence = False
+        if len(price_lows) >= 2 and len(rsi_lows) >= 2:
+            recent_price_low = price_lows[-1][1]
+            prev_price_low = price_lows[-2][1]
+            recent_rsi_low = rsi_lows[-1][1]
+            prev_rsi_low = rsi_lows[-2][1]
+            
+            if recent_price_low < prev_price_low and recent_rsi_low > prev_rsi_low:
+                bullish_divergence = True
+        
+        # 检测看跌背离：价格创新高，但RSI没有创新高
+        bearish_divergence = False
+        if len(price_highs) >= 2 and len(rsi_highs) >= 2:
+            recent_price_high = price_highs[-1][1]
+            prev_price_high = price_highs[-2][1]
+            recent_rsi_high = rsi_highs[-1][1]
+            prev_rsi_high = rsi_highs[-2][1]
+            
+            if recent_price_high > prev_price_high and recent_rsi_high < prev_rsi_high:
+                bearish_divergence = True
+        
+        return {
+            'bullish_divergence': bullish_divergence,
+            'bearish_divergence': bearish_divergence
         }
     
+    def _check_volume_confirmation(self, indicators: Dict[str, pd.Series], current_idx: int) -> bool:
+        """检查成交量确认"""
+        if 'volume' not in indicators or 'volume_ma' not in indicators:
+            return True  # 如果没有成交量数据，默认通过
+        
+        if current_idx < 20:
+            return True
+        
+        current_volume = indicators['volume'].iloc[current_idx]
+        volume_ma = indicators['volume_ma'].iloc[current_idx]
+        
+        # 成交量高于平均值视为确认
+        return current_volume > volume_ma * 0.8
+    
     def generate_signals(self, data: pd.DataFrame, current_date: datetime) -> List[TradingSignal]:
-        """生成RSI信号"""
+        """生成优化的RSI信号"""
         signals = []
         
         try:
             indicators = self.calculate_indicators(data)
             
             current_idx = data.index.get_loc(current_date) if current_date in data.index else -1
-            if current_idx < self.rsi_period:
+            if current_idx < max(self.rsi_period, self.trend_ma_period):
+                return signals
+            
+            # 需要至少2个数据点来判断RSI穿越
+            if current_idx < 1:
                 return signals
             
             current_rsi = indicators['rsi'].iloc[current_idx]
+            prev_rsi = indicators['rsi'].iloc[current_idx - 1]
             current_price = indicators['price'].iloc[current_idx]
             stock_code = data.attrs.get('stock_code', 'UNKNOWN')
             
-            # RSI超卖信号（买入）
-            if current_rsi < self.oversold_threshold:
-                strength = (self.oversold_threshold - current_rsi) / self.oversold_threshold
-                signal = TradingSignal(
-                    timestamp=current_date,
-                    stock_code=stock_code,
-                    signal_type=SignalType.BUY,
-                    strength=min(1.0, strength),
-                    price=current_price,
-                    reason=f"RSI超卖: {current_rsi:.2f}",
-                    metadata={'rsi': current_rsi}
-                )
-                signals.append(signal)
+            # 检测趋势
+            trend = self._detect_trend(indicators, current_idx) if self.enable_trend_alignment else 'sideways'
             
-            # RSI超买信号（卖出）
-            elif current_rsi > self.overbought_threshold:
-                strength = (current_rsi - self.overbought_threshold) / (100 - self.overbought_threshold)
-                signal = TradingSignal(
-                    timestamp=current_date,
-                    stock_code=stock_code,
-                    signal_type=SignalType.SELL,
-                    strength=min(1.0, strength),
-                    price=current_price,
-                    reason=f"RSI超买: {current_rsi:.2f}",
-                    metadata={'rsi': current_rsi}
-                )
-                signals.append(signal)
+            # 检测背离
+            divergence = self._detect_divergence(indicators, current_idx) if self.enable_divergence else {
+                'bullish_divergence': False, 
+                'bearish_divergence': False
+            }
+            
+            # 检查成交量确认
+            volume_confirmed = self._check_volume_confirmation(indicators, current_idx)
+            
+            # 1. RSI穿越信号（从超卖区域向上穿越）
+            if self.enable_crossover:
+                # 买入信号：RSI从超卖区域（<30）向上穿越30或40
+                if (prev_rsi < self.oversold_threshold and 
+                    current_rsi >= self.oversold_threshold):
+                    
+                    # 趋势对齐：在上升趋势中，等待RSI回调到40-50再买入
+                    if self.enable_trend_alignment and trend == 'uptrend':
+                        if current_rsi >= self.uptrend_buy_threshold and current_rsi <= 55:
+                            strength = min(1.0, (current_rsi - self.oversold_threshold) / 20)
+                            if divergence['bullish_divergence']:
+                                strength = min(1.0, strength * 1.2)  # 背离增强信号强度
+                            
+                            signal = TradingSignal(
+                                timestamp=current_date,
+                                stock_code=stock_code,
+                                signal_type=SignalType.BUY,
+                                strength=min(1.0, strength),
+                                price=current_price,
+                                reason=f"RSI从超卖区域向上穿越({prev_rsi:.2f}->{current_rsi:.2f})，上升趋势回调买入",
+                                metadata={
+                                    'rsi': current_rsi,
+                                    'prev_rsi': prev_rsi,
+                                    'trend': trend,
+                                    'divergence': divergence['bullish_divergence']
+                                }
+                            )
+                            signals.append(signal)
+                    # 非趋势对齐或横盘：传统超卖反弹
+                    elif trend != 'downtrend':  # 避免在下降趋势中买入
+                        strength = min(1.0, (current_rsi - self.oversold_threshold) / 20)
+                        if divergence['bullish_divergence']:
+                            strength = min(1.0, strength * 1.3)
+                        
+                        signal = TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=SignalType.BUY,
+                            strength=min(1.0, strength),
+                            price=current_price,
+                            reason=f"RSI从超卖区域向上穿越({prev_rsi:.2f}->{current_rsi:.2f})" + 
+                                   ("，看涨背离" if divergence['bullish_divergence'] else ""),
+                            metadata={
+                                'rsi': current_rsi,
+                                'prev_rsi': prev_rsi,
+                                'trend': trend,
+                                'divergence': divergence['bullish_divergence']
+                            }
+                        )
+                        signals.append(signal)
+                
+                # 卖出信号：RSI从超买区域（>70）向下穿越70或60
+                elif (prev_rsi > self.overbought_threshold and 
+                      current_rsi <= self.overbought_threshold):
+                    
+                    # 趋势对齐：在下降趋势中，等待RSI反弹到50-60再卖出
+                    if self.enable_trend_alignment and trend == 'downtrend':
+                        if current_rsi <= self.downtrend_sell_threshold and current_rsi >= 45:
+                            strength = min(1.0, (self.overbought_threshold - current_rsi) / 20)
+                            if divergence['bearish_divergence']:
+                                strength = min(1.0, strength * 1.2)
+                            
+                            signal = TradingSignal(
+                                timestamp=current_date,
+                                stock_code=stock_code,
+                                signal_type=SignalType.SELL,
+                                strength=min(1.0, strength),
+                                price=current_price,
+                                reason=f"RSI从超买区域向下穿越({prev_rsi:.2f}->{current_rsi:.2f})，下降趋势反弹卖出",
+                                metadata={
+                                    'rsi': current_rsi,
+                                    'prev_rsi': prev_rsi,
+                                    'trend': trend,
+                                    'divergence': divergence['bearish_divergence']
+                                }
+                            )
+                            signals.append(signal)
+                    # 非趋势对齐或横盘：传统超买回调
+                    elif trend != 'uptrend':  # 避免在上升趋势中卖出
+                        strength = min(1.0, (self.overbought_threshold - current_rsi) / 20)
+                        if divergence['bearish_divergence']:
+                            strength = min(1.0, strength * 1.3)
+                        
+                        signal = TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=SignalType.SELL,
+                            strength=min(1.0, strength),
+                            price=current_price,
+                            reason=f"RSI从超买区域向下穿越({prev_rsi:.2f}->{current_rsi:.2f})" + 
+                                   ("，看跌背离" if divergence['bearish_divergence'] else ""),
+                            metadata={
+                                'rsi': current_rsi,
+                                'prev_rsi': prev_rsi,
+                                'trend': trend,
+                                'divergence': divergence['bearish_divergence']
+                            }
+                        )
+                        signals.append(signal)
+            
+            # 2. 背离信号（如果未启用穿越信号，或作为补充）
+            if self.enable_divergence:
+                # 看涨背离买入信号
+                if (divergence['bullish_divergence'] and 
+                    current_rsi < 50 and 
+                    trend != 'downtrend' and
+                    volume_confirmed):
+                    
+                    strength = min(1.0, (50 - current_rsi) / 50 * 1.2)  # 背离信号增强
+                    signal = TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=SignalType.BUY,
+                        strength=min(1.0, strength),
+                        price=current_price,
+                        reason=f"看涨背离，RSI: {current_rsi:.2f}",
+                        metadata={
+                            'rsi': current_rsi,
+                            'trend': trend,
+                            'divergence': True
+                        }
+                    )
+                    signals.append(signal)
+                
+                # 看跌背离卖出信号
+                elif (divergence['bearish_divergence'] and 
+                      current_rsi > 50 and 
+                      trend != 'uptrend' and
+                      volume_confirmed):
+                    
+                    strength = min(1.0, (current_rsi - 50) / 50 * 1.2)  # 背离信号增强
+                    signal = TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=SignalType.SELL,
+                        strength=min(1.0, strength),
+                        price=current_price,
+                        reason=f"看跌背离，RSI: {current_rsi:.2f}",
+                        metadata={
+                            'rsi': current_rsi,
+                            'trend': trend,
+                            'divergence': True
+                        }
+                    )
+                    signals.append(signal)
             
             return signals
             
