@@ -418,33 +418,46 @@ export default function TaskDetailPage() {
     }
   };
 
-  // 获取策略配置信息
+  // 获取策略配置信息（支持 config 嵌套 backtest_config 或扁平 strategy_name/strategy_config）
   const getStrategyConfig = () => {
     if (!currentTask || currentTask.task_type !== 'backtest') {
       return null;
     }
 
-    // 优先从任务配置中获取（最可靠）
-    if (currentTask.config?.backtest_config?.strategy_config) {
-      return {
-        strategyName: currentTask.config.backtest_config.strategy_name,
-        parameters: currentTask.config.backtest_config.strategy_config,
-      };
-    }
-
-    // 从回测结果中获取
+    const cfg = currentTask.config;
+    const bc = cfg?.backtest_config;
     const backtestData = currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results;
-    if (backtestData) {
-      const backtestConfig = backtestData.backtest_config;
-      if (backtestConfig && backtestConfig.strategy_config) {
-        return {
-          strategyName: backtestConfig.strategy_name || currentTask.config?.backtest_config?.strategy_name,
-          parameters: backtestConfig.strategy_config,
-        };
-      }
-    }
+    const resultBc = backtestData?.backtest_config;
 
-    return null;
+    // 调试日志：检查各个位置的策略配置
+    console.log('[getStrategyConfig] 调试信息:', {
+      'cfg': cfg,
+      'cfg?.backtest_config': bc,
+      'cfg?.strategy_config': cfg?.strategy_config,
+      'backtestData': backtestData,
+      'resultBc': resultBc,
+      'resultBc?.strategy_config': resultBc?.strategy_config,
+    });
+
+    const strategyName =
+      bc?.strategy_name ??
+      cfg?.strategy_name ??
+      resultBc?.strategy_name ??
+      (backtestData as any)?.strategy_name ??
+      '未知策略';
+
+    const parameters: Record<string, any> =
+      bc?.strategy_config != null
+        ? bc.strategy_config
+        : cfg?.strategy_config != null
+          ? cfg.strategy_config
+          : resultBc?.strategy_config != null
+            ? resultBc.strategy_config
+            : {};
+
+    console.log('[getStrategyConfig] 最终结果:', { strategyName, parameters, parametersKeys: Object.keys(parameters) });
+
+    return { strategyName, parameters };
   };
 
   // 保存策略配置
@@ -748,7 +761,7 @@ export default function TaskDetailPage() {
                                         size="small"
                                         startIcon={<Save size={16} />}
                                         onClick={onSaveConfigOpen}
-                                        disabled={!configInfo.strategyName || Object.keys(configInfo.parameters).length === 0}
+                                        disabled={!configInfo.strategyName || configInfo.strategyName === '未知策略' || Object.keys(configInfo.parameters).length === 0}
                                       >
                                         保存配置
                                       </Button>

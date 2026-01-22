@@ -76,14 +76,23 @@ export function StrategyConfigForm({
       isMountedRef.current = true;
       
       // 策略变化或首次挂载时，使用externalValues（如果提供）或默认值
+      let initialValues: Record<string, any> = {};
       if (externalValues && Object.keys(externalValues).length > 0) {
-        setValues(externalValues);
+        initialValues = externalValues;
+        setValues(initialValues);
       } else {
-        const defaults: Record<string, any> = {};
+        // 生成默认值
         Object.entries(parameters).forEach(([key, param]) => {
-          defaults[key] = param.default;
+          initialValues[key] = param.default;
         });
-        setValues(defaults);
+        setValues(initialValues);
+      }
+      
+      // 通知父组件初始值（使用微任务避免在渲染期间调用）
+      if (onChangeRef.current && Object.keys(initialValues).length > 0) {
+        Promise.resolve().then(() => {
+          onChangeRef.current?.(initialValues);
+        });
       }
     }
     // 不监听externalValues，避免循环更新

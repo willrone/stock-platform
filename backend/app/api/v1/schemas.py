@@ -69,12 +69,13 @@ class TaskCreateRequest(BaseModel):
 
 
 class BacktestRequest(BaseModel):
-    """回测请求"""
-    strategy_name: str = Field(..., description="策略名称")
+    """回测请求（支持单策略和组合策略）"""
+    strategy_name: str = Field(..., description="策略名称，单策略时使用策略名，组合策略时使用'portfolio'")
     stock_codes: List[str] = Field(..., description="股票代码列表")
     start_date: datetime = Field(..., description="回测开始日期")
     end_date: datetime = Field(..., description="回测结束日期")
     initial_cash: float = Field(default=100000.0, description="初始资金")
+    strategy_config: Optional[Dict[str, Any]] = Field(default=None, description="策略配置，单策略时为策略参数，组合策略时包含strategies列表")
 
 
 class ModelTrainingRequest(BaseModel):

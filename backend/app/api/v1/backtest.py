@@ -221,9 +221,38 @@ async def get_available_strategies():
 
 @router.post("", response_model=StandardResponse)
 async def run_backtest(request: BacktestRequest):
-    """运行回测"""
+    """
+    运行回测（支持单策略和组合策略）
+    
+    组合策略配置格式：
+    {
+        "strategy_name": "portfolio",
+        "strategy_config": {
+            "strategies": [
+                {
+                    "name": "rsi",
+                    "weight": 0.4,
+                    "config": {"rsi_period": 14}
+                },
+                {
+                    "name": "macd",
+                    "weight": 0.3,
+                    "config": {"fast_period": 12}
+                }
+            ],
+            "integration_method": "weighted_voting"
+        }
+    }
+    """
     try:
-        logger.info(f"开始回测: 策略={request.strategy_name}, 股票={request.stock_codes}, 期间={request.start_date} - {request.end_date}")
+        # 检测是否为组合策略
+        is_portfolio = (
+            request.strategy_name.lower() == "portfolio" or
+            (request.strategy_config and "strategies" in request.strategy_config)
+        )
+        
+        strategy_display = "组合策略" if is_portfolio else request.strategy_name
+        logger.info(f"开始回测: 策略={strategy_display}, 股票={request.stock_codes}, 期间={request.start_date} - {request.end_date}")
         
         # 创建回测执行器
         executor = BacktestExecutor(
@@ -232,28 +261,29 @@ async def run_backtest(request: BacktestRequest):
         )
         
         # 验证参数
+        strategy_config = request.strategy_config or {}
         executor.validate_backtest_parameters(
             strategy_name=request.strategy_name,
             stock_codes=request.stock_codes,
             start_date=request.start_date,
             end_date=request.end_date,
-            strategy_config=request.strategy_config or {}
+            strategy_config=strategy_config
         )
         
         # 创建回测配置
         backtest_config = BacktestConfig(
             initial_cash=request.initial_cash,
-            commission_rate=request.strategy_config.get("commission_rate", 0.0003) if request.strategy_config else 0.0003,
-            slippage_rate=request.strategy_config.get("slippage_rate", 0.0001) if request.strategy_config else 0.0001
+            commission_rate=strategy_config.get("commission_rate", 0.0003),
+            slippage_rate=strategy_config.get("slippage_rate", 0.0001)
         )
         
-        # 执行回测
+        # 执行回测（StrategyFactory会自动检测是否为组合策略）
         backtest_report = executor.run_backtest(
             strategy_name=request.strategy_name,
             stock_codes=request.stock_codes,
             start_date=request.start_date,
             end_date=request.end_date,
-            strategy_config=request.strategy_config or {},
+            strategy_config=strategy_config,
             backtest_config=backtest_config
         )
         
@@ -283,8 +313,19 @@ async def run_backtest(request: BacktestRequest):
             })
         
         # 构建返回结果（匹配前端期望的格式）
+        # 如果是组合策略，获取组合信息
+        portfolio_info = None
+        if is_portfolio:
+            # 尝试从回测报告中提取组合信息
+            portfolio_info = {
+                "is_portfolio": True,
+                "strategies": strategy_config.get("strategies", []) if strategy_config else []
+            }
+        
         result = {
             "strategy_name": backtest_report.get("strategy_name", request.strategy_name),
+            "is_portfolio": is_portfolio,
+            "portfolio_info": portfolio_info,
             "period": {
                 "start_date": backtest_report.get("start_date", request.start_date.isoformat()),
                 "end_date": backtest_report.get("end_date", request.end_date.isoformat())
@@ -323,4 +364,104 @@ async def run_backtest(request: BacktestRequest):
     except Exception as e:
         logger.error(f"回测执行失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"回测执行失败: {str(e)}")
+
+
+@router.get("/portfolio-templates", response_model=StandardResponse)
+async def get_portfolio_templates():
+    """获取预设的策略组合模板"""
+    try:
+        templates = [
+            {
+                "name": "技术指标组合",
+                "description": "结合RSI、MACD和布林带的经典技术指标组合",
+                "strategies": [
+                    {
+                        "name": "rsi",
+                        "weight": 0.4,
+                        "config": {
+                            "rsi_period": 14,
+                            "oversold_threshold": 30,
+                            "overbought_threshold": 70
+                        }
+                    },
+                    {
+                        "name": "macd",
+                        "weight": 0.3,
+                        "config": {
+                            "fast_period": 12,
+                            "slow_period": 26,
+                            "signal_period": 9
+                        }
+                    },
+                    {
+                        "name": "bollinger",
+                        "weight": 0.3,
+                        "config": {
+                            "period": 20,
+                            "std_dev": 2
+                        }
+                    }
+                ],
+                "integration_method": "weighted_voting"
+            },
+            {
+                "name": "趋势跟踪组合",
+                "description": "移动平均和MACD的组合，适合趋势市场",
+                "strategies": [
+                    {
+                        "name": "moving_average",
+                        "weight": 0.5,
+                        "config": {
+                            "short_window": 5,
+                            "long_window": 20
+                        }
+                    },
+                    {
+                        "name": "macd",
+                        "weight": 0.5,
+                        "config": {
+                            "fast_period": 12,
+                            "slow_period": 26,
+                            "signal_period": 9
+                        }
+                    }
+                ],
+                "integration_method": "weighted_voting"
+            },
+            {
+                "name": "均值回归组合",
+                "description": "RSI和随机指标的组合，适合震荡市场",
+                "strategies": [
+                    {
+                        "name": "rsi",
+                        "weight": 0.5,
+                        "config": {
+                            "rsi_period": 14,
+                            "oversold_threshold": 30,
+                            "overbought_threshold": 70
+                        }
+                    },
+                    {
+                        "name": "stochastic",
+                        "weight": 0.5,
+                        "config": {
+                            "k_period": 14,
+                            "d_period": 3,
+                            "oversold": 20,
+                            "overbought": 80
+                        }
+                    }
+                ],
+                "integration_method": "weighted_voting"
+            }
+        ]
+        
+        return StandardResponse(
+            success=True,
+            message="获取策略组合模板成功",
+            data=templates
+        )
+    except Exception as e:
+        logger.error(f"获取策略组合模板失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取策略组合模板失败: {str(e)}")
 

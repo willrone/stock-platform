@@ -265,9 +265,16 @@ class BacktestExecutor:
                     task_id, "report_generation", status="running"
                 )
             
+            # 记录策略配置信息
+            if strategy_config and isinstance(strategy_config, dict) and len(strategy_config) > 0:
+                logger.info(f"生成回测报告，策略配置: {strategy_config}")
+            else:
+                logger.warning(f"策略配置为空或无效: {strategy_config}, 类型: {type(strategy_config)}")
+            
             backtest_report = self._generate_backtest_report(
                 strategy_name, stock_codes, start_date, end_date,
-                backtest_config, portfolio_manager, performance_metrics
+                backtest_config, portfolio_manager, performance_metrics,
+                strategy_config=strategy_config
             )
             
             if self.enable_performance_profiling:
@@ -681,7 +688,8 @@ class BacktestExecutor:
     def _generate_backtest_report(self, strategy_name: str, stock_codes: List[str],
                                 start_date: datetime, end_date: datetime,
                                 config: BacktestConfig, portfolio_manager: PortfolioManager,
-                                performance_metrics: Dict[str, float]) -> Dict[str, Any]:
+                                performance_metrics: Dict[str, float],
+                                strategy_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """生成回测报告"""
         
         # 基础信息
@@ -729,7 +737,8 @@ class BacktestExecutor:
                 "initial_cash": config.initial_cash,  # 添加初始资金
                 "commission_rate": config.commission_rate,
                 "slippage_rate": config.slippage_rate,
-                "max_position_size": config.max_position_size
+                "max_position_size": config.max_position_size,
+                **({"strategy_config": strategy_config} if strategy_config and isinstance(strategy_config, dict) and len(strategy_config) > 0 else {})
             },
             
             # 交易记录

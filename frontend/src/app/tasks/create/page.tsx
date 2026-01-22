@@ -47,6 +47,7 @@ import { DataService } from '../../../services/dataService';
 import { StockSelector } from '../../../components/tasks/StockSelector';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 import { StrategyConfigForm, StrategyParameter } from '../../../components/backtest/StrategyConfigForm';
+import { PortfolioStrategyConfig, PortfolioStrategyItem } from '../../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
 
 export default function CreateTaskPage() {
@@ -59,6 +60,8 @@ export default function CreateTaskPage() {
   const [taskType, setTaskType] = useState<'prediction' | 'backtest'>('prediction');
   const [availableStrategies, setAvailableStrategies] = useState<Array<{key: string; name: string; description: string; parameters?: Record<string, StrategyParameter>}>>([]);
   const [strategyConfig, setStrategyConfig] = useState<Record<string, any>>({});
+  const [portfolioConfig, setPortfolioConfig] = useState<{strategies: PortfolioStrategyItem[]; integration_method: string} | null>(null);
+  const [strategyType, setStrategyType] = useState<'single' | 'portfolio'>('single');
   const [savedConfigs, setSavedConfigs] = useState<StrategyConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [configFormKey, setConfigFormKey] = useState(0);
@@ -209,13 +212,18 @@ export default function CreateTaskPage() {
           },
         } : {
           backtest_config: {
-            strategy_name: formData.strategy_name,
+            strategy_name: strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name,
             start_date: formData.start_date,
             end_date: formData.end_date,
             initial_cash: formData.initial_cash,
             commission_rate: formData.commission_rate,
             slippage_rate: formData.slippage_rate,
-            strategy_config: strategyConfig,
+            strategy_config: strategyType === 'portfolio' 
+              ? (portfolioConfig ? {
+                  strategies: portfolioConfig.strategies,
+                  integration_method: portfolioConfig.integration_method,
+                } : {})
+              : strategyConfig,
             enable_performance_profiling: formData.enable_performance_profiling,
           },
         }),
@@ -428,53 +436,99 @@ export default function CreateTaskPage() {
                 title="回测配置"
               />
               <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <FormControl fullWidth required disabled={availableStrategies.length === 0}>
-                  <InputLabel>交易策略</InputLabel>
+                {/* 策略类型选择 */}
+                <FormControl fullWidth>
+                  <InputLabel>策略类型</InputLabel>
                   <Select
-                    value={formData.strategy_name}
-                    label="交易策略"
-                    onChange={(e) => updateFormData('strategy_name', e.target.value)}
+                    value={strategyType}
+                    label="策略类型"
+                    onChange={(e) => {
+                      const newType = e.target.value as 'single' | 'portfolio';
+                      setStrategyType(newType);
+                      if (newType === 'portfolio') {
+                        updateFormData('strategy_name', 'portfolio');
+                      } else if (availableStrategies.length > 0) {
+                        updateFormData('strategy_name', availableStrategies[0].key);
+                      }
+                    }}
                   >
-                    {availableStrategies.map(strategy => (
-                      <MenuItem key={strategy.key} value={strategy.key}>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {strategy.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {strategy.description}
-                          </Typography>
-                        </Box>
-                      </MenuItem>
-                    ))}
+                    <MenuItem value="single">单策略</MenuItem>
+                    <MenuItem value="portfolio">组合策略</MenuItem>
                   </Select>
+                  <FormHelperText>
+                    选择使用单个策略或多个策略的组合
+                  </FormHelperText>
                 </FormControl>
 
-                {/* 策略配置表单 */}
-                {formData.strategy_name && (() => {
-                  const selectedStrategy = availableStrategies.find(s => s.key === formData.strategy_name);
-                  if (selectedStrategy && selectedStrategy.parameters) {
-                    return (
-                      <StrategyConfigForm
-                        key={`${formData.strategy_name}-${configFormKey}`}
-                        strategyName={formData.strategy_name}
-                        parameters={selectedStrategy.parameters}
-                        values={configFormKey > 0 && Object.keys(strategyConfig).length > 0 ? strategyConfig : undefined}
-                        onChange={(newConfig) => {
-                          setStrategyConfig(newConfig);
-                        }}
-                        onLoadConfig={handleLoadConfig}
-                        savedConfigs={savedConfigs.map(c => ({
-                          config_id: c.config_id,
-                          config_name: c.config_name,
-                          created_at: c.created_at,
-                        }))}
-                        loading={loadingConfigs}
-                      />
-                    );
-                  }
-                  return null;
-                })()}
+                {strategyType === 'single' ? (
+                  <>
+                    {/* 单策略选择 */}
+                    <FormControl fullWidth required disabled={availableStrategies.length === 0}>
+                      <InputLabel>交易策略</InputLabel>
+                      <Select
+                        value={formData.strategy_name}
+                        label="交易策略"
+                        onChange={(e) => updateFormData('strategy_name', e.target.value)}
+                      >
+                        {availableStrategies.map(strategy => (
+                          <MenuItem key={strategy.key} value={strategy.key}>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {strategy.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {strategy.description}
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    {/* 单策略配置表单 */}
+                    {formData.strategy_name && formData.strategy_name !== 'portfolio' && (() => {
+                      const selectedStrategy = availableStrategies.find(s => s.key === formData.strategy_name);
+                      if (selectedStrategy && selectedStrategy.parameters) {
+                        return (
+                          <StrategyConfigForm
+                            key={`${formData.strategy_name}-${configFormKey}`}
+                            strategyName={formData.strategy_name}
+                            parameters={selectedStrategy.parameters}
+                            values={configFormKey > 0 && Object.keys(strategyConfig).length > 0 ? strategyConfig : undefined}
+                            onChange={(newConfig) => {
+                              setStrategyConfig(newConfig);
+                            }}
+                            onLoadConfig={handleLoadConfig}
+                            savedConfigs={savedConfigs.map(c => ({
+                              config_id: c.config_id,
+                              config_name: c.config_name,
+                              created_at: c.created_at,
+                            }))}
+                            loading={loadingConfigs}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    {/* 组合策略配置 */}
+                    <PortfolioStrategyConfig
+                      availableStrategies={availableStrategies}
+                      portfolioConfig={portfolioConfig || undefined}
+                      onChange={(config) => {
+                        setPortfolioConfig(config);
+                      }}
+                      constraints={{
+                        maxWeight: 0.5,
+                        grossLeverage: 1.0,
+                        minStrategies: 1,
+                        maxStrategies: 10,
+                      }}
+                    />
+                  </>
+                )}
                 
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
                   <TextField

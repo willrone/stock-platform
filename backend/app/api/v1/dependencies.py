@@ -249,6 +249,9 @@ def execute_backtest_task_simple(task_id: str):
         config = task.config or {}
         task_logger.info(f"任务配置: {config}")
         task_logger.info(f"配置键: {list(config.keys())}")
+        task_logger.info(f"策略配置 (strategy_config): {config.get('strategy_config', {})}")
+        task_logger.info(f"策略配置类型: {type(config.get('strategy_config', {}))}")
+        task_logger.info(f"策略配置是否为空: {not config.get('strategy_config', {})}")
 
         # 检查是否有系统字段被意外包含在配置中
         system_fields = ['task_id', 'task_name', 'task_type', 'status', 'progress', 'created_at', 'completed_at', 'error_message', 'result']

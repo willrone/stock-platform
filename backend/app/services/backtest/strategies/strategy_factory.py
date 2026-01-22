@@ -4,9 +4,10 @@
 负责创建和管理所有策略实例，整合基础策略和高级策略
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from ..core.base_strategy import BaseStrategy
+from ..core.strategy_portfolio import StrategyPortfolio
 from .technical.basic_strategies import MovingAverageStrategy, RSIStrategy, MACDStrategy
 from .strategies import (
     # 技术分析策略
@@ -56,8 +57,28 @@ class StrategyFactory:
     
     @classmethod
     def create_strategy(cls, strategy_name: str, config: Dict[str, Any]) -> BaseStrategy:
-        """创建策略实例"""
+        """
+        创建策略实例（支持单策略和组合策略）
+        
+        Args:
+            strategy_name: 策略名称，如果是"portfolio"或config中包含"strategies"则创建组合策略
+            config: 策略配置
+        
+        Returns:
+            策略实例（单策略或组合策略）
+        """
         strategy_name = strategy_name.lower()
+        
+        # 检测是否为组合策略
+        if strategy_name == "portfolio" or "strategies" in config:
+            return cls._create_portfolio_strategy(config)
+        else:
+            # 创建单策略
+            return cls._create_single_strategy(strategy_name, config)
+    
+    @classmethod
+    def _create_single_strategy(cls, strategy_name: str, config: Dict[str, Any]) -> BaseStrategy:
+        """创建单策略实例"""
         strategy_class = cls._strategies.get(strategy_name)
         
         if not strategy_class:
@@ -68,6 +89,82 @@ class StrategyFactory:
             )
         
         return strategy_class(config)
+    
+    @classmethod
+    def _create_portfolio_strategy(cls, config: Dict[str, Any]) -> StrategyPortfolio:
+        """
+        创建策略组合
+        
+        Args:
+            config: 组合策略配置，格式：
+                {
+                    "strategies": [
+                        {
+                            "name": "rsi",
+                            "weight": 0.4,
+                            "config": {"rsi_period": 14}
+                        },
+                        ...
+                    ],
+                    "integration_method": "weighted_voting"  # 可选
+                }
+        
+        Returns:
+            策略组合实例
+        """
+        if "strategies" not in config:
+            raise TaskError(
+                message="组合策略配置中必须包含'strategies'字段",
+                severity=ErrorSeverity.MEDIUM
+            )
+        
+        strategy_configs = config["strategies"]
+        if not isinstance(strategy_configs, list) or len(strategy_configs) == 0:
+            raise TaskError(
+                message="'strategies'必须是非空列表",
+                severity=ErrorSeverity.MEDIUM
+            )
+        
+        strategies = []
+        weights = {}
+        
+        for strat_config in strategy_configs:
+            if not isinstance(strat_config, dict):
+                raise TaskError(
+                    message=f"策略配置必须是字典，当前类型: {type(strat_config)}",
+                    severity=ErrorSeverity.MEDIUM
+                )
+            
+            if "name" not in strat_config:
+                raise TaskError(
+                    message="策略配置中必须包含'name'字段",
+                    severity=ErrorSeverity.MEDIUM
+                )
+            
+            name = strat_config["name"]
+            weight = strat_config.get("weight", 1.0)
+            strat_config_dict = strat_config.get("config", {})
+            
+            # 创建子策略
+            try:
+                strategy = cls._create_single_strategy(name, strat_config_dict)
+                strategies.append(strategy)
+                weights[strategy.name] = weight
+            except Exception as e:
+                raise TaskError(
+                    message=f"创建策略 {name} 失败: {str(e)}",
+                    severity=ErrorSeverity.MEDIUM
+                )
+        
+        # 获取整合方法
+        integration_method = config.get("integration_method", "weighted_voting")
+        
+        # 创建策略组合
+        return StrategyPortfolio(
+            strategies=strategies,
+            weights=weights,
+            integration_method=integration_method
+        )
     
     @classmethod
     def get_available_strategies(cls) -> List[str]:

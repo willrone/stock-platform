@@ -661,7 +661,7 @@ async def get_task_detail(task_id: str):
                 if task.task_type == "backtest":
                     logger.warning(f"回测任务但无结果数据: task_id={task_id}, result={task.result}")
         
-        # 构建任务详情
+        # 构建任务详情（含 config，供回测结果页策略配置卡片等使用）
         task_detail = {
             "task_id": task.task_id,
             "task_name": task.task_name,
@@ -673,6 +673,7 @@ async def get_task_detail(task_id: str):
             "created_at": task.created_at.isoformat() if task.created_at else datetime.now().isoformat(),
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
             "error_message": task.error_message,
+            "config": config,
             "results": {
                 "total_stocks": len(stock_codes) if isinstance(stock_codes, list) else 0,
                 "successful_predictions": len(prediction_results),

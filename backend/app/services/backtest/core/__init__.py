@@ -17,6 +17,7 @@ from ..models import (
 # 从各个模块导入
 from .base_strategy import BaseStrategy
 from .portfolio_manager import PortfolioManager
+from .strategy_portfolio import StrategyPortfolio
 
 # 从策略模块导入（策略已移动到strategies目录）
 from ..strategies.technical.basic_strategies import MovingAverageStrategy, RSIStrategy, MACDStrategy
@@ -34,5 +35,6 @@ __all__ = [
     'RSIStrategy',
     'MACDStrategy',
     'StrategyFactory',
-    'PortfolioManager'
+    'PortfolioManager',
+    'StrategyPortfolio'
 ]

@@ -5,6 +5,7 @@
 """
 
 from .backtest_data_adapter import BacktestDataAdapter
+from .signal_integrator import SignalIntegrator
 from ..models.analysis_models import (
     ExtendedRiskMetrics,
     MonthlyReturnsAnalysis,
@@ -19,6 +20,7 @@ try:
     from .performance_profiler import BacktestPerformanceProfiler, PerformanceContext
     __all__ = [
         'BacktestDataAdapter',
+        'SignalIntegrator',
         'ExtendedRiskMetrics',
         'MonthlyReturnsAnalysis',
         'PositionAnalysis',
@@ -31,6 +33,7 @@ try:
 except ImportError:
     __all__ = [
         'BacktestDataAdapter',
+        'SignalIntegrator',
         'ExtendedRiskMetrics',
         'MonthlyReturnsAnalysis',
         'PositionAnalysis',
