@@ -13,7 +13,7 @@ from loguru import logger
 
 from app.core.database import get_async_session
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
-from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+from app.services.backtest.utils import BacktestDataAdapter
 
 
 class BacktestDetailedDataPopulator:

@@ -1,56 +1,48 @@
 """
 回测引擎模块
 
-该模块包含所有与策略回测和执行相关的服务，包括：
-- 回测引擎核心功能
-- 回测执行器和数据加载
-- 交易策略实现
-- 组合管理和风险控制
+该模块包含所有与策略回测和执行相关的服务，提供完整的量化交易策略验证解决方案。
 
-主要组件：
-- BacktestEngine: 回测引擎核心（从 backtest_engine.py 导入）
-- BacktestExecutor: 回测执行器
-- DataLoader: 数据加载器
-- 策略类: BaseStrategy, MovingAverageStrategy, RSIStrategy, MACDStrategy
-- PortfolioManager: 组合管理器
-
-新增高级策略（从 strategies.py 导入）：
-- 技术分析策略: BollingerBandStrategy, StochasticStrategy, CCIStrategy
-- 统计套利策略: PairsTradingStrategy, MeanReversionStrategy, CointegrationStrategy
-- 因子投资策略: ValueFactorStrategy, MomentumFactorStrategy, LowVolatilityStrategy, MultiFactorStrategy
-- AdvancedStrategyFactory: 高级策略工厂
+模块结构：
+- core: 核心引擎和基础类
+- strategies: 交易策略实现
+- execution: 回测执行器和进度监控
+- analysis: 绩效分析和持仓分析
+- reporting: 报告生成和图表数据
+- optimization: 策略参数优化
+- utils: 工具类和适配器
 """
 
-# 回测引擎
-from .backtest_engine import (
-    # 枚举类型
+# 从 models 导入数据模型
+from .models import (
     SignalType,
     OrderType,
-    
-    # 数据类
     TradingSignal,
     Trade,
     Position,
-    BacktestConfig,
-    
-    # 策略类
+    BacktestConfig
+)
+
+# 从 core 导入策略和管理器
+from .core import (
     BaseStrategy,
     MovingAverageStrategy,
     RSIStrategy,
     MACDStrategy,
     StrategyFactory,
-    
-    # 管理器
     PortfolioManager
 )
 
-# 回测执行器
-from .backtest_executor import (
+# 执行模块
+from .execution import (
     BacktestExecutor,
-    DataLoader
+    DataLoader,
+    backtest_progress_monitor,
+    BacktestProgressData,
+    BacktestProgressStage
 )
 
-# 高级策略
+# 策略模块
 from .strategies import (
     # 技术分析策略
     BollingerBandStrategy,
@@ -58,11 +50,13 @@ from .strategies import (
     CCIStrategy,
     
     # 统计套利策略
+    StatisticalArbitrageStrategy,
     PairsTradingStrategy,
     MeanReversionStrategy,
     CointegrationStrategy,
     
     # 因子投资策略
+    FactorStrategy,
     ValueFactorStrategy,
     MomentumFactorStrategy,
     LowVolatilityStrategy,
@@ -71,6 +65,39 @@ from .strategies import (
     # 高级策略工厂
     AdvancedStrategyFactory
 )
+
+# 分析模块（可选导入，避免循环依赖）
+try:
+    from .analysis import (
+        EnhancedMetricsCalculator,
+        PositionAnalyzer,
+        MonthlyAnalyzer,
+        BacktestComparisonAnalyzer
+    )
+    _ANALYSIS_AVAILABLE = True
+except ImportError:
+    _ANALYSIS_AVAILABLE = False
+
+# 报告模块（可选导入）
+try:
+    from .reporting import (
+        BacktestReportGenerator,
+        ChartDataGenerator
+    )
+    _REPORTING_AVAILABLE = True
+except ImportError:
+    _REPORTING_AVAILABLE = False
+
+# 工具模块（可选导入）
+try:
+    from .utils import (
+        BacktestDataAdapter,
+        ExtendedRiskMetrics,
+        MonthlyReturnsAnalysis
+    )
+    _UTILS_AVAILABLE = True
+except ImportError:
+    _UTILS_AVAILABLE = False
 
 __all__ = [
     # 枚举类型
@@ -83,7 +110,7 @@ __all__ = [
     'Position',
     'BacktestConfig',
     
-    # 策略类
+    # 策略基类
     'BaseStrategy',
     'MovingAverageStrategy',
     'RSIStrategy',
@@ -96,6 +123,9 @@ __all__ = [
     # 执行器
     'BacktestExecutor',
     'DataLoader',
+    'backtest_progress_monitor',
+    'BacktestProgressData',
+    'BacktestProgressStage',
     
     # 技术分析策略
     'BollingerBandStrategy',
@@ -103,11 +133,13 @@ __all__ = [
     'CCIStrategy',
     
     # 统计套利策略
+    'StatisticalArbitrageStrategy',
     'PairsTradingStrategy',
     'MeanReversionStrategy',
     'CointegrationStrategy',
     
     # 因子投资策略
+    'FactorStrategy',
     'ValueFactorStrategy',
     'MomentumFactorStrategy',
     'LowVolatilityStrategy',
@@ -116,3 +148,25 @@ __all__ = [
     # 高级策略工厂
     'AdvancedStrategyFactory'
 ]
+
+# 向后兼容：导出分析、报告和工具模块的类（如果可用）
+if _ANALYSIS_AVAILABLE:
+    __all__.extend([
+        'EnhancedMetricsCalculator',
+        'PositionAnalyzer',
+        'MonthlyAnalyzer',
+        'BacktestComparisonAnalyzer'
+    ])
+
+if _REPORTING_AVAILABLE:
+    __all__.extend([
+        'BacktestReportGenerator',
+        'ChartDataGenerator'
+    ])
+
+if _UTILS_AVAILABLE:
+    __all__.extend([
+        'BacktestDataAdapter',
+        'ExtendedRiskMetrics',
+        'MonthlyReturnsAnalysis'
+    ])

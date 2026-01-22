@@ -16,7 +16,7 @@ from app.repositories.task_repository import TaskRepository
 from app.models.task_models import TaskStatus
 from app.websocket import manager
 from app.api.v1.backtest_websocket import backtest_ws_manager
-from app.services.backtest.backtest_progress_monitor import backtest_progress_monitor
+from app.services.backtest.execution.backtest_progress_monitor import backtest_progress_monitor
 
 
 class TaskNotifier:

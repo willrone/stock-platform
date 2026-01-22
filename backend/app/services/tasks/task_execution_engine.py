@@ -784,7 +784,7 @@ class HyperparameterOptimizationTaskExecutor:
                 # 执行优化（在同步函数中运行异步代码）
                 # 使用新的事件循环，避免与外部事件循环冲突
                 try:
-                    from app.services.backtest.strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer
+                    from app.services.backtest.optimization import StrategyHyperparameterOptimizer
                 except ImportError as e:
                     error_msg = f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
                     logger.error(error_msg)

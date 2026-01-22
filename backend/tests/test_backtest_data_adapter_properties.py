@@ -12,8 +12,9 @@ from typing import Dict, Any, List
 from hypothesis import given, strategies as st, settings, assume
 from unittest.mock import Mock, patch
 
-from app.services.backtest.backtest_data_adapter import (
-    BacktestDataAdapter, EnhancedBacktestResult, ExtendedRiskMetrics,
+from app.services.backtest.utils import BacktestDataAdapter
+from app.services.backtest.models import (
+    EnhancedBacktestResult, ExtendedRiskMetrics,
     MonthlyReturnsAnalysis, PositionAnalysis, DrawdownAnalysis
 )
 from app.core.error_handler import TaskError

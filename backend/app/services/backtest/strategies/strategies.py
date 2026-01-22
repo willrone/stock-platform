@@ -18,9 +18,8 @@ from loguru import logger
 from scipy import stats
 from scipy.optimize import minimize
 
-from .backtest_engine import (
-    BaseStrategy, SignalType, TradingSignal, Position, BacktestConfig
-)
+from ..core.base_strategy import BaseStrategy
+from ..models import SignalType, TradingSignal, Position, BacktestConfig
 from app.core.error_handler import TaskError, ErrorSeverity
 
 

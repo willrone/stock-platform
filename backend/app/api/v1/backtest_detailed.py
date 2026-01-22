@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_async_session
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
-from app.services.backtest.chart_cache_service import ChartCacheService
+from app.services.backtest.utils.chart_cache_service import ChartCacheService
 from app.api.v1.schemas import StandardResponse
 
 

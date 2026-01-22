@@ -20,7 +20,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
 from app.repositories.task_repository import TaskRepository
-from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+from app.services.backtest.utils import BacktestDataAdapter
 
 
 async def diagnose_task(task_id: str):

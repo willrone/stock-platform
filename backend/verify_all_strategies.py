@@ -24,9 +24,9 @@ from app.services.backtest.strategies import (
     MomentumFactorStrategy,
     LowVolatilityStrategy,
     MultiFactorStrategy,
-    AdvancedStrategyFactory
+    AdvancedStrategyFactory,
+    StrategyFactory
 )
-from app.services.backtest import StrategyFactory
 
 
 def generate_mock_price_data(start_date: datetime, num_days: int, 

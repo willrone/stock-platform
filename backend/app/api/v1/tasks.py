@@ -211,7 +211,7 @@ async def get_task_detailed_result(task_id: str):
             raise HTTPException(status_code=404, detail="回测结果不存在")
         
         # 使用适配器转换数据
-        from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+        from app.services.backtest.utils import BacktestDataAdapter
         adapter = BacktestDataAdapter()
         
         # 确保raw_result是字典格式
@@ -411,7 +411,7 @@ async def get_chart_data(task_id: str, chart_type: str):
 
         # 生成图表数据
         print(f"DEBUG: 开始生成图表数据 - chart_type: {chart_type}")
-        from app.services.backtest.chart_data_generator import ChartDataGenerator
+        from app.services.backtest.reporting import ChartDataGenerator
         chart_generator = ChartDataGenerator()
         chart_data = await chart_generator.generate_chart_data(raw_result, chart_type)
 
@@ -465,7 +465,7 @@ async def compare_backtest_results(request: BacktestCompareRequest):
                 import json
                 raw_result = json.loads(raw_result)
             
-            from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+            from app.services.backtest.utils import BacktestDataAdapter
             adapter = BacktestDataAdapter()
             enhanced_result = await adapter.adapt_backtest_result(raw_result)
             
@@ -476,7 +476,7 @@ async def compare_backtest_results(request: BacktestCompareRequest):
             })
         
         # 计算对比指标
-        from app.services.backtest.comparison_analyzer import BacktestComparisonAnalyzer
+        from app.services.backtest.analysis import BacktestComparisonAnalyzer
         comparison_analyzer = BacktestComparisonAnalyzer()
         comparison_analysis = await comparison_analyzer.analyze_comparison(
             comparison_results, request.comparison_metrics
@@ -525,7 +525,7 @@ async def export_backtest_report(
             raw_result = json.loads(raw_result)
         
         # 生成报告
-        from app.services.backtest.report_generator import BacktestReportGenerator
+        from app.services.backtest.reporting import BacktestReportGenerator
         report_generator = BacktestReportGenerator()
         
         if export_request.format == "pdf":

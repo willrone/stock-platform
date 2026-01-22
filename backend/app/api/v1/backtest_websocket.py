@@ -14,7 +14,7 @@ from fastapi import WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.routing import APIRouter
 import websockets
 
-from app.services.backtest.backtest_progress_monitor import backtest_progress_monitor
+from app.services.backtest.execution.backtest_progress_monitor import backtest_progress_monitor
 from app.services.infrastructure.websocket_manager import websocket_manager
 from app.repositories.task_repository import TaskRepository
 from app.core.database import SessionLocal

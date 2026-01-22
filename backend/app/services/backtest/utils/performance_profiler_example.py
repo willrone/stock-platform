@@ -5,13 +5,13 @@
 """
 
 import asyncio
-from app.services.backtest.performance_profiler import (
+from .performance_profiler import (
     BacktestPerformanceProfiler,
     PerformanceContext,
     profile_function
 )
-from app.services.backtest.backtest_executor import BacktestExecutor
-from app.services.backtest.backtest_engine import BacktestConfig
+from ..execution.backtest_executor import BacktestExecutor
+from ..core.backtest_engine import BacktestConfig
 from datetime import datetime, timedelta
 
 

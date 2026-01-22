@@ -394,7 +394,8 @@ def execute_backtest_task_simple(task_id: str):
                     """异步保存详细数据"""
                     from app.core.database import get_async_session
                     from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
-                    from app.services.backtest.backtest_data_adapter import BacktestDataAdapter, EnhancedPositionAnalysis
+                    from app.services.backtest.utils import BacktestDataAdapter
+                    from app.services.backtest.models import EnhancedPositionAnalysis
                     
                     adapter = BacktestDataAdapter()
                     

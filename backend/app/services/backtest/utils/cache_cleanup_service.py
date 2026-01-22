@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from loguru import logger
 
 from app.core.database import get_async_session
-from app.services.backtest.chart_cache_service import chart_cache_service
+from app.services.backtest.utils.chart_cache_service import chart_cache_service
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
 
 
