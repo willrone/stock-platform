@@ -105,6 +105,18 @@ export function PortfolioStrategyConfig({
 
   const normalizedWeights = calculateNormalizedWeights(strategies);
 
+  const getDefaultConfigForStrategy = (strategyName: string) => {
+    const strategyInfo = availableStrategies.find(s => s.key === strategyName);
+    if (!strategyInfo?.parameters) {
+      return {};
+    }
+    const defaults: Record<string, any> = {};
+    Object.entries(strategyInfo.parameters).forEach(([key, param]) => {
+      defaults[key] = param.default;
+    });
+    return defaults;
+  };
+
   // 验证权重约束
   const validateWeights = (items: PortfolioStrategyItem[]): Record<string, string> => {
     const newErrors: Record<string, string> = {};
@@ -154,7 +166,7 @@ export function PortfolioStrategyConfig({
     const newStrategy: PortfolioStrategyItem = {
       name: firstAvailableStrategy.key,
       weight: 1.0,
-      config: {},
+      config: getDefaultConfigForStrategy(firstAvailableStrategy.key),
     };
 
     const newStrategies = [...strategies, newStrategy];
@@ -193,7 +205,7 @@ export function PortfolioStrategyConfig({
   const handleStrategyNameChange = (index: number, name: string) => {
     const newStrategies = [...strategies];
     newStrategies[index].name = name;
-    newStrategies[index].config = {}; // 重置配置
+    newStrategies[index].config = getDefaultConfigForStrategy(name);
     setStrategies(newStrategies);
     updateConfig(newStrategies, integrationMethod);
   };
@@ -208,6 +220,29 @@ export function PortfolioStrategyConfig({
       integration_method: method,
     });
   };
+
+  // 缺失配置时回填默认参数
+  useEffect(() => {
+    if (availableStrategies.length === 0 || strategies.length === 0) {
+      return;
+    }
+    let updated = false;
+    const nextStrategies = strategies.map((item) => {
+      if (item.config && Object.keys(item.config).length > 0) {
+        return item;
+      }
+      const defaults = getDefaultConfigForStrategy(item.name);
+      if (Object.keys(defaults).length === 0) {
+        return item;
+      }
+      updated = true;
+      return { ...item, config: defaults };
+    });
+    if (updated) {
+      setStrategies(nextStrategies);
+      updateConfig(nextStrategies, integrationMethod);
+    }
+  }, [availableStrategies, strategies, integrationMethod]);
 
   // 当integrationMethod变化时更新
   useEffect(() => {

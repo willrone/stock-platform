@@ -65,6 +65,8 @@ export default function CreateTaskPage() {
   const [savedConfigs, setSavedConfigs] = useState<StrategyConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [configFormKey, setConfigFormKey] = useState(0);
+  const [portfolioConfigKey, setPortfolioConfigKey] = useState(0);
+  const [selectedPortfolioConfigId, setSelectedPortfolioConfigId] = useState('');
   const [formData, setFormData] = useState({
     task_name: '',
     description: '',
@@ -127,10 +129,11 @@ export default function CreateTaskPage() {
   // 加载已保存的配置列表
   useEffect(() => {
     const loadSavedConfigs = async () => {
-      if (taskType === 'backtest' && formData.strategy_name) {
+      const targetStrategyName = strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name;
+      if (taskType === 'backtest' && targetStrategyName) {
         setLoadingConfigs(true);
         try {
-          const response = await StrategyConfigService.getConfigs(formData.strategy_name);
+          const response = await StrategyConfigService.getConfigs(targetStrategyName);
           setSavedConfigs(response.configs);
         } catch (error) {
           console.error('加载已保存配置失败:', error);
@@ -143,7 +146,11 @@ export default function CreateTaskPage() {
     };
 
     loadSavedConfigs();
-  }, [taskType, formData.strategy_name]);
+  }, [taskType, formData.strategy_name, strategyType]);
+
+  useEffect(() => {
+    setSelectedPortfolioConfigId('');
+  }, [strategyType, taskType]);
 
   // 加载配置详情
   const handleLoadConfig = async (configId: string) => {
@@ -154,6 +161,23 @@ export default function CreateTaskPage() {
       setConfigFormKey(prev => prev + 1);
     } catch (error) {
       console.error('加载配置失败:', error);
+    }
+  };
+
+  // 加载组合策略配置
+  const handleLoadPortfolioConfig = async (configId: string) => {
+    try {
+      const config = await StrategyConfigService.getConfig(configId);
+      const parameters = config.parameters || {};
+      const strategies = Array.isArray(parameters.strategies) ? parameters.strategies : [];
+      const integrationMethod = parameters.integration_method || 'weighted_voting';
+      setPortfolioConfig({
+        strategies,
+        integration_method: integrationMethod,
+      });
+      setPortfolioConfigKey(prev => prev + 1);
+    } catch (error) {
+      console.error('加载组合策略配置失败:', error);
     }
   };
 
@@ -513,8 +537,33 @@ export default function CreateTaskPage() {
                   </>
                 ) : (
                   <>
+                    <FormControl fullWidth disabled={loadingConfigs || savedConfigs.length === 0}>
+                      <InputLabel>已保存组合配置</InputLabel>
+                      <Select
+                        value={selectedPortfolioConfigId}
+                        label="已保存组合配置"
+                        onChange={(e) => {
+                          const configId = e.target.value as string;
+                          setSelectedPortfolioConfigId(configId);
+                          if (configId) {
+                            handleLoadPortfolioConfig(configId);
+                          }
+                        }}
+                      >
+                        <MenuItem value="">不使用</MenuItem>
+                        {savedConfigs.map(config => (
+                          <MenuItem key={config.config_id} value={config.config_id}>
+                            {config.config_name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <FormHelperText>
+                        {loadingConfigs ? '正在加载配置列表...' : savedConfigs.length === 0 ? '暂无已保存组合配置' : '选择后将覆盖当前组合策略配置'}
+                      </FormHelperText>
+                    </FormControl>
                     {/* 组合策略配置 */}
                     <PortfolioStrategyConfig
+                      key={`portfolio-config-${portfolioConfigKey}`}
                       availableStrategies={availableStrategies}
                       portfolioConfig={portfolioConfig || undefined}
                       onChange={(config) => {
