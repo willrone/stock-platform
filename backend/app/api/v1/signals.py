@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
+import json
 
 from app.api.v1.schemas import StandardResponse
 from app.core.config import settings
@@ -53,6 +54,38 @@ def _infer_warmup_days(strategy_name: str, days: int) -> int:
         "multi_factor": 260,
     }
     return max(warmup_map.get(name, 120), days)
+
+
+def _infer_warmup_days_for_config(
+    strategy_name: str,
+    strategy_config: Dict[str, Any],
+    days: int,
+) -> int:
+    if not strategy_config:
+        return _infer_warmup_days(strategy_name, days)
+
+    if strategy_name.lower() == "portfolio" or "strategies" in strategy_config:
+        strategy_names = [
+            s.get("name")
+            for s in (strategy_config.get("strategies") or [])
+            if isinstance(s, dict) and s.get("name")
+        ]
+        if strategy_names:
+            return max(_infer_warmup_days(name, days) for name in strategy_names)
+
+    return _infer_warmup_days(strategy_name, days)
+
+
+def _parse_json_param(raw: Optional[str], label: str) -> Dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"{label} 不是合法JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=400, detail=f"{label} 需要是JSON对象")
+    return parsed
 
 
 def _list_local_stock_codes() -> List[str]:
@@ -205,6 +238,7 @@ def _compute_latest_signal_for_stock(
 @router.get("/latest", response_model=StandardResponse)
 async def get_latest_signals(
     strategy_name: str = Query(..., description="策略名称（与 /backtest/strategies 的 key 对应）"),
+    strategy_config: Optional[str] = Query(None, description="策略参数（JSON字符串）"),
     days: int = Query(60, ge=5, le=365, description="观察窗口：最近N个交易日"),
     source: SignalSource = Query("local", description="股票池来源：local=本地parquet，remote=远端数据服务"),
     limit: int = Query(200, ge=1, le=2000, description="分页大小（全市场很大，建议分页）"),
@@ -218,15 +252,16 @@ async def get_latest_signals(
     新的多策略版本请使用 /signals/latest-multi。
     """
     try:
+        strategy_config_obj = _parse_json_param(strategy_config, "strategy_config")
         all_codes = await _get_universe_stock_codes(source=source, data_service=data_service)
         total = len(all_codes)
         page_codes = all_codes[offset : offset + limit]
 
-        warmup = _infer_warmup_days(strategy_name, days)
+        warmup = _infer_warmup_days_for_config(strategy_name, strategy_config_obj, days)
         end_dt = datetime.now()
         start_dt = end_dt - timedelta(days=days + warmup + 30)  # 额外+30自然日，避免交易日不足
 
-        strategy = _create_strategy(strategy_name, {})
+        strategy = _create_strategy(strategy_name, strategy_config_obj)
 
         results: List[Dict[str, Any]] = []
         failures: List[str] = []
@@ -272,6 +307,7 @@ async def get_latest_signals_multi(
     strategy_names: List[str] = Query(
         ..., description="多个策略名称（与 /backtest/strategies 的 key 对应），至少1个"
     ),
+    strategy_configs: Optional[str] = Query(None, description="多策略参数（JSON字符串，key为策略名）"),
     days: int = Query(60, ge=5, le=365, description="观察窗口：最近N个交易日"),
     source: SignalSource = Query("local", description="股票池来源：local=本地parquet，remote=远端数据服务"),
     limit: int = Query(200, ge=1, le=2000, description="分页大小（全市场很大，建议分页）"),
@@ -306,12 +342,16 @@ async def get_latest_signals_multi(
         if len(uniq_strategy_names) > 8:
             raise HTTPException(status_code=400, detail="一次最多支持查询8个策略，请减少策略数量")
 
+        strategy_configs_obj = _parse_json_param(strategy_configs, "strategy_configs")
         all_codes = await _get_universe_stock_codes(source=source, data_service=data_service)
         total = len(all_codes)
         page_codes = all_codes[offset : offset + limit]
 
         # 使用所有策略中需求最大的 warmup 窗口
-        max_warmup = max(_infer_warmup_days(name, days) for name in uniq_strategy_names)
+        max_warmup = max(
+            _infer_warmup_days_for_config(name, strategy_configs_obj.get(name, {}), days)
+            for name in uniq_strategy_names
+        )
         end_dt = datetime.now()
         start_dt = end_dt - timedelta(days=days + max_warmup + 30)
 
@@ -319,7 +359,7 @@ async def get_latest_signals_multi(
         strategies: Dict[str, Any] = {}
         for name in uniq_strategy_names:
             try:
-                strategies[name] = _create_strategy(name, {})
+                strategies[name] = _create_strategy(name, strategy_configs_obj.get(name, {}))
             except Exception as e:
                 logger.error(f"创建策略失败: {name}: {e}")
                 raise HTTPException(status_code=400, detail=f"创建策略失败: {name}: {e}")
@@ -425,6 +465,7 @@ async def get_latest_signals_multi(
 async def get_signal_history(
     stock_code: str = Query(..., description="股票代码，如 000001.SZ"),
     strategy_name: str = Query(..., description="策略名称（与 /backtest/strategies 的 key 对应）"),
+    strategy_config: Optional[str] = Query(None, description="策略参数（JSON字符串）"),
     days: int = Query(60, ge=5, le=365, description="最近N个交易日"),
     data_service: SimpleDataService = Depends(get_data_service),
 ):
@@ -435,7 +476,8 @@ async def get_signal_history(
     新的多策略版本请使用 /signals/history-multi。
     """
     try:
-        warmup = _infer_warmup_days(strategy_name, days)
+        strategy_config_obj = _parse_json_param(strategy_config, "strategy_config")
+        warmup = _infer_warmup_days_for_config(strategy_name, strategy_config_obj, days)
         end_dt = datetime.now()
         start_dt = end_dt - timedelta(days=days + warmup + 30)
 
@@ -453,7 +495,7 @@ async def get_signal_history(
                 },
             )
 
-        strategy = _create_strategy(strategy_name, {})
+        strategy = _create_strategy(strategy_name, strategy_config_obj)
         dates = list(df.index.unique())[-days:]
 
         events: List[Dict[str, Any]] = []
@@ -497,6 +539,7 @@ async def get_signal_history_multi(
     strategy_names: List[str] = Query(
         ..., description="多个策略名称（与 /backtest/strategies 的 key 对应），至少1个"
     ),
+    strategy_configs: Optional[str] = Query(None, description="多策略参数（JSON字符串，key为策略名）"),
     days: int = Query(60, ge=5, le=365, description="最近N个交易日"),
     data_service: SimpleDataService = Depends(get_data_service),
 ):
@@ -515,7 +558,11 @@ async def get_signal_history_multi(
         if len(uniq_strategy_names) > 8:
             raise HTTPException(status_code=400, detail="一次最多支持查询8个策略，请减少策略数量")
 
-        max_warmup = max(_infer_warmup_days(name, days) for name in uniq_strategy_names)
+        strategy_configs_obj = _parse_json_param(strategy_configs, "strategy_configs")
+        max_warmup = max(
+            _infer_warmup_days_for_config(name, strategy_configs_obj.get(name, {}), days)
+            for name in uniq_strategy_names
+        )
         end_dt = datetime.now()
         start_dt = end_dt - timedelta(days=days + max_warmup + 30)
 
@@ -534,7 +581,8 @@ async def get_signal_history_multi(
             )
 
         strategies: Dict[str, Any] = {
-            name: _create_strategy(name, {}) for name in uniq_strategy_names
+            name: _create_strategy(name, strategy_configs_obj.get(name, {}))
+            for name in uniq_strategy_names
         }
         dates = list(df.index.unique())[-days:]
 
@@ -578,4 +626,3 @@ async def get_signal_history_multi(
     except Exception as e:
         logger.error(f"获取多策略信号历史失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取多策略信号历史失败: {str(e)}")
-

@@ -175,6 +175,13 @@ export interface MultiSignalHistoryResponse {
 
 // 数据服务类
 export class DataService {
+  private static serializeConfig(config?: Record<string, any>): string | undefined {
+    if (!config || Object.keys(config).length === 0) {
+      return undefined;
+    }
+    return JSON.stringify(config);
+  }
+
   /**
    * 获取股票历史数据
    */
@@ -393,8 +400,13 @@ export class DataService {
     source?: 'local' | 'remote';
     limit?: number;
     offset?: number;
+    strategy_config?: Record<string, any>;
   }): Promise<LatestSignalsResponse> {
-    return apiRequest.get<LatestSignalsResponse>('/signals/latest', params);
+    const { strategy_config, ...rest } = params;
+    return apiRequest.get<LatestSignalsResponse>('/signals/latest', {
+      ...rest,
+      strategy_config: DataService.serializeConfig(strategy_config),
+    });
   }
 
   /**
@@ -406,8 +418,13 @@ export class DataService {
     source?: 'local' | 'remote';
     limit?: number;
     offset?: number;
+    strategy_configs?: Record<string, any>;
   }): Promise<MultiLatestSignalsResponse> {
-    return apiRequest.get<MultiLatestSignalsResponse>('/signals/latest-multi', params);
+    const { strategy_configs, ...rest } = params;
+    return apiRequest.get<MultiLatestSignalsResponse>('/signals/latest-multi', {
+      ...rest,
+      strategy_configs: DataService.serializeConfig(strategy_configs),
+    });
   }
 
   /**
@@ -417,8 +434,13 @@ export class DataService {
     stock_code: string;
     strategy_name: string;
     days?: number;
+    strategy_config?: Record<string, any>;
   }): Promise<SignalHistoryResponse> {
-    return apiRequest.get<SignalHistoryResponse>('/signals/history', params);
+    const { strategy_config, ...rest } = params;
+    return apiRequest.get<SignalHistoryResponse>('/signals/history', {
+      ...rest,
+      strategy_config: DataService.serializeConfig(strategy_config),
+    });
   }
 
   /**
@@ -428,8 +450,13 @@ export class DataService {
     stock_code: string;
     strategy_names: string[];
     days?: number;
+    strategy_configs?: Record<string, any>;
   }): Promise<MultiSignalHistoryResponse> {
-    return apiRequest.get<MultiSignalHistoryResponse>('/signals/history-multi', params);
+    const { strategy_configs, ...rest } = params;
+    return apiRequest.get<MultiSignalHistoryResponse>('/signals/history-multi', {
+      ...rest,
+      strategy_configs: DataService.serializeConfig(strategy_configs),
+    });
   }
 
   /**

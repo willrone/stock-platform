@@ -164,9 +164,9 @@ flowchart TD
     style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
     style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
     style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
-    style CheckPrev fill:#fbbf24,stroke:#333,stroke-width:2px
-    style CheckCurr1 fill:#fbbf24,stroke:#333,stroke-width:2px
-    style CheckCurr2 fill:#fbbf24,stroke:#333,stroke-width:2px
+    style CheckPrev fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckCurr1 fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckCurr2 fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ---
@@ -338,7 +338,7 @@ flowchart TD
     
     CreateTask --> QueueTask[加入后台执行队列<br/>background_tasks.add_task]
     
-    QueueTask --> Redirect[跳转到任务详情页<br/>/tasks/[id]]
+    QueueTask --> Redirect[跳转到任务详情页<br/>路径: /tasks/task_id]
     
     Redirect --> Monitor[监控回测进度<br/>WebSocket实时推送]
     
@@ -349,6 +349,472 @@ flowchart TD
     style SubmitTask fill:#4299e1,stroke:#333,stroke-width:2px,color:#fff
     style CreateTask fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
     style ShowError fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+```
+
+---
+
+## 9. MACD策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcEMA_Fast[计算快速EMA<br/>周期: 12日<br/>EMA_fast = 12日指数移动平均]
+    
+    CalcEMA_Fast --> CalcEMA_Slow[计算慢速EMA<br/>周期: 26日<br/>EMA_slow = 26日指数移动平均]
+    
+    CalcEMA_Slow --> CalcMACD[计算MACD线<br/>MACD = EMA_fast - EMA_slow]
+    
+    CalcMACD --> CalcSignal[计算信号线<br/>周期: 9日<br/>MACD_signal = MACD的9日EMA]
+    
+    CalcSignal --> CalcHist[计算MACD柱状图<br/>MACD_hist = MACD - MACD_signal]
+    
+    CalcHist --> CheckPrev{前一日<br/>MACD_hist <= 0?}
+    
+    CheckPrev -->|是| CheckCurr1{当前<br/>MACD_hist > 0?}
+    CheckPrev -->|否| CheckPrev2{前一日<br/>MACD_hist >= 0?}
+    
+    CheckCurr1 -->|是| BuySignal[生成买入信号<br/>MACD金叉: MACD上穿信号线<br/>信号强度 = abs MACD_hist * 100]
+    CheckCurr1 -->|否| NoSignal1[无信号]
+    
+    CheckPrev2 -->|是| CheckCurr2{当前<br/>MACD_hist < 0?}
+    CheckPrev2 -->|否| NoSignal2[无信号]
+    
+    CheckCurr2 -->|是| SellSignal[生成卖出信号<br/>MACD死叉: MACD下穿信号线<br/>信号强度 = abs MACD_hist * 100]
+    CheckCurr2 -->|否| NoSignal3[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    NoSignal3 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckCurr1 fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckCurr2 fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+```
+
+---
+
+## 10. 布林带策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcSMA[计算移动平均线<br/>周期: 20日<br/>SMA = 20日简单移动平均]
+    
+    CalcSMA --> CalcStd[计算标准差<br/>周期: 20日<br/>Std = 20日价格标准差]
+    
+    CalcStd --> CalcUpper[计算上轨<br/>Upper = SMA + Std * 2]
+    
+    CalcUpper --> CalcLower[计算下轨<br/>Lower = SMA - Std * 2]
+    
+    CalcLower --> CalcPercentB[计算PercentB<br/>PercentB = 价格 - 下轨 / 上轨 - 下轨]
+    
+    CalcPercentB --> CheckPrev{前一日<br/>PercentB <= 0?}
+    
+    CheckPrev -->|是| CheckCurr1{当前<br/>PercentB > 0?}
+    CheckPrev -->|否| CheckPrev2{前一日<br/>PercentB >= 1?}
+    
+    CheckCurr1 -->|是| BuySignal[生成买入信号<br/>价格突破下轨反弹<br/>信号强度 = PercentB]
+    CheckCurr1 -->|否| NoSignal1[无信号]
+    
+    CheckPrev2 -->|是| CheckCurr2{当前<br/>PercentB < 1?}
+    CheckPrev2 -->|否| NoSignal2[无信号]
+    
+    CheckCurr2 -->|是| SellSignal[生成卖出信号<br/>价格突破上轨回调<br/>信号强度 = 1 - PercentB]
+    CheckCurr2 -->|否| NoSignal3[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    NoSignal3 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckCurr1 fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckCurr2 fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+```
+
+---
+
+## 11. 随机指标策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcLowest[计算最低价<br/>周期: 14日<br/>Lowest = 14日最低价]
+    
+    CalcLowest --> CalcHighest[计算最高价<br/>周期: 14日<br/>Highest = 14日最高价]
+    
+    CalcHighest --> CalcK[计算K值<br/>K = 100 * 收盘价 - 最低价 / 最高价 - 最低价]
+    
+    CalcK --> CalcD[计算D值<br/>周期: 3日<br/>D = K的3日移动平均]
+    
+    CalcD --> CheckK{当前K值<br/>和前一日的K值}
+    
+    CheckK --> CheckBuy{K < 20<br/>且前一日K < 20<br/>且K上穿D?}
+    CheckK --> CheckSell{K > 80<br/>且前一日K > 80<br/>且K下穿D?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>随机指标超卖金叉<br/>信号强度 = 20 - K / 20]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>随机指标超买死叉<br/>信号强度 = K - 80 / 20]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckK fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckBuy fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+    style CheckSell fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+```
+
+---
+
+## 12. CCI策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcTypicalPrice[计算典型价格<br/>Typical = 最高价 + 最低价 + 收盘价 / 3]
+    
+    CalcTypicalPrice --> CalcSMA[计算移动平均<br/>周期: 20日<br/>SMA = 20日典型价格移动平均]
+    
+    CalcSMA --> CalcMeanDev[计算平均偏差<br/>周期: 20日<br/>MeanDev = 20日平均绝对偏差]
+    
+    CalcMeanDev --> CalcCCI[计算CCI指标<br/>CCI = 典型价格 - SMA / 0.015 * MeanDev]
+    
+    CalcCCI --> CheckPrev{前一日CCI}
+    
+    CheckPrev --> CheckBuy{当前CCI < -100<br/>且前一日CCI >= -100?}
+    CheckPrev --> CheckSell{当前CCI > 100<br/>且前一日CCI <= 100?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>CCI超卖反弹<br/>信号强度 = abs CCI / 100]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>CCI超买回调<br/>信号强度 = CCI / 100]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 13. 配对交易策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入股票对数据]) --> FindPairs[寻找配对股票<br/>计算相关性<br/>阈值: 0.8]
+    
+    FindPairs --> CalcSpread[计算价差<br/>Spread = 股票1价格 - 股票2价格]
+    
+    CalcSpread --> CalcZScore[计算Z-score<br/>周期: 20日<br/>Z-score = Spread - Mean / Std]
+    
+    CalcZScore --> CalcMomentum[计算相对强度<br/>Momentum_5d = 5日动量<br/>Momentum_20d = 20日动量<br/>Relative = Momentum_20d - Momentum_5d]
+    
+    CalcMomentum --> CheckPrev{前一日Z-score}
+    
+    CheckPrev --> CheckBuy{前一日Z-score <= -2<br/>且当前Z-score > -2<br/>且相对强度 < -0.02?}
+    CheckPrev --> CheckSell{前一日Z-score >= 2<br/>且当前Z-score < 2<br/>且相对强度 > 0.02?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>价差回归，买入弱势股<br/>信号强度 = abs Z-score / 2]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>价差偏离，卖出强势股<br/>信号强度 = abs Z-score / 2]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 14. 均值回归策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcSMA[计算移动平均<br/>周期: 20日<br/>SMA = 20日简单移动平均]
+    
+    CalcSMA --> CalcStd[计算标准差<br/>周期: 20日<br/>Std = 20日价格标准差]
+    
+    CalcStd --> CalcZScore[计算Z-score<br/>Z-score = 价格 - SMA / Std]
+    
+    CalcZScore --> CheckPrev{前一日Z-score}
+    
+    CheckPrev --> CheckBuy{前一日Z-score <= -2<br/>且当前Z-score > -2?}
+    CheckPrev --> CheckSell{前一日Z-score >= 2<br/>且当前Z-score < 2?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>价格回归均值<br/>信号强度 = abs Z-score / 2]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>价格偏离均值<br/>信号强度 = abs Z-score / 2]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 15. 协整策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcReturns[计算收益率<br/>Returns = 价格变化率]
+    
+    CalcReturns --> EstimateHalfLife[估计半衰期<br/>使用OLS回归<br/>HalfLife = -ln2 / beta]
+    
+    EstimateHalfLife --> CalcSMA[计算移动平均<br/>周期: 60日<br/>SMA = 60日价格移动平均]
+    
+    CalcSMA --> CalcStd[计算标准差<br/>周期: 60日<br/>Std = 60日价格标准差]
+    
+    CalcStd --> CalcZScore[计算Z-score<br/>Z-score = 价格 - SMA / Std]
+    
+    CalcZScore --> CalcMeanRev[计算均值回归强度<br/>MeanRev = -ln2 / HalfLife]
+    
+    CalcMeanRev --> CheckPrev{前一日Z-score}
+    
+    CheckPrev --> CheckBuy{前一日Z-score <= -2<br/>且当前Z-score > -2<br/>且均值回归强度 < 0?}
+    CheckPrev --> CheckSell{前一日Z-score >= 2<br/>且当前Z-score < 2<br/>且均值回归强度 < 0?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>协整信号：价格回归均衡<br/>信号强度 = abs Z-score / 2]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>协整信号：价格偏离均衡<br/>信号强度 = abs Z-score / 2]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 16. 价值因子策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcReturns[计算收益率<br/>Returns = 价格变化率]
+    
+    CalcReturns --> CalcVolatility[计算波动率<br/>周期: 21日<br/>Volatility = 21日收益率标准差]
+    
+    CalcVolatility --> EstimatePE[估计PE比率<br/>PE = 1 / 年化收益率 + 0.001]
+    
+    EstimatePE --> EstimatePB[估计PB比率<br/>PB = 1 / 波动率 * 0.5 + 1]
+    
+    EstimatePB --> EstimatePS[估计PS比率<br/>PS = 1 / 波动率 * 0.3 + 1.5]
+    
+    EstimatePS --> EstimateEV[估计EV/EBITDA<br/>EV = 1 / 波动率 * 0.4 + 5]
+    
+    EstimateEV --> NormalizeFactors[标准化因子<br/>对PE/PB/PS/EV进行<br/>252日滚动标准化]
+    
+    NormalizeFactors --> CalcValueScore[计算价值评分<br/>ValueScore = -PE*0.25 - PB*0.25<br/>- PS*0.25 - EV*0.25]
+    
+    CalcValueScore --> CheckPrev{前一日价值评分}
+    
+    CheckPrev --> CheckBuy{前一日ValueScore <= 0<br/>且当前ValueScore > 0?}
+    CheckPrev --> CheckSell{前一日ValueScore >= 0<br/>且当前ValueScore < 0?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>价值因子评分转正<br/>信号强度 = ValueScore]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>价值因子评分转负<br/>信号强度 = abs ValueScore]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 17. 动量因子策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcMomentum1M[计算1月动量<br/>周期: 21日<br/>Momentum_1M = 价格 / 21日前价格 - 1]
+    
+    CalcMomentum1M --> CalcMomentum3M[计算3月动量<br/>周期: 63日<br/>Momentum_3M = 价格 / 63日前价格 - 1]
+    
+    CalcMomentum3M --> CalcMomentum6M[计算6月动量<br/>周期: 126日<br/>Momentum_6M = 价格 / 126日前价格 - 1]
+    
+    CalcMomentum6M --> NormalizeMomentum[标准化动量<br/>对每个动量进行<br/>滚动标准化]
+    
+    NormalizeMomentum --> CalcCombined[计算综合动量<br/>Momentum = Momentum_1M*0.5<br/>+ Momentum_3M*0.3<br/>+ Momentum_6M*0.2]
+    
+    CalcCombined --> CheckPrev{前一日动量}
+    
+    CheckPrev --> CheckBuy{前一日Momentum <= 0<br/>且当前Momentum > 0?}
+    CheckPrev --> CheckSell{前一日Momentum >= 0<br/>且当前Momentum < 0?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>动量转正<br/>信号强度 = abs Momentum]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>动量转负<br/>信号强度 = abs Momentum]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+```
+
+---
+
+## 18. 低波动因子策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcReturns[计算日收益率<br/>Returns = 价格变化率]
+    
+    CalcReturns --> CalcVolatility[计算历史波动率<br/>周期: 63日<br/>Volatility = 63日收益率标准差 * sqrt252]
+    
+    CalcVolatility --> CalcRiskAdjReturn[计算风险调整收益<br/>周期: 21日<br/>RAR = 21日平均收益 / 21日标准差]
+    
+    CalcRiskAdjReturn --> CheckRAR{风险调整收益<br/>RAR > 0?}
+    
+    CheckRAR -->|是| BuySignal[生成买入信号<br/>低波动高收益<br/>信号强度 = RAR / 5]
+    CheckRAR -->|否| NoSignal[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    NoSignal --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style CheckRAR fill:#ea580c,stroke:#333,stroke-width:2px,color:#fff
+```
+
+---
+
+## 19. 多因子组合策略流程图
+
+```mermaid
+flowchart TD
+    Start([输入历史价格数据]) --> CalcValue[计算价值因子<br/>ValueScore = -价格相对均线偏离度]
+    
+    CalcValue --> CalcMomentum[计算动量因子<br/>MomentumScore = 多周期动量标准化]
+    
+    CalcMomentum --> CalcLowVol[计算低波动因子<br/>LowVolScore = -波动率标准化]
+    
+    CalcLowVol --> NormalizeFactors[标准化各因子<br/>对每个因子进行滚动标准化]
+    
+    NormalizeFactors --> WeightFactors[加权组合因子<br/>根据配置的权重<br/>CombinedScore = Value*w1<br/>+ Momentum*w2<br/>+ LowVol*w3]
+    
+    WeightFactors --> SmoothScore[平滑综合评分<br/>周期: 5日<br/>CombinedScore = 5日移动平均]
+    
+    SmoothScore --> CheckPrev{前一日综合评分}
+    
+    CheckPrev --> CheckBuy{前一日CombinedScore <= 0<br/>且当前CombinedScore > 0?}
+    CheckPrev --> CheckSell{前一日CombinedScore >= 0<br/>且当前CombinedScore < 0?}
+    
+    CheckBuy -->|是| BuySignal[生成买入信号<br/>多因子综合评分转正<br/>信号强度 = CombinedScore]
+    CheckBuy -->|否| NoSignal1[无信号]
+    
+    CheckSell -->|是| SellSignal[生成卖出信号<br/>多因子综合评分转负<br/>信号强度 = abs CombinedScore]
+    CheckSell -->|否| NoSignal2[无信号]
+    
+    BuySignal --> Output[输出交易信号]
+    SellSignal --> Output
+    NoSignal1 --> Output
+    NoSignal2 --> Output
+    
+    Output --> End([结束])
+    
+    style Start fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style End fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style BuySignal fill:#48bb78,stroke:#333,stroke-width:2px,color:#fff
+    style SellSignal fill:#f56565,stroke:#333,stroke-width:2px,color:#fff
+    style CheckPrev fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckBuy fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
+    style CheckSell fill:#ea580c,color:#fff,stroke:#333,stroke-width:2px
 ```
 
 ---
