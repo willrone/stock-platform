@@ -342,11 +342,12 @@ class PortfolioManager:
         drawdown = (cumulative_returns - running_max) / running_max
         max_drawdown = drawdown.min()
         
-        # 交易统计
-        winning_trades = [t for t in self.trades if t.pnl > 0]
-        losing_trades = [t for t in self.trades if t.pnl < 0]
-
-        win_rate = len(winning_trades) / len(self.trades) if self.trades else 0
+        # 交易统计（以卖出成交为准，避免买入计入胜率）
+        sell_trades = [t for t in self.trades if t.action == "SELL"]
+        winning_trades = [t for t in sell_trades if t.pnl > 0]
+        losing_trades = [t for t in sell_trades if t.pnl < 0]
+        win_rate_denominator = len(winning_trades) + len(losing_trades)
+        win_rate = len(winning_trades) / win_rate_denominator if win_rate_denominator > 0 else 0
 
         avg_win = float(np.mean([t.pnl for t in winning_trades])) if winning_trades else 0.0
         avg_loss = float(np.mean([t.pnl for t in losing_trades])) if losing_trades else 0.0

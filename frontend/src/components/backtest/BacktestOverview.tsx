@@ -78,6 +78,25 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
     }
 
     const additional = backtestData || {};
+    const tradeHistory = Array.isArray(backtestData?.trade_history) ? backtestData.trade_history : [];
+    const winningTrades = typeof backtestData?.winning_trades === 'number' ? backtestData.winning_trades : null;
+    const losingTrades = typeof backtestData?.losing_trades === 'number' ? backtestData.losing_trades : null;
+
+    const derivedWinRate = (() => {
+      if (winningTrades !== null && losingTrades !== null && winningTrades + losingTrades > 0) {
+        return winningTrades / (winningTrades + losingTrades);
+      }
+      if (tradeHistory.length > 0) {
+        const sellTrades = tradeHistory.filter((trade: any) => trade?.action === 'SELL');
+        const wins = sellTrades.filter((trade: any) => (trade?.pnl ?? 0) > 0).length;
+        const losses = sellTrades.filter((trade: any) => (trade?.pnl ?? 0) < 0).length;
+        const total = wins + losses;
+        if (total > 0) {
+          return wins / total;
+        }
+      }
+      return typeof backtestData?.win_rate === 'number' ? backtestData.win_rate : 0;
+    })();
 
     return {
       totalReturn: (backtestData.total_return || 0) * 100,
@@ -85,7 +104,7 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       sharpeRatio: backtestData.sharpe_ratio || 0,
       maxDrawdown: (backtestData.max_drawdown || 0) * 100,
       volatility: (backtestData.volatility || 0) * 100,
-      winRate: (backtestData.win_rate || 0) * 100,
+      winRate: derivedWinRate * 100,
       totalTrades: backtestData.total_trades || 0,
       profitFactor: backtestData.profit_factor || 0,
       tradePnlMean: (additional.trade_pnl_mean || 0) * 100,

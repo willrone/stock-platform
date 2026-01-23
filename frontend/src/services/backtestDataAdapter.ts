@@ -119,6 +119,8 @@ export interface BenchmarkComparison {
 }
 
 export class BacktestDataAdapter {
+  private static readonly riskFreeRate = 0.03;
+
   /**
    * 将后端数据转换为风险指标格式
    */
@@ -223,12 +225,17 @@ export class BacktestDataAdapter {
    * 生成年度绩效数据
    */
   static generateYearlyPerformance(detailedResult: BacktestDetailedResult): YearlyPerformance[] {
-    if (!detailedResult.monthly_returns) return [];
+    if (!detailedResult.monthly_returns?.length) return [];
     
     // 按年份分组计算年度指标
     const yearlyData = new Map<number, MonthlyPerformance[]>();
     
-    detailedResult.monthly_returns.forEach(monthData => {
+    const sortedMonthlyReturns = [...detailedResult.monthly_returns].sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
+    });
+
+    sortedMonthlyReturns.forEach(monthData => {
       if (!yearlyData.has(monthData.year)) {
         yearlyData.set(monthData.year, []);
       }
@@ -242,23 +249,36 @@ export class BacktestDataAdapter {
         trading_days: 21,
       });
     });
-    
-    return Array.from(yearlyData.entries()).map(([year, months]) => {
-      const annualReturn = months.reduce((sum, m) => sum + m.return_rate, 0);
-      
+
+    const totalMonths = sortedMonthlyReturns.length;
+    const yearlyRows = Array.from(yearlyData.entries()).map(([year, months]) => {
+      const sortedMonths = [...months].sort((a, b) => a.month - b.month);
+      const monthlyReturns = sortedMonths.map(m => m.return_rate);
+      const annualReturn = this.calculateCompoundReturn(monthlyReturns);
+      const volatility = this.calculateAnnualizedVolatility(monthlyReturns);
+      const sharpeRatio = this.calculateSharpeRatio(annualReturn, volatility);
+      const maxDrawdown = this.calculateMaxDrawdown(monthlyReturns);
+      const calmarRatio = this.calculateCalmarRatio(annualReturn, maxDrawdown);
+      const sortinoRatio = this.calculateSortinoRatio(annualReturn, monthlyReturns);
+      const winRate = this.calculateWinRate(monthlyReturns);
+      const profitFactor = this.calculateProfitFactor(monthlyReturns);
+      const totalTrades = this.estimateTotalTrades(detailedResult, months.length, totalMonths);
+
       return {
         year,
         annual_return: annualReturn,
-        volatility: 0.18,
-        sharpe_ratio: 1.2,
-        max_drawdown: -0.15,
-        calmar_ratio: 1.0,
-        sortino_ratio: 1.4,
-        win_rate: 0.65,
-        profit_factor: 1.8,
-        total_trades: 120,
+        volatility,
+        sharpe_ratio: sharpeRatio,
+        max_drawdown: maxDrawdown,
+        calmar_ratio: calmarRatio,
+        sortino_ratio: sortinoRatio,
+        win_rate: winRate,
+        profit_factor: profitFactor,
+        total_trades: totalTrades,
       };
     });
+
+    return yearlyRows.sort((a, b) => a.year - b.year);
   }
 
   /**
@@ -338,6 +358,95 @@ export class BacktestDataAdapter {
   }
 
   // 辅助方法
+  private static calculateCompoundReturn(returns: number[]): number {
+    if (!returns.length) return 0;
+    return returns.reduce((acc, value) => acc * (1 + value), 1) - 1;
+  }
+
+  private static calculateStandardDeviation(values: number[]): number {
+    if (!values.length) return 0;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+    return Math.sqrt(variance);
+  }
+
+  private static calculateAnnualizedVolatility(returns: number[]): number {
+    if (returns.length < 2) return 0;
+    return this.calculateStandardDeviation(returns) * Math.sqrt(12);
+  }
+
+  private static calculateSharpeRatio(annualReturn: number, volatility: number): number {
+    if (volatility <= 0) return 0;
+    return (annualReturn - this.riskFreeRate) / volatility;
+  }
+
+  private static calculateSortinoRatio(annualReturn: number, returns: number[]): number {
+    const downsideReturns = returns.filter(value => value < 0);
+    if (!downsideReturns.length) return 0;
+    const downsideDeviation = this.calculateStandardDeviation(downsideReturns) * Math.sqrt(12);
+    if (downsideDeviation <= 0) return 0;
+    return (annualReturn - this.riskFreeRate) / downsideDeviation;
+  }
+
+  private static calculateCalmarRatio(annualReturn: number, maxDrawdown: number): number {
+    if (maxDrawdown >= 0) return 0;
+    return (annualReturn - this.riskFreeRate) / Math.abs(maxDrawdown);
+  }
+
+  private static calculateMaxDrawdown(returns: number[]): number {
+    if (!returns.length) return 0;
+    let peak = 1;
+    let value = 1;
+    let maxDrawdown = 0;
+
+    returns.forEach(monthReturn => {
+      value *= 1 + monthReturn;
+      if (value > peak) {
+        peak = value;
+      }
+      const drawdown = value / peak - 1;
+      if (drawdown < maxDrawdown) {
+        maxDrawdown = drawdown;
+      }
+    });
+
+    return maxDrawdown;
+  }
+
+  private static calculateWinRate(returns: number[]): number {
+    if (!returns.length) return 0;
+    const wins = returns.filter(value => value > 0).length;
+    return wins / returns.length;
+  }
+
+  private static calculateProfitFactor(returns: number[]): number {
+    const gains = returns.filter(value => value > 0).reduce((sum, value) => sum + value, 0);
+    const losses = returns.filter(value => value < 0).reduce((sum, value) => sum + Math.abs(value), 0);
+    if (losses === 0) return 0;
+    return gains / losses;
+  }
+
+  private static estimateTotalTrades(
+    detailedResult: BacktestDetailedResult,
+    monthsInYear: number,
+    totalMonths: number
+  ): number {
+    const positionAnalysis = detailedResult.position_analysis;
+    if (!positionAnalysis || Array.isArray(positionAnalysis)) return 0;
+
+    const totalClosedTrades = positionAnalysis.trading_patterns?.success_patterns?.total_closed_trades;
+    if (typeof totalClosedTrades === 'number' && totalMonths > 0) {
+      return Math.round(totalClosedTrades * (monthsInYear / totalMonths));
+    }
+
+    const avgMonthlyTrades = positionAnalysis.trading_patterns?.frequency_patterns?.avg_monthly_trades;
+    if (typeof avgMonthlyTrades === 'number') {
+      return Math.round(avgMonthlyTrades * monthsInYear);
+    }
+
+    return 0;
+  }
+
   private static generateDailyReturns(monthlyReturns: number[]): number[] {
     const dailyReturns: number[] = [];
     
