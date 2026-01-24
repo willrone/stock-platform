@@ -281,16 +281,18 @@ install_frontend_deps() {
     fi
     
     # 设置前端环境变量
+    # 默认不写死后端地址，避免跨环境部署时连接错误
     if [ ! -f .env.local ]; then
         if [ -f .env.example ]; then
             cp .env.example .env.local
         else
-            cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_WS_URL=ws://localhost:8000
+            cat > .env.local << 'EOF'
+# 如需覆盖后端地址，可取消注释并填写真实地址
+# NEXT_PUBLIC_API_URL=http://<backend-host>:8000/api/v1
+# NEXT_PUBLIC_WS_URL=ws://<backend-host>:8000/ws
 EOF
         fi
-        log_warning "已创建frontend/.env.local文件"
+        log_warning "已创建frontend/.env.local文件（未固定后端地址）"
     fi
     
     log_success "前端依赖安装完成"
