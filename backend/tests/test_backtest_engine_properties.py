@@ -185,7 +185,7 @@ class TestBacktestEngineAccuracy:
         
         # 执行买入信号
         current_prices = {'000001.SZ': 100.0}
-        trade = portfolio_manager.execute_signal(buy_signal, current_prices)
+        trade, _ = portfolio_manager.execute_signal(buy_signal, current_prices)
         
         # 验证买入交易
         if trade:  # 如果有足够资金执行交易
@@ -222,7 +222,7 @@ class TestBacktestEngineAccuracy:
             
             # 执行卖出信号
             sell_prices = {'000001.SZ': 105.0}
-            sell_trade = portfolio_manager.execute_signal(sell_signal, sell_prices)
+            sell_trade, _ = portfolio_manager.execute_signal(sell_signal, sell_prices)
             
             if sell_trade:
                 assert sell_trade.action == "SELL"

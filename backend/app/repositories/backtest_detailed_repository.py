@@ -474,7 +474,8 @@ class BacktestDetailedRepository:
                     strength=signal_data.get('strength', 0.0),
                     reason=signal_data.get('reason'),
                     signal_metadata=signal_data.get('metadata'),  # 从metadata字段读取，但存储为signal_metadata
-                    executed=signal_data.get('executed', False)
+                    executed=signal_data.get('executed', False),
+                    execution_reason=signal_data.get('execution_reason')  # 添加 execution_reason 字段
                 )
                 signals.append(signal)
             
@@ -572,43 +573,48 @@ class BacktestDetailedRepository:
             return 0
     
     async def get_signal_statistics(self, task_id: str) -> Dict[str, Any]:
-        """获取信号统计信息"""
+        """获取信号统计信息（优化：使用单个聚合查询，针对SQLite优化）"""
         try:
-            # 总信号数
-            total_stmt = select(func.count(SignalRecord.id)).where(SignalRecord.task_id == task_id)
-            total_result = await self.session.execute(total_stmt)
-            total_signals = total_result.scalar() or 0
-
-            # 买入/卖出信号数
+            import time
+            start_time = time.time()
+            
+            # 使用单个查询获取所有统计信息，针对SQLite优化
+            # SQLite的CASE语句性能较差，改用COUNT + WHERE子句
+            base_where = SignalRecord.task_id == task_id
+            
+            # 并行执行多个简单查询（SQLite单线程，但查询简单快速）
+            total_stmt = select(func.count(SignalRecord.id)).where(base_where)
             buy_stmt = select(func.count(SignalRecord.id)).where(
-                and_(SignalRecord.task_id == task_id, SignalRecord.signal_type == "BUY")
+                and_(base_where, SignalRecord.signal_type == "BUY")
             )
-            buy_result = await self.session.execute(buy_stmt)
-            buy_signals = buy_result.scalar() or 0
-
             sell_stmt = select(func.count(SignalRecord.id)).where(
-                and_(SignalRecord.task_id == task_id, SignalRecord.signal_type == "SELL")
+                and_(base_where, SignalRecord.signal_type == "SELL")
             )
-            sell_result = await self.session.execute(sell_stmt)
-            sell_signals = sell_result.scalar() or 0
-            
-            # 已执行信号数
             executed_stmt = select(func.count(SignalRecord.id)).where(
-                and_(SignalRecord.task_id == task_id, SignalRecord.executed == True)
+                and_(base_where, SignalRecord.executed == True)
             )
+            avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(base_where)
+            
+            # 执行所有查询
+            total_result = await self.session.execute(total_stmt)
+            buy_result = await self.session.execute(buy_stmt)
+            sell_result = await self.session.execute(sell_stmt)
             executed_result = await self.session.execute(executed_stmt)
-            executed_signals = executed_result.scalar() or 0
-            
-            # 未执行信号数
-            unexecuted_signals = total_signals - executed_signals
-            
-            # 平均信号强度
-            avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(SignalRecord.task_id == task_id)
             avg_strength_result = await self.session.execute(avg_strength_stmt)
+            
+            # 获取结果
+            total_signals = total_result.scalar() or 0
+            buy_signals = buy_result.scalar() or 0
+            sell_signals = sell_result.scalar() or 0
+            executed_signals = executed_result.scalar() or 0
             avg_strength = avg_strength_result.scalar() or 0.0
             
-            # 执行率
+            unexecuted_signals = total_signals - executed_signals
             execution_rate = executed_signals / total_signals if total_signals > 0 else 0.0
+            
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 1.0:  # 如果查询超过1秒，记录警告
+                self.logger.warning(f"信号统计查询耗时较长: {elapsed_time:.2f}秒, task_id={task_id}, total_signals={total_signals}")
 
             return {
                 "total_signals": total_signals,
@@ -617,12 +623,14 @@ class BacktestDetailedRepository:
                 "executed_signals": executed_signals,
                 "unexecuted_signals": unexecuted_signals,
                 "execution_rate": execution_rate,
-                "avg_strength": float(avg_strength)
+                "avg_strength": float(avg_strength) if avg_strength else 0.0
             }
             
         except Exception as e:
-            self.logger.error("获取信号统计失败: {}", e, exc_info=True)
-            return {}
+            import traceback
+            error_detail = traceback.format_exc()
+            self.logger.error("获取信号统计失败: {}\n{}", e, error_detail, exc_info=True)
+            raise  # 重新抛出异常以便上层处理
     
     async def mark_signal_as_executed(
         self,
@@ -655,6 +663,7 @@ class BacktestDetailedRepository:
                 # 标记第一个匹配的信号为已执行
                 signal = signals[0]
                 signal.executed = True
+                signal.execution_reason = None  # 已执行时清空未执行原因
                 await self.session.flush()
                 self.logger.debug(f"标记信号为已执行: task_id={task_id}, signal_id={signal.signal_id}")
                 return True
@@ -663,6 +672,48 @@ class BacktestDetailedRepository:
             
         except Exception as e:
             self.logger.error("标记信号为已执行失败: {}", e, exc_info=True)
+            return False
+    
+    async def update_signal_execution_reason(
+        self,
+        task_id: str,
+        stock_code: str,
+        timestamp: datetime,
+        signal_type: str,
+        execution_reason: str
+    ) -> bool:
+        """更新信号的未执行原因（基于股票代码、时间和类型匹配）"""
+        try:
+            # 查找匹配的信号（在相同日期和时间窗口内）
+            timestamp_start = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+            timestamp_end = timestamp_start + timedelta(days=1)
+            
+            stmt = select(SignalRecord).where(
+                and_(
+                    SignalRecord.task_id == task_id,
+                    SignalRecord.stock_code == stock_code,
+                    SignalRecord.signal_type == signal_type,
+                    SignalRecord.timestamp >= timestamp_start,
+                    SignalRecord.timestamp < timestamp_end,
+                    SignalRecord.executed == False  # 只更新未执行的信号
+                )
+            ).order_by(SignalRecord.timestamp)
+            
+            result = await self.session.execute(stmt)
+            signals = result.scalars().all()
+            
+            if signals:
+                # 更新第一个匹配的信号的未执行原因
+                signal = signals[0]
+                signal.execution_reason = execution_reason
+                await self.session.flush()
+                self.logger.debug(f"更新信号未执行原因: task_id={task_id}, signal_id={signal.signal_id}, reason={execution_reason}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error("更新信号未执行原因失败: {}", e, exc_info=True)
             return False
     
     # ==================== BacktestBenchmark 相关操作 ====================

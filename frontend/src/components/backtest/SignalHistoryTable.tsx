@@ -434,20 +434,21 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>是否执行</TableCell>
-                  <TableCell>原因</TableCell>
+                  <TableCell>信号原因</TableCell>
+                  <TableCell>未执行原因</TableCell>
                   <TableCell>操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <CircularProgress size={24} />
                     </TableCell>
                   </TableRow>
                 ) : filteredSignals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <Typography variant="body2" color="text.secondary">
                         暂无信号记录
                       </Typography>
@@ -526,6 +527,28 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                             {signal.reason || '-'}
                           </Typography>
                         </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        {!signal.executed && signal.execution_reason ? (
+                          <Tooltip title={signal.execution_reason}>
+                            <Typography
+                              variant="body2"
+                              color="error"
+                              sx={{
+                                maxWidth: 200,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {signal.execution_reason}
+                            </Typography>
+                          </Tooltip>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            -
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button

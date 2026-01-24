@@ -247,6 +247,7 @@ export interface SignalRecord {
   reason?: string;
   metadata?: Record<string, any>;
   executed: boolean;
+  execution_reason?: string;  // 未执行原因
   created_at: string;
 }
 

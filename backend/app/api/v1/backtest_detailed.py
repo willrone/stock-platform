@@ -251,7 +251,40 @@ async def get_signal_records(
             executed=executed
         )
         
-        signals_data = [signal.to_dict() for signal in signals]
+        # 安全地转换信号记录，处理可能的字段缺失
+        signals_data = []
+        for signal in signals:
+            try:
+                signal_dict = signal.to_dict()
+                # 确保 execution_reason 字段总是存在
+                if 'execution_reason' not in signal_dict:
+                    signal_dict['execution_reason'] = None
+                signals_data.append(signal_dict)
+            except Exception as e:
+                logger.warning(f"转换信号记录失败 (signal_id={getattr(signal, 'signal_id', 'unknown')}): {e}")
+                # 如果转换失败，尝试手动构建字典
+                try:
+                    signal_dict = {
+                        "id": signal.id,
+                        "task_id": signal.task_id,
+                        "backtest_id": signal.backtest_id,
+                        "signal_id": signal.signal_id,
+                        "stock_code": signal.stock_code,
+                        "stock_name": signal.stock_name,
+                        "signal_type": signal.signal_type,
+                        "timestamp": signal.timestamp.isoformat() if signal.timestamp else None,
+                        "price": signal.price,
+                        "strength": signal.strength,
+                        "reason": signal.reason,
+                        "metadata": signal.signal_metadata,
+                        "executed": signal.executed,
+                        "execution_reason": getattr(signal, 'execution_reason', None),
+                        "created_at": signal.created_at.isoformat() if signal.created_at else None
+                    }
+                    signals_data.append(signal_dict)
+                except Exception as e2:
+                    logger.error(f"手动构建信号记录字典也失败: {e2}")
+                    continue
         
         return StandardResponse(
             success=True,
@@ -269,7 +302,9 @@ async def get_signal_records(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
     except Exception as e:
-        logger.error(f"获取信号记录失败: {e}", exc_info=True)
+        import traceback
+        error_detail = traceback.format_exc()
+        logger.error(f"获取信号记录失败: {e}\n{error_detail}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取信号记录失败: {str(e)}")
 
 
@@ -290,7 +325,9 @@ async def get_signal_statistics(
         )
         
     except Exception as e:
-        logger.error(f"获取信号统计失败: {e}", exc_info=True)
+        import traceback
+        error_detail = traceback.format_exc()
+        logger.error(f"获取信号统计失败: {e}\n{error_detail}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取信号统计失败: {str(e)}")
 
 

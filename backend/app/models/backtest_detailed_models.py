@@ -216,10 +216,12 @@ class SignalRecord(Base):
     reason = Column(Text, nullable=True, comment="信号原因")
     signal_metadata = Column(JSON, nullable=True, comment="元数据（JSON格式）")
     executed = Column(Boolean, nullable=False, default=False, comment="是否被执行")
+    execution_reason = Column(Text, nullable=True, comment="执行原因：已执行时为空，未执行时记录未执行原因")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # 创建索引
     __table_args__ = (
+        Index('idx_signal_task_id', 'task_id'),  # 单独的task_id索引，用于快速查询
         Index('idx_signal_task_stock', 'task_id', 'stock_code'),
         Index('idx_signal_backtest_time', 'backtest_id', 'timestamp'),
         Index('idx_signal_stock_time', 'stock_code', 'timestamp'),
@@ -228,6 +230,14 @@ class SignalRecord(Base):
     )
     
     def to_dict(self):
+        # 安全地获取 execution_reason，兼容字段不存在的情况
+        execution_reason = None
+        try:
+            execution_reason = self.execution_reason
+        except (AttributeError, KeyError):
+            # 如果字段不存在，返回 None
+            pass
+        
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -242,6 +252,7 @@ class SignalRecord(Base):
             "reason": self.reason,
             "metadata": self.signal_metadata,  # 对外接口仍使用metadata名称
             "executed": self.executed,
+            "execution_reason": execution_reason,  # 确保总是返回这个字段，即使值为 None
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 

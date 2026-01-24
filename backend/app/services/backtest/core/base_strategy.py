@@ -5,7 +5,7 @@
 """
 
 import pandas as pd
-from typing import Dict, List
+from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 from abc import ABC, abstractmethod
 
@@ -31,16 +31,25 @@ class BaseStrategy(ABC):
         pass
     
     def validate_signal(self, signal: TradingSignal, portfolio_value: float, 
-                       current_positions: Dict[str, Position]) -> bool:
-        """验证信号有效性"""
+                       current_positions: Dict[str, Position]) -> Tuple[bool, Optional[str]]:
+        """
+        验证信号有效性
+        
+        Returns:
+            tuple[bool, str | None]: (是否有效, 未执行原因)
+            如果验证通过返回 (True, None)
+            如果验证失败返回 (False, 失败原因)
+        """
         # 基础验证
         if signal.strength < 0.1:  # 信号强度太低
-            return False
+            return False, f"信号强度过低: {signal.strength:.2%} < 10%"
         
         # 检查持仓限制
         if signal.signal_type == SignalType.BUY:
             current_position = current_positions.get(signal.stock_code)
-            if current_position and current_position.market_value / portfolio_value > 0.3:
-                return False  # 单股持仓过大
+            if current_position and portfolio_value > 0:
+                position_ratio = current_position.market_value / portfolio_value
+                if position_ratio > 0.3:
+                    return False, f"单股持仓过大: {position_ratio:.2%} > 30%"
         
-        return True
+        return True, None

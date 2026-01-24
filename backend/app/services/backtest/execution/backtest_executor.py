@@ -15,7 +15,7 @@ from functools import partial
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
-from ..models import BacktestConfig, TradingSignal, Trade, Position
+from ..models import BacktestConfig, TradingSignal, Trade, Position, SignalType
 from ..strategies.strategy_factory import StrategyFactory, AdvancedStrategyFactory
 from .data_loader import DataLoader
 from .backtest_progress_monitor import backtest_progress_monitor
@@ -505,31 +505,80 @@ class BacktestExecutor:
                 trade_start_time = time.perf_counter() if self.enable_performance_profiling else None
                 trades_this_day = 0
                 executed_trade_signals = []  # 记录已执行的交易对应的信号
+                unexecuted_signals = []  # 记录未执行的信号及原因
+                
                 for signal in all_signals:
-                    if strategy.validate_signal(signal, 
-                                              portfolio_manager.get_portfolio_value(current_prices),
-                                              portfolio_manager.positions):
-                        trade_exec_start = time.perf_counter() if self.enable_performance_profiling else None
-                        trade = portfolio_manager.execute_signal(signal, current_prices)
-                        if self.enable_performance_profiling and trade_exec_start:
-                            trade_exec_duration = time.perf_counter() - trade_exec_start
-                            trade_execution_times.append(trade_exec_duration)
-                            self.performance_profiler.record_function_call("execute_signal", trade_exec_duration)
-                        
-                        if trade:
-                            executed_trades += 1
-                            trades_this_day += 1
-                            # 记录已执行的信号，用于后续标记
-                            executed_trade_signals.append({
-                                'stock_code': signal.stock_code,
-                                'timestamp': signal.timestamp,
-                                'signal_type': signal.signal_type.name
-                            })
+                    # 验证信号
+                    is_valid, validation_reason = strategy.validate_signal(
+                        signal, 
+                        portfolio_manager.get_portfolio_value(current_prices),
+                        portfolio_manager.positions
+                    )
+                    
+                    if not is_valid:
+                        # 验证失败，记录未执行原因
+                        unexecuted_signals.append({
+                            'stock_code': signal.stock_code,
+                            'timestamp': signal.timestamp,
+                            'signal_type': signal.signal_type.name,
+                            'execution_reason': validation_reason or '信号验证失败'
+                        })
+                        continue
+                    
+                    # 验证通过，尝试执行
+                    trade_exec_start = time.perf_counter() if self.enable_performance_profiling else None
+                    trade, failure_reason = portfolio_manager.execute_signal(signal, current_prices)
+                    if self.enable_performance_profiling and trade_exec_start:
+                        trade_exec_duration = time.perf_counter() - trade_exec_start
+                        trade_execution_times.append(trade_exec_duration)
+                        self.performance_profiler.record_function_call("execute_signal", trade_exec_duration)
+                    
+                    if trade:
+                        executed_trades += 1
+                        trades_this_day += 1
+                        # 记录已执行的信号，用于后续标记
+                        executed_trade_signals.append({
+                            'stock_code': signal.stock_code,
+                            'timestamp': signal.timestamp,
+                            'signal_type': signal.signal_type.name
+                        })
+                    else:
+                        # 执行失败，记录未执行原因（从 execute_signal 直接获取）
+                        unexecuted_signals.append({
+                            'stock_code': signal.stock_code,
+                            'timestamp': signal.timestamp,
+                            'signal_type': signal.signal_type.name,
+                            'execution_reason': failure_reason or '执行失败（未知原因）'
+                        })
                 
                 # 记录交易执行总时间
                 if self.enable_performance_profiling and trade_start_time:
                     trade_duration = time.perf_counter() - trade_start_time
                     self.performance_profiler.record_function_call("execute_trades_batch", trade_duration)
+                
+                # 更新未执行信号的原因
+                if task_id and unexecuted_signals:
+                    try:
+                        from app.core.database import get_async_session_context
+                        from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
+                        
+                        async with get_async_session_context() as session:
+                            try:
+                                repository = BacktestDetailedRepository(session)
+                                for unexecuted_signal in unexecuted_signals:
+                                    await repository.update_signal_execution_reason(
+                                        task_id=task_id,
+                                        stock_code=unexecuted_signal['stock_code'],
+                                        timestamp=unexecuted_signal['timestamp'],
+                                        signal_type=unexecuted_signal['signal_type'],
+                                        execution_reason=unexecuted_signal['execution_reason']
+                                    )
+                                await session.commit()
+                            except Exception as e:
+                                await session.rollback()
+                                logger.warning(f"更新信号未执行原因失败: {e}")
+                    except Exception as e:
+                        logger.warning(f"更新信号未执行原因时出错: {e}")
                 
                 # 标记已执行的信号
                 if task_id and executed_trade_signals:
@@ -987,3 +1036,78 @@ class BacktestExecutor:
             ),
             "available_strategies": StrategyFactory.get_available_strategies()
         }
+    
+    def _get_execution_failure_reason(self, signal: TradingSignal, 
+                                     portfolio_manager: PortfolioManager,
+                                     current_prices: Dict[str, float]) -> str:
+        """
+        获取执行失败的原因
+        
+        Args:
+            signal: 交易信号
+            portfolio_manager: 组合管理器
+            current_prices: 当前价格
+            
+        Returns:
+            失败原因字符串
+        """
+        try:
+            stock_code = signal.stock_code
+            current_price = current_prices.get(stock_code, signal.price)
+            
+            if signal.signal_type == SignalType.BUY:
+                # 买入失败的可能原因（逻辑与 _execute_buy 保持一致）
+                # 计算组合价值（使用与 _execute_buy 相同的逻辑）
+                portfolio_value = portfolio_manager.get_portfolio_value({stock_code: current_price})
+                max_position_value = portfolio_value * portfolio_manager.config.max_position_size
+                
+                current_position = portfolio_manager.positions.get(stock_code)
+                current_position_value = current_position.market_value if current_position else 0
+                
+                available_cash_for_stock = max_position_value - current_position_value
+                available_cash_for_stock = min(available_cash_for_stock, portfolio_manager.cash * 0.95)  # 保留5%现金
+                
+                if available_cash_for_stock <= 0:
+                    if current_position_value > 0 and current_position_value >= max_position_value:
+                        return f"已达到最大持仓限制: 当前持仓 {current_position_value:.2f} >= 最大持仓 {max_position_value:.2f}"
+                    else:
+                        return f"可用资金不足: 需要保留5%现金，可用资金 {portfolio_manager.cash:.2f}"
+                
+                # 计算购买数量（最小交易单位为100股）
+                quantity = int(available_cash_for_stock / current_price / 100) * 100
+                if quantity <= 0:
+                    return f"可买数量不足: 可用资金 {available_cash_for_stock:.2f}，价格 {current_price:.2f}，无法买入100股"
+                
+                # 计算实际成本（包含手续费和滑点）
+                # 应用滑点（买入时价格上涨）
+                execution_price = current_price * (1 + portfolio_manager.config.slippage_rate)
+                slippage_cost_per_share = current_price * portfolio_manager.config.slippage_rate
+                
+                total_cost = quantity * execution_price
+                commission = total_cost * portfolio_manager.config.commission_rate
+                slippage_cost = quantity * slippage_cost_per_share
+                total_cost_with_all_fees = total_cost + commission
+                
+                if total_cost_with_all_fees > portfolio_manager.cash:
+                    return f"资金不足: 需要 {total_cost_with_all_fees:.2f}（含手续费 {commission:.2f}），可用 {portfolio_manager.cash:.2f}"
+                
+                # 如果所有检查都通过但还是失败了，可能是其他原因
+                return f"执行失败: 可能因滑点成本 {slippage_cost:.2f} 或其他限制"
+                
+            elif signal.signal_type == SignalType.SELL:
+                # 卖出失败的可能原因
+                if stock_code not in portfolio_manager.positions:
+                    return "无持仓"
+                
+                position = portfolio_manager.positions[stock_code]
+                if position.quantity <= 0:
+                    return "持仓数量为0"
+                
+                # 如果所有检查都通过但还是失败了，可能是其他原因
+                return "执行失败（未知原因）"
+            
+            return "未知信号类型"
+            
+        except Exception as e:
+            logger.warning(f"获取执行失败原因时出错: {e}")
+            return f"执行异常: {str(e)}"

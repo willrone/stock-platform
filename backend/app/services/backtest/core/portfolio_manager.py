@@ -6,22 +6,7 @@
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-from loguru import logger
-
-from ..models import BacktestConfig, Position, Trade, TradingSignal, SignalType
-
-
-"""
-组合管理器
-
-负责管理回测过程中的资金、持仓和交易记录
-"""
-
-import numpy as np
-import pandas as pd
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 from loguru import logger
 
@@ -74,8 +59,15 @@ class PortfolioManager:
         
         return total_value
     
-    def execute_signal(self, signal: TradingSignal, current_prices: Dict[str, float]) -> Optional[Trade]:
-        """执行交易信号"""
+    def execute_signal(self, signal: TradingSignal, current_prices: Dict[str, float]) -> tuple[Optional[Trade], Optional[str]]:
+        """
+        执行交易信号
+        
+        Returns:
+            tuple[Optional[Trade], Optional[str]]: (交易对象, 失败原因)
+            如果执行成功，返回 (Trade, None)
+            如果执行失败，返回 (None, 失败原因)
+        """
         try:
             stock_code = signal.stock_code
             current_price = current_prices.get(stock_code, signal.price)
@@ -93,14 +85,19 @@ class PortfolioManager:
             elif signal.signal_type == SignalType.SELL:
                 return self._execute_sell(stock_code, execution_price, current_price, slippage_cost_per_share, signal)
             
-            return None
+            return None, "未知信号类型"
             
         except Exception as e:
             logger.error(f"执行交易信号失败: {signal.stock_code}, {e}")
-            return None
+            return None, f"执行异常: {str(e)}"
     
-    def _execute_buy(self, stock_code: str, price: float, original_price: float, slippage_cost_per_share: float, signal: TradingSignal) -> Optional[Trade]:
-        """执行买入"""
+    def _execute_buy(self, stock_code: str, price: float, original_price: float, slippage_cost_per_share: float, signal: TradingSignal) -> tuple[Optional[Trade], Optional[str]]:
+        """
+        执行买入
+        
+        Returns:
+            tuple[Optional[Trade], Optional[str]]: (交易对象, 失败原因)
+        """
         # 计算可买数量
         portfolio_value = self.get_portfolio_value({stock_code: price})
         max_position_value = portfolio_value * self.config.max_position_size
@@ -112,12 +109,15 @@ class PortfolioManager:
         available_cash_for_stock = min(available_cash_for_stock, self.cash * 0.95)  # 保留5%现金
         
         if available_cash_for_stock <= 0:
-            return None
+            if current_position_value > 0 and current_position_value >= max_position_value:
+                return None, f"已达到最大持仓限制: 当前持仓 {current_position_value:.2f} >= 最大持仓 {max_position_value:.2f}"
+            else:
+                return None, f"可用资金不足: 需要保留5%现金，可用资金 {self.cash:.2f}"
         
         # 计算购买数量（假设最小交易单位为100股）
         quantity = int(available_cash_for_stock / price / 100) * 100
         if quantity <= 0:
-            return None
+            return None, f"可买数量不足: 可用资金 {available_cash_for_stock:.2f}，价格 {price:.2f}，无法买入100股"
         
         # 计算实际成本
         total_cost = quantity * price
@@ -126,7 +126,7 @@ class PortfolioManager:
         total_cost_with_commission = total_cost + commission
         
         if total_cost_with_commission > self.cash:
-            return None
+            return None, f"资金不足: 需要 {total_cost_with_commission:.2f}（含手续费 {commission:.2f}），可用 {self.cash:.2f}"
         
         # 执行交易（含成本）
         self.cash -= total_cost_with_commission
@@ -208,16 +208,21 @@ class PortfolioManager:
         self.trades.append(trade)
         logger.info(f"执行买入: {stock_code}, 数量: {quantity}, 价格: {price:.2f}, 手续费: {commission:.2f}, 滑点: {slippage_cost:.2f}")
         
-        return trade
+        return trade, None
     
-    def _execute_sell(self, stock_code: str, price: float, original_price: float, slippage_cost_per_share: float, signal: TradingSignal) -> Optional[Trade]:
-        """执行卖出"""
+    def _execute_sell(self, stock_code: str, price: float, original_price: float, slippage_cost_per_share: float, signal: TradingSignal) -> tuple[Optional[Trade], Optional[str]]:
+        """
+        执行卖出
+        
+        Returns:
+            tuple[Optional[Trade], Optional[str]]: (交易对象, 失败原因)
+        """
         if stock_code not in self.positions:
-            return None
+            return None, "无持仓"
         
         position = self.positions[stock_code]
         if position.quantity <= 0:
-            return None
+            return None, "持仓数量为0"
         
         # 卖出全部持仓（含成本）
         quantity = position.quantity
@@ -268,7 +273,7 @@ class PortfolioManager:
         self.trades.append(trade)
         logger.info(f"执行卖出: {stock_code}, 数量: {quantity}, 价格: {price:.2f}, 盈亏: {pnl:.2f}, 手续费: {commission:.2f}, 滑点: {slippage_cost:.2f}")
         
-        return trade
+        return trade, None
     
     def record_portfolio_snapshot(self, date: datetime, current_prices: Dict[str, float]):
         """记录组合快照"""
