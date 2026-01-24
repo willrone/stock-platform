@@ -20,7 +20,8 @@ from app.models.backtest_detailed_models import (
     PortfolioSnapshot,
     TradeRecord,
     SignalRecord,
-    BacktestBenchmark
+    BacktestBenchmark,
+    BacktestStatistics
 )
 
 
@@ -304,6 +305,79 @@ class BacktestDetailedTablesMigration:
             self.logger.error(f"创建表 backtest_benchmarks 失败: {e}")
             return False
     
+    async def create_backtest_statistics_table(self, session: AsyncSession) -> bool:
+        """创建回测统计信息表"""
+        try:
+            if await self.check_table_exists(session, "backtest_statistics"):
+                self.logger.info("表 backtest_statistics 已存在，跳过创建")
+                return True
+            
+            create_sql = """
+            CREATE TABLE backtest_statistics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id VARCHAR(50) NOT NULL UNIQUE,
+                backtest_id VARCHAR(50) NOT NULL,
+                total_signals INTEGER DEFAULT 0,
+                buy_signals INTEGER DEFAULT 0,
+                sell_signals INTEGER DEFAULT 0,
+                executed_signals INTEGER DEFAULT 0,
+                unexecuted_signals INTEGER DEFAULT 0,
+                execution_rate REAL DEFAULT 0.0,
+                avg_signal_strength REAL DEFAULT 0.0,
+                total_trades INTEGER DEFAULT 0,
+                buy_trades INTEGER DEFAULT 0,
+                sell_trades INTEGER DEFAULT 0,
+                winning_trades INTEGER DEFAULT 0,
+                losing_trades INTEGER DEFAULT 0,
+                win_rate REAL DEFAULT 0.0,
+                avg_profit REAL DEFAULT 0.0,
+                avg_loss REAL DEFAULT 0.0,
+                profit_factor REAL DEFAULT 0.0,
+                total_commission REAL DEFAULT 0.0,
+                total_pnl REAL DEFAULT 0.0,
+                avg_holding_days REAL DEFAULT 0.0,
+                total_stocks INTEGER DEFAULT 0,
+                profitable_stocks INTEGER DEFAULT 0,
+                avg_stock_return REAL DEFAULT 0.0,
+                max_stock_return REAL,
+                min_stock_return REAL,
+                first_signal_date TIMESTAMP,
+                last_signal_date TIMESTAMP,
+                first_trade_date TIMESTAMP,
+                last_trade_date TIMESTAMP,
+                trading_days INTEGER DEFAULT 0,
+                unique_stocks_signaled INTEGER DEFAULT 0,
+                unique_stocks_traded INTEGER DEFAULT 0,
+                most_signaled_stock VARCHAR(20),
+                most_traded_stock VARCHAR(20),
+                max_single_profit REAL,
+                max_single_loss REAL,
+                max_consecutive_wins INTEGER DEFAULT 0,
+                max_consecutive_losses INTEGER DEFAULT 0,
+                largest_position_size REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+            
+            await session.execute(text(create_sql))
+            
+            # 创建索引
+            index_sqls = [
+                "CREATE UNIQUE INDEX idx_statistics_task_id ON backtest_statistics(task_id);",
+                "CREATE INDEX idx_statistics_backtest_id ON backtest_statistics(backtest_id);"
+            ]
+            
+            for index_sql in index_sqls:
+                await session.execute(text(index_sql))
+            
+            self.logger.info("成功创建表 backtest_statistics 及其索引")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"创建表 backtest_statistics 失败: {e}")
+            return False
+    
     async def run_migration(self) -> bool:
         """执行迁移"""
         self.logger.info("开始执行回测详细表迁移...")
@@ -339,6 +413,10 @@ class BacktestDetailedTablesMigration:
                 # 6. 创建基准对比表
                 if await self.create_backtest_benchmarks_table(session):
                     tables_created.append("backtest_benchmarks")
+                
+                # 7. 创建统计信息表
+                if await self.create_backtest_statistics_table(session):
+                    tables_created.append("backtest_statistics")
                 
                 # 提交事务
                 await session.commit()

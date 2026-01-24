@@ -399,6 +399,7 @@ def execute_backtest_task_simple(task_id: str):
                     from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
                     from app.services.backtest.utils import BacktestDataAdapter
                     from app.services.backtest.models import EnhancedPositionAnalysis
+                    from app.services.backtest.statistics import StatisticsCalculator
                     
                     adapter = BacktestDataAdapter()
                     
@@ -549,6 +550,18 @@ def execute_backtest_task_simple(task_id: str):
                                     task_logger.warning(f"交易记录数据为空: task_id={task_id}")
                             else:
                                 task_logger.warning(f"没有交易历史数据: task_id={task_id}")
+                            
+                            # 计算并保存统计信息
+                            try:
+                                task_logger.info(f"开始计算统计信息: task_id={task_id}")
+                                calculator = StatisticsCalculator(session)
+                                backtest_id = f"bt_{task_id[:8]}"
+                                stats = await calculator.calculate_all_statistics(task_id, backtest_id)
+                                await session.flush()
+                                task_logger.info(f"统计信息计算并保存成功: task_id={task_id}, stats_id={stats.id}")
+                            except Exception as stats_error:
+                                task_logger.error(f"计算统计信息失败: task_id={task_id}, 错误: {stats_error}", exc_info=True)
+                                # 统计信息计算失败不影响主流程
                             
                             await session.commit()
                             task_logger.info(f"回测详细数据保存成功: {task_id}")

@@ -16,7 +16,8 @@ from app.models.backtest_detailed_models import (
     PortfolioSnapshot,
     TradeRecord,
     SignalRecord,
-    BacktestBenchmark
+    BacktestBenchmark,
+    BacktestStatistics
 )
 
 
@@ -321,92 +322,154 @@ class BacktestDetailedRepository:
             return 0
     
     async def get_trade_statistics(self, task_id: str) -> Dict[str, Any]:
-        """获取交易统计信息"""
+        """获取交易统计信息（优化：优先从统计表读取，不存在则实时计算）"""
         try:
-            # 总交易数
-            total_stmt = select(func.count(TradeRecord.id)).where(TradeRecord.task_id == task_id)
-            total_result = await self.session.execute(total_stmt)
-            total_trades = total_result.scalar() or 0
-
-            # 买入/卖出交易数
-            buy_stmt = select(func.count(TradeRecord.id)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.action == "BUY")
-            )
-            buy_result = await self.session.execute(buy_stmt)
-            buy_trades = buy_result.scalar() or 0
-
-            sell_stmt = select(func.count(TradeRecord.id)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.action == "SELL")
-            )
-            sell_result = await self.session.execute(sell_stmt)
-            sell_trades = sell_result.scalar() or 0
+            # 优先从统计表读取
+            try:
+                stats_stmt = select(BacktestStatistics).where(BacktestStatistics.task_id == task_id)
+                stats_result = await self.session.execute(stats_stmt)
+                stats = stats_result.scalar_one_or_none()
+                
+                if stats:
+                    # 从统计表返回
+                    return {
+                        "total_trades": stats.total_trades,
+                        "buy_trades": stats.buy_trades,
+                        "sell_trades": stats.sell_trades,
+                        "winning_trades": stats.winning_trades,
+                        "losing_trades": stats.losing_trades,
+                        "win_rate": stats.win_rate,
+                        "avg_profit": stats.avg_profit,
+                        "avg_loss": stats.avg_loss,
+                        "profit_factor": stats.profit_factor,
+                        "total_commission": stats.total_commission,
+                        "total_pnl": stats.total_pnl,
+                        "avg_holding_days": stats.avg_holding_days
+                    }
+            except Exception as stats_error:
+                # 如果统计表不存在或其他错误，回退到实时计算
+                error_str = str(stats_error).lower()
+                if "no such table" in error_str or ("table" in error_str and "does not exist" in error_str):
+                    self.logger.debug(f"统计表不存在，回退到实时计算: task_id={task_id}")
+                else:
+                    self.logger.warning(f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}")
             
-            # 盈利交易数
-            profit_stmt = select(func.count(TradeRecord.id)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
-            )
-            profit_result = await self.session.execute(profit_stmt)
-            profit_trades = profit_result.scalar() or 0
-            
-            # 亏损交易数
-            loss_stmt = select(func.count(TradeRecord.id)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
-            )
-            loss_result = await self.session.execute(loss_stmt)
-            loss_trades = loss_result.scalar() or 0
-            
-            # 总盈亏
-            pnl_stmt = select(func.sum(TradeRecord.pnl)).where(TradeRecord.task_id == task_id)
-            pnl_result = await self.session.execute(pnl_stmt)
-            total_pnl = pnl_result.scalar() or 0.0
+            # 向后兼容：如果统计表不存在或没有数据，实时计算
+            try:
+                total_stmt = select(func.count(TradeRecord.id)).where(TradeRecord.task_id == task_id)
+                total_result = await self.session.execute(total_stmt)
+                total_trades = total_result.scalar() or 0
 
-            # 平均盈利/亏损
-            avg_profit_stmt = select(func.avg(TradeRecord.pnl)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
-            )
-            avg_profit_result = await self.session.execute(avg_profit_stmt)
-            avg_profit = avg_profit_result.scalar() or 0.0
+                buy_stmt = select(func.count(TradeRecord.id)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.action == "BUY")
+                )
+                buy_result = await self.session.execute(buy_stmt)
+                buy_trades = buy_result.scalar() or 0
 
-            avg_loss_stmt = select(func.avg(TradeRecord.pnl)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
-            )
-            avg_loss_result = await self.session.execute(avg_loss_stmt)
-            avg_loss = avg_loss_result.scalar() or 0.0
+                sell_stmt = select(func.count(TradeRecord.id)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.action == "SELL")
+                )
+                sell_result = await self.session.execute(sell_stmt)
+                sell_trades = sell_result.scalar() or 0
+                
+                profit_stmt = select(func.count(TradeRecord.id)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
+                )
+                profit_result = await self.session.execute(profit_stmt)
+                profit_trades = profit_result.scalar() or 0
+                
+                loss_stmt = select(func.count(TradeRecord.id)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
+                )
+                loss_result = await self.session.execute(loss_stmt)
+                loss_trades = loss_result.scalar() or 0
+                
+                pnl_stmt = select(func.sum(TradeRecord.pnl)).where(TradeRecord.task_id == task_id)
+                pnl_result = await self.session.execute(pnl_stmt)
+                total_pnl = pnl_result.scalar() or 0.0
 
-            # 总手续费
-            commission_stmt = select(func.sum(TradeRecord.commission)).where(TradeRecord.task_id == task_id)
-            commission_result = await self.session.execute(commission_stmt)
-            total_commission = commission_result.scalar() or 0.0
-            
-            # 平均持仓天数
-            holding_stmt = select(func.avg(TradeRecord.holding_days)).where(
-                and_(TradeRecord.task_id == task_id, TradeRecord.holding_days.isnot(None))
-            )
-            holding_result = await self.session.execute(holding_stmt)
-            avg_holding_days = holding_result.scalar() or 0.0
+                avg_profit_stmt = select(func.avg(TradeRecord.pnl)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
+                )
+                avg_profit_result = await self.session.execute(avg_profit_stmt)
+                avg_profit = avg_profit_result.scalar() or 0.0
 
-            profit_factor = 0.0
-            if avg_loss != 0:
-                profit_factor = abs(avg_profit / avg_loss)
-            
-            return {
-                "total_trades": total_trades,
-                "buy_trades": buy_trades,
-                "sell_trades": sell_trades,
-                "winning_trades": profit_trades,
-                "losing_trades": loss_trades,
-                "win_rate": profit_trades / total_trades if total_trades > 0 else 0.0,
-                "avg_profit": float(avg_profit),
-                "avg_loss": float(avg_loss),
-                "profit_factor": float(profit_factor),
-                "total_commission": float(total_commission),
-                "total_pnl": float(total_pnl),
-                "avg_holding_days": float(avg_holding_days)
-            }
+                avg_loss_stmt = select(func.avg(TradeRecord.pnl)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
+                )
+                avg_loss_result = await self.session.execute(avg_loss_stmt)
+                avg_loss = avg_loss_result.scalar() or 0.0
+
+                commission_stmt = select(func.sum(TradeRecord.commission)).where(TradeRecord.task_id == task_id)
+                commission_result = await self.session.execute(commission_stmt)
+                total_commission = commission_result.scalar() or 0.0
+                
+                holding_stmt = select(func.avg(TradeRecord.holding_days)).where(
+                    and_(TradeRecord.task_id == task_id, TradeRecord.holding_days.isnot(None))
+                )
+                holding_result = await self.session.execute(holding_stmt)
+                avg_holding_days = holding_result.scalar() or 0.0
+
+                profit_factor = 0.0
+                if avg_loss != 0:
+                    profit_factor = abs(avg_profit / avg_loss)
+                
+                return {
+                    "total_trades": total_trades,
+                    "buy_trades": buy_trades,
+                    "sell_trades": sell_trades,
+                    "winning_trades": profit_trades,
+                    "losing_trades": loss_trades,
+                    "win_rate": profit_trades / total_trades if total_trades > 0 else 0.0,
+                    "avg_profit": float(avg_profit),
+                    "avg_loss": float(avg_loss),
+                    "profit_factor": float(profit_factor),
+                    "total_commission": float(total_commission),
+                    "total_pnl": float(total_pnl),
+                    "avg_holding_days": float(avg_holding_days)
+                }
+            except Exception as calc_error:
+                # 如果交易记录表不存在，返回空统计
+                error_str = str(calc_error).lower()
+                if "no such table" in error_str or ("table" in error_str and "does not exist" in error_str):
+                    self.logger.info(f"交易记录表不存在，返回空统计: task_id={task_id}")
+                else:
+                    self.logger.warning(f"计算交易统计失败: task_id={task_id}, error={calc_error}")
+                # 返回空统计
+                return {
+                    "total_trades": 0,
+                    "buy_trades": 0,
+                    "sell_trades": 0,
+                    "winning_trades": 0,
+                    "losing_trades": 0,
+                    "win_rate": 0.0,
+                    "avg_profit": 0.0,
+                    "avg_loss": 0.0,
+                    "profit_factor": 0.0,
+                    "total_commission": 0.0,
+                    "total_pnl": 0.0,
+                    "avg_holding_days": 0.0
+                }
             
         except Exception as e:
-            self.logger.error("获取交易统计失败: {}", e, exc_info=True)
-            return {}
+            import traceback
+            error_detail = traceback.format_exc()
+            self.logger.error("获取交易统计失败: {}\n{}", e, error_detail, exc_info=True)
+            # 返回空统计而不是抛出异常，避免前端报错
+            return {
+                "total_trades": 0,
+                "buy_trades": 0,
+                "sell_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0.0,
+                "avg_profit": 0.0,
+                "avg_loss": 0.0,
+                "profit_factor": 0.0,
+                "total_commission": 0.0,
+                "total_pnl": 0.0,
+                "avg_holding_days": 0.0
+            }
     
     # ==================== SignalRecord 相关操作 ====================
     
@@ -573,64 +636,112 @@ class BacktestDetailedRepository:
             return 0
     
     async def get_signal_statistics(self, task_id: str) -> Dict[str, Any]:
-        """获取信号统计信息（优化：使用单个聚合查询，针对SQLite优化）"""
+        """获取信号统计信息（优化：优先从统计表读取，不存在则实时计算）"""
         try:
-            import time
-            start_time = time.time()
+            # 优先从统计表读取
+            try:
+                stats_stmt = select(BacktestStatistics).where(BacktestStatistics.task_id == task_id)
+                stats_result = await self.session.execute(stats_stmt)
+                stats = stats_result.scalar_one_or_none()
+                
+                if stats:
+                    # 从统计表返回
+                    return {
+                        "total_signals": stats.total_signals,
+                        "buy_signals": stats.buy_signals,
+                        "sell_signals": stats.sell_signals,
+                        "executed_signals": stats.executed_signals,
+                        "unexecuted_signals": stats.unexecuted_signals,
+                        "execution_rate": stats.execution_rate,
+                        "avg_strength": stats.avg_signal_strength
+                    }
+            except Exception as stats_error:
+                # 如果统计表不存在或其他错误，回退到实时计算
+                error_str = str(stats_error).lower()
+                if "no such table" in error_str or ("table" in error_str and "does not exist" in error_str):
+                    self.logger.debug(f"统计表不存在，回退到实时计算: task_id={task_id}")
+                else:
+                    self.logger.warning(f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}")
             
-            # 使用单个查询获取所有统计信息，针对SQLite优化
-            # SQLite的CASE语句性能较差，改用COUNT + WHERE子句
-            base_where = SignalRecord.task_id == task_id
-            
-            # 并行执行多个简单查询（SQLite单线程，但查询简单快速）
-            total_stmt = select(func.count(SignalRecord.id)).where(base_where)
-            buy_stmt = select(func.count(SignalRecord.id)).where(
-                and_(base_where, SignalRecord.signal_type == "BUY")
-            )
-            sell_stmt = select(func.count(SignalRecord.id)).where(
-                and_(base_where, SignalRecord.signal_type == "SELL")
-            )
-            executed_stmt = select(func.count(SignalRecord.id)).where(
-                and_(base_where, SignalRecord.executed == True)
-            )
-            avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(base_where)
-            
-            # 执行所有查询
-            total_result = await self.session.execute(total_stmt)
-            buy_result = await self.session.execute(buy_stmt)
-            sell_result = await self.session.execute(sell_stmt)
-            executed_result = await self.session.execute(executed_stmt)
-            avg_strength_result = await self.session.execute(avg_strength_stmt)
-            
-            # 获取结果
-            total_signals = total_result.scalar() or 0
-            buy_signals = buy_result.scalar() or 0
-            sell_signals = sell_result.scalar() or 0
-            executed_signals = executed_result.scalar() or 0
-            avg_strength = avg_strength_result.scalar() or 0.0
-            
-            unexecuted_signals = total_signals - executed_signals
-            execution_rate = executed_signals / total_signals if total_signals > 0 else 0.0
-            
-            elapsed_time = time.time() - start_time
-            if elapsed_time > 1.0:  # 如果查询超过1秒，记录警告
-                self.logger.warning(f"信号统计查询耗时较长: {elapsed_time:.2f}秒, task_id={task_id}, total_signals={total_signals}")
+            # 向后兼容：如果统计表不存在或没有数据，实时计算
+            try:
+                import time
+                start_time = time.time()
+                
+                base_where = SignalRecord.task_id == task_id
+                
+                total_stmt = select(func.count(SignalRecord.id)).where(base_where)
+                buy_stmt = select(func.count(SignalRecord.id)).where(
+                    and_(base_where, SignalRecord.signal_type == "BUY")
+                )
+                sell_stmt = select(func.count(SignalRecord.id)).where(
+                    and_(base_where, SignalRecord.signal_type == "SELL")
+                )
+                executed_stmt = select(func.count(SignalRecord.id)).where(
+                    and_(base_where, SignalRecord.executed == True)
+                )
+                avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(base_where)
+                
+                total_result = await self.session.execute(total_stmt)
+                buy_result = await self.session.execute(buy_stmt)
+                sell_result = await self.session.execute(sell_stmt)
+                executed_result = await self.session.execute(executed_stmt)
+                avg_strength_result = await self.session.execute(avg_strength_stmt)
+                
+                total_signals = total_result.scalar() or 0
+                buy_signals = buy_result.scalar() or 0
+                sell_signals = sell_result.scalar() or 0
+                executed_signals = executed_result.scalar() or 0
+                avg_strength = avg_strength_result.scalar() or 0.0
+                
+                unexecuted_signals = total_signals - executed_signals
+                execution_rate = executed_signals / total_signals if total_signals > 0 else 0.0
+                
+                elapsed_time = time.time() - start_time
+                if elapsed_time > 1.0:
+                    self.logger.warning(f"信号统计查询耗时较长: {elapsed_time:.2f}秒, task_id={task_id}, total_signals={total_signals}")
 
-            return {
-                "total_signals": total_signals,
-                "buy_signals": buy_signals,
-                "sell_signals": sell_signals,
-                "executed_signals": executed_signals,
-                "unexecuted_signals": unexecuted_signals,
-                "execution_rate": execution_rate,
-                "avg_strength": float(avg_strength) if avg_strength else 0.0
-            }
+                return {
+                    "total_signals": total_signals,
+                    "buy_signals": buy_signals,
+                    "sell_signals": sell_signals,
+                    "executed_signals": executed_signals,
+                    "unexecuted_signals": unexecuted_signals,
+                    "execution_rate": execution_rate,
+                    "avg_strength": float(avg_strength) if avg_strength else 0.0
+                }
+            except Exception as calc_error:
+                # 如果信号记录表不存在，返回空统计
+                error_str = str(calc_error).lower()
+                if "no such table" in error_str or ("table" in error_str and "does not exist" in error_str):
+                    self.logger.info(f"信号记录表不存在，返回空统计: task_id={task_id}")
+                else:
+                    self.logger.warning(f"计算信号统计失败: task_id={task_id}, error={calc_error}")
+                # 返回空统计
+                return {
+                    "total_signals": 0,
+                    "buy_signals": 0,
+                    "sell_signals": 0,
+                    "executed_signals": 0,
+                    "unexecuted_signals": 0,
+                    "execution_rate": 0.0,
+                    "avg_strength": 0.0
+                }
             
         except Exception as e:
             import traceback
             error_detail = traceback.format_exc()
             self.logger.error("获取信号统计失败: {}\n{}", e, error_detail, exc_info=True)
-            raise  # 重新抛出异常以便上层处理
+            # 返回空统计而不是抛出异常，避免前端报错
+            return {
+                "total_signals": 0,
+                "buy_signals": 0,
+                "sell_signals": 0,
+                "executed_signals": 0,
+                "unexecuted_signals": 0,
+                "execution_rate": 0.0,
+                "avg_strength": 0.0
+            }
     
     async def mark_signal_as_executed(
         self,

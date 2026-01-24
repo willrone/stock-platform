@@ -304,3 +304,132 @@ class BacktestBenchmark(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+class BacktestStatistics(Base):
+    """回测统计信息表（预计算统计，加速页面加载）"""
+    __tablename__ = "backtest_statistics"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(String(50), nullable=False, unique=True, index=True, comment="任务ID")
+    backtest_id = Column(String(50), nullable=False, index=True, comment="回测ID")
+    
+    # ========== 信号统计 ==========
+    total_signals = Column(Integer, default=0, comment="总信号数")
+    buy_signals = Column(Integer, default=0, comment="买入信号数")
+    sell_signals = Column(Integer, default=0, comment="卖出信号数")
+    executed_signals = Column(Integer, default=0, comment="已执行信号数")
+    unexecuted_signals = Column(Integer, default=0, comment="未执行信号数")
+    execution_rate = Column(Float, default=0.0, comment="执行率")
+    avg_signal_strength = Column(Float, default=0.0, comment="平均信号强度")
+    
+    # ========== 交易统计 ==========
+    total_trades = Column(Integer, default=0, comment="总交易数")
+    buy_trades = Column(Integer, default=0, comment="买入交易数")
+    sell_trades = Column(Integer, default=0, comment="卖出交易数")
+    winning_trades = Column(Integer, default=0, comment="盈利交易数")
+    losing_trades = Column(Integer, default=0, comment="亏损交易数")
+    win_rate = Column(Float, default=0.0, comment="胜率")
+    avg_profit = Column(Float, default=0.0, comment="平均盈利")
+    avg_loss = Column(Float, default=0.0, comment="平均亏损")
+    profit_factor = Column(Float, default=0.0, comment="盈亏比")
+    total_commission = Column(Float, default=0.0, comment="总手续费")
+    total_pnl = Column(Float, default=0.0, comment="总盈亏")
+    avg_holding_days = Column(Float, default=0.0, comment="平均持仓天数")
+    
+    # ========== 持仓统计 ==========
+    total_stocks = Column(Integer, default=0, comment="总股票数")
+    profitable_stocks = Column(Integer, default=0, comment="盈利股票数")
+    avg_stock_return = Column(Float, default=0.0, comment="平均股票收益率")
+    max_stock_return = Column(Float, nullable=True, comment="最大股票收益率")
+    min_stock_return = Column(Float, nullable=True, comment="最小股票收益率")
+    
+    # ========== 时间范围统计 ==========
+    first_signal_date = Column(DateTime, nullable=True, comment="第一个信号日期")
+    last_signal_date = Column(DateTime, nullable=True, comment="最后一个信号日期")
+    first_trade_date = Column(DateTime, nullable=True, comment="第一笔交易日期")
+    last_trade_date = Column(DateTime, nullable=True, comment="最后一笔交易日期")
+    trading_days = Column(Integer, default=0, comment="交易天数")
+    
+    # ========== 股票分布统计 ==========
+    unique_stocks_signaled = Column(Integer, default=0, comment="产生信号的股票数")
+    unique_stocks_traded = Column(Integer, default=0, comment="实际交易的股票数")
+    most_signaled_stock = Column(String(20), nullable=True, comment="信号最多的股票代码")
+    most_traded_stock = Column(String(20), nullable=True, comment="交易最多的股票代码")
+    
+    # ========== 性能指标统计 ==========
+    max_single_profit = Column(Float, nullable=True, comment="单笔最大盈利")
+    max_single_loss = Column(Float, nullable=True, comment="单笔最大亏损")
+    max_consecutive_wins = Column(Integer, default=0, comment="最大连续盈利次数")
+    max_consecutive_losses = Column(Integer, default=0, comment="最大连续亏损次数")
+    largest_position_size = Column(Float, nullable=True, comment="最大持仓金额")
+    
+    # 元数据
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 创建索引
+    __table_args__ = (
+        Index('idx_statistics_task_id', 'task_id', unique=True),
+        Index('idx_statistics_backtest_id', 'backtest_id'),
+    )
+    
+    def to_dict(self):
+        """转换为字典格式"""
+        return {
+            "id": self.id,
+            "task_id": self.task_id,
+            "backtest_id": self.backtest_id,
+            "signal_statistics": {
+                "total_signals": self.total_signals,
+                "buy_signals": self.buy_signals,
+                "sell_signals": self.sell_signals,
+                "executed_signals": self.executed_signals,
+                "unexecuted_signals": self.unexecuted_signals,
+                "execution_rate": self.execution_rate,
+                "avg_signal_strength": self.avg_signal_strength
+            },
+            "trade_statistics": {
+                "total_trades": self.total_trades,
+                "buy_trades": self.buy_trades,
+                "sell_trades": self.sell_trades,
+                "winning_trades": self.winning_trades,
+                "losing_trades": self.losing_trades,
+                "win_rate": self.win_rate,
+                "avg_profit": self.avg_profit,
+                "avg_loss": self.avg_loss,
+                "profit_factor": self.profit_factor,
+                "total_commission": self.total_commission,
+                "total_pnl": self.total_pnl,
+                "avg_holding_days": self.avg_holding_days
+            },
+            "position_statistics": {
+                "total_stocks": self.total_stocks,
+                "profitable_stocks": self.profitable_stocks,
+                "avg_stock_return": self.avg_stock_return,
+                "max_stock_return": self.max_stock_return,
+                "min_stock_return": self.min_stock_return
+            },
+            "time_range": {
+                "first_signal_date": self.first_signal_date.isoformat() if self.first_signal_date else None,
+                "last_signal_date": self.last_signal_date.isoformat() if self.last_signal_date else None,
+                "first_trade_date": self.first_trade_date.isoformat() if self.first_trade_date else None,
+                "last_trade_date": self.last_trade_date.isoformat() if self.last_trade_date else None,
+                "trading_days": self.trading_days
+            },
+            "stock_distribution": {
+                "unique_stocks_signaled": self.unique_stocks_signaled,
+                "unique_stocks_traded": self.unique_stocks_traded,
+                "most_signaled_stock": self.most_signaled_stock,
+                "most_traded_stock": self.most_traded_stock
+            },
+            "performance_metrics": {
+                "max_single_profit": self.max_single_profit,
+                "max_single_loss": self.max_single_loss,
+                "max_consecutive_wins": self.max_consecutive_wins,
+                "max_consecutive_losses": self.max_consecutive_losses,
+                "largest_position_size": self.largest_position_size
+            },
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
