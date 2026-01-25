@@ -10,6 +10,7 @@ from sqlalchemy import select, delete, and_, or_, desc, asc, func
 from sqlalchemy.orm import selectinload
 from loguru import logger
 
+from app.core.database import retry_db_operation
 from app.models.backtest_detailed_models import (
     BacktestDetailedResult,
     BacktestChartCache,
@@ -81,11 +82,19 @@ class BacktestDetailedRepository:
     async def get_detailed_result_by_task_id(self, task_id: str) -> Optional[BacktestDetailedResult]:
         """根据任务ID获取回测详细结果"""
         try:
-            stmt = select(BacktestDetailedResult).where(
-                BacktestDetailedResult.task_id == task_id
+            async def _get_result():
+                stmt = select(BacktestDetailedResult).where(
+                    BacktestDetailedResult.task_id == task_id
+                )
+                result = await self.session.execute(stmt)
+                return result.scalar_one_or_none()
+            
+            return await retry_db_operation(
+                _get_result,
+                max_retries=3,
+                retry_delay=0.1,
+                operation_name=f"获取回测详细结果 (task_id={task_id})"
             )
-            result = await self.session.execute(stmt)
-            return result.scalar_one_or_none()
             
         except Exception as e:
             self.logger.error("获取回测详细结果失败: {}", e, exc_info=True)
@@ -615,21 +624,29 @@ class BacktestDetailedRepository:
     ) -> int:
         """获取信号记录总数"""
         try:
-            stmt = select(func.count(SignalRecord.id)).where(SignalRecord.task_id == task_id)
+            async def _get_count():
+                stmt = select(func.count(SignalRecord.id)).where(SignalRecord.task_id == task_id)
+                
+                if stock_code:
+                    stmt = stmt.where(SignalRecord.stock_code == stock_code)
+                if signal_type:
+                    stmt = stmt.where(SignalRecord.signal_type == signal_type)
+                if start_date:
+                    stmt = stmt.where(SignalRecord.timestamp >= start_date)
+                if end_date:
+                    stmt = stmt.where(SignalRecord.timestamp <= end_date)
+                if executed is not None:
+                    stmt = stmt.where(SignalRecord.executed == executed)
+                
+                result = await self.session.execute(stmt)
+                return result.scalar() or 0
             
-            if stock_code:
-                stmt = stmt.where(SignalRecord.stock_code == stock_code)
-            if signal_type:
-                stmt = stmt.where(SignalRecord.signal_type == signal_type)
-            if start_date:
-                stmt = stmt.where(SignalRecord.timestamp >= start_date)
-            if end_date:
-                stmt = stmt.where(SignalRecord.timestamp <= end_date)
-            if executed is not None:
-                stmt = stmt.where(SignalRecord.executed == executed)
-            
-            result = await self.session.execute(stmt)
-            return result.scalar() or 0
+            return await retry_db_operation(
+                _get_count,
+                max_retries=3,
+                retry_delay=0.1,
+                operation_name=f"获取信号记录总数 (task_id={task_id})"
+            )
             
         except Exception as e:
             self.logger.error("获取信号记录总数失败: {}", e, exc_info=True)

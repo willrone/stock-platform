@@ -101,10 +101,13 @@ class SignalIntegrator:
         prices = [s.price for s in signals]
         integrated_price = prices[0]  # 使用第一个信号的价格
         
-        # 计算加权投票得分
+        # 计算加权投票得分和加权平均强度
         buy_score = 0.0
         sell_score = 0.0
-        total_strength = 0.0
+        buy_weighted_strength_sum = 0.0  # 买入信号的加权强度总和
+        sell_weighted_strength_sum = 0.0  # 卖出信号的加权强度总和
+        buy_weight_sum = 0.0  # 买入信号的权重总和
+        sell_weight_sum = 0.0  # 卖出信号的权重总和
         
         # 统计信号来源
         signal_sources = []
@@ -118,13 +121,16 @@ class SignalIntegrator:
             
             # 计算加权强度
             weighted_strength = signal.strength * weight
-            total_strength += weighted_strength
             
-            # 根据信号类型累加得分
+            # 根据信号类型累加得分和强度
             if signal.signal_type == SignalType.BUY:
                 buy_score += weighted_strength
+                buy_weighted_strength_sum += weighted_strength
+                buy_weight_sum += weight
             elif signal.signal_type == SignalType.SELL:
                 sell_score += weighted_strength
+                sell_weighted_strength_sum += weighted_strength
+                sell_weight_sum += weight
             
             signal_sources.append({
                 "strategy": strategy_name,
@@ -140,13 +146,15 @@ class SignalIntegrator:
         
         consistency = max(buy_count, sell_count) / total_count if total_count > 0 else 0.0
         
-        # 确定最终信号类型
+        # 确定最终信号类型和强度
         if buy_score > sell_score:
             final_type = SignalType.BUY
-            final_strength = buy_score / total_strength if total_strength > 0 else 0.0
+            # 计算买入信号的加权平均强度
+            final_strength = buy_weighted_strength_sum / buy_weight_sum if buy_weight_sum > 0 else 0.0
         elif sell_score > buy_score:
             final_type = SignalType.SELL
-            final_strength = sell_score / total_strength if total_strength > 0 else 0.0
+            # 计算卖出信号的加权平均强度
+            final_strength = sell_weighted_strength_sum / sell_weight_sum if sell_weight_sum > 0 else 0.0
         else:
             # 得分相等或都为0，返回HOLD信号
             return None

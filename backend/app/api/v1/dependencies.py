@@ -395,7 +395,7 @@ def execute_backtest_task_simple(task_id: str):
                 
                 async def save_detailed_data():
                     """异步保存详细数据"""
-                    from app.core.database import get_async_session
+                    from app.core.database import get_async_session, retry_db_operation
                     from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
                     from app.services.backtest.utils import BacktestDataAdapter
                     from app.services.backtest.models import EnhancedPositionAnalysis
@@ -414,157 +414,165 @@ def execute_backtest_task_simple(task_id: str):
                     
                     async for session in get_async_session():
                         try:
-                            repository = BacktestDetailedRepository(session)
-                            
-                            # 准备扩展指标数据
-                            extended_metrics = {}
-                            if enhanced_result.extended_risk_metrics:
-                                extended_metrics = {
-                                    'sortino_ratio': enhanced_result.extended_risk_metrics.sortino_ratio,
-                                    'calmar_ratio': enhanced_result.extended_risk_metrics.calmar_ratio,
-                                    'max_drawdown_duration': enhanced_result.extended_risk_metrics.max_drawdown_duration,
-                                    'var_95': enhanced_result.extended_risk_metrics.var_95,
-                                    'downside_deviation': enhanced_result.extended_risk_metrics.downside_deviation,
+                            async def _save_data():
+                                repository = BacktestDetailedRepository(session)
+                                
+                                # 准备扩展指标数据
+                                extended_metrics = {}
+                                if enhanced_result.extended_risk_metrics:
+                                    extended_metrics = {
+                                        'sortino_ratio': enhanced_result.extended_risk_metrics.sortino_ratio,
+                                        'calmar_ratio': enhanced_result.extended_risk_metrics.calmar_ratio,
+                                        'max_drawdown_duration': enhanced_result.extended_risk_metrics.max_drawdown_duration,
+                                        'var_95': enhanced_result.extended_risk_metrics.var_95,
+                                        'downside_deviation': enhanced_result.extended_risk_metrics.downside_deviation,
+                                    }
+                                
+                                # 准备分析数据
+                                # 处理 position_analysis（可能是 EnhancedPositionAnalysis 对象或列表）
+                                position_analysis_data = None
+                                task_logger.info(f"检查 position_analysis: type={type(enhanced_result.position_analysis)}, value={enhanced_result.position_analysis is not None}")
+                                if enhanced_result.position_analysis:
+                                    if isinstance(enhanced_result.position_analysis, EnhancedPositionAnalysis):
+                                        # 如果是 EnhancedPositionAnalysis 对象，调用 to_dict()
+                                        position_analysis_data = enhanced_result.position_analysis.to_dict()
+                                        task_logger.info(f"EnhancedPositionAnalysis 转换为字典: stock_performance长度={len(position_analysis_data.get('stock_performance', []))}")
+                                    elif isinstance(enhanced_result.position_analysis, list):
+                                        # 如果是列表，转换为字典列表
+                                        position_analysis_data = [pa.to_dict() for pa in enhanced_result.position_analysis]
+                                        task_logger.info(f"列表格式 position_analysis: 长度={len(position_analysis_data)}")
+                                    else:
+                                        # 其他情况，直接使用
+                                        position_analysis_data = enhanced_result.position_analysis
+                                        task_logger.info(f"其他格式 position_analysis: type={type(position_analysis_data)}")
+                                else:
+                                    task_logger.warning(f"enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据")
+                                
+                                analysis_data = {
+                                    'drawdown_analysis': enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},
+                                    'monthly_returns': [mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
+                                    'position_analysis': position_analysis_data,
+                                    'benchmark_comparison': enhanced_result.benchmark_data or {},
+                                    'rolling_metrics': {}
                                 }
-                            
-                            # 准备分析数据
-                            # 处理 position_analysis（可能是 EnhancedPositionAnalysis 对象或列表）
-                            position_analysis_data = None
-                            task_logger.info(f"检查 position_analysis: type={type(enhanced_result.position_analysis)}, value={enhanced_result.position_analysis is not None}")
-                            if enhanced_result.position_analysis:
-                                if isinstance(enhanced_result.position_analysis, EnhancedPositionAnalysis):
-                                    # 如果是 EnhancedPositionAnalysis 对象，调用 to_dict()
-                                    position_analysis_data = enhanced_result.position_analysis.to_dict()
-                                    task_logger.info(f"EnhancedPositionAnalysis 转换为字典: stock_performance长度={len(position_analysis_data.get('stock_performance', []))}")
-                                elif isinstance(enhanced_result.position_analysis, list):
-                                    # 如果是列表，转换为字典列表
-                                    position_analysis_data = [pa.to_dict() for pa in enhanced_result.position_analysis]
-                                    task_logger.info(f"列表格式 position_analysis: 长度={len(position_analysis_data)}")
+                                
+                                # 创建详细结果记录
+                                await repository.create_detailed_result(
+                                    task_id=task_id,
+                                    backtest_id=f"bt_{task_id[:8]}",
+                                    extended_metrics=extended_metrics,
+                                    analysis_data=analysis_data
+                                )
+                                
+                                # 批量创建组合快照记录
+                                portfolio_history = enhanced_result.portfolio_history or []
+                                task_logger.info(f"准备保存组合快照: task_id={task_id}, count={len(portfolio_history)}")
+                                
+                                if portfolio_history:
+                                    snapshots_data = []
+                                    for snapshot in portfolio_history:
+                                        # 处理日期格式（可能是字符串或datetime）
+                                        date_value = snapshot.get("date")
+                                        if isinstance(date_value, str):
+                                            try:
+                                                from datetime import datetime
+                                                date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                                            except:
+                                                task_logger.warning(f"无法解析日期: {date_value}")
+                                                continue
+                                        
+                                        snapshots_data.append({
+                                            'date': date_value,
+                                            'portfolio_value': snapshot.get("portfolio_value", 0),
+                                            'cash': snapshot.get("cash", 0),
+                                            'positions_count': snapshot.get("positions_count", 0),
+                                            'total_return': snapshot.get("total_return", 0),
+                                            'drawdown': 0,
+                                            'positions': snapshot.get("positions", {})
+                                        })
+                                    
+                                    if snapshots_data:
+                                        success = await repository.batch_create_portfolio_snapshots(
+                                            task_id=task_id,
+                                            backtest_id=f"bt_{task_id[:8]}",
+                                            snapshots_data=snapshots_data
+                                        )
+                                        if success:
+                                            task_logger.info(f"成功保存 {len(snapshots_data)} 个组合快照: task_id={task_id}")
+                                        else:
+                                            task_logger.error(f"保存组合快照失败: task_id={task_id}")
+                                    else:
+                                        task_logger.warning(f"组合快照数据为空: task_id={task_id}")
                                 else:
-                                    # 其他情况，直接使用
-                                    position_analysis_data = enhanced_result.position_analysis
-                                    task_logger.info(f"其他格式 position_analysis: type={type(position_analysis_data)}")
-                            else:
-                                task_logger.warning(f"enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据")
+                                    task_logger.warning(f"没有组合历史数据: task_id={task_id}")
+                                
+                                # 批量创建交易记录
+                                trade_history = enhanced_result.trade_history or []
+                                task_logger.info(f"准备保存交易记录: task_id={task_id}, count={len(trade_history)}")
+                                
+                                if trade_history:
+                                    trades_data = []
+                                    for trade in trade_history:
+                                        # 处理时间戳格式（可能是字符串或datetime）
+                                        timestamp_value = trade.get("timestamp")
+                                        if isinstance(timestamp_value, str):
+                                            try:
+                                                from datetime import datetime
+                                                timestamp_value = datetime.fromisoformat(timestamp_value.replace('Z', '+00:00'))
+                                            except:
+                                                task_logger.warning(f"无法解析时间戳: {timestamp_value}")
+                                                continue
+                                        
+                                        trades_data.append({
+                                            'trade_id': trade.get("trade_id", ""),
+                                            'stock_code': trade.get("stock_code", ""),
+                                            'stock_name': trade.get("stock_code", ""),
+                                            'action': trade.get("action", ""),
+                                            'quantity': trade.get("quantity", 0),
+                                            'price': trade.get("price", 0),
+                                            'timestamp': timestamp_value,
+                                            'commission': trade.get("commission", 0),
+                                            'pnl': trade.get("pnl", 0),
+                                            'holding_days': trade.get("holding_days", 0),
+                                            'technical_indicators': {}
+                                        })
+                                    
+                                    if trades_data:
+                                        success = await repository.batch_create_trade_records(
+                                            task_id=task_id,
+                                            backtest_id=f"bt_{task_id[:8]}",
+                                            trades_data=trades_data
+                                        )
+                                        if success:
+                                            task_logger.info(f"成功保存 {len(trades_data)} 条交易记录: task_id={task_id}")
+                                        else:
+                                            task_logger.error(f"保存交易记录失败: task_id={task_id}")
+                                    else:
+                                        task_logger.warning(f"交易记录数据为空: task_id={task_id}")
+                                else:
+                                    task_logger.warning(f"没有交易历史数据: task_id={task_id}")
+                                
+                                # 计算并保存统计信息
+                                try:
+                                    task_logger.info(f"开始计算统计信息: task_id={task_id}")
+                                    calculator = StatisticsCalculator(session)
+                                    backtest_id = f"bt_{task_id[:8]}"
+                                    stats = await calculator.calculate_all_statistics(task_id, backtest_id)
+                                    await session.flush()
+                                    task_logger.info(f"统计信息计算并保存成功: task_id={task_id}, stats_id={stats.id}")
+                                except Exception as stats_error:
+                                    task_logger.error(f"计算统计信息失败: task_id={task_id}, 错误: {stats_error}", exc_info=True)
+                                    # 统计信息计算失败不影响主流程
+                                
+                                await session.commit()
+                                task_logger.info(f"回测详细数据保存成功: {task_id}")
                             
-                            analysis_data = {
-                                'drawdown_analysis': enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},
-                                'monthly_returns': [mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
-                                'position_analysis': position_analysis_data,
-                                'benchmark_comparison': enhanced_result.benchmark_data or {},
-                                'rolling_metrics': {}
-                            }
-                            
-                            # 创建详细结果记录
-                            await repository.create_detailed_result(
-                                task_id=task_id,
-                                backtest_id=f"bt_{task_id[:8]}",
-                                extended_metrics=extended_metrics,
-                                analysis_data=analysis_data
+                            await retry_db_operation(
+                                _save_data,
+                                max_retries=3,
+                                retry_delay=0.2,
+                                operation_name=f"保存回测详细数据 (task_id={task_id})"
                             )
-                            
-                            # 批量创建组合快照记录
-                            portfolio_history = enhanced_result.portfolio_history or []
-                            task_logger.info(f"准备保存组合快照: task_id={task_id}, count={len(portfolio_history)}")
-                            
-                            if portfolio_history:
-                                snapshots_data = []
-                                for snapshot in portfolio_history:
-                                    # 处理日期格式（可能是字符串或datetime）
-                                    date_value = snapshot.get("date")
-                                    if isinstance(date_value, str):
-                                        try:
-                                            from datetime import datetime
-                                            date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
-                                        except:
-                                            task_logger.warning(f"无法解析日期: {date_value}")
-                                            continue
-                                    
-                                    snapshots_data.append({
-                                        'date': date_value,
-                                        'portfolio_value': snapshot.get("portfolio_value", 0),
-                                        'cash': snapshot.get("cash", 0),
-                                        'positions_count': snapshot.get("positions_count", 0),
-                                        'total_return': snapshot.get("total_return", 0),
-                                        'drawdown': 0,
-                                        'positions': snapshot.get("positions", {})
-                                    })
-                                
-                                if snapshots_data:
-                                    success = await repository.batch_create_portfolio_snapshots(
-                                        task_id=task_id,
-                                        backtest_id=f"bt_{task_id[:8]}",
-                                        snapshots_data=snapshots_data
-                                    )
-                                    if success:
-                                        task_logger.info(f"成功保存 {len(snapshots_data)} 个组合快照: task_id={task_id}")
-                                    else:
-                                        task_logger.error(f"保存组合快照失败: task_id={task_id}")
-                                else:
-                                    task_logger.warning(f"组合快照数据为空: task_id={task_id}")
-                            else:
-                                task_logger.warning(f"没有组合历史数据: task_id={task_id}")
-                            
-                            # 批量创建交易记录
-                            trade_history = enhanced_result.trade_history or []
-                            task_logger.info(f"准备保存交易记录: task_id={task_id}, count={len(trade_history)}")
-                            
-                            if trade_history:
-                                trades_data = []
-                                for trade in trade_history:
-                                    # 处理时间戳格式（可能是字符串或datetime）
-                                    timestamp_value = trade.get("timestamp")
-                                    if isinstance(timestamp_value, str):
-                                        try:
-                                            from datetime import datetime
-                                            timestamp_value = datetime.fromisoformat(timestamp_value.replace('Z', '+00:00'))
-                                        except:
-                                            task_logger.warning(f"无法解析时间戳: {timestamp_value}")
-                                            continue
-                                    
-                                    trades_data.append({
-                                        'trade_id': trade.get("trade_id", ""),
-                                        'stock_code': trade.get("stock_code", ""),
-                                        'stock_name': trade.get("stock_code", ""),
-                                        'action': trade.get("action", ""),
-                                        'quantity': trade.get("quantity", 0),
-                                        'price': trade.get("price", 0),
-                                        'timestamp': timestamp_value,
-                                        'commission': trade.get("commission", 0),
-                                        'pnl': trade.get("pnl", 0),
-                                        'holding_days': trade.get("holding_days", 0),
-                                        'technical_indicators': {}
-                                    })
-                                
-                                if trades_data:
-                                    success = await repository.batch_create_trade_records(
-                                        task_id=task_id,
-                                        backtest_id=f"bt_{task_id[:8]}",
-                                        trades_data=trades_data
-                                    )
-                                    if success:
-                                        task_logger.info(f"成功保存 {len(trades_data)} 条交易记录: task_id={task_id}")
-                                    else:
-                                        task_logger.error(f"保存交易记录失败: task_id={task_id}")
-                                else:
-                                    task_logger.warning(f"交易记录数据为空: task_id={task_id}")
-                            else:
-                                task_logger.warning(f"没有交易历史数据: task_id={task_id}")
-                            
-                            # 计算并保存统计信息
-                            try:
-                                task_logger.info(f"开始计算统计信息: task_id={task_id}")
-                                calculator = StatisticsCalculator(session)
-                                backtest_id = f"bt_{task_id[:8]}"
-                                stats = await calculator.calculate_all_statistics(task_id, backtest_id)
-                                await session.flush()
-                                task_logger.info(f"统计信息计算并保存成功: task_id={task_id}, stats_id={stats.id}")
-                            except Exception as stats_error:
-                                task_logger.error(f"计算统计信息失败: task_id={task_id}, 错误: {stats_error}", exc_info=True)
-                                # 统计信息计算失败不影响主流程
-                            
-                            await session.commit()
-                            task_logger.info(f"回测详细数据保存成功: {task_id}")
                             
                         except Exception as e:
                             await session.rollback()
