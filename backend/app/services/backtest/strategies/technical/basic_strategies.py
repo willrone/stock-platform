@@ -136,7 +136,36 @@ class RSIStrategy(BaseStrategy):
         self.downtrend_sell_threshold = config.get('downtrend_sell_threshold', 60)  # 下降趋势中的卖出阈值
     
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算RSI指标及相关指标"""
+        """
+        计算RSI指标及相关指标
+        优先从预计算数据提取，如果不可用则现场计算
+        """
+        # 尝试从预计算数据提取
+        indicator_mapping = {
+            'rsi': 'RSI14',  # 预计算数据中的RSI列名
+            'trend_ma': f'MA{self.trend_ma_period}',  # 趋势均线
+        }
+        
+        precomputed_indicators = self._extract_indicators_from_precomputed(data, indicator_mapping)
+        if precomputed_indicators is not None:
+            # 从预计算数据提取成功，补充一些可能需要计算的指标
+            close_prices = data['close']
+            
+            # 计算价格变化率（用于背离检测）
+            precomputed_indicators['price_change'] = close_prices.pct_change()
+            
+            # 如果有成交量数据，加入成交量
+            if 'volume' in data.columns:
+                precomputed_indicators['volume'] = data['volume']
+                # 尝试从预计算数据提取成交量移动平均，如果没有则计算
+                if 'VOLUME_MA20' in data.columns:
+                    precomputed_indicators['volume_ma'] = data['VOLUME_MA20']
+                else:
+                    precomputed_indicators['volume_ma'] = data['volume'].rolling(window=20).mean()
+            
+            return precomputed_indicators
+        
+        # Fallback：现场计算
         close_prices = data['close']
         
         # 计算RSI

@@ -25,6 +25,7 @@ try:
     from qlib.utils import init_instance_by_config
     # 导入Qlib内置的Alpha158
     from qlib.contrib.data.loader import Alpha158DL
+    from qlib.contrib.data.handler import Alpha158 as Alpha158Handler
     from qlib.data.dataset.loader import QlibDataLoader
     QLIB_AVAILABLE = True
     ALPHA158_AVAILABLE = True
@@ -38,22 +39,142 @@ try:
         if hasattr(qlib, '_mount_nfs_uri'):
             _original_mount_nfs_uri = qlib._mount_nfs_uri
             def _patched_mount_nfs_uri(provider_uri, mount_path, auto_mount):
-                """修复后的 _mount_nfs_uri，处理 Path 对象"""
+                """修复后的 _mount_nfs_uri，处理 Path 对象和路径格式问题"""
+                # 清理路径的函数
+                def clean_path(path_val):
+                    """清理路径，移除末尾的 :\ 等异常字符"""
+                    if isinstance(path_val, Path):
+                        path_str = path_val.resolve().as_posix()
+                    elif isinstance(path_val, str):
+                        path_str = path_val
+                    else:
+                        return path_val
+                    # 清理路径末尾的异常字符
+                    path_str = path_str.rstrip(':\\').rstrip(':/').rstrip('\\').rstrip('/')
+                    # 如果路径中有 :\/，替换为 /
+                    path_str = path_str.replace(':\/', '/').replace(':\\/', '/')
+                    return path_str
+                
                 # 确保 mount_path 是字符串，而不是 Path 对象
                 if isinstance(mount_path, Path):
-                    mount_path = str(mount_path.absolute())
+                    mount_path = clean_path(mount_path)
                 elif isinstance(mount_path, (list, tuple)):
                     # 如果 mount_path 是列表，确保所有元素都是字符串
-                    mount_path = [str(item) if isinstance(item, Path) else item for item in mount_path]
+                    mount_path = [clean_path(item) for item in mount_path]
+                elif isinstance(mount_path, dict):
+                    # 如果 mount_path 是字典，确保所有值都是正确的路径格式
+                    mount_path = {k: clean_path(v) for k, v in mount_path.items()}
                 
                 # 如果路径不存在，创建它（避免 FileNotFoundError）
                 if isinstance(mount_path, str):
-                    # 清理路径末尾的异常字符（如 :\）
-                    mount_path = mount_path.rstrip(':\\')
                     Path(mount_path).mkdir(parents=True, exist_ok=True)
+                elif isinstance(mount_path, dict):
+                    # 如果是字典，为每个路径创建目录
+                    for path_val in mount_path.values():
+                        if isinstance(path_val, str):
+                            Path(path_val).mkdir(parents=True, exist_ok=True)
                 
-                return _original_mount_nfs_uri(provider_uri, mount_path, auto_mount)
+                # 调用原始函数
+                result = _original_mount_nfs_uri(provider_uri, mount_path, auto_mount)
+                
+                # 在调用后，再次修复 C.dpm.data_path（Qlib 内部可能会修改它，添加 :\ 字符）
+                try:
+                    from qlib.config import C
+                    if hasattr(C, 'dpm') and hasattr(C.dpm, 'data_path'):
+                        data_path = C.dpm.data_path
+                        if isinstance(data_path, dict):
+                            fixed_data_path = {}
+                            needs_fix = False
+                            for freq, path_val in data_path.items():
+                                path_str = str(path_val)
+                                fixed_path = clean_path(path_val)
+                                # 如果路径有问题，记录并修复
+                                if ':\\' in path_str or ':\/' in path_str or path_str.endswith(':\\') or path_str.endswith(':/'):
+                                    needs_fix = True
+                                    logger.info(f"检测到 data_path[{freq}] 路径问题: {path_str} -> {fixed_path}")
+                                fixed_data_path[freq] = fixed_path
+                            
+                            # 如果检测到问题，尝试设置修复后的路径
+                            if needs_fix:
+                                try:
+                                    C.dpm.data_path = fixed_data_path
+                                    logger.info(f"已修复 C.dpm.data_path: {fixed_data_path}")
+                                except Exception as set_error:
+                                    try:
+                                        # 尝试通过 __dict__ 设置
+                                        if hasattr(C.dpm, '__dict__'):
+                                            C.dpm.__dict__['data_path'] = fixed_data_path
+                                            logger.info(f"通过 __dict__ 修复 data_path")
+                                    except Exception:
+                                        logger.warning(f"无法修复 data_path: {set_error}")
+                except Exception as fix_error:
+                    logger.debug(f"修复 data_path 时出错: {fix_error}")
+                
+                return result
             qlib._mount_nfs_uri = _patched_mount_nfs_uri
+        
+        # 尝试 patch CalendarProvider 的日历查找逻辑，修复路径拼接问题
+        try:
+            from qlib.data import CalendarProvider
+            if hasattr(CalendarProvider, 'load_calendar'):
+                _original_load_calendar = CalendarProvider.load_calendar
+                
+                def _patched_load_calendar(self, freq, future=False):
+                    """修复后的 load_calendar，修复路径拼接问题（:\/ 字符）"""
+                    try:
+                        # 调用原始方法
+                        return _original_load_calendar(self, freq, future)
+                    except Exception as e:
+                        error_msg = str(e)
+                        # 如果错误信息中包含路径问题（:\/ 或 :\\/），尝试修复
+                        if "calendar not exists" in error_msg.lower() and (":\\/" in error_msg or ":\/" in error_msg or ":\\\\/" in error_msg):
+                            # 提取错误的路径
+                            import re
+                            match = re.search(r'calendar not exists:\s*(.+)', error_msg, re.IGNORECASE)
+                            if match:
+                                wrong_path = match.group(1).strip()
+                                # 修复路径：将 :\/ 或 :\\/ 替换为 /
+                                # 处理多种可能的转义形式
+                                fixed_path = wrong_path.replace(':\\\\/', '/').replace(':\\/', '/').replace(':\/', '/')
+                                fixed_path_obj = Path(fixed_path)
+                                
+                                # 如果修复后的路径存在，直接读取并返回
+                                if fixed_path_obj.exists():
+                                    logger.info(f"检测到日历路径问题，已修复: {wrong_path} -> {fixed_path}")
+                                    try:
+                                        with open(fixed_path_obj, 'r') as f:
+                                            dates = [line.strip() for line in f if line.strip()]
+                                        # 返回日期列表（转换为 Qlib 期望的格式）
+                                        import pandas as pd
+                                        calendar_dates = pd.to_datetime(dates, format='%Y%m%d')
+                                        logger.info(f"成功从修复后的路径读取日历，包含 {len(calendar_dates)} 个交易日")
+                                        return calendar_dates
+                                    except Exception as read_error:
+                                        logger.warning(f"读取日历文件失败: {read_error}")
+                                        raise
+                                else:
+                                    logger.warning(f"修复后的路径也不存在: {fixed_path}")
+                                    # 尝试使用配置中的路径
+                                    try:
+                                        from app.core.config import settings
+                                        config_path = Path(settings.QLIB_DATA_PATH).resolve() / "calendars" / "day.txt"
+                                        if config_path.exists():
+                                            logger.info(f"使用配置路径读取日历: {config_path}")
+                                            with open(config_path, 'r') as f:
+                                                dates = [line.strip() for line in f if line.strip()]
+                                            import pandas as pd
+                                            calendar_dates = pd.to_datetime(dates, format='%Y%m%d')
+                                            logger.info(f"成功从配置路径读取日历，包含 {len(calendar_dates)} 个交易日")
+                                            return calendar_dates
+                                    except Exception as config_error:
+                                        logger.warning(f"使用配置路径也失败: {config_error}")
+                        # 如果无法修复，抛出原始错误
+                        raise
+                
+                CalendarProvider.load_calendar = _patched_load_calendar
+                logger.debug("已 patch CalendarProvider.load_calendar 方法以修复路径问题")
+        except Exception as cal_patch_error:
+            logger.debug(f"无法 patch CalendarProvider: {cal_patch_error}")
     except Exception:
         pass  # 如果无法 patch，继续执行
     
@@ -80,6 +201,7 @@ except ImportError as e:
     QLIB_AVAILABLE = False
     ALPHA158_AVAILABLE = False
     Alpha158DL = None
+    Alpha158Handler = None
     QlibDataLoader = None
 
 from ..data.simple_data_service import SimpleDataService
@@ -376,11 +498,28 @@ class Alpha158Calculator:
         qlib_data: pd.DataFrame,
         stock_codes: List[str],
         date_range: Tuple[datetime, datetime],
-        use_cache: bool = True
+        use_cache: bool = True,
+        force_expression_engine: bool = False
     ) -> pd.DataFrame:
-        """计算Alpha158因子 - 使用Qlib内置的Alpha158实现"""
+        """
+        计算Alpha158因子 - 使用Qlib内置的Alpha158 handler计算158个标准因子
+        
+        优先使用Alpha158 handler，如果不可用则使用表达式引擎计算
+        
+        Args:
+            qlib_data: Qlib格式的数据
+            stock_codes: 股票代码列表
+            date_range: 日期范围
+            use_cache: 是否使用缓存
+            force_expression_engine: 是否强制使用表达式引擎（预计算时使用，因为文件还未保存）
+        """
         if not QLIB_AVAILABLE or not ALPHA158_AVAILABLE:
             logger.warning("Qlib或Alpha158不可用，跳过Alpha因子计算")
+            return pd.DataFrame(index=qlib_data.index)
+        
+        # 检查是否有Alpha158配置
+        if len(self.alpha_fields) == 0 or len(self.alpha_names) == 0:
+            logger.warning("Alpha158配置不可用，跳过Alpha因子计算")
             return pd.DataFrame(index=qlib_data.index)
         
         # 尝试从缓存获取
@@ -392,17 +531,543 @@ class Alpha158Calculator:
                 return cached_factors
         
         try:
-            logger.info(f"开始计算Alpha158因子: {len(stock_codes)} 只股票")
+            logger.info(f"开始计算Alpha158因子: {len(stock_codes)} 只股票, 目标因子数: {len(self.alpha_names)}, 强制表达式引擎: {force_expression_engine}")
             
             # 检查数据结构
             if qlib_data.empty:
                 logger.warning("输入数据为空，无法计算因子")
                 return pd.DataFrame(index=qlib_data.index)
             
-            # 确定数据索引类型
+            # 方法1：尝试使用Alpha158 handler（需要数据在Qlib系统中）
+            # 注意：在预计算时，文件可能已保存，优先使用handler确保所有因子都能计算
+            if not force_expression_engine:
+                try:
+                    alpha_factors = await self._calculate_using_alpha158_handler(
+                        stock_codes, date_range
+                    )
+                    # 要求所有158个因子都能计算出来（用户明确要求）
+                    if not alpha_factors.empty and len(alpha_factors.columns) >= 158:
+                        logger.info(f"使用Alpha158 handler计算完成: {len(alpha_factors.columns)} 个因子")
+                        # 缓存结果
+                        if use_cache:
+                            cache_key = self.factor_cache.get_cache_key(stock_codes, date_range)
+                            self.factor_cache.save_factors(cache_key, alpha_factors)
+                        return alpha_factors
+                    else:
+                        factor_count = len(alpha_factors.columns) if not alpha_factors.empty else 0
+                        logger.warning(f"使用Alpha158 handler计算因子数不足: {factor_count}，期望158个，尝试使用表达式引擎")
+                        # Handler失败，继续尝试表达式引擎
+                except Exception as e:
+                    logger.debug(f"使用Alpha158 handler失败: {e}，尝试使用表达式引擎")
+            else:
+                logger.debug("强制使用表达式引擎（预计算模式，文件未保存）")
+            
+            # 方法2：使用表达式引擎计算（基于Alpha158因子定义）
+            logger.info("使用表达式引擎计算Alpha158因子")
+            alpha_factors = await self._calculate_using_expression_engine(
+                qlib_data, stock_codes, date_range
+            )
+            
+            if not alpha_factors.empty:
+                factor_count = len(alpha_factors.columns)
+                logger.info(f"Alpha158因子计算完成: {len(alpha_factors)} 条记录, {factor_count} 个因子")
+                # 检查因子数量
+                if factor_count < 158:
+                    logger.warning(f"表达式引擎计算的因子数不足: {factor_count} < 158，缺失 {158 - factor_count} 个因子")
+                # 缓存结果
+                if use_cache:
+                    cache_key = self.factor_cache.get_cache_key(stock_codes, date_range)
+                    self.factor_cache.save_factors(cache_key, alpha_factors)
+                return alpha_factors
+            else:
+                logger.warning("没有计算出任何因子")
+                return pd.DataFrame(index=qlib_data.index)
+            
+        except Exception as e:
+            logger.error(f"Alpha因子计算失败: {e}", exc_info=True)
+            # 如果计算失败，尝试回退到简化版本
+            logger.warning("回退到简化版Alpha因子计算")
+            try:
+                return await self._calculate_simplified_alpha_factors(qlib_data)
+            except Exception as e2:
+                logger.error(f"简化版Alpha因子计算也失败: {e2}")
+                return pd.DataFrame(index=qlib_data.index)
+    
+    async def _calculate_using_alpha158_handler(
+        self,
+        stock_codes: List[str],
+        date_range: Tuple[datetime, datetime]
+    ) -> pd.DataFrame:
+        """
+        使用Qlib内置的Alpha158 handler计算158个标准因子
+        
+        注意：这需要数据已经在Qlib系统中
+        """
+        try:
+            if Alpha158Handler is None:
+                raise ValueError("Alpha158Handler不可用")
+            
+            # 在创建 handler 之前，确保日历文件路径正确
+            # Qlib 内部可能会在路径拼接时出现问题，需要修复
+            try:
+                from qlib.config import C
+                from pathlib import Path
+                
+                # 获取当前的 mount_path
+                if hasattr(C, 'dpm') and hasattr(C.dpm, 'get_mount_path'):
+                    mount_path = C.dpm.get_mount_path('day')
+                    if mount_path:
+                        calendar_file = Path(mount_path) / "calendars" / "day.txt"
+                        # 如果日历文件存在但路径格式有问题，尝试修复
+                        if not calendar_file.exists():
+                            # 尝试使用绝对路径
+                            calendar_file = Path(settings.QLIB_DATA_PATH).resolve() / "calendars" / "day.txt"
+                            if calendar_file.exists():
+                                # 如果文件存在但 Qlib 找不到，可能是路径格式问题
+                                # 尝试通过符号链接或其他方式修复
+                                logger.debug(f"日历文件存在但 Qlib 找不到，路径: {calendar_file}")
+            except Exception as cal_check_error:
+                logger.debug(f"检查日历文件路径时出错: {cal_check_error}")
+            
+            start_date, end_date = date_range
+
+            # 将股票代码转换为Qlib数据文件名，并过滤不存在的标的
+            logger.info(f"[Alpha158] 开始查找Qlib数据文件，股票代码: {stock_codes}")
+            
+            # 解析路径
+            qlib_data_path_raw = Path(settings.QLIB_DATA_PATH)
+            logger.debug(f"[Alpha158] 原始QLIB_DATA_PATH: {settings.QLIB_DATA_PATH}, 类型: {type(settings.QLIB_DATA_PATH)}")
+            logger.debug(f"[Alpha158] 解析后的qlib_data_path: {qlib_data_path_raw}, 绝对路径: {qlib_data_path_raw.resolve()}")
+            
+            qlib_features_dir = qlib_data_path_raw.resolve() / "features" / "day"
+            logger.info(f"[Alpha158] Qlib数据目录路径: {qlib_features_dir}")
+            logger.info(f"[Alpha158] 路径是绝对路径: {qlib_features_dir.is_absolute()}")
+            
+            # 检查目录是否存在
+            dir_exists = qlib_features_dir.exists()
+            dir_is_dir = qlib_features_dir.is_dir() if dir_exists else False
+            logger.info(f"[Alpha158] 目录存在: {dir_exists}, 是目录: {dir_is_dir}")
+            
+            if not dir_exists:
+                logger.error(f"[Alpha158] Qlib数据目录不存在: {qlib_features_dir}")
+                raise ValueError(f"Qlib数据目录不存在: {qlib_features_dir}")
+            
+            # 预先获取所有可用的文件列表，避免重复检查
+            # 注意：在多进程环境中，可能需要重新读取文件列表
+            try:
+                # 确保路径是绝对路径
+                qlib_features_dir_abs = qlib_features_dir.resolve()
+                logger.debug(f"[Alpha158] 绝对路径: {qlib_features_dir_abs}")
+                
+                # 使用 glob 获取文件列表
+                logger.debug(f"[Alpha158] 开始使用glob查找*.parquet文件...")
+                glob_pattern = qlib_features_dir_abs / "*.parquet"
+                logger.debug(f"[Alpha158] glob模式: {glob_pattern}")
+                
+                all_glob_files = list(qlib_features_dir_abs.glob("*.parquet"))
+                logger.info(f"[Alpha158] glob找到 {len(all_glob_files)} 个parquet文件")
+                
+                # 验证文件确实存在且可读
+                parquet_files = []
+                sh_count = 0
+                sz_count = 0
+                for f in all_glob_files:
+                    try:
+                        exists = f.exists()
+                        size = f.stat().st_size if exists else 0
+                        # 验证文件存在且大小大于0（确保文件已完全写入）
+                        if exists and size > 0:
+                            parquet_files.append(f)
+                            # 统计SH和SZ文件数量
+                            if '_SH' in f.stem:
+                                sh_count += 1
+                            elif '_SZ' in f.stem:
+                                sz_count += 1
+                        else:
+                            logger.debug(f"[Alpha158] 跳过无效文件: {f.name} (exists={exists}, size={size})")
+                    except (OSError, FileNotFoundError) as e:
+                        logger.debug(f"[Alpha158] 无法访问文件 {f.name}: {e}")
+                        # 忽略无法访问的文件
+                        pass
+                
+                available_files = {f.stem for f in parquet_files}
+                logger.info(f"[Alpha158] 有效文件数: {len(available_files)}, SH文件: {sh_count}, SZ文件: {sz_count}, 示例文件: {list(available_files)[:5]}")
+                
+                # 检查特定股票代码的文件
+                if stock_codes:
+                    test_code = stock_codes[0]
+                    test_candidates = [
+                        test_code.upper().replace(".", "_"),
+                        test_code.upper(),
+                    ]
+                    if "." in test_code.upper():
+                        try:
+                            sym, exch = test_code.upper().split(".")
+                            test_candidates.extend([f"{sym}_{exch}", f"{exch}{sym}"])
+                        except ValueError:
+                            pass
+                    
+                    found_in_set = [c for c in test_candidates if c in available_files]
+                    logger.info(f"[Alpha158] 测试代码 {test_code}: 候选={test_candidates}, 在集合中={found_in_set}")
+                    
+            except Exception as e:
+                logger.error(f"[Alpha158] 无法读取Qlib数据目录: {e}, 路径: {qlib_features_dir}", exc_info=True)
+                available_files = set()
+                
+                # 调试：检查特定文件是否存在
+                if stock_codes:
+                    test_code = stock_codes[0]
+                    test_candidates = [
+                        test_code.upper().replace(".", "_"),
+                        test_code.upper(),
+                    ]
+                    if "." in test_code.upper():
+                        try:
+                            sym, exch = test_code.upper().split(".")
+                            test_candidates.extend([f"{sym}_{exch}", f"{exch}{sym}"])
+                        except ValueError:
+                            pass
+                    
+                    found_in_set = [c for c in test_candidates if c in available_files]
+                    logger.debug(f"测试代码 {test_code}: 候选={test_candidates}, 在集合中={found_in_set}, 集合示例={list(available_files)[:5]}")
+            except Exception as e:
+                logger.warning(f"无法读取Qlib数据目录: {e}, 路径: {qlib_features_dir}")
+                available_files = set()
+            
+            instrument_map = {}  # 原始代码 -> 文件名
+            resolved_instruments = []  # 传递给handler的instrument名称（使用标准格式）
+            
+            for code in stock_codes:
+                logger.info(f"[Alpha158] 处理股票代码: {code}")
+                raw_code = str(code).strip()
+                norm_code = raw_code.upper()
+                candidates = [norm_code]
+                
+                # 生成所有可能的文件名格式
+                if "." in norm_code:
+                    candidates.append(norm_code.replace(".", "_"))
+                    try:
+                        sym, exch = norm_code.split(".")
+                        candidates.append(f"{exch}{sym}")  # 000001.SZ -> SZ000001
+                        candidates.append(f"{sym}_{exch}")  # 000001.SZ -> 000001_SZ
+                    except ValueError as e:
+                        logger.debug(f"[Alpha158] 分割股票代码失败: {norm_code}, 错误: {e}")
+                        pass
+                
+                if len(norm_code) >= 8 and norm_code[:2] in ("SZ", "SH"):
+                    sym = norm_code[2:]
+                    exch = norm_code[:2]
+                    candidates.append(f"{sym}_{exch}")  # SZ000001 -> 000001_SZ
+                
+                if norm_code.isdigit() and len(norm_code) == 6:
+                    # 纯数字代码，尝试沪深两种后缀
+                    candidates.append(f"{norm_code}_SZ")
+                    candidates.append(f"{norm_code}_SH")
+                
+                if "_" in norm_code:
+                    parts = norm_code.split("_")
+                    if len(parts) == 2:
+                        candidates.append(f"{parts[1]}{parts[0]}")  # SZ_000001 -> SZ000001
+                
+                # 去重候选列表
+                candidates = list(dict.fromkeys(candidates))  # 保持顺序的去重
+                logger.info(f"[Alpha158] 股票代码 {raw_code} 的候选文件名: {candidates}")
+                
+                # 选择第一个存在的数据文件
+                # 首先从预先获取的文件列表中查找
+                selected = None
+                matching_candidates = []
+                logger.debug(f"[Alpha158] 在available_files集合中查找 (集合大小: {len(available_files)})")
+                for cand in candidates:
+                    in_set = cand in available_files
+                    logger.debug(f"[Alpha158]   候选 {cand}: 在集合中={in_set}")
+                    if in_set:
+                        matching_candidates.append(cand)
+                        if selected is None:
+                            selected = cand
+                            logger.info(f"[Alpha158] 在集合中找到: {raw_code} -> {cand}")
+                
+                # 如果预先获取的列表中没有找到，直接检查文件系统（处理时序问题）
+                if selected is None:
+                    logger.warning(f"[Alpha158] 在集合中未找到，开始直接文件系统检查...")
+                    # 确保使用绝对路径
+                    qlib_features_dir_abs = qlib_features_dir.resolve()
+                    logger.debug(f"[Alpha158] 使用绝对路径进行文件检查: {qlib_features_dir_abs}")
+                    
+                    # 尝试多次检查（处理文件系统缓存和写入延迟）
+                    import time
+                    import os
+                    max_retries = 5  # 增加重试次数
+                    retry_delay = 0.2  # 200ms
+                    
+                    for attempt in range(max_retries):
+                        logger.debug(f"[Alpha158] 文件系统检查尝试 {attempt + 1}/{max_retries}")
+                        for cand in candidates:
+                            file_path = qlib_features_dir_abs / f"{cand}.parquet"
+                            os_path = str(file_path)
+                            logger.debug(f"[Alpha158]   检查文件: {file_path}")
+                            
+                            # 方法1: Path.exists()
+                            path_exists = file_path.exists()
+                            
+                            # 方法2: os.path.exists()
+                            os_exists = os.path.exists(os_path)
+                            
+                            # 方法3: os.path.isfile()
+                            os_isfile = os.path.isfile(os_path) if os_exists else False
+                            
+                            logger.debug(f"[Alpha158]     Path.exists(): {path_exists}, os.path.exists(): {os_exists}, os.path.isfile(): {os_isfile}")
+                            
+                            # 如果任一方法返回True，尝试获取文件大小
+                            if path_exists or os_exists:
+                                try:
+                                    # 尝试获取文件大小
+                                    if path_exists:
+                                        stat_result = file_path.stat()
+                                        size = stat_result.st_size
+                                    else:
+                                        size = os.path.getsize(os_path)
+                                    
+                                    logger.debug(f"[Alpha158]     文件大小: {size} 字节")
+                                    
+                                    if size > 0:
+                                        selected = cand
+                                        # 更新 available_files 集合，避免重复检查
+                                        available_files.add(cand)
+                                        logger.info(f"[Alpha158] ✓ 通过直接文件检查找到: {raw_code} -> {cand}.parquet (路径: {file_path}, 大小: {size})")
+                                        break
+                                    else:
+                                        logger.warning(f"[Alpha158]     文件大小为0，等待重试...")
+                                except (OSError, FileNotFoundError) as e:
+                                    logger.debug(f"[Alpha158]     无法获取文件状态: {e}")
+                                    # 即使获取状态失败，如果文件存在，也尝试使用
+                                    if os_isfile:
+                                        logger.warning(f"[Alpha158]     文件存在但无法获取状态，尝试使用: {cand}")
+                                        selected = cand
+                                        available_files.add(cand)
+                                        break
+                        
+                        if selected is not None:
+                            break
+                        
+                        # 如果还没找到，等待一小段时间后重试（处理文件写入延迟）
+                        if attempt < max_retries - 1:
+                            logger.debug(f"[Alpha158] 等待 {retry_delay} 秒后重试...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 1.5  # 线性增长（而不是指数）
+                
+                if selected is not None:
+                    instrument_map[code] = selected  # 保存文件名映射
+                    # Handler期望使用标准格式的instrument名称（如002463.SZ），而不是文件名格式（002463_SZ）
+                    # 但需要确保instruments/all.txt中包含标准格式
+                    handler_instrument = raw_code  # 使用原始代码（标准格式）
+                    resolved_instruments.append(handler_instrument)
+                    logger.info(f"[Alpha158] ✓ 找到Qlib数据文件: {raw_code} -> {selected}.parquet, handler使用: {handler_instrument}")
+                else:
+                    logger.error(f"[Alpha158] ✗ 未找到Qlib数据文件: {raw_code}")
+                    # 更详细的调试信息
+                    sample_matching = [f for f in list(available_files)[:10] if raw_code.split('.')[0] in f] if available_files else []
+                    # 检查文件是否真的不存在（使用绝对路径）
+                    qlib_features_dir_abs = qlib_features_dir.resolve()
+                    direct_check_results = {}
+                    
+                    logger.error(f"[Alpha158] 详细诊断信息:")
+                    logger.error(f"[Alpha158]   候选文件名: {candidates}")
+                    logger.error(f"[Alpha158]   可用文件数: {len(available_files)}")
+                    logger.error(f"[Alpha158]   匹配的候选: {matching_candidates}")
+                    logger.error(f"[Alpha158]   目录路径: {qlib_features_dir_abs}")
+                    logger.error(f"[Alpha158]   目录存在: {qlib_features_dir_abs.exists()}")
+                    logger.error(f"[Alpha158]   目录是目录: {qlib_features_dir_abs.is_dir()}")
+                    
+                    # 使用多种方法检查文件
+                    import os
+                    for cand in candidates[:3]:  # 只检查前3个候选，避免太多IO
+                        file_path = qlib_features_dir_abs / f"{cand}.parquet"
+                        os_path = str(file_path)
+                        
+                        # 方法1: Path.exists()
+                        path_exists = file_path.exists()
+                        
+                        # 方法2: os.path.exists()
+                        os_exists = os.path.exists(os_path)
+                        
+                        # 方法3: os.path.isfile()
+                        os_isfile = os.path.isfile(os_path) if os_exists else False
+                        
+                        # 方法4: 尝试打开文件
+                        can_open = False
+                        try:
+                            with open(os_path, 'rb') as f:
+                                can_open = True
+                                file_size = os.path.getsize(os_path)
+                        except (OSError, FileNotFoundError) as e:
+                            file_size = -1
+                            open_error = str(e)
+                        
+                        direct_check_results[cand] = {
+                            'path_exists': path_exists,
+                            'os_exists': os_exists,
+                            'os_isfile': os_isfile,
+                            'can_open': can_open,
+                            'file_size': file_size if can_open else None,
+                            'error': open_error if not can_open else None
+                        }
+                        
+                        logger.error(f"[Alpha158]   文件 {cand}.parquet:")
+                        logger.error(f"[Alpha158]     Path.exists(): {path_exists}")
+                        logger.error(f"[Alpha158]     os.path.exists(): {os_exists}")
+                        logger.error(f"[Alpha158]     os.path.isfile(): {os_isfile}")
+                        logger.error(f"[Alpha158]     可以打开: {can_open}")
+                        if can_open:
+                            logger.error(f"[Alpha158]     文件大小: {file_size} 字节")
+                        else:
+                            logger.error(f"[Alpha158]     错误: {open_error if 'open_error' in locals() else 'N/A'}")
+                        
+                        if can_open and file_size > 0:
+                            # 如果找到了，更新并选择
+                            selected = cand
+                            available_files.add(cand)
+                            logger.info(f"[Alpha158] ✓ 在错误处理中发现文件: {raw_code} -> {cand}.parquet")
+                            break
+                    
+                    if selected is None:
+                        logger.error(f"[Alpha158]   相关文件示例: {sample_matching}")
+                        logger.error(f"[Alpha158]   直接文件检查结果: {direct_check_results}")
+            
+            if not resolved_instruments:
+                # 提供更详细的错误信息
+                sample_files = list(available_files)[:5] if available_files else []
+                raise ValueError(
+                    f"Qlib数据文件不存在，无法使用Alpha158 handler\n"
+                    f"  data_path: {qlib_features_dir}\n"
+                    f"  目录存在: {qlib_features_dir.exists()}\n"
+                    f"  可用文件数: {len(available_files)}\n"
+                    f"  请求的股票代码: {stock_codes}\n"
+                    f"  示例文件: {sample_files}"
+                )
+            
+            # 在创建handler之前，先使用Qlib的D API验证数据是否可以加载
+            # 这有助于诊断为什么handler返回空数据
+            try:
+                logger.debug(f"[Alpha158] 使用D API验证数据可访问性，instruments: {resolved_instruments[:1] if resolved_instruments else []}")
+                if resolved_instruments:
+                    test_instrument = resolved_instruments[0]
+                    test_data = D.features(
+                        instruments=[test_instrument],
+                        fields=['$open', '$close', '$high', '$low', '$volume'],
+                        start_time=start_date.strftime('%Y-%m-%d'),
+                        end_time=end_date.strftime('%Y-%m-%d'),
+                        freq='day'
+                    )
+                    logger.debug(f"[Alpha158] D.features()返回: type={type(test_data)}, empty={test_data.empty if hasattr(test_data, 'empty') else 'N/A'}, shape={test_data.shape if hasattr(test_data, 'shape') else 'N/A'}")
+                    if test_data.empty:
+                        logger.warning(f"[Alpha158] D.features()返回空数据，可能的原因：数据格式不对或Qlib无法识别文件")
+                    else:
+                        logger.info(f"[Alpha158] D.features()成功加载数据: {test_data.shape}")
+            except Exception as d_api_error:
+                logger.warning(f"[Alpha158] D API验证失败: {d_api_error}，但这不影响handler尝试")
+            
+            # 确保qlib已初始化（handler需要）
+            try:
+                import qlib
+                from qlib.config import REG_CN
+                # 检查是否已初始化
+                if not hasattr(qlib, '_initialized') or not qlib._initialized:
+                    logger.debug("[Alpha158] 初始化qlib...")
+                    qlib.init(
+                        provider_uri=str(Path(settings.QLIB_DATA_PATH).resolve().as_posix()),
+                        region=REG_CN,
+                        mount_path=str(Path(settings.QLIB_DATA_PATH).resolve().as_posix()),
+                    )
+                    logger.debug("[Alpha158] qlib初始化完成")
+            except Exception as init_error:
+                logger.warning(f"[Alpha158] qlib初始化失败: {init_error}，尝试继续使用handler")
+            
+            # 创建Alpha158 handler
+            handler = Alpha158Handler(
+                instruments=resolved_instruments,
+                start_time=start_date.strftime('%Y-%m-%d'),
+                end_time=end_date.strftime('%Y-%m-%d'),
+                fit_start_time=start_date.strftime('%Y-%m-%d'),
+                fit_end_time=end_date.strftime('%Y-%m-%d'),
+            )
+            
+            # 获取158个标准因子
+            logger.debug(f"[Alpha158] 调用handler.fetch()，instruments: {resolved_instruments}, 日期范围: {start_date} 到 {end_date}")
+            alpha_factors = handler.fetch()
+            
+            logger.debug(f"[Alpha158] handler.fetch()返回: type={type(alpha_factors)}, empty={alpha_factors.empty if hasattr(alpha_factors, 'empty') else 'N/A'}, shape={alpha_factors.shape if hasattr(alpha_factors, 'shape') else 'N/A'}")
+            
+            if alpha_factors is not None and not alpha_factors.empty:
+                # 将Qlib内部的instrument名称映射回原始股票代码，便于和qlib_data对齐
+                try:
+                    reverse_map = {v: k for k, v in instrument_map.items()}
+                    if isinstance(alpha_factors.index, pd.MultiIndex):
+                        inst_level = alpha_factors.index.get_level_values(0)
+                        mapped_inst = inst_level.map(lambda x: reverse_map.get(x, x))
+                        alpha_factors.index = pd.MultiIndex.from_arrays(
+                            [mapped_inst, alpha_factors.index.get_level_values(1)],
+                            names=alpha_factors.index.names
+                        )
+                except Exception as map_error:
+                    logger.debug(f"映射Alpha158 instrument名称失败: {map_error}")
+                logger.info(f"Alpha158 handler计算完成: {alpha_factors.shape}, 因子数: {len(alpha_factors.columns)}")
+                return alpha_factors
+            else:
+                # 添加更详细的诊断信息
+                # 尝试读取实际文件，检查数据格式
+                try:
+                    import pandas as pd
+                    test_file = qlib_features_dir / f"{resolved_instruments[0]}.parquet"
+                    if test_file.exists():
+                        test_data = pd.read_parquet(test_file)
+                        logger.warning(
+                            f"[Alpha158] handler返回空数据，诊断信息：\n"
+                            f"  文件路径: {test_file}\n"
+                            f"  文件存在: {test_file.exists()}\n"
+                            f"  文件大小: {test_file.stat().st_size if test_file.exists() else 0} 字节\n"
+                            f"  数据形状: {test_data.shape if 'test_data' in locals() else 'N/A'}\n"
+                            f"  数据列名: {list(test_data.columns) if 'test_data' in locals() and not test_data.empty else 'N/A'}\n"
+                            f"  日期范围: {test_data.index.get_level_values(1).min() if isinstance(test_data.index, pd.MultiIndex) and test_data.index.nlevels >= 2 else test_data.index.min() if 'test_data' in locals() and not test_data.empty else 'N/A'} 到 {test_data.index.get_level_values(1).max() if isinstance(test_data.index, pd.MultiIndex) and test_data.index.nlevels >= 2 else test_data.index.max() if 'test_data' in locals() and not test_data.empty else 'N/A'}\n"
+                            f"  请求日期范围: {start_date} 到 {end_date}\n"
+                            f"  instrument名称: {resolved_instruments}"
+                        )
+                except Exception as diag_error:
+                    logger.warning(f"[Alpha158] 诊断信息获取失败: {diag_error}")
+                
+                raise ValueError("Alpha158 handler返回空数据")
+                
+        except Exception as e:
+            error_msg = str(e)
+            # 如果是日历文件路径问题，提供更详细的错误信息
+            if "calendar not exists" in error_msg or "calendar" in error_msg.lower():
+                calendar_path = Path(settings.QLIB_DATA_PATH).resolve() / "calendars" / "day.txt"
+                logger.warning(
+                    f"使用Alpha158 handler计算失败（日历文件路径问题）: {e}\n"
+                    f"日历文件应该位于: {calendar_path}\n"
+                    f"文件是否存在: {calendar_path.exists()}\n"
+                    f"将回退到表达式引擎计算"
+                )
+            else:
+                logger.warning(f"使用Alpha158 handler计算失败: {e}")
+            raise
+    
+    async def _calculate_using_expression_engine(
+        self,
+        qlib_data: pd.DataFrame,
+        stock_codes: List[str],
+        date_range: Tuple[datetime, datetime]
+    ) -> pd.DataFrame:
+        """
+        使用Qlib表达式引擎计算Alpha158因子
+        
+        基于Alpha158DL.get_feature_config()获取的因子表达式
+        """
+        try:
+            # 检查数据结构
             if isinstance(qlib_data.index, pd.MultiIndex) and qlib_data.index.nlevels == 2:
                 # MultiIndex: (stock_code, date)
-                logger.info("使用MultiIndex数据结构，按股票分组并行计算")
+                logger.info("使用MultiIndex数据结构，按股票分组计算")
                 
                 # 按股票分割数据
                 stock_groups = {}
@@ -415,16 +1080,17 @@ class Alpha158Calculator:
                         logger.warning(f"股票 {stock_code} 不在数据中")
                         continue
             else:
-                # 单索引: 假设是日期索引，所有股票数据在列中
-                logger.info("使用单索引数据结构，按列分割并行计算")
-                # 这里需要根据实际数据结构调整
-                return await self._calculate_simplified_alpha_factors(qlib_data)
+                logger.warning("数据格式不支持，无法使用表达式引擎计算")
+                return pd.DataFrame()
             
-            # 使用多进程并行计算
+            # 使用表达式引擎计算因子
+            # 由于Qlib表达式引擎需要数据在Qlib系统中，我们使用pandas实现表达式计算
+            # 这里使用表达式解析和pandas计算
+            
             factors_list = []
             
+            # 使用多进程并行计算
             if len(stock_groups) > 1 and self.max_workers > 1:
-                # 多进程计算
                 logger.info(f"使用 {self.max_workers} 个进程并行计算因子")
                 
                 with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
@@ -432,7 +1098,10 @@ class Alpha158Calculator:
                     
                     # 提交任务
                     for stock_code, stock_data in stock_groups.items():
-                        future = executor.submit(self._calculate_factors_for_stock, stock_data, stock_code)
+                        future = executor.submit(
+                            self._calculate_alpha_factors_from_expressions,
+                            stock_data, stock_code
+                        )
                         futures[future] = stock_code
                     
                     # 收集结果
@@ -449,7 +1118,7 @@ class Alpha158Calculator:
                 # 单进程计算
                 logger.info("使用单进程计算因子")
                 for stock_code, stock_data in stock_groups.items():
-                    stock_factors = self._calculate_factors_for_stock(stock_data, stock_code)
+                    stock_factors = self._calculate_alpha_factors_from_expressions(stock_data, stock_code)
                     if not stock_factors.empty:
                         factors_list.append(stock_factors)
                         logger.debug(f"完成股票 {stock_code} 的因子计算: {len(stock_factors.columns)} 个因子")
@@ -457,27 +1126,131 @@ class Alpha158Calculator:
             # 合并所有因子
             if factors_list:
                 alpha_factors = pd.concat(factors_list)
-                logger.info(f"Alpha158因子计算完成: {len(alpha_factors)} 条记录, {len(alpha_factors.columns)} 个因子")
+                return alpha_factors
             else:
-                logger.warning("没有计算出任何因子")
-                alpha_factors = pd.DataFrame(index=qlib_data.index)
+                return pd.DataFrame()
+                
+        except Exception as e:
+            logger.error(f"使用表达式引擎计算失败: {e}")
+            raise
+    
+    def _calculate_alpha_factors_from_expressions(
+        self,
+        stock_data: pd.DataFrame,
+        stock_code: str
+    ) -> pd.DataFrame:
+        """
+        从Alpha158表达式计算因子（使用pandas实现）
+        
+        使用Qlib的alpha_fields和alpha_names，通过表达式解析计算全部158个因子
+        """
+        try:
+            # 确保数据有正确的列
+            required_cols = ['$close', '$high', '$low', '$volume', '$open']
+            missing_cols = [col for col in required_cols if col not in stock_data.columns]
+            if missing_cols:
+                logger.warning(f"股票 {stock_code} 缺少必要列: {missing_cols}，无法计算Alpha158因子")
+                return pd.DataFrame(index=stock_data.index)
             
-            # 缓存结果
-            if use_cache and not alpha_factors.empty:
-                cache_key = self.factor_cache.get_cache_key(stock_codes, date_range)
-                self.factor_cache.save_factors(cache_key, alpha_factors)
+            factors = pd.DataFrame(index=stock_data.index)
             
-            return alpha_factors
+            # 如果有完整的alpha_fields和alpha_names，使用表达式解析计算全部158个因子
+            if len(self.alpha_fields) > 0 and len(self.alpha_names) > 0 and len(self.alpha_fields) == len(self.alpha_names):
+                logger.info(f"股票 {stock_code} 使用表达式解析计算全部 {len(self.alpha_fields)} 个Alpha158因子")
+                
+                success_count = 0
+                fail_count = 0
+                
+                # 遍历所有因子表达式
+                failed_expressions = []  # 记录失败的表达式，用于调试
+                for idx, (field_expr, factor_name) in enumerate(zip(self.alpha_fields, self.alpha_names)):
+                    try:
+                        # 使用表达式评估器计算因子
+                        factor_series = self._evaluate_qlib_expression(stock_data, field_expr)
+                        if factor_series is not None and len(factor_series) > 0:
+                            # 检查是否有有效值（不是全部NaN）
+                            valid_count = factor_series.notna().sum()
+                            if valid_count > 0:
+                                # 有有效值，填充NaN为0（对于滚动窗口函数，前几个值可能是NaN）
+                                factors[factor_name] = factor_series.fillna(0)
+                                success_count += 1
+                            else:
+                                # 全部是NaN，可能是数据不足或计算错误
+                                logger.debug(f"因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 全部为NaN: {field_expr}")
+                                factors[factor_name] = 0
+                                fail_count += 1
+                                failed_expressions.append((factor_name, field_expr, "全部为NaN"))
+                        else:
+                            # 如果表达式解析失败，填充0
+                            logger.debug(f"因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 表达式解析返回空: {field_expr}")
+                            factors[factor_name] = 0
+                            fail_count += 1
+                            failed_expressions.append((factor_name, field_expr, "返回空"))
+                    except Exception as e:
+                        logger.debug(f"计算因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 失败: {e}, 表达式: {field_expr}")
+                        # 失败时填充0
+                        factors[factor_name] = 0
+                        fail_count += 1
+                        failed_expressions.append((factor_name, field_expr, str(e)))
+                
+                # 如果失败数量较多，记录前20个失败的表达式用于调试
+                if fail_count > 0 and len(failed_expressions) > 0:
+                    logger.warning(f"股票 {stock_code} 失败的因子表达式（前20个）:")
+                    for name, expr, error in failed_expressions[:20]:
+                        logger.warning(f"  - {name}: {expr} (错误: {error})")
+                
+                logger.info(f"股票 {stock_code} 表达式解析完成: 成功 {success_count} 个, 失败 {fail_count} 个, 总计 {len(factors.columns)} 个因子")
+            else:
+                # 回退到简化版本（47个核心因子）
+                logger.warning(f"Alpha158配置不可用，使用简化版本（47个核心因子）")
+                close = stock_data['$close']
+                high = stock_data['$high']
+                low = stock_data['$low']
+                volume = stock_data['$volume']
+                open_ = stock_data['$open']
+                
+                # 基础价格因子
+                factors['KMID'] = (close - open_) / open_
+                factors['KLEN'] = (high - low) / close
+                factors['KUP'] = (high - close) / close
+                factors['KLOW'] = (close - low) / close
+                
+                # 价格收益率（不同周期）
+                for period in [1, 2, 3, 5, 10, 20, 30, 60]:
+                    factors[f'RET{period}'] = close.pct_change(period)
+                
+                # 移动平均
+                for period in [5, 10, 20, 30, 60]:
+                    factors[f'MA{period}'] = close.rolling(period).mean()
+                
+                # 标准差
+                for period in [5, 10, 20, 30, 60]:
+                    factors[f'STD{period}'] = close.rolling(period).std()
+                
+                # 最大值/最小值
+                for period in [5, 10, 20, 30, 60]:
+                    factors[f'MAX{period}'] = close.rolling(period).max()
+                    factors[f'MIN{period}'] = close.rolling(period).min()
+                
+                # 量价相关性
+                for period in [5, 10, 20, 30, 60]:
+                    factors[f'CORR{period}'] = close.rolling(period).corr(volume)
+                
+                # 成交量因子
+                for period in [5, 10, 20, 30, 60]:
+                    factors[f'VMA{period}'] = volume.rolling(period).mean()
+                    factors[f'VSTD{period}'] = volume.rolling(period).std()
+            
+            # 填充缺失值（使用新API）
+            factors = factors.bfill().fillna(0)
+            
+            logger.debug(f"股票 {stock_code} 最终计算了 {len(factors.columns)} 个因子")
+            
+            return factors
             
         except Exception as e:
-            logger.error(f"Alpha因子计算失败: {e}", exc_info=True)
-            # 如果多进程计算失败，尝试回退到简化版本
-            logger.warning("回退到简化版Alpha因子计算")
-            try:
-                return await self._calculate_simplified_alpha_factors(qlib_data)
-            except Exception as e2:
-                logger.error(f"简化版Alpha因子计算也失败: {e2}")
-                return pd.DataFrame(index=qlib_data.index)
+            logger.error(f"计算股票 {stock_code} 的因子失败: {e}", exc_info=True)
+            return pd.DataFrame(index=stock_data.index)
     
     async def _calculate_qlib_alpha158_factors(self, data: pd.DataFrame, stock_codes: List[str]) -> pd.DataFrame:
         """使用Qlib内置的Alpha158计算因子"""
@@ -533,238 +1306,707 @@ class Alpha158Calculator:
                 
                 # 暂时使用简化实现，但使用Qlib定义的因子名称
                 logger.info("使用Qlib Alpha158因子定义，通过pandas计算")
-                return await self._calculate_alpha_factors_from_expressions(data, self.alpha_fields, self.alpha_names)
+                # 注意：这里调用的是Alpha158Calculator类中的方法，需要按股票分组计算
+                # 由于_calculate_alpha_factors_from_expressions需要(stock_data, stock_code)参数
+                # 我们需要按股票分组调用
+                factors_list = []
+                for stock_code in stock_codes:
+                    try:
+                        if isinstance(data.index, pd.MultiIndex):
+                            stock_data = data.xs(stock_code, level=0, drop_level=False)
+                        else:
+                            stock_data = data.copy()
+                        
+                        if not stock_data.empty:
+                            stock_factors = self._calculate_alpha_factors_from_expressions(stock_data, stock_code)
+                            if not stock_factors.empty:
+                                factors_list.append(stock_factors)
+                    except Exception as e:
+                        logger.warning(f"计算股票 {stock_code} 的因子失败: {e}")
+                        continue
+                
+                if factors_list:
+                    return pd.concat(factors_list)
+                else:
+                    return pd.DataFrame(index=data.index)
                 
             except Exception as e:
                 logger.warning(f"使用QlibDataLoader失败: {e}，使用表达式计算")
-                return await self._calculate_alpha_factors_from_expressions(data, self.alpha_fields, self.alpha_names)
+                # 回退到按股票分组计算
+                factors_list = []
+                for stock_code in stock_codes:
+                    try:
+                        if isinstance(data.index, pd.MultiIndex):
+                            stock_data = data.xs(stock_code, level=0, drop_level=False)
+                        else:
+                            stock_data = data.copy()
+                        
+                        if not stock_data.empty:
+                            stock_factors = self._calculate_alpha_factors_from_expressions(stock_data, stock_code)
+                            if not stock_factors.empty:
+                                factors_list.append(stock_factors)
+                    except Exception as e2:
+                        logger.warning(f"计算股票 {stock_code} 的因子失败: {e2}")
+                        continue
+                
+                if factors_list:
+                    return pd.concat(factors_list)
+                else:
+                    return pd.DataFrame(index=data.index)
                 
         except Exception as e:
             logger.error(f"Qlib Alpha158因子计算失败: {e}", exc_info=True)
             return pd.DataFrame(index=data.index)
     
-    async def _calculate_alpha_factors_from_expressions(self, data: pd.DataFrame, expressions: List[str], names: List[str]) -> pd.DataFrame:
-        """从Qlib表达式计算Alpha因子（使用pandas实现）"""
-        factors = pd.DataFrame(index=data.index)
-        
-        # 创建一个表达式到pandas操作的映射
-        # 由于Qlib表达式比较复杂，我们实现一个简化版本
-        # 对于复杂的表达式，使用pandas的rolling和基本操作
-        
-        try:
-            # 对于每个表达式，尝试解析并计算
-            # 这是一个简化实现，只处理常见的表达式模式
-            for expr, name in zip(expressions, names):
-                try:
-                    # 解析并计算表达式
-                    factor_value = self._evaluate_qlib_expression(data, expr)
-                    if factor_value is not None:
-                        factors[name] = factor_value
-                except Exception as e:
-                    logger.debug(f"计算因子 {name} ({expr}) 失败: {e}")
-                    continue
-            
-            # 填充无穷大和NaN值
-            factors = factors.replace([np.inf, -np.inf], np.nan)
-            # 使用fillna的forward fill，然后填充0
-            # pandas 2.0+ 使用 ffill() 方法，旧版本使用 fillna(method='ffill')
-            try:
-                factors = factors.ffill()
-            except AttributeError:
-                factors = factors.fillna(method='ffill')
-            factors = factors.fillna(0)
-            
-            logger.info(f"成功计算 {len(factors.columns)} 个Alpha158因子")
-            return factors
-            
-        except Exception as e:
-            logger.error(f"表达式计算失败: {e}")
-            return pd.DataFrame(index=data.index)
-    
     def _evaluate_qlib_expression(self, data: pd.DataFrame, expression: str) -> Optional[pd.Series]:
-        """评估Qlib表达式（使用pandas实现）"""
+        """
+        评估Qlib表达式（使用pandas实现）
+        
+        支持Alpha158中使用的所有Qlib函数，包括嵌套函数和复杂表达式
+        """
         try:
             import re
             
             # 创建一个数据副本用于计算（避免修改原始数据）
             calc_data = data.copy()
             
-            # 处理Ref函数：Ref($close, n) -> data['$close'].shift(n)
+            # 标准化列名：确保基础列有$前缀
+            # 如果列名没有$前缀，添加$前缀
+            column_mapping = {}
+            for col in ['open', 'high', 'low', 'close', 'volume', 'vwap']:
+                if col in calc_data.columns and f'${col}' not in calc_data.columns:
+                    column_mapping[col] = f'${col}'
+            if column_mapping:
+                calc_data = calc_data.rename(columns=column_mapping)
+            
+            # 确保$vwap列存在（如果不存在则使用$close替代）
+            if '$vwap' not in calc_data.columns:
+                if '$close' in calc_data.columns:
+                    calc_data['$vwap'] = calc_data['$close']
+                elif 'close' in calc_data.columns:
+                    calc_data['$vwap'] = calc_data['close']
+            
+            # 使用递归方式处理嵌套函数，从内到外
+            # 先处理最内层的函数，然后逐步向外处理
+            
+            # 步骤1: 处理Ref函数（最基础，可能被其他函数使用）
+            # 注意：这里直接替换变量，因为Ref函数需要立即使用变量
+            # 但需要确保变量名已经标准化（有$前缀）
             def replace_ref(match):
                 var = match.group(1)
                 n = int(match.group(2))
+                # 确保变量名有$前缀（calc_data中的列名应该有$前缀）
                 return f"calc_data['${var}'].shift({n})"
-            expr = re.sub(r'Ref\(\$(\w+),\s*(\d+)\)', replace_ref, expression)
+            expr = expression
+            while re.search(r'Ref\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Ref\(\$(\w+),\s*(\d+)\)', replace_ref, expr)
             
-            # 处理Mean函数：Mean($close, n) -> data['$close'].rolling(n).mean()
-            def replace_mean(match):
+            # 步骤1.5: 修复Ref函数替换后可能产生的嵌套calc_data
+            # 如果Ref函数中的$var在后续变量替换时又被替换，会产生嵌套
+            # 这里先修复这种情况
+            var_names = ['close', 'open', 'high', 'low', 'volume', 'vwap']
+            for var_name in var_names:
+                # 修复 calc_data['calc_data['$var']'].shift(...) 格式
+                nested_pattern = rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+                if re.search(nested_pattern, expr):
+                    expr = re.sub(nested_pattern, rf"calc_data['\${var_name}'].shift(\1)", expr)
+                # 更简单的修复：直接替换嵌套的calc_data（在任何上下文中）
+                # 需要处理多种嵌套情况
+                nested_patterns = [
+                    f"calc_data['calc_data['${var_name}']']",  # 基本嵌套
+                    f"calc_data['calc_data['${var_name}']'].shift",  # 带shift的嵌套
+                ]
+                for nested_pattern in nested_patterns:
+                    if nested_pattern in expr:
+                        expr = expr.replace(nested_pattern, f"calc_data['${var_name}']")
+            
+            # 步骤2: 处理Log函数（可能在Corr等函数内部）
+            def replace_log(match):
+                inner = match.group(1)
+                # 处理 Log($var+1) 或 Log($var-1) 等形式
+                if '+' in inner or '-' in inner:
+                    var_match = re.search(r'\$(\w+)', inner)
+                    if var_match:
+                        var = var_match.group(1)
+                        # 提取常数部分（支持科学计数法如1e-12）
+                        const_match = re.search(r'([+-]\s*(?:\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))', inner)
+                        if const_match:
+                            const = const_match.group(1).replace(' ', '')
+                            return f"np.log(calc_data['${var}']{const})"
+                # 简单情况：Log($var) 或 Log(表达式)
+                var_match = re.search(r'\$(\w+)', inner)
+                if var_match:
+                    var = var_match.group(1)
+                    return f"np.log(calc_data['${var}'])"
+                # 如果inner已经是表达式，直接包装
+                return f"np.log({inner})"
+            while re.search(r'Log\(([^)]+)\)', expr):
+                expr = re.sub(r'Log\(([^)]+)\)', replace_log, expr)
+            
+            # 步骤3: 处理Abs函数
+            def replace_abs(match):
+                inner = match.group(1)
+                return f"np.abs({inner})"
+            while re.search(r'Abs\(([^)]+)\)', expr):
+                expr = re.sub(r'Abs\(([^)]+)\)', replace_abs, expr)
+            
+            # 步骤4: 保留Greater/Less，交由运行时函数处理，返回Series以支持rolling
+            def _as_series(x, ref):
+                if isinstance(x, pd.Series):
+                    return x
+                if np.isscalar(x):
+                    return pd.Series([x] * len(ref), index=ref.index)
+                if isinstance(x, np.ndarray):
+                    return pd.Series(x, index=ref.index)
+                return pd.Series(x, index=ref.index)
+            
+            def Greater(a, b=0):
+                if isinstance(a, pd.Series) or isinstance(b, pd.Series):
+                    ref = a if isinstance(a, pd.Series) else b
+                    a_s = _as_series(a, ref)
+                    b_s = _as_series(b, ref)
+                    return a_s.where(a_s > b_s, b_s)
+                return np.maximum(a, b)
+            
+            def Less(a, b=0):
+                if isinstance(a, pd.Series) or isinstance(b, pd.Series):
+                    ref = a if isinstance(a, pd.Series) else b
+                    a_s = _as_series(a, ref)
+                    b_s = _as_series(b, ref)
+                    return a_s.where(a_s < b_s, b_s)
+                return np.minimum(a, b)
+            
+            def Sum(x, n):
+                # 确保x是Series
+                if not isinstance(x, pd.Series):
+                    x_s = _as_series(x, calc_data)
+                else:
+                    x_s = x
+                # 确保索引对齐
+                if not x_s.index.equals(calc_data.index):
+                    x_s = x_s.reindex(calc_data.index)
+                return x_s.rolling(int(n)).sum()
+            
+            # 步骤5: 处理IdxMax和IdxMin函数（优先于Max/Min，避免IdxMax被Max替换）
+            # 注意：这些函数已经在返回值中包含了calc_data['$var']，所以不需要在步骤14再次替换
+            def replace_idxmax(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).mean()"
-            expr = re.sub(r'Mean\(\$(\w+),\s*(\d+)\)', replace_mean, expr)
-            
-            # 处理Std函数
-            def replace_std(match):
+                # 直接返回完整的表达式，变量已经在其中
+                # 改进：使用更简单的方式计算，避免lambda中的复杂逻辑
+                return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmax()) / {n} if len(x) == {n} else np.nan, raw=True))"
+            def replace_idxmin(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).std()"
-            expr = re.sub(r'Std\(\$(\w+),\s*(\d+)\)', replace_std, expr)
+                # 改进：使用更简单的方式计算
+                return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmin()) / {n} if len(x) == {n} else np.nan, raw=True))"
+            while re.search(r'IdxMax\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'IdxMax\(\$(\w+),\s*(\d+)\)', replace_idxmax, expr)
+            while re.search(r'IdxMin\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'IdxMin\(\$(\w+),\s*(\d+)\)', replace_idxmin, expr)
             
-            # 处理Max函数
+            # 步骤6: 处理单变量滚动函数（Max, Min, Mean, Std等）
             def replace_max(match):
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).max()"
-            expr = re.sub(r'Max\(\$(\w+),\s*(\d+)\)', replace_max, expr)
-            
-            # 处理Min函数
             def replace_min(match):
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).min()"
-            expr = re.sub(r'Min\(\$(\w+),\s*(\d+)\)', replace_min, expr)
+            def replace_mean_var(match):
+                var = match.group(1)
+                n = int(match.group(2))
+                return f"calc_data['${var}'].rolling({n}).mean()"
+            def replace_std(match):
+                var = match.group(1)
+                n = int(match.group(2))
+                return f"calc_data['${var}'].rolling({n}).std()"
             
-            # 处理Quantile函数
+            while re.search(r'Max\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Max\(\$(\w+),\s*(\d+)\)', replace_max, expr)
+            while re.search(r'Min\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Min\(\$(\w+),\s*(\d+)\)', replace_min, expr)
+            while re.search(r'Mean\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Mean\(\$(\w+),\s*(\d+)\)', replace_mean_var, expr)
+            while re.search(r'Std\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Std\(\$(\w+),\s*(\d+)\)', replace_std, expr)
+            
+            # 步骤7: 处理Corr函数（两个变量）
+            def replace_corr(match):
+                var1_expr = match.group(1)
+                var2_expr = match.group(2)
+                n = int(match.group(3))
+                # 如果var1或var2是表达式，需要先处理
+                # 简化处理：假设都是$var格式
+                var1_match = re.search(r'\$(\w+)', var1_expr)
+                var2_match = re.search(r'\$(\w+)', var2_expr)
+                if var1_match and var2_match:
+                    var1 = var1_match.group(1)
+                    var2 = var2_match.group(1)
+                    return f"calc_data['${var1}'].rolling({n}).corr(calc_data['${var2}'])"
+                # 如果包含表达式，需要更复杂的处理
+                return f"pd.Series({var1_expr}).rolling({n}).corr(pd.Series({var2_expr}))"
+            while re.search(r'Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)', replace_corr, expr)
+            
+            # 步骤8: Sum函数现在由运行时函数处理，不需要在表达式解析时替换
+            # Sum函数保留为运行时调用，由eval时的Sum函数处理
+            
+            # 步骤9: 处理Mean函数（用于嵌套表达式，如Mean(Abs(...), n)）
+            # 使用类似Sum函数的括号匹配方法处理嵌套Mean函数
+            def find_mean_and_replace(expr_str):
+                """找到Mean函数并替换，处理嵌套括号"""
+                def find_matching_paren(s, start_pos):
+                    count = 0
+                    i = start_pos
+                    while i < len(s):
+                        if s[i] == '(':
+                            count += 1
+                        elif s[i] == ')':
+                            count -= 1
+                            if count == 0:
+                                return i
+                        i += 1
+                    return -1
+                
+                mean_positions = [m.start() for m in re.finditer(r'Mean\(', expr_str)]
+                if not mean_positions:
+                    return expr_str, False
+                
+                for pos in reversed(mean_positions):
+                    end_pos = find_matching_paren(expr_str, pos + 5)
+                    if end_pos > 0:
+                        comma_pos = expr_str.rfind(',', pos + 5, end_pos)
+                        if comma_pos > 0:
+                            inner_expr = expr_str[pos + 5:comma_pos].strip()
+                            n_str = expr_str[comma_pos + 1:end_pos].strip()
+                            try:
+                                n = int(n_str)
+                                # 检查是否是简单的$var格式（已经在步骤6处理过）
+                                if re.match(r'calc_data\[\'\$\w+\'\]', inner_expr.strip()):
+                                    continue  # 跳过，已经在步骤6处理过
+                                # 对于复杂表达式（包括比较操作符、函数调用等），使用pd.Series包装
+                                replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
+                                new_expr = expr_str[:pos] + replacement + expr_str[end_pos + 1:]
+                                return new_expr, True
+                            except ValueError:
+                                pass
+                return expr_str, False
+            
+            # 注意：Mean函数需要在变量替换之后处理，所以这里先跳过
+            # Mean函数将在步骤15（变量替换后）处理
+            # 但需要先定义find_mean_and_replace函数，以便在步骤15使用
+            # find_mean_and_replace函数已在上面定义
+            
+            # 步骤10: 处理Std函数（用于嵌套表达式，如Std(Abs(...), n)）
+            # 使用类似Sum函数的括号匹配方法处理嵌套Std函数
+            def find_std_and_replace(expr_str):
+                """找到Std函数并替换，处理嵌套括号"""
+                def find_matching_paren(s, start_pos):
+                    """找到匹配的右括号位置"""
+                    count = 0
+                    i = start_pos
+                    while i < len(s):
+                        if s[i] == '(':
+                            count += 1
+                        elif s[i] == ')':
+                            count -= 1
+                            if count == 0:
+                                return i
+                        i += 1
+                    return -1
+                
+                # 查找所有Std(的位置
+                std_positions = [m.start() for m in re.finditer(r'Std\(', expr_str)]
+                if not std_positions:
+                    return expr_str, False
+                
+                # 从后往前处理，避免位置偏移
+                for pos in reversed(std_positions):
+                    # 找到匹配的右括号
+                    end_pos = find_matching_paren(expr_str, pos + 4)
+                    if end_pos > 0:
+                        # 找到最后一个逗号（分隔参数和n的）
+                        comma_pos = expr_str.rfind(',', pos + 4, end_pos)
+                        if comma_pos > 0:
+                            inner_expr = expr_str[pos + 4:comma_pos].strip()
+                            n_str = expr_str[comma_pos + 1:end_pos].strip()
+                            try:
+                                n = int(n_str)
+                                # 检查是否是简单的$var格式（已经在步骤6处理过）
+                                if re.match(r'calc_data\[\'\$\w+\'\]', inner_expr.strip()):
+                                    continue  # 跳过，已经在步骤6处理过
+                                # 对于复杂表达式，使用pd.Series包装
+                                replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
+                                new_expr = expr_str[:pos] + replacement + expr_str[end_pos + 1:]
+                                return new_expr, True
+                            except ValueError:
+                                pass
+                return expr_str, False
+            
+            # 递归处理嵌套的Std函数（从内到外）
+            # 注意：需要在变量替换之前处理，但变量可能还没有替换
+            # 所以需要先进行基本的变量替换（只替换独立的$var，不在函数参数中的）
+            max_iterations_std = 20
+            iteration = 0
+            prev_expr = ""
+            while iteration < max_iterations_std:
+                if expr == prev_expr:
+                    break
+                prev_expr = expr
+                new_expr, replaced = find_std_and_replace(expr)
+                if not replaced:
+                    break
+                expr = new_expr
+                iteration += 1
+            
+            # 步骤11: 处理Quantile函数
             def replace_quantile(match):
                 var = match.group(1)
                 n = int(match.group(2))
                 q = float(match.group(3))
                 return f"calc_data['${var}'].rolling({n}).quantile({q})"
-            expr = re.sub(r'Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)', replace_quantile, expr)
+            while re.search(r'Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)', expr):
+                expr = re.sub(r'Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)', replace_quantile, expr)
             
-            # 处理Corr函数（两个变量）
-            def replace_corr(match):
-                var1 = match.group(1)
-                var2 = match.group(2)
-                n = int(match.group(3))
-                return f"calc_data['${var1}'].rolling({n}).corr(calc_data['${var2}'])"
-            expr = re.sub(r'Corr\(\$(\w+),\s*\$(\w+),\s*(\d+)\)', replace_corr, expr)
-            
-            # 处理Corr函数（带Log）
-            def replace_corr_log(match):
-                var1 = match.group(1)
-                var2_expr = match.group(2)
-                n = int(match.group(3))
-                # 处理Log($volume+1)
-                if 'Log' in var2_expr:
-                    var2 = re.search(r'\$(\w+)', var2_expr).group(1)
-                    return f"calc_data['${var1}'].rolling({n}).corr(np.log(calc_data['${var2}'] + 1))"
-                return f"calc_data['${var1}'].rolling({n}).corr({var2_expr})"
-            expr = re.sub(r'Corr\(\$(\w+),\s*(Log\([^)]+\)),\s*(\d+)\)', replace_corr_log, expr)
-            
-            # 处理Log函数
-            def replace_log(match):
-                inner = match.group(1)
-                return f"np.log({inner})"
-            expr = re.sub(r'Log\(([^)]+)\)', replace_log, expr)
-            
-            # 处理Greater函数
-            def replace_greater(match):
-                a = match.group(1)
-                b = match.group(2)
-                return f"np.maximum({a}, {b})"
-            expr = re.sub(r'Greater\(([^,]+),\s*([^)]+)\)', replace_greater, expr)
-            
-            # 处理Less函数
-            def replace_less(match):
-                a = match.group(1)
-                b = match.group(2)
-                return f"np.minimum({a}, {b})"
-            expr = re.sub(r'Less\(([^,]+),\s*([^)]+)\)', replace_less, expr)
-            
-            # 处理Abs函数
-            expr = re.sub(r'Abs\(([^)]+)\)', r'np.abs(\1)', expr)
-            
-            # 处理Sum函数
-            def replace_sum(match):
-                inner_expr = match.group(1)
-                n = int(match.group(2))
-                return f"({inner_expr}).rolling({n}).sum()"
-            expr = re.sub(r'Sum\(([^,]+),\s*(\d+)\)', replace_sum, expr)
-            
-            # 处理Slope函数（线性回归斜率，简化实现）
-            def replace_slope(match):
-                var = match.group(1)
-                n = int(match.group(2))
-                # 使用线性回归的斜率近似
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0] if len(x) == {n} else np.nan, raw=True)"
-            expr = re.sub(r'Slope\(\$(\w+),\s*(\d+)\)', replace_slope, expr)
-            
-            # 处理Rsquare函数（R平方，简化实现）
-            def replace_rsquare(match):
-                var = match.group(1)
-                n = int(match.group(2))
-                # R平方简化：使用趋势强度
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: 1 - np.var(x - np.linspace(x.iloc[0], x.iloc[-1], len(x))) / (np.var(x) + 1e-8) if len(x) == {n} and np.var(x) > 0 else 0, raw=False)"
-            expr = re.sub(r'Rsquare\(\$(\w+),\s*(\d+)\)', replace_rsquare, expr)
-            
-            # 处理Resi函数（残差）
-            def replace_resi(match):
-                var = match.group(1)
-                n = int(match.group(2))
-                # 残差：价格与线性回归线的差
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: x.iloc[-1] - (np.polyfit(range(len(x)), x, 1)[0] * (len(x) - 1) + np.polyfit(range(len(x)), x, 1)[1]) if len(x) == {n} else np.nan, raw=False)"
-            expr = re.sub(r'Resi\(\$(\w+),\s*(\d+)\)', replace_resi, expr)
-            
-            # 处理Rank函数（排名）
+            # 步骤12: 处理Rank函数
             def replace_rank(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).rank(pct=True).iloc[:, -1] if hasattr(calc_data['${var}'].rolling({n}).rank(pct=True), 'iloc') else calc_data['${var}'].rolling({n}).apply(lambda x: (x.rank(pct=True).iloc[-1] if len(x) == {n} else np.nan), raw=False)"
-            # 简化Rank实现
-            def replace_rank_simple(match):
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: x.rank(pct=True).iloc[-1] if len(x) == {n} else np.nan, raw=False)"
+            while re.search(r'Rank\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Rank\(\$(\w+),\s*(\d+)\)', replace_rank, expr)
+            
+            # 步骤13: 处理Slope, Rsquare, Resi函数（如果需要）
+            def replace_slope(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: (x.rank(pct=True).iloc[-1] if len(x) == {n} else np.nan), raw=False)"
-            expr = re.sub(r'Rank\(\$(\w+),\s*(\d+)\)', replace_rank_simple, expr)
-            
-            # 处理IdxMax函数
-            def replace_idxmax(match):
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0] if len(x) == {n} else np.nan, raw=True)"
+            def replace_rsquare(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmax()) / {n} if len(x) == {n} else np.nan, raw=True)"
-            expr = re.sub(r'IdxMax\(\$(\w+),\s*(\d+)\)', replace_idxmax, expr)
-            
-            # 处理IdxMin函数
-            def replace_idxmin(match):
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: 1 - np.var(x - np.linspace(x.iloc[0] if len(x) > 0 else 0, x.iloc[-1] if len(x) > 0 else 0, len(x))) / (np.var(x) + 1e-8) if len(x) == {n} and np.var(x) > 0 else 0, raw=False)"
+            def replace_resi(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmin()) / {n} if len(x) == {n} else np.nan, raw=True)"
-            expr = re.sub(r'IdxMin\(\$(\w+),\s*(\d+)\)', replace_idxmin, expr)
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: x.iloc[-1] - (np.polyfit(range(len(x)), x, 1)[0] * (len(x) - 1) + np.polyfit(range(len(x)), x, 1)[1]) if len(x) == {n} else np.nan, raw=False)"
             
-            # 替换变量引用
-            expr = expr.replace('$close', "calc_data['$close']")
-            expr = expr.replace('$open', "calc_data['$open']")
-            expr = expr.replace('$high', "calc_data['$high']")
-            expr = expr.replace('$low', "calc_data['$low']")
-            expr = expr.replace('$volume', "calc_data['$volume']")
-            expr = expr.replace('$vwap', "calc_data.get('$vwap', calc_data['$close'])")
+            while re.search(r'Slope\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Slope\(\$(\w+),\s*(\d+)\)', replace_slope, expr)
+            while re.search(r'Rsquare\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Rsquare\(\$(\w+),\s*(\d+)\)', replace_rsquare, expr)
+            while re.search(r'Resi\(\$(\w+),\s*(\d+)\)', expr):
+                expr = re.sub(r'Resi\(\$(\w+),\s*(\d+)\)', replace_resi, expr)
             
-            # 处理Mean函数（用于布尔表达式，需要放在最后）
-            def replace_mean_bool(match):
-                inner_expr = match.group(1)
-                n = int(match.group(2))
-                return f"({inner_expr}).rolling({n}).mean()"
-            # 避免重复替换，只处理不包含$的Mean
-            if 'Mean(' in expr and '$' not in re.search(r'Mean\(([^,]+),', expr).group(1) if re.search(r'Mean\(([^,]+),', expr) else '':
-                expr = re.sub(r'Mean\(([^,]+),\s*(\d+)\)', replace_mean_bool, expr)
+            # 步骤14: 替换变量引用（最后处理，但在Mean/Std处理之前）
+            # 只替换那些还没有被处理的$var（不在calc_data['$var']中的）
+            # 使用更安全的方法：先替换所有独立的$var，但要避免替换已经在calc_data['$var']中的
+            var_names = ['close', 'open', 'high', 'low', 'volume', 'vwap']
+            for var_name in var_names:
+                replacement = f"calc_data['${var_name}']"
+                # 检查是否还有未处理的$var
+                if f"${var_name}" in expr:
+                    # 先修复可能存在的嵌套calc_data（从之前的错误替换中恢复）
+                    # 将calc_data['calc_data['$var']']替换为calc_data['$var']
+                    # 需要处理多种嵌套情况
+                    # 情况1: calc_data['calc_data['$var']...']（基本嵌套）
+                    nested_pattern1 = rf"calc_data\['calc_data\['\${var_name}'\]'\]"
+                    if nested_pattern1 in expr:
+                        expr = expr.replace(nested_pattern1, replacement)
+                    # 情况2: calc_data['calc_data['$var'].shift(...)']（带shift的嵌套）
+                    nested_pattern2 = rf"calc_data\['calc_data\['\${var_name}'\]\.shift\(([^)]+)\)'\]"
+                    if re.search(nested_pattern2, expr):
+                        expr = re.sub(nested_pattern2, rf"{replacement}.shift(\1)", expr)
+                    # 情况3: 在比较操作符中的嵌套（如 calc_data['$close']>calc_data['calc_data['$close']'].shift(1)）
+                    # 这种情况在变量替换时产生，需要特别处理
+                    nested_pattern3 = rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+                    if re.search(nested_pattern3, expr):
+                        expr = re.sub(nested_pattern3, rf"{replacement}.shift(\1)", expr)
+                    # 情况3: 修复在Ref函数中出现的嵌套（Ref($close, 1) -> calc_data['$close'].shift(1)，但$close又被替换了一次）
+                    # 这种情况会在变量替换时产生 calc_data['calc_data['$close']'].shift(1)
+                    # 需要在变量替换之前就修复Ref函数中的嵌套
+                    nested_pattern3 = rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+                    if re.search(nested_pattern3, expr):
+                        expr = re.sub(nested_pattern3, rf"{replacement}.shift(\1)", expr)
+                    
+                    # 使用更精确的替换：只替换不在calc_data['$var']中的$var
+                    # 使用固定宽度的lookbehind（只检查calc_data['）
+                    pattern = rf'(?<!calc_data\[\')\${var_name}(?!\'\])'
+                    # 多次替换直到没有变化（处理嵌套情况）
+                    max_replace_iterations = 10
+                    for iteration in range(max_replace_iterations):
+                        new_expr = re.sub(pattern, replacement, expr)
+                        # 每次替换后，立即修复可能产生的嵌套（在继续之前）
+                        # 修复 calc_data['calc_data['$var']'] 格式
+                        if f"calc_data['calc_data['${var_name}']']" in new_expr:
+                            new_expr = new_expr.replace(f"calc_data['calc_data['${var_name}']']", replacement)
+                        # 修复 calc_data['calc_data['$var']'].shift(...) 格式
+                        nested_shift_pattern = rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+                        if re.search(nested_shift_pattern, new_expr):
+                            new_expr = re.sub(nested_shift_pattern, rf"{replacement}.shift(\1)", new_expr)
+                        if new_expr == expr:
+                            # 检查是否还有未替换的$var（可能在函数参数中）
+                            if f"${var_name}" in new_expr and f"calc_data['${var_name}']" in new_expr:
+                                # 还有未替换的$var，尝试更激进的替换
+                                # 只保留已经在calc_data中的，其他全部替换
+                                temp_expr = new_expr.replace(f"calc_data['${var_name}']", f"__TEMP_{var_name}__")
+                                temp_expr = temp_expr.replace(f"${var_name}", replacement)
+                                new_expr = temp_expr.replace(f"__TEMP_{var_name}__", f"calc_data['${var_name}']")
+                                # 再次修复嵌套
+                                if f"calc_data['calc_data['${var_name}']']" in new_expr:
+                                    new_expr = new_expr.replace(f"calc_data['calc_data['${var_name}']']", replacement)
+                                if re.search(nested_shift_pattern, new_expr):
+                                    new_expr = re.sub(nested_shift_pattern, rf"{replacement}.shift(\1)", new_expr)
+                            if new_expr == expr:
+                                break
+                        expr = new_expr
+                    # 继续处理下一个变量，不break
+            
+            # 步骤15: 处理Mean和Std函数（在变量替换后，确保所有变量都已替换）
+            # 处理包含比较操作符或复杂表达式的Mean/Std函数
+            # Mean函数 - 处理包含比较操作符的表达式，如 Mean($close>Ref($close, 1), 5)
+            # 使用直接的字符串替换方法，确保所有Mean函数都被替换
+            def find_matching_paren_simple(s, start_pos):
+                count = 0
+                i = start_pos
+                while i < len(s):
+                    if s[i] == '(':
+                        count += 1
+                    elif s[i] == ')':
+                        count -= 1
+                        if count == 0:
+                            return i
+                    i += 1
+                return -1
+            
+            # 先修复嵌套的calc_data（在Mean函数处理之前）
+            var_names = ['close', 'open', 'high', 'low', 'volume', 'vwap']
+            for var_name in var_names:
+                # 修复 calc_data['calc_data['$var']'] 格式（在任何上下文中）
+                # 需要处理多种嵌套情况
+                nested_patterns = [
+                    f"calc_data['calc_data['${var_name}']']",  # 基本嵌套
+                    f"calc_data['calc_data['${var_name}']'].shift",  # 带shift的嵌套
+                ]
+                for nested_pattern in nested_patterns:
+                    if nested_pattern in expr:
+                        expr = expr.replace(nested_pattern, f"calc_data['${var_name}']")
+            
+            # 处理所有Mean函数
+            max_mean_iterations = 20
+            mean_iteration = 0
+            while 'Mean(' in expr and mean_iteration < max_mean_iterations:
+                mean_positions = [m.start() for m in re.finditer(r'Mean\(', expr)]
+                if not mean_positions:
+                    break
+                
+                # 从后往前处理，避免位置偏移
+                replaced_any = False
+                for pos in reversed(mean_positions):
+                    end_pos = find_matching_paren_simple(expr, pos + 5)
+                    if end_pos > 0:
+                        comma_pos = expr.rfind(',', pos + 5, end_pos)
+                        if comma_pos > 0:
+                            inner_expr = expr[pos + 5:comma_pos].strip()
+                            n_str = expr[comma_pos + 1:end_pos].strip()
+                            try:
+                                n = int(n_str)
+                                # 检查是否是简单的$var格式（已经在步骤6处理过）
+                                # 简单格式：calc_data['$var']（不包含操作符或函数调用）
+                                is_simple = re.match(r'^calc_data\[\'\$\w+\'\]$', inner_expr.strip())
+                                if not is_simple:
+                                    # 对于复杂表达式（包括比较操作符、函数调用等），使用pd.Series包装
+                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
+                                    expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                    replaced_any = True
+                                    break
+                            except ValueError:
+                                pass
+                
+                if not replaced_any:
+                    # 如果无法替换，可能是inner_expr格式问题，尝试强制替换
+                    # 找到第一个Mean函数，强制替换
+                    pos = mean_positions[0]
+                    end_pos = find_matching_paren_simple(expr, pos + 5)
+                    if end_pos > 0:
+                        comma_pos = expr.rfind(',', pos + 5, end_pos)
+                        if comma_pos > 0:
+                            inner_expr = expr[pos + 5:comma_pos].strip()
+                            n_str = expr[comma_pos + 1:end_pos].strip()
+                            try:
+                                n = int(n_str)
+                                # 强制替换，不管格式
+                                replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
+                                expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                replaced_any = True
+                            except ValueError:
+                                pass
+                
+                if not replaced_any:
+                    break
+                mean_iteration += 1
+            
+            # Std函数 - 处理包含复杂表达式的Std函数
+            # 使用直接的字符串替换方法，确保所有Std函数都被替换
+            # 处理所有Std函数
+            max_std_iterations = 20
+            std_iteration = 0
+            while 'Std(' in expr and std_iteration < max_std_iterations:
+                std_positions = [m.start() for m in re.finditer(r'Std\(', expr)]
+                if not std_positions:
+                    break
+                
+                # 从后往前处理，避免位置偏移
+                replaced_any = False
+                for pos in reversed(std_positions):
+                    end_pos = find_matching_paren_simple(expr, pos + 4)
+                    if end_pos > 0:
+                        comma_pos = expr.rfind(',', pos + 4, end_pos)
+                        if comma_pos > 0:
+                            inner_expr = expr[pos + 4:comma_pos].strip()
+                            n_str = expr[comma_pos + 1:end_pos].strip()
+                            try:
+                                n = int(n_str)
+                                # 检查是否是简单的$var格式（已经在步骤6处理过）
+                                # 简单格式：calc_data['$var']（不包含操作符或函数调用）
+                                is_simple = re.match(r'^calc_data\[\'\$\w+\'\]$', inner_expr.strip())
+                                if not is_simple:
+                                    # 对于复杂表达式，使用pd.Series包装
+                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
+                                    expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                    replaced_any = True
+                                    break
+                            except ValueError:
+                                pass
+                
+                if not replaced_any:
+                    # 如果无法替换，可能是inner_expr格式问题，尝试强制替换
+                    # 找到第一个Std函数，强制替换
+                    pos = std_positions[0]
+                    end_pos = find_matching_paren_simple(expr, pos + 4)
+                    if end_pos > 0:
+                        comma_pos = expr.rfind(',', pos + 4, end_pos)
+                        if comma_pos > 0:
+                            inner_expr = expr[pos + 4:comma_pos].strip()
+                            n_str = expr[comma_pos + 1:end_pos].strip()
+                            try:
+                                n = int(n_str)
+                                # 强制替换，不管格式
+                                replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
+                                expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                replaced_any = True
+                            except ValueError:
+                                pass
+                
+                if not replaced_any:
+                    break
+                std_iteration += 1
+            
+            # 在评估前，最后检查并修复Mean/Std函数（确保所有都被替换）
+            # 如果还有Mean/Std函数，强制替换
+            if 'Mean(' in expr or 'Std(' in expr:
+                logger.warning(f"表达式评估前仍有未替换的Mean/Std函数: {expr[:200]}...")
+                # 强制替换所有剩余的Mean/Std函数
+                def force_replace_mean_std(expr_str):
+                    """强制替换所有Mean/Std函数"""
+                    def find_matching_paren(s, start_pos):
+                        count = 0
+                        i = start_pos
+                        while i < len(s):
+                            if s[i] == '(':
+                                count += 1
+                            elif s[i] == ')':
+                                count -= 1
+                                if count == 0:
+                                    return i
+                            i += 1
+                        return -1
+                    
+                    # 处理Mean函数
+                    while 'Mean(' in expr_str:
+                        mean_pos = expr_str.find('Mean(')
+                        end_pos = find_matching_paren(expr_str, mean_pos + 5)
+                        if end_pos > 0:
+                            comma_pos = expr_str.rfind(',', mean_pos + 5, end_pos)
+                            if comma_pos > 0:
+                                inner_expr = expr_str[mean_pos + 5:comma_pos].strip()
+                                n_str = expr_str[comma_pos + 1:end_pos].strip()
+                                try:
+                                    n = int(n_str)
+                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
+                                    expr_str = expr_str[:mean_pos] + replacement + expr_str[end_pos + 1:]
+                                except ValueError:
+                                    break
+                        else:
+                            break
+                    
+                    # 处理Std函数
+                    while 'Std(' in expr_str:
+                        std_pos = expr_str.find('Std(')
+                        end_pos = find_matching_paren(expr_str, std_pos + 4)
+                        if end_pos > 0:
+                            comma_pos = expr_str.rfind(',', std_pos + 4, end_pos)
+                            if comma_pos > 0:
+                                inner_expr = expr_str[std_pos + 4:comma_pos].strip()
+                                n_str = expr_str[comma_pos + 1:end_pos].strip()
+                                try:
+                                    n = int(n_str)
+                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
+                                    expr_str = expr_str[:std_pos] + replacement + expr_str[end_pos + 1:]
+                                except ValueError:
+                                    break
+                        else:
+                            break
+                    
+                    return expr_str
+                
+                expr = force_replace_mean_std(expr)
             
             # 评估表达式
-            result = eval(expr)
+            result = eval(
+                expr,
+                {
+                    "np": np,
+                    "pd": pd,
+                    "calc_data": calc_data,
+                    "Greater": Greater,
+                    "Less": Less,
+                    "Sum": Sum,
+                },
+            )
             
-            # 如果是Series，直接返回；如果是DataFrame，取最后一列
+            # 如果是Series，直接返回；如果是DataFrame，取最后一列或第一列
             if isinstance(result, pd.DataFrame):
                 if len(result.columns) == 1:
                     return result.iloc[:, 0]
                 else:
-                    # 如果是多列，可能需要特殊处理
                     return result.iloc[:, -1]
-            return result
+            elif isinstance(result, pd.Series):
+                return result
+            else:
+                # 如果是标量或其他类型，尝试转换为Series
+                return pd.Series([result] * len(calc_data), index=calc_data.index)
             
         except Exception as e:
-            logger.debug(f"表达式 {expression} 评估失败: {e}")
-            import traceback
-            logger.debug(traceback.format_exc())
+            # 记录失败信息（限制数量避免日志过多）
+            error_msg = str(e)
+            # 只记录前几个详细错误，其他只记录简要信息
+            if not hasattr(self, '_detailed_error_count'):
+                self._detailed_error_count = 0
+            if self._detailed_error_count < 5:
+                logger.warning(
+                    f"表达式评估失败: {expression[:100]}... 错误: {error_msg}"
+                )
+                logger.debug(
+                    f"失败表达式(转换后): {expr[:200]}..."
+                )
+                logger.debug(
+                    f"可用列: {list(calc_data.columns)[:20]}{'...' if len(calc_data.columns) > 20 else ''}"
+                )
+                import traceback
+                logger.debug(traceback.format_exc())
+                self._detailed_error_count += 1
             return None
     
     async def _calculate_simplified_alpha_factors(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -818,7 +2060,7 @@ class Alpha158Calculator:
             
             # 填充无穷大和NaN值
             factors = factors.replace([np.inf, -np.inf], np.nan)
-            factors = factors.fillna(method='ffill').fillna(0)
+            factors = factors.ffill().fillna(0)
             
             logger.debug(f"计算了 {len(factors.columns)} 个Alpha因子")
             return factors
@@ -851,23 +2093,37 @@ class EnhancedQlibDataProvider:
             return
         
         try:
-            # 在使用memory://模式时，需要先设置mount_path和provider_uri，否则qlib会报错
+            # 使用本地路径作为 provider_uri，避免 Qlib 将 ":" 拼进 data_path 导致日历路径出错
             # 使用配置中的QLIB_DATA_PATH，如果不存在则创建
             qlib_data_path = Path(settings.QLIB_DATA_PATH).resolve()
             qlib_data_path.mkdir(parents=True, exist_ok=True)
             
+            # 确保交易日历文件存在（Qlib Alpha158 handler需要）
+            try:
+                from app.services.data.qlib_calendar_generator import QlibCalendarGenerator
+                calendar_generator = QlibCalendarGenerator()
+                calendar_generator.ensure_calendar_exists()
+            except Exception as cal_error:
+                logger.warning(f"生成交易日历文件失败: {cal_error}，Alpha158 handler可能无法使用")
+            
             # 准备mount_path和provider_uri配置
             # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
             # 确保所有路径都是绝对路径的字符串，避免Path对象传递
-            qlib_data_path_str = str(qlib_data_path.absolute())
+            # 注意：使用 .as_posix() 确保使用正斜杠，避免路径转义字符问题
+            # Qlib 内部可能会在路径拼接时出现问题，使用 POSIX 格式可以避免
+            qlib_data_path_str = qlib_data_path.resolve().as_posix()
             mount_path_config = {
                 "day": qlib_data_path_str,
                 "1min": qlib_data_path_str,
             }
             
+            # 记录路径信息用于调试
+            logger.debug(f"Qlib mount_path配置: {mount_path_config}")
+            logger.debug(f"交易日历文件路径: {qlib_data_path_str}/calendars/day.txt")
+            
             provider_uri_config = {
-                "day": "memory://",
-                "1min": "memory://",
+                "day": qlib_data_path_str,
+                "1min": qlib_data_path_str,
             }
             
             # 在调用 qlib.init() 之前，尝试修复 C.dpm 配置中的 Path 对象
@@ -887,7 +2143,7 @@ class EnhancedQlibDataProvider:
             except Exception:
                 pass  # 忽略配置修复错误
             
-            # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
+            # 通过kwargs传递配置，避免被C.set()重置
             # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
             # 设置 auto_mount=False 避免 qlib 内部处理 NFS mount 时的 Path 对象问题
             qlib.init(
@@ -896,6 +2152,76 @@ class EnhancedQlibDataProvider:
                 mount_path=mount_path_config,
                 auto_mount=False
             )
+            
+            # 修复日历文件路径问题
+            # Qlib 内部可能会在路径拼接时出现问题（出现 :\/ 或路径末尾的 :\）
+            # 这通常是因为 Qlib 内部使用了错误的路径拼接方式
+            # 我们需要在初始化后立即修复 C.dpm 中的路径配置
+            try:
+                from qlib.config import C
+                calendar_file = Path(qlib_data_path_str) / "calendars" / "day.txt"
+                if calendar_file.exists():
+                    logger.debug(f"交易日历文件已确认存在: {calendar_file}")
+                
+                # 强制修复 C.dpm.data_path（无论日历文件是否存在）
+                if hasattr(C, 'dpm') and hasattr(C.dpm, 'data_path'):
+                    data_path = C.dpm.data_path
+                    if isinstance(data_path, dict):
+                        # 清理路径的函数
+                        def clean_path_value(path_val):
+                            """清理路径值"""
+                            if isinstance(path_val, Path):
+                                path_str = str(path_val)
+                            elif isinstance(path_val, str):
+                                path_str = path_val
+                            else:
+                                return path_val
+                            # 清理路径末尾的异常字符
+                            fixed = path_str.rstrip(':\\').rstrip(':/').rstrip('\\').rstrip('/')
+                            # 如果路径中有 :\/，替换为 /
+                            fixed = fixed.replace(':\/', '/').replace(':\\/', '/')
+                            return fixed
+                        
+                        # 修复字典中的每个路径
+                        fixed_data_path = {}
+                        needs_fix = False
+                        for freq, path_val in data_path.items():
+                            path_str = str(path_val)
+                            fixed_path = clean_path_value(path_val)
+                            fixed_data_path[freq] = fixed_path
+                            # 检查是否需要修复
+                            if ':\\' in path_str or ':\/' in path_str or path_str.endswith(':\\') or path_str.endswith(':/'):
+                                needs_fix = True
+                                logger.info(f"检测到 data_path[{freq}] 路径问题: {repr(path_str)} -> {fixed_path}")
+                        
+                        # 如果检测到问题，强制修复
+                        if needs_fix:
+                            # 方法1: 直接设置
+                            try:
+                                C.dpm.data_path = fixed_data_path
+                                logger.info(f"✓ 已修复 C.dpm.data_path: {fixed_data_path}")
+                            except Exception as set_error:
+                                # 方法2: 通过 __dict__ 设置
+                                try:
+                                    if hasattr(C.dpm, '__dict__'):
+                                        C.dpm.__dict__['data_path'] = fixed_data_path
+                                        logger.info(f"✓ 通过 __dict__ 修复 data_path")
+                                    else:
+                                        # 方法3: 通过 setattr
+                                        setattr(C.dpm, 'data_path', fixed_data_path)
+                                        logger.info(f"✓ 通过 setattr 修复 data_path")
+                                except Exception as set_error2:
+                                    logger.warning(f"✗ 无法修复 data_path: {set_error}, {set_error2}")
+                                    # 方法4: 尝试替换整个 dpm 对象（最后的手段）
+                                    try:
+                                        # 创建一个新的 DataPathManager 对象（如果可能）
+                                        logger.warning("尝试其他方法修复 data_path...")
+                                    except Exception:
+                                        pass
+                        else:
+                            logger.debug("data_path 路径格式正确，无需修复")
+            except Exception as cal_setup_error:
+                logger.warning(f"修复 data_path 时出错: {cal_setup_error}，但不影响主要功能")
             _QLIB_GLOBAL_INITIALIZED = True
             self._qlib_initialized = True
             logger.info("Qlib环境初始化成功")
@@ -907,7 +2233,7 @@ class EnhancedQlibDataProvider:
                 logger.warning(f"检测到 qlib Path 对象问题，尝试替代初始化方式: {e}")
                 try:
                     # 尝试不传递 mount_path，让 qlib 使用默认值
-                    qlib.init(region=REG_CN, provider_uri="memory://", auto_mount=False)
+                    qlib.init(region=REG_CN, provider_uri=str(qlib_data_path.resolve()), auto_mount=False)
                     _QLIB_GLOBAL_INITIALIZED = True
                     self._qlib_initialized = True
                     logger.info("Qlib环境初始化成功（使用替代方式）")
@@ -1217,7 +2543,7 @@ class EnhancedQlibDataProvider:
         price_cols = ['$open', '$high', '$low', '$close', '$volume']
         for col in price_cols:
             if col in df_filled.columns:
-                df_filled[col] = df_filled[col].fillna(method='ffill')
+                df_filled[col] = df_filled[col].ffill()
         
         # 技术指标：使用0填充（因为计算窗口不足时为NaN是正常的）
         indicator_cols = [col for col in df_filled.columns if col not in price_cols]
@@ -1549,7 +2875,7 @@ class EnhancedQlibDataProvider:
                 negative_mask = data_fixed[col] <= 0
                 if negative_mask.sum() > 0:
                     # 使用前一个有效值填充
-                    data_fixed.loc[negative_mask, col] = data_fixed[col].fillna(method='ffill')
+                    data_fixed.loc[negative_mask, col] = data_fixed[col].ffill()
                     # 如果还有负值，使用均值
                     still_negative = data_fixed[col] <= 0
                     if still_negative.sum() > 0:
@@ -1571,7 +2897,7 @@ class EnhancedQlibDataProvider:
         for col in high_missing_cols:
             if col in ['$open', '$high', '$low', '$close']:
                 # 价格列使用前向填充
-                data_fixed[col] = data_fixed[col].fillna(method='ffill').fillna(method='bfill')
+                data_fixed[col] = data_fixed[col].ffill().bfill()
             elif col == '$volume':
                 # 成交量使用0填充
                 data_fixed[col] = data_fixed[col].fillna(0)

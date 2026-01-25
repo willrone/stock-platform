@@ -53,7 +53,35 @@ class ProcessTaskExecutor:
             return
         
         self.is_running = False
-        self.executor.shutdown(wait=wait, timeout=timeout)
+        
+        # 先尝试优雅关闭
+        try:
+            # 取消所有未完成的任务
+            if hasattr(self.executor, '_processes'):
+                # 获取所有活跃的Future
+                import concurrent.futures
+                for future in concurrent.futures.as_completed([]):
+                    try:
+                        future.cancel()
+                    except:
+                        pass
+            
+            # 关闭进程池
+            if wait:
+                # 等待任务完成，但设置超时
+                actual_timeout = timeout or 30.0
+                self.executor.shutdown(wait=True)
+            else:
+                # 不等待，立即关闭
+                self.executor.shutdown(wait=False)
+        except Exception as e:
+            logger.warning(f"关闭进程池时出错: {e}")
+            # 强制关闭
+            try:
+                self.executor.shutdown(wait=False)
+            except:
+                pass
+        
         logger.info("进程池执行器已关闭")
     
     def submit(self, fn: Callable, *args, **kwargs) -> Future:

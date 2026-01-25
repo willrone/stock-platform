@@ -272,7 +272,7 @@ class QlibFeatureProvider:
             return False
         
         try:
-            # 在使用memory://模式时，需要先设置mount_path和provider_uri，否则qlib会报错
+            # 使用本地路径作为 provider_uri，避免 Qlib 将 ":" 拼进 data_path 导致日历路径出错
             from app.core.config import settings
             
             # 使用配置中的QLIB_DATA_PATH，如果不存在则创建
@@ -287,11 +287,11 @@ class QlibFeatureProvider:
             }
             
             provider_uri_config = {
-                "day": "memory://",
-                "1min": "memory://",
+                "day": str(qlib_data_path),
+                "1min": str(qlib_data_path),
             }
             
-            # 使用内存模式，通过kwargs传递配置，避免被C.set()重置
+            # 通过kwargs传递配置，避免被C.set()重置
             # 注意：provider_uri作为字典传递时，会覆盖字符串形式的provider_uri
             qlib.init(
                 region=REG_CN,

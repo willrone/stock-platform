@@ -494,10 +494,10 @@ class FeatureExtractor:
         features = features.replace([np.inf, -np.inf], np.nan)
         
         # 前向填充缺失值
-        features = features.fillna(method='ffill')
+        features = features.ffill()
         
         # 后向填充剩余缺失值
-        features = features.fillna(method='bfill')
+        features = features.bfill()
         
         # 移除仍有缺失值的行
         features = features.dropna()

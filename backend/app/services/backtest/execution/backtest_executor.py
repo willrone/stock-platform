@@ -376,7 +376,42 @@ class BacktestExecutor:
         signal_generation_times = []
         trade_execution_times = []
         
+        # 辅助函数：检查任务状态
+        def check_task_status():
+            """检查任务是否仍然存在且处于运行状态"""
+            if not task_id:
+                return True
+            try:
+                from app.core.database import SessionLocal
+                from app.repositories.task_repository import TaskRepository
+                from app.models.task_models import TaskStatus
+                
+                session = SessionLocal()
+                try:
+                    task_repo = TaskRepository(session)
+                    task = task_repo.get_task_by_id(task_id)
+                    if not task:
+                        logger.warning(f"任务不存在，停止回测执行: {task_id}")
+                        return False
+                    if task.status != TaskStatus.RUNNING:
+                        logger.warning(f"任务状态为 {task.status}，停止回测执行: {task_id}")
+                        return False
+                    return True
+                finally:
+                    session.close()
+            except Exception as e:
+                logger.warning(f"检查任务状态失败: {e}，继续执行")
+                return True  # 检查失败时继续执行，避免因检查错误而中断
+        
         for i, current_date in enumerate(trading_dates):
+            # 在循环开始时检查任务状态（每10个交易日检查一次，避免频繁检查）
+            if task_id and i % 10 == 0 and i > 0:
+                if not check_task_status():
+                    logger.info(f"任务状态检查失败，停止回测执行: {task_id}")
+                    raise TaskError(
+                        message=f"任务 {task_id} 已被删除或状态已改变，停止回测执行",
+                        severity=ErrorSeverity.LOW
+                    )
             try:
                 # 获取当前价格
                 current_prices = {}
@@ -630,6 +665,18 @@ class BacktestExecutor:
                             existing_task = task_repo.get_task_by_id(task_id)
                             if not existing_task:
                                 logger.warning(f"任务不存在，无法更新进度: {task_id}")
+                                # 任务已被删除，停止回测执行
+                                raise TaskError(
+                                    message=f"任务 {task_id} 已被删除，停止回测执行",
+                                    severity=ErrorSeverity.LOW
+                                )
+                            # 检查任务状态，如果不是运行中，则停止执行
+                            elif existing_task.status != TaskStatus.RUNNING:
+                                logger.warning(f"任务状态为 {existing_task.status}，停止回测执行: {task_id}")
+                                raise TaskError(
+                                    message=f"任务 {task_id} 状态为 {existing_task.status}，停止回测执行",
+                                    severity=ErrorSeverity.LOW
+                                )
                             else:
                                 result_data = existing_task.result or {}
                                 if not isinstance(result_data, dict):

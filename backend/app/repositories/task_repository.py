@@ -2,6 +2,8 @@
 任务数据存储层 - 处理任务的CRUD操作和数据持久化
 """
 
+from __future__ import annotations  # 延迟评估类型注解，避免在独立进程中类型解析问题
+
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -23,7 +25,7 @@ class TaskRepository:
         self.db = db_session
     
     def create_task(self, task_name: str, task_type: TaskType, user_id: str,
-                   config: Dict[str, Any]) -> Task:
+                   config: 'Dict[str, Any]') -> 'Task':
         """创建新任务"""
         try:
             task = Task(
@@ -145,9 +147,14 @@ class TaskRepository:
     
     def update_task_status(self, task_id: str, status: TaskStatus, 
                           progress: Optional[float] = None,
-                          result: Optional[Dict[str, Any]] = None,
-                          error_message: Optional[str] = None) -> Task:
+                          result=None,  # 使用 None 作为默认值，避免类型注解问题
+                          error_message: Optional[str] = None) -> 'Task':
         """更新任务状态"""
+        # 在方法内部确保 Any 可用（用于类型检查，但不影响运行时）
+        from typing import Any, Dict
+        if result is not None and not isinstance(result, dict):
+            raise TypeError(f"result must be a dict, got {type(result)}")
+        
         try:
             task = self.get_task_by_id(task_id)
             if not task:
@@ -201,6 +208,37 @@ class TaskRepository:
             raise TaskError(
                 message=f"更新任务状态失败: {str(e)}",
                 severity=ErrorSeverity.HIGH,
+                context=ErrorContext(task_id=task_id),
+                original_exception=e
+            )
+    
+    def update_task_progress(self, task_id: str, progress: float) -> 'Task':
+        """更新任务进度"""
+        try:
+            task = self.get_task_by_id(task_id)
+            if not task:
+                raise TaskError(
+                    message=f"任务不存在: {task_id}",
+                    severity=ErrorSeverity.MEDIUM,
+                    context=ErrorContext(task_id=task_id)
+                )
+            
+            old_progress = task.progress
+            task.progress = progress
+            
+            self.db.commit()
+            self.db.refresh(task)
+            
+            logger.debug(f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%")
+            return task
+            
+        except TaskError:
+            raise
+        except Exception as e:
+            self.db.rollback()
+            raise TaskError(
+                message=f"更新任务进度失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
                 context=ErrorContext(task_id=task_id),
                 original_exception=e
             )

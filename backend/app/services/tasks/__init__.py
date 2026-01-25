@@ -39,6 +39,7 @@ from .task_execution_engine import (
     PredictionTaskExecutor,
     BacktestTaskExecutor,
     TrainingTaskExecutor,
+    QlibPrecomputeTaskExecutor,
     ProgressTracker,
     TaskProgress
 )
@@ -71,6 +72,7 @@ __all__ = [
     'PredictionTaskExecutor',
     'BacktestTaskExecutor',
     'TrainingTaskExecutor',
+    'QlibPrecomputeTaskExecutor',
     'ProgressTracker',
     'TaskProgress',
     

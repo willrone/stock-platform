@@ -120,7 +120,7 @@ class TaskNotifier:
             if task.task_type == "backtest":
                 await self._notify_backtest_update(task)
             else:
-                # 普通任务通知
+                # 普通任务通知（包括qlib_precompute等）
                 await self._notify_general_task_update(task)
             
         except Exception as e:
@@ -303,28 +303,59 @@ class TaskNotifier:
     async def _notify_general_task_update(self, task):
         """通知普通任务更新"""
         try:
-            # 构建通知消息
-            message = {
-                "type": "task:update",
-                "task_id": task.task_id,
-                "task_name": task.task_name,
-                "status": task.status,
-                "progress": task.progress,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            # 根据任务状态添加额外信息
-            if task.status == TaskStatus.COMPLETED.value:
-                message["type"] = "task:completed"
-                message["completed_at"] = task.completed_at.isoformat() if task.completed_at else None
+            # 根据任务状态和进度变化发送不同类型的消息
+            if task.status == TaskStatus.RUNNING.value:
+                # 运行中：发送进度更新
+                message = {
+                    "type": "task:progress",
+                    "task_id": task.task_id,
+                    "status": task.status,
+                    "progress": task.progress,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await manager.send_to_task_subscribers(task.task_id, message)
+                logger.debug(f"已发送任务进度更新: {task.task_id}, 进度: {task.progress}%")
+                
+            elif task.status == TaskStatus.COMPLETED.value:
+                # 已完成：发送完成消息
+                message = {
+                    "type": "task:completed",
+                    "task_id": task.task_id,
+                    "task_name": task.task_name,
+                    "status": task.status,
+                    "progress": task.progress,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                    "results": task.result,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await manager.send_to_task_subscribers(task.task_id, message)
+                logger.debug(f"已发送任务完成通知: {task.task_id}")
+                
             elif task.status == TaskStatus.FAILED.value:
-                message["type"] = "task:failed"
-                message["error_message"] = task.error_message
-            
-            # 发送给任务订阅者
-            await manager.send_to_task_subscribers(task.task_id, message)
-            
-            logger.debug(f"已发送任务状态更新: {task.task_id}, 状态: {task.status}, 进度: {task.progress}%")
+                # 失败：发送失败消息
+                message = {
+                    "type": "task:failed",
+                    "task_id": task.task_id,
+                    "task_name": task.task_name,
+                    "status": task.status,
+                    "error": task.error_message,
+                    "error_message": task.error_message,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await manager.send_to_task_subscribers(task.task_id, message)
+                logger.debug(f"已发送任务失败通知: {task.task_id}, 错误: {task.error_message}")
+            else:
+                # 其他状态：发送通用更新
+                message = {
+                    "type": "task:update",
+                    "task_id": task.task_id,
+                    "task_name": task.task_name,
+                    "status": task.status,
+                    "progress": task.progress,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await manager.send_to_task_subscribers(task.task_id, message)
+                logger.debug(f"已发送任务状态更新: {task.task_id}, 状态: {task.status}, 进度: {task.progress}%")
             
         except Exception as e:
             logger.error(f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True)

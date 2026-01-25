@@ -931,4 +931,61 @@ export class DataService {
       stock_codes: stockCodes || null,
     });
   }
+
+  /**
+   * 触发Qlib指标/因子预计算
+   * 
+   * @param params 预计算参数（可选）
+   * @returns 任务创建结果，包含task_id
+   */
+  static async triggerQlibPrecompute(params?: {
+    stock_codes?: string[];
+    start_date?: string;
+    end_date?: string;
+    batch_size?: number;
+    max_workers?: number;
+  }): Promise<{
+    task_id: string;
+    task_name: string;
+    task_type: string;
+    status: string;
+    progress: number;
+    config: any;
+    created_at: string;
+    completed_at?: string;
+    error_message?: string;
+  }> {
+    // 构建请求参数，即使params为空也传递一个对象（使用默认值）
+    const requestParams: any = {
+      batch_size: params?.batch_size || 50,
+    };
+    
+    if (params?.stock_codes && params.stock_codes.length > 0) {
+      requestParams.stock_codes = params.stock_codes;
+    }
+    if (params?.start_date) {
+      requestParams.start_date = params.start_date;
+    }
+    if (params?.end_date) {
+      requestParams.end_date = params.end_date;
+    }
+    if (params?.max_workers) {
+      requestParams.max_workers = params.max_workers;
+    }
+    
+    // apiRequest.post返回的是data字段，直接返回
+    const taskData = await apiRequest.post<{
+      task_id: string;
+      task_name: string;
+      task_type: string;
+      status: string;
+      progress: number;
+      config: any;
+      created_at: string;
+      completed_at?: string;
+      error_message?: string;
+    }>('/data/qlib/precompute', requestParams);
+    
+    return taskData;
+  }
 }

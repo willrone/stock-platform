@@ -99,6 +99,15 @@ class RemoteDataSyncRequest(BaseModel):
     stock_codes: Optional[List[str]] = Field(default=None, description="要同步的股票代码列表，如果为空则同步所有股票")
 
 
+class QlibPrecomputeRequest(BaseModel):
+    """Qlib预计算请求"""
+    stock_codes: Optional[List[str]] = Field(default=None, description="股票代码列表（可选，None则处理所有股票）")
+    start_date: Optional[str] = Field(default=None, description="开始日期（可选，ISO格式字符串）")
+    end_date: Optional[str] = Field(default=None, description="结束日期（可选，ISO格式字符串）")
+    batch_size: int = Field(default=50, description="每批处理的股票数（默认50）")
+    max_workers: Optional[int] = Field(default=None, description="最大并发数（可选，None则自动选择）")
+
+
 class ParamSpaceConfig(BaseModel):
     """参数空间配置"""
     type: str = Field(..., description="参数类型: int, float, categorical")

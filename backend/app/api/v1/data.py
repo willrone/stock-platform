@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
 from loguru import logger
-from app.api.v1.schemas import StandardResponse, RemoteDataSyncRequest
+from app.api.v1.schemas import StandardResponse, RemoteDataSyncRequest, QlibPrecomputeRequest
 from app.core.container import get_data_service, get_sftp_sync_service
 from app.core.config import settings
 from app.services.data import SimpleDataService
@@ -19,6 +19,97 @@ from app.services.data.parquet_manager import ParquetManager
 from app.services.events.data_sync_events import get_data_sync_event_manager, DataSyncEventType
 
 router = APIRouter(prefix="/data", tags=["数据管理"])
+
+
+# Qlib预计算相关接口
+@router.post("/qlib/precompute", response_model=StandardResponse, summary="触发Qlib指标/因子预计算", description="为全市场所有股票（或指定股票）预计算所有指标和因子，存储为Qlib格式")
+async def trigger_qlib_precompute(request: QlibPrecomputeRequest):
+    """
+    触发Qlib指标/因子预计算任务
+    
+    Args:
+        request: 预计算请求参数
+    
+    Returns:
+        任务创建结果，包含task_id
+    """
+    from app.core.database import SessionLocal
+    from app.repositories.task_repository import TaskRepository
+    from app.models.task_models import TaskType, TaskStatus
+    from app.services.tasks.process_executor import get_process_executor
+    from app.api.v1.dependencies import execute_qlib_precompute_task_simple
+    
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        
+        # 构建任务配置
+        config = {
+            'batch_size': request.batch_size,
+        }
+        
+        if request.stock_codes:
+            config['stock_codes'] = request.stock_codes
+        if request.start_date:
+            config['start_date'] = request.start_date
+        if request.end_date:
+            config['end_date'] = request.end_date
+        if request.max_workers:
+            config['max_workers'] = request.max_workers
+        
+        # 创建任务
+        task = task_repository.create_task(
+            task_name=f"Qlib预计算任务",
+            task_type=TaskType.QLIB_PRECOMPUTE,
+            user_id="default_user",  # TODO: 从认证中获取真实用户ID
+            config=config
+        )
+        
+        # 将任务提交到进程池执行（异步，不阻塞）
+        try:
+            process_executor = get_process_executor()
+            
+            # 提交任务到进程池
+            future = process_executor.submit(execute_qlib_precompute_task_simple, task.task_id)
+            
+            logger.info(f"Qlib预计算任务已提交到进程池: {task.task_id}")
+        except Exception as submit_error:
+            logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
+            # 如果提交失败，标记任务为失败
+            try:
+                task_repository.update_task_status(
+                    task_id=task.task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"任务提交失败: {str(submit_error)}"
+                )
+            except:
+                pass
+        
+        # 转换为前端期望的格式
+        task_data = {
+            "task_id": task.task_id,
+            "task_name": task.task_name,
+            "task_type": task.task_type,
+            "status": task.status,
+            "progress": task.progress,
+            "config": config,
+            "created_at": task.created_at.isoformat() if task.created_at else datetime.now().isoformat(),
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "error_message": task.error_message
+        }
+        
+        return StandardResponse(
+            success=True,
+            message="Qlib预计算任务创建成功",
+            data=task_data
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"创建Qlib预计算任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"创建Qlib预计算任务失败: {str(e)}")
+    finally:
+        session.close()
 
 
 @router.get("/status", response_model=StandardResponse, summary="获取数据服务状态", description="获取远端数据服务连接状态和响应时间")

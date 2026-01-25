@@ -559,7 +559,8 @@ class TaskExecutionEngine:
             ),
             TaskType.BACKTEST: BacktestTaskExecutor(task_repository),
             TaskType.TRAINING: TrainingTaskExecutor(task_repository),
-            TaskType.HYPERPARAMETER_OPTIMIZATION: HyperparameterOptimizationTaskExecutor(task_repository)
+            TaskType.HYPERPARAMETER_OPTIMIZATION: HyperparameterOptimizationTaskExecutor(task_repository),
+            TaskType.QLIB_PRECOMPUTE: QlibPrecomputeTaskExecutor(task_repository)
         }
     
     def get_task_handler(self, task_type: TaskType) -> Callable:
@@ -637,6 +638,31 @@ class TaskExecutionEngine:
                 except ValueError:
                     raise TaskError("日期格式错误，应为ISO格式")
             
+            elif task_type == TaskType.QLIB_PRECOMPUTE:
+                # 预计算任务不需要必需字段，所有参数都是可选的
+                # 如果提供了日期，验证格式
+                if 'start_date' in config:
+                    try:
+                        datetime.fromisoformat(config['start_date'])
+                    except ValueError:
+                        raise TaskError("开始日期格式错误，应为ISO格式")
+                
+                if 'end_date' in config:
+                    try:
+                        datetime.fromisoformat(config['end_date'])
+                    except ValueError:
+                        raise TaskError("结束日期格式错误，应为ISO格式")
+                
+                # 如果同时提供了开始和结束日期，验证逻辑
+                if 'start_date' in config and 'end_date' in config:
+                    try:
+                        start_date = datetime.fromisoformat(config['start_date'])
+                        end_date = datetime.fromisoformat(config['end_date'])
+                        if start_date >= end_date:
+                            raise TaskError("开始日期必须早于结束日期")
+                    except ValueError:
+                        pass  # 已在上面处理
+            
             return True
             
         except TaskError:
@@ -674,10 +700,120 @@ class TaskExecutionEngine:
                 # 优化时间与试验次数相关，每个试验大约需要1-2分钟
                 return min(n_trials * 90, 7200)  # 最多2小时
             
+            elif task_type == TaskType.QLIB_PRECOMPUTE:
+                # 预计算时间与股票数量相关
+                stock_codes = config.get('stock_codes')
+                if stock_codes:
+                    stock_count = len(stock_codes)
+                else:
+                    # 如果没有指定股票，估算全市场（假设5000只股票）
+                    stock_count = 5000
+                
+                # 每只股票大约需要1-5秒，加上初始化时间
+                return min(stock_count * 3 + 300, 14400)  # 最多4小时
+            
             return 600  # 默认10分钟
             
         except Exception:
             return 600  # 出错时返回默认值
+
+
+class QlibPrecomputeTaskExecutor:
+    """Qlib预计算任务执行器"""
+    
+    def __init__(self, task_repository: TaskRepository):
+        self.task_repository = task_repository
+    
+    def execute(self, queued_task: QueuedTask, context: TaskExecutionContext):
+        """执行Qlib预计算任务"""
+        # 确保在独立进程中类型可用
+        from typing import Any, Dict, Optional
+        
+        task_id = queued_task.task_id
+        
+        with set_log_context(task_id=task_id, user_id=queued_task.user_id):
+            try:
+                # 解析任务配置（预计算任务通常不需要参数，使用默认配置）
+                config_dict = queued_task.config or {}
+                stock_codes = config_dict.get('stock_codes')  # 可选，None则处理所有股票
+                start_date_str = config_dict.get('start_date')  # 可选
+                end_date_str = config_dict.get('end_date')  # 可选
+                
+                # 解析日期
+                start_date = None
+                end_date = None
+                if start_date_str:
+                    start_date = datetime.fromisoformat(start_date_str)
+                if end_date_str:
+                    end_date = datetime.fromisoformat(end_date_str)
+                
+                # 更新任务状态为运行中
+                self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
+                
+                # 创建进度回调
+                def progress_callback(progress: float, message: str):
+                    """进度回调函数"""
+                    self.task_repository.update_task_progress(task_id, progress)
+                    if context.progress_callback:
+                        context.progress_callback(progress, message)
+                
+                # 导入预计算服务（确保在独立进程中正确导入）
+                from typing import Any, Dict  # 确保类型可用
+                from app.services.data.offline_factor_precompute import OfflineFactorPrecomputeService
+                
+                # 创建预计算服务
+                precompute_service = OfflineFactorPrecomputeService(
+                    batch_size=config_dict.get('batch_size', 50),
+                    max_workers=config_dict.get('max_workers'),
+                    progress_callback=progress_callback
+                )
+                
+                # 执行预计算（异步）
+                import asyncio
+                result = asyncio.run(
+                    precompute_service.precompute_all_stocks(
+                        stock_codes=stock_codes,
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                )
+                
+                # 更新任务结果（通过update_task_status）
+                self.task_repository.update_task_status(
+                    task_id,
+                    TaskStatus.RUNNING,
+                    result=result
+                )
+                
+                if result.get('success'):
+                    self.task_repository.update_task_status(task_id, TaskStatus.COMPLETED)
+                    logger.info(f"Qlib预计算任务完成: {task_id}")
+                else:
+                    self.task_repository.update_task_status(
+                        task_id, 
+                        TaskStatus.FAILED,
+                        error_message=result.get('message', '预计算失败')
+                    )
+                    logger.error(f"Qlib预计算任务失败: {task_id}, {result.get('message')}")
+                
+                return result
+                
+            except Exception as e:
+                error_message = f"Qlib预计算任务执行失败: {str(e)}"
+                logger.error(error_message, exc_info=True)
+                
+                self.task_repository.update_task_status(
+                    task_id,
+                    TaskStatus.FAILED,
+                    error_message=error_message
+                )
+                
+                raise TaskError(
+                    message=error_message,
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(task_id=task_id, user_id=queued_task.user_id),
+                    original_exception=e
+                )
 
 
 class HyperparameterOptimizationTaskExecutor:

@@ -39,6 +39,8 @@ import {
 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { TaskService } from '../../services/taskService';
+import { wsService } from '../../services/websocket';
 
 interface ServiceStatus {
   service_url: string;
@@ -76,6 +78,7 @@ interface LocalStock {
 export default function DataManagementPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [precomputing, setPrecomputing] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
   const [remoteStocks, setRemoteStocks] = useState<RemoteStock[]>([]);
   const [localStocks, setLocalStocks] = useState<LocalStock[]>([]);
@@ -86,6 +89,12 @@ export default function DataManagementPage() {
     synced_files?: number;
     total_files?: number;
     total_size_mb?: number;
+  } | null>(null);
+  const [precomputeTask, setPrecomputeTask] = useState<{
+    task_id: string;
+    progress: number;
+    status: string;
+    message?: string;
   } | null>(null);
 
   // 检查服务状态
@@ -178,6 +187,81 @@ export default function DataManagementPage() {
     }
   };
 
+  // 触发Qlib预计算
+  const handleTriggerQlibPrecompute = async () => {
+    if (precomputing) return;
+    
+    setPrecomputing(true);
+    setPrecomputeTask(null);
+    
+    try {
+      const task = await DataService.triggerQlibPrecompute();
+      setPrecomputeTask({
+        task_id: task.task_id,
+        progress: task.progress,
+        status: task.status,
+        message: '预计算任务已创建，正在处理...'
+      });
+    } catch (error) {
+      console.error('触发预计算失败:', error);
+      setPrecomputeTask({
+        task_id: '',
+        progress: 0,
+        status: 'failed',
+        message: error instanceof Error ? error.message : '预计算任务创建失败'
+      });
+      setPrecomputing(false);
+    }
+  };
+
+  // WebSocket监听预计算任务进度
+  useEffect(() => {
+    if (!precomputeTask) return;
+
+    const handleTaskProgress = (data: { task_id: string; progress: number; status: string }) => {
+      if (data.task_id === precomputeTask.task_id) {
+        setPrecomputeTask(prev => prev ? {
+          ...prev,
+          progress: data.progress,
+          status: data.status
+        } : null);
+      }
+    };
+
+    const handleTaskCompleted = (data: { task_id: string; results: any }) => {
+      if (data.task_id === precomputeTask.task_id) {
+        setPrecomputeTask(prev => prev ? {
+          ...prev,
+          progress: 100,
+          status: 'completed',
+          message: '预计算完成！所有指标和因子已生成，可用于训练/回测。'
+        } : null);
+        setPrecomputing(false);
+      }
+    };
+
+    const handleTaskFailed = (data: { task_id: string; error: string }) => {
+      if (data.task_id === precomputeTask.task_id) {
+        setPrecomputeTask(prev => prev ? {
+          ...prev,
+          status: 'failed',
+          message: `预计算失败: ${data.error}`
+        } : null);
+        setPrecomputing(false);
+      }
+    };
+
+    wsService.on('task:progress', handleTaskProgress);
+    wsService.on('task:completed', handleTaskCompleted);
+    wsService.on('task:failed', handleTaskFailed);
+
+    return () => {
+      wsService.off('task:progress', handleTaskProgress);
+      wsService.off('task:completed', handleTaskCompleted);
+      wsService.off('task:failed', handleTaskFailed);
+    };
+  }, [precomputeTask]);
+
   if (loading) {
     return <LoadingSpinner text="加载数据信息..." />;
   }
@@ -194,16 +278,28 @@ export default function DataManagementPage() {
             查看远端数据服务状态和股票列表
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          size="large"
-          startIcon={<Download size={20} />}
-          onClick={handleSyncRemoteData}
-          disabled={syncing}
-        >
-          {syncing ? '同步中...' : '同步远端数据'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            startIcon={<Download size={20} />}
+            onClick={handleSyncRemoteData}
+            disabled={syncing}
+          >
+            {syncing ? '同步中...' : '同步远端数据'}
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            size="large"
+            startIcon={<Zap size={20} />}
+            onClick={handleTriggerQlibPrecompute}
+            disabled={precomputing || (precomputeTask?.status === 'running')}
+          >
+            {precomputing || precomputeTask?.status === 'running' ? '预计算中...' : '离线生成 Qlib 指标/因子'}
+          </Button>
+        </Box>
       </Box>
 
       {/* 同步结果提示 */}
@@ -225,6 +321,63 @@ export default function DataManagementPage() {
                   总大小: {syncResult.total_size_mb} MB
                 </Typography>
               )}
+            </Box>
+          )}
+        </Alert>
+      )}
+
+      {/* 预计算任务进度提示 */}
+      {precomputeTask && (
+        <Alert 
+          severity={
+            precomputeTask.status === 'completed' ? 'success' :
+            precomputeTask.status === 'failed' ? 'error' :
+            'info'
+          }
+          icon={
+            precomputeTask.status === 'completed' ? <Zap size={20} /> :
+            precomputeTask.status === 'failed' ? <XCircle size={20} /> :
+            <Database size={20} />
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            {precomputeTask.message || '正在为全市场所有股票计算所有指标和因子，请耐心等待...'}
+          </Typography>
+          {precomputeTask.status === 'running' && (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  进度: {precomputeTask.progress.toFixed(1)}%
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  状态: {precomputeTask.status === 'running' ? '运行中' : precomputeTask.status}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 8,
+                  backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                  borderRadius: 1,
+                  overflow: 'hidden'
+                }}
+              >
+                <Box
+                  sx={{
+                    width: `${precomputeTask.progress}%`,
+                    height: '100%',
+                    backgroundColor: 'primary.main',
+                    transition: 'width 0.3s ease'
+                  }}
+                />
+              </Box>
+            </Box>
+          )}
+          {precomputeTask.status === 'completed' && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="caption" display="block" color="success.main">
+                预计算完成！所有指标和因子已生成，可用于训练/回测。
+              </Typography>
             </Box>
           )}
         </Alert>

@@ -228,6 +228,7 @@ def execute_backtest_task_simple(task_id: str):
     try:
         from app.services.backtest import BacktestExecutor, BacktestConfig
         from app.core.config import settings
+        from app.core.error_handler import TaskError, ErrorSeverity
         from datetime import datetime
         
         task_repository = TaskRepository(session)
@@ -591,14 +592,41 @@ def execute_backtest_task_simple(task_id: str):
                 task_logger.error(f"保存详细数据时出错: {task_id}, 错误: {save_error}", exc_info=True)
                 # 不影响主流程，继续执行
             
+        except TaskError as task_error:
+            # 处理任务错误（如任务被删除）
+            if task_error.severity == ErrorSeverity.LOW:
+                # 低严重程度错误（如任务被删除），直接退出，不更新任务状态
+                task_logger.info(f"任务被取消或删除: {task_id}, 原因: {task_error.message}")
+                return
+            else:
+                # 其他任务错误，标记为失败
+                task_logger.error(f"回测任务错误: {task_id}, 错误: {task_error.message}", exc_info=True)
+                try:
+                    task_repository.update_task_status(
+                        task_id=task_id,
+                        status=TaskStatus.FAILED,
+                        error_message=f"回测执行失败: {task_error.message}"
+                    )
+                except Exception:
+                    # 如果更新失败（可能任务已被删除），忽略
+                    pass
+                raise task_error
         except Exception as backtest_error:
             task_logger.error(f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True)
-            # 如果回测执行失败，标记任务为失败
-            task_repository.update_task_status(
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                error_message=f"回测执行失败: {str(backtest_error)}"
-            )
+            # 如果回测执行失败，尝试标记任务为失败
+            try:
+                # 先检查任务是否还存在
+                existing_task = task_repository.get_task_by_id(task_id)
+                if existing_task:
+                    task_repository.update_task_status(
+                        task_id=task_id,
+                        status=TaskStatus.FAILED,
+                        error_message=f"回测执行失败: {str(backtest_error)}"
+                    )
+                else:
+                    task_logger.warning(f"任务不存在，无法更新状态: {task_id}")
+            except Exception as update_error:
+                task_logger.warning(f"更新任务状态失败: {update_error}")
             raise backtest_error
         
     except KeyError as ke:
@@ -637,6 +665,99 @@ def execute_backtest_task_simple(task_id: str):
         if 'task' in locals():
             task_logger.error(f"任务对象: task_id={task.task_id}, task_type={task.task_type}, status={task.status}")
 
+        try:
+            if 'task_repository' in locals():
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"{type(e).__name__}: {str(e)}"
+                )
+        except Exception as update_error:
+            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+    finally:
+        # 确保关闭数据库连接
+        if 'session' in locals():
+            session.close()
+
+
+def execute_qlib_precompute_task_simple(task_id: str):
+    """
+    简化的Qlib预计算任务执行函数（进程池执行）
+    
+    重要：此函数在独立进程中执行，必须：
+    1. 每个进程独立创建数据库连接
+    2. 不使用全局缓存、服务容器等单例
+    3. 独立创建所需服务实例
+    4. 添加进程ID到日志上下文
+    """
+    import asyncio
+    
+    # 绑定进程ID到日志上下文
+    process_id = os.getpid()
+    task_logger = logger.bind(process_id=process_id, task_id=task_id, log_type="task")
+    
+    # 每个进程独立创建数据库连接
+    session = SessionLocal()
+    task_logger.info(f"开始执行Qlib预计算任务: {task_id}, 进程ID: {process_id}")
+
+    # 添加全局异常捕获
+    try:
+        # 在独立进程中，确保所有类型都正确导入
+        from typing import Any, Dict, List, Optional
+        from app.services.tasks.task_execution_engine import QlibPrecomputeTaskExecutor
+        from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext
+        from datetime import datetime
+        import threading
+        
+        task_repository = TaskRepository(session)
+        
+        # 获取任务
+        task = task_repository.get_task_by_id(task_id)
+        if not task:
+            task_logger.error(f"任务不存在: {task_id}")
+            return
+        
+        # 更新任务状态为运行中
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            progress=0.0
+        )
+        
+        # 创建QueuedTask对象
+        from app.models.task_models import TaskType
+        queued_task = QueuedTask(
+            task_id=task.task_id,
+            task_type=TaskType.QLIB_PRECOMPUTE,
+            user_id=task.user_id,
+            priority=1,  # 默认优先级
+            config=task.config or {},
+            created_at=task.created_at or datetime.utcnow()
+        )
+        
+        # 创建执行上下文
+        cancel_event = threading.Event()
+        progress_callback = lambda progress, message: task_repository.update_task_progress(task_id, progress)
+        
+        context = TaskExecutionContext(
+            task_id=task_id,
+            executor_id=f"process_{process_id}",
+            start_time=datetime.utcnow(),
+            progress_callback=progress_callback,
+            cancel_event=cancel_event
+        )
+        
+        # 创建任务执行器
+        executor = QlibPrecomputeTaskExecutor(task_repository)
+        
+        # 执行任务（同步执行，因为已经在独立进程中）
+        task_logger.info(f"开始执行Qlib预计算任务: {task_id}")
+        result = executor.execute(queued_task, context)
+        
+        task_logger.info(f"Qlib预计算任务执行完成: {task_id}, 结果: {result.get('success', False)}")
+        
+    except Exception as e:
+        task_logger.error(f"Qlib预计算任务执行失败: {task_id}, 错误: {e}", exc_info=True)
         try:
             if 'task_repository' in locals():
                 task_repository.update_task_status(

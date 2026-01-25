@@ -20,6 +20,7 @@ class TaskType(Enum):
     TRAINING = "training"
     DATA_SYNC = "data_sync"
     HYPERPARAMETER_OPTIMIZATION = "hyperparameter_optimization"
+    QLIB_PRECOMPUTE = "qlib_precompute"
 
 
 class TaskStatus(Enum):

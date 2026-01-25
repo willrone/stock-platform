@@ -30,6 +30,49 @@ class BaseStrategy(ABC):
         """计算技术指标"""
         pass
     
+    def _extract_indicators_from_precomputed(
+        self,
+        data: pd.DataFrame,
+        indicator_mapping: Dict[str, str]
+    ) -> Optional[Dict[str, pd.Series]]:
+        """
+        从预计算数据中提取指标
+        
+        Args:
+            data: 包含预计算指标的DataFrame
+            indicator_mapping: 指标名称映射 {策略需要的指标名: 预计算数据中的列名}
+                              例如: {'rsi': 'RSI14', 'ma20': 'MA20'}
+        
+        Returns:
+            提取的指标字典，如果预计算数据不可用或缺少指标则返回None
+        """
+        # 检查数据是否来自预计算
+        if not data.attrs.get('from_precomputed', False):
+            return None
+        
+        # 检查所有需要的指标是否都存在
+        missing_indicators = []
+        for strategy_name, precomputed_name in indicator_mapping.items():
+            if precomputed_name not in data.columns:
+                missing_indicators.append(precomputed_name)
+        
+        if missing_indicators:
+            # 部分指标缺失，返回None让策略fallback到现场计算
+            return None
+        
+        # 提取指标
+        indicators = {}
+        for strategy_name, precomputed_name in indicator_mapping.items():
+            indicators[strategy_name] = data[precomputed_name]
+        
+        # 确保基础数据也在indicators中
+        if 'close' in data.columns:
+            indicators['price'] = data['close']
+        if 'volume' in data.columns:
+            indicators['volume'] = data['volume']
+        
+        return indicators
+    
     def validate_signal(self, signal: TradingSignal, portfolio_value: float, 
                        current_positions: Dict[str, Position]) -> Tuple[bool, Optional[str]]:
         """
