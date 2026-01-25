@@ -377,6 +377,15 @@ class BacktestExecutor:
         trade_execution_times = []
         
         # 辅助函数：检查任务状态
+        def _is_task_running(status) -> bool:
+            if status is None:
+                return False
+            # 支持字符串或Enum
+            try:
+                return status == TaskStatus.RUNNING or status == TaskStatus.RUNNING.value
+            except Exception:
+                return status == TaskStatus.RUNNING.value
+
         def check_task_status():
             """检查任务是否仍然存在且处于运行状态"""
             if not task_id:
@@ -393,7 +402,7 @@ class BacktestExecutor:
                     if not task:
                         logger.warning(f"任务不存在，停止回测执行: {task_id}")
                         return False
-                    if task.status != TaskStatus.RUNNING:
+                    if not _is_task_running(task.status):
                         logger.warning(f"任务状态为 {task.status}，停止回测执行: {task_id}")
                         return False
                     return True
@@ -671,7 +680,7 @@ class BacktestExecutor:
                                     severity=ErrorSeverity.LOW
                                 )
                             # 检查任务状态，如果不是运行中，则停止执行
-                            elif existing_task.status != TaskStatus.RUNNING:
+                            elif not _is_task_running(existing_task.status):
                                 logger.warning(f"任务状态为 {existing_task.status}，停止回测执行: {task_id}")
                                 raise TaskError(
                                     message=f"任务 {task_id} 状态为 {existing_task.status}，停止回测执行",

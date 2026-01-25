@@ -640,6 +640,7 @@ class Alpha158Calculator:
             logger.debug(f"[Alpha158] 解析后的qlib_data_path: {qlib_data_path_raw}, 绝对路径: {qlib_data_path_raw.resolve()}")
             
             qlib_features_dir = qlib_data_path_raw.resolve() / "features" / "day"
+            qlib_bin_dir = qlib_data_path_raw.resolve() / "features"
             logger.info(f"[Alpha158] Qlib数据目录路径: {qlib_features_dir}")
             logger.info(f"[Alpha158] 路径是绝对路径: {qlib_features_dir.is_absolute()}")
             
@@ -657,6 +658,7 @@ class Alpha158Calculator:
             try:
                 # 确保路径是绝对路径
                 qlib_features_dir_abs = qlib_features_dir.resolve()
+                qlib_bin_dir_abs = qlib_bin_dir.resolve()
                 logger.debug(f"[Alpha158] 绝对路径: {qlib_features_dir_abs}")
                 
                 # 使用 glob 获取文件列表
@@ -691,6 +693,17 @@ class Alpha158Calculator:
                         pass
                 
                 available_files = {f.stem for f in parquet_files}
+                
+                # 兼容Qlib bin格式：features/day/<instrument>/*.day.bin
+                try:
+                    qlib_bin_dir_abs = qlib_bin_dir.resolve()
+                    bin_dirs = [p for p in qlib_bin_dir_abs.iterdir() if p.is_dir()]
+                    for d in bin_dirs:
+                        if list(d.glob("*.day.bin")):
+                            available_files.add(d.name)
+                except Exception:
+                    pass
+                
                 logger.info(f"[Alpha158] 有效文件数: {len(available_files)}, SH文件: {sh_count}, SZ文件: {sz_count}, 示例文件: {list(available_files)[:5]}")
                 
                 # 检查特定股票代码的文件
@@ -707,7 +720,8 @@ class Alpha158Calculator:
                         except ValueError:
                             pass
                     
-                    found_in_set = [c for c in test_candidates if c in available_files]
+                    available_map = {c.lower(): c for c in available_files}
+                    found_in_set = [c for c in test_candidates if c.lower() in available_map]
                     logger.info(f"[Alpha158] 测试代码 {test_code}: 候选={test_candidates}, 在集合中={found_in_set}")
                     
             except Exception as e:
@@ -728,11 +742,16 @@ class Alpha158Calculator:
                         except ValueError:
                             pass
                     
-                    found_in_set = [c for c in test_candidates if c in available_files]
+                    available_map = {c.lower(): c for c in available_files}
+                    found_in_set = [c for c in test_candidates if c.lower() in available_map]
                     logger.debug(f"测试代码 {test_code}: 候选={test_candidates}, 在集合中={found_in_set}, 集合示例={list(available_files)[:5]}")
             except Exception as e:
                 logger.warning(f"无法读取Qlib数据目录: {e}, 路径: {qlib_features_dir}")
                 available_files = set()
+            
+            qlib_bin_dir_abs = qlib_bin_dir.resolve()
+            
+            available_map = {c.lower(): c for c in available_files}
             
             instrument_map = {}  # 原始代码 -> 文件名
             resolved_instruments = []  # 传递给handler的instrument名称（使用标准格式）
@@ -779,13 +798,13 @@ class Alpha158Calculator:
                 matching_candidates = []
                 logger.debug(f"[Alpha158] 在available_files集合中查找 (集合大小: {len(available_files)})")
                 for cand in candidates:
-                    in_set = cand in available_files
+                    in_set = cand.lower() in available_map
                     logger.debug(f"[Alpha158]   候选 {cand}: 在集合中={in_set}")
                     if in_set:
                         matching_candidates.append(cand)
                         if selected is None:
-                            selected = cand
-                            logger.info(f"[Alpha158] 在集合中找到: {raw_code} -> {cand}")
+                            selected = available_map.get(cand.lower(), cand)
+                            logger.info(f"[Alpha158] 在集合中找到: {raw_code} -> {selected}")
                 
                 # 如果预先获取的列表中没有找到，直接检查文件系统（处理时序问题）
                 if selected is None:
@@ -805,6 +824,8 @@ class Alpha158Calculator:
                         for cand in candidates:
                             file_path = qlib_features_dir_abs / f"{cand}.parquet"
                             os_path = str(file_path)
+                            bin_dir = qlib_bin_dir_abs / cand.lower()
+                            bin_exists = bin_dir.is_dir() and any(bin_dir.glob("*.day.bin"))
                             logger.debug(f"[Alpha158]   检查文件: {file_path}")
                             
                             # 方法1: Path.exists()
@@ -846,6 +867,11 @@ class Alpha158Calculator:
                                         selected = cand
                                         available_files.add(cand)
                                         break
+                            elif bin_exists:
+                                selected = cand.lower()
+                                available_files.add(selected)
+                                logger.info(f"[Alpha158] ✓ 通过bin目录检查找到: {raw_code} -> {selected} (路径: {bin_dir})")
+                                break
                         
                         if selected is not None:
                             break
@@ -858,11 +884,10 @@ class Alpha158Calculator:
                 
                 if selected is not None:
                     instrument_map[code] = selected  # 保存文件名映射
-                    # Handler期望使用标准格式的instrument名称（如002463.SZ），而不是文件名格式（002463_SZ）
-                    # 但需要确保instruments/all.txt中包含标准格式
-                    handler_instrument = raw_code  # 使用原始代码（标准格式）
+                    # Handler使用与数据文件/目录一致的instrument名称
+                    handler_instrument = selected
                     resolved_instruments.append(handler_instrument)
-                    logger.info(f"[Alpha158] ✓ 找到Qlib数据文件: {raw_code} -> {selected}.parquet, handler使用: {handler_instrument}")
+                    logger.info(f"[Alpha158] ✓ 找到Qlib数据文件: {raw_code} -> {selected}, handler使用: {handler_instrument}")
                 else:
                     logger.error(f"[Alpha158] ✗ 未找到Qlib数据文件: {raw_code}")
                     # 更详细的调试信息
@@ -1019,6 +1044,7 @@ class Alpha158Calculator:
                 try:
                     import pandas as pd
                     test_file = qlib_features_dir / f"{resolved_instruments[0]}.parquet"
+                    bin_dir = qlib_bin_dir / str(resolved_instruments[0]).lower()
                     if test_file.exists():
                         test_data = pd.read_parquet(test_file)
                         logger.warning(
@@ -1029,6 +1055,14 @@ class Alpha158Calculator:
                             f"  数据形状: {test_data.shape if 'test_data' in locals() else 'N/A'}\n"
                             f"  数据列名: {list(test_data.columns) if 'test_data' in locals() and not test_data.empty else 'N/A'}\n"
                             f"  日期范围: {test_data.index.get_level_values(1).min() if isinstance(test_data.index, pd.MultiIndex) and test_data.index.nlevels >= 2 else test_data.index.min() if 'test_data' in locals() and not test_data.empty else 'N/A'} 到 {test_data.index.get_level_values(1).max() if isinstance(test_data.index, pd.MultiIndex) and test_data.index.nlevels >= 2 else test_data.index.max() if 'test_data' in locals() and not test_data.empty else 'N/A'}\n"
+                            f"  请求日期范围: {start_date} 到 {end_date}\n"
+                            f"  instrument名称: {resolved_instruments}"
+                        )
+                    elif bin_dir.is_dir() and list(bin_dir.glob("*.day.bin")):
+                        logger.warning(
+                            f"[Alpha158] handler返回空数据，诊断信息：\n"
+                            f"  bin目录: {bin_dir}\n"
+                            f"  bin文件数: {len(list(bin_dir.glob('*.day.bin')))}\n"
                             f"  请求日期范围: {start_date} 到 {end_date}\n"
                             f"  instrument名称: {resolved_instruments}"
                         )
@@ -1163,7 +1197,11 @@ class Alpha158Calculator:
                 
                 # 遍历所有因子表达式
                 failed_expressions = []  # 记录失败的表达式，用于调试
+                total_factors = len(self.alpha_fields)
                 for idx, (field_expr, factor_name) in enumerate(zip(self.alpha_fields, self.alpha_names)):
+                    # 每10个因子输出一次进度
+                    if idx % 10 == 0:
+                        logger.info(f"股票 {stock_code} 计算进度: {idx+1}/{total_factors} ({((idx+1)/total_factors*100):.1f}%)")
                     try:
                         # 使用表达式评估器计算因子
                         factor_series = self._evaluate_qlib_expression(stock_data, field_expr)
@@ -1398,8 +1436,12 @@ class Alpha158Calculator:
                 # 确保变量名有$前缀（calc_data中的列名应该有$前缀）
                 return f"calc_data['${var}'].shift({n})"
             expr = expression
-            while re.search(r'Ref\(\$(\w+),\s*(\d+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_ref_iterations = 50
+            ref_iteration = 0
+            while re.search(r'Ref\(\$(\w+),\s*(\d+)\)', expr) and ref_iteration < max_ref_iterations:
                 expr = re.sub(r'Ref\(\$(\w+),\s*(\d+)\)', replace_ref, expr)
+                ref_iteration += 1
             
             # 步骤1.5: 修复Ref函数替换后可能产生的嵌套calc_data
             # 如果Ref函数中的$var在后续变量替换时又被替换，会产生嵌套
@@ -1440,15 +1482,23 @@ class Alpha158Calculator:
                     return f"np.log(calc_data['${var}'])"
                 # 如果inner已经是表达式，直接包装
                 return f"np.log({inner})"
-            while re.search(r'Log\(([^)]+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_log_iterations = 50
+            log_iteration = 0
+            while re.search(r'Log\(([^)]+)\)', expr) and log_iteration < max_log_iterations:
                 expr = re.sub(r'Log\(([^)]+)\)', replace_log, expr)
+                log_iteration += 1
             
             # 步骤3: 处理Abs函数
             def replace_abs(match):
                 inner = match.group(1)
                 return f"np.abs({inner})"
-            while re.search(r'Abs\(([^)]+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_abs_iterations = 50
+            abs_iteration = 0
+            while re.search(r'Abs\(([^)]+)\)', expr) and abs_iteration < max_abs_iterations:
                 expr = re.sub(r'Abs\(([^)]+)\)', replace_abs, expr)
+                abs_iteration += 1
             
             # 步骤4: 保留Greater/Less，交由运行时函数处理，返回Series以支持rolling
             def _as_series(x, ref):
@@ -1461,22 +1511,27 @@ class Alpha158Calculator:
                 return pd.Series(x, index=ref.index)
             
             def Greater(a, b=0):
+                """Greater函数：返回布尔Series，表示a > b"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
                     a_s = _as_series(a, ref)
                     b_s = _as_series(b, ref)
-                    return a_s.where(a_s > b_s, b_s)
-                return np.maximum(a, b)
+                    # 返回布尔Series，True表示a > b，False表示a <= b
+                    return (a_s > b_s).astype(float)
+                return float(a > b) if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
             
             def Less(a, b=0):
+                """Less函数：返回布尔Series，表示a < b"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
                     a_s = _as_series(a, ref)
                     b_s = _as_series(b, ref)
-                    return a_s.where(a_s < b_s, b_s)
-                return np.minimum(a, b)
+                    # 返回布尔Series，True表示a < b，False表示a >= b
+                    return (a_s < b_s).astype(float)
+                return float(a < b) if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
             
             def Sum(x, n):
+                """Sum函数：对Series进行滚动求和"""
                 # 确保x是Series
                 if not isinstance(x, pd.Series):
                     x_s = _as_series(x, calc_data)
@@ -1485,27 +1540,89 @@ class Alpha158Calculator:
                 # 确保索引对齐
                 if not x_s.index.equals(calc_data.index):
                     x_s = x_s.reindex(calc_data.index)
+                # 如果是布尔类型，转换为数值类型（True->1, False->0）
+                if x_s.dtype == bool:
+                    x_s = x_s.astype(float)
                 return x_s.rolling(int(n)).sum()
+
+            def Mean(x, n):
+                """Mean函数：对Series进行滚动均值"""
+                if not isinstance(x, pd.Series):
+                    x_s = _as_series(x, calc_data)
+                else:
+                    x_s = x
+                if not x_s.index.equals(calc_data.index):
+                    x_s = x_s.reindex(calc_data.index)
+                if x_s.dtype == bool:
+                    x_s = x_s.astype(float)
+                return x_s.rolling(int(n)).mean()
+
+            def Std(x, n):
+                """Std函数：对Series进行滚动标准差"""
+                if not isinstance(x, pd.Series):
+                    x_s = _as_series(x, calc_data)
+                else:
+                    x_s = x
+                if not x_s.index.equals(calc_data.index):
+                    x_s = x_s.reindex(calc_data.index)
+                if x_s.dtype == bool:
+                    x_s = x_s.astype(float)
+                return x_s.rolling(int(n)).std()
             
             # 步骤5: 处理IdxMax和IdxMin函数（优先于Max/Min，避免IdxMax被Max替换）
             # 注意：这些函数已经在返回值中包含了calc_data['$var']，所以不需要在步骤14再次替换
+            # IdxMax返回最大值在窗口中的位置（从右往左，0到n-1），然后除以n归一化
+            # IdxMin返回最小值在窗口中的位置（从右往左，0到n-1），然后除以n归一化
             def replace_idxmax(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                # 直接返回完整的表达式，变量已经在其中
-                # 改进：使用更简单的方式计算，避免lambda中的复杂逻辑
-                return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmax()) / {n} if len(x) == {n} else np.nan, raw=True))"
+                # 计算最大值在窗口中的位置（从右往左，0到n-1），然后除以n
+                # argmax返回从左往右的第一个最大值位置，我们需要从右往左的位置
+                # 注意：raw=True时x是numpy数组，需要使用pd.isna()或np.isnan()
+                return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmax()) / {n} if len(x) == {n} and not np.isnan(x).all() else np.nan, raw=True))"
             def replace_idxmin(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                # 改进：使用更简单的方式计算
-                return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmin()) / {n} if len(x) == {n} else np.nan, raw=True))"
-            while re.search(r'IdxMax\(\$(\w+),\s*(\d+)\)', expr):
+                # 计算最小值在窗口中的位置（从右往左，0到n-1），然后除以n
+                # 注意：raw=True时x是numpy数组，需要使用pd.isna()或np.isnan()
+                return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmin()) / {n} if len(x) == {n} and not np.isnan(x).all() else np.nan, raw=True))"
+            # 添加最大迭代次数防止无限循环
+            max_idxmax_iterations = 50
+            idxmax_iteration = 0
+            while re.search(r'IdxMax\(\$(\w+),\s*(\d+)\)', expr) and idxmax_iteration < max_idxmax_iterations:
                 expr = re.sub(r'IdxMax\(\$(\w+),\s*(\d+)\)', replace_idxmax, expr)
-            while re.search(r'IdxMin\(\$(\w+),\s*(\d+)\)', expr):
+                idxmax_iteration += 1
+            max_idxmin_iterations = 50
+            idxmin_iteration = 0
+            while re.search(r'IdxMin\(\$(\w+),\s*(\d+)\)', expr) and idxmin_iteration < max_idxmin_iterations:
                 expr = re.sub(r'IdxMin\(\$(\w+),\s*(\d+)\)', replace_idxmin, expr)
+                idxmin_iteration += 1
             
             # 步骤6: 处理单变量滚动函数（Max, Min, Mean, Std等）
+            # 注意：Max/Min函数可能有两种用法：
+            # 1. Max($var, n) - 滚动窗口的最大值
+            # 2. Max($var, scalar) - Series和标量的逐元素最大值（运行时处理）
+            # 这里先处理滚动窗口的情况，标量情况由运行时函数处理
+            
+            # 运行时Max/Min函数（处理Series和标量的情况）
+            def Max(a, b):
+                """Max函数：如果两个参数都是Series或一个是Series一个是标量，返回逐元素最大值"""
+                if isinstance(a, pd.Series) or isinstance(b, pd.Series):
+                    ref = a if isinstance(a, pd.Series) else b
+                    a_s = _as_series(a, ref)
+                    b_s = _as_series(b, ref)
+                    return pd.concat([a_s, b_s], axis=1).max(axis=1)
+                return max(a, b) if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
+            
+            def Min(a, b):
+                """Min函数：如果两个参数都是Series或一个是Series一个是标量，返回逐元素最小值"""
+                if isinstance(a, pd.Series) or isinstance(b, pd.Series):
+                    ref = a if isinstance(a, pd.Series) else b
+                    a_s = _as_series(a, ref)
+                    b_s = _as_series(b, ref)
+                    return pd.concat([a_s, b_s], axis=1).min(axis=1)
+                return min(a, b) if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
+            
             def replace_max(match):
                 var = match.group(1)
                 n = int(match.group(2))
@@ -1523,14 +1640,27 @@ class Alpha158Calculator:
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).std()"
             
-            while re.search(r'Max\(\$(\w+),\s*(\d+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_max_iterations = 50
+            max_iteration = 0
+            while re.search(r'Max\(\$(\w+),\s*(\d+)\)', expr) and max_iteration < max_max_iterations:
                 expr = re.sub(r'Max\(\$(\w+),\s*(\d+)\)', replace_max, expr)
-            while re.search(r'Min\(\$(\w+),\s*(\d+)\)', expr):
+                max_iteration += 1
+            max_min_iterations = 50
+            min_iteration = 0
+            while re.search(r'Min\(\$(\w+),\s*(\d+)\)', expr) and min_iteration < max_min_iterations:
                 expr = re.sub(r'Min\(\$(\w+),\s*(\d+)\)', replace_min, expr)
-            while re.search(r'Mean\(\$(\w+),\s*(\d+)\)', expr):
+                min_iteration += 1
+            max_mean_var_iterations = 50
+            mean_var_iteration = 0
+            while re.search(r'Mean\(\$(\w+),\s*(\d+)\)', expr) and mean_var_iteration < max_mean_var_iterations:
                 expr = re.sub(r'Mean\(\$(\w+),\s*(\d+)\)', replace_mean_var, expr)
-            while re.search(r'Std\(\$(\w+),\s*(\d+)\)', expr):
+                mean_var_iteration += 1
+            max_std_var_iterations = 50
+            std_var_iteration = 0
+            while re.search(r'Std\(\$(\w+),\s*(\d+)\)', expr) and std_var_iteration < max_std_var_iterations:
                 expr = re.sub(r'Std\(\$(\w+),\s*(\d+)\)', replace_std, expr)
+                std_var_iteration += 1
             
             # 步骤7: 处理Corr函数（两个变量）
             def replace_corr(match):
@@ -1547,8 +1677,12 @@ class Alpha158Calculator:
                     return f"calc_data['${var1}'].rolling({n}).corr(calc_data['${var2}'])"
                 # 如果包含表达式，需要更复杂的处理
                 return f"pd.Series({var1_expr}).rolling({n}).corr(pd.Series({var2_expr}))"
-            while re.search(r'Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_corr_iterations = 50
+            corr_iteration = 0
+            while re.search(r'Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)', expr) and corr_iteration < max_corr_iterations:
                 expr = re.sub(r'Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)', replace_corr, expr)
+                corr_iteration += 1
             
             # 步骤8: Sum函数现在由运行时函数处理，不需要在表达式解析时替换
             # Sum函数保留为运行时调用，由eval时的Sum函数处理
@@ -1667,16 +1801,24 @@ class Alpha158Calculator:
                 n = int(match.group(2))
                 q = float(match.group(3))
                 return f"calc_data['${var}'].rolling({n}).quantile({q})"
-            while re.search(r'Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_quantile_iterations = 50
+            quantile_iteration = 0
+            while re.search(r'Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)', expr) and quantile_iteration < max_quantile_iterations:
                 expr = re.sub(r'Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)', replace_quantile, expr)
+                quantile_iteration += 1
             
             # 步骤12: 处理Rank函数
             def replace_rank(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: x.rank(pct=True).iloc[-1] if len(x) == {n} else np.nan, raw=False)"
-            while re.search(r'Rank\(\$(\w+),\s*(\d+)\)', expr):
+                # 使用raw=False，x是Series，可以使用iloc
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1] if len(x) == {n} and not pd.Series(x).isna().all() else np.nan, raw=False)"
+            max_rank_iterations = 50
+            rank_iteration = 0
+            while re.search(r'Rank\(\$(\w+),\s*(\d+)\)', expr) and rank_iteration < max_rank_iterations:
                 expr = re.sub(r'Rank\(\$(\w+),\s*(\d+)\)', replace_rank, expr)
+                rank_iteration += 1
             
             # 步骤13: 处理Slope, Rsquare, Resi函数（如果需要）
             def replace_slope(match):
@@ -1686,18 +1828,30 @@ class Alpha158Calculator:
             def replace_rsquare(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: 1 - np.var(x - np.linspace(x.iloc[0] if len(x) > 0 else 0, x.iloc[-1] if len(x) > 0 else 0, len(x))) / (np.var(x) + 1e-8) if len(x) == {n} and np.var(x) > 0 else 0, raw=False)"
+                # 使用raw=False，x是Series，可以使用iloc
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: 1 - np.var(x.values - np.linspace(x.iloc[0] if len(x) > 0 else 0, x.iloc[-1] if len(x) > 0 else 0, len(x))) / (np.var(x.values) + 1e-8) if len(x) == {n} and np.var(x.values) > 0 else 0, raw=False)"
             def replace_resi(match):
                 var = match.group(1)
                 n = int(match.group(2))
-                return f"calc_data['${var}'].rolling({n}).apply(lambda x: x.iloc[-1] - (np.polyfit(range(len(x)), x, 1)[0] * (len(x) - 1) + np.polyfit(range(len(x)), x, 1)[1]) if len(x) == {n} else np.nan, raw=False)"
+                # 使用raw=False，x是Series，可以使用iloc
+                return f"calc_data['${var}'].rolling({n}).apply(lambda x: x.iloc[-1] - (np.polyfit(range(len(x)), x.values, 1)[0] * (len(x) - 1) + np.polyfit(range(len(x)), x.values, 1)[1]) if len(x) == {n} else np.nan, raw=False)"
             
-            while re.search(r'Slope\(\$(\w+),\s*(\d+)\)', expr):
+            # 添加最大迭代次数防止无限循环
+            max_slope_iterations = 50
+            slope_iteration = 0
+            while re.search(r'Slope\(\$(\w+),\s*(\d+)\)', expr) and slope_iteration < max_slope_iterations:
                 expr = re.sub(r'Slope\(\$(\w+),\s*(\d+)\)', replace_slope, expr)
-            while re.search(r'Rsquare\(\$(\w+),\s*(\d+)\)', expr):
+                slope_iteration += 1
+            max_rsquare_iterations = 50
+            rsquare_iteration = 0
+            while re.search(r'Rsquare\(\$(\w+),\s*(\d+)\)', expr) and rsquare_iteration < max_rsquare_iterations:
                 expr = re.sub(r'Rsquare\(\$(\w+),\s*(\d+)\)', replace_rsquare, expr)
-            while re.search(r'Resi\(\$(\w+),\s*(\d+)\)', expr):
+                rsquare_iteration += 1
+            max_resi_iterations = 50
+            resi_iteration = 0
+            while re.search(r'Resi\(\$(\w+),\s*(\d+)\)', expr) and resi_iteration < max_resi_iterations:
                 expr = re.sub(r'Resi\(\$(\w+),\s*(\d+)\)', replace_resi, expr)
+                resi_iteration += 1
             
             # 步骤14: 替换变量引用（最后处理，但在Mean/Std处理之前）
             # 只替换那些还没有被处理的$var（不在calc_data['$var']中的）
@@ -1814,17 +1968,29 @@ class Alpha158Calculator:
                                 n = int(n_str)
                                 # 检查是否是简单的$var格式（已经在步骤6处理过）
                                 # 简单格式：calc_data['$var']（不包含操作符或函数调用）
-                                is_simple = re.match(r'^calc_data\[\'\$\w+\'\]$', inner_expr.strip())
-                                if not is_simple:
+                                inner_expr_stripped = inner_expr.strip()
+                                is_simple = re.match(r'^calc_data\[\'\$\w+\'\]$', inner_expr_stripped)
+                                # 如果不是简单格式，或者包含比较操作符、函数调用等，都需要处理
+                                # 注意：即使is_simple为True，如果包含比较操作符，也需要处理
+                                has_comparison = any(op in inner_expr_stripped for op in ['>', '<', '>=', '<=', '==', '!='])
+                                if not is_simple or has_comparison:
                                     # 对于复杂表达式（包括比较操作符、函数调用等），使用pd.Series包装
                                     replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
                                     expr = expr[:pos] + replacement + expr[end_pos + 1:]
                                     replaced_any = True
                                     break
-                            except ValueError:
-                                pass
+                            except (ValueError, Exception) as e:
+                                # 如果解析失败，尝试强制替换
+                                try:
+                                    n = int(n_str)
+                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
+                                    expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                    replaced_any = True
+                                    break
+                                except:
+                                    pass
                 
-                if not replaced_any:
+                if not replaced_any and mean_positions:
                     # 如果无法替换，可能是inner_expr格式问题，尝试强制替换
                     # 找到第一个Mean函数，强制替换
                     pos = mean_positions[0]
@@ -1870,17 +2036,29 @@ class Alpha158Calculator:
                                 n = int(n_str)
                                 # 检查是否是简单的$var格式（已经在步骤6处理过）
                                 # 简单格式：calc_data['$var']（不包含操作符或函数调用）
-                                is_simple = re.match(r'^calc_data\[\'\$\w+\'\]$', inner_expr.strip())
-                                if not is_simple:
+                                inner_expr_stripped = inner_expr.strip()
+                                is_simple = re.match(r'^calc_data\[\'\$\w+\'\]$', inner_expr_stripped)
+                                # 如果不是简单格式，或者包含比较操作符、函数调用等，都需要处理
+                                # 注意：即使is_simple为True，如果包含比较操作符，也需要处理
+                                has_comparison = any(op in inner_expr_stripped for op in ['>', '<', '>=', '<=', '==', '!='])
+                                if not is_simple or has_comparison:
                                     # 对于复杂表达式，使用pd.Series包装
                                     replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
                                     expr = expr[:pos] + replacement + expr[end_pos + 1:]
                                     replaced_any = True
                                     break
-                            except ValueError:
-                                pass
+                            except (ValueError, Exception) as e:
+                                # 如果解析失败，尝试强制替换
+                                try:
+                                    n = int(n_str)
+                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
+                                    expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                    replaced_any = True
+                                    break
+                                except:
+                                    pass
                 
-                if not replaced_any:
+                if not replaced_any and std_positions:
                     # 如果无法替换，可能是inner_expr格式问题，尝试强制替换
                     # 找到第一个Std函数，强制替换
                     pos = std_positions[0]
@@ -1906,62 +2084,7 @@ class Alpha158Calculator:
             # 在评估前，最后检查并修复Mean/Std函数（确保所有都被替换）
             # 如果还有Mean/Std函数，强制替换
             if 'Mean(' in expr or 'Std(' in expr:
-                logger.warning(f"表达式评估前仍有未替换的Mean/Std函数: {expr[:200]}...")
-                # 强制替换所有剩余的Mean/Std函数
-                def force_replace_mean_std(expr_str):
-                    """强制替换所有Mean/Std函数"""
-                    def find_matching_paren(s, start_pos):
-                        count = 0
-                        i = start_pos
-                        while i < len(s):
-                            if s[i] == '(':
-                                count += 1
-                            elif s[i] == ')':
-                                count -= 1
-                                if count == 0:
-                                    return i
-                            i += 1
-                        return -1
-                    
-                    # 处理Mean函数
-                    while 'Mean(' in expr_str:
-                        mean_pos = expr_str.find('Mean(')
-                        end_pos = find_matching_paren(expr_str, mean_pos + 5)
-                        if end_pos > 0:
-                            comma_pos = expr_str.rfind(',', mean_pos + 5, end_pos)
-                            if comma_pos > 0:
-                                inner_expr = expr_str[mean_pos + 5:comma_pos].strip()
-                                n_str = expr_str[comma_pos + 1:end_pos].strip()
-                                try:
-                                    n = int(n_str)
-                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
-                                    expr_str = expr_str[:mean_pos] + replacement + expr_str[end_pos + 1:]
-                                except ValueError:
-                                    break
-                        else:
-                            break
-                    
-                    # 处理Std函数
-                    while 'Std(' in expr_str:
-                        std_pos = expr_str.find('Std(')
-                        end_pos = find_matching_paren(expr_str, std_pos + 4)
-                        if end_pos > 0:
-                            comma_pos = expr_str.rfind(',', std_pos + 4, end_pos)
-                            if comma_pos > 0:
-                                inner_expr = expr_str[std_pos + 4:comma_pos].strip()
-                                n_str = expr_str[comma_pos + 1:end_pos].strip()
-                                try:
-                                    n = int(n_str)
-                                    replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
-                                    expr_str = expr_str[:std_pos] + replacement + expr_str[end_pos + 1:]
-                                except ValueError:
-                                    break
-                        else:
-                            break
-                    
-                    return expr_str
-                
-                expr = force_replace_mean_std(expr)
+                logger.debug(f"表达式评估前仍有未替换的Mean/Std函数，交由运行时函数处理: {expr[:200]}...")
             
             # 评估表达式
             result = eval(
@@ -1973,6 +2096,10 @@ class Alpha158Calculator:
                     "Greater": Greater,
                     "Less": Less,
                     "Sum": Sum,
+                    "Mean": Mean,
+                    "Std": Std,
+                    "Max": Max,
+                    "Min": Min,
                 },
             )
             

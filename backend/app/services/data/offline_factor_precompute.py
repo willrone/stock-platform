@@ -23,6 +23,7 @@ from app.services.data.precompute_validator import PrecomputeValidator
 from app.services.data.incremental_updater import IncrementalUpdater
 from app.services.data.indicator_registry import IndicatorRegistry
 from app.services.data.version_manager import VersionManager
+from app.services.data.qlib_bin_converter import QlibBinConverter
 from app.services.prediction.technical_indicators import TechnicalIndicatorCalculator
 from app.services.models.feature_engineering import FeatureCalculator
 from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider, Alpha158Calculator
@@ -58,6 +59,7 @@ class OfflineFactorPrecomputeService:
         self.version_manager = VersionManager()
         self.indicator_calculator = TechnicalIndicatorCalculator()
         self.feature_calculator = FeatureCalculator()
+        self.bin_converter = QlibBinConverter()
         
         # Qlib相关组件（延迟初始化）
         self.qlib_provider: Optional[EnhancedQlibDataProvider] = None
@@ -296,193 +298,44 @@ class OfflineFactorPrecomputeService:
             start_date = dates.min().to_pydatetime()
             end_date = dates.max().to_pydatetime()
             
-            # 改进方案：先将基础数据临时保存到Qlib数据目录
-            # 这样Alpha158 handler就可以读取数据并计算因子
-            qlib_features_dir = self.qlib_data_path / "features" / "day"
-            qlib_features_dir.mkdir(parents=True, exist_ok=True)
+            # 生成Qlib bin数据（方案A）
+            try:
+                self.bin_converter.convert_parquet_to_bin(stock_data, stock_code, self.qlib_data_path)
+            except Exception as bin_error:
+                logger.warning(f"股票 {stock_code} 生成Qlib bin失败: {bin_error}")
             
-            # 生成临时文件名（使用股票代码）
-            safe_code = stock_code.replace('.', '_')
-            temp_file = qlib_features_dir / f"{safe_code}.parquet"
-            
-                # 保存基础数据到临时文件（Qlib期望MultiIndex格式：(instrument, date)）
-                try:
-                    logger.debug(f"股票 {stock_code} 临时保存基础数据到 {temp_file}，用于Alpha158 handler计算")
-                    to_save = stock_data.copy()
-                    if isinstance(to_save.index, pd.MultiIndex):
-                        to_save = to_save.droplevel(0)
-                    
-                    # 优先使用带$前缀的基础列，其次使用无前缀列
-                    base_cols_prefixed = ['$open', '$high', '$low', '$close', '$volume']
-                    base_cols_plain = ['open', 'high', 'low', 'close', 'volume']
-                    if any(col in to_save.columns for col in base_cols_prefixed):
-                        cols = [col for col in base_cols_prefixed if col in to_save.columns]
-                        to_save = to_save[cols].rename(columns={c: c.lstrip('$') for c in cols})
-                    elif any(col in to_save.columns for col in base_cols_plain):
-                        cols = [col for col in base_cols_plain if col in to_save.columns]
-                        to_save = to_save[cols]
-                    else:
-                        logger.warning(f"股票 {stock_code} 缺少基础行情列，使用原始数据保存以便诊断")
-                    
-                    # Qlib期望MultiIndex格式：(instrument, date)
-                    # 注意：Qlib的数据提供器期望MultiIndex格式，但保存时可能需要特殊处理
-                    if not isinstance(to_save.index, pd.MultiIndex):
-                        # 创建MultiIndex
-                        dates = to_save.index
-                        multi_index = pd.MultiIndex.from_arrays(
-                            [[stock_code] * len(dates), dates],
-                            names=['instrument', 'date']
-                        )
-                        to_save.index = multi_index
-                    
-                    # 保存为MultiIndex格式
-                    to_save.to_parquet(temp_file, compression='snappy', index=True)
-                    
-                    # 验证保存的数据格式
-                    verify_data = pd.read_parquet(temp_file)
-                    logger.debug(f"验证保存的数据: 形状={verify_data.shape}, 索引类型={type(verify_data.index)}, 是否为MultiIndex={isinstance(verify_data.index, pd.MultiIndex)}")
-                    
-                    # 同时创建标准格式的文件名（如果文件名是下划线格式）
-                    standard_file = qlib_features_dir / f"{stock_code}.parquet"
-                    if standard_file != temp_file and not standard_file.exists():
-                        try:
-                            import os
-                            os.symlink(temp_file.name, standard_file)
-                            logger.debug(f"创建符号链接: {standard_file} -> {temp_file.name}")
-                        except Exception:
-                            # 如果符号链接失败，复制文件
-                            import shutil
-                            shutil.copy2(temp_file, standard_file)
-                            logger.debug(f"复制文件: {standard_file}")
-                    
-                    # 确保 instruments/all.txt 中包含该股票（Qlib D/Handler 依赖 instrument universe）
-                    self._ensure_instrument_entry(stock_code, start_date, end_date)
-                
-                # 确保文件已写入磁盘
-                import os
-                if temp_file.exists():
-                    # 尝试同步文件系统
-                    try:
-                        file_fd = os.open(str(temp_file), os.O_RDONLY)
-                        os.fsync(file_fd)
-                        os.close(file_fd)
-                    except Exception:
-                        pass
-                    
-                    # 短暂等待，确保文件系统缓存刷新
-                    import time
-                    time.sleep(0.1)
-                
-                # 使用Qlib handler计算，确保所有158个因子都能计算出来
-                logger.info(f"股票 {stock_code} 使用Alpha158 handler计算因子（数据已保存到 {temp_file}）")
-                # 先尝试使用handler
-                try:
-                    # 等待文件系统同步
-                    import time
-                    time.sleep(0.5)  # 增加等待时间，确保文件系统完全同步
-                    
-                    # 确保qlib已初始化
-                    try:
-                        import qlib
-                        from qlib.config import REG_CN
-                        if not hasattr(qlib, '_initialized') or not qlib._initialized:
-                            logger.debug(f"初始化qlib用于handler计算...")
-                            qlib.init(
-                                provider_uri=str(self.qlib_data_path.resolve().as_posix()),
-                                region=REG_CN,
-                                mount_path=str(self.qlib_data_path.resolve().as_posix()),
-                            )
-                            logger.debug(f"qlib初始化完成")
-                    except Exception as init_error:
-                        logger.debug(f"qlib初始化失败: {init_error}")
-                    
-                    # 使用handler计算，要求所有158个因子都能计算出来
-                    alpha_factors = await self.alpha_calculator.calculate_alpha_factors(
-                        qlib_data=qlib_data,
-                        stock_codes=[stock_code],
-                        date_range=(start_date, end_date),
-                        use_cache=False,  # 预计算时不使用缓存
-                        force_expression_engine=False  # 优先使用handler
-                    )
-                    # 检查因子数量，要求所有158个因子都能计算出来
-                    if not alpha_factors.empty and len(alpha_factors.columns) >= 158:
-                        logger.info(f"股票 {stock_code} Alpha158 handler计算成功，因子数: {len(alpha_factors.columns)}")
-                        return alpha_factors
-                    else:
-                        factor_count = len(alpha_factors.columns) if not alpha_factors.empty else 0
-                        logger.warning(f"股票 {stock_code} Alpha158 handler计算因子数不足: {factor_count}，期望158个")
-                        raise ValueError(f"Handler因子数不足: {factor_count} < 158")
-                except Exception as handler_error:
-                    logger.warning(f"股票 {stock_code} Alpha158 handler计算失败: {handler_error}，回退到表达式引擎")
-                    # 回退到表达式引擎
-                    alpha_factors = await self.alpha_calculator.calculate_alpha_factors(
-                        qlib_data=qlib_data,
-                        stock_codes=[stock_code],
-                        date_range=(start_date, end_date),
-                        use_cache=False,  # 预计算时不使用缓存
-                        force_expression_engine=True  # 强制表达式引擎
-                    )
-                    # 表达式引擎可能也无法计算所有因子，但至少返回部分结果
-                    if not alpha_factors.empty:
-                        logger.warning(f"股票 {stock_code} 表达式引擎计算完成，因子数: {len(alpha_factors.columns)}（可能不足158个）")
-                    return alpha_factors
-                
-                if not alpha_factors.empty:
-                    logger.info(f"股票 {stock_code} Alpha158因子计算完成，因子数: {len(alpha_factors.columns)}")
-                
-                return alpha_factors
-                
-            except Exception as save_error:
-                logger.warning(f"股票 {stock_code} 保存临时数据失败，回退到表达式引擎: {save_error}")
-                # 回退到表达式引擎
+            # 优先使用handler计算
+            try:
                 alpha_factors = await self.alpha_calculator.calculate_alpha_factors(
                     qlib_data=qlib_data,
                     stock_codes=[stock_code],
                     date_range=(start_date, end_date),
                     use_cache=False,
-                    force_expression_engine=True
+                    force_expression_engine=False,
                 )
+                if not alpha_factors.empty and len(alpha_factors.columns) >= 158:
+                    logger.info(f"股票 {stock_code} Alpha158 handler计算成功，因子数: {len(alpha_factors.columns)}")
+                    return alpha_factors
+                factor_count = len(alpha_factors.columns) if not alpha_factors.empty else 0
+                logger.warning(f"股票 {stock_code} Alpha158 handler因子数不足: {factor_count}，期望158个")
+                raise ValueError(f"Handler因子数不足: {factor_count} < 158")
+            except Exception as handler_error:
+                logger.warning(f"股票 {stock_code} Alpha158 handler计算失败: {handler_error}，回退到表达式引擎")
+                alpha_factors = await self.alpha_calculator.calculate_alpha_factors(
+                    qlib_data=qlib_data,
+                    stock_codes=[stock_code],
+                    date_range=(start_date, end_date),
+                    use_cache=False,
+                    force_expression_engine=True,
+                )
+                if not alpha_factors.empty:
+                    logger.warning(f"股票 {stock_code} 表达式引擎计算完成，因子数: {len(alpha_factors.columns)}（可能不足158个）")
                 return alpha_factors
-            finally:
-                # 注意：不删除临时文件，因为后续保存完整数据时会覆盖它
-                # 如果计算失败，临时文件可以用于调试
-                pass
-            
+        
         except Exception as e:
             logger.warning(f"计算Alpha158因子失败 {stock_code}: {e}", exc_info=True)
             return pd.DataFrame()
 
-    def _ensure_instrument_entry(self, stock_code: str, start_date: datetime, end_date: datetime) -> None:
-        """确保Qlib instruments/all.txt 中包含股票代码条目。"""
-        try:
-            instruments_dir = self.qlib_data_path / "instruments"
-            instruments_dir.mkdir(parents=True, exist_ok=True)
-            inst_file = instruments_dir / "all.txt"
-            start_str = start_date.strftime("%Y-%m-%d")
-            end_str = end_date.strftime("%Y-%m-%d")
-            instrument_code = stock_code.replace(".", "_")
-            new_line = f"{instrument_code}\t{start_str}\t{end_str}\n"
-            if not inst_file.exists():
-                inst_file.write_text(new_line, encoding="utf-8")
-                return
-            lines = inst_file.read_text(encoding="utf-8").splitlines()
-            updated = False
-            out_lines = []
-            for line in lines:
-                if not line.strip():
-                    continue
-                code = line.split()[0]
-                if code == instrument_code:
-                    out_lines.append(new_line.rstrip("\n"))
-                    updated = True
-                else:
-                    out_lines.append(line)
-            if not updated:
-                out_lines.append(new_line.rstrip("\n"))
-            inst_file.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
-        except Exception as e:
-            logger.warning(f"更新instruments文件失败 {stock_code}: {e}")
-    
     async def _compute_alpha158_factors(
         self,
         qlib_data: pd.DataFrame,

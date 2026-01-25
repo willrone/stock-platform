@@ -77,6 +77,7 @@ class QlibFormatConverter:
             # 构建MultiIndex: (stock_code, date)
             qlib_df = qlib_df.set_index('stock_code', append=True)
             qlib_df = qlib_df.swaplevel(0, 1)  # 交换层级，使stock_code在前
+            qlib_df.index = qlib_df.index.set_names(["stock_code", "date"])
             qlib_df = qlib_df.sort_index()
             
             # 数据类型优化
@@ -149,6 +150,14 @@ class QlibFormatConverter:
             添加了指标的Qlib格式DataFrame
         """
         try:
+            # 确保基础索引命名一致
+            if isinstance(qlib_base.index, pd.MultiIndex):
+                if qlib_base.index.names != ["stock_code", "date"]:
+                    qlib_base = qlib_base.copy()
+                    qlib_base.index = qlib_base.index.set_names(["stock_code", "date"])
+            else:
+                raise ValueError("qlib_base必须为MultiIndex (stock_code, date)")
+
             # 如果indicators是单股票数据（索引为日期），需要转换为MultiIndex
             if not isinstance(indicators.index, pd.MultiIndex):
                 if stock_code is None:
@@ -156,9 +165,27 @@ class QlibFormatConverter:
                 
                 # 添加stock_code到索引
                 indicators = indicators.copy()
+                if indicators.index.name is None:
+                    indicators.index = indicators.index.set_names("date")
                 indicators['stock_code'] = stock_code
                 indicators = indicators.set_index('stock_code', append=True)
                 indicators = indicators.swaplevel(0, 1)
+                indicators.index = indicators.index.set_names(["stock_code", "date"])
+            else:
+                # MultiIndex: 对齐索引层级顺序和名称
+                indicators = indicators.copy()
+                if len(indicators.index.levels) != 2:
+                    raise ValueError("指标数据MultiIndex必须是2层 (stock_code, date)")
+                names = indicators.index.names
+                if names != ["stock_code", "date"]:
+                    # 尝试根据dtype推断日期层
+                    level0 = indicators.index.get_level_values(0)
+                    level1 = indicators.index.get_level_values(1)
+                    is_dt0 = pd.api.types.is_datetime64_any_dtype(level0)
+                    is_dt1 = pd.api.types.is_datetime64_any_dtype(level1)
+                    if is_dt0 and not is_dt1:
+                        indicators = indicators.swaplevel(0, 1)
+                    indicators.index = indicators.index.set_names(["stock_code", "date"])
             
             # 检查列名冲突
             overlapping_cols = qlib_base.columns.intersection(indicators.columns)

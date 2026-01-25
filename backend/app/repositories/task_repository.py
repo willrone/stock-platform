@@ -23,6 +23,44 @@ class TaskRepository:
     
     def __init__(self, db_session: Session):
         self.db = db_session
+
+    def _to_json_safe(self, value: Any) -> Any:
+        """递归转换为可 JSON 序列化的类型"""
+        try:
+            import numpy as np
+        except Exception:
+            np = None
+        try:
+            import pandas as pd
+        except Exception:
+            pd = None
+
+        from datetime import datetime, date
+        from enum import Enum
+
+        if isinstance(value, dict):
+            return {k: self._to_json_safe(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._to_json_safe(v) for v in value]
+        if isinstance(value, tuple):
+            return [self._to_json_safe(v) for v in value]
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if pd is not None:
+            if isinstance(value, pd.Timestamp):
+                return value.isoformat()
+            if isinstance(value, pd.Series):
+                return [self._to_json_safe(v) for v in value.tolist()]
+            if isinstance(value, pd.DataFrame):
+                return {k: [self._to_json_safe(v) for v in col] for k, col in value.to_dict(orient="list").items()}
+        if np is not None:
+            if isinstance(value, (np.integer, np.floating)):
+                return value.item()
+            if isinstance(value, np.ndarray):
+                return [self._to_json_safe(v) for v in value.tolist()]
+        return value
     
     def create_task(self, task_name: str, task_type: TaskType, user_id: str,
                    config: 'Dict[str, Any]') -> 'Task':
@@ -173,7 +211,7 @@ class TaskRepository:
             if result is not None:
                 # 强制更新 result 字段，即使值看起来相同
                 from sqlalchemy.orm.attributes import flag_modified
-                task.result = result
+                task.result = self._to_json_safe(result)
                 flag_modified(task, 'result')  # 标记 result 字段为已修改
             
             if error_message is not None:

@@ -596,11 +596,11 @@ def execute_backtest_task_simple(task_id: str):
             # 处理任务错误（如任务被删除）
             if task_error.severity == ErrorSeverity.LOW:
                 # 低严重程度错误（如任务被删除），直接退出，不更新任务状态
-                task_logger.info(f"任务被取消或删除: {task_id}, 原因: {task_error.message}")
+                task_logger.info("任务被取消或删除: {}, 原因: {}", task_id, task_error.message)
                 return
             else:
                 # 其他任务错误，标记为失败
-                task_logger.error(f"回测任务错误: {task_id}, 错误: {task_error.message}", exc_info=True)
+                task_logger.error("回测任务错误: {}, 错误: {}", task_id, task_error.message, exc_info=True)
                 try:
                     task_repository.update_task_status(
                         task_id=task_id,
