@@ -7,11 +7,7 @@ import torch
 import numpy as np
 
 # 直接导入模型，避免通过services模块导入
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app', 'services'))
-
-from modern_models import TimesNet, PatchTST, Informer
+from app.services.models.modern_models import Informer, PatchTST, TimesNet
 
 
 class TestModernModels:

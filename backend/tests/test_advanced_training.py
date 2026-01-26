@@ -12,17 +12,13 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, AsyncMock
 from pathlib import Path
 
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app', 'services'))
-
-from advanced_training import (
+from app.services.models.advanced_training import (
     AdvancedTrainingService,
-    EnsembleModelManager,
-    OnlineLearningManager,
     EnsembleConfig,
+    EnsembleMethod,
+    EnsembleModelManager,
     OnlineLearningConfig,
-    EnsembleMethod
+    OnlineLearningManager,
 )
 
 

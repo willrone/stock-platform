@@ -19,14 +19,23 @@ import joblib
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 
-from backend.app.services.model_storage import (
-    ModelStorage, ModelMetadata, ModelType, ModelStatus, ModelVersionManager
+from app.services.models.model_deployment_service import (
+    DeploymentConfig,
+    DeploymentStatus,
+    ModelDeploymentService,
+    ModelEvaluator,
 )
-from backend.app.services.model_training_service import (
-    ModelTrainingService, TrainingConfig, TrainerFactory
+from app.services.models.model_evaluation import ModelVersionManager
+from app.services.models.model_storage import (
+    ModelMetadata,
+    ModelStatus,
+    ModelStorage,
+    ModelType,
 )
-from backend.app.services.model_deployment_service import (
-    ModelDeploymentService, ModelEvaluator, DeploymentConfig, DeploymentStatus
+from app.services.models.model_training_service import (
+    ModelTrainingService,
+    TrainerFactory,
+    TrainingConfig,
 )
 
 

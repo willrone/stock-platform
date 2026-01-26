@@ -14,13 +14,31 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.app.models.task_models import Task, TaskType, TaskStatus, Base
-from backend.app.repositories.task_repository import TaskRepository, PredictionResultRepository
-from backend.app.services.task_queue import TaskScheduler, TaskPriority, QueuedTask, TaskExecutor
-from backend.app.services.task_execution_engine import TaskExecutionEngine, ProgressTracker
-from backend.app.services.task_notification_service import TaskNotificationService
-from backend.app.services.websocket_manager import WebSocketManager
-from backend.app.core.error_handler import TaskError
+from app.core.database import Base
+from app.core.error_handler import TaskError
+from app.models.task_models import Task, TaskStatus, TaskType
+from app.repositories.task_repository import (
+    PredictionResultRepository,
+    TaskRepository,
+)
+from app.services.infrastructure.websocket_manager import (
+    ClientConnection,
+    WebSocketManager,
+    WebSocketMessage,
+)
+from app.services.tasks.task_queue import TaskExecutor
+from app.services.tasks.task_execution_engine import (
+    ProgressTracker,
+    TaskExecutionEngine,
+)
+from app.services.tasks.task_notification_service import (
+    TaskNotificationService,
+)
+from app.services.tasks.task_queue import (
+    QueuedTask,
+    TaskPriority,
+    TaskScheduler,
+)
 
 
 class TestTaskManagementIntegrity:
@@ -338,7 +356,7 @@ class TestTaskQueueReliability:
         功能: production-ready-implementation, 属性 2: 任务管理完整性
         验证任务执行上下文的完整性 - 执行上下文应该正确管理任务生命周期
         """
-        from backend.app.services.task_queue import TaskExecutionContext
+        from app.services.tasks.task_queue import TaskExecutionContext
         import threading
         
         # 创建执行上下文

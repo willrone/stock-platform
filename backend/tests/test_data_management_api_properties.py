@@ -14,8 +14,13 @@ from hypothesis.strategies import composite
 from fastapi.testclient import TestClient
 
 from app.main import create_application
-from app.services.data import ParquetManager
-from app.services.data import DataSyncEngine
+from app.services.data.parquet_manager import ParquetManager
+
+# DataSyncEngine 已移除，使用占位符
+try:
+    from app.services.data.incremental_updater import IncrementalUpdater as DataSyncEngine
+except ImportError:
+    DataSyncEngine = None
 from app.models.file_management import FileFilters, IntegrityStatus
 from app.models.sync_models import BatchSyncRequest, SyncMode
 

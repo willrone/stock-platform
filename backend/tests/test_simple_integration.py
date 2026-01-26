@@ -13,11 +13,14 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
-from app.services.data import StockDataService
-from app.services.data import ParquetManager
-from app.services.infrastructure import DataMonitoringService
-from app.services.data import DataValidator
-from app.services.infrastructure import cache_manager
+from app.services.data import SimpleDataService
+from app.services.data.data_validator import DataValidator
+from app.services.data.parquet_manager import ParquetManager
+from app.services.infrastructure.cache_service import cache_manager
+from app.services.infrastructure.monitoring_service import DataMonitoringService
+
+# 别名以兼容旧测试
+StockDataService = SimpleDataService
 
 
 class TestSimpleIntegration:

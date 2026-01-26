@@ -10,7 +10,10 @@ from pathlib import Path
 import pytest
 
 from app.models.stock_simple import DataSyncRequest, StockData
-from app.services.data_service_simple import SimpleStockDataService
+from app.services.data import SimpleDataService
+
+# 别名以兼容旧测试
+SimpleStockDataService = SimpleDataService
 
 
 class TestSimpleStockDataService:

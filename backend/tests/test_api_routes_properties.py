@@ -12,7 +12,7 @@ from hypothesis.strategies import composite
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.data import DataService as StockDataService
+from app.services.data import SimpleDataService as StockDataService
 from app.services.prediction import TechnicalIndicatorCalculator
 from app.models.stock import StockData, DataServiceStatus
 
@@ -162,7 +162,7 @@ class TestAPIRoutesProperties:
         ]
         
         # 模拟技术指标结果
-        from app.services.technical_indicators import TechnicalIndicatorResult
+        from app.services.prediction.technical_indicators import TechnicalIndicatorResult
         mock_indicator_results = [
             TechnicalIndicatorResult(
                 stock_code=stock_code,

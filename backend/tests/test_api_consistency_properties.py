@@ -15,7 +15,7 @@ from typing import Dict, Any, List
 import json
 
 from app.main import app
-from app.api.routes import StandardResponse
+from app.api.v1.schemas import StandardResponse
 
 
 # 测试客户端

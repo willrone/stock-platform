@@ -9,9 +9,9 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
 from app.core.container import ServiceContainer, get_container, cleanup_container
-from app.services.data import DataService as StockDataService
+from app.services.data import SimpleDataService as StockDataService
+from app.services.data.parquet_manager import ParquetManager
 from app.services.prediction import TechnicalIndicatorCalculator
-from app.services.data import ParquetManager
 
 
 @composite

@@ -13,12 +13,19 @@ from typing import Dict, Any, List
 from hypothesis import given, strategies as st, settings, assume
 from unittest.mock import Mock, patch
 
-from backend.app.services.backtest import (
-    MovingAverageStrategy, RSIStrategy, MACDStrategy, StrategyFactory,
-    PortfolioManager, BacktestConfig, TradingSignal, SignalType
+from app.core.error_handler import TaskError
+from app.services.backtest import (
+    BacktestConfig,
+    BacktestExecutor,
+    DataLoader,
+    MACDStrategy,
+    MovingAverageStrategy,
+    PortfolioManager,
+    RSIStrategy,
+    SignalType,
+    StrategyFactory,
+    TradingSignal,
 )
-from backend.app.services.backtest import BacktestExecutor, DataLoader
-from backend.app.core.error_handler import TaskError
 
 
 class TestBacktestEngineAccuracy:

@@ -13,12 +13,18 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 import os
 
-from backend.app.services.prediction import PredictionEngine, PredictionConfig
-from backend.app.services.prediction import FeatureExtractor, FeatureConfig
-from backend.app.services.prediction import RiskAssessmentService, RiskAssessmentConfig
-from backend.app.services.prediction import PredictionErrorHandler, FallbackStrategy
-from backend.app.models.task_models import RiskMetrics
-from backend.app.core.error_handler import PredictionError
+from app.core.error_handler import PredictionError
+from app.models.task_models import RiskMetrics
+from app.services.prediction import (
+    FeatureConfig,
+    FeatureExtractor,
+    FallbackStrategy,
+    PredictionConfig,
+    PredictionEngine,
+    PredictionErrorHandler,
+    RiskAssessmentConfig,
+    RiskAssessmentService,
+)
 
 
 class TestPredictionEngineAccuracy:
@@ -467,7 +473,7 @@ class TestRiskAssessmentAccuracy:
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
         验证置信区间的数学属性 - 置信区间应该满足统计学要求
         """
-        from backend.app.services.prediction import ConfidenceIntervalCalculator
+        from app.services.prediction import ConfidenceIntervalCalculator
         
         predicted_price = 100.0
         

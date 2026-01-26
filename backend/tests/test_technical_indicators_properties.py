@@ -11,11 +11,11 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
 from app.models.stock_simple import StockData
-from app.services.technical_indicators import (
+from app.services.prediction.technical_indicators import (
     TechnicalIndicatorCalculator,
     BatchIndicatorRequest
 )
-from app.services.data_service_simple import SimpleStockDataService
+from app.services.data import SimpleDataService as SimpleStockDataService
 
 
 @composite

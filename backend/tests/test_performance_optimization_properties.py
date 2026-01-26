@@ -15,12 +15,23 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 from pathlib import Path
 
-from app.services.infrastructure import LRUCache, CacheManager, cache_manager
-from app.services.data import StreamProcessor, ChunkedDataReader, MemoryMonitor
-from app.services.infrastructure import (
-    HTTPConnectionPool, DatabaseConnectionPool, ConnectionPoolManager,
-    PoolConfig, connection_pool_manager
+from app.services.data.stream_processor import StreamProcessor
+from app.services.infrastructure.cache_service import (
+    CacheManager,
+    LRUCache,
+    cache_manager,
 )
+from app.services.infrastructure.connection_pool import (
+    ConnectionPoolManager,
+    DatabaseConnectionPool,
+    HTTPConnectionPool,
+    PoolConfig,
+    connection_pool_manager,
+)
+
+# ChunkedDataReader, MemoryMonitor 可能已移除
+ChunkedDataReader = None
+MemoryMonitor = None
 
 
 @composite

@@ -20,9 +20,9 @@ from fastapi.websockets import WebSocket
 
 from app.main import app
 from app.websocket import manager
-from app.services.task_manager import TaskManager
-from app.services.data import StockDataService
-from app.models.stock import TaskCreateRequest, StockDataRequest
+from app.services.data import SimpleDataService as StockDataService
+from app.services.tasks.task_manager import TaskManager
+from app.api.v1.schemas import StockDataRequest, TaskCreateRequest
 
 
 class TestIntegration:

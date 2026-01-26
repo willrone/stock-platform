@@ -16,12 +16,22 @@ from hypothesis.strategies import composite
 from pathlib import Path
 
 from app.core.container import ServiceContainer
-from app.services.data import DataService as StockDataService
-from app.services.data import ParquetManager
-from app.services.data import DataSyncEngine
-from app.services.infrastructure import DataMonitoringService
-from app.services.infrastructure import cache_manager
-from app.services.infrastructure import connection_pool_manager
+from app.services.data import SimpleDataService as StockDataService
+from app.services.data.parquet_manager import ParquetManager
+from app.services.infrastructure.cache_service import cache_manager
+from app.services.infrastructure.monitoring_service import DataMonitoringService
+
+# DataSyncEngine 已移除，使用占位符
+try:
+    from app.services.data.incremental_updater import IncrementalUpdater as DataSyncEngine
+except ImportError:
+    DataSyncEngine = None
+
+# connection_pool_manager 可能已移除
+try:
+    from app.services.infrastructure.connection_pool import connection_pool_manager
+except ImportError:
+    connection_pool_manager = None
 from app.models.stock import DataSyncRequest
 from app.models.file_management import FileListRequest, FileListResponse
 
@@ -55,9 +65,9 @@ class TestIntegrationProperties:
         self.temp_path = Path(self.temp_dir)
         
         # 直接创建服务实例，不使用容器
-        from app.services.data import DataService as StockDataService
-        from app.services.data import ParquetManager
-        from app.services.infrastructure import DataMonitoringService
+        from app.services.data import SimpleDataService as StockDataService
+        from app.services.data.parquet_manager import ParquetManager
+        from app.services.infrastructure.monitoring_service import DataMonitoringService
         from app.services.data import DataValidator
         
         self.stock_data_service = StockDataService()

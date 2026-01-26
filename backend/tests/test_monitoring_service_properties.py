@@ -12,11 +12,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
-from app.services.infrastructure import DataMonitoringService, ServiceHealthStatus, PerformanceMetrics, ErrorStatistics
-from app.services.data import DataService as StockDataService
+from app.services.infrastructure.monitoring_service import (
+    DataMonitoringService,
+    ErrorStatistics,
+    PerformanceMetrics,
+    ServiceHealthStatus,
+)
+from app.services.data import SimpleDataService as StockDataService
+from app.services.data.parquet_manager import ParquetManager
 from app.services.prediction import TechnicalIndicatorCalculator
-from app.services.data import ParquetManager
-from app.services.data import DataSyncEngine
+
+# DataSyncEngine 已移除，使用占位符
+try:
+    from app.services.data.incremental_updater import IncrementalUpdater as DataSyncEngine
+except ImportError:
+    DataSyncEngine = None
 
 
 @composite

@@ -12,9 +12,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
-from app.services.data import DataSyncEngine, SyncProgressTracker
-from app.services.data import DataService as StockDataService
-from app.services.data import ParquetManager
+from app.services.data import SimpleDataService as StockDataService
+from app.services.data.data_validator import DataValidator
+from app.services.data.parquet_manager import ParquetManager
+
+# DataSyncEngine 和 SyncProgressTracker 已移除，使用占位符
+# 相关测试可能需要跳过或重构
+try:
+    from app.services.data.incremental_updater import IncrementalUpdater as DataSyncEngine
+    SyncProgressTracker = None  # 占位符
+except ImportError:
+    DataSyncEngine = None
+    SyncProgressTracker = None
 from app.models.stock_simple import StockData
 from app.models.sync_models import (
     BatchSyncRequest, SyncOptions, SyncMode, SyncStatus

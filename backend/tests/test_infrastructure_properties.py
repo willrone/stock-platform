@@ -11,13 +11,22 @@ from typing import Dict, Any
 from hypothesis import given, strategies as st, settings
 from unittest.mock import Mock, AsyncMock
 
-from backend.app.models.task_models import Task, TaskType, TaskStatus, PredictionResult
-from backend.app.services.infrastructure import WebSocketManager, WebSocketMessage, ClientConnection
-from backend.app.core.error_handler import (
-    ErrorRecoveryManager, BaseError, ErrorType, ErrorSeverity, 
-    PredictionError, TaskError, ModelError
+from app.core.error_handler import (
+    BaseError,
+    ErrorRecoveryManager,
+    ErrorSeverity,
+    ErrorType,
+    ModelError,
+    PredictionError,
+    TaskError,
 )
-from backend.app.core.logging_config import AuditLogger, PerformanceLogger, LogContext
+from app.core.logging_config import AuditLogger, LogContext, PerformanceLogger
+from app.models.task_models import PredictionResult, Task, TaskStatus, TaskType
+from app.services.infrastructure.websocket_manager import (
+    ClientConnection,
+    WebSocketManager,
+    WebSocketMessage,
+)
 
 
 class TestTaskManagementIntegrity:
@@ -233,7 +242,7 @@ class TestLoggingSystemIntegrity:
             )
             
             # 验证上下文设置正确
-            from backend.app.core.logging_config import request_id_var, user_id_var
+            from app.core.logging_config import request_id_var, user_id_var
             assert request_id_var.get() == request_id
             assert user_id_var.get() == user_id
     

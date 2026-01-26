@@ -12,18 +12,23 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, AsyncMock
 from pathlib import Path
 
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app', 'services'))
+from enum import Enum
 
-from prediction_engine import (
-    PredictionEngine,
-    PredictionConfig,
-    PredictionResult,
-    PredictionHorizon,
+from app.models.task_models import PredictionResult
+from app.services.prediction import (
     ModelLoader,
-    RiskAssessment
+    PredictionConfig,
+    PredictionEngine,
 )
+from app.services.prediction.prediction_engine import RiskAssessment
+
+
+class PredictionHorizon(Enum):
+    """预测时间范围枚举（测试用）"""
+    INTRADAY = "intraday"
+    SHORT_TERM = "short_term"
+    MEDIUM_TERM = "medium_term"
+    LONG_TERM = "long_term"
 
 
 class TestPredictionConfig:

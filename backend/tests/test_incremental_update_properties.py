@@ -11,7 +11,7 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 
 from app.models.stock_simple import StockData
-from app.services.data import SimpleStockDataService
+from app.services.data import SimpleDataService as SimpleStockDataService
 
 
 @composite

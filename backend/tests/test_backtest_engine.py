@@ -10,18 +10,20 @@ import pandas as pd
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app', 'services'))
-
-from backtest_engine import (
-    BacktestService,
+from app.models.task_models import BacktestResult as TaskBacktestResult
+from app.services.backtest import (
     BacktestConfig,
-    BacktestResult,
-    Trade,
+    BacktestExecutor,
     OrderType,
-    SimpleBacktestEngine
+    Trade,
 )
+
+# 别名以兼容旧测试
+BacktestService = BacktestExecutor
+SimpleBacktestEngine = BacktestExecutor
+# BacktestResult 在测试中作为 dataclass 使用，但实际是 ORM 模型
+# 测试可能需要调整
+BacktestResult = TaskBacktestResult
 
 
 class TestBacktestConfig:

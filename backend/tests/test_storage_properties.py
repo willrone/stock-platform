@@ -13,7 +13,7 @@ from hypothesis.strategies import composite
 
 from app.models.stock_simple import StockData
 from app.models.database import DatabaseManager, Task, TaskResult, ModelMetadata, SystemConfig, TaskStatus
-from app.services.parquet_manager import ParquetManager
+from app.services.data.parquet_manager import ParquetManager
 
 
 @composite

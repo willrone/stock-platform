@@ -13,7 +13,7 @@ from hypothesis import given, strategies as st, settings
 from hypothesis.strategies import composite
 import pandas as pd
 
-from app.services.parquet_manager import ParquetManager
+from app.services.data.parquet_manager import ParquetManager
 from app.models.stock_simple import StockData
 from app.models.file_management import (
     FileFilters, FilterCriteria, IntegrityStatus
