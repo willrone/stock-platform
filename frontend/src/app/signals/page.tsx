@@ -13,7 +13,6 @@ import {
   FormControl,
   FormControlLabel,
   InputLabel,
-  LinearProgress,
   MenuItem,
   Select,
   Stack,
@@ -48,7 +47,7 @@ export default function SignalsPage() {
     Array<{
       key: string;
       name: string;
-      description?: string;
+      description: string;
       parameters?: Record<string, StrategyParameter>;
     }>
   >([]);
@@ -199,7 +198,7 @@ export default function SignalsPage() {
         const normalized = list.map(s => ({
           key: s.key,
           name: s.name || s.key,
-          description: s.description,
+          description: s.description || s.name || s.key || '无描述',
           parameters: s.parameters,
         }));
         setStrategies(normalized);

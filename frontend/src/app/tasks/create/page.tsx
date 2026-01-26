@@ -35,8 +35,8 @@ import { useRouter } from 'next/navigation';
 import { useDataStore } from '../../../stores/useDataStore';
 import { useTaskStore } from '../../../stores/useTaskStore';
 import { TaskService, CreateTaskRequest } from '../../../services/taskService';
+import { DataService } from '../../../services/dataService';
 import { StockSelector } from '../../../components/tasks/StockSelector';
-import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 import {
   StrategyConfigForm,
   StrategyParameter,

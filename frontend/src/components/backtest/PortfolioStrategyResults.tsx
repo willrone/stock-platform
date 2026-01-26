@@ -19,7 +19,6 @@ import {
   Chip,
   Paper,
   Divider,
-  Grid,
 } from '@mui/material';
 import {
   PieChart,
@@ -131,9 +130,15 @@ export function PortfolioStrategyResults({
           subheader={`包含 ${strategies.length} 个策略`}
         />
         <CardContent>
-          <Grid container spacing={2}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+              gap: 2,
+            }}
+          >
             {strategies.map((strategy, index) => (
-              <Grid item xs={12} sm={6} md={4} key={strategy.name}>
+              <Box key={strategy.name}>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Box
@@ -166,9 +171,9 @@ export function PortfolioStrategyResults({
                     </>
                   )}
                 </Paper>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
           <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
             <Typography variant="body2" color="text.secondary">
               总权重: {(totalWeight * 100).toFixed(1)}%
@@ -189,7 +194,10 @@ export function PortfolioStrategyResults({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                  label={(props: any) => {
+                    const { name, percent } = props;
+                    return `${name}: ${((percent || 0) * 100).toFixed(1)}%`;
+                  }}
                   outerRadius={120}
                   fill="#8884d8"
                   dataKey="weight"
@@ -252,8 +260,14 @@ export function PortfolioStrategyResults({
         <Card>
           <CardHeader avatar={<TrendingUp size={24} />} title="组合策略总体表现" />
           <CardContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                gap: 2,
+              }}
+            >
+              <Box>
                 <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary">
                     总收益率
@@ -262,8 +276,8 @@ export function PortfolioStrategyResults({
                     {(backtestData.portfolio.total_return * 100).toFixed(2)}%
                   </Typography>
                 </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Box>
+              <Box>
                 <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary">
                     年化收益率
@@ -272,10 +286,10 @@ export function PortfolioStrategyResults({
                     {(backtestData.portfolio.annualized_return * 100).toFixed(2)}%
                   </Typography>
                 </Paper>
-              </Grid>
+              </Box>
               {backtestData.risk_metrics && (
                 <>
-                  <Grid item xs={12} sm={6} md={3}>
+                  <Box>
                     <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
                         夏普比率
@@ -284,8 +298,8 @@ export function PortfolioStrategyResults({
                         {backtestData.risk_metrics.sharpe_ratio.toFixed(2)}
                       </Typography>
                     </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
+                  </Box>
+                  <Box>
                     <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
                         最大回撤
@@ -294,10 +308,10 @@ export function PortfolioStrategyResults({
                         {(backtestData.risk_metrics.max_drawdown * 100).toFixed(2)}%
                       </Typography>
                     </Paper>
-                  </Grid>
+                  </Box>
                 </>
               )}
-            </Grid>
+            </Box>
           </CardContent>
         </Card>
       )}

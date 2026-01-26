@@ -14,7 +14,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
-  CardHeader,
   Button,
   TextField,
   Select,
@@ -46,6 +45,7 @@ import { useRouter } from 'next/navigation';
 import { useTaskStore, Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export default function TasksPage() {
   const router = useRouter();

@@ -22,6 +22,7 @@ import {
   Typography,
   IconButton,
   CircularProgress,
+  LinearProgress,
 } from '@mui/material';
 import { BarChart3, TrendingUp, Zap, AlertCircle, RefreshCw, Clock, Activity } from 'lucide-react';
 import { DataService } from '../../services/dataService';

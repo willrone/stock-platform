@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
+  CardHeader,
   Button,
   Select,
   MenuItem,
@@ -28,6 +29,7 @@ import {
   Slider,
   Alert,
   Paper,
+  Divider,
 } from '@mui/material';
 import { Plus, Trash2, Settings, TrendingUp, AlertCircle } from 'lucide-react';
 import { StrategyConfigForm, StrategyParameter } from './StrategyConfigForm';

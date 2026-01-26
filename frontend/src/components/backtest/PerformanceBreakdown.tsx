@@ -36,6 +36,7 @@ import {
   Target,
   Award,
   Clock,
+  Calendar,
 } from 'lucide-react';
 
 interface MonthlyPerformance {
