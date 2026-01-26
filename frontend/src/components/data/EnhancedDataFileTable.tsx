@@ -1,6 +1,6 @@
 /**
  * 增强的数据文件表格组件
- * 
+ *
  * 显示本地数据文件的详细信息，包括：
  * - 文件完整性状态
  * - 压缩比信息
@@ -39,7 +39,6 @@ import {
   FormControl,
   InputLabel,
   CircularProgress,
-  Checkbox,
 } from '@mui/material';
 import {
   FileText,
@@ -81,7 +80,7 @@ interface EnhancedDataFileTableProps {
 }
 
 // 文件操作菜单组件
-function FileMenu({ file, onDelete }: { file: DataFile; onDelete: () => void }) {
+function FileMenu({ file: _file, onDelete }: { file: DataFile; onDelete: () => void }) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -95,22 +94,21 @@ function FileMenu({ file, onDelete }: { file: DataFile; onDelete: () => void }) 
 
   return (
     <>
-      <IconButton
-        size="small"
-        onClick={handleClick}
-      >
+      <IconButton size="small" onClick={handleClick}>
         <MoreVertical size={16} />
       </IconButton>
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-      >
+      <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
         <MenuItem onClick={handleClose}>
           <Download size={16} style={{ marginRight: 8 }} />
           下载文件
         </MenuItem>
-        <MenuItem onClick={() => { onDelete(); handleClose(); }} sx={{ color: 'error.main' }}>
+        <MenuItem
+          onClick={() => {
+            onDelete();
+            handleClose();
+          }}
+          sx={{ color: 'error.main' }}
+        >
           <Trash2 size={16} style={{ marginRight: 8 }} />
           删除文件
         </MenuItem>
@@ -123,16 +121,16 @@ export function EnhancedDataFileTable({
   files,
   loading = false,
   selectedFiles,
-  onSelectionChange,
+  onSelectionChange: _onSelectionChange,
   onDeleteFiles,
-  onRefresh,
+  onRefresh: _onRefresh,
 }: EnhancedDataFileTableProps) {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sizeFilter, setSizeFilter] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<DataFile | null>(null);
-  
+
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const onPreviewOpen = () => setIsPreviewOpen(true);
@@ -142,7 +140,9 @@ export function EnhancedDataFileTable({
 
   // 格式化文件大小
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) {
+      return '0 B';
+    }
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -163,19 +163,23 @@ export function EnhancedDataFileTable({
     }
   };
 
-  // 获取压缩比颜色
-  const getCompressionColor = (ratio: number) => {
-    if (ratio > 0.8) return 'text-success';
-    if (ratio > 0.6) return 'text-warning';
-    return 'text-danger';
-  };
+  // 获取压缩比颜色（暂时未使用）
+  // const getCompressionColor = (ratio: number) => {
+  //   if (ratio > 0.8) {
+  //     return 'text-success';
+  //   }
+  //   if (ratio > 0.6) {
+  //     return 'text-warning';
+  //   }
+  //   return 'text-danger';
+  // };
 
   // 获取文件新旧程度
   const getFileAge = (file: DataFile) => {
     const now = new Date();
     const lastModified = new Date(file.last_modified);
     const hoursDiff = (now.getTime() - lastModified.getTime()) / (1000 * 60 * 60);
-    
+
     if (hoursDiff < 24) {
       return { color: 'success' as const, text: '最新' };
     } else if (hoursDiff < 72) {
@@ -190,7 +194,7 @@ export function EnhancedDataFileTable({
     return files.filter(file => {
       const matchesSearch = file.stock_code.toLowerCase().includes(searchText.toLowerCase());
       const matchesStatus = !statusFilter || file.integrity_status === statusFilter;
-      
+
       let matchesSize = true;
       if (sizeFilter) {
         const sizeInMB = file.file_size / (1024 * 1024);
@@ -206,13 +210,13 @@ export function EnhancedDataFileTable({
             break;
         }
       }
-      
+
       let matchesDate = true;
       if (dateFilter) {
         const age = getFileAge(file);
         matchesDate = age.text === dateFilter;
       }
-      
+
       return matchesSearch && matchesStatus && matchesSize && matchesDate;
     });
   }, [files, searchText, statusFilter, sizeFilter, dateFilter]);
@@ -238,11 +242,20 @@ export function EnhancedDataFileTable({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 筛选控件 */}
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: 2,
+          p: 2,
+          bgcolor: 'grey.50',
+          borderRadius: 1,
+        }}
+      >
         <TextField
           placeholder="搜索股票代码"
           value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
+          onChange={e => setSearchText(e.target.value)}
           size="small"
           InputProps={{
             startAdornment: (
@@ -253,13 +266,13 @@ export function EnhancedDataFileTable({
           }}
           sx={{ width: { md: 256 } }}
         />
-        
+
         <FormControl size="small" sx={{ minWidth: { md: 160 } }}>
           <InputLabel>完整性状态</InputLabel>
           <Select
             value={statusFilter}
             label="完整性状态"
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={e => setStatusFilter(e.target.value)}
           >
             <MenuItem value="">全部</MenuItem>
             <MenuItem value="valid">完整</MenuItem>
@@ -267,47 +280,44 @@ export function EnhancedDataFileTable({
             <MenuItem value="partial">部分</MenuItem>
           </Select>
         </FormControl>
-        
+
         <FormControl size="small" sx={{ minWidth: { md: 160 } }}>
           <InputLabel>文件大小</InputLabel>
-          <Select
-            value={sizeFilter}
-            label="文件大小"
-            onChange={(e) => setSizeFilter(e.target.value)}
-          >
+          <Select value={sizeFilter} label="文件大小" onChange={e => setSizeFilter(e.target.value)}>
             <MenuItem value="">全部</MenuItem>
             <MenuItem value="small">小于 10MB</MenuItem>
             <MenuItem value="medium">10MB - 100MB</MenuItem>
             <MenuItem value="large">大于 100MB</MenuItem>
           </Select>
         </FormControl>
-        
+
         <FormControl size="small" sx={{ minWidth: { md: 160 } }}>
           <InputLabel>文件新旧</InputLabel>
-          <Select
-            value={dateFilter}
-            label="文件新旧"
-            onChange={(e) => setDateFilter(e.target.value)}
-          >
+          <Select value={dateFilter} label="文件新旧" onChange={e => setDateFilter(e.target.value)}>
             <MenuItem value="">全部</MenuItem>
             <MenuItem value="最新">最新</MenuItem>
             <MenuItem value="较新">较新</MenuItem>
             <MenuItem value="过期">过期</MenuItem>
           </Select>
         </FormControl>
-        
-        <Button
-          variant="outlined"
-          startIcon={<Filter size={16} />}
-          onClick={clearFilters}
-        >
+
+        <Button variant="outlined" startIcon={<Filter size={16} />} onClick={clearFilters}>
           清除筛选
         </Button>
       </Box>
 
       {/* 操作栏 */}
       {selectedFiles.size > 0 && (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'primary.light', borderRadius: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            p: 1.5,
+            bgcolor: 'primary.light',
+            borderRadius: 1,
+          }}
+        >
           <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main' }}>
             已选择 {selectedFiles.size} 个文件
           </Typography>
@@ -359,103 +369,106 @@ export function EnhancedDataFileTable({
                 </TableCell>
               </TableRow>
             ) : (
-              filteredFiles.map((file) => {
-            const status = getFileStatus(file);
-            const age = getFileAge(file);
-            const StatusIcon = status.icon;
-            
-            return (
-              <TableRow key={file.file_path}>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <FileText size={16} color="#999" />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{file.stock_code}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {file.file_path.split('/').pop()}
+              filteredFiles.map(file => {
+                const status = getFileStatus(file);
+                const age = getFileAge(file);
+                const StatusIcon = status.icon;
+
+                return (
+                  <TableRow key={file.file_path}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <FileText size={16} color="#999" />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {file.stock_code}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {file.file_path.split('/').pop()}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <HardDrive size={12} color="#999" />
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {formatFileSize(file.file_size)}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {file.record_count.toLocaleString()}
                       </Typography>
-                    </Box>
-                  </Box>
-                </TableCell>
-                
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <HardDrive size={12} color="#999" />
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {formatFileSize(file.file_size)}
-                    </Typography>
-                  </Box>
-                </TableCell>
-                
-                <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {file.record_count.toLocaleString()}
-                  </Typography>
-                </TableCell>
-                
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Zap size={12} color="#999" />
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        fontWeight: 500,
-                        color: file.compression_ratio > 0.8 ? 'success.main' : 
-                               file.compression_ratio > 0.6 ? 'warning.main' : 'error.main'
-                      }}
-                    >
-                      {(file.compression_ratio * 100).toFixed(1)}%
-                    </Typography>
-                  </Box>
-                </TableCell>
-                
-                <TableCell>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{file.date_range.start}</Typography>
-                    <Typography variant="caption" color="text.secondary">至 {file.date_range.end}</Typography>
-                  </Box>
-                </TableCell>
-                
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip
-                      label={status.text}
-                      color={status.color}
-                      size="small"
-                      icon={<StatusIcon size={12} />}
-                    />
-                  </Box>
-                </TableCell>
-                
-                <TableCell>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <Typography variant="body2">
-                      {new Date(file.last_modified).toLocaleDateString()}
-                    </Typography>
-                    <Chip
-                      label={age.text}
-                      color={age.color}
-                      size="small"
-                    />
-                  </Box>
-                </TableCell>
-                
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Tooltip title="预览文件信息">
-                      <IconButton
-                        size="small"
-                        onClick={() => handlePreviewFile(file)}
-                      >
-                        <Eye size={16} />
-                      </IconButton>
-                    </Tooltip>
-                    
-                    <FileMenu file={file} onDelete={() => onDeleteFiles([file.file_path])} />
-                  </Box>
-                </TableCell>
-              </TableRow>
-            );
+                    </TableCell>
+
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Zap size={12} color="#999" />
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 500,
+                            color:
+                              file.compression_ratio > 0.8
+                                ? 'success.main'
+                                : file.compression_ratio > 0.6
+                                  ? 'warning.main'
+                                  : 'error.main',
+                          }}
+                        >
+                          {(file.compression_ratio * 100).toFixed(1)}%
+                        </Typography>
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {file.date_range.start}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          至 {file.date_range.end}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip
+                          label={status.text}
+                          color={status.color}
+                          size="small"
+                          icon={<StatusIcon size={12} />}
+                        />
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <Typography variant="body2">
+                          {new Date(file.last_modified).toLocaleDateString()}
+                        </Typography>
+                        <Chip label={age.text} color={age.color} size="small" />
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Tooltip title="预览文件信息">
+                          <IconButton size="small" onClick={() => handlePreviewFile(file)}>
+                            <Eye size={16} />
+                          </IconButton>
+                        </Tooltip>
+
+                        <FileMenu file={file} onDelete={() => onDeleteFiles([file.file_path])} />
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
               })
             )}
           </TableBody>
@@ -478,28 +491,47 @@ export function EnhancedDataFileTable({
               {/* 基本信息 */}
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">文件路径</Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    文件路径
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.5 }}
+                  >
                     {selectedFile.file_path}
                   </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">股票代码</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.stock_code}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    股票代码
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                    {selectedFile.stock_code}
+                  </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">文件大小</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{formatFileSize(selectedFile.file_size)}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    文件大小
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                    {formatFileSize(selectedFile.file_size)}
+                  </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">记录数量</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.record_count.toLocaleString()}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    记录数量
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                    {selectedFile.record_count.toLocaleString()}
+                  </Typography>
                 </Box>
               </Box>
 
               {/* 数据质量指标 */}
               <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1.5 }}>数据质量指标</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1.5 }}>
+                  数据质量指标
+                </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -511,13 +543,20 @@ export function EnhancedDataFileTable({
                     <LinearProgress
                       variant="determinate"
                       value={selectedFile.compression_ratio * 100}
-                      color={selectedFile.compression_ratio > 0.8 ? 'success' : 
-                             selectedFile.compression_ratio > 0.6 ? 'warning' : 'error'}
+                      color={
+                        selectedFile.compression_ratio > 0.8
+                          ? 'success'
+                          : selectedFile.compression_ratio > 0.6
+                            ? 'warning'
+                            : 'error'
+                      }
                       sx={{ height: 8, borderRadius: 4 }}
                     />
                   </Box>
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
                     <Typography variant="body2">完整性状态</Typography>
                     <Chip
                       label={getFileStatus(selectedFile).text}
@@ -531,22 +570,34 @@ export function EnhancedDataFileTable({
               {/* 时间信息 */}
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">数据开始日期</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.date_range.start}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    数据开始日期
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                    {selectedFile.date_range.start}
+                  </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">数据结束日期</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>{selectedFile.date_range.end}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    数据结束日期
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                    {selectedFile.date_range.end}
+                  </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">最后修改时间</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    最后修改时间
+                  </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
                     {new Date(selectedFile.last_modified).toLocaleString()}
                   </Typography>
                 </Box>
                 {selectedFile.created_at && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary">创建时间</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      创建时间
+                    </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
                       {new Date(selectedFile.created_at).toLocaleString()}
                     </Typography>
@@ -560,11 +611,7 @@ export function EnhancedDataFileTable({
           <Button variant="outlined" onClick={onPreviewClose}>
             关闭
           </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<Download size={16} />}
-          >
+          <Button variant="contained" color="primary" startIcon={<Download size={16} />}>
             下载文件
           </Button>
         </DialogActions>

@@ -7,7 +7,21 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
-import { Card, CardContent, CardHeader, Chip, Table, TableHead, TableBody, TableRow, TableCell, Box, Typography, TableContainer, Paper } from '@mui/material';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Chip,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Box,
+  Typography,
+  TableContainer,
+  Paper,
+} from '@mui/material';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, AlertCircle } from 'lucide-react';
 
 interface BacktestChartProps {
@@ -42,16 +56,16 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
   const processBacktestData = () => {
     // 调试日志
     console.log('BacktestChart - backtestData:', backtestData);
-    
+
     // 如果提供了真实回测数据，使用真实数据
     // 检查多种可能的数据格式
-    const hasRealData = backtestData && (
-      (backtestData.portfolio && backtestData.risk_metrics) ||
-      (backtestData.equity_curve && backtestData.equity_curve.length > 0) ||
-      (backtestData.total_return !== undefined) ||
-      (backtestData.sharpe_ratio !== undefined)
-    );
-    
+    const hasRealData =
+      backtestData &&
+      ((backtestData.portfolio && backtestData.risk_metrics) ||
+        (backtestData.equity_curve && backtestData.equity_curve.length > 0) ||
+        backtestData.total_return !== undefined ||
+        backtestData.sharpe_ratio !== undefined);
+
     if (hasRealData) {
       console.log('BacktestChart - 使用真实回测数据');
       // 兼容多种数据格式
@@ -59,28 +73,28 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         initial_cash: backtestData.initial_cash || 100000,
         final_value: backtestData.final_value || backtestData.initial_cash || 100000,
         total_return: backtestData.total_return || 0,
-        annualized_return: backtestData.annualized_return || 0
+        annualized_return: backtestData.annualized_return || 0,
       };
-      
+
       const riskMetrics = backtestData.risk_metrics || {
         volatility: backtestData.volatility || 0,
         sharpe_ratio: backtestData.sharpe_ratio || 0,
-        max_drawdown: backtestData.max_drawdown || 0
+        max_drawdown: backtestData.max_drawdown || 0,
       };
-      
+
       const tradingStats = backtestData.trading_stats || {
         total_trades: backtestData.total_trades || 0,
         win_rate: backtestData.win_rate || 0,
-        profit_factor: backtestData.profit_factor || 0
+        profit_factor: backtestData.profit_factor || 0,
       };
-      
+
       const tradeHistory = backtestData.trade_history || [];
-      
+
       // 从真实数据构建图表数据
       const equityCurve = backtestData.equity_curve || [];
       const drawdownCurve = backtestData.drawdown_curve || [];
       const dates = backtestData.dates || [];
-      
+
       // 转换交易记录格式
       const trades: TradeRecord[] = tradeHistory.map((trade: any) => ({
         date: trade.date || trade.trade_date,
@@ -89,7 +103,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         quantity: trade.quantity || trade.shares || 0,
         pnl: trade.pnl || trade.profit_loss || 0,
       }));
-      
+
       const metrics: BacktestMetrics = {
         total_return: (portfolio.total_return || 0) * 100,
         sharpe_ratio: riskMetrics.sharpe_ratio || 0,
@@ -98,20 +112,23 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         total_trades: tradingStats.total_trades || 0,
         profit_factor: tradingStats.profit_factor || 0,
       };
-      
+
       return {
-        dates: dates.length > 0 ? dates : equityCurve.map((_: any, i: number) => {
-          const date = new Date();
-          date.setDate(date.getDate() - (equityCurve.length - i));
-          return date.toISOString().split('T')[0];
-        }),
+        dates:
+          dates.length > 0
+            ? dates
+            : equityCurve.map((_: any, i: number) => {
+                const date = new Date();
+                date.setDate(date.getDate() - (equityCurve.length - i));
+                return date.toISOString().split('T')[0];
+              }),
         equityCurve: equityCurve.length > 0 ? equityCurve : [portfolio.initial_cash || 100000],
         drawdownCurve: drawdownCurve.length > 0 ? drawdownCurve : [0],
         trades: trades.slice(-10), // 最近10笔交易
-        metrics
+        metrics,
       };
     }
-    
+
     // 否则生成模拟回测数据
     console.log('BacktestChart - 未找到真实数据，生成模拟数据');
     return generateMockBacktestData();
@@ -125,25 +142,25 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
     const drawdownCurve = [0];
     const dates = [];
     const trades: TradeRecord[] = [];
-    
+
     let currentEquity = initialCapital;
     let peak = initialCapital;
     let position = 0;
     let lastPrice = 100;
-    
+
     for (let i = 0; i < days; i++) {
       const date = new Date();
       date.setDate(date.getDate() - (days - i));
       dates.push(date.toISOString().split('T')[0]);
-      
+
       // 模拟价格变动
       const priceChange = (Math.random() - 0.5) * 0.04;
       const currentPrice = lastPrice * (1 + priceChange);
-      
+
       // 模拟交易信号（简单策略）
       if (position === 0 && Math.random() < 0.05) {
         // 买入信号
-        const quantity = Math.floor(currentEquity * 0.1 / currentPrice);
+        const quantity = Math.floor((currentEquity * 0.1) / currentPrice);
         if (quantity > 0) {
           position = quantity;
           trades.push({
@@ -151,7 +168,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
             action: 'buy',
             price: currentPrice,
             quantity,
-            pnl: 0
+            pnl: 0,
           });
         }
       } else if (position > 0 && Math.random() < 0.03) {
@@ -159,127 +176,130 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         const sellValue = position * currentPrice;
         const buyValue = position * trades[trades.length - 1].price;
         const pnl = sellValue - buyValue;
-        
+
         trades.push({
           date: dates[i],
           action: 'sell',
           price: currentPrice,
           quantity: position,
-          pnl
+          pnl,
         });
-        
+
         currentEquity += pnl;
         position = 0;
       }
-      
+
       // 计算当前权益
       if (position > 0) {
         const positionValue = position * currentPrice;
-        const cash = currentEquity - (position * trades[trades.length - 1].price);
+        const cash = currentEquity - position * trades[trades.length - 1].price;
         currentEquity = cash + positionValue;
       }
-      
+
       equityCurve.push(currentEquity);
-      
+
       // 计算回撤
       if (currentEquity > peak) {
         peak = currentEquity;
       }
-      const drawdown = (peak - currentEquity) / peak * 100;
+      const drawdown = ((peak - currentEquity) / peak) * 100;
       drawdownCurve.push(drawdown);
-      
+
       lastPrice = currentPrice;
     }
-    
+
     // 计算性能指标
-    const totalReturn = (currentEquity - initialCapital) / initialCapital * 100;
-    const returns = equityCurve.slice(1).map((equity, i) => 
-      (equity - equityCurve[i]) / equityCurve[i]
-    );
+    const totalReturn = ((currentEquity - initialCapital) / initialCapital) * 100;
+    const returns = equityCurve
+      .slice(1)
+      .map((equity, i) => (equity - equityCurve[i]) / equityCurve[i]);
     const avgReturn = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
     const returnStd = Math.sqrt(
       returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / returns.length
     );
-    const sharpeRatio = avgReturn / returnStd * Math.sqrt(252);
+    const sharpeRatio = (avgReturn / returnStd) * Math.sqrt(252);
     const maxDrawdown = Math.max(...drawdownCurve);
-    
+
     const winningTrades = trades.filter(t => t.action === 'sell' && t.pnl > 0).length;
     const totalSellTrades = trades.filter(t => t.action === 'sell').length;
-    const winRate = totalSellTrades > 0 ? winningTrades / totalSellTrades * 100 : 0;
-    
+    const winRate = totalSellTrades > 0 ? (winningTrades / totalSellTrades) * 100 : 0;
+
     const grossProfit = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
     const grossLoss = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
     const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
-    
+
     const metrics: BacktestMetrics = {
       total_return: totalReturn,
       sharpe_ratio: sharpeRatio,
       max_drawdown: maxDrawdown,
       win_rate: winRate,
       total_trades: totalSellTrades,
-      profit_factor: profitFactor
+      profit_factor: profitFactor,
     };
-    
+
     return {
       dates,
       equityCurve: equityCurve.slice(1),
       drawdownCurve: drawdownCurve.slice(1),
       trades: trades.slice(-10), // 最近10笔交易
-      metrics
+      metrics,
     };
   };
 
   useEffect(() => {
     const data = processBacktestData();
-    
+
     // 权益曲线图表
     if (equityChartRef.current) {
       if (equityChartInstance.current) {
         equityChartInstance.current.dispose();
       }
-      
+
       equityChartInstance.current = echarts.init(equityChartRef.current);
-      
+
       const equityOption = {
         title: {
           text: '权益曲线',
           left: 'center',
           textStyle: {
             fontSize: 14,
-            fontWeight: 'bold'
-          }
+            fontWeight: 'bold',
+          },
         },
         tooltip: {
           trigger: 'axis',
-          formatter: function(params: any) {
+          formatter: function (params: any) {
             const value = params[0].value;
             const date = params[0].axisValue;
             return `${date}<br/>权益: ¥${value.toLocaleString()}`;
-          }
+          },
         },
         grid: {
           left: '3%',
           right: '4%',
           bottom: '3%',
           top: '15%',
-          containLabel: true
+          containLabel: true,
         },
         xAxis: {
           type: 'category',
           data: data.dates,
           axisLabel: {
-            formatter: function(value: string) {
-              return new Date(value).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-            }
-          }
+            formatter: function (value: string) {
+              return new Date(value).toLocaleDateString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+              });
+            },
+          },
         },
         yAxis: {
           type: 'value',
           axisLabel: {
-            formatter: function(value: number) {
+            formatter: function (value: number) {
               return `¥${(value / 1000).toFixed(0)}K`;
-            }
-          }
+            },
+          },
         },
         series: [
           {
@@ -288,78 +308,81 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
             data: data.equityCurve,
             lineStyle: {
               color: '#10b981',
-              width: 2
+              width: 2,
             },
             areaStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                 {
                   offset: 0,
-                  color: 'rgba(16, 185, 129, 0.3)'
+                  color: 'rgba(16, 185, 129, 0.3)',
                 },
                 {
                   offset: 1,
-                  color: 'rgba(16, 185, 129, 0.1)'
-                }
-              ])
+                  color: 'rgba(16, 185, 129, 0.1)',
+                },
+              ]),
             },
-            symbol: 'none'
-          }
-        ]
+            symbol: 'none',
+          },
+        ],
       };
-      
+
       equityChartInstance.current.setOption(equityOption);
     }
-    
+
     // 回撤图表
     if (drawdownChartRef.current) {
       if (drawdownChartInstance.current) {
         drawdownChartInstance.current.dispose();
       }
-      
+
       drawdownChartInstance.current = echarts.init(drawdownChartRef.current);
-      
+
       const drawdownOption = {
         title: {
           text: '回撤曲线',
           left: 'center',
           textStyle: {
             fontSize: 14,
-            fontWeight: 'bold'
-          }
+            fontWeight: 'bold',
+          },
         },
         tooltip: {
           trigger: 'axis',
-          formatter: function(params: any) {
+          formatter: function (params: any) {
             const value = params[0].value;
             const date = params[0].axisValue;
             return `${date}<br/>回撤: ${value.toFixed(2)}%`;
-          }
+          },
         },
         grid: {
           left: '3%',
           right: '4%',
           bottom: '3%',
           top: '15%',
-          containLabel: true
+          containLabel: true,
         },
         xAxis: {
           type: 'category',
           data: data.dates,
           axisLabel: {
-            formatter: function(value: string) {
-              return new Date(value).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-            }
-          }
+            formatter: function (value: string) {
+              return new Date(value).toLocaleDateString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+              });
+            },
+          },
         },
         yAxis: {
           type: 'value',
           axisLabel: {
-            formatter: '{value}%'
+            formatter: '{value}%',
           },
           max: 0,
-          min: function(value: any) {
+          min: function (value: any) {
             return Math.floor(value.min * 1.1);
-          }
+          },
         },
         series: [
           {
@@ -368,28 +391,28 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
             data: data.drawdownCurve.map((d: number) => -d),
             lineStyle: {
               color: '#ef4444',
-              width: 2
+              width: 2,
             },
             areaStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                 {
                   offset: 0,
-                  color: 'rgba(239, 68, 68, 0.3)'
+                  color: 'rgba(239, 68, 68, 0.3)',
                 },
                 {
                   offset: 1,
-                  color: 'rgba(239, 68, 68, 0.1)'
-                }
-              ])
+                  color: 'rgba(239, 68, 68, 0.1)',
+                },
+              ]),
             },
-            symbol: 'none'
-          }
-        ]
+            symbol: 'none',
+          },
+        ],
       };
-      
+
       drawdownChartInstance.current.setOption(drawdownOption);
     }
-    
+
     // 响应式调整
     const handleResize = () => {
       if (equityChartInstance.current) {
@@ -419,9 +442,13 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}
+          >
             <AlertCircle size={32} style={{ marginRight: 8 }} />
-            <Typography variant="body2" color="text.secondary">暂无回测数据</Typography>
+            <Typography variant="body2" color="text.secondary">
+              暂无回测数据
+            </Typography>
           </Box>
         </CardContent>
       </Card>
@@ -431,12 +458,26 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 性能指标概览 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' },
+          gap: 2,
+        }}
+      >
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <DollarSign size={24} color="#1976d2" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary">总收益率</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: data.metrics.total_return >= 0 ? 'success.main' : 'error.main' }}>
+            <Typography variant="caption" color="text.secondary">
+              总收益率
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+                color: data.metrics.total_return >= 0 ? 'success.main' : 'error.main',
+              }}
+            >
               {data.metrics.total_return.toFixed(2)}%
             </Typography>
           </CardContent>
@@ -445,15 +486,21 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <TrendingUp size={24} color="#9c27b0" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary">夏普比率</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>{data.metrics.sharpe_ratio.toFixed(3)}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              夏普比率
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              {data.metrics.sharpe_ratio.toFixed(3)}
+            </Typography>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <TrendingDown size={24} color="#d32f2f" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary">最大回撤</Typography>
+            <Typography variant="caption" color="text.secondary">
+              最大回撤
+            </Typography>
             <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
               {data.metrics.max_drawdown.toFixed(2)}%
             </Typography>
@@ -463,8 +510,12 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <BarChart3 size={24} color="#ed6c02" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary">胜率</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>{data.metrics.win_rate.toFixed(1)}%</Typography>
+            <Typography variant="caption" color="text.secondary">
+              胜率
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              {data.metrics.win_rate.toFixed(1)}%
+            </Typography>
           </CardContent>
         </Card>
 
@@ -473,7 +524,9 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', mb: 0.5 }}>
               {data.metrics.total_trades}
             </Typography>
-            <Typography variant="caption" color="text.secondary">总交易次数</Typography>
+            <Typography variant="caption" color="text.secondary">
+              总交易次数
+            </Typography>
           </CardContent>
         </Card>
 
@@ -482,28 +535,26 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
             <Typography variant="h6" sx={{ fontWeight: 600, color: 'secondary.main', mb: 0.5 }}>
               {data.metrics.profit_factor.toFixed(2)}
             </Typography>
-            <Typography variant="caption" color="text.secondary">盈亏比</Typography>
+            <Typography variant="caption" color="text.secondary">
+              盈亏比
+            </Typography>
           </CardContent>
         </Card>
       </Box>
 
       {/* 图表区域 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 3 }}>
+      <Box
+        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 3 }}
+      >
         <Card>
           <CardContent>
-            <Box
-              ref={equityChartRef}
-              sx={{ height: 300, width: '100%' }}
-            />
+            <Box ref={equityChartRef} sx={{ height: 300, width: '100%' }} />
           </CardContent>
         </Card>
 
         <Card>
           <CardContent>
-            <Box
-              ref={drawdownChartRef}
-              sx={{ height: 300, width: '100%' }}
-            />
+            <Box ref={drawdownChartRef} sx={{ height: 300, width: '100%' }} />
           </CardContent>
         </Card>
       </Box>
@@ -538,7 +589,10 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
                     <TableCell>{trade.quantity}</TableCell>
                     <TableCell>
                       {trade.action === 'sell' && (
-                        <Typography variant="body2" sx={{ color: trade.pnl >= 0 ? 'success.main' : 'error.main' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ color: trade.pnl >= 0 ? 'success.main' : 'error.main' }}
+                        >
                           ¥{trade.pnl.toFixed(2)}
                         </Typography>
                       )}

@@ -13,6 +13,7 @@ import {
   FormControl,
   FormControlLabel,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Select,
   Stack,
@@ -32,21 +33,32 @@ import {
   SignalEvent,
 } from '../../services/dataService';
 import TradingViewChart from '@/components/charts/TradingViewChart';
-import { StrategyConfigForm, StrategyParameter } from '../../components/backtest/StrategyConfigForm';
-import { PortfolioStrategyConfig, PortfolioStrategyItem } from '../../components/backtest/PortfolioStrategyConfig';
+import {
+  StrategyConfigForm,
+  StrategyParameter,
+} from '../../components/backtest/StrategyConfigForm';
+import {
+  PortfolioStrategyConfig,
+  PortfolioStrategyItem,
+} from '../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfig, StrategyConfigService } from '../../services/strategyConfigService';
 
 export default function SignalsPage() {
-  const [strategies, setStrategies] = useState<Array<{
-    key: string;
-    name: string;
-    description?: string;
-    parameters?: Record<string, StrategyParameter>;
-  }>>([]);
+  const [strategies, setStrategies] = useState<
+    Array<{
+      key: string;
+      name: string;
+      description?: string;
+      parameters?: Record<string, StrategyParameter>;
+    }>
+  >([]);
   const [strategyType, setStrategyType] = useState<'single' | 'portfolio'>('single');
   const [selectedStrategyName, setSelectedStrategyName] = useState<string>('');
   const [strategyConfig, setStrategyConfig] = useState<Record<string, any>>({});
-  const [portfolioConfig, setPortfolioConfig] = useState<{ strategies: PortfolioStrategyItem[]; integration_method: string } | null>(null);
+  const [portfolioConfig, setPortfolioConfig] = useState<{
+    strategies: PortfolioStrategyItem[];
+    integration_method: string;
+  } | null>(null);
   const [savedConfigs, setSavedConfigs] = useState<StrategyConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [configFormKey, setConfigFormKey] = useState(0);
@@ -137,29 +149,39 @@ export default function SignalsPage() {
     return !!selectedStrategyName;
   }, [strategyType, selectedStrategyName, portfolioConfig]);
   const selectedStrategy = useMemo(
-    () => strategies.find((s) => s.key === selectedStrategyName),
-    [strategies, selectedStrategyName],
+    () => strategies.find(s => s.key === selectedStrategyName),
+    [strategies, selectedStrategyName]
   );
 
   const filteredRows = useMemo(() => {
-    if (!rows.length) return [];
-    return rows.filter((row) => {
+    if (!rows.length) {
+      return [];
+    }
+    return rows.filter(row => {
       const perStrategy = row.per_strategy || {};
       const entries = Object.entries(perStrategy).filter(([name]) =>
-        selectedStrategyNames.includes(name),
+        selectedStrategyNames.includes(name)
       );
-      if (!entries.length) return false;
+      if (!entries.length) {
+        return false;
+      }
 
       // 只要有任意一个策略在当前筛选条件下命中，就保留该股票
       return entries.some(([, val]) => {
-        if (!val) return false;
+        if (!val) {
+          return false;
+        }
         if (signalFilter !== 'ALL' && val.latest_signal !== signalFilter) {
           return false;
         }
         if (val.signal_date) {
           const d = val.signal_date.slice(0, 10); // YYYY-MM-DD
-          if (dateFrom && d < dateFrom) return false;
-          if (dateTo && d > dateTo) return false;
+          if (dateFrom && d < dateFrom) {
+            return false;
+          }
+          if (dateTo && d > dateTo) {
+            return false;
+          }
         }
         return true;
       });
@@ -171,8 +193,10 @@ export default function SignalsPage() {
     (async () => {
       try {
         const list = await DataService.getAvailableStrategies();
-        if (!mounted) return;
-        const normalized = list.map((s) => ({
+        if (!mounted) {
+          return;
+        }
+        const normalized = list.map(s => ({
           key: s.key,
           name: s.name || s.key,
           description: s.description,
@@ -180,10 +204,12 @@ export default function SignalsPage() {
         }));
         setStrategies(normalized);
         if (normalized.length > 0) {
-          setSelectedStrategyName((prev) => (prev ? prev : normalized[0].key));
+          setSelectedStrategyName(prev => (prev ? prev : normalized[0].key));
         }
       } catch (e: any) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         setError(e?.message || '加载策略列表失败');
       }
     })();
@@ -221,7 +247,9 @@ export default function SignalsPage() {
 
   const fetchLatest = async (customOffset?: number) => {
     const realOffset = customOffset ?? offset;
-    if (!selectedStrategyNames.length) return;
+    if (!selectedStrategyNames.length) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -241,7 +269,7 @@ export default function SignalsPage() {
             limit: pageSize,
             offset: pageOffset,
           });
-          const mappedRows = (resp.signals || []).map((item) => ({
+          const mappedRows = (resp.signals || []).map(item => ({
             stock_code: item.stock_code,
             per_strategy: {
               portfolio: {
@@ -268,7 +296,7 @@ export default function SignalsPage() {
           limit: pageSize,
           offset: pageOffset,
         });
-        const mappedRows = (resp.signals || []).map((item) => ({
+        const mappedRows = (resp.signals || []).map(item => ({
           stock_code: item.stock_code,
           per_strategy: {
             [selectedStrategyName]: {
@@ -293,16 +321,22 @@ export default function SignalsPage() {
         const allRows: MultiLatestSignalRow[] = [];
         const allFailures: string[] = [];
 
-        while (true) {
+        let hasMore = true;
+        while (hasMore) {
           const pageResp = await fetchPage(nextOffset);
-          totalCount = pageResp.total || totalCount || (nextOffset + pageResp.rows.length);
+          totalCount = pageResp.total || totalCount || nextOffset + pageResp.rows.length;
           allRows.push(...pageResp.rows);
           allFailures.push(...pageResp.failures);
 
-          if (totalCount === 0 || nextOffset + pageSize >= totalCount || pageResp.rows.length === 0) {
-            break;
+          if (
+            totalCount === 0 ||
+            nextOffset + pageSize >= totalCount ||
+            pageResp.rows.length === 0
+          ) {
+            hasMore = false;
+          } else {
+            nextOffset += pageSize;
           }
-          nextOffset += pageSize;
         }
 
         setRows(allRows);
@@ -336,7 +370,7 @@ export default function SignalsPage() {
     try {
       const config = await StrategyConfigService.getConfig(configId);
       setStrategyConfig(config.parameters || {});
-      setConfigFormKey((prev) => prev + 1);
+      setConfigFormKey(prev => prev + 1);
     } catch (e) {
       console.error('加载策略配置失败:', e);
     }
@@ -352,7 +386,7 @@ export default function SignalsPage() {
         strategies,
         integration_method: integrationMethod,
       });
-      setPortfolioConfigKey((prev) => prev + 1);
+      setPortfolioConfigKey(prev => prev + 1);
     } catch (e) {
       console.error('加载组合策略配置失败:', e);
     }
@@ -403,7 +437,7 @@ export default function SignalsPage() {
     if (name === 'portfolio') {
       return '组合策略';
     }
-    const meta = strategies.find((s) => s.key === name);
+    const meta = strategies.find(s => s.key === name);
     return meta ? `${meta.name}（${meta.key}）` : name;
   };
 
@@ -427,7 +461,7 @@ export default function SignalsPage() {
                 labelId="strategy-type-select-label"
                 label="策略类型"
                 value={strategyType}
-                onChange={(e) => {
+                onChange={e => {
                   const next = e.target.value as 'single' | 'portfolio';
                   setStrategyType(next);
                   setOffset(0);
@@ -445,12 +479,12 @@ export default function SignalsPage() {
                   labelId="strategy-select-label"
                   label="策略"
                   value={selectedStrategyName}
-                  onChange={(e) => {
+                  onChange={e => {
                     setSelectedStrategyName(e.target.value as string);
                     setOffset(0);
                   }}
                 >
-                  {strategies.map((s) => (
+                  {strategies.map(s => (
                     <MenuItem key={s.key} value={s.key}>
                       {s.name}（{s.key}）
                     </MenuItem>
@@ -465,7 +499,7 @@ export default function SignalsPage() {
                 labelId="source-select-label"
                 label="股票池来源"
                 value={source}
-                onChange={(e) => {
+                onChange={e => {
                   setSource(e.target.value as any);
                   setOffset(0);
                 }}
@@ -479,7 +513,7 @@ export default function SignalsPage() {
               label="最近N个交易日"
               type="number"
               value={days}
-              onChange={(e) => setDays(Math.max(5, Math.min(365, Number(e.target.value || 60))))}
+              onChange={e => setDays(Math.max(5, Math.min(365, Number(e.target.value || 60))))}
               sx={{ width: 160 }}
               inputProps={{ min: 5, max: 365 }}
             />
@@ -488,7 +522,7 @@ export default function SignalsPage() {
               label="分页大小"
               type="number"
               value={limit}
-              onChange={(e) => {
+              onChange={e => {
                 const v = Math.max(1, Math.min(2000, Number(e.target.value || 200)));
                 setLimit(v);
                 setOffset(0);
@@ -501,7 +535,7 @@ export default function SignalsPage() {
               control={
                 <Switch
                   checked={generateAll}
-                  onChange={(e) => setGenerateAll(e.target.checked)}
+                  onChange={e => setGenerateAll(e.target.checked)}
                   color="primary"
                 />
               }
@@ -524,12 +558,16 @@ export default function SignalsPage() {
                   key={`${selectedStrategyName}-${configFormKey}`}
                   strategyName={selectedStrategyName}
                   parameters={selectedStrategy.parameters}
-                  values={configFormKey > 0 && Object.keys(strategyConfig).length > 0 ? strategyConfig : undefined}
-                  onChange={(newConfig) => {
+                  values={
+                    configFormKey > 0 && Object.keys(strategyConfig).length > 0
+                      ? strategyConfig
+                      : undefined
+                  }
+                  onChange={newConfig => {
                     setStrategyConfig(newConfig);
                   }}
                   onLoadConfig={handleLoadConfig}
-                  savedConfigs={savedConfigs.map((c) => ({
+                  savedConfigs={savedConfigs.map(c => ({
                     config_id: c.config_id,
                     config_name: c.config_name,
                     created_at: c.created_at,
@@ -545,7 +583,7 @@ export default function SignalsPage() {
                 <Select
                   value={selectedPortfolioConfigId}
                   label="已保存组合配置"
-                  onChange={(e) => {
+                  onChange={e => {
                     const configId = e.target.value as string;
                     setSelectedPortfolioConfigId(configId);
                     if (configId) {
@@ -554,7 +592,7 @@ export default function SignalsPage() {
                   }}
                 >
                   <MenuItem value="">不使用</MenuItem>
-                  {savedConfigs.map((config) => (
+                  {savedConfigs.map(config => (
                     <MenuItem key={config.config_id} value={config.config_id}>
                       {config.config_name}
                     </MenuItem>
@@ -565,7 +603,7 @@ export default function SignalsPage() {
                 key={`portfolio-config-${portfolioConfigKey}`}
                 availableStrategies={strategies}
                 portfolioConfig={portfolioConfig || undefined}
-                onChange={(config) => setPortfolioConfig(config)}
+                onChange={config => setPortfolioConfig(config)}
                 constraints={{
                   maxWeight: 0.5,
                   grossLeverage: 1.0,
@@ -589,7 +627,7 @@ export default function SignalsPage() {
                 labelId="signal-filter-label"
                 label="信号筛选"
                 value={signalFilter}
-                onChange={(e) => setSignalFilter(e.target.value as any)}
+                onChange={e => setSignalFilter(e.target.value as any)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="BUY">BUY</MenuItem>
@@ -602,7 +640,7 @@ export default function SignalsPage() {
               label="开始日期"
               type="date"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              onChange={e => setDateFrom(e.target.value)}
               InputLabelProps={{ shrink: true }}
               sx={{ width: 180 }}
             />
@@ -610,7 +648,7 @@ export default function SignalsPage() {
               label="结束日期"
               type="date"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              onChange={e => setDateTo(e.target.value)}
               InputLabelProps={{ shrink: true }}
               sx={{ width: 180 }}
             />
@@ -629,14 +667,16 @@ export default function SignalsPage() {
           <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               最新信号（第 {page} 页，{filteredRows.length} / {rows.length} / {total}，已选策略：
-              {selectedStrategyNames.map((name) => getStrategyLabel(name)).join('，') || '无'}）
+              {selectedStrategyNames.map(name => getStrategyLabel(name)).join('，') || '无'}）
             </Typography>
             <Stack direction="row" spacing={1}>
               <Button
                 variant="outlined"
                 disabled={generateAll || loading || offset <= 0}
                 onClick={() => {
-                  if (offset <= 0) return;
+                  if (offset <= 0) {
+                    return;
+                  }
                   const nextOffset = Math.max(0, offset - limit);
                   fetchLatest(nextOffset);
                 }}
@@ -647,7 +687,9 @@ export default function SignalsPage() {
                 variant="outlined"
                 disabled={generateAll || loading || offset + limit >= total}
                 onClick={() => {
-                  if (offset + limit >= total) return;
+                  if (offset + limit >= total) {
+                    return;
+                  }
                   const nextOffset = offset + limit;
                   fetchLatest(nextOffset);
                 }}
@@ -662,11 +704,9 @@ export default function SignalsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>股票</TableCell>
-                  {selectedStrategyNames.map((name) => {
+                  {selectedStrategyNames.map(name => {
                     const label = getStrategyLabel(name);
-                    return (
-                      <TableCell key={name}>{label} · 最新信号</TableCell>
-                    );
+                    return <TableCell key={name}>{label} · 最新信号</TableCell>;
                   })}
                 </TableRow>
               </TableHead>
@@ -699,7 +739,7 @@ export default function SignalsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredRows.map((row) => (
+                  filteredRows.map(row => (
                     <TableRow
                       key={row.stock_code}
                       hover
@@ -707,7 +747,7 @@ export default function SignalsPage() {
                       onClick={() => openHistory(row.stock_code)}
                     >
                       <TableCell>{row.stock_code}</TableCell>
-                      {selectedStrategyNames.map((name) => {
+                      {selectedStrategyNames.map(name => {
                         const val = row.per_strategy?.[name] || null;
                         if (!val) {
                           return <TableCell key={name}>-</TableCell>;
@@ -721,11 +761,7 @@ export default function SignalsPage() {
                             <Typography
                               variant="body2"
                               noWrap
-                              title={
-                                val.reason
-                                  ? `${desc}\n原因：${val.reason}`
-                                  : desc
-                              }
+                              title={val.reason ? `${desc}\n原因：${val.reason}` : desc}
                             >
                               {desc}
                             </Typography>
@@ -751,7 +787,9 @@ export default function SignalsPage() {
 
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          {historyStock} · {selectedStrategyNames.map((name) => getStrategyLabel(name)).join('，') || '策略'} · 近{days}个交易日信号事件
+          {historyStock} ·{' '}
+          {selectedStrategyNames.map(name => getStrategyLabel(name)).join('，') || '策略'} · 近
+          {days}个交易日信号事件
         </DialogTitle>
         <DialogContent>
           {historyLoading ? (
@@ -796,16 +834,14 @@ export default function SignalsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {historyStrategies.flatMap((strategyName) => {
+                    {historyStrategies.flatMap(strategyName => {
                       const events = historyEventsByStrategy?.[strategyName] || [];
                       return events.map((ev: SignalEvent, idx: number) => (
                         <TableRow key={`${strategyName}-${ev.timestamp}-${idx}`}>
                           <TableCell>{ev.timestamp}</TableCell>
                           <TableCell>{getStrategyLabel(strategyName)}</TableCell>
                           <TableCell>{ev.signal}</TableCell>
-                          <TableCell align="right">
-                            {Number(ev.strength || 0).toFixed(3)}
-                          </TableCell>
+                          <TableCell align="right">{Number(ev.strength || 0).toFixed(3)}</TableCell>
                           <TableCell align="right">{ev.price}</TableCell>
                           <TableCell sx={{ maxWidth: 520 }}>
                             <Typography variant="body2" noWrap title={ev.reason || ''}>

@@ -23,7 +23,6 @@ import {
   Clock,
   Calendar,
   Settings,
-  TrendingUp,
   AlertTriangle,
   CheckCircle,
   Play,
@@ -33,6 +32,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Task } from '../../stores/useTaskStore';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 
 interface BacktestTaskStatusProps {
   task: Task;
@@ -41,11 +41,11 @@ interface BacktestTaskStatusProps {
   loading?: boolean;
 }
 
-export default function BacktestTaskStatus({ 
-  task, 
-  onRetry, 
-  onStop, 
-  loading = false 
+export default function BacktestTaskStatus({
+  task,
+  onRetry,
+  onStop,
+  loading = false,
 }: BacktestTaskStatusProps) {
   const [selectedStocksPage, setSelectedStocksPage] = useState(1); // 已选股票分页
   // 获取状态配置
@@ -55,28 +55,28 @@ export default function BacktestTaskStatus({
         color: 'default' as const,
         text: '已创建',
         icon: <Clock size={16} />,
-        description: '任务已创建，等待执行'
+        description: '任务已创建，等待执行',
       },
       running: {
         color: 'primary' as const,
         text: '运行中',
         icon: <Play size={16} />,
-        description: '回测正在执行中，请耐心等待'
+        description: '回测正在执行中，请耐心等待',
       },
       completed: {
         color: 'success' as const,
         text: '已完成',
         icon: <CheckCircle size={16} />,
-        description: '回测执行完成，可以查看结果'
+        description: '回测执行完成，可以查看结果',
       },
       failed: {
         color: 'error' as const,
         text: '执行失败',
         icon: <AlertTriangle size={16} />,
-        description: '回测执行失败，请检查配置或重新运行'
+        description: '回测执行失败，请检查配置或重新运行',
       },
     };
-    
+
     return configs[status] || configs.created;
   };
 
@@ -94,16 +94,18 @@ export default function BacktestTaskStatus({
 
   // 计算执行时长
   const getExecutionDuration = () => {
-    if (!task.created_at) return null;
-    
+    if (!task.created_at) {
+      return null;
+    }
+
     const startTime = new Date(task.created_at);
     const endTime = task.completed_at ? new Date(task.completed_at) : new Date();
     const duration = endTime.getTime() - startTime.getTime();
-    
+
     const hours = Math.floor(duration / (1000 * 60 * 60));
     const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((duration % (1000 * 60)) / 1000);
-    
+
     if (hours > 0) {
       return `${hours}小时${minutes}分钟${seconds}秒`;
     } else if (minutes > 0) {
@@ -117,35 +119,39 @@ export default function BacktestTaskStatus({
   const getStrategyDisplayName = (strategyName: string): string => {
     const strategyNameMap: Record<string, string> = {
       // 基础技术分析策略
-      'moving_average': '移动平均策略',
-      'rsi': 'RSI策略',
-      'macd': 'MACD策略',
+      moving_average: '移动平均策略',
+      rsi: 'RSI策略',
+      macd: 'MACD策略',
       // 新增技术分析策略
-      'bollinger': '布林带策略',
-      'stochastic': '随机指标策略',
-      'cci': 'CCI策略',
+      bollinger: '布林带策略',
+      stochastic: '随机指标策略',
+      cci: 'CCI策略',
       // 统计套利策略
-      'pairs_trading': '配对交易策略',
-      'mean_reversion': '均值回归策略',
-      'cointegration': '协整策略',
+      pairs_trading: '配对交易策略',
+      mean_reversion: '均值回归策略',
+      cointegration: '协整策略',
       // 因子投资策略
-      'value_factor': '价值因子策略',
-      'momentum_factor': '动量因子策略',
-      'low_volatility': '低波动因子策略',
-      'multi_factor': '多因子组合策略',
+      value_factor: '价值因子策略',
+      momentum_factor: '动量因子策略',
+      low_volatility: '低波动因子策略',
+      multi_factor: '多因子组合策略',
     };
-    
-    return strategyNameMap[strategyName] || strategyName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    return (
+      strategyNameMap[strategyName] ||
+      strategyName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+    );
   };
 
   // 获取回测配置信息
   const getBacktestConfig = () => {
     const result = task.result;
     const config = result?.backtest_config || task.config?.backtest_config || {};
-    
+
     // 获取原始策略名称并转换为中文
-    const rawStrategyName = config.strategy_name || result?.strategy_name || task.model_id || '默认策略';
-    
+    const rawStrategyName =
+      config.strategy_name || result?.strategy_name || task.model_id || '默认策略';
+
     return {
       startDate: config.start_date || result?.start_date || result?.startDate || '未设置',
       endDate: config.end_date || result?.end_date || result?.endDate || '未设置',
@@ -169,18 +175,16 @@ export default function BacktestTaskStatus({
           action={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {statusConfig.icon}
-              <Chip
-                label={statusConfig.text}
-                color={statusConfig.color}
-                size="small"
-              />
+              <Chip label={statusConfig.text} color={statusConfig.color} size="small" />
             </Box>
           }
         />
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* 进度条 */}
           <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Box
+              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}
+            >
               <Typography variant="body2" color="text.secondary">
                 执行进度
               </Typography>
@@ -225,7 +229,7 @@ export default function BacktestTaskStatus({
                 重新运行
               </Button>
             )}
-            
+
             {task.status === 'running' && onStop && (
               <Button
                 variant="outlined"
@@ -246,7 +250,13 @@ export default function BacktestTaskStatus({
       <Card>
         <CardHeader title="基础信息" />
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+            }}
+          >
             <Box>
               <Typography variant="caption" color="text.secondary">
                 任务名称
@@ -255,7 +265,7 @@ export default function BacktestTaskStatus({
                 {task.task_name}
               </Typography>
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 任务ID
@@ -264,14 +274,19 @@ export default function BacktestTaskStatus({
                 {task.task_id}
               </Typography>
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 策略模型
               </Typography>
-              <Chip label={backtestConfig.strategyName} color="secondary" size="small" sx={{ mt: 0.5 }} />
+              <Chip
+                label={backtestConfig.strategyName}
+                color="secondary"
+                size="small"
+                sx={{ mt: 0.5 }}
+              />
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 股票数量
@@ -284,7 +299,13 @@ export default function BacktestTaskStatus({
 
           <Divider />
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+            }}
+          >
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <Calendar size={16} />
@@ -296,7 +317,7 @@ export default function BacktestTaskStatus({
                 {formatDateTime(task.created_at)}
               </Typography>
             </Box>
-            
+
             {task.completed_at && (
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
@@ -310,7 +331,7 @@ export default function BacktestTaskStatus({
                 </Typography>
               </Box>
             )}
-            
+
             {duration && (
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
@@ -332,8 +353,8 @@ export default function BacktestTaskStatus({
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
               选择的股票
             </Typography>
-            <Box 
-              sx={{ 
+            <Box
+              sx={{
                 height: 200,
                 overflow: 'hidden',
                 display: 'flex',
@@ -341,20 +362,20 @@ export default function BacktestTaskStatus({
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 1,
-                p: 1.5
+                p: 1.5,
               }}
             >
               {task.stock_codes && task.stock_codes.length > 0 ? (
                 <>
-                  <Box 
-                    sx={{ 
+                  <Box
+                    sx={{
                       flex: 1,
                       overflowY: 'auto',
                       display: 'flex',
                       flexWrap: 'wrap',
                       gap: 1,
                       alignContent: 'flex-start',
-                      pb: 1
+                      pb: 1,
                     }}
                   >
                     {(() => {
@@ -363,28 +384,30 @@ export default function BacktestTaskStatus({
                       const startIndex = (selectedStocksPage - 1) * STOCKS_PER_PAGE;
                       const endIndex = startIndex + STOCKS_PER_PAGE;
                       const currentStocks = task.stock_codes.slice(startIndex, endIndex);
-                      
+
                       return currentStocks.map(code => (
                         <Chip key={code} label={code} size="small" />
                       ));
                     })()}
                   </Box>
-                  
+
                   {(() => {
                     const STOCKS_PER_PAGE = 12;
                     const totalPages = Math.ceil(task.stock_codes.length / STOCKS_PER_PAGE);
-                    
+
                     if (totalPages > 1) {
                       return (
-                        <Box sx={{ 
-                          display: 'flex', 
-                          justifyContent: 'center', 
-                          alignItems: 'center', 
-                          gap: 1,
-                          pt: 1,
-                          borderTop: '1px solid',
-                          borderColor: 'divider'
-                        }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: 1,
+                            pt: 1,
+                            borderTop: '1px solid',
+                            borderColor: 'divider',
+                          }}
+                        >
                           <IconButton
                             size="small"
                             disabled={selectedStocksPage === 1}
@@ -392,15 +415,17 @@ export default function BacktestTaskStatus({
                           >
                             <ChevronLeft size={16} />
                           </IconButton>
-                          
+
                           <Typography variant="caption" color="text.secondary">
                             第 {selectedStocksPage} / {totalPages} 页
                           </Typography>
-                          
+
                           <IconButton
                             size="small"
                             disabled={selectedStocksPage >= totalPages}
-                            onClick={() => setSelectedStocksPage(prev => Math.min(totalPages, prev + 1))}
+                            onClick={() =>
+                              setSelectedStocksPage(prev => Math.min(totalPages, prev + 1))
+                            }
                           >
                             <ChevronRight size={16} />
                           </IconButton>
@@ -409,27 +434,31 @@ export default function BacktestTaskStatus({
                     }
                     return null;
                   })()}
-                  
-                  <Box sx={{ 
-                    pt: 1,
-                    mt: 1,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    justifyContent: 'center'
-                  }}>
+
+                  <Box
+                    sx={{
+                      pt: 1,
+                      mt: 1,
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       已选择 <strong>{task.stock_codes.length}</strong> 只股票
                     </Typography>
                   </Box>
                 </>
               ) : (
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  height: '100%' 
-                }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                  }}
+                >
                   <Typography variant="body2" color="text.secondary">
                     暂无选择的股票
                   </Typography>
@@ -442,12 +471,15 @@ export default function BacktestTaskStatus({
 
       {/* 回测配置信息 */}
       <Card>
-        <CardHeader
-          avatar={<Settings size={24} />}
-          title="回测配置"
-        />
+        <CardHeader avatar={<Settings size={24} />} title="回测配置" />
         <CardContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+            }}
+          >
             <Box>
               <Typography variant="caption" color="text.secondary">
                 回测开始日期
@@ -456,7 +488,7 @@ export default function BacktestTaskStatus({
                 {backtestConfig.startDate}
               </Typography>
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 回测结束日期
@@ -465,7 +497,7 @@ export default function BacktestTaskStatus({
                 {backtestConfig.endDate}
               </Typography>
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 初始资金
@@ -474,7 +506,7 @@ export default function BacktestTaskStatus({
                 ¥{backtestConfig.initialCash.toLocaleString()}
               </Typography>
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 手续费率
@@ -483,7 +515,7 @@ export default function BacktestTaskStatus({
                 {backtestConfig.commissionRate.toFixed(3)}%
               </Typography>
             </Box>
-            
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 滑点率

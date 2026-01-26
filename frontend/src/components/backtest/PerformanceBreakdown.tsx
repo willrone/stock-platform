@@ -28,15 +28,14 @@ import {
   Paper,
 } from '@mui/material';
 import * as echarts from 'echarts';
-import { 
-  Calendar, 
-  TrendingUp, 
-  TrendingDown, 
-  BarChart3, 
+import {
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
   Activity,
   Target,
   Award,
-  Clock
+  Clock,
 } from 'lucide-react';
 
 interface MonthlyPerformance {
@@ -106,12 +105,14 @@ export function PerformanceBreakdown({
   monthlyPerformance,
   yearlyPerformance,
   seasonalAnalysis,
-  benchmarkComparison
+  benchmarkComparison,
 }: PerformanceBreakdownProps) {
   const [selectedYear, setSelectedYear] = useState<string>('all');
-  const [selectedMetric, setSelectedMetric] = useState<'return' | 'volatility' | 'sharpe'>('return');
+  const [selectedMetric, setSelectedMetric] = useState<'return' | 'volatility' | 'sharpe'>(
+    'return'
+  );
   const [activeTab, setActiveTab] = useState<string>('heatmap');
-  
+
   // 图表引用
   const heatmapChartRef = useRef<HTMLDivElement>(null);
   const seasonalChartRef = useRef<HTMLDivElement>(null);
@@ -122,12 +123,22 @@ export function PerformanceBreakdown({
 
   // 月份名称
   const monthNames = [
-    '1月', '2月', '3月', '4月', '5月', '6月',
-    '7月', '8月', '9月', '10月', '11月', '12月'
+    '1月',
+    '2月',
+    '3月',
+    '4月',
+    '5月',
+    '6月',
+    '7月',
+    '8月',
+    '9月',
+    '10月',
+    '11月',
+    '12月',
   ];
 
-  // 季度名称
-  const quarterNames = ['Q1', 'Q2', 'Q3', 'Q4'];
+  // 季度名称（保留以备将来使用）
+  // const quarterNames = ['Q1', 'Q2', 'Q3', 'Q4'];
 
   // 可用年份
   const availableYears = useMemo(() => {
@@ -138,12 +149,15 @@ export function PerformanceBreakdown({
 
   // 热力图数据
   const heatmapData = useMemo(() => {
-    if (!monthlyPerformance.length) return [];
-    
-    const filteredData = selectedYear === 'all' 
-      ? monthlyPerformance 
-      : monthlyPerformance.filter(item => item.year.toString() === selectedYear);
-    
+    if (!monthlyPerformance.length) {
+      return [];
+    }
+
+    const filteredData =
+      selectedYear === 'all'
+        ? monthlyPerformance
+        : monthlyPerformance.filter(item => item.year.toString() === selectedYear);
+
     return filteredData.map(item => {
       let value;
       switch (selectedMetric) {
@@ -159,40 +173,47 @@ export function PerformanceBreakdown({
         default:
           value = item.return_rate;
       }
-      
+
       return [item.month - 1, item.year, value];
     });
   }, [monthlyPerformance, selectedYear, selectedMetric]);
 
   // 年度统计
   const yearlyStats = useMemo(() => {
-    if (!yearlyPerformance.length) return null;
-    
+    if (!yearlyPerformance.length) {
+      return null;
+    }
+
     const totalReturn = yearlyPerformance.reduce((sum, year) => sum + year.annual_return, 0);
     const avgReturn = totalReturn / yearlyPerformance.length;
-    const avgVolatility = yearlyPerformance.reduce((sum, year) => sum + year.volatility, 0) / yearlyPerformance.length;
-    const avgSharpe = yearlyPerformance.reduce((sum, year) => sum + year.sharpe_ratio, 0) / yearlyPerformance.length;
-    
-    const bestYear = yearlyPerformance.reduce((best, year) => 
+    const avgVolatility =
+      yearlyPerformance.reduce((sum, year) => sum + year.volatility, 0) / yearlyPerformance.length;
+    const avgSharpe =
+      yearlyPerformance.reduce((sum, year) => sum + year.sharpe_ratio, 0) /
+      yearlyPerformance.length;
+
+    const bestYear = yearlyPerformance.reduce((best, year) =>
       year.annual_return > best.annual_return ? year : best
     );
-    const worstYear = yearlyPerformance.reduce((worst, year) => 
+    const worstYear = yearlyPerformance.reduce((worst, year) =>
       year.annual_return < worst.annual_return ? year : worst
     );
-    
+
     return {
       avgReturn,
       avgVolatility,
       avgSharpe,
       bestYear,
       worstYear,
-      totalYears: yearlyPerformance.length
+      totalYears: yearlyPerformance.length,
     };
   }, [yearlyPerformance]);
 
   // 初始化热力图
   useEffect(() => {
-    if (!heatmapChartRef.current || !heatmapData.length) return;
+    if (!heatmapChartRef.current || !heatmapData.length) {
+      return;
+    }
 
     if (heatmapChartInstance.current) {
       heatmapChartInstance.current.dispose();
@@ -202,7 +223,7 @@ export function PerformanceBreakdown({
 
     const yearSet = new Set(heatmapData.map(item => item[1]));
     const years = Array.from(yearSet).sort();
-    
+
     const option = {
       title: {
         text: '月度表现热力图',
@@ -218,7 +239,7 @@ export function PerformanceBreakdown({
           const month = monthNames[params.data[0]];
           const year = params.data[1];
           const value = params.data[2];
-          
+
           let unit = '';
           let label = '';
           switch (selectedMetric) {
@@ -235,7 +256,7 @@ export function PerformanceBreakdown({
               label = '夏普比率';
               break;
           }
-          
+
           return `${year}年${month}<br/>${label}: ${(value * 100).toFixed(2)}${unit}`;
         },
       },
@@ -265,7 +286,19 @@ export function PerformanceBreakdown({
         left: 'center',
         bottom: '15%',
         inRange: {
-          color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+          color: [
+            '#313695',
+            '#4575b4',
+            '#74add1',
+            '#abd9e9',
+            '#e0f3f8',
+            '#ffffbf',
+            '#fee090',
+            '#fdae61',
+            '#f46d43',
+            '#d73027',
+            '#a50026',
+          ],
         },
       },
       series: [
@@ -306,7 +339,9 @@ export function PerformanceBreakdown({
 
   // 初始化季节性分析图表
   useEffect(() => {
-    if (!seasonalChartRef.current || !seasonalAnalysis) return;
+    if (!seasonalChartRef.current || !seasonalAnalysis) {
+      return;
+    }
 
     if (seasonalChartInstance.current) {
       seasonalChartInstance.current.dispose();
@@ -409,7 +444,9 @@ export function PerformanceBreakdown({
 
   // 初始化基准对比图表
   useEffect(() => {
-    if (!benchmarkChartRef.current || !benchmarkComparison) return;
+    if (!benchmarkChartRef.current || !benchmarkComparison) {
+      return;
+    }
 
     if (benchmarkChartInstance.current) {
       benchmarkChartInstance.current.dispose();
@@ -515,10 +552,14 @@ export function PerformanceBreakdown({
   if (!monthlyPerformance.length || !yearlyPerformance.length) {
     return (
       <Card>
-        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+        <CardContent
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}
+        >
           <Box sx={{ textAlign: 'center' }}>
             <Calendar size={48} color="#999" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="body2" color="text.secondary">暂无绩效分解数据</Typography>
+            <Typography variant="body2" color="text.secondary">
+              暂无绩效分解数据
+            </Typography>
           </Box>
         </CardContent>
       </Card>
@@ -529,50 +570,72 @@ export function PerformanceBreakdown({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 年度统计概览 */}
       {yearlyStats && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 2,
+          }}
+        >
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingUp size={20} color="#1976d2" />
                 <Box>
-                  <Typography variant="caption" color="text.secondary">平均年化收益</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{formatPercent(yearlyStats.avgReturn)}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    平均年化收益
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {formatPercent(yearlyStats.avgReturn)}
+                  </Typography>
                 </Box>
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Activity size={20} color="#9c27b0" />
                 <Box>
-                  <Typography variant="caption" color="text.secondary">平均波动率</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{formatPercent(yearlyStats.avgVolatility)}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    平均波动率
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {formatPercent(yearlyStats.avgVolatility)}
+                  </Typography>
                 </Box>
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Target size={20} color="#2e7d32" />
                 <Box>
-                  <Typography variant="caption" color="text.secondary">平均夏普比率</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{formatRatio(yearlyStats.avgSharpe)}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    平均夏普比率
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {formatRatio(yearlyStats.avgSharpe)}
+                  </Typography>
                 </Box>
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Clock size={20} color="#ed6c02" />
                 <Box>
-                  <Typography variant="caption" color="text.secondary">回测年数</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>{yearlyStats.totalYears} 年</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    回测年数
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {yearlyStats.totalYears} 年
+                  </Typography>
                 </Box>
               </Box>
             </CardContent>
@@ -582,21 +645,29 @@ export function PerformanceBreakdown({
 
       {/* 最佳和最差年份 */}
       {yearlyStats && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}
+        >
           <Card>
-            <CardHeader title={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Award size={20} color="#2e7d32" />
-                <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
-                  最佳年份
-                </Typography>
-              </Box>
-            } />
+            <CardHeader
+              title={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Award size={20} color="#2e7d32" />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                    最佳年份
+                  </Typography>
+                </Box>
+              }
+            />
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{yearlyStats.bestYear.year}</Typography>
-                  <Typography variant="caption" color="text.secondary">年化收益率</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                    {yearlyStats.bestYear.year}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    年化收益率
+                  </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
                   <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
@@ -609,21 +680,27 @@ export function PerformanceBreakdown({
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
-            <CardHeader title={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TrendingDown size={20} color="#d32f2f" />
-                <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
-                  最差年份
-                </Typography>
-              </Box>
-            } />
+            <CardHeader
+              title={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TrendingDown size={20} color="#d32f2f" />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                    最差年份
+                  </Typography>
+                </Box>
+              }
+            />
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{yearlyStats.worstYear.year}</Typography>
-                  <Typography variant="caption" color="text.secondary">年化收益率</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                    {yearlyStats.worstYear.year}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    年化收益率
+                  </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
                   <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main' }}>
@@ -640,31 +717,48 @@ export function PerformanceBreakdown({
       )}
 
       <Box>
-        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} variant="scrollable" scrollButtons="auto">
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Calendar size={16} />
-              <span>月度热力图</span>
-            </Box>
-          } value="heatmap" />
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <BarChart3 size={16} />
-              <span>季节性分析</span>
-            </Box>
-          } value="seasonal" />
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Target size={16} />
-              <span>年度表现</span>
-            </Box>
-          } value="yearly" />
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Activity size={16} />
-              <span>基准对比</span>
-            </Box>
-          } value="benchmark" />
+        <Tabs
+          value={activeTab}
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Calendar size={16} />
+                <span>月度热力图</span>
+              </Box>
+            }
+            value="heatmap"
+          />
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <BarChart3 size={16} />
+                <span>季节性分析</span>
+              </Box>
+            }
+            value="seasonal"
+          />
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Target size={16} />
+                <span>年度表现</span>
+              </Box>
+            }
+            value="yearly"
+          />
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Activity size={16} />
+                <span>基准对比</span>
+              </Box>
+            }
+            value="benchmark"
+          />
         </Tabs>
 
         <Box sx={{ mt: 2 }}>
@@ -672,7 +766,14 @@ export function PerformanceBreakdown({
             <Card>
               <CardHeader
                 title={
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      width: '100%',
+                    }}
+                  >
                     <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
                       月度表现热力图
                     </Typography>
@@ -682,7 +783,7 @@ export function PerformanceBreakdown({
                         <Select
                           value={selectedYear}
                           label="年份"
-                          onChange={(e) => setSelectedYear(e.target.value)}
+                          onChange={e => setSelectedYear(e.target.value)}
                         >
                           <MenuItem value="all">全部</MenuItem>
                           {availableYears.map(year => (
@@ -692,13 +793,15 @@ export function PerformanceBreakdown({
                           ))}
                         </Select>
                       </FormControl>
-                      
+
                       <FormControl size="small" sx={{ minWidth: 120 }}>
                         <InputLabel>指标</InputLabel>
                         <Select
                           value={selectedMetric}
                           label="指标"
-                          onChange={(e) => setSelectedMetric(e.target.value as 'return' | 'volatility' | 'sharpe')}
+                          onChange={e =>
+                            setSelectedMetric(e.target.value as 'return' | 'volatility' | 'sharpe')
+                          }
                         >
                           <MenuItem value="return">收益率</MenuItem>
                           <MenuItem value="volatility">波动率</MenuItem>
@@ -730,23 +833,64 @@ export function PerformanceBreakdown({
                 <Card>
                   <CardHeader title="季度表现统计" />
                   <CardContent>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
-                      {Object.entries(seasonalAnalysis.quarterly_performance).map(([quarter, performance]) => (
-                        <Box key={quarter} sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                          <Typography variant="caption" color="text.secondary">{quarter.toUpperCase()}</Typography>
-                          <Typography variant="h5" sx={{ fontWeight: 600, color: performance >= 0 ? 'success.main' : 'error.main' }}>
-                            {formatPercent(performance)}
-                          </Typography>
-                        </Box>
-                      ))}
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                        gap: 2,
+                        mb: 3,
+                      }}
+                    >
+                      {Object.entries(seasonalAnalysis.quarterly_performance).map(
+                        ([quarter, performance]) => (
+                          <Box
+                            key={quarter}
+                            sx={{
+                              textAlign: 'center',
+                              p: 2,
+                              border: 1,
+                              borderColor: 'divider',
+                              borderRadius: 1,
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary">
+                              {quarter.toUpperCase()}
+                            </Typography>
+                            <Typography
+                              variant="h5"
+                              sx={{
+                                fontWeight: 600,
+                                color: performance >= 0 ? 'success.main' : 'error.main',
+                              }}
+                            >
+                              {formatPercent(performance)}
+                            </Typography>
+                          </Box>
+                        )
+                      )}
                     </Box>
-                    
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                        gap: 2,
+                      }}
+                    >
                       <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.dark', mb: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 500, color: 'success.dark', mb: 1 }}
+                        >
                           最佳月份
                         </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
                           <Typography variant="body2" sx={{ color: 'success.dark' }}>
                             {monthNames[seasonalAnalysis.best_month.month - 1]}
                           </Typography>
@@ -755,12 +899,21 @@ export function PerformanceBreakdown({
                           </Typography>
                         </Box>
                       </Box>
-                      
+
                       <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.dark', mb: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 500, color: 'error.dark', mb: 1 }}
+                        >
                           最差月份
                         </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
                           <Typography variant="body2" sx={{ color: 'error.dark' }}>
                             {monthNames[seasonalAnalysis.worst_month.month - 1]}
                           </Typography>
@@ -795,13 +948,21 @@ export function PerformanceBreakdown({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {yearlyPerformance.map((year) => (
+                      {yearlyPerformance.map(year => (
                         <TableRow key={year.year} hover>
                           <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{year.year}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {year.year}
+                            </Typography>
                           </TableCell>
                           <TableCell align="right">
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', color: year.annual_return >= 0 ? 'success.main' : 'error.main' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontFamily: 'monospace',
+                                color: year.annual_return >= 0 ? 'success.main' : 'error.main',
+                              }}
+                            >
                               {formatPercent(year.annual_return)}
                             </Typography>
                           </TableCell>
@@ -816,7 +977,10 @@ export function PerformanceBreakdown({
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'error.main' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontFamily: 'monospace', color: 'error.main' }}
+                            >
                               {formatPercent(Math.abs(year.max_drawdown))}
                             </Typography>
                           </TableCell>
@@ -859,39 +1023,100 @@ export function PerformanceBreakdown({
                 <Card>
                   <CardHeader title="相对基准统计" />
                   <CardContent>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 2 }}>
-                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">跟踪误差</Typography>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                        gap: 2,
+                        mb: 2,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          textAlign: 'center',
+                          p: 2,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          跟踪误差
+                        </Typography>
                         <Typography variant="h5" sx={{ fontWeight: 600 }}>
                           {formatPercent(benchmarkComparison.tracking_error)}
                         </Typography>
                       </Box>
-                      
-                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">信息比率</Typography>
+
+                      <Box
+                        sx={{
+                          textAlign: 'center',
+                          p: 2,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          信息比率
+                        </Typography>
                         <Typography variant="h5" sx={{ fontWeight: 600 }}>
                           {formatRatio(benchmarkComparison.information_ratio)}
                         </Typography>
                       </Box>
-                      
-                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">Beta系数</Typography>
+
+                      <Box
+                        sx={{
+                          textAlign: 'center',
+                          p: 2,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Beta系数
+                        </Typography>
                         <Typography variant="h5" sx={{ fontWeight: 600 }}>
                           {formatRatio(benchmarkComparison.beta)}
                         </Typography>
                       </Box>
-                      
-                      <Box sx={{ textAlign: 'center', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">Alpha系数</Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 600, color: benchmarkComparison.alpha >= 0 ? 'success.main' : 'error.main' }}>
+
+                      <Box
+                        sx={{
+                          textAlign: 'center',
+                          p: 2,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Alpha系数
+                        </Typography>
+                        <Typography
+                          variant="h5"
+                          sx={{
+                            fontWeight: 600,
+                            color: benchmarkComparison.alpha >= 0 ? 'success.main' : 'error.main',
+                          }}
+                        >
                           {formatPercent(benchmarkComparison.alpha)}
                         </Typography>
                       </Box>
                     </Box>
-                    
+
                     <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body2" sx={{ color: 'primary.dark' }}>相关系数</Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ color: 'primary.dark' }}>
+                          相关系数
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.dark' }}>
                           {formatRatio(benchmarkComparison.correlation)}
                         </Typography>

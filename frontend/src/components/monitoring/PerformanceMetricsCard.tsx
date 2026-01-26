@@ -1,6 +1,6 @@
 /**
  * 性能指标卡片组件
- * 
+ *
  * 显示系统性能指标，包括：
  * - 平均响应时间
  * - 请求总数
@@ -15,7 +15,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  LinearProgress,
   Button,
   Tabs,
   Tab,
@@ -24,15 +23,7 @@ import {
   IconButton,
   CircularProgress,
 } from '@mui/material';
-import {
-  BarChart3,
-  TrendingUp,
-  Zap,
-  AlertCircle,
-  RefreshCw,
-  Clock,
-  Activity,
-} from 'lucide-react';
+import { BarChart3, TrendingUp, Zap, AlertCircle, RefreshCw, Clock, Activity } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 
 interface PerformanceData {
@@ -64,7 +55,7 @@ export function PerformanceMetricsCard() {
 
   useEffect(() => {
     loadPerformanceData();
-    
+
     // 每60秒自动刷新
     const interval = setInterval(loadPerformanceData, 60000);
     return () => clearInterval(interval);
@@ -80,24 +71,27 @@ export function PerformanceMetricsCard() {
   };
 
   const getErrorRate = () => {
-    if (!performanceData?.summary) return 0;
+    if (!performanceData?.summary) {
+      return 0;
+    }
     const { total_requests, total_errors } = performanceData.summary;
     return total_requests > 0 ? (total_errors / total_requests) * 100 : 0;
   };
 
-  const getResponseTimeColor = (responseTime: number): "success" | "warning" | "error" => {
-    if (responseTime < 100) return 'success';
-    if (responseTime < 500) return 'warning';
+  const getResponseTimeColor = (responseTime: number): 'success' | 'warning' | 'error' => {
+    if (responseTime < 100) {
+      return 'success';
+    }
+    if (responseTime < 500) {
+      return 'warning';
+    }
     return 'error';
   };
 
   if (loading && !performanceData) {
     return (
       <Card>
-        <CardHeader
-          avatar={<BarChart3 size={24} />}
-          title="性能指标"
-        />
+        <CardHeader avatar={<BarChart3 size={24} />} title="性能指标" />
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={24} sx={{ mr: 1 }} />
@@ -116,20 +110,13 @@ export function PerformanceMetricsCard() {
         avatar={<BarChart3 size={24} />}
         title="性能指标"
         action={
-          <IconButton
-            size="small"
-            onClick={loadPerformanceData}
-            disabled={loading}
-          >
+          <IconButton size="small" onClick={loadPerformanceData} disabled={loading}>
             <RefreshCw size={16} />
           </IconButton>
         }
       />
       <CardContent>
-        <Tabs
-          value={selectedTab}
-          onChange={(e, newValue) => setSelectedTab(newValue)}
-        >
+        <Tabs value={selectedTab} onChange={(e, newValue) => setSelectedTab(newValue)}>
           <Tab label="概览" value="overview" />
           <Tab label="服务详情" value="services" />
         </Tabs>
@@ -138,7 +125,13 @@ export function PerformanceMetricsCard() {
           {selectedTab === 'overview' && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* 关键指标 */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+                  gap: 2,
+                }}
+              >
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <Clock size={20} color="#1976d2" />
@@ -150,7 +143,7 @@ export function PerformanceMetricsCard() {
                     平均响应时间
                   </Typography>
                 </Box>
-                
+
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <TrendingUp size={20} color="#2e7d32" />
@@ -162,7 +155,7 @@ export function PerformanceMetricsCard() {
                     总请求数
                   </Typography>
                 </Box>
-                
+
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <AlertCircle size={20} color="#ed6c02" />
@@ -174,8 +167,10 @@ export function PerformanceMetricsCard() {
                     错误总数
                   </Typography>
                 </Box>
-                
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'secondary.light', borderRadius: 1 }}>
+
+                <Box
+                  sx={{ textAlign: 'center', p: 2, bgcolor: 'secondary.light', borderRadius: 1 }}
+                >
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <Activity size={20} color="#9c27b0" />
                   </Box>
@@ -225,54 +220,66 @@ export function PerformanceMetricsCard() {
               </Box>
             </Box>
           )}
-          
+
           {selectedTab === 'services' && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {performanceData?.services && Object.entries(performanceData.services).map(([serviceName, metrics]) => (
-                <Box key={serviceName} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {serviceName}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Zap size={16} color="#1976d2" />
+              {performanceData?.services &&
+                Object.entries(performanceData.services).map(([serviceName, metrics]) => (
+                  <Box key={serviceName} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 2,
+                      }}
+                    >
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {metrics.avg_response_time?.toFixed(0) || 0}ms
+                        {serviceName}
                       </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Zap size={16} color="#1976d2" />
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {metrics.avg_response_time?.toFixed(0) || 0}ms
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          请求数
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {formatNumber(metrics.request_count || 0)}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          错误数
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>
+                          {metrics.error_count || 0}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          成功率
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
+                          {metrics.request_count > 0
+                            ? (
+                                ((metrics.request_count - metrics.error_count) /
+                                  metrics.request_count) *
+                                100
+                              ).toFixed(1)
+                            : 100}
+                          %
+                        </Typography>
+                      </Box>
                     </Box>
                   </Box>
-                  
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        请求数
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {formatNumber(metrics.request_count || 0)}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        错误数
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>
-                        {metrics.error_count || 0}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        成功率
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                        {metrics.request_count > 0 
-                          ? (((metrics.request_count - metrics.error_count) / metrics.request_count) * 100).toFixed(1)
-                          : 100
-                        }%
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              ))}
+                ))}
             </Box>
           )}
         </Box>

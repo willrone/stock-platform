@@ -1,6 +1,6 @@
 /**
  * 简化的前端集成测试
- * 
+ *
  * 测试前端与后端的基础集成功能
  */
 
@@ -55,7 +55,9 @@ describe('前端集成测试', () => {
         prediction_engine: { status: 'healthy', active_models: 3 },
       };
 
-      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(mockSystemStatus);
+      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(
+        mockSystemStatus
+      );
 
       const result = await apiRequest.get('/system/status');
       expect(result).toEqual(mockSystemStatus);
@@ -91,7 +93,9 @@ describe('前端集成测试', () => {
 
   describe('WebSocket服务集成', () => {
     it('应该能够建立WebSocket连接', () => {
-      (wsService.isConnected as jest.MockedFunction<typeof wsService.isConnected>).mockReturnValue(true);
+      (wsService.isConnected as jest.MockedFunction<typeof wsService.isConnected>).mockReturnValue(
+        true
+      );
 
       const isConnected = wsService.isConnected();
       expect(isConnected).toBe(true);
@@ -99,7 +103,7 @@ describe('前端集成测试', () => {
 
     it('应该能够订阅任务更新', () => {
       const taskId = 'test_task_123';
-      
+
       wsService.subscribeToTask(taskId);
       expect(wsService.subscribeToTask).toHaveBeenCalledWith(taskId);
     });
@@ -149,7 +153,9 @@ describe('前端集成测试', () => {
         offset: 0,
       };
 
-      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(mockTaskList);
+      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(
+        mockTaskList
+      );
 
       const result = await apiRequest.get('/tasks');
       expect(result).toEqual(mockTaskList);
@@ -166,7 +172,9 @@ describe('前端集成测试', () => {
         data_points: 20,
       };
 
-      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(mockStockData);
+      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(
+        mockStockData
+      );
 
       const params = {
         stock_code: '000001.SZ',
@@ -186,7 +194,9 @@ describe('前端集成测试', () => {
         response_time: 150,
       };
 
-      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(mockDataStatus);
+      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(
+        mockDataStatus
+      );
 
       const result = await apiRequest.get('/data/status');
       expect(result).toEqual(mockDataStatus);
@@ -197,13 +207,17 @@ describe('前端集成测试', () => {
   describe('错误处理集成', () => {
     it('应该能够处理网络错误', async () => {
       const networkError = new Error('网络连接失败');
-      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockRejectedValue(networkError);
+      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockRejectedValue(
+        networkError
+      );
 
       await expect(apiRequest.get('/test')).rejects.toThrow('网络连接失败');
     });
 
     it('应该能够处理WebSocket连接错误', () => {
-      (wsService.isConnected as jest.MockedFunction<typeof wsService.isConnected>).mockReturnValue(false);
+      (wsService.isConnected as jest.MockedFunction<typeof wsService.isConnected>).mockReturnValue(
+        false
+      );
 
       const isConnected = wsService.isConnected();
       expect(isConnected).toBe(false);

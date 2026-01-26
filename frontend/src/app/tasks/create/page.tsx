@@ -1,6 +1,6 @@
 /**
  * 任务创建页面
- * 
+ *
  * 提供任务创建表单，包括：
  * - 股票选择器
  * - 模型选择
@@ -30,24 +30,21 @@ import {
   FormHelperText,
   IconButton,
 } from '@mui/material';
-import {
-  ArrowLeft,
-  Settings,
-  Target,
-  TrendingUp,
-  Shield,
-  Info,
-  Activity,
-} from 'lucide-react';
+import { ArrowLeft, Settings, Target, TrendingUp, Shield, Info, Activity } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useDataStore } from '../../../stores/useDataStore';
 import { useTaskStore } from '../../../stores/useTaskStore';
 import { TaskService, CreateTaskRequest } from '../../../services/taskService';
-import { DataService } from '../../../services/dataService';
 import { StockSelector } from '../../../components/tasks/StockSelector';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
-import { StrategyConfigForm, StrategyParameter } from '../../../components/backtest/StrategyConfigForm';
-import { PortfolioStrategyConfig, PortfolioStrategyItem } from '../../../components/backtest/PortfolioStrategyConfig';
+import {
+  StrategyConfigForm,
+  StrategyParameter,
+} from '../../../components/backtest/StrategyConfigForm';
+import {
+  PortfolioStrategyConfig,
+  PortfolioStrategyItem,
+} from '../../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
 
 export default function CreateTaskPage() {
@@ -58,9 +55,19 @@ export default function CreateTaskPage() {
   const [loading, setLoading] = useState(false);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
   const [taskType, setTaskType] = useState<'prediction' | 'backtest'>('prediction');
-  const [availableStrategies, setAvailableStrategies] = useState<Array<{key: string; name: string; description: string; parameters?: Record<string, StrategyParameter>}>>([]);
+  const [availableStrategies, setAvailableStrategies] = useState<
+    Array<{
+      key: string;
+      name: string;
+      description: string;
+      parameters?: Record<string, StrategyParameter>;
+    }>
+  >([]);
   const [strategyConfig, setStrategyConfig] = useState<Record<string, any>>({});
-  const [portfolioConfig, setPortfolioConfig] = useState<{strategies: PortfolioStrategyItem[]; integration_method: string} | null>(null);
+  const [portfolioConfig, setPortfolioConfig] = useState<{
+    strategies: PortfolioStrategyItem[];
+    integration_method: string;
+  } | null>(null);
   const [strategyType, setStrategyType] = useState<'single' | 'portfolio'>('single');
   const [savedConfigs, setSavedConfigs] = useState<StrategyConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
@@ -113,7 +120,10 @@ export default function CreateTaskPage() {
           if (data.success && data.data) {
             setAvailableStrategies(data.data);
             // 如果当前策略不在列表中，设置为第一个策略
-            if (data.data.length > 0 && !data.data.find((s: any) => s.key === formData.strategy_name)) {
+            if (
+              data.data.length > 0 &&
+              !data.data.find((s: any) => s.key === formData.strategy_name)
+            ) {
               updateFormData('strategy_name', data.data[0].key);
             }
           }
@@ -129,7 +139,8 @@ export default function CreateTaskPage() {
   // 加载已保存的配置列表
   useEffect(() => {
     const loadSavedConfigs = async () => {
-      const targetStrategyName = strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name;
+      const targetStrategyName =
+        strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name;
       if (taskType === 'backtest' && targetStrategyName) {
         setLoadingConfigs(true);
         try {
@@ -184,20 +195,21 @@ export default function CreateTaskPage() {
   // 表单验证
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!formData.task_name.trim()) {
       newErrors.task_name = '请输入任务名称';
     }
-    
+
     if (selectedStocks.length === 0) {
       newErrors.stock_codes = '请至少选择一只股票';
     }
-    
+
     if (taskType === 'prediction') {
       if (!formData.model_id) {
         newErrors.model_id = '请选择预测模型';
       }
-    } else {  // backtest
+    } else {
+      // backtest
       if (!formData.start_date) {
         newErrors.start_date = '请选择回测开始日期';
       }
@@ -208,7 +220,7 @@ export default function CreateTaskPage() {
         newErrors.end_date = '结束日期必须晚于开始日期';
       }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -227,30 +239,35 @@ export default function CreateTaskPage() {
         task_name: formData.task_name,
         task_type: taskType,
         stock_codes: selectedStocks,
-        ...(taskType === 'prediction' ? {
-          model_id: formData.model_id,
-          prediction_config: {
-            horizon: formData.horizon,
-            confidence_level: formData.confidence_level / 100,
-            risk_assessment: formData.risk_assessment,
-          },
-        } : {
-          backtest_config: {
-            strategy_name: strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name,
-            start_date: formData.start_date,
-            end_date: formData.end_date,
-            initial_cash: formData.initial_cash,
-            commission_rate: formData.commission_rate,
-            slippage_rate: formData.slippage_rate,
-            strategy_config: strategyType === 'portfolio' 
-              ? (portfolioConfig ? {
-                  strategies: portfolioConfig.strategies,
-                  integration_method: portfolioConfig.integration_method,
-                } : {})
-              : strategyConfig,
-            enable_performance_profiling: formData.enable_performance_profiling,
-          },
-        }),
+        ...(taskType === 'prediction'
+          ? {
+              model_id: formData.model_id,
+              prediction_config: {
+                horizon: formData.horizon,
+                confidence_level: formData.confidence_level / 100,
+                risk_assessment: formData.risk_assessment,
+              },
+            }
+          : {
+              backtest_config: {
+                strategy_name: strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name,
+                start_date: formData.start_date,
+                end_date: formData.end_date,
+                initial_cash: formData.initial_cash,
+                commission_rate: formData.commission_rate,
+                slippage_rate: formData.slippage_rate,
+                strategy_config:
+                  strategyType === 'portfolio'
+                    ? portfolioConfig
+                      ? {
+                          strategies: portfolioConfig.strategies,
+                          integration_method: portfolioConfig.integration_method,
+                        }
+                      : {}
+                    : strategyConfig,
+                enable_performance_profiling: formData.enable_performance_profiling,
+              },
+            }),
       };
 
       const task = await TaskService.createTask(request);
@@ -300,39 +317,36 @@ export default function CreateTaskPage() {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* 基本信息 */}
           <Card>
-            <CardHeader
-              avatar={<Settings size={20} />}
-              title="基本信息"
-            />
+            <CardHeader avatar={<Settings size={20} />} title="基本信息" />
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <FormControl fullWidth required>
                 <InputLabel>任务类型</InputLabel>
                 <Select
                   value={taskType}
                   label="任务类型"
-                  onChange={(e) => setTaskType(e.target.value as 'prediction' | 'backtest')}
+                  onChange={e => setTaskType(e.target.value as 'prediction' | 'backtest')}
                 >
                   <MenuItem value="prediction">预测任务</MenuItem>
                   <MenuItem value="backtest">回测任务</MenuItem>
                 </Select>
               </FormControl>
-              
+
               <TextField
                 label="任务名称"
                 placeholder="请输入任务名称"
                 value={formData.task_name}
-                onChange={(e) => updateFormData('task_name', e.target.value)}
+                onChange={e => updateFormData('task_name', e.target.value)}
                 error={!!errors.task_name}
                 helperText={errors.task_name}
                 required
                 fullWidth
               />
-              
+
               <TextField
                 label="任务描述"
                 placeholder="请输入任务描述（可选）"
                 value={formData.description}
-                onChange={(e) => updateFormData('description', e.target.value)}
+                onChange={e => updateFormData('description', e.target.value)}
                 multiline
                 rows={3}
                 fullWidth
@@ -342,15 +356,12 @@ export default function CreateTaskPage() {
 
           {/* 股票选择 */}
           <Card>
-            <CardHeader
-              avatar={<Target size={20} />}
-              title="股票选择"
-            />
+            <CardHeader avatar={<Target size={20} />} title="股票选择" />
             <CardContent>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <StockSelector
                   value={selectedStocks}
-                  onChange={(stocks) => {
+                  onChange={stocks => {
                     setSelectedStocks(stocks);
                     if (errors.stock_codes) {
                       setErrors(prev => ({ ...prev, stock_codes: '' }));
@@ -359,9 +370,7 @@ export default function CreateTaskPage() {
                   maxCount={20}
                   placeholder="搜索股票代码或名称"
                 />
-                {errors.stock_codes && (
-                  <FormHelperText error>{errors.stock_codes}</FormHelperText>
-                )}
+                {errors.stock_codes && <FormHelperText error>{errors.stock_codes}</FormHelperText>}
               </Box>
             </CardContent>
           </Card>
@@ -369,17 +378,14 @@ export default function CreateTaskPage() {
           {/* 模型和参数 / 回测配置 */}
           {taskType === 'prediction' ? (
             <Card>
-              <CardHeader
-                avatar={<TrendingUp size={20} />}
-                title="模型和参数"
-              />
+              <CardHeader avatar={<TrendingUp size={20} />} title="模型和参数" />
               <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <FormControl fullWidth required error={!!errors.model_id}>
                   <InputLabel>预测模型</InputLabel>
                   <Select
                     value={formData.model_id}
                     label="预测模型"
-                    onChange={(e) => {
+                    onChange={e => {
                       const modelId = e.target.value;
                       updateFormData('model_id', modelId);
                       const model = models.find(m => m.model_id === modelId);
@@ -395,7 +401,8 @@ export default function CreateTaskPage() {
                               {model.model_name}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
+                              准确率: {(model.accuracy * 100).toFixed(1)}% | 类型:{' '}
+                              {model.model_type}
                             </Typography>
                           </Box>
                         </MenuItem>
@@ -404,13 +411,19 @@ export default function CreateTaskPage() {
                   {errors.model_id && <FormHelperText>{errors.model_id}</FormHelperText>}
                 </FormControl>
 
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                    gap: 2,
+                  }}
+                >
                   <FormControl fullWidth>
                     <InputLabel>预测时间维度</InputLabel>
                     <Select
                       value={formData.horizon}
                       label="预测时间维度"
-                      onChange={(e) => updateFormData('horizon', e.target.value)}
+                      onChange={e => updateFormData('horizon', e.target.value)}
                     >
                       <MenuItem value="intraday">日内 (1-4小时)</MenuItem>
                       <MenuItem value="short_term">短期 (1-5天)</MenuItem>
@@ -434,7 +447,9 @@ export default function CreateTaskPage() {
                   </Box>
                 </Box>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Shield size={20} color="#1976d2" />
                     <Box>
@@ -448,17 +463,14 @@ export default function CreateTaskPage() {
                   </Box>
                   <Switch
                     checked={formData.risk_assessment}
-                    onChange={(e) => updateFormData('risk_assessment', e.target.checked)}
+                    onChange={e => updateFormData('risk_assessment', e.target.checked)}
                   />
                 </Box>
               </CardContent>
             </Card>
           ) : (
             <Card>
-              <CardHeader
-                avatar={<Activity size={20} />}
-                title="回测配置"
-              />
+              <CardHeader avatar={<Activity size={20} />} title="回测配置" />
               <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {/* 策略类型选择 */}
                 <FormControl fullWidth>
@@ -466,7 +478,7 @@ export default function CreateTaskPage() {
                   <Select
                     value={strategyType}
                     label="策略类型"
-                    onChange={(e) => {
+                    onChange={e => {
                       const newType = e.target.value as 'single' | 'portfolio';
                       setStrategyType(newType);
                       if (newType === 'portfolio') {
@@ -479,9 +491,7 @@ export default function CreateTaskPage() {
                     <MenuItem value="single">单策略</MenuItem>
                     <MenuItem value="portfolio">组合策略</MenuItem>
                   </Select>
-                  <FormHelperText>
-                    选择使用单个策略或多个策略的组合
-                  </FormHelperText>
+                  <FormHelperText>选择使用单个策略或多个策略的组合</FormHelperText>
                 </FormControl>
 
                 {strategyType === 'single' ? (
@@ -492,7 +502,7 @@ export default function CreateTaskPage() {
                       <Select
                         value={formData.strategy_name}
                         label="交易策略"
-                        onChange={(e) => updateFormData('strategy_name', e.target.value)}
+                        onChange={e => updateFormData('strategy_name', e.target.value)}
                       >
                         {availableStrategies.map(strategy => (
                           <MenuItem key={strategy.key} value={strategy.key}>
@@ -510,30 +520,38 @@ export default function CreateTaskPage() {
                     </FormControl>
 
                     {/* 单策略配置表单 */}
-                    {formData.strategy_name && formData.strategy_name !== 'portfolio' && (() => {
-                      const selectedStrategy = availableStrategies.find(s => s.key === formData.strategy_name);
-                      if (selectedStrategy && selectedStrategy.parameters) {
-                        return (
-                          <StrategyConfigForm
-                            key={`${formData.strategy_name}-${configFormKey}`}
-                            strategyName={formData.strategy_name}
-                            parameters={selectedStrategy.parameters}
-                            values={configFormKey > 0 && Object.keys(strategyConfig).length > 0 ? strategyConfig : undefined}
-                            onChange={(newConfig) => {
-                              setStrategyConfig(newConfig);
-                            }}
-                            onLoadConfig={handleLoadConfig}
-                            savedConfigs={savedConfigs.map(c => ({
-                              config_id: c.config_id,
-                              config_name: c.config_name,
-                              created_at: c.created_at,
-                            }))}
-                            loading={loadingConfigs}
-                          />
+                    {formData.strategy_name &&
+                      formData.strategy_name !== 'portfolio' &&
+                      (() => {
+                        const selectedStrategy = availableStrategies.find(
+                          s => s.key === formData.strategy_name
                         );
-                      }
-                      return null;
-                    })()}
+                        if (selectedStrategy && selectedStrategy.parameters) {
+                          return (
+                            <StrategyConfigForm
+                              key={`${formData.strategy_name}-${configFormKey}`}
+                              strategyName={formData.strategy_name}
+                              parameters={selectedStrategy.parameters}
+                              values={
+                                configFormKey > 0 && Object.keys(strategyConfig).length > 0
+                                  ? strategyConfig
+                                  : undefined
+                              }
+                              onChange={newConfig => {
+                                setStrategyConfig(newConfig);
+                              }}
+                              onLoadConfig={handleLoadConfig}
+                              savedConfigs={savedConfigs.map(c => ({
+                                config_id: c.config_id,
+                                config_name: c.config_name,
+                                created_at: c.created_at,
+                              }))}
+                              loading={loadingConfigs}
+                            />
+                          );
+                        }
+                        return null;
+                      })()}
                   </>
                 ) : (
                   <>
@@ -542,7 +560,7 @@ export default function CreateTaskPage() {
                       <Select
                         value={selectedPortfolioConfigId}
                         label="已保存组合配置"
-                        onChange={(e) => {
+                        onChange={e => {
                           const configId = e.target.value as string;
                           setSelectedPortfolioConfigId(configId);
                           if (configId) {
@@ -558,7 +576,11 @@ export default function CreateTaskPage() {
                         ))}
                       </Select>
                       <FormHelperText>
-                        {loadingConfigs ? '正在加载配置列表...' : savedConfigs.length === 0 ? '暂无已保存组合配置' : '选择后将覆盖当前组合策略配置'}
+                        {loadingConfigs
+                          ? '正在加载配置列表...'
+                          : savedConfigs.length === 0
+                            ? '暂无已保存组合配置'
+                            : '选择后将覆盖当前组合策略配置'}
                       </FormHelperText>
                     </FormControl>
                     {/* 组合策略配置 */}
@@ -566,7 +588,7 @@ export default function CreateTaskPage() {
                       key={`portfolio-config-${portfolioConfigKey}`}
                       availableStrategies={availableStrategies}
                       portfolioConfig={portfolioConfig || undefined}
-                      onChange={(config) => {
+                      onChange={config => {
                         setPortfolioConfig(config);
                       }}
                       constraints={{
@@ -578,25 +600,31 @@ export default function CreateTaskPage() {
                     />
                   </>
                 )}
-                
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                    gap: 2,
+                  }}
+                >
                   <TextField
                     type="date"
                     label="回测开始日期"
                     value={formData.start_date}
-                    onChange={(e) => updateFormData('start_date', e.target.value)}
+                    onChange={e => updateFormData('start_date', e.target.value)}
                     error={!!errors.start_date}
                     helperText={errors.start_date}
                     required
                     fullWidth
                     InputLabelProps={{ shrink: true }}
                   />
-                  
+
                   <TextField
                     type="date"
                     label="回测结束日期"
                     value={formData.end_date}
-                    onChange={(e) => updateFormData('end_date', e.target.value)}
+                    onChange={e => updateFormData('end_date', e.target.value)}
                     error={!!errors.end_date}
                     helperText={errors.end_date}
                     required
@@ -604,31 +632,43 @@ export default function CreateTaskPage() {
                     InputLabelProps={{ shrink: true }}
                   />
                 </Box>
-                
+
                 <TextField
                   type="number"
                   label="初始资金"
                   value={formData.initial_cash}
-                  onChange={(e) => updateFormData('initial_cash', parseFloat(e.target.value) || 100000)}
+                  onChange={e =>
+                    updateFormData('initial_cash', parseFloat(e.target.value) || 100000)
+                  }
                   inputProps={{ min: 1000, step: 1000 }}
                   fullWidth
                 />
-                
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                    gap: 2,
+                  }}
+                >
                   <TextField
                     type="number"
                     label="手续费率"
                     value={formData.commission_rate}
-                    onChange={(e) => updateFormData('commission_rate', parseFloat(e.target.value) || 0.0003)}
+                    onChange={e =>
+                      updateFormData('commission_rate', parseFloat(e.target.value) || 0.0003)
+                    }
                     inputProps={{ min: 0, max: 0.01, step: 0.0001 }}
                     fullWidth
                   />
-                  
+
                   <TextField
                     type="number"
                     label="滑点率"
                     value={formData.slippage_rate}
-                    onChange={(e) => updateFormData('slippage_rate', parseFloat(e.target.value) || 0.0001)}
+                    onChange={e =>
+                      updateFormData('slippage_rate', parseFloat(e.target.value) || 0.0001)
+                    }
                     inputProps={{ min: 0, max: 0.01, step: 0.0001 }}
                     fullWidth
                   />
@@ -636,7 +676,9 @@ export default function CreateTaskPage() {
 
                 <Divider />
 
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Activity size={20} color="#1976d2" />
                     <Box>
@@ -650,7 +692,7 @@ export default function CreateTaskPage() {
                   </Box>
                   <Switch
                     checked={formData.enable_performance_profiling}
-                    onChange={(e) => updateFormData('enable_performance_profiling', e.target.checked)}
+                    onChange={e => updateFormData('enable_performance_profiling', e.target.checked)}
                   />
                 </Box>
               </CardContent>
@@ -669,11 +711,7 @@ export default function CreateTaskPage() {
             >
               {loading ? '创建中...' : '创建任务'}
             </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              onClick={handleBack}
-            >
+            <Button variant="outlined" size="large" onClick={handleBack}>
               取消
             </Button>
           </Box>
@@ -698,7 +736,12 @@ export default function CreateTaskPage() {
                   <Typography variant="caption" color="text.secondary">
                     模型类型
                   </Typography>
-                  <Chip label={selectedModel.model_type} size="small" color="secondary" sx={{ mt: 0.5 }} />
+                  <Chip
+                    label={selectedModel.model_type}
+                    size="small"
+                    color="secondary"
+                    sx={{ mt: 0.5 }}
+                  />
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -730,16 +773,16 @@ export default function CreateTaskPage() {
 
           {/* 预测说明 */}
           <Card>
-            <CardHeader
-              avatar={<Info size={20} />}
-              title="预测说明"
-            />
+            <CardHeader avatar={<Info size={20} />} title="预测说明" />
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                   时间维度说明:
                 </Typography>
-                <Box component="ul" sx={{ m: 0, pl: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Box
+                  component="ul"
+                  sx={{ m: 0, pl: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}
+                >
                   <Typography component="li" variant="body2" color="text.secondary">
                     日内: 适合短线交易
                   </Typography>

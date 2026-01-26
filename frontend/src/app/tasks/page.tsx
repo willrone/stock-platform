@@ -1,6 +1,6 @@
 /**
  * 任务管理页面
- * 
+ *
  * 显示任务列表，支持：
  * - 任务创建
  * - 任务状态筛选
@@ -41,22 +41,11 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
-import {
-  Plus,
-  RefreshCw,
-  Search,
-  Eye,
-  Play,
-  Pause,
-  Trash2,
-  Filter,
-  BarChart3,
-} from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Play, Pause, Trash2, Filter, BarChart3 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTaskStore, Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export default function TasksPage() {
   const router = useRouter();
@@ -188,7 +177,7 @@ export default function TasksPage() {
       completed: { color: 'success' as const, text: '已完成' },
       failed: { color: 'error' as const, text: '失败' },
     };
-    
+
     const config = statusConfig[status] || statusConfig.created;
     return <Chip label={config.text} color={config.color} size="small" />;
   };
@@ -223,8 +212,10 @@ export default function TasksPage() {
 
   // 删除任务
   const handleDeleteTask = async () => {
-    if (!taskToDelete) return;
-    
+    if (!taskToDelete) {
+      return;
+    }
+
     setDeleteError(null);
     try {
       await TaskService.deleteTask(taskToDelete, deleteForce);
@@ -237,7 +228,7 @@ export default function TasksPage() {
       console.error('删除任务失败:', error);
       const errorMessage = error?.response?.data?.detail || error?.message || '删除任务失败';
       setDeleteError(errorMessage);
-      
+
       // 如果错误提示需要使用强制删除，自动勾选强制删除选项
       if (errorMessage.includes('强制删除') || errorMessage.includes('正在运行中')) {
         setDeleteForce(true);
@@ -248,7 +239,9 @@ export default function TasksPage() {
   // 批量删除任务
   const handleBatchDelete = async () => {
     const taskIds = Array.from(selectedKeys);
-    if (taskIds.length === 0) return;
+    if (taskIds.length === 0) {
+      return;
+    }
 
     try {
       await TaskService.batchDeleteTasks(taskIds);
@@ -274,7 +267,7 @@ export default function TasksPage() {
   };
 
   // 过滤任务
-  const filteredTasks = tasks.filter(task => 
+  const filteredTasks = tasks.filter(task =>
     task.task_name.toLowerCase().includes(searchText.toLowerCase())
   );
 
@@ -289,7 +282,13 @@ export default function TasksPage() {
         <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 2 }}>
           任务管理
         </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 2,
+          }}
+        >
           <Card>
             <CardContent sx={{ textAlign: 'center' }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
@@ -303,7 +302,7 @@ export default function TasksPage() {
               </Typography>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
@@ -314,7 +313,7 @@ export default function TasksPage() {
               </Typography>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
@@ -325,7 +324,7 @@ export default function TasksPage() {
               </Typography>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
@@ -342,7 +341,15 @@ export default function TasksPage() {
       {/* 操作栏 */}
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              justifyContent: 'space-between',
+              alignItems: { xs: 'stretch', md: 'center' },
+              gap: 2,
+            }}
+          >
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               <Button
                 variant="contained"
@@ -371,13 +378,13 @@ export default function TasksPage() {
                 </Button>
               )}
             </Box>
-            
+
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               <TextField
                 placeholder="搜索任务名称"
                 size="small"
                 value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+                onChange={e => setSearchText(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -392,7 +399,7 @@ export default function TasksPage() {
                 <Select
                   value={statusFilter || ''}
                   label="筛选状态"
-                  onChange={(e) => handleStatusFilter(e.target.value || null)}
+                  onChange={e => handleStatusFilter(e.target.value || null)}
                   startAdornment={<Filter size={16} />}
                 >
                   <MenuItem value="">全部</MenuItem>
@@ -424,7 +431,7 @@ export default function TasksPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredTasks.map((task) => (
+                {filteredTasks.map(task => (
                   <TableRow key={task.task_id} hover>
                     <TableCell>
                       <Button
@@ -435,9 +442,7 @@ export default function TasksPage() {
                         {task.task_name}
                       </Button>
                     </TableCell>
-                    <TableCell>
-                      {getStatusChip(task.status)}
-                    </TableCell>
+                    <TableCell>{getStatusChip(task.status)}</TableCell>
                     <TableCell>
                       <Box sx={{ width: 80 }}>
                         <LinearProgress
@@ -463,14 +468,11 @@ export default function TasksPage() {
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Tooltip title="查看详情">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleViewTask(task.task_id)}
-                          >
+                          <IconButton size="small" onClick={() => handleViewTask(task.task_id)}>
                             <Eye size={16} />
                           </IconButton>
                         </Tooltip>
-                        
+
                         {task.status === 'running' && (
                           <Tooltip title="暂停任务">
                             <IconButton
@@ -483,18 +485,15 @@ export default function TasksPage() {
                             </IconButton>
                           </Tooltip>
                         )}
-                        
+
                         {task.status === 'failed' && (
                           <Tooltip title="重新运行">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRetryTask(task.task_id)}
-                            >
+                            <IconButton size="small" onClick={() => handleRetryTask(task.task_id)}>
                               <Play size={16} />
                             </IconButton>
                           </Tooltip>
                         )}
-                        
+
                         <Tooltip title="删除任务">
                           <IconButton
                             size="small"
@@ -514,7 +513,7 @@ export default function TasksPage() {
               </TableBody>
             </Table>
           </Box>
-          
+
           {/* 分页 */}
           {total > pageSize && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
@@ -530,32 +529,37 @@ export default function TasksPage() {
       </Card>
 
       {/* 删除确认对话框 */}
-      <Dialog open={isDeleteOpen} onClose={() => {
-        setIsDeleteOpen(false);
-        setDeleteForce(false);
-        setDeleteError(null);
-      }}>
+      <Dialog
+        open={isDeleteOpen}
+        onClose={() => {
+          setIsDeleteOpen(false);
+          setDeleteForce(false);
+          setDeleteError(null);
+        }}
+      >
         <DialogTitle>确认删除</DialogTitle>
         <DialogContent>
           <Typography sx={{ mb: 2 }}>确定要删除这个任务吗？此操作不可撤销。</Typography>
-          
+
           {deleteError && (
-            <Box sx={{ 
-              p: 2, 
-              mb: 2, 
-              bgcolor: 'error.light', 
-              color: 'error.contrastText',
-              borderRadius: 1 
-            }}>
+            <Box
+              sx={{
+                p: 2,
+                mb: 2,
+                bgcolor: 'error.light',
+                color: 'error.contrastText',
+                borderRadius: 1,
+              }}
+            >
               <Typography variant="body2">{deleteError}</Typography>
             </Box>
           )}
-          
+
           <FormControlLabel
             control={
               <Switch
                 checked={deleteForce}
-                onChange={(e) => setDeleteForce(e.target.checked)}
+                onChange={e => setDeleteForce(e.target.checked)}
                 color="error"
               />
             }
@@ -567,18 +571,16 @@ export default function TasksPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setIsDeleteOpen(false);
-            setDeleteForce(false);
-            setDeleteError(null);
-          }}>
+          <Button
+            onClick={() => {
+              setIsDeleteOpen(false);
+              setDeleteForce(false);
+              setDeleteError(null);
+            }}
+          >
             取消
           </Button>
-          <Button 
-            onClick={handleDeleteTask} 
-            color="error" 
-            variant="contained"
-          >
+          <Button onClick={handleDeleteTask} color="error" variant="contained">
             {deleteForce ? '强制删除' : '删除'}
           </Button>
         </DialogActions>

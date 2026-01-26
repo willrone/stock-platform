@@ -1,6 +1,6 @@
 /**
  * 加载动画组件
- * 
+ *
  * 提供统一的加载状态显示，包括：
  * - 旋转动画
  * - 自定义文本
@@ -72,9 +72,9 @@ export const PageLoading: React.FC<{ text?: string }> = ({ text }) => (
 );
 
 // 内联加载组件
-export const InlineLoading: React.FC<{ text?: string; size?: 'sm' | 'md' | 'lg' }> = ({ 
-  text, 
-  size = 'md' 
+export const InlineLoading: React.FC<{ text?: string; size?: 'sm' | 'md' | 'lg' }> = ({
+  text,
+  size = 'md',
 }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
     <CircularProgress size={sizeMap[size]} />
@@ -87,6 +87,4 @@ export const InlineLoading: React.FC<{ text?: string; size?: 'sm' | 'md' | 'lg' 
 );
 
 // 按钮加载状态
-export const ButtonLoading: React.FC = () => (
-  <Loader2 size={16} className="animate-spin" />
-);
+export const ButtonLoading: React.FC = () => <Loader2 size={16} className="animate-spin" />;

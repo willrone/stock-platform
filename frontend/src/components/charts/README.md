@@ -5,6 +5,7 @@
 ## 组件列表
 
 ### 1. EquityCurveChart - 收益曲线图表
+
 - **功能**: 显示组合价值和收益率随时间的变化
 - **特性**:
   - 支持缩放和平移操作
@@ -14,6 +15,7 @@
   - 交互式工具栏（放大、缩小、重置）
 
 ### 2. DrawdownChart - 回撤曲线图表
+
 - **功能**: 显示回撤曲线并标注最大回撤期间
 - **特性**:
   - 回撤曲线可视化
@@ -23,6 +25,7 @@
   - 支持缩放和交互操作
 
 ### 3. MonthlyHeatmapChart - 月度收益热力图
+
 - **功能**: 显示每月收益率的热力图分布
 - **特性**:
   - 月度收益热力图展示
@@ -32,6 +35,7 @@
   - 图表导出功能
 
 ### 4. InteractiveChartsContainer - 交互式图表容器
+
 - **功能**: 整合所有图表组件的容器
 - **特性**:
   - 标签页式布局
@@ -43,17 +47,20 @@
 ## 技术实现
 
 ### 图表库
+
 - **ECharts**: 主要图表渲染引擎
 - **React**: 组件框架
 - **TypeScript**: 类型安全
 
 ### 数据流
+
 1. 从后端API获取图表数据
 2. 数据缓存和错误处理
 3. 数据转换和格式化
 4. 图表渲染和交互
 
 ### API集成
+
 - 使用 `BacktestService` 获取图表数据
 - 支持数据缓存和强制刷新
 - 错误处理和重试机制
@@ -63,15 +70,13 @@
 ```tsx
 import { InteractiveChartsContainer } from '../components/charts';
 
-<InteractiveChartsContainer
-  taskId="your-task-id"
-  backtestData={backtestData}
-/>
+<InteractiveChartsContainer taskId="your-task-id" backtestData={backtestData} />;
 ```
 
 ## 数据格式
 
 ### 收益曲线数据
+
 ```typescript
 {
   dates: string[];
@@ -82,6 +87,7 @@ import { InteractiveChartsContainer } from '../components/charts';
 ```
 
 ### 回撤数据
+
 ```typescript
 {
   dates: string[];
@@ -93,6 +99,7 @@ import { InteractiveChartsContainer } from '../components/charts';
 ```
 
 ### 月度热力图数据
+
 ```typescript
 {
   monthlyReturns: Array<{
@@ -109,6 +116,7 @@ import { InteractiveChartsContainer } from '../components/charts';
 ## 特性说明
 
 ### 交互功能
+
 - **缩放**: 支持鼠标滚轮和工具栏缩放
 - **平移**: 支持鼠标拖拽平移
 - **时间范围**: 快速选择不同时间段
@@ -116,11 +124,13 @@ import { InteractiveChartsContainer } from '../components/charts';
 - **图表导出**: 支持PNG格式导出
 
 ### 响应式设计
+
 - 自适应不同屏幕尺寸
 - 移动端友好的交互体验
 - 动态调整图表尺寸
 
 ### 性能优化
+
 - 数据缓存机制
 - 懒加载和虚拟化
 - 防抖和节流处理
@@ -132,7 +142,7 @@ import { InteractiveChartsContainer } from '../components/charts';
 ## 需求对应
 
 - ✅ **需求 2.1**: 收益曲线图表组件，支持缩放和时间范围选择
-- ✅ **需求 2.2**: 回撤曲线图表，标注最大回撤期间  
+- ✅ **需求 2.2**: 回撤曲线图表，标注最大回撤期间
 - ✅ **需求 6.1**: 月度收益热力图组件
 - ✅ 支持基准对比和交互式操作
 - ✅ 响应式设计和性能优化

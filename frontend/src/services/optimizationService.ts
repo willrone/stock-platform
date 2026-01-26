@@ -117,15 +117,13 @@ export class OptimizationService {
   /**
    * 创建超参优化任务
    */
-  static async createTask(
-    request: CreateOptimizationTaskRequest
-  ): Promise<OptimizationTask> {
+  static async createTask(request: CreateOptimizationTaskRequest): Promise<OptimizationTask> {
     try {
       // 构建完整的 API URL（使用相对路径，通过Next.js代理转发）
-      const url = `/api/v1/optimization/tasks`;
+      const url = '/api/v1/optimization/tasks';
       console.log('[OptimizationService] 创建任务请求 URL:', url);
       console.log('[OptimizationService] 请求数据:', JSON.stringify(request, null, 2));
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -145,7 +143,7 @@ export class OptimizationService {
         console.error('[OptimizationService] 请求失败，URL:', url);
         console.error('[OptimizationService] 响应 URL:', response.url);
         console.error('[OptimizationService] 响应状态:', response.status, response.statusText);
-        
+
         // 尝试获取错误详情
         try {
           const errorText = await response.text();
@@ -153,27 +151,31 @@ export class OptimizationService {
         } catch (e) {
           console.error('[OptimizationService] 无法读取错误响应:', e);
         }
-        
-        throw new Error(`API 端点不存在 (404): ${url}。请检查：1) 后端服务是否正常运行；2) 路由是否正确注册；3) Next.js代理配置是否正确。`);
+
+        throw new Error(
+          `API 端点不存在 (404): ${url}。请检查：1) 后端服务是否正常运行；2) 路由是否正确注册；3) Next.js代理配置是否正确。`
+        );
       }
 
       if (!response.ok) {
         let errorMessage = '创建优化任务失败';
         let errorData: any = null;
-        
+
         try {
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
             errorData = await response.json();
             console.error('[OptimizationService] 错误响应数据:', errorData);
-            
+
             if (errorData.detail) {
               // 处理 Pydantic 验证错误
               if (Array.isArray(errorData.detail)) {
-                errorMessage = errorData.detail.map((e: any) => {
-                  const loc = e.loc ? e.loc.join('.') : '';
-                  return `${loc}: ${e.msg || e.message}`;
-                }).join(', ');
+                errorMessage = errorData.detail
+                  .map((e: any) => {
+                    const loc = e.loc ? e.loc.join('.') : '';
+                    return `${loc}: ${e.msg || e.message}`;
+                  })
+                  .join(', ');
               } else if (typeof errorData.detail === 'string') {
                 errorMessage = errorData.detail;
               } else {
@@ -193,21 +195,21 @@ export class OptimizationService {
           console.error('[OptimizationService] 解析错误响应失败:', e);
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       const result: StandardResponse<OptimizationTask> = await response.json();
       console.log('[OptimizationService] 成功响应:', result);
-      
+
       if (!result.success) {
         throw new Error(result.message || '创建优化任务失败');
       }
-      
+
       if (!result.data) {
         throw new Error('服务器返回数据为空');
       }
-      
+
       return result.data;
     } catch (error) {
       console.error('[OptimizationService] 创建优化任务错误:', error);
@@ -234,9 +236,7 @@ export class OptimizationService {
       params.append('status', status);
     }
 
-    const response = await fetch(
-      `/api/v1/optimization/tasks?${params.toString()}`
-    );
+    const response = await fetch(`/api/v1/optimization/tasks?${params.toString()}`);
 
     if (!response.ok) {
       throw new Error('获取优化任务列表失败');
@@ -250,10 +250,10 @@ export class OptimizationService {
   /**
    * 获取优化任务详情
    */
-  static async getTask(taskId: string): Promise<OptimizationTask & { result?: OptimizationResult }> {
-    const response = await fetch(
-      `/api/v1/optimization/tasks/${taskId}`
-    );
+  static async getTask(
+    taskId: string
+  ): Promise<OptimizationTask & { result?: OptimizationResult }> {
+    const response = await fetch(`/api/v1/optimization/tasks/${taskId}`);
 
     if (!response.ok) {
       throw new Error('获取优化任务详情失败');
@@ -268,9 +268,7 @@ export class OptimizationService {
    * 获取优化任务状态
    */
   static async getStatus(taskId: string): Promise<OptimizationStatus> {
-    const response = await fetch(
-      `/api/v1/optimization/tasks/${taskId}/status`
-    );
+    const response = await fetch(`/api/v1/optimization/tasks/${taskId}/status`);
 
     if (!response.ok) {
       throw new Error('获取优化状态失败');
@@ -283,12 +281,8 @@ export class OptimizationService {
   /**
    * 获取参数重要性
    */
-  static async getParamImportance(
-    taskId: string
-  ): Promise<Record<string, number>> {
-    const response = await fetch(
-      `/api/v1/optimization/tasks/${taskId}/param-importance`
-    );
+  static async getParamImportance(taskId: string): Promise<Record<string, number>> {
+    const response = await fetch(`/api/v1/optimization/tasks/${taskId}/param-importance`);
 
     if (!response.ok) {
       throw new Error('获取参数重要性失败');
@@ -301,18 +295,14 @@ export class OptimizationService {
   /**
    * 获取帕累托前沿
    */
-  static async getParetoFront(
-    taskId: string
-  ): Promise<
+  static async getParetoFront(taskId: string): Promise<
     Array<{
       trial_number: number;
       params: Record<string, any>;
       objectives: number[];
     }>
   > {
-    const response = await fetch(
-      `/api/v1/optimization/tasks/${taskId}/pareto-front`
-    );
+    const response = await fetch(`/api/v1/optimization/tasks/${taskId}/pareto-front`);
 
     if (!response.ok) {
       throw new Error('获取帕累托前沿失败');
@@ -328,4 +318,3 @@ export class OptimizationService {
     return result.data;
   }
 }
-

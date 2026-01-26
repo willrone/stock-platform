@@ -1,6 +1,6 @@
 /**
  * 回测进度WebSocket客户端
- * 
+ *
  * 管理与后端的WebSocket连接，用于接收实时回测进度更新
  */
 
@@ -56,10 +56,10 @@ export interface BacktestCancellationData {
   timestamp: string;
 }
 
-export type BacktestWebSocketMessage = 
-  | BacktestProgressData 
-  | BacktestErrorData 
-  | BacktestCompletionData 
+export type BacktestWebSocketMessage =
+  | BacktestProgressData
+  | BacktestErrorData
+  | BacktestCompletionData
   | BacktestCancellationData
   | { type: 'connection_established' | 'pong' | 'error' | 'no_progress_data'; [key: string]: any };
 
@@ -88,12 +88,15 @@ export class BacktestProgressWebSocket {
   private isManuallyDisconnected = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
-  constructor(taskId: string, private wsUrl?: string) {
+  constructor(
+    taskId: string,
+    private wsUrl?: string
+  ) {
     this.taskId = taskId;
-    
+
     // 确定WebSocket基础URL
     let baseUrl: string;
-    
+
     if (wsUrl) {
       baseUrl = wsUrl;
     } else if (process.env.NEXT_PUBLIC_WS_URL) {
@@ -108,9 +111,9 @@ export class BacktestProgressWebSocket {
       // 服务端：使用默认值
       baseUrl = 'ws://localhost:8000';
     }
-    
+
     // 清理URL末尾的斜杠，并确保不包含多余的/ws前缀
-    baseUrl = baseUrl.replace(/\/+$/, '');  // 移除末尾斜杠
+    baseUrl = baseUrl.replace(/\/+$/, ''); // 移除末尾斜杠
     // 如果URL末尾是/ws，移除它（避免重复）
     if (baseUrl.endsWith('/ws')) {
       baseUrl = baseUrl.slice(0, -3);
@@ -150,20 +153,20 @@ export class BacktestProgressWebSocket {
           console.log(`回测进度WebSocket连接已建立: ${this.taskId}`);
           this.isConnecting = false;
           this.reconnectAttempts = 0;
-          
+
           // 启动心跳
           this.startHeartbeat();
-          
+
           // 请求当前进度
           this.requestCurrentProgress();
-          
+
           // 通知连接状态
           this.callbacks.onConnection?.(true);
-          
+
           resolve();
         };
 
-        this.ws.onmessage = (event) => {
+        this.ws.onmessage = event => {
           try {
             const data: BacktestWebSocketMessage = JSON.parse(event.data);
             this.handleMessage(data);
@@ -172,30 +175,29 @@ export class BacktestProgressWebSocket {
           }
         };
 
-        this.ws.onclose = (event) => {
+        this.ws.onclose = event => {
           console.log(`回测进度WebSocket连接已关闭: ${this.taskId}`, event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
-          
+
           // 停止心跳
           this.stopHeartbeat();
-          
+
           // 通知连接状态
           this.callbacks.onConnection?.(false);
-          
+
           // 自动重连（如果不是手动断开）
           if (!this.isManuallyDisconnected && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
           }
         };
 
-        this.ws.onerror = (error) => {
+        this.ws.onerror = error => {
           console.error(`回测进度WebSocket连接错误: ${this.taskId}`, error);
           this.isConnecting = false;
           this.callbacks.onConnection?.(false);
           reject(error);
         };
-
       } catch (error) {
         this.isConnecting = false;
         reject(error);
@@ -209,12 +211,12 @@ export class BacktestProgressWebSocket {
   disconnect(): void {
     this.isManuallyDisconnected = true;
     this.stopHeartbeat();
-    
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    
+
     this.callbacks.onConnection?.(false);
   }
 
@@ -223,7 +225,7 @@ export class BacktestProgressWebSocket {
    */
   requestCurrentProgress(): void {
     this.sendMessage({
-      type: 'get_current_progress'
+      type: 'get_current_progress',
     });
   }
 
@@ -233,7 +235,7 @@ export class BacktestProgressWebSocket {
   cancelBacktest(reason: string = '用户取消'): void {
     this.sendMessage({
       type: 'cancel_backtest',
-      reason: reason
+      reason: reason,
     });
   }
 
@@ -309,7 +311,7 @@ export class BacktestProgressWebSocket {
    */
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    
+
     this.heartbeatInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.sendMessage({ type: 'ping' });
@@ -333,9 +335,9 @@ export class BacktestProgressWebSocket {
   private scheduleReconnect(): void {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // 指数退避
-    
+
     console.log(`${delay}ms后尝试重连回测WebSocket (第${this.reconnectAttempts}次)`);
-    
+
     setTimeout(() => {
       if (!this.isManuallyDisconnected) {
         this.connect().catch(error => {
@@ -367,13 +369,16 @@ export class BacktestProgressWebSocketManager {
   /**
    * 连接指定任务的WebSocket
    */
-  async connect(taskId: string, callbacks?: BacktestWebSocketCallbacks): Promise<BacktestProgressWebSocket> {
+  async connect(
+    taskId: string,
+    callbacks?: BacktestWebSocketCallbacks
+  ): Promise<BacktestProgressWebSocket> {
     const connection = this.getConnection(taskId);
-    
+
     if (callbacks) {
       connection.setCallbacks(callbacks);
     }
-    
+
     await connection.connect();
     return connection;
   }
@@ -405,7 +410,9 @@ export class BacktestProgressWebSocketManager {
   getActiveConnectionCount(): number {
     let count = 0;
     this.connections.forEach(conn => {
-      if (conn.isConnected()) count++;
+      if (conn.isConnected()) {
+        count++;
+      }
     });
     return count;
   }

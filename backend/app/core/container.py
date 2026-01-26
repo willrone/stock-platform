@@ -3,9 +3,9 @@
 管理所有服务组件的生命周期和依赖关系
 """
 
-from typing import Optional
 import asyncio
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from app.services.data import SimpleDataService
 from app.services.data.sftp_sync_service import SFTPSyncService
@@ -14,46 +14,46 @@ from app.services.prediction import TechnicalIndicatorCalculator
 
 class ServiceContainer:
     """服务容器，管理所有服务组件"""
-    
+
     def __init__(self):
         self._data_service: Optional[SimpleDataService] = None
         self._indicators_service: Optional[TechnicalIndicatorCalculator] = None
         self._sftp_sync_service: Optional[SFTPSyncService] = None
         self._initialized = False
-    
+
     async def initialize(self):
         """初始化所有服务"""
         if self._initialized:
             return
-        
+
         # 初始化基础服务 - 使用简化的数据服务
         self._data_service = SimpleDataService()
         self._indicators_service = TechnicalIndicatorCalculator()
         self._sftp_sync_service = SFTPSyncService()
-        
+
         self._initialized = True
-    
+
     async def cleanup(self):
         """清理所有服务"""
         if self._data_service:
             await self._data_service.__aexit__(None, None, None)
-        
+
         self._initialized = False
-    
+
     @property
     def data_service(self) -> SimpleDataService:
         """获取数据服务"""
         if not self._initialized:
             raise RuntimeError("服务容器未初始化")
         return self._data_service
-    
+
     @property
     def indicators_service(self) -> TechnicalIndicatorCalculator:
         """获取技术指标服务"""
         if not self._initialized:
             raise RuntimeError("服务容器未初始化")
         return self._indicators_service
-    
+
     @property
     def sftp_sync_service(self) -> SFTPSyncService:
         """获取SFTP同步服务"""

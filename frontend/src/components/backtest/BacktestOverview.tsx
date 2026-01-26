@@ -78,9 +78,13 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
     }
 
     const additional = backtestData || {};
-    const tradeHistory = Array.isArray(backtestData?.trade_history) ? backtestData.trade_history : [];
-    const winningTrades = typeof backtestData?.winning_trades === 'number' ? backtestData.winning_trades : null;
-    const losingTrades = typeof backtestData?.losing_trades === 'number' ? backtestData.losing_trades : null;
+    const tradeHistory = Array.isArray(backtestData?.trade_history)
+      ? backtestData.trade_history
+      : [];
+    const winningTrades =
+      typeof backtestData?.winning_trades === 'number' ? backtestData.winning_trades : null;
+    const losingTrades =
+      typeof backtestData?.losing_trades === 'number' ? backtestData.losing_trades : null;
 
     const derivedWinRate = (() => {
       if (winningTrades !== null && losingTrades !== null && winningTrades + losingTrades > 0) {
@@ -122,29 +126,49 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
 
   // 获取收益率颜色
   const getReturnColor = (value: number): string => {
-    if (value > 0) return 'success.main';
-    if (value < 0) return 'error.main';
+    if (value > 0) {
+      return 'success.main';
+    }
+    if (value < 0) {
+      return 'error.main';
+    }
     return 'text.secondary';
   };
 
   // 获取收益率图标
   const getReturnIcon = (value: number) => {
-    if (value > 0) return <TrendingUp size={20} color="#2e7d32" />;
-    if (value < 0) return <TrendingDown size={20} color="#d32f2f" />;
+    if (value > 0) {
+      return <TrendingUp size={20} color="#2e7d32" />;
+    }
+    if (value < 0) {
+      return <TrendingDown size={20} color="#d32f2f" />;
+    }
     return <Activity size={20} color="#666" />;
   };
 
   // 获取夏普比率评级
   const getSharpeRating = (sharpe: number) => {
-    if (sharpe >= 2) return { text: '优秀', color: 'success' as const };
-    if (sharpe >= 1) return { text: '良好', color: 'primary' as const };
-    if (sharpe >= 0.5) return { text: '一般', color: 'warning' as const };
+    if (sharpe >= 2) {
+      return { text: '优秀', color: 'success' as const };
+    }
+    if (sharpe >= 1) {
+      return { text: '良好', color: 'primary' as const };
+    }
+    if (sharpe >= 0.5) {
+      return { text: '一般', color: 'warning' as const };
+    }
     return { text: '较差', color: 'error' as const };
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 2,
+        }}
+      >
         {Array.from({ length: 8 }).map((_, index) => (
           <Card key={index}>
             <CardContent sx={{ textAlign: 'center' }}>
@@ -162,7 +186,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 128, color: 'text.secondary' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 128,
+              color: 'text.secondary',
+            }}
+          >
             <AlertTriangle size={32} style={{ marginRight: 8 }} />
             <Typography>暂无回测数据</Typography>
           </Box>
@@ -176,7 +208,13 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 核心指标卡片 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 2,
+        }}
+      >
         {/* 总收益率 */}
         <Card sx={{ '&:hover': { boxShadow: 4 }, transition: 'box-shadow 0.3s' }}>
           <CardContent sx={{ textAlign: 'center' }}>
@@ -184,15 +222,27 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               {getReturnIcon(metrics.totalReturn)}
             </Box>
             <Tooltip title="策略在整个回测期间的总收益率">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   总收益率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: getReturnColor(metrics.totalReturn) }}>
-              {metrics.totalReturn >= 0 ? '+' : ''}{metrics.totalReturn.toFixed(2)}%
+            <Typography
+              variant="h4"
+              sx={{ fontWeight: 600, color: getReturnColor(metrics.totalReturn) }}
+            >
+              {metrics.totalReturn >= 0 ? '+' : ''}
+              {metrics.totalReturn.toFixed(2)}%
             </Typography>
           </CardContent>
         </Card>
@@ -204,15 +254,27 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <BarChart3 size={20} color="#1976d2" />
             </Box>
             <Tooltip title="将总收益率按年化计算的收益率">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   年化收益率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: getReturnColor(metrics.annualizedReturn) }}>
-              {metrics.annualizedReturn >= 0 ? '+' : ''}{metrics.annualizedReturn.toFixed(2)}%
+            <Typography
+              variant="h4"
+              sx={{ fontWeight: 600, color: getReturnColor(metrics.annualizedReturn) }}
+            >
+              {metrics.annualizedReturn >= 0 ? '+' : ''}
+              {metrics.annualizedReturn.toFixed(2)}%
             </Typography>
           </CardContent>
         </Card>
@@ -224,7 +286,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <Target size={20} color="#9c27b0" />
             </Box>
             <Tooltip title="衡量风险调整后收益的指标，数值越高越好">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   夏普比率
                 </Typography>
@@ -247,7 +317,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <TrendingDown size={20} color="#d32f2f" />
             </Box>
             <Tooltip title="策略在回测期间的最大亏损幅度">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   最大回撤
                 </Typography>
@@ -262,7 +340,13 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       </Box>
 
       {/* 次要指标卡片 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 2,
+        }}
+      >
         {/* 波动率 */}
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
@@ -270,7 +354,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <Activity size={20} color="#ed6c02" />
             </Box>
             <Tooltip title="策略收益的波动程度，数值越低越稳定">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   波动率
                 </Typography>
@@ -290,7 +382,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <Target size={20} color="#2e7d32" />
             </Box>
             <Tooltip title="盈利交易占总交易次数的比例">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   胜率
                 </Typography>
@@ -318,7 +418,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <BarChart3 size={20} color="#1976d2" />
             </Box>
             <Tooltip title="回测期间的总交易次数">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   交易次数
                 </Typography>
@@ -338,7 +446,15 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               <DollarSign size={20} color="#9c27b0" />
             </Box>
             <Tooltip title="平均盈利交易与平均亏损交易的比值">
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, cursor: 'help' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1,
+                  cursor: 'help',
+                }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   盈亏比
                 </Typography>
@@ -347,7 +463,10 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
             </Tooltip>
             <Typography
               variant="h5"
-              sx={{ fontWeight: 600, color: metrics.profitFactor >= 1 ? 'success.main' : 'error.main' }}
+              sx={{
+                fontWeight: 600,
+                color: metrics.profitFactor >= 1 ? 'success.main' : 'error.main',
+              }}
             >
               {metrics.profitFactor.toFixed(2)}
             </Typography>
@@ -436,7 +555,13 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       <Card>
         <CardHeader title="风险评估总结" />
         <CardContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+              gap: 2,
+            }}
+          >
             <Box sx={{ textAlign: 'center' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
                 <Box
@@ -449,8 +574,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                       metrics.sharpeRatio >= 1
                         ? 'success.main'
                         : metrics.sharpeRatio >= 0.5
-                        ? 'warning.main'
-                        : 'error.main',
+                          ? 'warning.main'
+                          : 'error.main',
                   }}
                 />
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -461,8 +586,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                 {metrics.sharpeRatio >= 1
                   ? '良好'
                   : metrics.sharpeRatio >= 0.5
-                  ? '一般'
-                  : '需要改进'}
+                    ? '一般'
+                    : '需要改进'}
               </Typography>
             </Box>
 
@@ -478,8 +603,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                       Math.abs(metrics.maxDrawdown) <= 10
                         ? 'success.main'
                         : Math.abs(metrics.maxDrawdown) <= 20
-                        ? 'warning.main'
-                        : 'error.main',
+                          ? 'warning.main'
+                          : 'error.main',
                   }}
                 />
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -490,8 +615,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                 {Math.abs(metrics.maxDrawdown) <= 10
                   ? '优秀'
                   : Math.abs(metrics.maxDrawdown) <= 20
-                  ? '良好'
-                  : '需要改进'}
+                    ? '良好'
+                    : '需要改进'}
               </Typography>
             </Box>
 
@@ -507,8 +632,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                       metrics.winRate >= 50
                         ? 'success.main'
                         : metrics.winRate >= 40
-                        ? 'warning.main'
-                        : 'error.main',
+                          ? 'warning.main'
+                          : 'error.main',
                   }}
                 />
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -516,11 +641,7 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                 </Typography>
               </Box>
               <Typography variant="caption" color="text.secondary">
-                {metrics.winRate >= 50
-                  ? '良好'
-                  : metrics.winRate >= 40
-                  ? '一般'
-                  : '需要改进'}
+                {metrics.winRate >= 50 ? '良好' : metrics.winRate >= 40 ? '一般' : '需要改进'}
               </Typography>
             </Box>
           </Box>

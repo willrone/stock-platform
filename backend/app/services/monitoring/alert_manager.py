@@ -3,40 +3,51 @@
 实现性能下降告警，支持邮件和WebSocket通知
 """
 import asyncio
-import smtplib
 import json
-from typing import Dict, List, Optional, Any, Callable, Set
+import smtplib
+import threading
+import uuid
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import threading
-from collections import defaultdict, deque
-import uuid
+from email.mime.text import MIMEText
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Set
+
 from loguru import logger
 
-from app.services.monitoring.performance_monitor import Alert, AlertLevel, PerformanceMetrics
 from app.services.monitoring.drift_detector import DriftReport, DriftSeverity
+from app.services.monitoring.performance_monitor import (
+    Alert,
+    AlertLevel,
+    PerformanceMetrics,
+)
+
 
 class NotificationChannel(Enum):
     """通知渠道"""
+
     EMAIL = "email"
     WEBSOCKET = "websocket"
     WEBHOOK = "webhook"
     SMS = "sms"
     SLACK = "slack"
 
+
 class NotificationStatus(Enum):
     """通知状态"""
+
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
     DELIVERED = "delivered"
 
+
 @dataclass
 class NotificationConfig:
     """通知配置"""
+
     channel: NotificationChannel
     enabled: bool = True
     # 邮件配置
@@ -53,25 +64,27 @@ class NotificationConfig:
     # 通用配置
     rate_limit_minutes: int = 5  # 限流时间（分钟）
     max_notifications_per_hour: int = 10  # 每小时最大通知数
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'channel': self.channel.value,
-            'enabled': self.enabled,
-            'smtp_server': self.smtp_server,
-            'smtp_port': self.smtp_port,
-            'smtp_username': self.smtp_username,
-            'email_recipients': self.email_recipients,
-            'websocket_endpoints': self.websocket_endpoints,
-            'webhook_url': self.webhook_url,
-            'webhook_headers': self.webhook_headers,
-            'rate_limit_minutes': self.rate_limit_minutes,
-            'max_notifications_per_hour': self.max_notifications_per_hour
+            "channel": self.channel.value,
+            "enabled": self.enabled,
+            "smtp_server": self.smtp_server,
+            "smtp_port": self.smtp_port,
+            "smtp_username": self.smtp_username,
+            "email_recipients": self.email_recipients,
+            "websocket_endpoints": self.websocket_endpoints,
+            "webhook_url": self.webhook_url,
+            "webhook_headers": self.webhook_headers,
+            "rate_limit_minutes": self.rate_limit_minutes,
+            "max_notifications_per_hour": self.max_notifications_per_hour,
         }
+
 
 @dataclass
 class NotificationRecord:
     """通知记录"""
+
     notification_id: str
     alert_id: str
     channel: NotificationChannel
@@ -83,60 +96,63 @@ class NotificationRecord:
     sent_at: Optional[datetime] = None
     error_message: Optional[str] = None
     retry_count: int = 0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'notification_id': self.notification_id,
-            'alert_id': self.alert_id,
-            'channel': self.channel.value,
-            'recipient': self.recipient,
-            'subject': self.subject,
-            'content': self.content,
-            'status': self.status.value,
-            'created_at': self.created_at.isoformat(),
-            'sent_at': self.sent_at.isoformat() if self.sent_at else None,
-            'error_message': self.error_message,
-            'retry_count': self.retry_count
+            "notification_id": self.notification_id,
+            "alert_id": self.alert_id,
+            "channel": self.channel.value,
+            "recipient": self.recipient,
+            "subject": self.subject,
+            "content": self.content,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
         }
+
 
 class EmailNotifier:
     """邮件通知器"""
-    
+
     def __init__(self, config: NotificationConfig):
         self.config = config
-        
-    async def send_notification(self, subject: str, content: str, recipients: List[str]) -> bool:
+
+    async def send_notification(
+        self, subject: str, content: str, recipients: List[str]
+    ) -> bool:
         """发送邮件通知"""
         if not self.config.enabled or not recipients:
             return False
-        
+
         try:
             # 创建邮件
             msg = MIMEMultipart()
-            msg['From'] = self.config.smtp_username
-            msg['Subject'] = subject
-            
+            msg["From"] = self.config.smtp_username
+            msg["Subject"] = subject
+
             # 添加HTML内容
             html_content = self._format_html_content(content)
-            msg.attach(MIMEText(html_content, 'html'))
-            
+            msg.attach(MIMEText(html_content, "html"))
+
             # 发送邮件
             with smtplib.SMTP(self.config.smtp_server, self.config.smtp_port) as server:
                 server.starttls()
                 server.login(self.config.smtp_username, self.config.smtp_password)
-                
+
                 for recipient in recipients:
-                    msg['To'] = recipient
+                    msg["To"] = recipient
                     server.send_message(msg)
-                    del msg['To']
-            
+                    del msg["To"]
+
             logger.info(f"邮件通知已发送给 {len(recipients)} 个收件人")
             return True
-            
+
         except Exception as e:
             logger.error(f"发送邮件通知失败: {e}")
             return False
-    
+
     def _format_html_content(self, content: str) -> str:
         """格式化HTML内容"""
         html_template = f"""
@@ -165,38 +181,39 @@ class EmailNotifier:
         """
         return html_template
 
+
 class WebSocketNotifier:
     """WebSocket通知器"""
-    
+
     def __init__(self, config: NotificationConfig):
         self.config = config
         self.connections: Set[Any] = set()  # WebSocket连接集合
-    
+
     def add_connection(self, websocket):
         """添加WebSocket连接"""
         self.connections.add(websocket)
         logger.info(f"添加WebSocket连接，当前连接数: {len(self.connections)}")
-    
+
     def remove_connection(self, websocket):
         """移除WebSocket连接"""
         self.connections.discard(websocket)
         logger.info(f"移除WebSocket连接，当前连接数: {len(self.connections)}")
-    
+
     async def send_notification(self, subject: str, content: str) -> bool:
         """发送WebSocket通知"""
         if not self.config.enabled or not self.connections:
             return False
-        
+
         try:
             notification_data = {
-                'type': 'alert',
-                'subject': subject,
-                'content': content,
-                'timestamp': datetime.now().isoformat()
+                "type": "alert",
+                "subject": subject,
+                "content": content,
+                "timestamp": datetime.now().isoformat(),
             }
-            
+
             message = json.dumps(notification_data)
-            
+
             # 发送给所有连接的客户端
             disconnected = set()
             for websocket in self.connections:
@@ -205,45 +222,48 @@ class WebSocketNotifier:
                 except Exception as e:
                     logger.warning(f"WebSocket发送失败: {e}")
                     disconnected.add(websocket)
-            
+
             # 清理断开的连接
             for websocket in disconnected:
                 self.connections.discard(websocket)
-            
-            logger.info(f"WebSocket通知已发送给 {len(self.connections) - len(disconnected)} 个客户端")
+
+            logger.info(
+                f"WebSocket通知已发送给 {len(self.connections) - len(disconnected)} 个客户端"
+            )
             return True
-            
+
         except Exception as e:
             logger.error(f"发送WebSocket通知失败: {e}")
             return False
 
+
 class WebhookNotifier:
     """Webhook通知器"""
-    
+
     def __init__(self, config: NotificationConfig):
         self.config = config
-    
+
     async def send_notification(self, subject: str, content: str) -> bool:
         """发送Webhook通知"""
         if not self.config.enabled or not self.config.webhook_url:
             return False
-        
+
         try:
             import aiohttp
-            
+
             payload = {
-                'subject': subject,
-                'content': content,
-                'timestamp': datetime.now().isoformat(),
-                'source': 'mlops-monitoring'
+                "subject": subject,
+                "content": content,
+                "timestamp": datetime.now().isoformat(),
+                "source": "mlops-monitoring",
             }
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     self.config.webhook_url,
                     json=payload,
                     headers=self.config.webhook_headers,
-                    timeout=aiohttp.ClientTimeout(total=10)
+                    timeout=aiohttp.ClientTimeout(total=10),
                 ) as response:
                     if response.status == 200:
                         logger.info(f"Webhook通知发送成功: {self.config.webhook_url}")
@@ -251,46 +271,52 @@ class WebhookNotifier:
                     else:
                         logger.error(f"Webhook通知发送失败，状态码: {response.status}")
                         return False
-                        
+
         except Exception as e:
             logger.error(f"发送Webhook通知失败: {e}")
             return False
 
+
 class RateLimiter:
     """限流器"""
-    
+
     def __init__(self):
-        self.notification_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
+        self.notification_history: Dict[str, deque] = defaultdict(
+            lambda: deque(maxlen=100)
+        )
         self.lock = threading.Lock()
-    
+
     def can_send_notification(self, key: str, config: NotificationConfig) -> bool:
         """检查是否可以发送通知"""
         with self.lock:
             now = datetime.now()
             history = self.notification_history[key]
-            
+
             # 清理过期记录
             cutoff_time = now - timedelta(hours=1)
             while history and history[0] < cutoff_time:
                 history.popleft()
-            
+
             # 检查每小时限制
             if len(history) >= config.max_notifications_per_hour:
                 return False
-            
+
             # 检查限流间隔
             if history:
                 last_notification = history[-1]
-                if now - last_notification < timedelta(minutes=config.rate_limit_minutes):
+                if now - last_notification < timedelta(
+                    minutes=config.rate_limit_minutes
+                ):
                     return False
-            
+
             # 记录本次通知
             history.append(now)
             return True
 
+
 class AlertNotificationManager:
     """告警通知管理器"""
-    
+
     def __init__(self):
         self.notification_configs: Dict[NotificationChannel, NotificationConfig] = {}
         self.notifiers: Dict[NotificationChannel, Any] = {}
@@ -298,12 +324,12 @@ class AlertNotificationManager:
         self.notification_records: List[NotificationRecord] = []
         self.max_records = 10000
         self.lock = threading.Lock()
-        
+
         # 初始化默认配置
         self._init_default_configs()
-        
+
         logger.info("告警通知管理器初始化完成")
-    
+
     def _init_default_configs(self):
         """初始化默认配置"""
         # 邮件配置
@@ -313,33 +339,35 @@ class AlertNotificationManager:
             smtp_server="smtp.gmail.com",
             smtp_port=587,
             rate_limit_minutes=10,
-            max_notifications_per_hour=5
+            max_notifications_per_hour=5,
         )
         self.notification_configs[NotificationChannel.EMAIL] = email_config
-        
+
         # WebSocket配置
         websocket_config = NotificationConfig(
             channel=NotificationChannel.WEBSOCKET,
             enabled=True,
             rate_limit_minutes=1,
-            max_notifications_per_hour=30
+            max_notifications_per_hour=30,
         )
         self.notification_configs[NotificationChannel.WEBSOCKET] = websocket_config
-        self.notifiers[NotificationChannel.WEBSOCKET] = WebSocketNotifier(websocket_config)
-        
+        self.notifiers[NotificationChannel.WEBSOCKET] = WebSocketNotifier(
+            websocket_config
+        )
+
         # Webhook配置
         webhook_config = NotificationConfig(
             channel=NotificationChannel.WEBHOOK,
             enabled=False,
             rate_limit_minutes=5,
-            max_notifications_per_hour=10
+            max_notifications_per_hour=10,
         )
         self.notification_configs[NotificationChannel.WEBHOOK] = webhook_config
-    
+
     def update_config(self, channel: NotificationChannel, config: NotificationConfig):
         """更新通知配置"""
         self.notification_configs[channel] = config
-        
+
         # 重新初始化通知器
         if channel == NotificationChannel.EMAIL and config.enabled:
             self.notifiers[channel] = EmailNotifier(config)
@@ -347,57 +375,70 @@ class AlertNotificationManager:
             self.notifiers[channel] = WebSocketNotifier(config)
         elif channel == NotificationChannel.WEBHOOK and config.enabled:
             self.notifiers[channel] = WebhookNotifier(config)
-        
+
         logger.info(f"更新通知配置: {channel.value}")
-    
+
     def get_config(self, channel: NotificationChannel) -> Optional[NotificationConfig]:
         """获取通知配置"""
         return self.notification_configs.get(channel)
-    
+
     async def send_alert_notification(self, alert: Alert):
         """发送告警通知"""
         subject = f"[{alert.level.value.upper()}] {alert.rule_name}"
         content = self._format_alert_content(alert)
-        
+
         await self._send_notification("alert", alert.alert_id, subject, content)
-    
+
     async def send_drift_notification(self, drift_report: DriftReport):
         """发送漂移检测通知"""
-        if drift_report.overall_severity in [DriftSeverity.HIGH, DriftSeverity.CRITICAL]:
+        if drift_report.overall_severity in [
+            DriftSeverity.HIGH,
+            DriftSeverity.CRITICAL,
+        ]:
             subject = f"[数据漂移] {drift_report.model_id} - {drift_report.overall_severity.value.upper()}"
             content = self._format_drift_content(drift_report)
-            
-            await self._send_notification("drift", drift_report.report_id, subject, content)
-    
-    async def send_custom_notification(self, subject: str, content: str, notification_type: str = "custom"):
+
+            await self._send_notification(
+                "drift", drift_report.report_id, subject, content
+            )
+
+    async def send_custom_notification(
+        self, subject: str, content: str, notification_type: str = "custom"
+    ):
         """发送自定义通知"""
         notification_id = str(uuid.uuid4())
-        await self._send_notification(notification_type, notification_id, subject, content)
-    
-    async def _send_notification(self, notification_type: str, source_id: str, subject: str, content: str):
+        await self._send_notification(
+            notification_type, notification_id, subject, content
+        )
+
+    async def _send_notification(
+        self, notification_type: str, source_id: str, subject: str, content: str
+    ):
         """发送通知到所有启用的渠道"""
         for channel, config in self.notification_configs.items():
             if not config.enabled:
                 continue
-            
+
             # 检查限流
             rate_limit_key = f"{notification_type}_{channel.value}"
             if not self.rate_limiter.can_send_notification(rate_limit_key, config):
                 logger.warning(f"通知被限流: {channel.value}")
                 continue
-            
+
             # 发送通知
             await self._send_to_channel(channel, source_id, subject, content)
-    
-    async def _send_to_channel(self, channel: NotificationChannel, source_id: str, subject: str, content: str):
+
+    async def _send_to_channel(
+        self, channel: NotificationChannel, source_id: str, subject: str, content: str
+    ):
         """发送通知到指定渠道"""
         if channel not in self.notifiers:
             logger.warning(f"通知器未初始化: {channel.value}")
             return
-        
+
         notifier = self.notifiers[channel]
         config = self.notification_configs[channel]
-        
+
         # 创建通知记录
         notification_record = NotificationRecord(
             notification_id=str(uuid.uuid4()),
@@ -407,26 +448,28 @@ class AlertNotificationManager:
             subject=subject,
             content=content,
             status=NotificationStatus.PENDING,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
-        
+
         try:
             success = False
-            
+
             if channel == NotificationChannel.EMAIL:
                 recipients = config.email_recipients
                 if recipients:
                     notification_record.recipient = ", ".join(recipients)
-                    success = await notifier.send_notification(subject, content, recipients)
-            
+                    success = await notifier.send_notification(
+                        subject, content, recipients
+                    )
+
             elif channel == NotificationChannel.WEBSOCKET:
                 notification_record.recipient = "websocket_clients"
                 success = await notifier.send_notification(subject, content)
-            
+
             elif channel == NotificationChannel.WEBHOOK:
                 notification_record.recipient = config.webhook_url or ""
                 success = await notifier.send_notification(subject, content)
-            
+
             # 更新通知状态
             if success:
                 notification_record.status = NotificationStatus.SENT
@@ -434,18 +477,20 @@ class AlertNotificationManager:
             else:
                 notification_record.status = NotificationStatus.FAILED
                 notification_record.error_message = "发送失败"
-            
+
         except Exception as e:
             notification_record.status = NotificationStatus.FAILED
             notification_record.error_message = str(e)
             logger.error(f"发送通知失败 {channel.value}: {e}")
-        
+
         # 存储通知记录
         with self.lock:
             self.notification_records.append(notification_record)
             if len(self.notification_records) > self.max_records:
-                self.notification_records = self.notification_records[-self.max_records:]
-    
+                self.notification_records = self.notification_records[
+                    -self.max_records :
+                ]
+
     def _format_alert_content(self, alert: Alert) -> str:
         """格式化告警内容"""
         content = f"""
@@ -465,7 +510,7 @@ class AlertNotificationManager:
 - 如有必要，考虑重启或回滚模型
         """
         return content.strip()
-    
+
     def _format_drift_content(self, drift_report: DriftReport) -> str:
         """格式化漂移检测内容"""
         content = f"""
@@ -482,74 +527,77 @@ class AlertNotificationManager:
 
 建议操作:
         """
-        
+
         for recommendation in drift_report.recommendations:
             content += f"- {recommendation}\n"
-        
+
         return content.strip()
-    
+
     def get_notification_history(
-        self, 
+        self,
         channel: Optional[NotificationChannel] = None,
         status: Optional[NotificationStatus] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[NotificationRecord]:
         """获取通知历史"""
         with self.lock:
             records = self.notification_records
-            
+
             if channel:
                 records = [r for r in records if r.channel == channel]
-            
+
             if status:
                 records = [r for r in records if r.status == status]
-            
+
             return records[-limit:]
-    
+
     def get_notification_stats(self) -> Dict[str, Any]:
         """获取通知统计"""
         with self.lock:
             records = self.notification_records
-            
+
             if not records:
                 return {}
-            
+
             # 按渠道统计
-            channel_stats = defaultdict(lambda: {'sent': 0, 'failed': 0, 'total': 0})
-            
+            channel_stats = defaultdict(lambda: {"sent": 0, "failed": 0, "total": 0})
+
             # 按状态统计
             status_stats = defaultdict(int)
-            
+
             # 最近24小时统计
             cutoff_time = datetime.now() - timedelta(hours=24)
             recent_records = [r for r in records if r.created_at >= cutoff_time]
-            
+
             for record in records:
-                channel_stats[record.channel.value]['total'] += 1
+                channel_stats[record.channel.value]["total"] += 1
                 if record.status == NotificationStatus.SENT:
-                    channel_stats[record.channel.value]['sent'] += 1
+                    channel_stats[record.channel.value]["sent"] += 1
                 elif record.status == NotificationStatus.FAILED:
-                    channel_stats[record.channel.value]['failed'] += 1
-                
+                    channel_stats[record.channel.value]["failed"] += 1
+
                 status_stats[record.status.value] += 1
-            
+
             return {
-                'total_notifications': len(records),
-                'recent_24h_notifications': len(recent_records),
-                'channel_stats': dict(channel_stats),
-                'status_stats': dict(status_stats),
-                'success_rate': status_stats.get('sent', 0) / len(records) if records else 0
+                "total_notifications": len(records),
+                "recent_24h_notifications": len(recent_records),
+                "channel_stats": dict(channel_stats),
+                "status_stats": dict(status_stats),
+                "success_rate": status_stats.get("sent", 0) / len(records)
+                if records
+                else 0,
             }
-    
+
     def add_websocket_connection(self, websocket):
         """添加WebSocket连接"""
         if NotificationChannel.WEBSOCKET in self.notifiers:
             self.notifiers[NotificationChannel.WEBSOCKET].add_connection(websocket)
-    
+
     def remove_websocket_connection(self, websocket):
         """移除WebSocket连接"""
         if NotificationChannel.WEBSOCKET in self.notifiers:
             self.notifiers[NotificationChannel.WEBSOCKET].remove_connection(websocket)
+
 
 # 全局告警通知管理器实例
 alert_notification_manager = AlertNotificationManager()

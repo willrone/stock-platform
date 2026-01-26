@@ -1,6 +1,6 @@
 /**
  * WebSocket服务
- * 
+ *
  * 处理实时数据通信，包括：
  * - 任务状态实时更新
  * - 系统状态监控
@@ -15,11 +15,11 @@ export interface WebSocketEvents {
   'task:progress': (data: { task_id: string; progress: number; status: string }) => void;
   'task:completed': (data: { task_id: string; results: any }) => void;
   'task:failed': (data: { task_id: string; error: string }) => void;
-  
+
   // 系统状态事件
   'system:status': (data: any) => void;
   'system:alert': (data: { level: 'info' | 'warning' | 'error'; message: string }) => void;
-  
+
   // 数据更新事件
   'data:updated': (data: { stock_code: string; timestamp: string }) => void;
   'prediction:result': (data: { prediction_id: string; results: any }) => void;
@@ -43,7 +43,7 @@ export class WebSocketService {
    */
   private connect(): void {
     let wsUrl: string;
-    
+
     // 优先使用环境变量配置
     if (process.env.NEXT_PUBLIC_WS_URL) {
       wsUrl = process.env.NEXT_PUBLIC_WS_URL;
@@ -58,9 +58,9 @@ export class WebSocketService {
       // 服务端：使用默认值
       wsUrl = 'ws://localhost:8000/ws';
     }
-    
+
     console.log('[WebSocket] 连接到:', wsUrl);
-    
+
     try {
       this.socket = new WebSocket(wsUrl);
       this.setupEventListeners();
@@ -74,7 +74,9 @@ export class WebSocketService {
    * 设置事件监听器
    */
   private setupEventListeners(): void {
-    if (!this.socket) return;
+    if (!this.socket) {
+      return;
+    }
 
     // 连接成功
     this.socket.onopen = () => {
@@ -84,10 +86,10 @@ export class WebSocketService {
     };
 
     // 连接断开
-    this.socket.onclose = (event) => {
+    this.socket.onclose = event => {
       console.log('[WebSocket] 连接断开:', event.code, event.reason);
       console.log('实时连接已断开');
-      
+
       // 自动重连（除非是正常关闭）
       if (event.code !== 1000) {
         this.handleReconnect();
@@ -95,13 +97,13 @@ export class WebSocketService {
     };
 
     // 连接错误
-    this.socket.onerror = (error) => {
+    this.socket.onerror = error => {
       console.error('[WebSocket] 连接错误:', error);
       this.handleReconnect();
     };
 
     // 接收消息
-    this.socket.onmessage = (event) => {
+    this.socket.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
         this.handleMessage(data);
@@ -116,12 +118,12 @@ export class WebSocketService {
    */
   private handleMessage(data: any): void {
     const { type } = data;
-    
+
     switch (type) {
       case 'connection':
         console.log('[WebSocket] 连接确认:', data.message);
         break;
-        
+
       case 'task:created':
         console.log('[WebSocket] 任务创建:', data);
         this.emit('task:created', data);
@@ -150,7 +152,7 @@ export class WebSocketService {
 
       case 'system:alert':
         this.emit('system:alert', data);
-        
+
         // 显示系统警告
         switch (data.level) {
           case 'info':
@@ -172,20 +174,20 @@ export class WebSocketService {
       case 'prediction:result':
         this.emit('prediction:result', data);
         break;
-        
+
       case 'subscription':
       case 'unsubscription':
         console.log('[WebSocket] 订阅状态:', data.message);
         break;
-        
+
       case 'pong':
         // 心跳响应
         break;
-        
+
       case 'error':
         console.error('[WebSocket] 服务器错误:', data.message);
         break;
-        
+
       default:
         console.warn('[WebSocket] 未知消息类型:', type, data);
     }
@@ -203,9 +205,9 @@ export class WebSocketService {
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    
+
     console.log(`[WebSocket] ${delay}ms 后尝试第 ${this.reconnectAttempts} 次重连`);
-    
+
     setTimeout(() => {
       this.connect();
     }, delay);
@@ -214,10 +216,7 @@ export class WebSocketService {
   /**
    * 订阅事件
    */
-  public on<K extends keyof WebSocketEvents>(
-    event: K,
-    handler: WebSocketEvents[K]
-  ): void {
+  public on<K extends keyof WebSocketEvents>(event: K, handler: WebSocketEvents[K]): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, []);
     }
@@ -227,10 +226,7 @@ export class WebSocketService {
   /**
    * 取消订阅事件
    */
-  public off<K extends keyof WebSocketEvents>(
-    event: K,
-    handler: WebSocketEvents[K]
-  ): void {
+  public off<K extends keyof WebSocketEvents>(event: K, handler: WebSocketEvents[K]): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       const index = handlers.indexOf(handler);
@@ -263,7 +259,7 @@ export class WebSocketService {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       const message = {
         type: event,
-        ...data
+        ...data,
       };
       this.socket.send(JSON.stringify(message));
     } else {

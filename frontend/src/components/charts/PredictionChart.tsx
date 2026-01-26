@@ -21,7 +21,9 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [loading, setLoading] = useState(true);
-  const [seriesData, setSeriesData] = useState<Array<{date: string; actual: number; predicted: number}>>([]);
+  const [seriesData, setSeriesData] = useState<
+    Array<{ date: string; actual: number; predicted: number }>
+  >([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // 获取预测序列数据
@@ -50,13 +52,15 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
   }, [stockCode, taskId]);
 
   useEffect(() => {
-    if (!chartRef.current || loading) return;
+    if (!chartRef.current || loading) {
+      return;
+    }
 
     // 初始化图表
     if (chartInstance.current) {
       chartInstance.current.dispose();
     }
-    
+
     chartInstance.current = echarts.init(chartRef.current);
     const chartDates = seriesData.map(item => item.date);
     const actualSeries = seriesData.map(item => item.actual);
@@ -69,15 +73,15 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
         left: 'center',
         textStyle: {
           fontSize: 16,
-          fontWeight: 'bold'
-        }
+          fontWeight: 'bold',
+        },
       },
       tooltip: {
         trigger: 'axis',
         axisPointer: {
-          type: 'cross'
+          type: 'cross',
         },
-        formatter: function(params: any) {
+        formatter: function (params: any) {
           let result = `${params[0].axisValue}<br/>`;
           params.forEach((param: any) => {
             const color = param.color;
@@ -86,49 +90,49 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
             result += `<span style="color:${color}">●</span> ${seriesName}: ¥${value}<br/>`;
           });
           return result;
-        }
+        },
       },
       legend: {
         data: ['实际价格', '预测价格'],
-        top: 30
+        top: 30,
       },
       grid: {
         left: '3%',
         right: '4%',
         bottom: '3%',
         top: '15%',
-        containLabel: true
+        containLabel: true,
       },
       xAxis: {
         type: 'category',
         data: chartDates,
         axisLine: {
           lineStyle: {
-            color: '#ccc'
-          }
+            color: '#ccc',
+          },
         },
         axisLabel: {
-          formatter: function(value: string) {
+          formatter: function (value: string) {
             return new Date(value).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-          }
-        }
+          },
+        },
       },
       yAxis: {
         type: 'value',
         scale: true,
         axisLine: {
           lineStyle: {
-            color: '#ccc'
-          }
+            color: '#ccc',
+          },
         },
         splitLine: {
           lineStyle: {
-            color: '#f0f0f0'
-          }
+            color: '#f0f0f0',
+          },
         },
         axisLabel: {
-          formatter: '¥{value}'
-        }
+          formatter: '¥{value}',
+        },
       },
       series: [
         {
@@ -137,13 +141,13 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
           data: actualSeries,
           lineStyle: {
             color: '#3b82f6',
-            width: 2
+            width: 2,
           },
           itemStyle: {
-            color: '#3b82f6'
+            color: '#3b82f6',
           },
           symbol: 'circle',
-          symbolSize: 4
+          symbolSize: 4,
         },
         {
           name: '预测价格',
@@ -152,15 +156,15 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
           lineStyle: {
             color: '#10b981',
             width: 3,
-            type: 'dashed'
+            type: 'dashed',
           },
           itemStyle: {
-            color: '#10b981'
+            color: '#10b981',
           },
           symbol: 'diamond',
-          symbolSize: 6
-        }
-      ]
+          symbolSize: 6,
+        },
+      ],
     };
 
     chartInstance.current.setOption(option);
@@ -186,9 +190,13 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}
+          >
             <AlertCircle size={32} style={{ marginRight: 8 }} />
-            <Typography variant="body2" color="text.secondary">暂无预测数据</Typography>
+            <Typography variant="body2" color="text.secondary">
+              暂无预测数据
+            </Typography>
           </Box>
         </CardContent>
       </Card>
@@ -198,7 +206,9 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 预测摘要 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}
+      >
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
@@ -210,10 +220,15 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
                 <Target size={24} color="#ed6c02" />
               )}
             </Box>
-            <Typography variant="caption" color="text.secondary">预测方向</Typography>
+            <Typography variant="caption" color="text.secondary">
+              预测方向
+            </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {prediction.predicted_direction > 0 ? '上涨' : 
-               prediction.predicted_direction < 0 ? '下跌' : '持平'}
+              {prediction.predicted_direction > 0
+                ? '上涨'
+                : prediction.predicted_direction < 0
+                  ? '下跌'
+                  : '持平'}
             </Typography>
           </CardContent>
         </Card>
@@ -223,7 +238,9 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
               {(prediction.predicted_return * 100).toFixed(2)}%
             </Typography>
-            <Typography variant="caption" color="text.secondary">预测收益率</Typography>
+            <Typography variant="caption" color="text.secondary">
+              预测收益率
+            </Typography>
           </CardContent>
         </Card>
 
@@ -232,18 +249,23 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main' }}>
               {(prediction.confidence_score * 100).toFixed(1)}%
             </Typography>
-            <Typography variant="caption" color="text.secondary">置信度</Typography>
+            <Typography variant="caption" color="text.secondary">
+              置信度
+            </Typography>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
-              {prediction.risk_assessment?.value_at_risk 
-                ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2) 
-                : '--'}%
+              {prediction.risk_assessment?.value_at_risk
+                ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2)
+                : '--'}
+              %
             </Typography>
-            <Typography variant="caption" color="text.secondary">风险价值(VaR)</Typography>
+            <Typography variant="caption" color="text.secondary">
+              风险价值(VaR)
+            </Typography>
           </CardContent>
         </Card>
       </Box>
@@ -252,19 +274,22 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
       <Card>
         <CardContent>
           {loading ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 384 }}>
+            <Box
+              sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 384 }}
+            >
               <CircularProgress size={48} />
             </Box>
           ) : loadError ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 384 }}>
+            <Box
+              sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 384 }}
+            >
               <AlertCircle size={32} style={{ marginRight: 8 }} />
-              <Typography variant="body2" color="text.secondary">{loadError}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {loadError}
+              </Typography>
             </Box>
           ) : (
-            <Box
-              ref={chartRef}
-              sx={{ height: 400, width: '100%' }}
-            />
+            <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
           )}
         </CardContent>
       </Card>
@@ -275,15 +300,30 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
           <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
             技术指标分析
           </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
-            {prediction.technical_indicators && Object.entries(prediction.technical_indicators).map(([key, value]) => (
-              <Box key={key} sx={{ textAlign: 'center' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                  {key.replace('_', ' ')}
-                </Typography>
-                <Chip label={typeof value === 'number' ? value.toFixed(2) : String(value)} size="small" sx={{ mt: 0.5 }} />
-              </Box>
-            ))}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gap: 2,
+            }}
+          >
+            {prediction.technical_indicators &&
+              Object.entries(prediction.technical_indicators).map(([key, value]) => (
+                <Box key={key} sx={{ textAlign: 'center' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ textTransform: 'capitalize' }}
+                  >
+                    {key.replace('_', ' ')}
+                  </Typography>
+                  <Chip
+                    label={typeof value === 'number' ? value.toFixed(2) : String(value)}
+                    size="small"
+                    sx={{ mt: 0.5 }}
+                  />
+                </Box>
+              ))}
           </Box>
         </CardContent>
       </Card>
@@ -296,32 +336,43 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">置信区间</Typography>
+              <Typography variant="body2" color="text.secondary">
+                置信区间
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                [{(prediction.confidence_interval.lower * 100).toFixed(2)}%, {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
+                [{(prediction.confidence_interval.lower * 100).toFixed(2)}%,{' '}
+                {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">风险价值 (VaR)</Typography>
+              <Typography variant="body2" color="text.secondary">
+                风险价值 (VaR)
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>
-                {prediction.risk_assessment?.value_at_risk 
-                  ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2) 
-                  : '--'}%
+                {prediction.risk_assessment?.value_at_risk
+                  ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2)
+                  : '--'}
+                %
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">最大回撤</Typography>
+              <Typography variant="body2" color="text.secondary">
+                最大回撤
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 500, color: 'warning.main' }}>
-                {prediction.risk_assessment?.max_drawdown 
-                  ? (prediction.risk_assessment.max_drawdown * 100).toFixed(2) 
-                  : '--'}%
+                {prediction.risk_assessment?.max_drawdown
+                  ? (prediction.risk_assessment.max_drawdown * 100).toFixed(2)
+                  : '--'}
+                %
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">夏普比率</Typography>
+              <Typography variant="body2" color="text.secondary">
+                夏普比率
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                {prediction.risk_assessment?.sharpe_ratio 
-                  ? prediction.risk_assessment.sharpe_ratio.toFixed(3) 
+                {prediction.risk_assessment?.sharpe_ratio
+                  ? prediction.risk_assessment.sharpe_ratio.toFixed(3)
                   : '--'}
               </Typography>
             </Box>

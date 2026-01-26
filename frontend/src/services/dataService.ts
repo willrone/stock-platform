@@ -1,6 +1,6 @@
 /**
  * 数据服务
- * 
+ *
  * 处理股票数据和系统状态相关的API调用，包括：
  * - 股票数据获取
  * - 技术指标计算
@@ -195,17 +195,17 @@ export class DataService {
       start_date: startDate,
       end_date: endDate,
     };
-    
+
     try {
       const response = await apiRequest.get<any>('/stocks/data', params);
-      
-      console.log(`[DataService] getStockData 响应:`, response);
-      
+
+      console.log('[DataService] getStockData 响应:', response);
+
       // 转换为标准格式
       // response 是后端返回的 response_data: { stock_code, start_date, end_date, data_points, data: [...] }
       // 如果 response 为 null（后端返回 success=False 但 data 不为 null），则尝试从其他地方获取
       let dataArray: any[] = [];
-      
+
       if (response) {
         if (Array.isArray(response.data)) {
           dataArray = response.data;
@@ -213,25 +213,25 @@ export class DataService {
           dataArray = response;
         }
       }
-      
+
       console.log(`[DataService] 解析后的数据数组长度: ${dataArray.length}`, {
         responseType: typeof response,
         responseKeys: response ? Object.keys(response) : [],
         hasData: !!response?.data,
-        dataIsArray: Array.isArray(response?.data)
+        dataIsArray: Array.isArray(response?.data),
       });
-      
+
       return {
         stock_code: stockCode,
         data: dataArray,
         last_updated: new Date().toISOString(),
       };
     } catch (error: any) {
-      console.error(`[DataService] getStockData 失败:`, error);
-      console.error(`[DataService] 错误详情:`, {
+      console.error('[DataService] getStockData 失败:', error);
+      console.error('[DataService] 错误详情:', {
         message: error?.message,
         status: error?.status,
-        response: error?.response
+        response: error?.response,
       });
       // 返回空数据而不是抛出错误，让组件可以处理
       return {
@@ -251,13 +251,14 @@ export class DataService {
     endDate?: string
   ): Promise<TechnicalIndicators> {
     const params: any = {};
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    
-    return apiRequest.get<TechnicalIndicators>(
-      `/stocks/${stockCode}/indicators`,
-      params
-    );
+    if (startDate) {
+      params.start_date = startDate;
+    }
+    if (endDate) {
+      params.end_date = endDate;
+    }
+
+    return apiRequest.get<TechnicalIndicators>(`/stocks/${stockCode}/indicators`, params);
   }
 
   /**
@@ -268,21 +269,21 @@ export class DataService {
     startDate: string,
     endDate: string
   ): Promise<StockData[]> {
-    const promises = stockCodes.map(code =>
-      this.getStockData(code, startDate, endDate)
-    );
-    
+    const promises = stockCodes.map(code => this.getStockData(code, startDate, endDate));
+
     return Promise.all(promises);
   }
 
   /**
    * 搜索股票
    */
-  static async searchStocks(keyword: string): Promise<Array<{
-    code: string;
-    name: string;
-    market: string;
-  }>> {
+  static async searchStocks(keyword: string): Promise<
+    Array<{
+      code: string;
+      name: string;
+      market: string;
+    }>
+  > {
     const response = await apiRequest.get<{
       stocks: Array<{
         code: string;
@@ -297,13 +298,15 @@ export class DataService {
   /**
    * 获取热门股票
    */
-  static async getPopularStocks(): Promise<Array<{
-    code: string;
-    name: string;
-    market?: string;
-    change_percent: number;
-    volume: number;
-  }>> {
+  static async getPopularStocks(): Promise<
+    Array<{
+      code: string;
+      name: string;
+      market?: string;
+      change_percent: number;
+      volume: number;
+    }>
+  > {
     try {
       console.log('[DataService] 开始调用 /stocks/popular API...');
       const response = await apiRequest.get<{
@@ -316,23 +319,23 @@ export class DataService {
         }>;
         total: number;
       }>('/stocks/popular');
-      
+
       console.log('[DataService] API响应:', response);
       console.log('[DataService] response类型:', typeof response);
       console.log('[DataService] response是否为数组:', Array.isArray(response));
       console.log('[DataService] response.stocks:', response?.stocks);
-      
+
       if (!response) {
         console.warn('[DataService] 响应为空');
         return [];
       }
-      
+
       // 处理响应可能是数组的情况
       if (Array.isArray(response)) {
         console.log('[DataService] 响应是数组，直接返回');
         return response;
       }
-      
+
       // 处理响应是对象的情况
       if (response && typeof response === 'object' && 'stocks' in response) {
         const stocks = response.stocks;
@@ -343,12 +346,15 @@ export class DataService {
         console.log(`[DataService] 成功获取 ${stocks.length} 只热门股票`);
         return stocks;
       }
-      
+
       console.warn('[DataService] 响应格式不符合预期:', response);
       return [];
     } catch (error) {
       console.error('[DataService] 获取热门股票列表失败:', error);
-      console.error('[DataService] 错误详情:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '[DataService] 错误详情:',
+        error instanceof Error ? error.message : String(error)
+      );
       throw error;
     }
   }
@@ -388,7 +394,7 @@ export class DataService {
   > {
     const resp = await apiRequest.get<any>('/backtest/strategies');
     // 后端返回的是 { key, name, ... } 数组
-    return Array.isArray(resp) ? resp : (resp ?? []);
+    return Array.isArray(resp) ? resp : resp ?? [];
   }
 
   /**
@@ -507,11 +513,19 @@ export class DataService {
     source: string;
   }> {
     const queryParams = new URLSearchParams();
-    if (params?.stock_code) queryParams.append('stock_code', params.stock_code);
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
-    
-    const url = `/models/available-features${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    if (params?.stock_code) {
+      queryParams.append('stock_code', params.stock_code);
+    }
+    if (params?.start_date) {
+      queryParams.append('start_date', params.start_date);
+    }
+    if (params?.end_date) {
+      queryParams.append('end_date', params.end_date);
+    }
+
+    const url = `/models/available-features${
+      queryParams.toString() ? '?' + queryParams.toString() : ''
+    }`;
     const response = await apiRequest.get<{
       success: boolean;
       message: string;
@@ -527,7 +541,7 @@ export class DataService {
         source: string;
       };
     }>(url);
-    
+
     // 处理响应格式：可能是 { data: {...} } 或直接是 { success, data, ... }
     if (response.data) {
       return response.data;
@@ -545,7 +559,7 @@ export class DataService {
           fundamental_features: [],
           alpha_features: [],
         },
-        source: 'error'
+        source: 'error',
       };
     }
   }
@@ -765,7 +779,7 @@ export class DataService {
     // 将文件路径作为查询参数传递
     const params = new URLSearchParams();
     filePaths.forEach(path => params.append('file_paths', path));
-    
+
     return apiRequest.delete(`/data/files?${params.toString()}`);
   }
 
@@ -841,12 +855,15 @@ export class DataService {
    */
   static async getSystemHealth(): Promise<{
     overall_healthy: boolean;
-    services: Record<string, {
-      healthy: boolean;
-      response_time_ms: number;
-      last_check: string;
-      error_message: string | null;
-    }>;
+    services: Record<
+      string,
+      {
+        healthy: boolean;
+        response_time_ms: number;
+        last_check: string;
+        error_message: string | null;
+      }
+    >;
     check_time: string;
   }> {
     return apiRequest.get('/monitoring/health');
@@ -934,7 +951,7 @@ export class DataService {
 
   /**
    * 触发Qlib指标/因子预计算
-   * 
+   *
    * @param params 预计算参数（可选）
    * @returns 任务创建结果，包含task_id
    */
@@ -959,7 +976,7 @@ export class DataService {
     const requestParams: any = {
       batch_size: params?.batch_size || 50,
     };
-    
+
     if (params?.stock_codes && params.stock_codes.length > 0) {
       requestParams.stock_codes = params.stock_codes;
     }
@@ -972,7 +989,7 @@ export class DataService {
     if (params?.max_workers) {
       requestParams.max_workers = params.max_workers;
     }
-    
+
     // apiRequest.post返回的是data字段，直接返回
     const taskData = await apiRequest.post<{
       task_id: string;
@@ -985,7 +1002,7 @@ export class DataService {
       completed_at?: string;
       error_message?: string;
     }>('/data/qlib/precompute', requestParams);
-    
+
     return taskData;
   }
 }

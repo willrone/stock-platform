@@ -1,6 +1,6 @@
 /**
  * 组合策略配置组件
- * 
+ *
  * 提供组合策略的配置界面，包括：
  * - 添加/删除策略
  * - 配置每个策略的权重
@@ -15,9 +15,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
-  CardHeader,
   Button,
-  TextField,
   Select,
   MenuItem,
   Box,
@@ -28,17 +26,10 @@ import {
   IconButton,
   Chip,
   Slider,
-  Divider,
   Alert,
   Paper,
 } from '@mui/material';
-import {
-  Plus,
-  Trash2,
-  Settings,
-  TrendingUp,
-  AlertCircle,
-} from 'lucide-react';
+import { Plus, Trash2, Settings, TrendingUp, AlertCircle } from 'lucide-react';
 import { StrategyConfigForm, StrategyParameter } from './StrategyConfigForm';
 
 export interface PortfolioStrategyItem {
@@ -58,10 +49,7 @@ export interface PortfolioStrategyConfigProps {
     strategies: PortfolioStrategyItem[];
     integration_method?: string;
   };
-  onChange: (config: {
-    strategies: PortfolioStrategyItem[];
-    integration_method: string;
-  }) => void;
+  onChange: (config: { strategies: PortfolioStrategyItem[]; integration_method: string }) => void;
   constraints?: {
     maxWeight?: number;
     grossLeverage?: number;
@@ -120,7 +108,7 @@ export function PortfolioStrategyConfig({
   // 验证权重约束
   const validateWeights = (items: PortfolioStrategyItem[]): Record<string, string> => {
     const newErrors: Record<string, string> = {};
-    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+    // const totalWeight = items.reduce((sum, item) => sum + item.weight, 0); // 暂时未使用
     const normalized = calculateNormalizedWeights(items);
 
     items.forEach((item, index) => {
@@ -227,7 +215,7 @@ export function PortfolioStrategyConfig({
       return;
     }
     let updated = false;
-    const nextStrategies = strategies.map((item) => {
+    const nextStrategies = strategies.map(item => {
       if (item.config && Object.keys(item.config).length > 0) {
         return item;
       }
@@ -257,20 +245,18 @@ export function PortfolioStrategyConfig({
         <Select
           value={integrationMethod}
           label="信号整合方法"
-          onChange={(e) => setIntegrationMethod(e.target.value)}
+          onChange={e => setIntegrationMethod(e.target.value)}
         >
           <MenuItem value="weighted_voting">加权投票</MenuItem>
         </Select>
-        <FormHelperText>
-          选择如何整合多个策略的信号
-        </FormHelperText>
+        <FormHelperText>选择如何整合多个策略的信号</FormHelperText>
       </FormControl>
 
       {/* 权重约束提示 */}
       {constraints.maxWeight && (
         <Alert severity="info" icon={<AlertCircle size={16} />}>
-          单个策略权重限制: {(constraints.maxWeight * 100).toFixed(0)}%，
-          总杠杆限制: {constraints.grossLeverage || 1.0}
+          单个策略权重限制: {(constraints.maxWeight * 100).toFixed(0)}%， 总杠杆限制:{' '}
+          {constraints.grossLeverage || 1.0}
         </Alert>
       )}
 
@@ -294,7 +280,9 @@ export function PortfolioStrategyConfig({
                     <Chip
                       label={`${(normalizedWeight * 100).toFixed(1)}%`}
                       size="small"
-                      color={normalizedWeight > (constraints.maxWeight || 0.5) ? 'error' : 'primary'}
+                      color={
+                        normalizedWeight > (constraints.maxWeight || 0.5) ? 'error' : 'primary'
+                      }
                     />
                   </Box>
                 }
@@ -302,7 +290,9 @@ export function PortfolioStrategyConfig({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <IconButton
                       size="small"
-                      onClick={() => setExpandedStrategy(isExpanded ? null : `${strategy.name}_${index}`)}
+                      onClick={() =>
+                        setExpandedStrategy(isExpanded ? null : `${strategy.name}_${index}`)
+                      }
                     >
                       <Settings size={18} />
                     </IconButton>
@@ -325,7 +315,7 @@ export function PortfolioStrategyConfig({
                     <Select
                       value={strategy.name}
                       label="策略"
-                      onChange={(e) => handleStrategyNameChange(index, e.target.value)}
+                      onChange={e => handleStrategyNameChange(index, e.target.value)}
                     >
                       {availableStrategies.map(s => (
                         <MenuItem key={s.key} value={s.key}>
@@ -349,7 +339,8 @@ export function PortfolioStrategyConfig({
                         权重
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        原始: {strategy.weight.toFixed(2)} | 归一化: {(normalizedWeight * 100).toFixed(1)}%
+                        原始: {strategy.weight.toFixed(2)} | 归一化:{' '}
+                        {(normalizedWeight * 100).toFixed(1)}%
                       </Typography>
                     </Box>
                     <Slider
@@ -364,9 +355,7 @@ export function PortfolioStrategyConfig({
                         { value: 10, label: '10' },
                       ]}
                     />
-                    {strategyErrors && (
-                      <FormHelperText error>{strategyErrors}</FormHelperText>
-                    )}
+                    {strategyErrors && <FormHelperText error>{strategyErrors}</FormHelperText>}
                   </Box>
 
                   {/* 策略参数配置（展开时显示） */}
@@ -380,7 +369,7 @@ export function PortfolioStrategyConfig({
                         strategyName={strategy.name}
                         parameters={strategyInfo.parameters}
                         values={strategy.config}
-                        onChange={(config) => handleStrategyConfigChange(index, config)}
+                        onChange={config => handleStrategyConfigChange(index, config)}
                       />
                     </>
                   )}

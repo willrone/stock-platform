@@ -1,6 +1,6 @@
 /**
  * 模型管理页面
- * 
+ *
  * 提供模型创建、查看和管理功能
  */
 
@@ -19,21 +19,18 @@ import {
   Box,
   Typography,
 } from '@mui/material';
-import {
-  Plus,
-  Brain,
-  TrendingUp,
-  Trash2,
-} from 'lucide-react';
+import { Plus, Brain, TrendingUp, Trash2 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { useDataStore, Model } from '../../stores/useDataStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TrainingReportModal } from '../../components/models/TrainingReportModal';
-import { FeatureSelector } from '../../components/models/FeatureSelector';
 import { ModelListTable } from '../../components/models/ModelListTable';
 import { LiveTrainingModal } from '../../components/models/LiveTrainingModal';
 import { CreateModelForm } from '../../components/models/CreateModelForm';
-import { getTrainingProgressWebSocket, cleanupTrainingProgressWebSocket } from '../../services/TrainingProgressWebSocket';
+import {
+  getTrainingProgressWebSocket,
+  cleanupTrainingProgressWebSocket,
+} from '../../services/TrainingProgressWebSocket';
 
 export default function ModelsPage() {
   const { models, setModels } = useDataStore();
@@ -47,11 +44,11 @@ export default function ModelsPage() {
   const [liveTrainingModelId, setLiveTrainingModelId] = useState<string | null>(null);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  
+
   // WebSocket连接状态
-  const [wsConnected, setWsConnected] = useState(false);
+  const [, setWsConnected] = useState(false);
   const [trainingProgress, setTrainingProgress] = useState<Record<string, any>>({});
-  
+
   const [formData, setFormData] = useState({
     model_name: '',
     model_type: 'lightgbm',
@@ -84,21 +81,20 @@ export default function ModelsPage() {
   const setupWebSocketConnection = async () => {
     try {
       const wsClient = getTrainingProgressWebSocket();
-      
+
       // 连接WebSocket
       await wsClient.connect();
       setWsConnected(true);
-      
+
       // 订阅所有训练进度更新
-      const unsubscribe = wsClient.subscribeToAll((data) => {
+      const unsubscribe = wsClient.subscribeToAll(data => {
         handleWebSocketMessage(data);
       });
-      
+
       // 保存取消订阅函数以便清理
       if (typeof window !== 'undefined') {
         (window as any).unsubscribeTrainingProgress = unsubscribe;
       }
-      
     } catch (error) {
       console.error('设置WebSocket连接失败:', error);
       setWsConnected(false);
@@ -115,20 +111,21 @@ export default function ModelsPage() {
           stage: data.stage,
           message: data.message,
           metrics: data.metrics || {},
-          timestamp: data.timestamp
-        }
+          timestamp: data.timestamp,
+        },
       }));
-      
+
       // 更新模型列表中的进度
-      const updatedModels = models.map((model: Model): Model => 
-        model.model_id === data.model_id 
-          ? { 
-              ...model, 
-              training_progress: data.progress,
-              training_stage: data.stage,
-              status: (data.progress >= 100 ? 'ready' : 'training') as Model['status']
-            }
-          : model
+      const updatedModels = models.map(
+        (model: Model): Model =>
+          model.model_id === data.model_id
+            ? {
+                ...model,
+                training_progress: data.progress,
+                training_stage: data.stage,
+                status: (data.progress >= 100 ? 'ready' : 'training') as Model['status'],
+              }
+            : model
       );
       setModels(updatedModels);
     } else if (data.type === 'model:training:completed') {
@@ -141,10 +138,11 @@ export default function ModelsPage() {
       });
     } else if (data.type === 'model:training:failed') {
       // 训练失败，更新状态
-      const updatedModels = models.map((model: Model): Model => 
-        model.model_id === data.model_id 
-          ? { ...model, status: 'failed', training_stage: 'failed' }
-          : model
+      const updatedModels = models.map(
+        (model: Model): Model =>
+          model.model_id === data.model_id
+            ? { ...model, status: 'failed', training_stage: 'failed' }
+            : model
       );
       setModels(updatedModels);
       setTrainingProgress(prev => {
@@ -156,7 +154,9 @@ export default function ModelsPage() {
   };
 
   // 获取状态颜色
-  const getStatusColor = (status: string): "success" | "primary" | "secondary" | "warning" | "error" | "default" => {
+  const getStatusColor = (
+    status: string
+  ): 'success' | 'primary' | 'secondary' | 'warning' | 'error' | 'default' => {
     switch (status) {
       case 'ready':
         return 'success';
@@ -176,11 +176,11 @@ export default function ModelsPage() {
   // 获取状态文本
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
-      'ready': '就绪',
-      'active': '活跃',
-      'deployed': '已部署',
-      'training': '训练中',
-      'failed': '失败',
+      ready: '就绪',
+      active: '活跃',
+      deployed: '已部署',
+      training: '训练中',
+      failed: '失败',
     };
     return statusMap[status] || status;
   };
@@ -188,16 +188,16 @@ export default function ModelsPage() {
   // 获取训练阶段文本
   const getStageText = (stage: string) => {
     const stageMap: Record<string, string> = {
-      'initializing': '初始化中',
-      'preparing': '准备数据',
-      'configuring': '配置模型',
-      'preprocessing': '数据预处理',
-      'training': '模型训练',
-      'evaluating': '模型评估',
-      'saving': '保存模型',
-      'completed': '训练完成',
-      'failed': '训练失败',
-      'hyperparameter_tuning': '超参数调优'
+      initializing: '初始化中',
+      preparing: '准备数据',
+      configuring: '配置模型',
+      preprocessing: '数据预处理',
+      training: '模型训练',
+      evaluating: '模型评估',
+      saving: '保存模型',
+      completed: '训练完成',
+      failed: '训练失败',
+      hyperparameter_tuning: '超参数调优',
     };
     return stageMap[stage] || stage;
   };
@@ -222,7 +222,9 @@ export default function ModelsPage() {
 
   // 删除模型
   const handleDeleteModel = async () => {
-    if (!deletingModelId) return;
+    if (!deletingModelId) {
+      return;
+    }
 
     setDeleting(true);
     try {
@@ -244,27 +246,27 @@ export default function ModelsPage() {
   // 验证表单
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!formData.model_name.trim()) {
       newErrors.model_name = '请输入模型名称';
     }
-    
+
     if (formData.stock_codes.length === 0) {
       newErrors.stock_codes = '请至少选择一只股票用于训练';
     }
-    
+
     if (!formData.start_date) {
       newErrors.start_date = '请选择训练数据开始日期';
     }
-    
+
     if (!formData.end_date) {
       newErrors.end_date = '请选择训练数据结束日期';
     }
-    
+
     if (formData.start_date && formData.end_date && formData.start_date >= formData.end_date) {
       newErrors.end_date = '结束日期必须晚于开始日期';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -282,14 +284,18 @@ export default function ModelsPage() {
         ...formData,
         hyperparameters: {
           ...formData.hyperparameters,
-          num_iterations: formData.num_iterations || 100
+          num_iterations: formData.num_iterations || 100,
         },
         // 如果使用所有特征，不传递selected_features（或传递null）
-        selected_features: useAllFeatures ? undefined : (formData.selected_features.length > 0 ? formData.selected_features : undefined)
+        selected_features: useAllFeatures
+          ? undefined
+          : formData.selected_features.length > 0
+            ? formData.selected_features
+            : undefined,
       };
       const result = await DataService.createModel(submitData);
       console.log('模型创建成功:', result);
-      
+
       // 重置表单
       setFormData({
         model_name: '',
@@ -305,11 +311,11 @@ export default function ModelsPage() {
       });
       setErrors({});
       setUseAllFeatures(true);
-      
+
       // 关闭对话框并刷新列表
       setIsOpen(false);
       await loadModels();
-      
+
       alert('模型创建成功！训练任务已开始，您可以在模型列表中查看进度。');
     } catch (error: any) {
       console.error('创建模型失败:', error);
@@ -321,13 +327,13 @@ export default function ModelsPage() {
 
   // 处理表单数据变化
   const handleFormDataChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   useEffect(() => {
     loadModels();
     setupWebSocketConnection();
-    
+
     return () => {
       // 清理WebSocket连接
       cleanupTrainingProgressWebSocket();
@@ -343,7 +349,11 @@ export default function ModelsPage() {
       {/* 页面标题 */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}
+          >
             <Brain size={32} />
             模型管理
           </Typography>
@@ -424,7 +434,9 @@ export default function ModelsPage() {
             useAllFeatures={useAllFeatures}
             onFormDataChange={handleFormDataChange}
             onUseAllFeaturesChange={setUseAllFeatures}
-            onSelectedFeaturesChange={(features) => handleFormDataChange('selected_features', features)}
+            onSelectedFeaturesChange={features =>
+              handleFormDataChange('selected_features', features)
+            }
           />
         </DialogContent>
         <DialogActions>
@@ -465,10 +477,7 @@ export default function ModelsPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => setIsDeleteModalOpen(false)}
-            disabled={deleting}
-          >
+          <Button onClick={() => setIsDeleteModalOpen(false)} disabled={deleting}>
             取消
           </Button>
           <Button

@@ -13,14 +13,10 @@ import {
   TableBody,
   TableRow,
   TableCell,
-  Chip,
-  Button,
   Select,
   MenuItem,
   Tabs,
   Tab,
-  LinearProgress,
-  Tooltip,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -32,9 +28,20 @@ import {
   TableContainer,
   Paper,
   TableSortLabel,
+  LinearProgress,
+  Chip,
+  Button,
 } from '@mui/material';
 import * as echarts from 'echarts';
-import { TrendingUp, TrendingDown, PieChart as PieChartIcon, BarChart3, Target, Award, DollarSign } from 'lucide-react';
+import {
+  TrendingUp,
+  TrendingDown,
+  PieChart as PieChartIcon,
+  Target,
+  Award,
+  DollarSign,
+  BarChart3,
+} from 'lucide-react';
 import { BacktestService, PortfolioSnapshot } from '@/services/backtestService';
 
 interface PositionData {
@@ -87,20 +94,20 @@ interface SortConfig {
 export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: PositionAnalysisProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'total_return',
-    direction: 'desc'
+    direction: 'desc',
   });
   const [selectedMetric, setSelectedMetric] = useState<keyof PositionData>('total_return');
   const [selectedStock, setSelectedStock] = useState<PositionData | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>('table');
-  
+
   // 组合快照数据状态
   const [portfolioSnapshots, setPortfolioSnapshots] = useState<PortfolioSnapshot[]>([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
-  
+
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const onDetailOpen = () => setIsDetailOpen(true);
   const onDetailClose = () => setIsDetailOpen(false);
-  
+
   // 图表引用
   const pieChartRef = useRef<HTMLDivElement>(null);
   const barChartRef = useRef<HTMLDivElement>(null);
@@ -122,12 +129,12 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
     console.log('[PositionAnalysis] 接收到的 positionAnalysis:', positionAnalysis);
     console.log('[PositionAnalysis] positionAnalysis 类型:', typeof positionAnalysis);
     console.log('[PositionAnalysis] 是否为数组:', Array.isArray(positionAnalysis));
-    
+
     if (!positionAnalysis) {
       console.log('[PositionAnalysis] positionAnalysis 为空');
       return null;
     }
-    
+
     // 如果是数组格式（旧格式），直接使用
     if (Array.isArray(positionAnalysis)) {
       console.log('[PositionAnalysis] 使用数组格式，长度:', positionAnalysis.length);
@@ -136,18 +143,26 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
         position_weights: undefined,
         trading_patterns: undefined,
         holding_periods: undefined,
-        concentration_risk: undefined
+        concentration_risk: undefined,
       };
     }
-    
+
     // 如果是对象格式（新格式），检查是否有 stock_performance
     if (typeof positionAnalysis === 'object' && positionAnalysis !== null) {
       console.log('[PositionAnalysis] 使用对象格式');
       console.log('[PositionAnalysis] 对象键:', Object.keys(positionAnalysis));
       console.log('[PositionAnalysis] stock_performance:', positionAnalysis.stock_performance);
-      console.log('[PositionAnalysis] stock_performance 类型:', typeof positionAnalysis.stock_performance);
-      console.log('[PositionAnalysis] stock_performance 长度:', Array.isArray(positionAnalysis.stock_performance) ? positionAnalysis.stock_performance.length : 'N/A');
-      
+      console.log(
+        '[PositionAnalysis] stock_performance 类型:',
+        typeof positionAnalysis.stock_performance
+      );
+      console.log(
+        '[PositionAnalysis] stock_performance 长度:',
+        Array.isArray(positionAnalysis.stock_performance)
+          ? positionAnalysis.stock_performance.length
+          : 'N/A'
+      );
+
       // 确保 stock_performance 存在且是数组
       if (positionAnalysis.stock_performance && Array.isArray(positionAnalysis.stock_performance)) {
         return positionAnalysis as EnhancedPositionAnalysis;
@@ -156,7 +171,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
         return null;
       }
     }
-    
+
     console.warn('[PositionAnalysis] 未知的数据格式');
     return null;
   }, [positionAnalysis]);
@@ -168,30 +183,34 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 排序后的持仓数据
   const sortedPositions = useMemo(() => {
-    if (!stockPerformance || stockPerformance.length === 0) return [];
-    
+    if (!stockPerformance || stockPerformance.length === 0) {
+      return [];
+    }
+
     return [...stockPerformance].sort((a, b) => {
       const aValue = a[sortConfig.key];
       const bValue = b[sortConfig.key];
-      
+
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
       }
-      
+
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortConfig.direction === 'asc' 
+        return sortConfig.direction === 'asc'
           ? aValue.localeCompare(bValue)
           : bValue.localeCompare(aValue);
       }
-      
+
       return 0;
     });
   }, [stockPerformance, sortConfig]);
 
   // 饼图数据（基于总收益）
   const pieChartData = useMemo(() => {
-    if (!stockPerformance || stockPerformance.length === 0) return [];
-    
+    if (!stockPerformance || stockPerformance.length === 0) {
+      return [];
+    }
+
     return stockPerformance
       .filter(pos => Math.abs(pos.total_return) > 0)
       .map(pos => ({
@@ -205,15 +224,17 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 柱状图数据
   const barChartData = useMemo(() => {
-    if (!stockPerformance || stockPerformance.length === 0) return [];
-    
+    if (!stockPerformance || stockPerformance.length === 0) {
+      return [];
+    }
+
     return stockPerformance
       .map(pos => ({
         stock_code: pos.stock_code,
         total_return: pos.total_return,
         win_rate: pos.win_rate * 100,
         trade_count: pos.trade_count,
-        avg_holding_period: pos.avg_holding_period
+        avg_holding_period: pos.avg_holding_period,
       }))
       .sort((a, b) => b.total_return - a.total_return)
       .slice(0, 15); // 显示前15个
@@ -221,8 +242,10 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 树状图数据（用于权重可视化）
   const treemapData = useMemo(() => {
-    if (!stockPerformance || stockPerformance.length === 0) return [];
-    
+    if (!stockPerformance || stockPerformance.length === 0) {
+      return [];
+    }
+
     return stockPerformance
       .filter(pos => Math.abs(pos.total_return) > 0)
       .map(pos => ({
@@ -230,8 +253,8 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
         value: Math.abs(pos.total_return),
         originalValue: pos.total_return,
         itemStyle: {
-          color: pos.total_return >= 0 ? '#10b981' : '#ef4444'
-        }
+          color: pos.total_return >= 0 ? '#10b981' : '#ef4444',
+        },
       }))
       .sort((a, b) => b.value - a.value);
   }, [stockPerformance]);
@@ -239,8 +262,10 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
   // 持仓权重数据（基于真实权重）
   const weightChartData = useMemo(() => {
     const weights = normalizedData?.position_weights?.current_weights;
-    if (!weights || Object.keys(weights).length === 0) return null;
-    
+    if (!weights || Object.keys(weights).length === 0) {
+      return null;
+    }
+
     return Object.entries(weights)
       .map(([stock_code, weight]) => ({
         name: stock_code,
@@ -260,23 +285,24 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
         avgWinRate: 0,
         avgHoldingPeriod: 0,
         bestPerformer: null,
-        worstPerformer: null
+        worstPerformer: null,
       };
     }
-    
+
     const totalStocks = stockPerformance.length;
     const profitableStocks = stockPerformance.filter(pos => pos.total_return > 0).length;
     const totalReturn = stockPerformance.reduce((sum, pos) => sum + pos.total_return, 0);
     const avgWinRate = stockPerformance.reduce((sum, pos) => sum + pos.win_rate, 0) / totalStocks;
-    const avgHoldingPeriod = stockPerformance.reduce((sum, pos) => sum + pos.avg_holding_period, 0) / totalStocks;
-    
-    const bestPerformer = stockPerformance.reduce((best, pos) => 
+    const avgHoldingPeriod =
+      stockPerformance.reduce((sum, pos) => sum + pos.avg_holding_period, 0) / totalStocks;
+
+    const bestPerformer = stockPerformance.reduce((best, pos) =>
       pos.total_return > best.total_return ? pos : best
     );
-    const worstPerformer = stockPerformance.reduce((worst, pos) => 
+    const worstPerformer = stockPerformance.reduce((worst, pos) =>
       pos.total_return < worst.total_return ? pos : worst
     );
-    
+
     return {
       totalStocks,
       profitableStocks,
@@ -284,20 +310,26 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
       avgWinRate,
       avgHoldingPeriod,
       bestPerformer,
-      worstPerformer
+      worstPerformer,
     };
   }, [stockPerformance]);
 
   // 初始化饼图
   useEffect(() => {
-    if (!pieChartRef.current || pieChartData.length === 0) return;
-    
+    if (!pieChartRef.current || pieChartData.length === 0) {
+      return;
+    }
+
     // 如果不在饼图Tab，不初始化
-    if (selectedTab !== 'pie') return;
+    if (selectedTab !== 'pie') {
+      return;
+    }
 
     const initChart = () => {
-      if (!pieChartRef.current || pieChartData.length === 0) return;
-      
+      if (!pieChartRef.current || pieChartData.length === 0) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = pieChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -324,8 +356,13 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
         tooltip: {
           trigger: 'item',
           formatter: function (params: any) {
-            const percentage = ((params.value / pieChartData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
-            return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(2)}<br/>占比: ${percentage}%`;
+            const percentage = (
+              (params.value / pieChartData.reduce((sum, item) => sum + item.value, 0)) *
+              100
+            ).toFixed(1);
+            return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(
+              2
+            )}<br/>占比: ${percentage}%`;
           },
         },
         legend: {
@@ -380,14 +417,20 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 初始化柱状图
   useEffect(() => {
-    if (!barChartRef.current || barChartData.length === 0) return;
-    
+    if (!barChartRef.current || barChartData.length === 0) {
+      return;
+    }
+
     // 如果不在柱状图Tab，不初始化
-    if (selectedTab !== 'bar') return;
+    if (selectedTab !== 'bar') {
+      return;
+    }
 
     const initChart = () => {
-      if (!barChartRef.current || barChartData.length === 0) return;
-      
+      if (!barChartRef.current || barChartData.length === 0) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = barChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -402,104 +445,104 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
       barChartInstance.current = echarts.init(barChartRef.current);
 
-    const getDataByMetric = () => {
-      switch (selectedMetric) {
-        case 'total_return':
-          return barChartData.map(item => item.total_return);
-        case 'win_rate':
-          return barChartData.map(item => item.win_rate);
-        case 'trade_count':
-          return barChartData.map(item => item.trade_count);
-        case 'avg_holding_period':
-          return barChartData.map(item => item.avg_holding_period);
-        default:
-          return barChartData.map(item => item.total_return);
-      }
-    };
+      const getDataByMetric = () => {
+        switch (selectedMetric) {
+          case 'total_return':
+            return barChartData.map(item => item.total_return);
+          case 'win_rate':
+            return barChartData.map(item => item.win_rate);
+          case 'trade_count':
+            return barChartData.map(item => item.trade_count);
+          case 'avg_holding_period':
+            return barChartData.map(item => item.avg_holding_period);
+          default:
+            return barChartData.map(item => item.total_return);
+        }
+      };
 
-    const getMetricName = () => {
-      switch (selectedMetric) {
-        case 'total_return':
-          return '总收益';
-        case 'win_rate':
-          return '胜率';
-        case 'trade_count':
-          return '交易次数';
-        case 'avg_holding_period':
-          return '平均持仓期';
-        default:
-          return '总收益';
-      }
-    };
+      const getMetricName = () => {
+        switch (selectedMetric) {
+          case 'total_return':
+            return '总收益';
+          case 'win_rate':
+            return '胜率';
+          case 'trade_count':
+            return '交易次数';
+          case 'avg_holding_period':
+            return '平均持仓期';
+          default:
+            return '总收益';
+        }
+      };
 
-    const option = {
-      title: {
-        text: '股票表现对比',
-        left: 'center',
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold',
+      const option = {
+        title: {
+          text: '股票表现对比',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold',
+          },
         },
-      },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: {
-          type: 'shadow',
-        },
-        formatter: function (params: any) {
-          const param = params[0];
-          const value = param.value;
-          
-          if (selectedMetric === 'total_return') {
-            return `${param.name}<br/>${getMetricName()}: ¥${value.toFixed(2)}`;
-          } else if (selectedMetric === 'win_rate') {
-            return `${param.name}<br/>${getMetricName()}: ${value.toFixed(2)}%`;
-          } else if (selectedMetric === 'avg_holding_period') {
-            return `${param.name}<br/>${getMetricName()}: ${value} 天`;
-          }
-          return `${param.name}<br/>${getMetricName()}: ${value}`;
-        },
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '15%',
-        top: '15%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'category',
-        data: barChartData.map(item => item.stock_code),
-        axisLabel: {
-          rotate: 45,
-        },
-      },
-      yAxis: {
-        type: 'value',
-        axisLabel: {
-          formatter: function (value: number) {
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow',
+          },
+          formatter: function (params: any) {
+            const param = params[0];
+            const value = param.value;
+
             if (selectedMetric === 'total_return') {
-              return `¥${(value / 1000).toFixed(0)}K`;
+              return `${param.name}<br/>${getMetricName()}: ¥${value.toFixed(2)}`;
             } else if (selectedMetric === 'win_rate') {
-              return `${value.toFixed(0)}%`;
+              return `${param.name}<br/>${getMetricName()}: ${value.toFixed(2)}%`;
             } else if (selectedMetric === 'avg_holding_period') {
-              return `${value}天`;
+              return `${param.name}<br/>${getMetricName()}: ${value} 天`;
             }
-            return value.toString();
+            return `${param.name}<br/>${getMetricName()}: ${value}`;
           },
         },
-      },
-      series: [
-        {
-          name: getMetricName(),
-          type: 'bar',
-          data: getDataByMetric(),
-          itemStyle: {
-            color: '#3b82f6',
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '15%',
+          top: '15%',
+          containLabel: true,
+        },
+        xAxis: {
+          type: 'category',
+          data: barChartData.map(item => item.stock_code),
+          axisLabel: {
+            rotate: 45,
           },
         },
-      ],
-    };
+        yAxis: {
+          type: 'value',
+          axisLabel: {
+            formatter: function (value: number) {
+              if (selectedMetric === 'total_return') {
+                return `¥${(value / 1000).toFixed(0)}K`;
+              } else if (selectedMetric === 'win_rate') {
+                return `${value.toFixed(0)}%`;
+              } else if (selectedMetric === 'avg_holding_period') {
+                return `${value}天`;
+              }
+              return value.toString();
+            },
+          },
+        },
+        series: [
+          {
+            name: getMetricName(),
+            type: 'bar',
+            data: getDataByMetric(),
+            itemStyle: {
+              color: '#3b82f6',
+            },
+          },
+        ],
+      };
 
       barChartInstance.current.setOption(option);
     };
@@ -523,14 +566,20 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 初始化树状图
   useEffect(() => {
-    if (!treemapChartRef.current || treemapData.length === 0) return;
-    
+    if (!treemapChartRef.current || treemapData.length === 0) {
+      return;
+    }
+
     // 如果不在树状图Tab，不初始化
-    if (selectedTab !== 'treemap') return;
+    if (selectedTab !== 'treemap') {
+      return;
+    }
 
     const initChart = () => {
-      if (!treemapChartRef.current || treemapData.length === 0) return;
-      
+      if (!treemapChartRef.current || treemapData.length === 0) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = treemapChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -557,8 +606,13 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
         tooltip: {
           trigger: 'item',
           formatter: function (params: any) {
-            const percentage = ((params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
-            return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(2)}<br/>占比: ${percentage}%`;
+            const percentage = (
+              (params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) *
+              100
+            ).toFixed(1);
+            return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(
+              2
+            )}<br/>占比: ${percentage}%`;
           },
         },
         series: [
@@ -574,7 +628,10 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
             label: {
               show: true,
               formatter: function (params: any) {
-                const percentage = ((params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1);
+                const percentage = (
+                  (params.value / treemapData.reduce((sum, item) => sum + item.value, 0)) *
+                  100
+                ).toFixed(1);
                 return `${params.name}\n${percentage}%`;
               },
               color: '#fff',
@@ -609,14 +666,20 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 初始化持仓权重图表
   useEffect(() => {
-    if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
-    
+    if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) {
+      return;
+    }
+
     // 如果不在持仓权重Tab，不初始化
-    if (selectedTab !== 'weight') return;
+    if (selectedTab !== 'weight') {
+      return;
+    }
 
     const initChart = () => {
-      if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) return;
-      
+      if (!weightChartRef.current || !weightChartData || weightChartData.length === 0) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = weightChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -631,42 +694,42 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
       weightChartInstance.current = echarts.init(weightChartRef.current);
 
-    const option = {
-      title: {
-        text: '持仓权重分布（真实权重）',
-        left: 'center',
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold',
-        },
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: function (params: any) {
-          return `${params.name}<br/>权重: ${params.value.toFixed(2)}%`;
-        },
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        data: weightChartData.map(item => item.name),
-      },
-      series: [
-        {
-          name: '持仓权重',
-          type: 'pie',
-          radius: '50%',
-          data: weightChartData,
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)',
-            },
+      const option = {
+        title: {
+          text: '持仓权重分布（真实权重）',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold',
           },
         },
-      ],
-    };
+        tooltip: {
+          trigger: 'item',
+          formatter: function (params: any) {
+            return `${params.name}<br/>权重: ${params.value.toFixed(2)}%`;
+          },
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          data: weightChartData.map(item => item.name),
+        },
+        series: [
+          {
+            name: '持仓权重',
+            type: 'pie',
+            radius: '50%',
+            data: weightChartData,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)',
+              },
+            },
+          },
+        ],
+      };
 
       weightChartInstance.current.setOption(option);
     };
@@ -690,14 +753,20 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 初始化交易模式图表
   useEffect(() => {
-    if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
-    
+    if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) {
+      return;
+    }
+
     // 如果不在交易模式Tab，不初始化
-    if (selectedTab !== 'trading') return;
+    if (selectedTab !== 'trading') {
+      return;
+    }
 
     const initChart = () => {
-      if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) return;
-      
+      if (!tradingPatternChartRef.current || !normalizedData?.trading_patterns) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = tradingPatternChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -769,14 +838,20 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 初始化持仓时间图表
   useEffect(() => {
-    if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
-    
+    if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) {
+      return;
+    }
+
     // 如果不在持仓时间Tab，不初始化
-    if (selectedTab !== 'holding') return;
+    if (selectedTab !== 'holding') {
+      return;
+    }
 
     const initChart = () => {
-      if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) return;
-      
+      if (!holdingPeriodChartRef.current || !normalizedData?.holding_periods) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = holdingPeriodChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -848,16 +923,23 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 获取组合快照数据
   useEffect(() => {
-    if (!taskId) return;
+    if (!taskId) {
+      return;
+    }
 
     const loadSnapshots = async () => {
       setLoadingSnapshots(true);
       try {
-        const result = await BacktestService.getPortfolioSnapshots(taskId, undefined, undefined, 10000);
+        const result = await BacktestService.getPortfolioSnapshots(
+          taskId,
+          undefined,
+          undefined,
+          10000
+        );
         if (result && result.snapshots) {
           // 按日期排序
-          const sorted = [...result.snapshots].sort((a, b) => 
-            new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime()
+          const sorted = [...result.snapshots].sort(
+            (a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime()
           );
           setPortfolioSnapshots(sorted);
         }
@@ -873,7 +955,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
   // 资金分配图表数据
   const capitalChartData = useMemo(() => {
-    if (!portfolioSnapshots || portfolioSnapshots.length === 0) return null;
+    if (!portfolioSnapshots || portfolioSnapshots.length === 0) {
+      return null;
+    }
 
     const dates: string[] = [];
     const totalCapital: number[] = [];
@@ -891,20 +975,26 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
       dates,
       totalCapital,
       positionCapital,
-      freeCapital
+      freeCapital,
     };
   }, [portfolioSnapshots]);
 
   // 初始化资金分配折线图
   useEffect(() => {
-    if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) return;
-    
+    if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) {
+      return;
+    }
+
     // 如果不在资金分配Tab，不初始化
-    if (selectedTab !== 'capital') return;
+    if (selectedTab !== 'capital') {
+      return;
+    }
 
     const initChart = () => {
-      if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) return;
-      
+      if (!capitalChartRef.current || !capitalChartData || capitalChartData.dates.length === 0) {
+        return;
+      }
+
       // 检查容器是否有尺寸
       const rect = capitalChartRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -933,7 +1023,10 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
           formatter: function (params: any) {
             let result = `${params[0].axisValue}<br/>`;
             params.forEach((param: any) => {
-              result += `${param.marker}${param.seriesName}: ¥${param.value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<br/>`;
+              result += `${param.marker}${param.seriesName}: ¥${param.value.toLocaleString(
+                'zh-CN',
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+              )}<br/>`;
             });
             return result;
           },
@@ -1035,7 +1128,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
   const handleSort = (key: keyof PositionData) => {
     setSortConfig(prev => ({
       key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
   };
 
@@ -1050,7 +1143,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
     return new Intl.NumberFormat('zh-CN', {
       style: 'currency',
       currency: 'CNY',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
     }).format(value);
   };
 
@@ -1061,10 +1154,14 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
   if (!stockPerformance || stockPerformance.length === 0) {
     return (
       <Card>
-        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+        <CardContent
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}
+        >
           <Box sx={{ textAlign: 'center' }}>
             <Target size={48} color="#999" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="body2" color="text.secondary">暂无持仓分析数据</Typography>
+            <Typography variant="body2" color="text.secondary">
+              暂无持仓分析数据
+            </Typography>
           </Box>
         </CardContent>
       </Card>
@@ -1074,25 +1171,37 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 统计概览 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: 2,
+        }}
+      >
         <Card>
           <CardContent sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Target size={20} color="#1976d2" />
               <Box>
-                <Typography variant="caption" color="text.secondary">持仓股票</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 600 }}>{statistics.totalStocks}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  持仓股票
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  {statistics.totalStocks}
+                </Typography>
               </Box>
             </Box>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <TrendingUp size={20} color="#2e7d32" />
               <Box>
-                <Typography variant="caption" color="text.secondary">盈利股票</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  盈利股票
+                </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
                   {statistics.profitableStocks}
                 </Typography>
@@ -1103,13 +1212,15 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
             </Box>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Award size={20} color="#9c27b0" />
               <Box>
-                <Typography variant="caption" color="text.secondary">平均胜率</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  平均胜率
+                </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
                   {formatPercent(statistics.avgWinRate)}
                 </Typography>
@@ -1117,14 +1228,22 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
             </Box>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <TrendingUp size={20} color="#ed6c02" />
               <Box>
-                <Typography variant="caption" color="text.secondary">总收益</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 600, color: statistics.totalReturn >= 0 ? 'success.main' : 'error.main' }}>
+                <Typography variant="caption" color="text.secondary">
+                  总收益
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    fontWeight: 600,
+                    color: statistics.totalReturn >= 0 ? 'success.main' : 'error.main',
+                  }}
+                >
                   {formatCurrency(statistics.totalReturn)}
                 </Typography>
               </Box>
@@ -1135,7 +1254,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
       {/* 最佳和最差表现者 */}
       {statistics.bestPerformer && statistics.worstPerformer && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}
+        >
           <Card>
             <CardHeader
               title={
@@ -1168,7 +1289,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader
               title={
@@ -1206,67 +1327,91 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
 
       {/* 图表展示 */}
       <Box>
-        <Tabs 
+        <Tabs
           value={selectedTab}
           onChange={(e, newValue) => setSelectedTab(newValue)}
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Target size={16} />
-              <span>表格视图</span>
-            </Box>
-          } value="table" />
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <PieChartIcon size={16} />
-              <span>饼图</span>
-            </Box>
-          } value="pie" />
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <BarChart3 size={16} />
-              <span>柱状图</span>
-            </Box>
-          } value="bar" />
-          <Tab label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <BarChart3 size={16} />
-              <span>树状图</span>
-            </Box>
-          } value="treemap" />
-          {normalizedData?.position_weights && (
-            <Tab label={
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Target size={16} />
+                <span>表格视图</span>
+              </Box>
+            }
+            value="table"
+          />
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <PieChartIcon size={16} />
+                <span>饼图</span>
+              </Box>
+            }
+            value="pie"
+          />
+          <Tab
+            label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <BarChart3 size={16} />
-                <span>权重分析</span>
+                <span>柱状图</span>
               </Box>
-            } value="weight" />
+            }
+            value="bar"
+          />
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <BarChart3 size={16} />
+                <span>树状图</span>
+              </Box>
+            }
+            value="treemap"
+          />
+          {normalizedData?.position_weights && (
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <BarChart3 size={16} />
+                  <span>权重分析</span>
+                </Box>
+              }
+              value="weight"
+            />
           )}
           {normalizedData?.trading_patterns && (
-            <Tab label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <BarChart3 size={16} />
-                <span>交易模式</span>
-              </Box>
-            } value="trading" />
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <BarChart3 size={16} />
+                  <span>交易模式</span>
+                </Box>
+              }
+              value="trading"
+            />
           )}
           {normalizedData?.holding_periods && (
-            <Tab label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <BarChart3 size={16} />
-                <span>持仓期分析</span>
-              </Box>
-            } value="holding" />
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <BarChart3 size={16} />
+                  <span>持仓期分析</span>
+                </Box>
+              }
+              value="holding"
+            />
           )}
           {taskId && (
-            <Tab label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <DollarSign size={16} />
-                <span>资金分析</span>
-              </Box>
-            } value="capital" />
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <DollarSign size={16} />
+                  <span>资金分析</span>
+                </Box>
+              }
+              value="capital"
+            />
           )}
         </Tabs>
 
@@ -1281,7 +1426,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                         <TableCell>
                           <TableSortLabel
                             active={sortConfig.key === 'stock_code'}
-                            direction={sortConfig.key === 'stock_code' ? sortConfig.direction : 'asc'}
+                            direction={
+                              sortConfig.key === 'stock_code' ? sortConfig.direction : 'asc'
+                            }
                             onClick={() => handleSort('stock_code')}
                           >
                             股票代码
@@ -1290,7 +1437,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                         <TableCell align="right">
                           <TableSortLabel
                             active={sortConfig.key === 'total_return'}
-                            direction={sortConfig.key === 'total_return' ? sortConfig.direction : 'asc'}
+                            direction={
+                              sortConfig.key === 'total_return' ? sortConfig.direction : 'asc'
+                            }
                             onClick={() => handleSort('total_return')}
                           >
                             总收益
@@ -1299,7 +1448,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                         <TableCell align="right">
                           <TableSortLabel
                             active={sortConfig.key === 'trade_count'}
-                            direction={sortConfig.key === 'trade_count' ? sortConfig.direction : 'asc'}
+                            direction={
+                              sortConfig.key === 'trade_count' ? sortConfig.direction : 'asc'
+                            }
                             onClick={() => handleSort('trade_count')}
                           >
                             交易次数
@@ -1317,7 +1468,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                         <TableCell align="right">
                           <TableSortLabel
                             active={sortConfig.key === 'avg_holding_period'}
-                            direction={sortConfig.key === 'avg_holding_period' ? sortConfig.direction : 'asc'}
+                            direction={
+                              sortConfig.key === 'avg_holding_period' ? sortConfig.direction : 'asc'
+                            }
                             onClick={() => handleSort('avg_holding_period')}
                           >
                             平均持仓期
@@ -1328,11 +1481,14 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {sortedPositions.map((position) => (
+                      {sortedPositions.map(position => (
                         <TableRow key={position.stock_code} hover>
                           <TableCell>
                             <Box>
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontFamily: 'monospace', fontWeight: 600 }}
+                              >
                                 {position.stock_code}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
@@ -1341,13 +1497,17 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                             </Box>
                           </TableCell>
                           <TableCell align="right">
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                fontFamily: 'monospace', 
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontFamily: 'monospace',
                                 fontWeight: 500,
-                                color: position.total_return > 0 ? 'success.main' : 
-                                       position.total_return < 0 ? 'error.main' : 'text.secondary'
+                                color:
+                                  position.total_return > 0
+                                    ? 'success.main'
+                                    : position.total_return < 0
+                                      ? 'error.main'
+                                      : 'text.secondary',
                               }}
                             >
                               {formatCurrency(position.total_return)}
@@ -1380,7 +1540,11 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                             <Chip
                               label={`${position.winning_trades}胜${position.losing_trades}负`}
                               size="small"
-                              color={position.winning_trades > position.losing_trades ? 'success' : 'error'}
+                              color={
+                                position.winning_trades > position.losing_trades
+                                  ? 'success'
+                                  : 'error'
+                              }
                             />
                           </TableCell>
                           <TableCell>
@@ -1414,7 +1578,14 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
             <Card>
               <CardHeader
                 title={
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      width: '100%',
+                    }}
+                  >
                     <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
                       股票表现对比
                     </Typography>
@@ -1423,7 +1594,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                       <Select
                         value={selectedMetric}
                         label="指标"
-                        onChange={(e) => setSelectedMetric(e.target.value as keyof PositionData)}
+                        onChange={e => setSelectedMetric(e.target.value as keyof PositionData)}
                       >
                         <MenuItem value="total_return">总收益</MenuItem>
                         <MenuItem value="win_rate">胜率</MenuItem>
@@ -1479,34 +1650,63 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                   <Box ref={weightChartRef} sx={{ height: 400, width: '100%' }} />
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">暂无持仓权重数据</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无持仓权重数据
+                    </Typography>
                   </Box>
                 )}
                 {/* 集中度指标 */}
                 {normalizedData.position_weights.concentration_metrics?.averages && (
-                  <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+                  <Box
+                    sx={{
+                      mt: 3,
+                      display: 'grid',
+                      gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                      gap: 2,
+                    }}
+                  >
                     <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">HHI指数</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        HHI指数
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {normalizedData.position_weights.concentration_metrics.averages.avg_hhi.toFixed(3)}
+                        {normalizedData.position_weights.concentration_metrics.averages.avg_hhi.toFixed(
+                          3
+                        )}
                       </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">有效股票数</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        有效股票数
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {normalizedData.position_weights.concentration_metrics.averages.avg_effective_stocks.toFixed(1)}
+                        {normalizedData.position_weights.concentration_metrics.averages.avg_effective_stocks.toFixed(
+                          1
+                        )}
                       </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">前3大集中度</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        前3大集中度
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {(normalizedData.position_weights.concentration_metrics.averages.avg_top_3_concentration * 100).toFixed(1)}%
+                        {(
+                          normalizedData.position_weights.concentration_metrics.averages
+                            .avg_top_3_concentration * 100
+                        ).toFixed(1)}
+                        %
                       </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">前5大集中度</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        前5大集中度
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {(normalizedData.position_weights.concentration_metrics.averages.avg_top_5_concentration * 100).toFixed(1)}%
+                        {(
+                          normalizedData.position_weights.concentration_metrics.averages
+                            .avg_top_5_concentration * 100
+                        ).toFixed(1)}
+                        %
                       </Typography>
                     </Box>
                   </Box>
@@ -1521,35 +1721,71 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               <CardContent>
                 <Box ref={tradingPatternChartRef} sx={{ height: 400, width: '100%' }} />
                 {/* 交易模式统计 */}
-                <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+                <Box
+                  sx={{
+                    mt: 3,
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                    gap: 2,
+                  }}
+                >
                   {normalizedData.trading_patterns.size_patterns && (
                     <>
-                      <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">平均交易规模</Typography>
+                      <Box
+                        sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          平均交易规模
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          ¥{(normalizedData.trading_patterns.size_patterns.avg_trade_size / 10000).toFixed(2)}万
+                          ¥
+                          {(
+                            normalizedData.trading_patterns.size_patterns.avg_trade_size / 10000
+                          ).toFixed(2)}
+                          万
                         </Typography>
                       </Box>
-                      <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">总交易量</Typography>
+                      <Box
+                        sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          总交易量
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          ¥{(normalizedData.trading_patterns.size_patterns.total_volume / 10000).toFixed(2)}万
+                          ¥
+                          {(
+                            normalizedData.trading_patterns.size_patterns.total_volume / 10000
+                          ).toFixed(2)}
+                          万
                         </Typography>
                       </Box>
                     </>
                   )}
                   {normalizedData.trading_patterns.frequency_patterns && (
                     <>
-                      <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">平均间隔</Typography>
+                      <Box
+                        sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          平均间隔
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {normalizedData.trading_patterns.frequency_patterns.avg_interval_days.toFixed(1)}天
+                          {normalizedData.trading_patterns.frequency_patterns.avg_interval_days.toFixed(
+                            1
+                          )}
+                          天
                         </Typography>
                       </Box>
-                      <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">月度交易次数</Typography>
+                      <Box
+                        sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          月度交易次数
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {normalizedData.trading_patterns.frequency_patterns.avg_monthly_trades.toFixed(1)}
+                          {normalizedData.trading_patterns.frequency_patterns.avg_monthly_trades.toFixed(
+                            1
+                          )}
                         </Typography>
                       </Box>
                     </>
@@ -1565,32 +1801,51 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               <CardContent>
                 <Box ref={holdingPeriodChartRef} sx={{ height: 400, width: '100%' }} />
                 {/* 持仓时间统计 */}
-                <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+                <Box
+                  sx={{
+                    mt: 3,
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                    gap: 2,
+                  }}
+                >
                   <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary">平均持仓期</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      平均持仓期
+                    </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       {normalizedData.holding_periods.avg_holding_period.toFixed(1)}天
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary">中位数持仓期</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      中位数持仓期
+                    </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       {normalizedData.holding_periods.median_holding_period.toFixed(1)}天
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary">短期持仓</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      短期持仓
+                    </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
                       {normalizedData.holding_periods.short_term_positions}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">≤7天</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      ≤7天
+                    </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary">长期持仓</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      长期持仓
+                    </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
                       {normalizedData.holding_periods.long_term_positions}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">&gt;30天</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      &gt;30天
+                    </Typography>
                   </Box>
                 </Box>
               </CardContent>
@@ -1614,40 +1869,103 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               <CardContent>
                 {loadingSnapshots ? (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">加载资金分配数据中...</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      加载资金分配数据中...
+                    </Typography>
                   </Box>
                 ) : capitalChartData && capitalChartData.dates.length > 0 ? (
                   <Box ref={capitalChartRef} sx={{ height: 400, width: '100%' }} />
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">暂无资金分配数据</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无资金分配数据
+                    </Typography>
                   </Box>
                 )}
                 {/* 资金统计信息 */}
                 {capitalChartData && capitalChartData.dates.length > 0 && (
-                  <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
-                    <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'primary.light', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">平均总资金</Typography>
+                  <Box
+                    sx={{
+                      mt: 3,
+                      display: 'grid',
+                      gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        p: 1.5,
+                        bgcolor: 'primary.light',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        平均总资金
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.dark' }}>
-                        ¥{(capitalChartData.totalCapital.reduce((a, b) => a + b, 0) / capitalChartData.totalCapital.length / 10000).toFixed(2)}万
+                        ¥
+                        {(
+                          capitalChartData.totalCapital.reduce((a, b) => a + b, 0) /
+                          capitalChartData.totalCapital.length /
+                          10000
+                        ).toFixed(2)}
+                        万
                       </Typography>
                     </Box>
-                    <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'success.light', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">平均持仓资金</Typography>
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        p: 1.5,
+                        bgcolor: 'success.light',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        平均持仓资金
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.dark' }}>
-                        ¥{(capitalChartData.positionCapital.reduce((a, b) => a + b, 0) / capitalChartData.positionCapital.length / 10000).toFixed(2)}万
+                        ¥
+                        {(
+                          capitalChartData.positionCapital.reduce((a, b) => a + b, 0) /
+                          capitalChartData.positionCapital.length /
+                          10000
+                        ).toFixed(2)}
+                        万
                       </Typography>
                     </Box>
-                    <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'warning.light', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">平均空闲资金</Typography>
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        p: 1.5,
+                        bgcolor: 'warning.light',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        平均空闲资金
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.dark' }}>
-                        ¥{(capitalChartData.freeCapital.reduce((a, b) => a + b, 0) / capitalChartData.freeCapital.length / 10000).toFixed(2)}万
+                        ¥
+                        {(
+                          capitalChartData.freeCapital.reduce((a, b) => a + b, 0) /
+                          capitalChartData.freeCapital.length /
+                          10000
+                        ).toFixed(2)}
+                        万
                       </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary">平均持仓比例</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        平均持仓比例
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {((capitalChartData.positionCapital.reduce((a, b) => a + b, 0) / capitalChartData.totalCapital.reduce((a, b) => a + b, 0)) * 100).toFixed(1)}%
+                        {(
+                          (capitalChartData.positionCapital.reduce((a, b) => a + b, 0) /
+                            capitalChartData.totalCapital.reduce((a, b) => a + b, 0)) *
+                          100
+                        ).toFixed(1)}
+                        %
                       </Typography>
                     </Box>
                   </Box>
@@ -1672,43 +1990,79 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                   {selectedStock.stock_name}
                 </Typography>
               </Box>
-              
+
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">总收益</Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: selectedStock.total_return > 0 ? 'success.main' : selectedStock.total_return < 0 ? 'error.main' : 'text.secondary' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    总收益
+                  </Typography>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color:
+                        selectedStock.total_return > 0
+                          ? 'success.main'
+                          : selectedStock.total_return < 0
+                            ? 'error.main'
+                            : 'text.secondary',
+                    }}
+                  >
                     {formatCurrency(selectedStock.total_return)}
                   </Typography>
                 </Box>
-                
+
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">胜率</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    胜率
+                  </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 600 }}>
                     {formatPercent(selectedStock.win_rate)}
                   </Typography>
                 </Box>
-                
+
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">交易次数</Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{selectedStock.trade_count}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    交易次数
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                    {selectedStock.trade_count}
+                  </Typography>
                 </Box>
-                
+
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">平均持仓期</Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{selectedStock.avg_holding_period} 天</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    平均持仓期
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                    {selectedStock.avg_holding_period} 天
+                  </Typography>
                 </Box>
               </Box>
-              
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 2,
+                  pt: 2,
+                  borderTop: 1,
+                  borderColor: 'divider',
+                }}
+              >
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">盈利交易</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    盈利交易
+                  </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
                     {selectedStock.winning_trades}
                   </Typography>
                 </Box>
-                
+
                 <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">亏损交易</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    亏损交易
+                  </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main' }}>
                     {selectedStock.losing_trades}
                   </Typography>
@@ -1716,7 +2070,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               </Box>
 
               {/* 扩展信息 */}
-              {(selectedStock.avg_win !== undefined || selectedStock.avg_loss !== undefined || selectedStock.profit_factor !== undefined) && (
+              {(selectedStock.avg_win !== undefined ||
+                selectedStock.avg_loss !== undefined ||
+                selectedStock.profit_factor !== undefined) && (
                 <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
                   <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
                     盈亏分析
@@ -1724,7 +2080,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                     {selectedStock.avg_win !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">平均盈利</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          平均盈利
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
                           {formatCurrency(selectedStock.avg_win)}
                         </Typography>
@@ -1732,7 +2090,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.avg_loss !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">平均亏损</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          平均亏损
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
                           {formatCurrency(selectedStock.avg_loss)}
                         </Typography>
@@ -1740,7 +2100,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.largest_win !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">最大盈利</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          最大盈利
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
                           {formatCurrency(selectedStock.largest_win)}
                         </Typography>
@@ -1748,7 +2110,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.largest_loss !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">最大亏损</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          最大亏损
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
                           {formatCurrency(selectedStock.largest_loss)}
                         </Typography>
@@ -1756,8 +2120,16 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.profit_factor !== undefined && (
                       <Box sx={{ gridColumn: 'span 2' }}>
-                        <Typography variant="caption" color="text.secondary">盈亏比</Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: selectedStock.profit_factor >= 1 ? 'success.main' : 'error.main' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          盈亏比
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 600,
+                            color: selectedStock.profit_factor >= 1 ? 'success.main' : 'error.main',
+                          }}
+                        >
                           {selectedStock.profit_factor.toFixed(2)}
                         </Typography>
                       </Box>
@@ -1767,7 +2139,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               )}
 
               {/* 价格分析 */}
-              {(selectedStock.avg_buy_price !== undefined || selectedStock.avg_sell_price !== undefined || selectedStock.price_improvement !== undefined) && (
+              {(selectedStock.avg_buy_price !== undefined ||
+                selectedStock.avg_sell_price !== undefined ||
+                selectedStock.price_improvement !== undefined) && (
                 <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
                   <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
                     价格分析
@@ -1775,7 +2149,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                     {selectedStock.avg_buy_price !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">平均买入价</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          平均买入价
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           ¥{selectedStock.avg_buy_price.toFixed(2)}
                         </Typography>
@@ -1783,7 +2159,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.avg_sell_price !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">平均卖出价</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          平均卖出价
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           ¥{selectedStock.avg_sell_price.toFixed(2)}
                         </Typography>
@@ -1791,8 +2169,17 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.price_improvement !== undefined && (
                       <Box sx={{ gridColumn: 'span 2' }}>
-                        <Typography variant="caption" color="text.secondary">价格改善率</Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: selectedStock.price_improvement >= 0 ? 'success.main' : 'error.main' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          价格改善率
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 600,
+                            color:
+                              selectedStock.price_improvement >= 0 ? 'success.main' : 'error.main',
+                          }}
+                        >
                           {(selectedStock.price_improvement * 100).toFixed(2)}%
                         </Typography>
                       </Box>
@@ -1802,21 +2189,26 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
               )}
 
               {/* 持仓期详情 */}
-              {(selectedStock.max_holding_period !== undefined || selectedStock.min_holding_period !== undefined) && (
+              {(selectedStock.max_holding_period !== undefined ||
+                selectedStock.min_holding_period !== undefined) && (
                 <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
                   <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
                     持仓期详情
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">平均持仓期</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        平均持仓期
+                      </Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {selectedStock.avg_holding_period} 天
                       </Typography>
                     </Box>
                     {selectedStock.max_holding_period !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">最长持仓期</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          最长持仓期
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {selectedStock.max_holding_period} 天
                         </Typography>
@@ -1824,7 +2216,9 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                     )}
                     {selectedStock.min_holding_period !== undefined && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary">最短持仓期</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          最短持仓期
+                        </Typography>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {selectedStock.min_holding_period} 天
                         </Typography>
@@ -1833,10 +2227,19 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
                   </Box>
                 </Box>
               )}
-              
+
               <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="caption" color="text.secondary">胜率进度</Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    胜率进度
+                  </Typography>
                   <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                     {formatPercent(selectedStock.win_rate)}
                   </Typography>

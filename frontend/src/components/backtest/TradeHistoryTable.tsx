@@ -32,7 +32,15 @@ import {
   InputLabel,
   TableSortLabel,
 } from '@mui/material';
-import { Search, Filter, Download, TrendingUp, TrendingDown, Calendar, DollarSign } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  Download,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  DollarSign,
+} from 'lucide-react';
 import { BacktestService, TradeRecord, TradeStatistics } from '../../services/backtestService';
 
 interface TradeHistoryTableProps {
@@ -59,19 +67,19 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   const [statistics, setStatistics] = useState<TradeStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
+  const [, setTotalCount] = useState(0);
   const itemsPerPage = 50;
-  
+
   // 排序状态
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'timestamp',
-    direction: 'desc'
+    direction: 'desc',
   });
-  
+
   // 筛选状态
   const [filters, setFilters] = useState<TradeFilters>({
     stockCode: '',
@@ -79,12 +87,12 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
     startDate: '',
     endDate: '',
     minPnl: '',
-    maxPnl: ''
+    maxPnl: '',
   });
-  
+
   // 搜索状态
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // 模态框状态
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -95,7 +103,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
     try {
       setLoading(true);
       setError(null);
-      
+
       const options = {
         offset: (currentPage - 1) * itemsPerPage,
         limit: itemsPerPage,
@@ -106,17 +114,16 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
       };
-      
+
       const [tradesResponse, statsResponse] = await Promise.all([
         BacktestService.getTradeRecords(taskId, options),
-        BacktestService.getTradeStatistics(taskId)
+        BacktestService.getTradeStatistics(taskId),
       ]);
-      
+
       setTrades(tradesResponse.trades);
       setTotalCount(tradesResponse.pagination.count);
       setTotalPages(Math.ceil(tradesResponse.pagination.count / itemsPerPage));
       setStatistics(statsResponse);
-      
     } catch (err: any) {
       console.error('获取交易记录失败:', err);
       setError(err.message || '获取交易记录失败');
@@ -134,13 +141,16 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
 
   // 筛选后的交易记录（用于搜索）
   const filteredTrades = useMemo(() => {
-    if (!searchTerm) return trades;
-    
+    if (!searchTerm) {
+      return trades;
+    }
+
     const term = searchTerm.toLowerCase();
-    return trades.filter(trade => 
-      trade.stock_code.toLowerCase().includes(term) ||
-      trade.trade_id.toLowerCase().includes(term) ||
-      trade.action.toLowerCase().includes(term)
+    return trades.filter(
+      trade =>
+        trade.stock_code.toLowerCase().includes(term) ||
+        trade.trade_id.toLowerCase().includes(term) ||
+        trade.action.toLowerCase().includes(term)
     );
   }, [trades, searchTerm]);
 
@@ -148,7 +158,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   const handleSort = (key: keyof TradeRecord) => {
     setSortConfig(prev => ({
       key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
     setCurrentPage(1); // 重置到第一页
   };
@@ -167,7 +177,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
       startDate: '',
       endDate: '',
       minPnl: '',
-      maxPnl: ''
+      maxPnl: '',
     });
     setSearchTerm('');
     setCurrentPage(1);
@@ -191,29 +201,30 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
       });
-      
+
       // 转换为CSV格式
       const csvContent = [
         ['交易ID', '股票代码', '操作', '数量', '价格', '时间', '手续费', '盈亏'].join(','),
-        ...allTrades.trades.map(trade => [
-          trade.trade_id,
-          trade.stock_code,
-          trade.action,
-          trade.quantity,
-          trade.price,
-          trade.timestamp,
-          trade.commission,
-          trade.pnl
-        ].join(','))
+        ...allTrades.trades.map(trade =>
+          [
+            trade.trade_id,
+            trade.stock_code,
+            trade.action,
+            trade.quantity,
+            trade.price,
+            trade.timestamp,
+            trade.commission,
+            trade.pnl,
+          ].join(',')
+        ),
       ].join('\n');
-      
+
       // 下载文件
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `交易记录_${taskId}_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-      
     } catch (err: any) {
       console.error('导出交易记录失败:', err);
     }
@@ -224,7 +235,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
     return new Intl.NumberFormat('zh-CN', {
       style: 'currency',
       currency: 'CNY',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
     }).format(value);
   };
 
@@ -240,7 +251,15 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 256,
+            }}
+          >
             <CircularProgress size={48} />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               加载交易记录中...
@@ -255,7 +274,15 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 256,
+            }}
+          >
             <TrendingDown size={48} color="#d32f2f" style={{ marginBottom: 8 }} />
             <Typography variant="body2" color="error" sx={{ mb: 2 }}>
               {error}
@@ -273,7 +300,9 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 统计信息卡片 */}
       {statistics && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}
+        >
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -289,7 +318,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -305,7 +334,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -321,7 +350,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -347,12 +376,20 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
       )}
 
       {/* 搜索和筛选工具栏 */}
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: 2,
+          alignItems: { xs: 'stretch', sm: 'center' },
+          justifyContent: 'space-between',
+        }}
+      >
         <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <TextField
             placeholder="搜索股票代码或交易ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={e => setSearchTerm(e.target.value)}
             size="small"
             InputProps={{
               startAdornment: (
@@ -371,19 +408,12 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
             筛选
           </Button>
         </Box>
-        
+
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            onClick={handleExport}
-            startIcon={<Download size={16} />}
-          >
+          <Button variant="outlined" onClick={handleExport} startIcon={<Download size={16} />}>
             导出
           </Button>
-          <Button
-            variant="outlined"
-            onClick={resetFilters}
-          >
+          <Button variant="outlined" onClick={resetFilters}>
             重置
           </Button>
         </Box>
@@ -462,7 +492,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTrades.map((trade) => (
+                  filteredTrades.map(trade => (
                     <TableRow key={trade.id} hover>
                       <TableCell>
                         <Tooltip title={formatDateTime(trade.timestamp)}>
@@ -472,7 +502,10 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                        >
                           {trade.stock_code}
                         </Typography>
                       </TableCell>
@@ -494,7 +527,10 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
+                        >
                           ¥{trade.commission.toFixed(2)}
                         </Typography>
                       </TableCell>
@@ -504,7 +540,12 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                           sx={{
                             fontFamily: 'monospace',
                             fontWeight: 500,
-                            color: trade.pnl > 0 ? 'success.main' : trade.pnl < 0 ? 'error.main' : 'text.secondary',
+                            color:
+                              trade.pnl > 0
+                                ? 'success.main'
+                                : trade.pnl < 0
+                                  ? 'error.main'
+                                  : 'text.secondary',
                           }}
                         >
                           {formatCurrency(trade.pnl)}
@@ -544,61 +585,68 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
       <Dialog open={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>筛选交易记录</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mt: 1 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+              mt: 1,
+            }}
+          >
             <TextField
               label="股票代码"
               placeholder="输入股票代码"
               value={filters.stockCode}
-              onChange={(e) => handleFilterChange('stockCode', e.target.value)}
+              onChange={e => handleFilterChange('stockCode', e.target.value)}
               fullWidth
             />
-            
+
             <FormControl fullWidth>
               <InputLabel>操作类型</InputLabel>
               <Select
                 value={filters.action}
                 label="操作类型"
-                onChange={(e) => handleFilterChange('action', e.target.value as any)}
+                onChange={e => handleFilterChange('action', e.target.value as any)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="BUY">买入</MenuItem>
                 <MenuItem value="SELL">卖出</MenuItem>
               </Select>
             </FormControl>
-            
+
             <TextField
               type="date"
               label="开始日期"
               value={filters.startDate}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              onChange={e => handleFilterChange('startDate', e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
-            
+
             <TextField
               type="date"
               label="结束日期"
               value={filters.endDate}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              onChange={e => handleFilterChange('endDate', e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
-            
+
             <TextField
               type="number"
               label="最小盈亏"
               placeholder="输入最小盈亏金额"
               value={filters.minPnl}
-              onChange={(e) => handleFilterChange('minPnl', e.target.value)}
+              onChange={e => handleFilterChange('minPnl', e.target.value)}
               fullWidth
             />
-            
+
             <TextField
               type="number"
               label="最大盈亏"
               placeholder="输入最大盈亏金额"
               value={filters.maxPnl}
-              onChange={(e) => handleFilterChange('maxPnl', e.target.value)}
+              onChange={e => handleFilterChange('maxPnl', e.target.value)}
               fullWidth
             />
           </Box>
@@ -648,9 +696,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     交易时间
                   </Typography>
-                  <Typography variant="body2">
-                    {formatDateTime(selectedTrade.timestamp)}
-                  </Typography>
+                  <Typography variant="body2">{formatDateTime(selectedTrade.timestamp)}</Typography>
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -685,22 +731,25 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                     sx={{
                       fontFamily: 'monospace',
                       fontWeight: 500,
-                      color: selectedTrade.pnl > 0 ? 'success.main' : selectedTrade.pnl < 0 ? 'error.main' : 'text.secondary',
+                      color:
+                        selectedTrade.pnl > 0
+                          ? 'success.main'
+                          : selectedTrade.pnl < 0
+                            ? 'error.main'
+                            : 'text.secondary',
                     }}
                   >
                     {formatCurrency(selectedTrade.pnl)}
                   </Typography>
                 </Box>
               </Box>
-              
+
               {selectedTrade.holding_days && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     持仓天数
                   </Typography>
-                  <Typography variant="body2">
-                    {selectedTrade.holding_days} 天
-                  </Typography>
+                  <Typography variant="body2">{selectedTrade.holding_days} 天</Typography>
                 </Box>
               )}
             </Box>

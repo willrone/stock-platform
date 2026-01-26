@@ -10,61 +10,65 @@ Qlib集成服务模块
 - 自定义模型实现（CustomModels）
 """
 
-from .enhanced_qlib_provider import EnhancedQlibDataProvider, Alpha158Calculator, FactorCache
-from .unified_qlib_training_engine import (
-    UnifiedQlibTrainingEngine,
-    QlibTrainingConfig,
-    QlibTrainingResult,
-    QlibModelType
+from .enhanced_qlib_provider import (
+    Alpha158Calculator,
+    EnhancedQlibDataProvider,
+    FactorCache,
 )
 from .qlib_model_manager import (
-    QlibModelManager,
-    ModelMetadata,
     HyperparameterSpec,
     ModelCategory,
-    ModelComplexity
+    ModelComplexity,
+    ModelMetadata,
+    QlibModelManager,
+)
+from .unified_qlib_training_engine import (
+    QlibModelType,
+    QlibTrainingConfig,
+    QlibTrainingResult,
+    UnifiedQlibTrainingEngine,
 )
 
 # 尝试导入自定义模型（可能因为依赖问题失败）
 try:
     from .custom_models import (
-        CustomTransformerModel,
         CustomInformerModel,
+        CustomPatchTSTModel,
         CustomTimesNetModel,
-        CustomPatchTSTModel
+        CustomTransformerModel,
     )
+
     CUSTOM_MODELS_AVAILABLE = True
 except ImportError:
     CUSTOM_MODELS_AVAILABLE = False
 
 __all__ = [
     # 数据提供器
-    'EnhancedQlibDataProvider',
-    'Alpha158Calculator', 
-    'FactorCache',
-    
+    "EnhancedQlibDataProvider",
+    "Alpha158Calculator",
+    "FactorCache",
     # 训练引擎
-    'UnifiedQlibTrainingEngine',
-    'QlibTrainingConfig',
-    'QlibTrainingResult',
-    'QlibModelType',
-    
+    "UnifiedQlibTrainingEngine",
+    "QlibTrainingConfig",
+    "QlibTrainingResult",
+    "QlibModelType",
     # 模型管理器
-    'QlibModelManager',
-    'ModelMetadata',
-    'HyperparameterSpec',
-    'ModelCategory',
-    'ModelComplexity',
-    
+    "QlibModelManager",
+    "ModelMetadata",
+    "HyperparameterSpec",
+    "ModelCategory",
+    "ModelComplexity",
     # 可用性标志
-    'CUSTOM_MODELS_AVAILABLE'
+    "CUSTOM_MODELS_AVAILABLE",
 ]
 
 # 如果自定义模型可用，添加到导出列表
 if CUSTOM_MODELS_AVAILABLE:
-    __all__.extend([
-        'CustomTransformerModel',
-        'CustomInformerModel', 
-        'CustomTimesNetModel',
-        'CustomPatchTSTModel'
-    ])
+    __all__.extend(
+        [
+            "CustomTransformerModel",
+            "CustomInformerModel",
+            "CustomTimesNetModel",
+            "CustomPatchTSTModel",
+        ]
+    )

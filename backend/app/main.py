@@ -11,14 +11,21 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.api import api_router
-from app.websocket import ws_router
 from app.core.config import settings
+from app.core.container import cleanup_container, get_container
 from app.core.database import init_db
 from app.core.logging import setup_logging
-from app.core.metrics import setup_metrics_collection, MetricsMiddleware, metrics_endpoint
-from app.core.container import get_container, cleanup_container
-from app.middleware.rate_limiting import RateLimitMiddleware, RateLimitConfig
-from app.middleware.error_handling import ErrorHandlingMiddleware, RequestLoggingMiddleware
+from app.core.metrics import (
+    MetricsMiddleware,
+    metrics_endpoint,
+    setup_metrics_collection,
+)
+from app.middleware.error_handling import (
+    ErrorHandlingMiddleware,
+    RequestLoggingMiddleware,
+)
+from app.middleware.rate_limiting import RateLimitConfig, RateLimitMiddleware
+from app.websocket import ws_router
 
 
 @asynccontextmanager
@@ -28,113 +35,133 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging()
     await init_db()
     setup_metrics_collection()
-    
+
     # 初始化服务容器
     await get_container()
-    
+
     # 注册特征管道回调
     try:
-        from app.services.events.data_sync_events import register_feature_pipeline_callbacks
+        from app.services.events.data_sync_events import (
+            register_feature_pipeline_callbacks,
+        )
+
         register_feature_pipeline_callbacks()
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"注册特征管道回调失败: {e}")
-    
+
     # 启动进程池执行器
     try:
         from app.services.tasks.process_executor import start_process_executor
+
         start_process_executor()
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("进程池执行器已启动")
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"启动进程池执行器失败: {e}")
-    
+
     # 启动任务状态通知器（WebSocket同步）
     try:
         from app.services.tasks.task_notifier import task_notifier
+
         await task_notifier.start()
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("任务状态通知器已启动")
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"启动任务状态通知器失败: {e}")
-    
+
     # 启动资源监控和任务调度器
     try:
         from app.services.infrastructure.resource_monitor import resource_monitor
         from app.services.infrastructure.task_scheduler import task_scheduler
         from app.services.tasks.task_cleanup_service import task_cleanup_service
-        
+
         # 启动资源监控（30秒间隔）
         await resource_monitor.start_monitoring(30.0)
-        
+
         # 启动任务调度器
         await task_scheduler.start()
-        
+
         # 启动任务清理服务
         await task_cleanup_service.start()
-        
+
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("资源监控、任务调度器和任务清理服务已启动")
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"启动服务失败: {e}")
-    
+
     yield
-    
+
     # 关闭时清理
     try:
         # 停止任务状态通知器
         from app.services.tasks.task_notifier import task_notifier
+
         await task_notifier.stop()
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("任务状态通知器已停止")
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"停止任务状态通知器失败: {e}")
-    
+
     try:
         # 关闭进程池执行器
         from app.services.tasks.process_executor import shutdown_process_executor
+
         shutdown_process_executor(wait=True, timeout=30)
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("进程池执行器已关闭")
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"关闭进程池执行器失败: {e}")
-    
+
     try:
         from app.services.infrastructure.resource_monitor import resource_monitor
         from app.services.infrastructure.task_scheduler import task_scheduler
         from app.services.tasks.task_cleanup_service import task_cleanup_service
-        
+
         # 停止任务清理服务
         await task_cleanup_service.stop()
-        
+
         # 停止资源监控和任务调度器
         await resource_monitor.stop_monitoring()
         await task_scheduler.stop()
-        
+
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("所有服务已停止")
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"停止服务失败: {e}")
-    
+
     await cleanup_container()
 
 
@@ -184,39 +211,33 @@ def create_application() -> FastAPI:
             "url": "https://opensource.org/licenses/MIT",
         },
         servers=[
-            {
-                "url": "http://localhost:8000",
-                "description": "开发环境"
-            },
-            {
-                "url": "https://api.stock-prediction.com",
-                "description": "生产环境"
-            }
-        ]
+            {"url": "http://localhost:8000", "description": "开发环境"},
+            {"url": "https://api.stock-prediction.com", "description": "生产环境"},
+        ],
     )
 
     # 添加中间件（注意顺序很重要）
-    
+
     # 1. 指标收集中间件（最外层）
     app.add_middleware(MetricsMiddleware)
-    
+
     # 2. 请求日志中间件
     app.add_middleware(RequestLoggingMiddleware)
-    
+
     # 3. 错误处理中间件
     app.add_middleware(ErrorHandlingMiddleware)
-    
+
     # 4. 限流中间件
     rate_limit_config = RateLimitConfig(
         requests_per_minute=120,  # 增加到120次/分钟
-        requests_per_hour=2000,   # 增加到2000次/小时
-        burst_size=20             # 增加突发限制到20
+        requests_per_hour=2000,  # 增加到2000次/小时
+        burst_size=20,  # 增加突发限制到20
     )
     app.add_middleware(RateLimitMiddleware, config=rate_limit_config)
-    
+
     # 5. GZIP压缩中间件
     app.add_middleware(GZipMiddleware, minimum_size=1000)
-    
+
     # 6. CORS中间件（最内层）
     if settings.CORS_ORIGINS:
         app.add_middleware(
@@ -230,7 +251,7 @@ def create_application() -> FastAPI:
     # 包含路由
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
     app.include_router(ws_router)  # WebSocket路由不需要前缀
-    
+
     # 添加指标端点
     app.get("/metrics")(metrics_endpoint)
 
@@ -239,32 +260,26 @@ def create_application() -> FastAPI:
     async def http_exception_handler(request, exc):
         """HTTP异常处理"""
         from app.api.v1.schemas import StandardResponse
+
         return JSONResponse(
             status_code=exc.status_code,
             content=StandardResponse(
-                success=False,
-                message=exc.detail,
-                data=None
-            ).model_dump()
+                success=False, message=exc.detail, data=None
+            ).model_dump(),
         )
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request, exc):
         """通用异常处理"""
         import logging
+
         logger = logging.getLogger(__name__)
         logger.error(f"API异常: {exc}")
-        
+
         from app.api.v1.schemas import StandardResponse
-        response = StandardResponse(
-            success=False,
-            message="服务器内部错误",
-            data=None
-        )
-        return JSONResponse(
-            status_code=500,
-            content=response.model_dump(mode='json')
-        )
+
+        response = StandardResponse(success=False, message="服务器内部错误", data=None)
+        return JSONResponse(status_code=500, content=response.model_dump(mode="json"))
 
     return app
 

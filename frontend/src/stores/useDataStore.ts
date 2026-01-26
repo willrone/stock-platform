@@ -1,6 +1,6 @@
 /**
  * 数据管理状态
- * 
+ *
  * 管理股票数据和系统状态，包括：
  * - 股票数据缓存
  * - 系统状态监控
@@ -91,12 +91,15 @@ export interface SyncProgress {
 
 export interface SystemHealth {
   overall_healthy: boolean;
-  services: Record<string, {
-    healthy: boolean;
-    response_time_ms: number;
-    last_check: string;
-    error_message: string | null;
-  }>;
+  services: Record<
+    string,
+    {
+      healthy: boolean;
+      response_time_ms: number;
+      last_check: string;
+      error_message: string | null;
+    }
+  >;
   check_time: string;
 }
 
@@ -113,29 +116,29 @@ export interface PerformanceMetrics {
 interface DataState {
   // 股票数据
   stockDataCache: Map<string, StockData>;
-  
+
   // 模型信息
   models: Model[];
   selectedModel: Model | null;
-  
+
   // 系统状态
   systemStatus: SystemStatus | null;
   dataServiceStatus: DataServiceStatus | null;
-  
+
   // 监控数据
   systemHealth: SystemHealth | null;
   performanceMetrics: PerformanceMetrics | null;
-  
+
   // 同步状态
   activeSyncs: Map<string, SyncProgress>;
-  
+
   // 加载状态
   loadingStockData: boolean;
   loadingModels: boolean;
   loadingSystemStatus: boolean;
   loadingHealth: boolean;
   loadingMetrics: boolean;
-  
+
   // Actions
   setStockData: (stockCode: string, data: StockData) => void;
   getStockData: (stockCode: string) => StockData | undefined;
@@ -174,79 +177,154 @@ export const useDataStore = create<DataState>()(
       loadingMetrics: false,
 
       // Actions
-      setStockData: (stockCode, data) => set((state) => {
-        const newCache = new Map(state.stockDataCache);
-        newCache.set(stockCode, data);
-        return { stockDataCache: newCache };
-      }, false, 'setStockData'),
+      setStockData: (stockCode, data) =>
+        set(
+          state => {
+            const newCache = new Map(state.stockDataCache);
+            newCache.set(stockCode, data);
+            return { stockDataCache: newCache };
+          },
+          false,
+          'setStockData'
+        ),
 
-      getStockData: (stockCode) => {
+      getStockData: stockCode => {
         return get().stockDataCache.get(stockCode);
       },
 
-      setModels: (models) => set({
-        models,
-        loadingModels: false,
-      }, false, 'setModels'),
+      setModels: models =>
+        set(
+          {
+            models,
+            loadingModels: false,
+          },
+          false,
+          'setModels'
+        ),
 
-      setSelectedModel: (selectedModel) => set({
-        selectedModel,
-      }, false, 'setSelectedModel'),
+      setSelectedModel: selectedModel =>
+        set(
+          {
+            selectedModel,
+          },
+          false,
+          'setSelectedModel'
+        ),
 
-      setSystemStatus: (systemStatus) => set({
-        systemStatus,
-        loadingSystemStatus: false,
-      }, false, 'setSystemStatus'),
+      setSystemStatus: systemStatus =>
+        set(
+          {
+            systemStatus,
+            loadingSystemStatus: false,
+          },
+          false,
+          'setSystemStatus'
+        ),
 
-      setDataServiceStatus: (dataServiceStatus) => set({
-        dataServiceStatus,
-      }, false, 'setDataServiceStatus'),
+      setDataServiceStatus: dataServiceStatus =>
+        set(
+          {
+            dataServiceStatus,
+          },
+          false,
+          'setDataServiceStatus'
+        ),
 
-      setSystemHealth: (systemHealth) => set({
-        systemHealth,
-        loadingHealth: false,
-      }, false, 'setSystemHealth'),
+      setSystemHealth: systemHealth =>
+        set(
+          {
+            systemHealth,
+            loadingHealth: false,
+          },
+          false,
+          'setSystemHealth'
+        ),
 
-      setPerformanceMetrics: (performanceMetrics) => set({
-        performanceMetrics,
-        loadingMetrics: false,
-      }, false, 'setPerformanceMetrics'),
+      setPerformanceMetrics: performanceMetrics =>
+        set(
+          {
+            performanceMetrics,
+            loadingMetrics: false,
+          },
+          false,
+          'setPerformanceMetrics'
+        ),
 
-      setSyncProgress: (syncId, progress) => set((state) => {
-        const newSyncs = new Map(state.activeSyncs);
-        newSyncs.set(syncId, progress);
-        return { activeSyncs: newSyncs };
-      }, false, 'setSyncProgress'),
+      setSyncProgress: (syncId, progress) =>
+        set(
+          state => {
+            const newSyncs = new Map(state.activeSyncs);
+            newSyncs.set(syncId, progress);
+            return { activeSyncs: newSyncs };
+          },
+          false,
+          'setSyncProgress'
+        ),
 
-      removeSyncProgress: (syncId) => set((state) => {
-        const newSyncs = new Map(state.activeSyncs);
-        newSyncs.delete(syncId);
-        return { activeSyncs: newSyncs };
-      }, false, 'removeSyncProgress'),
+      removeSyncProgress: syncId =>
+        set(
+          state => {
+            const newSyncs = new Map(state.activeSyncs);
+            newSyncs.delete(syncId);
+            return { activeSyncs: newSyncs };
+          },
+          false,
+          'removeSyncProgress'
+        ),
 
-      setLoadingStockData: (loadingStockData) => set({
-        loadingStockData,
-      }, false, 'setLoadingStockData'),
+      setLoadingStockData: loadingStockData =>
+        set(
+          {
+            loadingStockData,
+          },
+          false,
+          'setLoadingStockData'
+        ),
 
-      setLoadingModels: (loadingModels) => set({
-        loadingModels,
-      }, false, 'setLoadingModels'),
+      setLoadingModels: loadingModels =>
+        set(
+          {
+            loadingModels,
+          },
+          false,
+          'setLoadingModels'
+        ),
 
-      setLoadingSystemStatus: (loadingSystemStatus) => set({
-        loadingSystemStatus,
-      }, false, 'setLoadingSystemStatus'),
+      setLoadingSystemStatus: loadingSystemStatus =>
+        set(
+          {
+            loadingSystemStatus,
+          },
+          false,
+          'setLoadingSystemStatus'
+        ),
 
-      setLoadingHealth: (loadingHealth) => set({
-        loadingHealth,
-      }, false, 'setLoadingHealth'),
+      setLoadingHealth: loadingHealth =>
+        set(
+          {
+            loadingHealth,
+          },
+          false,
+          'setLoadingHealth'
+        ),
 
-      setLoadingMetrics: (loadingMetrics) => set({
-        loadingMetrics,
-      }, false, 'setLoadingMetrics'),
+      setLoadingMetrics: loadingMetrics =>
+        set(
+          {
+            loadingMetrics,
+          },
+          false,
+          'setLoadingMetrics'
+        ),
 
-      clearStockDataCache: () => set({
-        stockDataCache: new Map(),
-      }, false, 'clearStockDataCache'),
+      clearStockDataCache: () =>
+        set(
+          {
+            stockDataCache: new Map(),
+          },
+          false,
+          'clearStockDataCache'
+        ),
     }),
     {
       name: 'data-store',

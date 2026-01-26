@@ -6,9 +6,24 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, ColorType, SeriesMarkerPosition, SeriesMarkerShape } from 'lightweight-charts';
-import { Card, CardContent, Button, ButtonGroup, CircularProgress, Box, Typography } from '@mui/material';
-import { Calendar, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
+import {
+  createChart,
+  IChartApi,
+  ISeriesApi,
+  ColorType,
+  SeriesMarkerPosition,
+  SeriesMarkerShape,
+} from 'lightweight-charts';
+import {
+  Card,
+  CardContent,
+  Button,
+  ButtonGroup,
+  CircularProgress,
+  Box,
+  Typography,
+} from '@mui/material';
+import { TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { DataService } from '@/services/dataService';
 
 import { PredictionResult } from '../../services/taskService';
@@ -64,7 +79,7 @@ export default function TradingViewChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M'>('1D');
   const [chartType, setChartType] = useState<'candlestick' | 'line'>('candlestick');
@@ -86,10 +101,10 @@ export default function TradingViewChart({
       // 处理日期格式
       const fallbackEnd = new Date();
       const fallbackStart = new Date('2020-01-01');
-      
+
       let resolvedStart: Date;
       let resolvedEnd: Date;
-      
+
       // 处理startDate：可能是ISO字符串或undefined
       if (startDate) {
         resolvedStart = new Date(startDate);
@@ -100,7 +115,7 @@ export default function TradingViewChart({
       } else {
         resolvedStart = fallbackStart;
       }
-      
+
       // 处理endDate：可能是ISO字符串或undefined
       if (endDate) {
         resolvedEnd = new Date(endDate);
@@ -111,52 +126,58 @@ export default function TradingViewChart({
       } else {
         resolvedEnd = fallbackEnd;
       }
-      
-      console.log(`[TradingViewChart] 开始获取股票数据: ${stockCode}, 时间范围: ${resolvedStart.toISOString().split('T')[0]} 至 ${resolvedEnd.toISOString().split('T')[0]}`);
-      
+
+      console.log(
+        `[TradingViewChart] 开始获取股票数据: ${stockCode}, 时间范围: ${
+          resolvedStart.toISOString().split('T')[0]
+        } 至 ${resolvedEnd.toISOString().split('T')[0]}`
+      );
+
       // 调用真实API获取数据
       const response = await DataService.getStockData(
         stockCode,
         resolvedStart.toISOString().split('T')[0],
         resolvedEnd.toISOString().split('T')[0]
       );
-      
-      console.log(`[TradingViewChart] API响应:`, response);
-      
+
+      console.log('[TradingViewChart] API响应:', response);
+
       // 转换数据格式
       // DataService.getStockData 返回格式: { stock_code, data: [...], last_updated }
       // 其中 data 字段已经是后端返回的数据数组
       const dataArray: any[] = Array.isArray(response?.data) ? response.data : [];
-      
+
       console.log(`[TradingViewChart] 解析后的数据数组长度: ${dataArray.length}`, {
         responseType: typeof response,
         responseKeys: response ? Object.keys(response) : [],
         hasDataArray: Array.isArray(dataArray),
         dataArrayLength: dataArray.length,
-        firstItem: dataArray[0]
+        firstItem: dataArray[0],
       });
-      
+
       if (dataArray.length > 0) {
-        let formattedData: PriceData[] = dataArray.map((item: any) => ({
-          time: item.date ? item.date.split('T')[0] : item.date, // 只取日期部分
-          open: Number(item.open) || 0,
-          high: Number(item.high) || 0,
-          low: Number(item.low) || 0,
-          close: Number(item.close) || 0,
-          volume: Number(item.volume) || 0,
-        })).filter((item: PriceData) => item.time); // 过滤掉无效数据
-        
+        let formattedData: PriceData[] = dataArray
+          .map((item: any) => ({
+            time: item.date ? item.date.split('T')[0] : item.date, // 只取日期部分
+            open: Number(item.open) || 0,
+            high: Number(item.high) || 0,
+            low: Number(item.low) || 0,
+            close: Number(item.close) || 0,
+            volume: Number(item.volume) || 0,
+          }))
+          .filter((item: PriceData) => item.time); // 过滤掉无效数据
+
         // 根据timeframe进行数据采样
         if (timeframe === '1W' && formattedData.length > 0) {
           // 周线：每周取最后一个交易日的数据
           const weeklyData: PriceData[] = [];
           let currentWeek = '';
           let lastItem: PriceData | null = null;
-          
+
           for (const item of formattedData) {
             const date = new Date(item.time);
             const weekKey = `${date.getFullYear()}-W${getWeekNumber(date)}`;
-            
+
             if (weekKey !== currentWeek) {
               if (currentWeek && lastItem) {
                 // 保存上一周的最后一条数据
@@ -176,11 +197,14 @@ export default function TradingViewChart({
           const monthlyData: PriceData[] = [];
           let currentMonth = '';
           let lastItem: PriceData | null = null;
-          
+
           for (const item of formattedData) {
             const date = new Date(item.time);
-            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+              2,
+              '0'
+            )}`;
+
             if (monthKey !== currentMonth) {
               if (currentMonth && lastItem) {
                 // 保存上一月的最后一条数据
@@ -196,11 +220,16 @@ export default function TradingViewChart({
           }
           formattedData = monthlyData;
         }
-        
+
         // 按时间排序（确保数据按时间顺序）
         formattedData.sort((a, b) => a.time.localeCompare(b.time));
-        
-        console.log(`[TradingViewChart] 成功加载 ${formattedData.length} 条${timeframe === '1D' ? '日' : timeframe === '1W' ? '周' : '月'}线数据，时间范围: ${formattedData[0]?.time} 至 ${formattedData[formattedData.length - 1]?.time}`);
+
+        console.log(
+          `[TradingViewChart] 成功加载 ${formattedData.length} 条${
+            timeframe === '1D' ? '日' : timeframe === '1W' ? '周' : '月'
+          }线数据，时间范围: ${formattedData[0]?.time} 至 ${formattedData[formattedData.length - 1]
+            ?.time}`
+        );
         setPriceData(formattedData);
       } else {
         console.warn('[TradingViewChart] 未获取到股票数据，返回空数据。', {
@@ -208,7 +237,7 @@ export default function TradingViewChart({
           startDate: resolvedStart.toISOString().split('T')[0],
           endDate: resolvedEnd.toISOString().split('T')[0],
           response,
-          dataArrayLength: dataArray.length
+          dataArrayLength: dataArray.length,
         });
         setPriceData([]);
       }
@@ -218,7 +247,7 @@ export default function TradingViewChart({
         message: error?.message,
         stack: error?.stack,
         response: error?.response,
-        status: error?.status
+        status: error?.status,
       });
       setPriceData([]);
       // 可以在这里添加用户友好的错误提示
@@ -233,20 +262,24 @@ export default function TradingViewChart({
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   };
 
   // 添加买卖标记的辅助函数
   const addTradingMarkers = () => {
-    if (!prediction || !candlestickSeriesRef.current || priceData.length === 0) return;
-    
+    if (!prediction || !candlestickSeriesRef.current || priceData.length === 0) {
+      return;
+    }
+
     const buyThreshold = 0.02; // 2%收益率阈值
     const confidenceThreshold = 0.6; // 60%置信度阈值
-    
+
     // 买入信号
-    if (prediction.predicted_direction > 0 && 
-        prediction.predicted_return > buyThreshold && 
-        prediction.confidence_score > confidenceThreshold) {
+    if (
+      prediction.predicted_direction > 0 &&
+      prediction.predicted_return > buyThreshold &&
+      prediction.confidence_score > confidenceThreshold
+    ) {
       const lastData = priceData[priceData.length - 1];
       candlestickSeriesRef.current.createPriceLine({
         price: lastData.close,
@@ -257,11 +290,13 @@ export default function TradingViewChart({
         title: `买入 - 预测上涨${(prediction.predicted_return * 100).toFixed(2)}%`,
       });
     }
-    
+
     // 卖出信号
-    if (prediction.predicted_direction < 0 && 
-        prediction.predicted_return < -buyThreshold && 
-        prediction.confidence_score > confidenceThreshold) {
+    if (
+      prediction.predicted_direction < 0 &&
+      prediction.predicted_return < -buyThreshold &&
+      prediction.confidence_score > confidenceThreshold
+    ) {
       const lastData = priceData[priceData.length - 1];
       candlestickSeriesRef.current.createPriceLine({
         price: lastData.close,
@@ -283,7 +318,9 @@ export default function TradingViewChart({
   };
 
   const addSignalMarkers = () => {
-    if (!candlestickSeriesRef.current) return;
+    if (!candlestickSeriesRef.current) {
+      return;
+    }
 
     // 合并交易标记和信号标记
     const allMarkers: any[] = [];
@@ -295,44 +332,64 @@ export default function TradingViewChart({
       moving_average: '#2196F3', // 蓝色
       rsi: '#FF9800', // 橙色
       macd: '#4CAF50', // 绿色
-      
+
       // 高级技术分析策略
       bollinger: '#9C27B0', // 紫色
       stochastic: '#00BCD4', // 青色
       cci: '#FF5722', // 深橙红
-      
+
       // 统计套利策略
       pairs_trading: '#795548', // 棕色
       mean_reversion: '#607D8B', // 蓝灰
       cointegration: '#E91E63', // 粉红
-      
+
       // 因子投资策略
       value_factor: '#3F51B5', // 靛蓝
       momentum_factor: '#FFC107', // 琥珀
       low_volatility: '#009688', // 青绿
       multi_factor: '#F44336', // 红色
     };
-    
+
     // 扩展调色板（用于未映射的策略，使用稳定哈希分配）
     const extendedPalette = [
-      '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-      '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-      '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
-      '#c49c94', '#f7b6d3', '#c7c7c7', '#dbdb8d', '#9edae5',
-      '#6b6ecf', '#b5cf6b', '#bd9e39', '#e7ba52', '#637939',
+      '#1f77b4',
+      '#ff7f0e',
+      '#2ca02c',
+      '#d62728',
+      '#9467bd',
+      '#8c564b',
+      '#e377c2',
+      '#7f7f7f',
+      '#bcbd22',
+      '#17becf',
+      '#aec7e8',
+      '#ffbb78',
+      '#98df8a',
+      '#ff9896',
+      '#c5b0d5',
+      '#c49c94',
+      '#f7b6d3',
+      '#c7c7c7',
+      '#dbdb8d',
+      '#9edae5',
+      '#6b6ecf',
+      '#b5cf6b',
+      '#bd9e39',
+      '#e7ba52',
+      '#637939',
     ];
-    
+
     // 基于字符串生成稳定哈希值（用于未映射的策略）
     const stringHash = (str: string): number => {
       let hash = 0;
       for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
+        hash = (hash << 5) - hash + char;
         hash = hash & hash; // Convert to 32bit integer
       }
       return Math.abs(hash);
     };
-    
+
     const strategyColorMap: Record<string, string> = {};
     const strategyKeys: string[] = [];
     if (internalShowSignals && signals && signals.length > 0) {
@@ -343,9 +400,9 @@ export default function TradingViewChart({
         }
       }
     }
-    
+
     // 为每个策略分配颜色：优先使用固定映射，否则使用稳定哈希
-    strategyKeys.forEach((key) => {
+    strategyKeys.forEach(key => {
       const normalizedKey = key.toLowerCase().trim();
       if (fixedColorMap[normalizedKey]) {
         strategyColorMap[key] = fixedColorMap[normalizedKey];
@@ -355,12 +412,12 @@ export default function TradingViewChart({
         strategyColorMap[key] = extendedPalette[hash % extendedPalette.length];
       }
     });
-    
+
     // 先添加交易标记（如果显示）
     if (internalShowTrades && trades && trades.length > 0) {
       const tradeMarkers = trades
-        .filter((trade) => trade.timestamp)
-        .map((trade) => ({
+        .filter(trade => trade.timestamp)
+        .map(trade => ({
           time: trade.timestamp.split('T')[0],
           position: (trade.action === 'BUY' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
           color: trade.action === 'BUY' ? '#10b981' : '#ef4444',
@@ -369,15 +426,17 @@ export default function TradingViewChart({
         }));
       allMarkers.push(...tradeMarkers);
     }
-    
+
     // 添加信号标记（如果显示）
     if (internalShowSignals && signals && signals.length > 0) {
       const signalMarkers = signals
-        .filter((signal) => signal.timestamp)
-        .map((signal) => ({
+        .filter(signal => signal.timestamp)
+        .map(signal => ({
           time: signal.timestamp.split('T')[0],
-          position: (signal.signal_type === 'BUY' ? 'belowBar' : 'aboveBar') as SeriesMarkerPosition,
-          shape: (signal.signal_type === 'BUY' ? 'circle' : 'circle') as SeriesMarkerShape,  // 使用圆形区分信号
+          position: (signal.signal_type === 'BUY'
+            ? 'belowBar'
+            : 'aboveBar') as SeriesMarkerPosition,
+          shape: (signal.signal_type === 'BUY' ? 'circle' : 'circle') as SeriesMarkerShape, // 使用圆形区分信号
           color: (() => {
             const key = signal.strategy_id || signal.strategy_name;
             if (key && strategyColorMap[key]) {
@@ -395,13 +454,13 @@ export default function TradingViewChart({
                 ? '#4caf50'
                 : '#8bc34a'
               : signal.executed
-              ? '#f44336'
-              : '#ff9800';
+                ? '#f44336'
+                : '#ff9800';
           })(),
           text: `${signal.strategy_name ? signal.strategy_name + '·' : ''}${
             signal.signal_type === 'BUY' ? '买' : '卖'
           }信号${signal.executed ? '' : '(未执行)'}`,
-          size: signal.executed ? 0.8 : 0.6,  // 已执行信号更大
+          size: signal.executed ? 0.8 : 0.6, // 已执行信号更大
         }));
       allMarkers.push(...signalMarkers);
     }
@@ -418,7 +477,9 @@ export default function TradingViewChart({
 
   // 初始化图表
   const initChart = () => {
-    if (!chartContainerRef.current) return;
+    if (!chartContainerRef.current) {
+      return;
+    }
 
     // 清理现有图表
     if (chartRef.current) {
@@ -459,8 +520,8 @@ export default function TradingViewChart({
     // 添加价格系列
     if (chartType === 'candlestick') {
       const candlestickSeries = chart.addCandlestickSeries({
-        upColor: '#ef5350',  // 红色，上涨
-        downColor: '#26a69a',  // 绿色，下跌
+        upColor: '#ef5350', // 红色，上涨
+        downColor: '#26a69a', // 绿色，下跌
         borderVisible: false,
         wickUpColor: '#ef5350',
         wickDownColor: '#26a69a',
@@ -492,7 +553,7 @@ export default function TradingViewChart({
 
     // 设置数据
     updateChartData();
-    
+
     // 添加买卖标记
     addTradingMarkers();
     addTradeMarkers();
@@ -513,7 +574,9 @@ export default function TradingViewChart({
 
   // 更新图表数据
   const updateChartData = () => {
-    if (!candlestickSeriesRef.current || !volumeSeriesRef.current) return;
+    if (!candlestickSeriesRef.current || !volumeSeriesRef.current) {
+      return;
+    }
 
     if (chartType === 'candlestick') {
       const candlestickData = priceData.map(item => ({
@@ -535,7 +598,7 @@ export default function TradingViewChart({
     const volumeData = priceData.map(item => ({
       time: item.time,
       value: item.volume,
-      color: item.close >= item.open ? '#ef535080' : '#26a69a80',  // 上涨时红色，下跌时绿色
+      color: item.close >= item.open ? '#ef535080' : '#26a69a80', // 上涨时红色，下跌时绿色
     }));
     volumeSeriesRef.current.setData(volumeData);
   };
@@ -571,10 +634,11 @@ export default function TradingViewChart({
               {stockCode} 价格走势
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              当前价格: ¥{priceData.length > 0 ? priceData[priceData.length - 1]?.close.toFixed(2) : '--'}
+              当前价格: ¥
+              {priceData.length > 0 ? priceData[priceData.length - 1]?.close.toFixed(2) : '--'}
             </Typography>
           </Box>
-          
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             <ButtonGroup size="small" variant="outlined">
               <Button
@@ -596,7 +660,7 @@ export default function TradingViewChart({
                 月线
               </Button>
             </ButtonGroup>
-            
+
             <ButtonGroup size="small" variant="outlined">
               <Button
                 variant={chartType === 'candlestick' ? 'contained' : 'outlined'}
@@ -613,7 +677,7 @@ export default function TradingViewChart({
                 线图
               </Button>
             </ButtonGroup>
-            
+
             {(signals && signals.length > 0) || (trades && trades.length > 0) ? (
               <ButtonGroup size="small" variant="outlined">
                 <Button
@@ -638,17 +702,40 @@ export default function TradingViewChart({
             ) : null}
           </Box>
         </Box>
-        
+
         <Box sx={{ position: 'relative' }}>
           {loading && (
-            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: 'rgba(255,255,255,0.8)',
+                zIndex: 10,
+              }}
+            >
               <CircularProgress size={48} />
             </Box>
           )}
           {!loading && priceData.length === 0 && (
-            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: 'rgba(255,255,255,0.8)',
+                zIndex: 10,
+              }}
+            >
               <AlertCircle size={48} color="#999" style={{ marginBottom: 8 }} />
-              <Typography variant="body2" color="text.secondary">暂无数据</Typography>
+              <Typography variant="body2" color="text.secondary">
+                暂无数据
+              </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
                 股票代码: {stockCode}
               </Typography>
@@ -657,10 +744,7 @@ export default function TradingViewChart({
               </Typography>
             </Box>
           )}
-          <Box
-            ref={chartContainerRef}
-            sx={{ height: `${height}px`, width: '100%' }}
-          />
+          <Box ref={chartContainerRef} sx={{ height: `${height}px`, width: '100%' }} />
         </Box>
       </CardContent>
     </Card>

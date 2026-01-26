@@ -14,9 +14,7 @@ interface OptimizationVisualizationProps {
   result: OptimizationResult;
 }
 
-export default function OptimizationVisualization({
-  result,
-}: OptimizationVisualizationProps) {
+export default function OptimizationVisualization({ result }: OptimizationVisualizationProps) {
   const historyChartRef = useRef<HTMLDivElement>(null);
   const importanceChartRef = useRef<HTMLDivElement>(null);
   const paretoChartRef = useRef<HTMLDivElement>(null);
@@ -27,15 +25,22 @@ export default function OptimizationVisualization({
 
   useEffect(() => {
     console.log('[OptimizationVisualization] optimization_history:', result.optimization_history);
-    console.log('[OptimizationVisualization] optimization_history length:', result.optimization_history?.length);
+    console.log(
+      '[OptimizationVisualization] optimization_history length:',
+      result.optimization_history?.length
+    );
     console.log('[OptimizationVisualization] selectedTab:', selectedTab);
-    
+
     // 如果不在历史Tab，不初始化
     if (selectedTab !== 'history') {
       return;
     }
-    
-    if (!historyChartRef.current || !result.optimization_history || result.optimization_history.length === 0) {
+
+    if (
+      !historyChartRef.current ||
+      !result.optimization_history ||
+      result.optimization_history.length === 0
+    ) {
       console.log('[OptimizationVisualization] 跳过初始化：容器或数据不存在');
       return;
     }
@@ -45,11 +50,11 @@ export default function OptimizationVisualization({
         console.log('[OptimizationVisualization] historyChartRef.current 为空');
         return;
       }
-      
+
       // 检查容器是否有尺寸
       const rect = historyChartRef.current.getBoundingClientRect();
       console.log('[OptimizationVisualization] 容器尺寸:', rect.width, rect.height);
-      
+
       if (rect.width === 0 || rect.height === 0) {
         // 如果容器还没有尺寸，延迟重试
         console.log('[OptimizationVisualization] 容器尺寸为0，延迟重试');
@@ -66,18 +71,18 @@ export default function OptimizationVisualization({
       console.log('[OptimizationVisualization] 开始初始化历史图表');
       const chart = echarts.init(historyChartRef.current);
       historyChartInstance.current = chart;
-      
+
       const completedTrials = result.optimization_history.filter(
         t => (t.state === 'complete' || t.state === 'finished') && t.score !== undefined
       );
-      
+
       console.log('[OptimizationVisualization] completedTrials:', completedTrials.length);
-      
+
       if (completedTrials.length === 0) {
         console.warn('[OptimizationVisualization] 没有完成的试验数据');
         return;
       }
-      
+
       const data = completedTrials.map(t => ({
         value: [t.trial_number, t.score!],
         name: `Trial ${t.trial_number}`,
@@ -92,7 +97,12 @@ export default function OptimizationVisualization({
         return [t.trial_number, bestScore];
       });
 
-      console.log('[OptimizationVisualization] 数据点数量:', data.length, '最佳得分曲线点数:', bestScores.length);
+      console.log(
+        '[OptimizationVisualization] 数据点数量:',
+        data.length,
+        '最佳得分曲线点数:',
+        bestScores.length
+      );
 
       const option = {
         title: {
@@ -167,15 +177,22 @@ export default function OptimizationVisualization({
 
   useEffect(() => {
     console.log('[OptimizationVisualization] param_importance:', result.param_importance);
-    console.log('[OptimizationVisualization] param_importance keys:', result.param_importance ? Object.keys(result.param_importance) : []);
+    console.log(
+      '[OptimizationVisualization] param_importance keys:',
+      result.param_importance ? Object.keys(result.param_importance) : []
+    );
     console.log('[OptimizationVisualization] selectedTab:', selectedTab);
-    
+
     // 如果不在重要性Tab，不初始化
     if (selectedTab !== 'importance') {
       return;
     }
-    
-    if (!importanceChartRef.current || !result.param_importance || Object.keys(result.param_importance).length === 0) {
+
+    if (
+      !importanceChartRef.current ||
+      !result.param_importance ||
+      Object.keys(result.param_importance).length === 0
+    ) {
       console.log('[OptimizationVisualization] 跳过初始化：容器或数据不存在');
       return;
     }
@@ -185,11 +202,11 @@ export default function OptimizationVisualization({
         console.log('[OptimizationVisualization] importanceChartRef.current 为空');
         return;
       }
-      
+
       // 检查容器是否有尺寸
       const rect = importanceChartRef.current.getBoundingClientRect();
       console.log('[OptimizationVisualization] 重要性容器尺寸:', rect.width, rect.height);
-      
+
       if (rect.width === 0 || rect.height === 0) {
         // 如果容器还没有尺寸，延迟重试
         console.log('[OptimizationVisualization] 重要性容器尺寸为0，延迟重试');
@@ -206,13 +223,11 @@ export default function OptimizationVisualization({
       console.log('[OptimizationVisualization] 开始初始化参数重要性图表');
       const chart = echarts.init(importanceChartRef.current);
       importanceChartInstance.current = chart;
-      
-      const entries = Object.entries(result.param_importance || {}).sort(
-        (a, b) => b[1] - a[1]
-      );
-      
+
+      const entries = Object.entries(result.param_importance || {}).sort((a, b) => b[1] - a[1]);
+
       console.log('[OptimizationVisualization] param_importance entries:', entries.length);
-      
+
       const option = {
         title: {
           text: '参数重要性',
@@ -284,14 +299,18 @@ export default function OptimizationVisualization({
   useEffect(() => {
     if (paretoChartRef.current && result.pareto_front && result.pareto_front.length > 0) {
       const chart = echarts.init(paretoChartRef.current);
-      
+
       const paretoData = result.pareto_front.map(p => p.objectives);
       const otherData = result.optimization_history
         .filter(t => t.objectives && (t.state === 'complete' || t.state === 'finished'))
         .map(t => t.objectives!)
-        .filter(obj => result.pareto_front && result.pareto_front.some(p => 
-          p.objectives[0] === obj[0] && p.objectives[1] === obj[1]
-        ) === false);
+        .filter(
+          obj =>
+            result.pareto_front &&
+            result.pareto_front.some(
+              p => p.objectives[0] === obj[0] && p.objectives[1] === obj[1]
+            ) === false
+        );
 
       const option = {
         title: {
@@ -341,7 +360,7 @@ export default function OptimizationVisualization({
 
   return (
     <Box>
-      <Tabs 
+      <Tabs
         value={selectedTab}
         onChange={(e, newValue) => {
           setSelectedTab(newValue);
@@ -361,16 +380,17 @@ export default function OptimizationVisualization({
           <Card>
             <CardContent>
               {result.optimization_history && result.optimization_history.length > 0 ? (
-                <Box
-                  ref={historyChartRef}
-                  sx={{ width: '100%', height: 400 }}
-                />
+                <Box ref={historyChartRef} sx={{ width: '100%', height: 400 }} />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
                     暂无优化历史数据
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 1, display: 'block' }}
+                  >
                     数据: {JSON.stringify(result.optimization_history)}
                   </Typography>
                 </Box>
@@ -383,16 +403,17 @@ export default function OptimizationVisualization({
           <Card>
             <CardContent>
               {result.param_importance && Object.keys(result.param_importance).length > 0 ? (
-                <Box
-                  ref={importanceChartRef}
-                  sx={{ width: '100%', height: 400 }}
-                />
+                <Box ref={importanceChartRef} sx={{ width: '100%', height: 400 }} />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
                     暂无参数重要性数据（仅单目标优化任务提供）
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 1, display: 'block' }}
+                  >
                     数据: {JSON.stringify(result.param_importance)}
                   </Typography>
                 </Box>
@@ -404,10 +425,7 @@ export default function OptimizationVisualization({
         {selectedTab === 'pareto' && result.pareto_front && result.pareto_front.length > 0 && (
           <Card>
             <CardContent>
-              <Box
-                ref={paretoChartRef}
-                sx={{ width: '100%', height: 400 }}
-              />
+              <Box ref={paretoChartRef} sx={{ width: '100%', height: 400 }} />
             </CardContent>
           </Card>
         )}
@@ -415,4 +433,3 @@ export default function OptimizationVisualization({
     </Box>
   );
 }
-

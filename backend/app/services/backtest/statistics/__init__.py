@@ -5,4 +5,4 @@
 
 from .statistics_calculator import StatisticsCalculator
 
-__all__ = ['StatisticsCalculator']
+__all__ = ["StatisticsCalculator"]

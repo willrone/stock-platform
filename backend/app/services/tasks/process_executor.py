@@ -5,11 +5,12 @@
 每个进程独立创建所需资源（数据库连接、服务实例等），不依赖全局变量。
 """
 
-import os
 import asyncio
-from concurrent.futures import ProcessPoolExecutor, Future
-from typing import Optional, Dict, Any, Callable
+import os
+from concurrent.futures import Future, ProcessPoolExecutor
 from datetime import datetime
+from typing import Any, Callable, Dict, Optional
+
 from loguru import logger
 
 from app.core.config import settings
@@ -17,55 +18,56 @@ from app.core.config import settings
 
 class ProcessTaskExecutor:
     """进程池任务执行器"""
-    
+
     def __init__(self, max_workers: Optional[int] = None):
         """
         初始化进程池执行器
-        
+
         Args:
             max_workers: 最大工作进程数，默认使用配置中的PROCESS_POOL_SIZE
         """
-        self.max_workers = max_workers or getattr(settings, 'PROCESS_POOL_SIZE', 3)
+        self.max_workers = max_workers or getattr(settings, "PROCESS_POOL_SIZE", 3)
         self.executor: Optional[ProcessPoolExecutor] = None
         self.is_running = False
-        
+
         # 统计信息
         self.stats = {
             "total_submitted": 0,
             "total_completed": 0,
             "total_failed": 0,
-            "active_tasks": 0
+            "active_tasks": 0,
         }
-    
+
     def start(self):
         """启动进程池"""
         if self.is_running:
             logger.warning("进程池已经运行中")
             return
-        
+
         self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
         self.is_running = True
         logger.info(f"进程池执行器已启动，工作进程数: {self.max_workers}")
-    
+
     def shutdown(self, wait: bool = True, timeout: Optional[float] = None):
         """关闭进程池"""
         if not self.is_running or not self.executor:
             return
-        
+
         self.is_running = False
-        
+
         # 先尝试优雅关闭
         try:
             # 取消所有未完成的任务
-            if hasattr(self.executor, '_processes'):
+            if hasattr(self.executor, "_processes"):
                 # 获取所有活跃的Future
                 import concurrent.futures
+
                 for future in concurrent.futures.as_completed([]):
                     try:
                         future.cancel()
                     except:
                         pass
-            
+
             # 关闭进程池
             if wait:
                 # 等待任务完成，但设置超时
@@ -81,29 +83,29 @@ class ProcessTaskExecutor:
                 self.executor.shutdown(wait=False)
             except:
                 pass
-        
+
         logger.info("进程池执行器已关闭")
-    
+
     def submit(self, fn: Callable, *args, **kwargs) -> Future:
         """
         提交任务到进程池
-        
+
         Args:
             fn: 要执行的函数（必须是可序列化的）
             *args: 位置参数
             **kwargs: 关键字参数
-            
+
         Returns:
             Future对象，可用于获取结果
         """
         if not self.is_running or not self.executor:
             raise RuntimeError("进程池未启动，请先调用start()")
-        
+
         self.stats["total_submitted"] += 1
         self.stats["active_tasks"] += 1
-        
+
         future = self.executor.submit(fn, *args, **kwargs)
-        
+
         # 添加回调来更新统计信息
         def on_done(f: Future):
             self.stats["active_tasks"] -= 1
@@ -113,37 +115,37 @@ class ProcessTaskExecutor:
             except Exception as e:
                 self.stats["total_failed"] += 1
                 logger.error(f"任务执行失败: {e}")
-        
+
         future.add_done_callback(on_done)
-        
+
         logger.debug(f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}")
         return future
-    
+
     async def submit_async(self, fn: Callable, *args, **kwargs) -> Any:
         """
         异步提交任务到进程池并等待结果
-        
+
         Args:
             fn: 要执行的函数
             *args: 位置参数
             **kwargs: 关键字参数
-            
+
         Returns:
             任务执行结果
         """
         loop = asyncio.get_event_loop()
         future = self.submit(fn, *args, **kwargs)
-        
+
         # 在事件循环中等待结果
         result = await loop.run_in_executor(None, future.result)
         return result
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         return {
             **self.stats,
             "max_workers": self.max_workers,
-            "is_running": self.is_running
+            "is_running": self.is_running,
         }
 
 

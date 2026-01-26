@@ -46,7 +46,7 @@ interface DrawdownChartProps {
 }
 
 export default function DrawdownChart({
-  taskId,
+  taskId: _taskId,
   data,
   loading = false,
   height = 400,
@@ -69,7 +69,8 @@ export default function DrawdownChart({
     // 向前找到回撤开始点（回撤为0的点）
     let startIndex = maxDrawdownIndex;
     for (let i = maxDrawdownIndex - 1; i >= 0; i--) {
-      if (Math.abs(data.drawdowns[i]) < 0.001) { // 接近0
+      if (Math.abs(data.drawdowns[i]) < 0.001) {
+        // 接近0
         startIndex = i;
         break;
       }
@@ -78,7 +79,8 @@ export default function DrawdownChart({
     // 向后找到回撤结束点（回撤恢复到接近0的点）
     let endIndex = maxDrawdownIndex;
     for (let i = maxDrawdownIndex + 1; i < data.drawdowns.length; i++) {
-      if (Math.abs(data.drawdowns[i]) < 0.001) { // 接近0
+      if (Math.abs(data.drawdowns[i]) < 0.001) {
+        // 接近0
         endIndex = i;
         break;
       }
@@ -89,7 +91,9 @@ export default function DrawdownChart({
 
   // 初始化和更新图表
   useEffect(() => {
-    if (!chartRef.current || loading || !data.dates.length) return;
+    if (!chartRef.current || loading || !data.dates.length) {
+      return;
+    }
 
     // 销毁现有图表实例
     if (chartInstance.current) {
@@ -133,12 +137,7 @@ export default function DrawdownChart({
         itemStyle: {
           color: 'rgba(239, 68, 68, 0.2)',
         },
-        data: [
-          [
-            { xAxis: data.dates[startIndex] },
-            { xAxis: data.dates[endIndex] },
-          ],
-        ],
+        data: [[{ xAxis: data.dates[startIndex] }, { xAxis: data.dates[endIndex] }]],
       });
 
       // 标注最大回撤点
@@ -185,7 +184,7 @@ export default function DrawdownChart({
         formatter: function (params: any) {
           const date = params[0].axisValue;
           const drawdown = params[0].value;
-          
+
           return `
             <div style="margin-bottom: 4px;">${date}</div>
             <div style="color: #ef4444;">
@@ -308,9 +307,15 @@ export default function DrawdownChart({
   // 获取回撤评级
   const getDrawdownRating = (maxDrawdown: number) => {
     const absDrawdown = Math.abs(maxDrawdown);
-    if (absDrawdown <= 5) return { text: '优秀', color: 'success' as const };
-    if (absDrawdown <= 10) return { text: '良好', color: 'primary' as const };
-    if (absDrawdown <= 20) return { text: '一般', color: 'warning' as const };
+    if (absDrawdown <= 5) {
+      return { text: '优秀', color: 'success' as const };
+    }
+    if (absDrawdown <= 10) {
+      return { text: '良好', color: 'primary' as const };
+    }
+    if (absDrawdown <= 20) {
+      return { text: '一般', color: 'warning' as const };
+    }
     return { text: '较差', color: 'error' as const };
   };
 
@@ -333,7 +338,14 @@ export default function DrawdownChart({
       <CardHeader
         title={
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingDown size={20} color="#d32f2f" />
                 <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
@@ -348,30 +360,36 @@ export default function DrawdownChart({
 
               {/* 图表控制按钮 */}
               <ButtonGroup size="small" variant="outlined">
-                <Button
-                  onClick={handleZoomIn}
-                  startIcon={<ZoomIn size={16} />}
-                >
+                <Button onClick={handleZoomIn} startIcon={<ZoomIn size={16} />}>
                   放大
                 </Button>
-                <Button
-                  onClick={handleZoomOut}
-                  startIcon={<ZoomOut size={16} />}
-                >
+                <Button onClick={handleZoomOut} startIcon={<ZoomOut size={16} />}>
                   缩小
                 </Button>
-                <Button
-                  onClick={handleReset}
-                  startIcon={<RotateCcw size={16} />}
-                >
+                <Button onClick={handleReset} startIcon={<RotateCcw size={16} />}>
                   重置
                 </Button>
               </ButtonGroup>
             </Box>
 
             {/* 回撤统计信息 */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'error.light', borderRadius: 1 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+                gap: 2,
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  p: 1.5,
+                  bgcolor: 'error.light',
+                  borderRadius: 1,
+                }}
+              >
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     最大回撤
@@ -386,22 +404,39 @@ export default function DrawdownChart({
                 <AlertTriangle size={24} color="#d32f2f" />
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  p: 1.5,
+                  bgcolor: 'warning.light',
+                  borderRadius: 1,
+                }}
+              >
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     最大回撤日期
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.main' }}>
-                    {data.maxDrawdownDate ? 
-                      new Date(data.maxDrawdownDate).toLocaleDateString('zh-CN') : 
-                      '未知'
-                    }
+                    {data.maxDrawdownDate
+                      ? new Date(data.maxDrawdownDate).toLocaleDateString('zh-CN')
+                      : '未知'}
                   </Typography>
                 </Box>
                 <Calendar size={24} color="#ed6c02" />
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'secondary.light', borderRadius: 1 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  p: 1.5,
+                  bgcolor: 'secondary.light',
+                  borderRadius: 1,
+                }}
+              >
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     回撤持续天数
@@ -420,7 +455,7 @@ export default function DrawdownChart({
                 control={
                   <Checkbox
                     checked={showMaxDrawdownPeriod}
-                    onChange={(e) => setShowMaxDrawdownPeriod(e.target.checked)}
+                    onChange={e => setShowMaxDrawdownPeriod(e.target.checked)}
                     size="small"
                   />
                 }
@@ -432,10 +467,7 @@ export default function DrawdownChart({
       />
 
       <CardContent>
-        <Box
-          ref={chartRef}
-          sx={{ height, width: '100%', minHeight: 400 }}
-        />
+        <Box ref={chartRef} sx={{ height, width: '100%', minHeight: 400 }} />
       </CardContent>
     </Card>
   );

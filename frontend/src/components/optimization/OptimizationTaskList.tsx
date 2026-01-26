@@ -33,7 +33,7 @@ export default function OptimizationTaskList({
   onTaskSelect,
   onRefresh,
 }: OptimizationTaskListProps) {
-  const getStatusColor = (status: string): "success" | "primary" | "error" | "default" => {
+  const getStatusColor = (status: string): 'success' | 'primary' | 'error' | 'default' => {
     switch (status) {
       case 'completed':
         return 'success';
@@ -99,7 +99,7 @@ export default function OptimizationTaskList({
               </TableRow>
             </TableHead>
             <TableBody>
-              {tasks.map((task) => (
+              {tasks.map(task => (
                 <TableRow key={task.task_id} hover>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -140,7 +140,9 @@ export default function OptimizationTaskList({
                   <TableCell>
                     {task.best_score !== undefined && task.best_score !== null ? (
                       <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                        {typeof task.best_score === 'number' ? task.best_score.toFixed(4) : String(task.best_score)}
+                        {typeof task.best_score === 'number'
+                          ? task.best_score.toFixed(4)
+                          : String(task.best_score)}
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
@@ -150,17 +152,12 @@ export default function OptimizationTaskList({
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">
-                      {task.created_at
-                        ? new Date(task.created_at).toLocaleString('zh-CN')
-                        : '-'}
+                      {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
                     </Typography>
                   </TableCell>
                   <TableCell>
                     <Tooltip title="查看详情">
-                      <IconButton
-                        size="small"
-                        onClick={() => onTaskSelect(task.task_id)}
-                      >
+                      <IconButton size="small" onClick={() => onTaskSelect(task.task_id)}>
                         <Eye size={16} />
                       </IconButton>
                     </Tooltip>

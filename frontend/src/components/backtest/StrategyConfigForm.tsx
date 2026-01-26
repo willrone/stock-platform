@@ -1,6 +1,6 @@
 /**
  * 策略配置表单组件
- * 
+ *
  * 根据策略的参数定义动态渲染表单字段
  */
 
@@ -70,11 +70,11 @@ export function StrategyConfigForm({
   // 初始化默认值（只在策略变化或首次挂载时）
   useEffect(() => {
     const strategyChanged = prevStrategyRef.current !== strategyName;
-    
+
     if (strategyChanged || !isMountedRef.current) {
       prevStrategyRef.current = strategyName;
       isMountedRef.current = true;
-      
+
       // 策略变化或首次挂载时，使用externalValues（如果提供）或默认值
       let initialValues: Record<string, any> = {};
       if (externalValues && Object.keys(externalValues).length > 0) {
@@ -87,7 +87,7 @@ export function StrategyConfigForm({
         });
         setValues(initialValues);
       }
-      
+
       // 通知父组件初始值（使用微任务避免在渲染期间调用）
       if (onChangeRef.current && Object.keys(initialValues).length > 0) {
         Promise.resolve().then(() => {
@@ -100,67 +100,73 @@ export function StrategyConfigForm({
   }, [strategyName]);
 
   // 处理参数值变化
-  const handleValueChange = React.useCallback((key: string, value: any) => {
-    const param = parameters[key];
-    if (!param) return;
-
-    // 验证值
-    let validatedValue = value;
-    if (param.type === 'int') {
-      validatedValue = typeof value === 'number' ? Math.round(value) : parseInt(String(value), 10);
-      if (isNaN(validatedValue)) {
-        setErrors(prev => ({ ...prev, [key]: '请输入有效的整数' }));
+  const handleValueChange = React.useCallback(
+    (key: string, value: any) => {
+      const param = parameters[key];
+      if (!param) {
         return;
       }
-      if (param.min !== undefined && validatedValue < param.min) {
-        validatedValue = param.min;
-      }
-      if (param.max !== undefined && validatedValue > param.max) {
-        validatedValue = param.max;
-      }
-    } else if (param.type === 'float') {
-      validatedValue = typeof value === 'number' ? value : parseFloat(String(value));
-      if (isNaN(validatedValue)) {
-        setErrors(prev => ({ ...prev, [key]: '请输入有效的数字' }));
-        return;
-      }
-      if (param.min !== undefined && validatedValue < param.min) {
-        validatedValue = param.min;
-      }
-      if (param.max !== undefined && validatedValue > param.max) {
-        validatedValue = param.max;
-      }
-    } else if (param.type === 'json') {
-      try {
-        validatedValue = typeof value === 'string' ? JSON.parse(value) : value;
-      } catch (e) {
-        setErrors(prev => ({ ...prev, [key]: '请输入有效的JSON格式' }));
-        return;
-      }
-    }
 
-    setErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[key];
-      return newErrors;
-    });
+      // 验证值
+      let validatedValue = value;
+      if (param.type === 'int') {
+        validatedValue =
+          typeof value === 'number' ? Math.round(value) : parseInt(String(value), 10);
+        if (isNaN(validatedValue)) {
+          setErrors(prev => ({ ...prev, [key]: '请输入有效的整数' }));
+          return;
+        }
+        if (param.min !== undefined && validatedValue < param.min) {
+          validatedValue = param.min;
+        }
+        if (param.max !== undefined && validatedValue > param.max) {
+          validatedValue = param.max;
+        }
+      } else if (param.type === 'float') {
+        validatedValue = typeof value === 'number' ? value : parseFloat(String(value));
+        if (isNaN(validatedValue)) {
+          setErrors(prev => ({ ...prev, [key]: '请输入有效的数字' }));
+          return;
+        }
+        if (param.min !== undefined && validatedValue < param.min) {
+          validatedValue = param.min;
+        }
+        if (param.max !== undefined && validatedValue > param.max) {
+          validatedValue = param.max;
+        }
+      } else if (param.type === 'json') {
+        try {
+          validatedValue = typeof value === 'string' ? JSON.parse(value) : value;
+        } catch (e) {
+          setErrors(prev => ({ ...prev, [key]: '请输入有效的JSON格式' }));
+          return;
+        }
+      }
 
-    setValues(prev => {
-      // 避免不必要的更新
-      if (prev[key] === validatedValue) {
-        return prev;
-      }
-      const newValues = { ...prev, [key]: validatedValue };
-      // 调用onChange，使用ref避免闭包问题
-      if (onChangeRef.current) {
-        // 使用微任务，确保在状态更新后调用
-        Promise.resolve().then(() => {
-          onChangeRef.current?.(newValues);
-        });
-      }
-      return newValues;
-    });
-  }, [parameters]);
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[key];
+        return newErrors;
+      });
+
+      setValues(prev => {
+        // 避免不必要的更新
+        if (prev[key] === validatedValue) {
+          return prev;
+        }
+        const newValues = { ...prev, [key]: validatedValue };
+        // 调用onChange，使用ref避免闭包问题
+        if (onChangeRef.current) {
+          // 使用微任务，确保在状态更新后调用
+          Promise.resolve().then(() => {
+            onChangeRef.current?.(newValues);
+          });
+        }
+        return newValues;
+      });
+    },
+    [parameters]
+  );
 
   // 重置为默认值
   const handleReset = () => {
@@ -186,24 +192,32 @@ export function StrategyConfigForm({
     switch (param.type) {
       case 'int':
       case 'float':
-        const numValue = typeof value === 'number' ? value : (param.type === 'int' ? parseInt(String(value || param.default), 10) : parseFloat(String(value || param.default)));
+        const numValue =
+          typeof value === 'number'
+            ? value
+            : param.type === 'int'
+              ? parseInt(String(value || param.default), 10)
+              : parseFloat(String(value || param.default));
         const safeValue = isNaN(numValue) ? param.default : numValue;
-        
+
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <TextField
                 type="number"
                 value={safeValue?.toString() || ''}
-                onChange={(e) => {
-                  const numVal = param.type === 'int' ? parseInt(e.target.value, 10) : parseFloat(e.target.value);
+                onChange={e => {
+                  const numVal =
+                    param.type === 'int'
+                      ? parseInt(e.target.value, 10)
+                      : parseFloat(e.target.value);
                   if (!isNaN(numVal)) {
                     handleValueChange(key, numVal);
                   }
                 }}
                 error={!!error}
                 helperText={error}
-                inputProps={{ 
+                inputProps={{
                   step: param.type === 'float' ? 0.001 : 1,
                   min: param.min,
                   max: param.max,
@@ -219,7 +233,9 @@ export function StrategyConfigForm({
                       if (!isNaN(numVal)) {
                         const finalValue = param.type === 'int' ? Math.round(numVal) : numVal;
                         setValues(prev => {
-                          if (prev[key] === finalValue) return prev;
+                          if (prev[key] === finalValue) {
+                            return prev;
+                          }
                           const newValues = { ...prev, [key]: finalValue };
                           if (onChangeRef.current) {
                             Promise.resolve().then(() => {
@@ -252,12 +268,7 @@ export function StrategyConfigForm({
         );
 
       case 'boolean':
-        return (
-          <Switch
-            checked={value}
-            onChange={(e) => handleValueChange(key, e.target.checked)}
-          />
-        );
+        return <Switch checked={value} onChange={e => handleValueChange(key, e.target.checked)} />;
 
       case 'string':
         if (param.options && param.options.length > 0) {
@@ -267,7 +278,7 @@ export function StrategyConfigForm({
               <Select
                 value={value || ''}
                 label={key}
-                onChange={(e) => handleValueChange(key, e.target.value)}
+                onChange={e => handleValueChange(key, e.target.value)}
               >
                 {param.options.map(option => (
                   <MenuItem key={option} value={option}>
@@ -282,7 +293,7 @@ export function StrategyConfigForm({
         return (
           <TextField
             value={value?.toString() || ''}
-            onChange={(e) => handleValueChange(key, e.target.value)}
+            onChange={e => handleValueChange(key, e.target.value)}
             error={!!error}
             helperText={error}
             fullWidth
@@ -296,7 +307,7 @@ export function StrategyConfigForm({
               multiline
               rows={3}
               value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-              onChange={(e) => handleValueChange(key, e.target.value)}
+              onChange={e => handleValueChange(key, e.target.value)}
               error={!!error}
               helperText={error || '请输入有效的JSON格式'}
               placeholder='例如: [1, 2, 3] 或 {"key": "value"}'
@@ -339,7 +350,9 @@ export function StrategyConfigForm({
       <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {/* 加载已保存配置 */}
         {onLoadConfig && (
-          <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+          <Box
+            sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, border: 1, borderColor: 'divider' }}
+          >
             <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
               加载已保存配置
             </Typography>
@@ -353,7 +366,7 @@ export function StrategyConfigForm({
                 <Select
                   value=""
                   label="选择已保存的配置"
-                  onChange={(e) => {
+                  onChange={e => {
                     const configId = e.target.value;
                     if (configId && onLoadConfig) {
                       onLoadConfig(configId);

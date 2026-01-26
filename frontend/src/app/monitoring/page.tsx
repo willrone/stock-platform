@@ -1,6 +1,6 @@
 /**
  * 系统监控页面
- * 
+ *
  * 提供全面的系统监控功能，包括：
  * - 系统健康状态
  * - 性能指标监控
@@ -16,11 +16,9 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Button,
   Tabs,
   Tab,
   Chip,
-  LinearProgress,
   Table,
   TableHead,
   TableBody,
@@ -34,14 +32,7 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material';
-import {
-  Activity,
-  AlertTriangle,
-  Shield,
-  RefreshCw,
-  Database,
-  Server,
-} from 'lucide-react';
+import { Activity, AlertTriangle, Shield, RefreshCw, Database, Server } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { SystemHealthCard } from '../../components/monitoring/SystemHealthCard';
@@ -92,7 +83,7 @@ export default function MonitoringPage() {
         DataService.getAnomalies(),
         DataService.getDataQuality(),
       ]);
-      
+
       setErrorStats(errorsData);
       setAnomalies(anomaliesData);
       setDataQuality(qualityData);
@@ -105,13 +96,13 @@ export default function MonitoringPage() {
 
   useEffect(() => {
     loadMonitoringData();
-    
+
     // 每分钟自动刷新
     const interval = setInterval(loadMonitoringData, 60000);
     return () => clearInterval(interval);
   }, [timeRange]);
 
-  const getSeverityColor = (severity: string): "error" | "warning" | "primary" | "default" => {
+  const getSeverityColor = (severity: string): 'error' | 'warning' | 'primary' | 'default' => {
     switch (severity) {
       case 'high':
         return 'error';
@@ -128,7 +119,7 @@ export default function MonitoringPage() {
     const now = new Date();
     const date = new Date(dateString);
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
+
     if (diffInMinutes < 60) {
       return `${diffInMinutes}分钟前`;
     } else if (diffInMinutes < 1440) {
@@ -145,7 +136,15 @@ export default function MonitoringPage() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
             系统监控
@@ -157,21 +156,14 @@ export default function MonitoringPage() {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>时间范围</InputLabel>
-            <Select
-              value={timeRange}
-              label="时间范围"
-              onChange={(e) => setTimeRange(e.target.value)}
-            >
+            <Select value={timeRange} label="时间范围" onChange={e => setTimeRange(e.target.value)}>
               <MenuItem value="1">1小时</MenuItem>
               <MenuItem value="6">6小时</MenuItem>
               <MenuItem value="24">24小时</MenuItem>
               <MenuItem value="168">7天</MenuItem>
             </Select>
           </FormControl>
-          <IconButton
-            onClick={loadMonitoringData}
-            disabled={loading}
-          >
+          <IconButton onClick={loadMonitoringData} disabled={loading}>
             <RefreshCw size={16} />
           </IconButton>
         </Box>
@@ -184,12 +176,7 @@ export default function MonitoringPage() {
         variant="scrollable"
         scrollButtons="auto"
       >
-        <Tab
-          value="overview"
-          icon={<Activity size={16} />}
-          iconPosition="start"
-          label="系统概览"
-        />
+        <Tab value="overview" icon={<Activity size={16} />} iconPosition="start" label="系统概览" />
         <Tab
           value="errors"
           icon={<AlertTriangle size={16} />}
@@ -216,25 +203,32 @@ export default function MonitoringPage() {
             </Box>
           }
         />
-        <Tab
-          value="quality"
-          icon={<Database size={16} />}
-          iconPosition="start"
-          label="数据质量"
-        />
+        <Tab value="quality" icon={<Database size={16} />} iconPosition="start" label="数据质量" />
       </Tabs>
 
       <Box sx={{ mt: 2 }}>
         {selectedTab === 'overview' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* 健康状态和性能指标 */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: 'repeat(2, 1fr)' }, gap: 3 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', xl: 'repeat(2, 1fr)' },
+                gap: 3,
+              }}
+            >
               <SystemHealthCard />
               <PerformanceMetricsCard />
             </Box>
 
             {/* 关键指标概览 */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+                gap: 2,
+              }}
+            >
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
@@ -309,7 +303,13 @@ export default function MonitoringPage() {
         {selectedTab === 'errors' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* 错误统计概览 */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+                gap: 2,
+              }}
+            >
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: 2 }}>
                   <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
@@ -390,7 +390,11 @@ export default function MonitoringPage() {
                               </Box>
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                              >
                                 {error.sample_message}
                               </Typography>
                             </TableCell>
@@ -408,7 +412,13 @@ export default function MonitoringPage() {
         {selectedTab === 'anomalies' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* 异常统计 */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+                gap: 2,
+              }}
+            >
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: 2 }}>
                   <Typography variant="h4" sx={{ fontWeight: 600 }}>
@@ -497,8 +507,13 @@ export default function MonitoringPage() {
                             </TableCell>
                             <TableCell>
                               <Chip
-                                label={anomaly.severity === 'high' ? '高危' :
-                                       anomaly.severity === 'medium' ? '中危' : '低危'}
+                                label={
+                                  anomaly.severity === 'high'
+                                    ? '高危'
+                                    : anomaly.severity === 'medium'
+                                      ? '中危'
+                                      : '低危'
+                                }
                                 color={getSeverityColor(anomaly.severity)}
                                 size="small"
                               />
@@ -519,7 +534,11 @@ export default function MonitoringPage() {
                               </Box>
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ maxWidth: 300 }}
+                              >
                                 {anomaly.description}
                               </Typography>
                             </TableCell>

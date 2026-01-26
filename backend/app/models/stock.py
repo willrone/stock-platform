@@ -5,17 +5,14 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StockData(BaseModel):
     """股票基础数据"""
-    model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
-    )
-    
+
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+
     stock_code: str = Field(..., description="股票代码")
     date: datetime = Field(..., description="日期")
     open: float = Field(..., description="开盘价")
@@ -28,12 +25,9 @@ class StockData(BaseModel):
 
 class TechnicalIndicator(BaseModel):
     """技术指标数据"""
-    model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
-    )
-    
+
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+
     stock_code: str = Field(..., description="股票代码")
     date: datetime = Field(..., description="日期")
     indicator_name: str = Field(..., description="指标名称")
@@ -43,6 +37,7 @@ class TechnicalIndicator(BaseModel):
 
 class DataServiceStatus(BaseModel):
     """数据服务状态"""
+
     service_url: str = Field(..., description="服务URL")
     is_available: bool = Field(..., description="是否可用")
     last_check: datetime = Field(..., description="最后检查时间")
@@ -52,6 +47,7 @@ class DataServiceStatus(BaseModel):
 
 class DataSyncRequest(BaseModel):
     """数据同步请求"""
+
     stock_codes: list[str] = Field(..., description="股票代码列表")
     start_date: Optional[datetime] = Field(None, description="开始日期")
     end_date: Optional[datetime] = Field(None, description="结束日期")
@@ -63,6 +59,7 @@ class DataSyncRequest(BaseModel):
 
 class DataSyncResponse(BaseModel):
     """数据同步响应"""
+
     success: bool = Field(..., description="是否成功")
     synced_stocks: list[str] = Field(default_factory=list, description="已同步的股票")
     failed_stocks: list[str] = Field(default_factory=list, description="同步失败的股票")

@@ -1,6 +1,6 @@
 /**
  * 用户工作流程测试组件
- * 
+ *
  * 提供完整的用户工作流程测试界面，包括：
  * - 测试执行控制
  * - 实时测试进度显示
@@ -16,7 +16,6 @@ import {
   CardContent,
   CardHeader,
   Button,
-  LinearProgress,
   Chip,
   Divider,
   Accordion,
@@ -49,9 +48,7 @@ interface WorkflowTestProps {
   onTestComplete?: (result: TestSuiteResult) => void;
 }
 
-export const WorkflowTest: React.FC<WorkflowTestProps> = ({
-  onTestComplete,
-}) => {
+export const WorkflowTest: React.FC<WorkflowTestProps> = ({ onTestComplete }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [currentTest, setCurrentTest] = useState<string>('');
   const [progress, setProgress] = useState(0);
@@ -79,11 +76,11 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
 
       // 运行测试并更新进度
       const testResult = await integrationTestManager.runAllTests();
-      
+
       setResult(testResult);
       setProgress(100);
       setCurrentTest('测试完成');
-      
+
       if (onTestComplete) {
         onTestComplete(testResult);
       }
@@ -97,7 +94,9 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
 
   // 下载测试报告
   const downloadReport = useCallback(() => {
-    if (!result) return;
+    if (!result) {
+      return;
+    }
 
     const report = generateTestReport(result);
     const blob = new Blob([report], { type: 'text/markdown' });
@@ -121,13 +120,15 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
   };
 
   // 获取测试状态颜色
-  const getStatusColor = (success: boolean): "success" | "error" => {
+  const getStatusColor = (success: boolean): 'success' | 'error' => {
     return success ? 'success' : 'error';
   };
 
   // 格式化持续时间
   const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1000) {
+      return `${ms}ms`;
+    }
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
@@ -182,9 +183,13 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
                     {progress}%
                   </Typography>
                 </Box>
-                <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
+                <LinearProgress
+                  variant="determinate"
+                  value={progress}
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
               </Box>
-              
+
               {currentTest && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CircularProgress size={16} />
@@ -210,7 +215,13 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
             }
           />
           <CardContent>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+                gap: 2,
+              }}
+            >
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" sx={{ fontWeight: 600 }}>
                   {result.totalTests}
@@ -275,7 +286,15 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
               {result.results.map((testResult, index) => (
                 <Accordion key={index}>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 2 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        pr: 2,
+                      }}
+                    >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {getStatusIcon(testResult.success)}
                         <Typography variant="body2">{testResult.name}</Typography>
@@ -301,9 +320,7 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
                             测试消息
                           </Typography>
                         </Box>
-                        <Typography variant="body2">
-                          {testResult.message}
-                        </Typography>
+                        <Typography variant="body2">{testResult.message}</Typography>
                       </Box>
 
                       {testResult.details && (
@@ -363,25 +380,25 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({
 // 获取修复建议
 function getFixSuggestions(testName: string): string[] {
   const suggestions: Record<string, string[]> = {
-    'API连接测试': [
+    API连接测试: [
       '检查后端服务是否正常运行',
       '确认API_URL环境变量配置正确',
       '检查网络连接和防火墙设置',
       '验证CORS配置是否正确',
     ],
-    'WebSocket连接测试': [
+    WebSocket连接测试: [
       '检查WebSocket服务是否启用',
       '确认WS_URL环境变量配置正确',
       '检查浏览器WebSocket支持',
       '验证代理服务器WebSocket配置',
     ],
-    '任务创建流程测试': [
+    任务创建流程测试: [
       '检查任务管理服务是否正常',
       '验证数据库连接状态',
       '确认模型服务可用性',
       '检查任务创建权限',
     ],
-    '数据获取流程测试': [
+    数据获取流程测试: [
       '检查数据服务连接状态',
       '验证远端数据服务可用性',
       '确认Parquet文件访问权限',
@@ -389,10 +406,12 @@ function getFixSuggestions(testName: string): string[] {
     ],
   };
 
-  return suggestions[testName] || [
-    '检查相关服务状态',
-    '查看详细错误日志',
-    '验证配置参数',
-    '联系技术支持',
-  ];
+  return (
+    suggestions[testName] || [
+      '检查相关服务状态',
+      '查看详细错误日志',
+      '验证配置参数',
+      '联系技术支持',
+    ]
+  );
 }

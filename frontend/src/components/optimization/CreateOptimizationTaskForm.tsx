@@ -23,7 +23,11 @@ import {
   FormHelperText,
 } from '@mui/material';
 import { Save, Loader2 } from 'lucide-react';
-import { OptimizationService, CreateOptimizationTaskRequest, ParamSpaceConfig } from '../../services/optimizationService';
+import {
+  OptimizationService,
+  CreateOptimizationTaskRequest,
+  ParamSpaceConfig,
+} from '../../services/optimizationService';
 import { StockSelector } from '../tasks/StockSelector';
 import { apiRequest } from '../../services/api';
 
@@ -38,7 +42,9 @@ interface Strategy {
   parameters?: Record<string, any>;
 }
 
-export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOptimizationTaskFormProps) {
+export default function CreateOptimizationTaskForm({
+  onTaskCreated,
+}: CreateOptimizationTaskFormProps) {
   const [loading, setLoading] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
@@ -110,7 +116,11 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
               default: param.default,
               enabled: true,
             };
-          } else if (param.type === 'categorical' && param.options && Array.isArray(param.options)) {
+          } else if (
+            param.type === 'categorical' &&
+            param.options &&
+            Array.isArray(param.options)
+          ) {
             // 处理分类参数
             defaultSpace[key] = {
               type: 'categorical',
@@ -133,7 +143,13 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
   }, [formData.strategy_name, strategies]);
 
   const handleSubmit = async () => {
-    if (!formData.task_name || !formData.strategy_name || selectedStocks.length === 0 || !formData.start_date || !formData.end_date) {
+    if (
+      !formData.task_name ||
+      !formData.strategy_name ||
+      selectedStocks.length === 0 ||
+      !formData.start_date ||
+      !formData.end_date
+    ) {
       alert('请填写所有必填字段');
       return;
     }
@@ -142,13 +158,9 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
     try {
       // 转换日期格式：从 YYYY-MM-DD 转换为 ISO 格式（带时区）
       // 注意：Date 构造函数会将本地时间转换为 UTC，需要手动处理
-      const startDate = formData.start_date 
-        ? `${formData.start_date}T00:00:00` 
-        : '';
-      const endDate = formData.end_date 
-        ? `${formData.end_date}T23:59:59` 
-        : '';
-      
+      const startDate = formData.start_date ? `${formData.start_date}T00:00:00` : '';
+      const endDate = formData.end_date ? `${formData.end_date}T23:59:59` : '';
+
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
         strategy_name: formData.strategy_name,
@@ -165,12 +177,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
         optimization_method: formData.optimization_method,
         timeout: formData.timeout,
       };
-      
+
       console.log('创建优化任务请求:', request);
 
       await OptimizationService.createTask(request);
       onTaskCreated();
-      
+
       // 重置表单
       setFormData({
         task_name: '',
@@ -221,7 +233,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             label="任务名称"
             placeholder="输入任务名称"
             value={formData.task_name}
-            onChange={(e) => setFormData(prev => ({ ...prev, task_name: e.target.value }))}
+            onChange={e => setFormData(prev => ({ ...prev, task_name: e.target.value }))}
             required
             fullWidth
           />
@@ -231,35 +243,36 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             <Select
               value={formData.strategy_name}
               label="选择策略"
-              onChange={(e) => setFormData(prev => ({ ...prev, strategy_name: e.target.value }))}
+              onChange={e => setFormData(prev => ({ ...prev, strategy_name: e.target.value }))}
             >
-              {strategies.map((strategy) => (
+              {strategies.map(strategy => (
                 <MenuItem key={strategy.key} value={strategy.key}>
                   {strategy.name || strategy.key}
                 </MenuItem>
               ))}
             </Select>
-            {strategies.length === 0 && (
-              <FormHelperText>正在加载策略列表...</FormHelperText>
-            )}
+            {strategies.length === 0 && <FormHelperText>正在加载策略列表...</FormHelperText>}
           </FormControl>
 
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
               选择股票
             </Typography>
-            <StockSelector
-              value={selectedStocks}
-              onChange={setSelectedStocks}
-            />
+            <StockSelector value={selectedStocks} onChange={setSelectedStocks} />
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+            }}
+          >
             <TextField
               type="date"
               label="开始日期"
               value={formData.start_date}
-              onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+              onChange={e => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
               required
               fullWidth
               InputLabelProps={{ shrink: true }}
@@ -268,7 +281,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
               type="date"
               label="结束日期"
               value={formData.end_date}
-              onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+              onChange={e => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
               required
               fullWidth
               InputLabelProps={{ shrink: true }}
@@ -278,8 +291,8 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
       </Card>
 
       <Card>
-        <CardHeader 
-          title="参数空间配置" 
+        <CardHeader
+          title="参数空间配置"
           subheader="配置需要优化的策略参数范围。只有数值型参数（整数、浮点数）和分类参数可以进行优化。"
         />
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -302,10 +315,23 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
               const strategy = strategies.find(s => s.key === formData.strategy_name);
               const paramInfo = strategy?.parameters?.[paramName];
               const paramDescription = paramInfo?.description || '';
-              
+
               return (
-                <Box key={paramName} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box
+                  key={paramName}
+                  sx={{
+                    p: 2,
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                  }}
+                >
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         {paramName}
@@ -316,9 +342,9 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                         </Typography>
                       )}
                       {config.default !== undefined && (
-                        <Chip 
-                          label={`默认值: ${config.default}`} 
-                          size="small" 
+                        <Chip
+                          label={`默认值: ${config.default}`}
+                          size="small"
                           sx={{ mt: 0.5, mr: 1 }}
                         />
                       )}
@@ -327,7 +353,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                       <Typography variant="body2">启用优化</Typography>
                       <Switch
                         checked={config.enabled}
-                        onChange={(e) => updateParamSpace(paramName, 'enabled', e.target.checked)}
+                        onChange={e => updateParamSpace(paramName, 'enabled', e.target.checked)}
                       />
                     </Box>
                   </Box>
@@ -340,7 +366,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                             multiple
                             value={config.choices || []}
                             label="可选值"
-                            renderValue={(selected) => (
+                            renderValue={selected => (
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                 {selected.map((value: any) => (
                                   <Chip key={value} label={value} size="small" />
@@ -355,17 +381,23 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                               </MenuItem>
                             ))}
                           </Select>
-                          <FormHelperText>
-                            分类参数：将从以上值中选择
-                          </FormHelperText>
+                          <FormHelperText>分类参数：将从以上值中选择</FormHelperText>
                         </FormControl>
                       ) : (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                        <Box
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                            gap: 2,
+                          }}
+                        >
                           <TextField
                             type="number"
                             label="最小值"
                             value={config.low?.toString() || ''}
-                            onChange={(e) => updateParamSpace(paramName, 'low', parseFloat(e.target.value))}
+                            onChange={e =>
+                              updateParamSpace(paramName, 'low', parseFloat(e.target.value))
+                            }
                             fullWidth
                             helperText={config.type === 'int' ? '整数' : '浮点数'}
                           />
@@ -373,7 +405,9 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                             type="number"
                             label="最大值"
                             value={config.high?.toString() || ''}
-                            onChange={(e) => updateParamSpace(paramName, 'high', parseFloat(e.target.value))}
+                            onChange={e =>
+                              updateParamSpace(paramName, 'high', parseFloat(e.target.value))
+                            }
                             fullWidth
                             helperText={config.type === 'int' ? '整数' : '浮点数'}
                           />
@@ -405,7 +439,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                     : formData.objective_metric
               }
               label="目标指标"
-              onChange={(e) => {
+              onChange={e => {
                 const value = e.target.value;
                 setFormData(prev => ({
                   ...prev,
@@ -418,7 +452,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                       : value,
                 }));
               }}
-              renderValue={(selected) =>
+              renderValue={selected =>
                 isMultiObjectiveMethod && Array.isArray(selected) ? (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                     {selected.map((value: any) => (
@@ -426,7 +460,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                     ))}
                   </Box>
                 ) : (
-                  selected as any
+                  (selected as any)
                 )
               }
             >
@@ -449,7 +483,7 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             <Select
               value={formData.direction}
               label="优化方向"
-              onChange={(e) => {
+              onChange={e => {
                 const selected = e.target.value as 'maximize' | 'minimize';
                 setFormData(prev => ({ ...prev, direction: selected }));
               }}
@@ -468,7 +502,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="夏普比率权重"
                 value={objectiveWeights.sharpe_ratio?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, sharpe_ratio: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    sharpe_ratio: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -476,7 +515,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="总收益率权重"
                 value={objectiveWeights.total_return?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, total_return: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    total_return: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -484,7 +528,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="胜率权重"
                 value={objectiveWeights.win_rate?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, win_rate: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    win_rate: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -492,7 +541,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="盈亏比权重 (Profit Factor)"
                 value={objectiveWeights.profit_factor?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, profit_factor: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    profit_factor: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -500,7 +554,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="信息比率权重 (IC_IR)"
                 value={objectiveWeights.information_ratio?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, information_ratio: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    information_ratio: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -508,7 +567,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="最大回撤权重"
                 value={objectiveWeights.max_drawdown?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, max_drawdown: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    max_drawdown: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -516,7 +580,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
                 type="number"
                 label="交易成本权重 (Cost Ratio)"
                 value={objectiveWeights.cost_ratio?.toString() ?? '0'}
-                onChange={(e) => setObjectiveWeights(prev => ({ ...prev, cost_ratio: parseFloat(e.target.value) || 0 }))}
+                onChange={e =>
+                  setObjectiveWeights(prev => ({
+                    ...prev,
+                    cost_ratio: parseFloat(e.target.value) || 0,
+                  }))
+                }
                 inputProps={{ min: 0, max: 1, step: 0.1 }}
                 fullWidth
               />
@@ -532,7 +601,9 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             type="number"
             label="试验次数"
             value={formData.n_trials.toString()}
-            onChange={(e) => setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))}
+            onChange={e =>
+              setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))
+            }
             inputProps={{ min: 10, max: 200 }}
             fullWidth
           />
@@ -542,11 +613,10 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             <Select
               value={formData.optimization_method}
               label="优化方法"
-              onChange={(e) => {
+              onChange={e => {
                 const method = e.target.value as string;
                 setFormData(prev => {
-                  const nextIsMulti =
-                    method === 'nsga2' || method === 'motpe';
+                  const nextIsMulti = method === 'nsga2' || method === 'motpe';
                   let objective_metric = prev.objective_metric;
                   if (nextIsMulti && !Array.isArray(objective_metric)) {
                     objective_metric = [objective_metric];
@@ -572,10 +642,12 @@ export default function CreateOptimizationTaskForm({ onTaskCreated }: CreateOpti
             type="number"
             label="超时时间（秒，可选）"
             value={formData.timeout?.toString() || ''}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              timeout: e.target.value ? parseInt(e.target.value) : undefined 
-            }))}
+            onChange={e =>
+              setFormData(prev => ({
+                ...prev,
+                timeout: e.target.value ? parseInt(e.target.value) : undefined,
+              }))
+            }
             placeholder="不设置则无超时限制"
             fullWidth
           />

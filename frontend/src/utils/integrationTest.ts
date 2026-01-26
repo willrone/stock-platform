@@ -1,6 +1,6 @@
 /**
  * 集成测试工具
- * 
+ *
  * 提供前后端集成测试的工具函数，包括：
  * - API连接测试
  * - WebSocket连接测试
@@ -11,7 +11,7 @@
 import { apiRequest, healthCheck } from '../services/api';
 import { wsService } from '../services/websocket';
 import { TaskService } from '../services/taskService';
-import { INTEGRATION_CONFIG } from '../config/integration';
+// import { INTEGRATION_CONFIG } from '../config/integration'; // 暂时未使用
 
 // 测试结果接口
 export interface TestResult {
@@ -42,16 +42,13 @@ export class IntegrationTestManager {
   /**
    * 运行单个测试
    */
-  private async runTest(
-    name: string,
-    testFn: () => Promise<any>
-  ): Promise<TestResult> {
+  private async runTest(name: string, testFn: () => Promise<any>): Promise<TestResult> {
     const startTime = Date.now();
-    
+
     try {
       const result = await testFn();
       const duration = Date.now() - startTime;
-      
+
       return {
         name,
         success: true,
@@ -61,7 +58,7 @@ export class IntegrationTestManager {
       };
     } catch (error) {
       const duration = Date.now() - startTime;
-      
+
       return {
         name,
         success: false,
@@ -92,13 +89,13 @@ export class IntegrationTestManager {
     return this.runTest('API基础功能测试', async () => {
       // 测试获取系统状态
       const systemStatus = await apiRequest.get('/system/status');
-      
+
       // 测试获取模型列表
       const models = await apiRequest.get('/models');
-      
+
       // 测试获取数据服务状态
       const dataStatus = await apiRequest.get('/data/status');
-      
+
       return {
         systemStatus,
         models: models.models?.length || 0,
@@ -190,7 +187,7 @@ export class IntegrationTestManager {
 
       // 获取任务详情
       const taskDetail = await TaskService.getTaskDetail(task.task_id);
-      
+
       return {
         taskId: task.task_id,
         taskName: taskDetail.task_name,
@@ -258,8 +255,8 @@ export class IntegrationTestManager {
 
       // 测试网络错误（使用无效URL）
       try {
-        const originalBaseURL = INTEGRATION_CONFIG.API.BASE_URL;
         // 这里我们不能直接修改配置，所以跳过这个测试
+        // const _originalBaseURL = INTEGRATION_CONFIG.API.BASE_URL;
         results.networkError = true;
       } catch (error) {
         results.networkError = true;
@@ -284,7 +281,7 @@ export class IntegrationTestManager {
       workflow.steps.push('获取模型列表成功');
 
       // 步骤2: 获取数据状态
-      const dataStatus = await apiRequest.get('/data/status');
+      await apiRequest.get('/data/status');
       workflow.steps.push('获取数据状态成功');
 
       // 步骤3: 创建预测任务
@@ -306,11 +303,11 @@ export class IntegrationTestManager {
       }
 
       // 步骤5: 获取任务列表
-      const taskList = await TaskService.getTasks();
+      await TaskService.getTasks();
       workflow.steps.push('获取任务列表成功');
 
       // 步骤6: 获取任务详情
-      const taskDetail = await TaskService.getTaskDetail(task.task_id);
+      await TaskService.getTaskDetail(task.task_id);
       workflow.steps.push('获取任务详情成功');
 
       return workflow;
@@ -341,7 +338,7 @@ export class IntegrationTestManager {
     for (const test of tests) {
       const result = await test();
       results.push(result);
-      
+
       console.log(
         `${result.success ? '✅' : '❌'} ${result.name}: ${result.message} (${result.duration}ms)`
       );
@@ -361,7 +358,7 @@ export class IntegrationTestManager {
       results,
     };
 
-    console.log(`\n集成测试完成:`);
+    console.log('\n集成测试完成:');
     console.log(`总测试数: ${suiteResult.totalTests}`);
     console.log(`通过: ${suiteResult.passedTests}`);
     console.log(`失败: ${suiteResult.failedTests}`);
@@ -395,11 +392,11 @@ export class IntegrationTestManager {
       report.push(`- **状态**: ${result.success ? '✅ 通过' : '❌ 失败'}`);
       report.push(`- **消息**: ${result.message}`);
       report.push(`- **耗时**: ${result.duration}ms`);
-      
+
       if (result.details) {
         report.push(`- **详情**: \`${JSON.stringify(result.details, null, 2)}\``);
       }
-      
+
       report.push('');
     });
 
@@ -412,5 +409,5 @@ export const integrationTestManager = new IntegrationTestManager();
 
 // 便捷函数
 export const runIntegrationTests = () => integrationTestManager.runAllTests();
-export const generateTestReport = (result: TestSuiteResult) => 
+export const generateTestReport = (result: TestSuiteResult) =>
   integrationTestManager.generateReport(result);

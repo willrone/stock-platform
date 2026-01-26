@@ -1,6 +1,6 @@
 /**
  * 仪表板页面
- * 
+ *
  * 显示系统概览信息，包括：
  * - 任务统计
  * - 系统状态
@@ -15,13 +15,12 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardActions,
   Button,
-  LinearProgress,
   Chip,
   Avatar,
   Box,
   Typography,
+  LinearProgress,
 } from '@mui/material';
 import {
   Bot,
@@ -37,17 +36,12 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTaskStore } from '../../stores/useTaskStore';
-import { useDataStore } from '../../stores/useDataStore';
-import { useAppStore } from '../../stores/useAppStore';
-import { TaskService } from '../../services/taskService';
-import { DataService } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { tasks } = useTaskStore();
-  const { systemStatus } = useDataStore();
-  
+
   const [loading, setLoading] = useState(true);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
   const [systemStats, setSystemStats] = useState({
@@ -64,11 +58,11 @@ export default function DashboardPage() {
     const loadDashboardData = async () => {
       try {
         setLoading(true);
-        
+
         // 加载最近任务
         const tasksResult = await TaskService.getTasks(undefined, 5, 0);
         setRecentTasks(tasksResult.tasks);
-        
+
         // 计算统计数据
         const stats = {
           totalTasks: tasks.length,
@@ -79,7 +73,6 @@ export default function DashboardPage() {
           systemHealth: 'good' as const,
         };
         setSystemStats(stats);
-        
       } catch (error) {
         console.error('加载仪表板数据失败:', error);
       } finally {
@@ -91,32 +84,44 @@ export default function DashboardPage() {
   }, [tasks]);
 
   // 获取任务状态颜色
-  const getTaskStatusColor = (status: string): "primary" | "success" | "error" | "default" => {
+  const getTaskStatusColor = (status: string): 'primary' | 'success' | 'error' | 'default' => {
     switch (status) {
-      case 'running': return 'primary';
-      case 'completed': return 'success';
-      case 'failed': return 'error';
-      default: return 'default';
+      case 'running':
+        return 'primary';
+      case 'completed':
+        return 'success';
+      case 'failed':
+        return 'error';
+      default:
+        return 'default';
     }
   };
 
   // 获取任务状态文本
   const getTaskStatusText = (status: string) => {
     switch (status) {
-      case 'running': return '运行中';
-      case 'completed': return '已完成';
-      case 'failed': return '失败';
-      default: return '已创建';
+      case 'running':
+        return '运行中';
+      case 'completed':
+        return '已完成';
+      case 'failed':
+        return '失败';
+      default:
+        return '已创建';
     }
   };
 
   // 获取任务状态图标
   const getTaskStatusIcon = (status: string) => {
     switch (status) {
-      case 'running': return <Clock size={16} />;
-      case 'completed': return <CheckCircle size={16} />;
-      case 'failed': return <AlertTriangle size={16} />;
-      default: return <Bot size={16} />;
+      case 'running':
+        return <Clock size={16} />;
+      case 'completed':
+        return <CheckCircle size={16} />;
+      case 'failed':
+        return <AlertTriangle size={16} />;
+      default:
+        return <Bot size={16} />;
     }
   };
 
@@ -137,11 +142,25 @@ export default function DashboardPage() {
       </Box>
 
       {/* 统计卡片 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 2,
+        }}
+      >
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'primary.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  bgcolor: 'primary.light',
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 <Bot size={24} color="white" />
               </Box>
               <Box>
@@ -159,7 +178,15 @@ export default function DashboardPage() {
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'success.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  bgcolor: 'success.light',
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 <CheckCircle size={24} color="white" />
               </Box>
               <Box>
@@ -177,7 +204,15 @@ export default function DashboardPage() {
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'warning.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  bgcolor: 'warning.light',
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 <Clock size={24} color="white" />
               </Box>
               <Box>
@@ -195,7 +230,15 @@ export default function DashboardPage() {
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'error.light', borderRadius: 1, display: 'flex', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  bgcolor: 'error.light',
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 <AlertTriangle size={24} color="white" />
               </Box>
               <Box>
@@ -211,7 +254,9 @@ export default function DashboardPage() {
         </Card>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mt: 3 }}>
+      <Box
+        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mt: 3 }}
+      >
         {/* 最近任务 */}
         <Box>
           <Card>
@@ -241,7 +286,7 @@ export default function DashboardPage() {
                 </Box>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {recentTasks.map((task) => (
+                  {recentTasks.map(task => (
                     <Box
                       key={task.task_id}
                       sx={{
@@ -297,32 +342,45 @@ export default function DashboardPage() {
             <Card>
               <CardHeader title="系统状态" />
               <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Wifi size={16} color="#2e7d32" />
                     <Typography variant="body2">API服务</Typography>
                   </Box>
                   <Chip label="正常" color="success" size="small" />
                 </Box>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Database size={16} color="#2e7d32" />
                     <Typography variant="body2">数据服务</Typography>
                   </Box>
                   <Chip label="正常" color="success" size="small" />
                 </Box>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Activity size={16} color="#ed6c02" />
                     <Typography variant="body2">模型服务</Typography>
                   </Box>
                   <Chip label="负载高" color="warning" size="small" />
                 </Box>
-                
+
                 <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 1,
+                    }}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       系统负载
                     </Typography>
@@ -348,7 +406,7 @@ export default function DashboardPage() {
                 >
                   创建预测任务
                 </Button>
-                
+
                 <Button
                   variant="outlined"
                   startIcon={<Eye size={16} />}
@@ -357,7 +415,7 @@ export default function DashboardPage() {
                 >
                   查看所有任务
                 </Button>
-                
+
                 <Button
                   variant="outlined"
                   startIcon={<Database size={16} />}
@@ -366,7 +424,7 @@ export default function DashboardPage() {
                 >
                   数据管理
                 </Button>
-                
+
                 <Button
                   variant="outlined"
                   startIcon={<TrendingUp size={16} />}

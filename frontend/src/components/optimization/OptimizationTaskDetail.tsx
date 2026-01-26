@@ -26,7 +26,11 @@ import {
   Paper,
 } from '@mui/material';
 import { ArrowLeft, RefreshCw, Save } from 'lucide-react';
-import { OptimizationService, OptimizationStatus, OptimizationResult } from '../../services/optimizationService';
+import {
+  OptimizationService,
+  OptimizationStatus,
+  OptimizationResult,
+} from '../../services/optimizationService';
 import { StrategyConfigService } from '../../services/strategyConfigService';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import OptimizationStatusMonitor from './OptimizationStatusMonitor';
@@ -38,10 +42,7 @@ interface OptimizationTaskDetailProps {
   onBack: () => void;
 }
 
-export default function OptimizationTaskDetail({
-  taskId,
-  onBack,
-}: OptimizationTaskDetailProps) {
+export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationTaskDetailProps) {
   const [loading, setLoading] = useState(true);
   const [task, setTask] = useState<any>(null);
   const [status, setStatus] = useState<OptimizationStatus | null>(null);
@@ -58,7 +59,10 @@ export default function OptimizationTaskDetail({
       setTask(taskData);
       if (taskData.result) {
         console.log('[OptimizationTaskDetail] task result:', taskData.result);
-        console.log('[OptimizationTaskDetail] optimization_history:', taskData.result.optimization_history);
+        console.log(
+          '[OptimizationTaskDetail] optimization_history:',
+          taskData.result.optimization_history
+        );
         console.log('[OptimizationTaskDetail] param_importance:', taskData.result.param_importance);
         setResult(taskData.result);
       } else {
@@ -127,7 +131,9 @@ export default function OptimizationTaskDetail({
   if (!task) {
     return (
       <Box sx={{ textAlign: 'center', py: 4 }}>
-        <Typography variant="body2" color="text.secondary">任务不存在</Typography>
+        <Typography variant="body2" color="text.secondary">
+          任务不存在
+        </Typography>
         <Button onClick={onBack} variant="outlined" sx={{ mt: 2 }}>
           返回列表
         </Button>
@@ -139,11 +145,7 @@ export default function OptimizationTaskDetail({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Button
-            variant="outlined"
-            onClick={onBack}
-            sx={{ minWidth: 40, px: 1 }}
-          >
+          <Button variant="outlined" onClick={onBack} sx={{ minWidth: 40, px: 1 }}>
             <ArrowLeft size={20} />
           </Button>
           <Box>
@@ -151,7 +153,8 @@ export default function OptimizationTaskDetail({
               {task.task_name}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              策略: {task.strategy_name} | 创建时间: {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
+              策略: {task.strategy_name} | 创建时间:{' '}
+              {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
             </Typography>
           </Box>
         </Box>
@@ -168,7 +171,11 @@ export default function OptimizationTaskDetail({
       </Box>
 
       <Box>
-        <Tabs value={selectedTab} onChange={(e, newValue) => setSelectedTab(newValue)} aria-label="任务详情标签页">
+        <Tabs
+          value={selectedTab}
+          onChange={(e, newValue) => setSelectedTab(newValue)}
+          aria-label="任务详情标签页"
+        >
           <Tab label="运行状态" value="status" />
           <Tab label="优化结果" value="results" disabled={task.status !== 'completed'} />
         </Tabs>
@@ -177,12 +184,7 @@ export default function OptimizationTaskDetail({
           {selectedTab === 'status' && (
             <Card>
               <CardContent>
-                {status && (
-                  <OptimizationStatusMonitor
-                    status={status}
-                    task={task}
-                  />
-                )}
+                {status && <OptimizationStatusMonitor status={status} task={task} />}
               </CardContent>
             </Card>
           )}
@@ -192,14 +194,25 @@ export default function OptimizationTaskDetail({
               <CardContent>
                 {result ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+                        gap: 2,
+                      }}
+                    >
                       <Card>
                         <CardContent>
                           <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                            <Typography
+                              variant="h4"
+                              sx={{ fontWeight: 600, color: 'success.main' }}
+                            >
                               {result.best_score?.toFixed(4) || '-'}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">最佳得分</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              最佳得分
+                            </Typography>
                           </Box>
                         </CardContent>
                       </Card>
@@ -209,7 +222,9 @@ export default function OptimizationTaskDetail({
                             <Typography variant="h4" sx={{ fontWeight: 600 }}>
                               {result.completed_trials} / {result.n_trials}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">完成试验数</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              完成试验数
+                            </Typography>
                           </Box>
                         </CardContent>
                       </Card>
@@ -218,10 +233,14 @@ export default function OptimizationTaskDetail({
                           <Box sx={{ textAlign: 'center' }}>
                             <Typography variant="h4" sx={{ fontWeight: 600 }}>
                               {result.optimization_metadata?.duration_seconds
-                                ? `${Math.round(result.optimization_metadata.duration_seconds / 60)} 分钟`
+                                ? `${Math.round(
+                                    result.optimization_metadata.duration_seconds / 60
+                                  )} 分钟`
                                 : '-'}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">优化耗时</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              优化耗时
+                            </Typography>
                           </Box>
                         </CardContent>
                       </Card>
@@ -231,7 +250,14 @@ export default function OptimizationTaskDetail({
                       <Card>
                         <CardHeader
                           title={
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                width: '100%',
+                              }}
+                            >
                               <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
                                 最佳参数
                               </Typography>
@@ -247,11 +273,24 @@ export default function OptimizationTaskDetail({
                           }
                         />
                         <CardContent>
-                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                          <Box
+                            sx={{
+                              display: 'grid',
+                              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                              gap: 2,
+                            }}
+                          >
                             {Object.entries(result.best_params).map(([key, value]) => (
-                              <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="text.secondary">{key}:</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>{String(value)}</Typography>
+                              <Box
+                                key={key}
+                                sx={{ display: 'flex', justifyContent: 'space-between' }}
+                              >
+                                <Typography variant="body2" color="text.secondary">
+                                  {key}:
+                                </Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {String(value)}
+                                </Typography>
                               </Box>
                             ))}
                           </Box>
@@ -288,4 +327,3 @@ export default function OptimizationTaskDetail({
     </Box>
   );
 }
-

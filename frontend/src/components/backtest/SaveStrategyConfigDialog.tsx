@@ -106,7 +106,7 @@ export function SaveStrategyConfigDialog({
             label="配置名称"
             placeholder="请输入配置名称"
             value={configName}
-            onChange={(e) => setConfigName(e.target.value)}
+            onChange={e => setConfigName(e.target.value)}
             required
             error={!!error && !configName.trim()}
             helperText={error && !configName.trim() ? error : undefined}
@@ -117,7 +117,7 @@ export function SaveStrategyConfigDialog({
             label="配置描述"
             placeholder="请输入配置描述（可选）"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={e => setDescription(e.target.value)}
             multiline
             rows={2}
             fullWidth
@@ -143,9 +143,7 @@ export function SaveStrategyConfigDialog({
             </Box>
           </Box>
 
-          {error && (
-            <Alert severity="error">{error}</Alert>
-          )}
+          {error && <Alert severity="error">{error}</Alert>}
         </Box>
       </DialogContent>
       <DialogActions>

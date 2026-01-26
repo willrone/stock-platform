@@ -1,6 +1,6 @@
 /**
  * 应用主布局组件
- * 
+ *
  * 提供应用的整体布局结构，包括：
  * - 顶部导航栏
  * - 侧边菜单
@@ -116,7 +116,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAppStore();
-  
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
@@ -181,7 +181,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {/* 顶部导航栏 */}
-      <AppBar position="sticky" sx={{ bgcolor: 'background.paper', color: 'text.primary', boxShadow: 1 }}>
+      <AppBar
+        position="sticky"
+        sx={{ bgcolor: 'background.paper', color: 'text.primary', boxShadow: 1 }}
+      >
         <Toolbar>
           {/* 移动端菜单按钮 */}
           <IconButton
@@ -193,25 +196,36 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           >
             <MenuIcon size={20} />
           </IconButton>
-          
+
           {/* Logo */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
             <BarChart3 size={24} color="#1976d2" />
-            <Typography variant="h6" component="div" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}
+            >
               股票预测平台
             </Typography>
           </Box>
 
           {/* 桌面端菜单 */}
-          <Box sx={{ flexGrow: 1, display: { xs: 'none', lg: 'flex' }, gap: 1, justifyContent: 'center' }}>
-            {menuItems.map((item) => {
+          <Box
+            sx={{
+              flexGrow: 1,
+              display: { xs: 'none', lg: 'flex' },
+              gap: 1,
+              justifyContent: 'center',
+            }}
+          >
+            {menuItems.map(item => {
               const Icon = item.icon;
               const isActive = pathname === item.key;
               return (
                 <Button
                   key={item.key}
-                  variant={isActive ? "contained" : "text"}
-                  color={isActive ? "primary" : "inherit"}
+                  variant={isActive ? 'contained' : 'text'}
+                  color={isActive ? 'primary' : 'inherit'}
                   startIcon={<Icon size={16} />}
                   onClick={() => handleMenuClick(item.key)}
                   sx={{ fontWeight: 500 }}
@@ -228,7 +242,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <Chip
               icon={wsConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
               label={wsConnected ? '已连接' : '未连接'}
-              color={wsConnected ? "success" : "error"}
+              color={wsConnected ? 'success' : 'error'}
               size="small"
               sx={{ display: { xs: 'none', sm: 'flex' } }}
             />
@@ -241,10 +255,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             </IconButton>
 
             {/* 用户菜单 */}
-            <IconButton
-              onClick={(e) => setUserMenuAnchor(e.currentTarget)}
-              sx={{ p: 0 }}
-            >
+            <IconButton onClick={e => setUserMenuAnchor(e.currentTarget)} sx={{ p: 0 }}>
               <Avatar src={user?.avatar} sx={{ width: 32, height: 32 }}>
                 <User size={16} />
               </Avatar>
@@ -294,7 +305,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         sx={{ display: { lg: 'none' } }}
       >
         <Box sx={{ width: 256, p: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <BarChart3 size={24} color="#1976d2" />
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -305,9 +318,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <X size={20} />
             </IconButton>
           </Box>
-          
+
           <List>
-            {menuItems.map((item) => {
+            {menuItems.map(item => {
               const Icon = item.icon;
               const isActive = pathname === item.key;
               return (
@@ -339,7 +352,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       </Drawer>
 
       {/* 主内容区域 */}
-      <Box component="main" sx={{ flexGrow: 1, p: 3, maxWidth: '1400px', mx: 'auto', width: '100%' }}>
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, p: 3, maxWidth: '1400px', mx: 'auto', width: '100%' }}
+      >
         {children}
       </Box>
 

@@ -6,12 +6,20 @@
 
 # 从 models 导入数据模型
 from ..models import (
-    SignalType,
+    BacktestConfig,
     OrderType,
-    TradingSignal,
-    Trade,
     Position,
-    BacktestConfig
+    SignalType,
+    Trade,
+    TradingSignal,
+)
+from ..strategies.strategy_factory import StrategyFactory
+
+# 从策略模块导入（策略已移动到strategies目录）
+from ..strategies.technical.basic_strategies import (
+    MACDStrategy,
+    MovingAverageStrategy,
+    RSIStrategy,
 )
 
 # 从各个模块导入
@@ -19,22 +27,18 @@ from .base_strategy import BaseStrategy
 from .portfolio_manager import PortfolioManager
 from .strategy_portfolio import StrategyPortfolio
 
-# 从策略模块导入（策略已移动到strategies目录）
-from ..strategies.technical.basic_strategies import MovingAverageStrategy, RSIStrategy, MACDStrategy
-from ..strategies.strategy_factory import StrategyFactory
-
 __all__ = [
-    'SignalType',
-    'OrderType',
-    'TradingSignal',
-    'Trade',
-    'Position',
-    'BacktestConfig',
-    'BaseStrategy',
-    'MovingAverageStrategy',
-    'RSIStrategy',
-    'MACDStrategy',
-    'StrategyFactory',
-    'PortfolioManager',
-    'StrategyPortfolio'
+    "SignalType",
+    "OrderType",
+    "TradingSignal",
+    "Trade",
+    "Position",
+    "BacktestConfig",
+    "BaseStrategy",
+    "MovingAverageStrategy",
+    "RSIStrategy",
+    "MACDStrategy",
+    "StrategyFactory",
+    "PortfolioManager",
+    "StrategyPortfolio",
 ]

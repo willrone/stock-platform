@@ -1,6 +1,6 @@
 /**
  * 全局应用状态管理
- * 
+ *
  * 使用Zustand管理应用的全局状态，包括：
  * - 用户信息
  * - 系统配置
@@ -30,14 +30,14 @@ interface AppState {
   // 用户状态
   user: User | null;
   isAuthenticated: boolean;
-  
+
   // 系统配置
   config: SystemConfig;
-  
+
   // 全局状态
   loading: boolean;
   error: string | null;
-  
+
   // Actions
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
@@ -60,7 +60,9 @@ export const useAppStore = create<AppState>()(
             return process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
           }
           const envUrl = process.env.NEXT_PUBLIC_WS_URL;
-          if (envUrl) return envUrl;
+          if (envUrl) {
+            return envUrl;
+          }
           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const hostname = window.location.hostname;
           const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
@@ -73,18 +75,28 @@ export const useAppStore = create<AppState>()(
       error: null,
 
       // Actions
-      setUser: (user) => set((state) => ({
-        user,
-        isAuthenticated: !!user,
-      }), false, 'setUser'),
+      setUser: user =>
+        set(
+          state => ({
+            user,
+            isAuthenticated: !!user,
+          }),
+          false,
+          'setUser'
+        ),
 
-      setLoading: (loading) => set({ loading }, false, 'setLoading'),
+      setLoading: loading => set({ loading }, false, 'setLoading'),
 
-      setError: (error) => set({ error }, false, 'setError'),
+      setError: error => set({ error }, false, 'setError'),
 
-      updateConfig: (newConfig) => set((state) => ({
-        config: { ...state.config, ...newConfig }
-      }), false, 'updateConfig'),
+      updateConfig: newConfig =>
+        set(
+          state => ({
+            config: { ...state.config, ...newConfig },
+          }),
+          false,
+          'updateConfig'
+        ),
 
       clearError: () => set({ error: null }, false, 'clearError'),
     }),

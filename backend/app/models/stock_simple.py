@@ -4,12 +4,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 @dataclass
 class StockData:
     """股票基础数据"""
+
     stock_code: str
     date: datetime
     open: float
@@ -18,24 +19,25 @@ class StockData:
     close: float
     volume: int
     adj_close: Optional[float] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
-            'stock_code': self.stock_code,
-            'date': self.date.isoformat(),
-            'open': self.open,
-            'high': self.high,
-            'low': self.low,
-            'close': self.close,
-            'volume': self.volume,
-            'adj_close': self.adj_close
+            "stock_code": self.stock_code,
+            "date": self.date.isoformat(),
+            "open": self.open,
+            "high": self.high,
+            "low": self.low,
+            "close": self.close,
+            "volume": self.volume,
+            "adj_close": self.adj_close,
         }
 
 
 @dataclass
 class DataServiceStatus:
     """数据服务状态"""
+
     service_url: str
     is_available: bool
     last_check: datetime
@@ -46,6 +48,7 @@ class DataServiceStatus:
 @dataclass
 class DataSyncRequest:
     """数据同步请求"""
+
     stock_codes: list[str]
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -55,6 +58,7 @@ class DataSyncRequest:
 @dataclass
 class DataSyncResponse:
     """数据同步响应"""
+
     success: bool
     synced_stocks: list[str]
     failed_stocks: list[str]

@@ -1,0 +1,24 @@
+[bandit]
+# 排除的目录和文件
+exclude_dirs = .git,.venv,venv,env,__pycache__,*.egg-info,build,dist,.mypy_cache,.pytest_cache,migrations
+
+# 跳过测试文件
+skips = B101,B601
+
+# 安全级别（low, medium, high）
+level = 1
+
+# 置信度级别（low, medium, high）
+confidence = 1
+
+# 输出格式（json, txt, csv, custom）
+format = json
+
+# 输出文件
+output_file = bandit-report.json
+
+# 聚合输出
+aggregate = True
+
+# 显示跳过的测试
+show_skipped = True

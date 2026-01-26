@@ -1,6 +1,6 @@
 /**
  * 任务管理服务
- * 
+ *
  * 处理与任务相关的API调用，包括：
  * - 任务创建
  * - 任务查询
@@ -84,7 +84,7 @@ export class TaskService {
     if (status) {
       params.status = status;
     }
-    
+
     return apiRequest.get<TaskListResponse>('/tasks', params);
   }
 
@@ -125,19 +125,21 @@ export class TaskService {
   static async getTaskResults(taskId: string): Promise<PredictionResult[]> {
     const task = await this.getTaskDetail(taskId);
     // 转换数据格式以匹配PredictionResult接口
-    return task.results?.predictions?.map(pred => ({
-      stock_code: pred.stock_code,
-      predicted_direction: pred.predicted_direction,
-      predicted_return: pred.predicted_return || 0,
-      confidence_score: pred.confidence_score,
-      confidence_interval: pred.confidence_interval || { lower: 0, upper: 0 },
+    return (
+      task.results?.predictions?.map(pred => ({
+        stock_code: pred.stock_code,
+        predicted_direction: pred.predicted_direction,
+        predicted_return: pred.predicted_return || 0,
+        confidence_score: pred.confidence_score,
+        confidence_interval: pred.confidence_interval || { lower: 0, upper: 0 },
         risk_assessment: {
           value_at_risk: pred.risk_assessment?.value_at_risk || 0,
           volatility: pred.risk_assessment?.volatility || 0,
           max_drawdown: (pred.risk_assessment as any)?.max_drawdown || 0,
           sharpe_ratio: (pred.risk_assessment as any)?.sharpe_ratio || 0,
         },
-    })) || [];
+      })) || []
+    );
   }
 
   /**
@@ -165,12 +167,9 @@ export class TaskService {
     taskId: string,
     format: 'csv' | 'excel' | 'json' = 'csv'
   ): Promise<Blob> {
-    const response = await apiRequest.get(
-      `/tasks/${taskId}/export`,
-      { format },
-    );
-    return new Blob([response], { 
-      type: format === 'json' ? 'application/json' : 'text/csv' 
+    const response = await apiRequest.get(`/tasks/${taskId}/export`, { format });
+    return new Blob([response], {
+      type: format === 'json' ? 'application/json' : 'text/csv',
     });
   }
 

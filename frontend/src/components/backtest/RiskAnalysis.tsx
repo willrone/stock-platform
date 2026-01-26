@@ -26,16 +26,16 @@ import {
   InputLabel,
 } from '@mui/material';
 import * as echarts from 'echarts';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  BarChart3, 
-  PieChart as PieChartIcon, 
-  AlertTriangle, 
+import {
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
+  PieChart as PieChartIcon,
+  AlertTriangle,
   Target,
   Calculator,
   Activity,
-  Info
+  Info,
 } from 'lucide-react';
 
 interface RiskMetrics {
@@ -97,21 +97,21 @@ interface RiskAnalysisProps {
   rollingMetrics: RollingMetrics;
 }
 
-export function RiskAnalysis({ 
-  taskId, 
-  riskMetrics, 
-  returnDistribution, 
-  rollingMetrics 
+export function RiskAnalysis({
+  taskId,
+  riskMetrics,
+  returnDistribution,
+  rollingMetrics,
 }: RiskAnalysisProps) {
   const [selectedMetric, setSelectedMetric] = useState<keyof RollingMetrics>('rolling_sharpe');
   const [selectedDistribution, setSelectedDistribution] = useState<'daily' | 'monthly'>('daily');
-  const [selectedRiskLevel, setSelectedRiskLevel] = useState<'95' | '99'>('95');
-  
+  const [, setSelectedRiskLevel] = useState<'95' | '99'>('95');
+
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const onDetailOpen = () => setIsDetailOpen(true);
   const onDetailClose = () => setIsDetailOpen(false);
   const [selectedRiskMetric, setSelectedRiskMetric] = useState<string | null>(null);
-  
+
   // 图表引用
   const distributionChartRef = useRef<HTMLDivElement>(null);
   const rollingChartRef = useRef<HTMLDivElement>(null);
@@ -119,70 +119,120 @@ export function RiskAnalysis({
   const rollingChartInstance = useRef<echarts.ECharts | null>(null);
 
   // 风险指标分类
-  const riskCategories = useMemo(() => ({
-    performance: {
-      title: '绩效指标',
-      icon: TrendingUp,
-      color: 'text-blue-500',
-      metrics: [
-        { key: 'sharpe_ratio', name: '夏普比率', description: '风险调整后收益指标', format: 'ratio' },
-        { key: 'sortino_ratio', name: '索提诺比率', description: '下行风险调整收益', format: 'ratio' },
-        { key: 'calmar_ratio', name: '卡玛比率', description: '年化收益/最大回撤', format: 'ratio' },
-        { key: 'information_ratio', name: '信息比率', description: '超额收益/跟踪误差', format: 'ratio' },
-      ]
-    },
-    risk: {
-      title: '风险指标',
-      icon: AlertTriangle,
-      color: 'text-red-500',
-      metrics: [
-        { key: 'max_drawdown', name: '最大回撤', description: '历史最大亏损幅度', format: 'percent' },
-        { key: 'avg_drawdown', name: '平均回撤', description: '平均回撤幅度', format: 'percent' },
-        { key: 'volatility_annual', name: '年化波动率', description: '收益率标准差', format: 'percent' },
-        { key: 'var_95', name: 'VaR(95%)', description: '95%置信度风险价值', format: 'percent' },
-      ]
-    },
-    market: {
-      title: '市场相关性',
-      icon: Target,
-      color: 'text-purple-500',
-      metrics: [
-        { key: 'beta', name: 'Beta系数', description: '相对市场的敏感度', format: 'ratio' },
-        { key: 'alpha', name: 'Alpha系数', description: '超额收益能力', format: 'percent' },
-        { key: 'tracking_error', name: '跟踪误差', description: '相对基准的波动', format: 'percent' },
-        { key: 'upside_capture', name: '上涨捕获率', description: '牛市中的表现', format: 'percent' },
-      ]
-    }
-  }), []);
+  const riskCategories = useMemo(
+    () => ({
+      performance: {
+        title: '绩效指标',
+        icon: TrendingUp,
+        color: 'text-blue-500',
+        metrics: [
+          {
+            key: 'sharpe_ratio',
+            name: '夏普比率',
+            description: '风险调整后收益指标',
+            format: 'ratio',
+          },
+          {
+            key: 'sortino_ratio',
+            name: '索提诺比率',
+            description: '下行风险调整收益',
+            format: 'ratio',
+          },
+          {
+            key: 'calmar_ratio',
+            name: '卡玛比率',
+            description: '年化收益/最大回撤',
+            format: 'ratio',
+          },
+          {
+            key: 'information_ratio',
+            name: '信息比率',
+            description: '超额收益/跟踪误差',
+            format: 'ratio',
+          },
+        ],
+      },
+      risk: {
+        title: '风险指标',
+        icon: AlertTriangle,
+        color: 'text-red-500',
+        metrics: [
+          {
+            key: 'max_drawdown',
+            name: '最大回撤',
+            description: '历史最大亏损幅度',
+            format: 'percent',
+          },
+          { key: 'avg_drawdown', name: '平均回撤', description: '平均回撤幅度', format: 'percent' },
+          {
+            key: 'volatility_annual',
+            name: '年化波动率',
+            description: '收益率标准差',
+            format: 'percent',
+          },
+          { key: 'var_95', name: 'VaR(95%)', description: '95%置信度风险价值', format: 'percent' },
+        ],
+      },
+      market: {
+        title: '市场相关性',
+        icon: Target,
+        color: 'text-purple-500',
+        metrics: [
+          { key: 'beta', name: 'Beta系数', description: '相对市场的敏感度', format: 'ratio' },
+          { key: 'alpha', name: 'Alpha系数', description: '超额收益能力', format: 'percent' },
+          {
+            key: 'tracking_error',
+            name: '跟踪误差',
+            description: '相对基准的波动',
+            format: 'percent',
+          },
+          {
+            key: 'upside_capture',
+            name: '上涨捕获率',
+            description: '牛市中的表现',
+            format: 'percent',
+          },
+        ],
+      },
+    }),
+    []
+  );
 
   // 收益分布数据
   const distributionData = useMemo(() => {
-    if (!returnDistribution) return { returns: [], bins: [], frequencies: [] };
-    
-    const returns = selectedDistribution === 'daily' 
-      ? returnDistribution.daily_returns 
-      : returnDistribution.monthly_returns;
-    
+    if (!returnDistribution) {
+      return { returns: [], bins: [], frequencies: [] };
+    }
+
+    const returns =
+      selectedDistribution === 'daily'
+        ? returnDistribution.daily_returns
+        : returnDistribution.monthly_returns;
+
     return {
       returns,
       bins: returnDistribution.return_bins,
-      frequencies: returnDistribution.return_frequencies
+      frequencies: returnDistribution.return_frequencies,
     };
   }, [returnDistribution, selectedDistribution]);
 
   // 滚动指标数据
   const rollingData = useMemo(() => {
-    if (!rollingMetrics) return { dates: [], values: [] };
-    
+    if (!rollingMetrics) {
+      return { dates: [], values: [] };
+    }
+
     return {
       dates: rollingMetrics.dates,
-      values: rollingMetrics[selectedMetric] || []
+      values: rollingMetrics[selectedMetric] || [],
     };
   }, [rollingMetrics, selectedMetric]);
 
   // 初始化收益分布图表
   useEffect(() => {
-    if (!distributionChartRef.current || !distributionData.bins.length) return;
+    if (!distributionChartRef.current || !distributionData.bins.length) {
+      return;
+    }
 
     if (distributionChartInstance.current) {
       distributionChartInstance.current.dispose();
@@ -244,7 +294,10 @@ export function RiskAnalysis({
             data: [
               {
                 name: '均值',
-                xAxis: distributionData.returns.reduce((a, b) => a + b, 0) / distributionData.returns.length * 100,
+                xAxis:
+                  (distributionData.returns.reduce((a, b) => a + b, 0) /
+                    distributionData.returns.length) *
+                  100,
                 lineStyle: {
                   color: '#ef4444',
                   type: 'dashed',
@@ -276,7 +329,9 @@ export function RiskAnalysis({
 
   // 初始化滚动指标图表
   useEffect(() => {
-    if (!rollingChartRef.current || !rollingData.dates.length) return;
+    if (!rollingChartRef.current || !rollingData.dates.length) {
+      return;
+    }
 
     if (rollingChartInstance.current) {
       rollingChartInstance.current.dispose();
@@ -313,7 +368,7 @@ export function RiskAnalysis({
         formatter: function (params: any) {
           const param = params[0];
           const value = param.value;
-          
+
           if (selectedMetric === 'rolling_volatility' || selectedMetric === 'rolling_drawdown') {
             return `${param.axisValue}<br/>${getMetricName()}: ${(value * 100).toFixed(2)}%`;
           }
@@ -397,23 +452,41 @@ export function RiskAnalysis({
     // 根据不同指标判断风险等级
     switch (key) {
       case 'sharpe_ratio':
-        if (value > 1.5) return { level: 'excellent', color: 'success' };
-        if (value > 1.0) return { level: 'good', color: 'primary' };
-        if (value > 0.5) return { level: 'fair', color: 'warning' };
+        if (value > 1.5) {
+          return { level: 'excellent', color: 'success' };
+        }
+        if (value > 1.0) {
+          return { level: 'good', color: 'primary' };
+        }
+        if (value > 0.5) {
+          return { level: 'fair', color: 'warning' };
+        }
         return { level: 'poor', color: 'danger' };
-      
+
       case 'max_drawdown':
-        if (Math.abs(value) < 0.05) return { level: 'excellent', color: 'success' };
-        if (Math.abs(value) < 0.10) return { level: 'good', color: 'primary' };
-        if (Math.abs(value) < 0.20) return { level: 'fair', color: 'warning' };
+        if (Math.abs(value) < 0.05) {
+          return { level: 'excellent', color: 'success' };
+        }
+        if (Math.abs(value) < 0.1) {
+          return { level: 'good', color: 'primary' };
+        }
+        if (Math.abs(value) < 0.2) {
+          return { level: 'fair', color: 'warning' };
+        }
         return { level: 'poor', color: 'danger' };
-      
+
       case 'volatility_annual':
-        if (value < 0.10) return { level: 'excellent', color: 'success' };
-        if (value < 0.15) return { level: 'good', color: 'primary' };
-        if (value < 0.25) return { level: 'fair', color: 'warning' };
+        if (value < 0.1) {
+          return { level: 'excellent', color: 'success' };
+        }
+        if (value < 0.15) {
+          return { level: 'good', color: 'primary' };
+        }
+        if (value < 0.25) {
+          return { level: 'fair', color: 'warning' };
+        }
         return { level: 'poor', color: 'danger' };
-      
+
       default:
         return { level: 'neutral', color: 'default' };
     }
@@ -427,10 +500,14 @@ export function RiskAnalysis({
   if (!riskMetrics || !returnDistribution || !rollingMetrics) {
     return (
       <Card>
-        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}>
+        <CardContent
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 256 }}
+        >
           <Box sx={{ textAlign: 'center' }}>
             <Calculator size={48} color="#999" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="body2" color="text.secondary">暂无风险分析数据</Typography>
+            <Typography variant="body2" color="text.secondary">
+              暂无风险分析数据
+            </Typography>
           </Box>
         </CardContent>
       </Card>
@@ -443,7 +520,7 @@ export function RiskAnalysis({
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {Object.entries(riskCategories).map(([categoryKey, category]) => {
           const IconComponent = category.icon;
-          
+
           return (
             <Card key={categoryKey}>
               <CardHeader
@@ -457,28 +534,45 @@ export function RiskAnalysis({
                 }
               />
               <CardContent>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
-                  {category.metrics.map((metric) => {
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                    gap: 2,
+                  }}
+                >
+                  {category.metrics.map(metric => {
                     const value = riskMetrics[metric.key as keyof RiskMetrics];
                     const riskLevel = getRiskLevel(metric.key, value);
-                    
+
                     return (
                       <Box
                         key={metric.key}
-                        sx={{ 
-                          p: 2, 
-                          border: 1, 
-                          borderColor: 'divider', 
-                          borderRadius: 1, 
+                        sx={{
+                          p: 2,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
                           cursor: 'pointer',
                           '&:hover': { bgcolor: 'grey.50' },
-                          transition: 'background-color 0.2s'
+                          transition: 'background-color 0.2s',
                         }}
-                        onClick={() => handleRiskMetricClick(metric.key, metric.name, metric.description)}
+                        onClick={() =>
+                          handleRiskMetricClick(metric.key, metric.name, metric.description)
+                        }
                       >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            mb: 1,
+                          }}
+                        >
                           <Box>
-                            <Typography variant="caption" color="text.secondary">{metric.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {metric.name}
+                            </Typography>
                             <Typography variant="h5" sx={{ fontWeight: 600 }}>
                               {formatValue(value, metric.format)}
                             </Typography>
@@ -490,7 +584,16 @@ export function RiskAnalysis({
                           />
                         </Box>
                         <Tooltip title={metric.description}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              display: 'block',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
                             {metric.description}
                           </Typography>
                         </Tooltip>
@@ -510,44 +613,86 @@ export function RiskAnalysis({
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <AlertTriangle size={20} color="#ed6c02" />
-              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, color: 'warning.main' }}>
+              <Typography
+                variant="h6"
+                component="h3"
+                sx={{ fontWeight: 600, color: 'warning.main' }}
+              >
                 风险价值 (VaR) 分析
               </Typography>
             </Box>
           }
         />
         <CardContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 3,
+            }}
+          >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>风险价值 (VaR)</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                风险价值 (VaR)
+              </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">95% 置信度</Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    95% 置信度
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}
+                  >
                     {formatValue(riskMetrics.var_95, 'percent')}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">99% 置信度</Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    99% 置信度
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}
+                  >
                     {formatValue(riskMetrics.var_99, 'percent')}
                   </Typography>
                 </Box>
               </Box>
             </Box>
-            
+
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>条件风险价值 (CVaR)</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                条件风险价值 (CVaR)
+              </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">95% 置信度</Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    95% 置信度
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}
+                  >
                     {formatValue(riskMetrics.cvar_95, 'percent')}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="caption" color="text.secondary">99% 置信度</Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    99% 置信度
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main' }}
+                  >
                     {formatValue(riskMetrics.cvar_99, 'percent')}
                   </Typography>
                 </Box>
@@ -561,7 +706,14 @@ export function RiskAnalysis({
       <Card>
         <CardHeader
           title={
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <BarChart3 size={20} />
                 <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
@@ -573,7 +725,7 @@ export function RiskAnalysis({
                 <Select
                   value={selectedDistribution}
                   label="分布类型"
-                  onChange={(e) => setSelectedDistribution(e.target.value as 'daily' | 'monthly')}
+                  onChange={e => setSelectedDistribution(e.target.value as 'daily' | 'monthly')}
                 >
                   <MenuItem value="daily">日收益</MenuItem>
                   <MenuItem value="monthly">月收益</MenuItem>
@@ -588,7 +740,7 @@ export function RiskAnalysis({
             <Box>
               <Box ref={distributionChartRef} sx={{ height: 300, width: '100%' }} />
             </Box>
-            
+
             {/* 统计信息 */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box>
@@ -597,20 +749,24 @@ export function RiskAnalysis({
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">偏度</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      偏度
+                    </Typography>
                     <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                       {returnDistribution.skewness.toFixed(3)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">峰度</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      峰度
+                    </Typography>
                     <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                       {returnDistribution.kurtosis.toFixed(3)}
                     </Typography>
                   </Box>
                 </Box>
               </Box>
-              
+
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                   分位数
@@ -618,34 +774,53 @@ export function RiskAnalysis({
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {[5, 25, 50, 75, 95].map(percentile => (
                     <Box key={percentile} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">{percentile}%</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {percentile}%
+                      </Typography>
                       <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                        {formatValue(returnDistribution.percentiles[`p${percentile}` as keyof typeof returnDistribution.percentiles], 'percent')}
+                        {formatValue(
+                          returnDistribution.percentiles[
+                            `p${percentile}` as keyof typeof returnDistribution.percentiles
+                          ],
+                          'percent'
+                        )}
                       </Typography>
                     </Box>
                   ))}
                 </Box>
               </Box>
-              
+
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                   正态性检验
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">检验统计量</Typography>
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      检验统计量
+                    </Typography>
                     <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                       {returnDistribution.normality_test.statistic.toFixed(3)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">P值</Typography>
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      P值
+                    </Typography>
                     <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                       {returnDistribution.normality_test.p_value.toFixed(4)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">正态分布</Typography>
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      正态分布
+                    </Typography>
                     <Chip
                       label={returnDistribution.normality_test.is_normal ? '是' : '否'}
                       size="small"
@@ -663,7 +838,14 @@ export function RiskAnalysis({
       <Card>
         <CardHeader
           title={
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Activity size={20} />
                 <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
@@ -675,7 +857,7 @@ export function RiskAnalysis({
                 <Select
                   value={selectedMetric}
                   label="指标类型"
-                  onChange={(e) => setSelectedMetric(e.target.value as keyof RollingMetrics)}
+                  onChange={e => setSelectedMetric(e.target.value as keyof RollingMetrics)}
                 >
                   <MenuItem value="rolling_sharpe">滚动夏普比率</MenuItem>
                   <MenuItem value="rolling_volatility">滚动波动率</MenuItem>
@@ -703,7 +885,7 @@ export function RiskAnalysis({
           {selectedRiskMetric && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Typography variant="body2">{selectedRiskMetric}</Typography>
-              
+
               <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                   计算说明
@@ -713,14 +895,13 @@ export function RiskAnalysis({
                   请结合其他指标综合分析，避免单一指标判断。
                 </Typography>
               </Box>
-              
+
               <Box sx={{ bgcolor: 'primary.light', p: 2, borderRadius: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: 'primary.dark' }}>
                   使用建议
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'primary.dark' }}>
-                    建议将该指标与同类策略或基准进行对比，
-                    并考虑市场环境变化对指标的影响。
+                  建议将该指标与同类策略或基准进行对比， 并考虑市场环境变化对指标的影响。
                 </Typography>
               </Box>
             </Box>

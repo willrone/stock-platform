@@ -1,0 +1,86 @@
+name: 代码质量检查
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-quality:
+    name: 后端代码质量
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: 安装依赖
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install black isort flake8 mypy bandit safety
+    
+    - name: 代码格式化检查 (Black)
+      working-directory: ./backend
+      run: black --check app/
+    
+    - name: 导入排序检查 (isort)
+      working-directory: ./backend
+      run: isort --check-only app/
+    
+    - name: 代码风格检查 (Flake8)
+      working-directory: ./backend
+      run: flake8 app/
+    
+    - name: 类型检查 (mypy)
+      working-directory: ./backend
+      run: mypy app/ --ignore-missing-imports || true
+    
+    - name: 安全扫描 (Bandit)
+      working-directory: ./backend
+      run: bandit -r app/ -f json -o bandit-report.json || true
+    
+    - name: 依赖安全扫描 (Safety)
+      working-directory: ./backend
+      run: safety check --json || true
+
+  frontend-quality:
+    name: 前端代码质量
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: 安装依赖
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: ESLint检查
+      working-directory: ./frontend
+      run: npm run lint
+    
+    - name: Prettier格式化检查
+      working-directory: ./frontend
+      run: npm run format:check
+    
+    - name: TypeScript类型检查
+      working-directory: ./frontend
+      run: npm run type-check
+    
+    - name: 依赖安全扫描
+      working-directory: ./frontend
+      run: npm audit --audit-level=moderate || true

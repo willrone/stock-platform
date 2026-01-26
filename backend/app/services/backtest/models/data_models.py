@@ -5,8 +5,8 @@
 """
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 from .enums import SignalType
 
@@ -14,6 +14,7 @@ from .enums import SignalType
 @dataclass
 class TradingSignal:
     """交易信号"""
+
     timestamp: datetime
     stock_code: str
     signal_type: SignalType
@@ -26,6 +27,7 @@ class TradingSignal:
 @dataclass
 class Trade:
     """交易记录"""
+
     trade_id: str
     stock_code: str
     action: str  # BUY, SELL
@@ -41,6 +43,7 @@ class Trade:
 @dataclass
 class Position:
     """持仓信息"""
+
     stock_code: str
     quantity: int
     avg_cost: float
@@ -53,10 +56,11 @@ class Position:
 @dataclass
 class BacktestConfig:
     """回测配置"""
+
     initial_cash: float = 100000.0
     commission_rate: float = 0.001  # 手续费率
-    slippage_rate: float = 0.001   # 滑点率
+    slippage_rate: float = 0.001  # 滑点率
     max_position_size: float = 0.2  # 最大单股持仓比例
-    stop_loss_pct: float = 0.05    # 止损比例
+    stop_loss_pct: float = 0.05  # 止损比例
     take_profit_pct: float = 0.15  # 止盈比例
     rebalance_frequency: str = "daily"  # 调仓频率

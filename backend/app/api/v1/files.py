@@ -4,6 +4,7 @@
 
 import os
 import tempfile
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger
@@ -16,29 +17,27 @@ async def download_file(filename: str):
     """下载文件"""
     try:
         # 安全检查：只允许下载报告文件
-        if not filename.endswith(('.pdf', '.xlsx', '.csv')):
+        if not filename.endswith((".pdf", ".xlsx", ".csv")):
             raise HTTPException(status_code=400, detail="不支持的文件类型")
-        
+
         # 构建文件路径
         temp_dir = tempfile.gettempdir()
         reports_dir = os.path.join(temp_dir, "backtest_reports")
         file_path = os.path.join(reports_dir, filename)
-        
+
         # 检查文件是否存在
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="文件不存在")
-        
+
         # 检查文件是否在允许的目录内（安全检查）
         if not os.path.abspath(file_path).startswith(os.path.abspath(reports_dir)):
             raise HTTPException(status_code=403, detail="访问被拒绝")
-        
+
         # 返回文件
         return FileResponse(
-            path=file_path,
-            filename=filename,
-            media_type='application/octet-stream'
+            path=file_path, filename=filename, media_type="application/octet-stream"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

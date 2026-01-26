@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """应用程序设置"""
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -50,18 +50,20 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_TASKS: int = 3
     TASK_TIMEOUT_SECONDS: int = 3600
     CLEANUP_INTERVAL_HOURS: int = 24
-    
+
     # 进程池配置（用于任务执行，独立于WORKERS配置）
     PROCESS_POOL_SIZE: int = 3  # 进程池大小，建议为CPU核心数
     TASK_EXECUTION_TIMEOUT: int = 3600  # 任务执行超时（秒）
-    
+
     # 回测并行化配置（单个回测任务内部的并行化）
     BACKTEST_PARALLEL_ENABLED: bool = True  # 是否启用回测并行化（多股票信号生成并行）
     BACKTEST_MAX_WORKERS: int = 10  # 回测并行化工作线程数（建议为CPU核心数）
 
     # API 配置
     API_V1_PREFIX: str = "/api/v1"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://192.168.3.62:3000"
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,http://192.168.3.62:3000"
+    )
 
     @property
     def cors_origins_list(self) -> List[str]:
@@ -76,5 +78,6 @@ class Settings(BaseSettings):
     def database_url_sync(self) -> str:
         """同步数据库URL"""
         return self.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite:///")
+
 
 settings = Settings()

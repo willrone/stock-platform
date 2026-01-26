@@ -57,27 +57,34 @@ export function LiveTrainingModal({
         {modelId && trainingProgress[modelId] ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* 顶部：实时指标概览 */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                gap: 3,
+              }}
+            >
               {/* 左侧：实时指标 */}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   实时指标
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                  {trainingProgress[modelId].metrics && Object.entries(trainingProgress[modelId].metrics).map(([key, value]) => (
-                    <Card key={key}>
-                      <CardContent sx={{ p: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {key}
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {typeof value === 'number' ? value.toFixed(4) : String(value)}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {trainingProgress[modelId].metrics &&
+                    Object.entries(trainingProgress[modelId].metrics).map(([key, value]) => (
+                      <Card key={key}>
+                        <CardContent sx={{ p: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {key}
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {typeof value === 'number' ? value.toFixed(4) : String(value)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    ))}
                 </Box>
-                
+
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2">总体进度</Typography>
@@ -100,13 +107,22 @@ export function LiveTrainingModal({
                   )}
                 </Box>
               </Box>
-              
+
               {/* 右侧：训练曲线占位符 */}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   训练曲线
                 </Typography>
-                <Box sx={{ height: 256, bgcolor: 'grey.50', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Box
+                  sx={{
+                    height: 256,
+                    bgcolor: 'grey.50',
+                    borderRadius: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <Box sx={{ textAlign: 'center' }}>
                     <TrendingUp size={32} color="#666" style={{ margin: '0 auto 8px' }} />
                     <Typography variant="body2" color="text.secondary">
@@ -119,17 +135,36 @@ export function LiveTrainingModal({
                 </Box>
               </Box>
             </Box>
-            
+
             {/* 训练日志占位符 */}
             <Box>
               <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
                 训练日志
               </Typography>
-              <Box sx={{ bgcolor: '#1e1e1e', color: '#4ade80', p: 2, borderRadius: 1, height: 128, overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                <div>[{new Date().toLocaleTimeString()}] 训练进度: {trainingProgress[modelId].progress?.toFixed(1)}%</div>
-                <div>[{new Date().toLocaleTimeString()}] 当前阶段: {getStageText(trainingProgress[modelId].stage)}</div>
+              <Box
+                sx={{
+                  bgcolor: '#1e1e1e',
+                  color: '#4ade80',
+                  p: 2,
+                  borderRadius: 1,
+                  height: 128,
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                }}
+              >
+                <div>
+                  [{new Date().toLocaleTimeString()}] 训练进度:{' '}
+                  {trainingProgress[modelId].progress?.toFixed(1)}%
+                </div>
+                <div>
+                  [{new Date().toLocaleTimeString()}] 当前阶段:{' '}
+                  {getStageText(trainingProgress[modelId].stage)}
+                </div>
                 {trainingProgress[modelId].message && (
-                  <div>[{new Date().toLocaleTimeString()}] {trainingProgress[modelId].message}</div>
+                  <div>
+                    [{new Date().toLocaleTimeString()}] {trainingProgress[modelId].message}
+                  </div>
                 )}
                 <div style={{ color: '#666' }}>更多日志功能开发中...</div>
               </Box>

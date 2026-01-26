@@ -32,13 +32,7 @@ import {
   TableContainer,
   Paper,
 } from '@mui/material';
-import {
-  Calendar,
-  Info,
-  TrendingUp,
-  TrendingDown,
-  Download,
-} from 'lucide-react';
+import { Calendar, Info, TrendingUp, TrendingDown, Download } from 'lucide-react';
 
 interface MonthlyHeatmapChartProps {
   taskId: string;
@@ -57,8 +51,18 @@ interface MonthlyHeatmapChartProps {
 }
 
 const MONTH_NAMES = [
-  '1月', '2月', '3月', '4月', '5月', '6月',
-  '7月', '8月', '9月', '10月', '11月', '12月'
+  '1月',
+  '2月',
+  '3月',
+  '4月',
+  '5月',
+  '6月',
+  '7月',
+  '8月',
+  '9月',
+  '10月',
+  '11月',
+  '12月',
 ];
 
 export default function MonthlyHeatmapChart({
@@ -86,7 +90,7 @@ export default function MonthlyHeatmapChart({
     const monthlyStats = Array.from({ length: 12 }, (_, index) => {
       const month = index + 1;
       const monthData = filteredData.filter(item => item.month === month);
-      
+
       if (monthData.length === 0) {
         return {
           month,
@@ -119,7 +123,9 @@ export default function MonthlyHeatmapChart({
 
   // 初始化和更新图表
   useEffect(() => {
-    if (!chartRef.current || loading || !data.monthlyReturns.length) return;
+    if (!chartRef.current || loading || !data.monthlyReturns.length) {
+      return;
+    }
 
     // 销毁现有图表实例
     if (chartInstance.current) {
@@ -134,17 +140,15 @@ export default function MonthlyHeatmapChart({
     // 准备热力图数据
     const heatmapData: any[] = [];
     const years = selectedYear === 'all' ? data.years : [parseInt(selectedYear)];
-    
+
     years.forEach((year, yearIndex) => {
       for (let month = 1; month <= 12; month++) {
-        const monthData = filteredData.find(item => 
-          item.year === year && item.month === month
-        );
-        
+        const monthData = filteredData.find(item => item.year === year && item.month === month);
+
         if (monthData) {
           heatmapData.push([
             month - 1, // x轴：月份（0-11）
-            yearIndex,  // y轴：年份索引
+            yearIndex, // y轴：年份索引
             monthData.return, // 值：收益率
             monthData.date, // 额外信息：日期
           ]);
@@ -173,7 +177,7 @@ export default function MonthlyHeatmapChart({
           const [monthIndex, yearIndex, returnValue, date] = params.data;
           const month = MONTH_NAMES[monthIndex];
           const year = years[yearIndex];
-          
+
           return `
             <div style="margin-bottom: 4px;">${year}年${month}</div>
             <div style="color: ${returnValue >= 0 ? '#10b981' : '#ef4444'};">
@@ -266,7 +270,7 @@ export default function MonthlyHeatmapChart({
         pixelRatio: 2,
         backgroundColor: '#fff',
       });
-      
+
       const link = document.createElement('a');
       link.download = `monthly-heatmap-${taskId}-${selectedYear}.png`;
       link.href = url;
@@ -287,10 +291,10 @@ export default function MonthlyHeatmapChart({
   }
 
   const monthlyStats = getMonthlyStatistics();
-  const bestMonth = monthlyStats.reduce((best, current) => 
+  const bestMonth = monthlyStats.reduce((best, current) =>
     current.avgReturn > best.avgReturn ? current : best
   );
-  const worstMonth = monthlyStats.reduce((worst, current) => 
+  const worstMonth = monthlyStats.reduce((worst, current) =>
     current.avgReturn < worst.avgReturn ? current : worst
   );
 
@@ -299,7 +303,14 @@ export default function MonthlyHeatmapChart({
       <CardHeader
         title={
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Calendar size={20} color="#1976d2" />
                 <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
@@ -323,13 +334,20 @@ export default function MonthlyHeatmapChart({
             </Box>
 
             {/* 年份选择和统计开关 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
               <FormControl size="small" sx={{ minWidth: 128 }}>
                 <InputLabel>选择年份</InputLabel>
                 <Select
                   value={selectedYear}
                   label="选择年份"
-                  onChange={(e) => setSelectedYear(e.target.value)}
+                  onChange={e => setSelectedYear(e.target.value)}
                 >
                   <MenuItem value="all">全部年份</MenuItem>
                   {data.years.map(year => (
@@ -344,7 +362,7 @@ export default function MonthlyHeatmapChart({
                 control={
                   <Checkbox
                     checked={showStatistics}
-                    onChange={(e) => setShowStatistics(e.target.checked)}
+                    onChange={e => setShowStatistics(e.target.checked)}
                     size="small"
                   />
                 }
@@ -354,8 +372,23 @@ export default function MonthlyHeatmapChart({
 
             {/* 月度统计信息 */}
             {showStatistics && (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'success.light', borderRadius: 1 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                  gap: 2,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    p: 1.5,
+                    bgcolor: 'success.light',
+                    borderRadius: 1,
+                  }}
+                >
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       表现最佳月份
@@ -364,13 +397,26 @@ export default function MonthlyHeatmapChart({
                       <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
                         {MONTH_NAMES[bestMonth.month - 1]}
                       </Typography>
-                      <Chip label={`+${bestMonth.avgReturn.toFixed(2)}%`} color="success" size="small" />
+                      <Chip
+                        label={`+${bestMonth.avgReturn.toFixed(2)}%`}
+                        color="success"
+                        size="small"
+                      />
                     </Box>
                   </Box>
                   <TrendingUp size={24} color="#2e7d32" />
                 </Box>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'error.light', borderRadius: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    p: 1.5,
+                    bgcolor: 'error.light',
+                    borderRadius: 1,
+                  }}
+                >
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       表现最差月份
@@ -379,7 +425,11 @@ export default function MonthlyHeatmapChart({
                       <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
                         {MONTH_NAMES[worstMonth.month - 1]}
                       </Typography>
-                      <Chip label={`${worstMonth.avgReturn.toFixed(2)}%`} color="error" size="small" />
+                      <Chip
+                        label={`${worstMonth.avgReturn.toFixed(2)}%`}
+                        color="error"
+                        size="small"
+                      />
                     </Box>
                   </Box>
                   <TrendingDown size={24} color="#d32f2f" />
@@ -391,10 +441,7 @@ export default function MonthlyHeatmapChart({
       />
 
       <CardContent>
-        <Box
-          ref={chartRef}
-          sx={{ height, width: '100%', minHeight: 400 }}
-        />
+        <Box ref={chartRef} sx={{ height, width: '100%', minHeight: 400 }} />
 
         {/* 月度详细统计表格 */}
         {showStatistics && (
@@ -416,17 +463,25 @@ export default function MonthlyHeatmapChart({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {monthlyStats.map((stat) => (
+                  {monthlyStats.map(stat => (
                     <TableRow key={stat.month} hover>
-                      <TableCell sx={{ fontWeight: 500 }}>
-                        {MONTH_NAMES[stat.month - 1]}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 500, color: stat.avgReturn >= 0 ? 'success.main' : 'error.main' }}>
+                      <TableCell sx={{ fontWeight: 500 }}>{MONTH_NAMES[stat.month - 1]}</TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          fontWeight: 500,
+                          color: stat.avgReturn >= 0 ? 'success.main' : 'error.main',
+                        }}
+                      >
                         {stat.avgReturn.toFixed(2)}%
                       </TableCell>
                       <TableCell align="right">{stat.count}</TableCell>
-                      <TableCell align="right" sx={{ color: 'success.main' }}>{stat.positiveCount}</TableCell>
-                      <TableCell align="right" sx={{ color: 'error.main' }}>{stat.negativeCount}</TableCell>
+                      <TableCell align="right" sx={{ color: 'success.main' }}>
+                        {stat.positiveCount}
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: 'error.main' }}>
+                        {stat.negativeCount}
+                      </TableCell>
                       <TableCell align="right" sx={{ color: 'success.main' }}>
                         {stat.maxReturn.toFixed(2)}%
                       </TableCell>

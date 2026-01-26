@@ -53,7 +53,7 @@ export function CreateModelForm({
         label="模型名称"
         placeholder="请输入模型名称"
         value={formData.model_name}
-        onChange={(e) => onFormDataChange('model_name', e.target.value)}
+        onChange={e => onFormDataChange('model_name', e.target.value)}
         error={!!errors.model_name}
         helperText={errors.model_name}
         required
@@ -65,7 +65,7 @@ export function CreateModelForm({
         <Select
           value={formData.model_type}
           label="模型类型"
-          onChange={(e) => onFormDataChange('model_type', e.target.value)}
+          onChange={e => onFormDataChange('model_type', e.target.value)}
         >
           <MenuItem value="lightgbm">
             <Box>
@@ -113,18 +113,18 @@ export function CreateModelForm({
 
       <StockSelector
         value={formData.stock_codes}
-        onChange={(codes) => onFormDataChange('stock_codes', codes)}
+        onChange={codes => onFormDataChange('stock_codes', codes)}
       />
-      {errors.stock_codes && (
-        <FormHelperText error>{errors.stock_codes}</FormHelperText>
-      )}
+      {errors.stock_codes && <FormHelperText error>{errors.stock_codes}</FormHelperText>}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+      <Box
+        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}
+      >
         <TextField
           type="date"
           label="训练数据开始日期"
           value={formData.start_date}
-          onChange={(e) => onFormDataChange('start_date', e.target.value)}
+          onChange={e => onFormDataChange('start_date', e.target.value)}
           error={!!errors.start_date}
           helperText={errors.start_date}
           required
@@ -135,7 +135,7 @@ export function CreateModelForm({
           type="date"
           label="训练数据结束日期"
           value={formData.end_date}
-          onChange={(e) => onFormDataChange('end_date', e.target.value)}
+          onChange={e => onFormDataChange('end_date', e.target.value)}
           error={!!errors.end_date}
           helperText={errors.end_date}
           required
@@ -148,7 +148,7 @@ export function CreateModelForm({
         label="模型描述（可选）"
         placeholder="请输入模型描述"
         value={formData.description}
-        onChange={(e) => onFormDataChange('description', e.target.value)}
+        onChange={e => onFormDataChange('description', e.target.value)}
         fullWidth
       />
 
@@ -157,12 +157,12 @@ export function CreateModelForm({
         label="训练迭代次数（Epochs）"
         placeholder="请输入训练迭代次数"
         value={formData.num_iterations}
-        onChange={(e) => {
+        onChange={e => {
           const num = parseInt(e.target.value) || 100;
           onFormDataChange('num_iterations', num);
           onFormDataChange('hyperparameters', {
             ...formData.hyperparameters,
-            num_iterations: num
+            num_iterations: num,
           });
         }}
         helperText="控制模型训练的迭代次数，LightGBM/XGBoost使用此参数。建议范围：50-1000，默认100"
@@ -174,7 +174,7 @@ export function CreateModelForm({
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <Checkbox
           checked={formData.enable_hyperparameter_tuning}
-          onChange={(e) => onFormDataChange('enable_hyperparameter_tuning', e.target.checked)}
+          onChange={e => onFormDataChange('enable_hyperparameter_tuning', e.target.checked)}
         />
         <Typography variant="body2">启用自动超参数调优</Typography>
       </Box>

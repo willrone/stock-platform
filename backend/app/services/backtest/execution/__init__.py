@@ -5,17 +5,17 @@
 """
 
 from .backtest_executor import BacktestExecutor
-from .data_loader import DataLoader
 from .backtest_progress_monitor import (
-    backtest_progress_monitor,
     BacktestProgressData,
-    BacktestProgressStage
+    BacktestProgressStage,
+    backtest_progress_monitor,
 )
+from .data_loader import DataLoader
 
 __all__ = [
-    'BacktestExecutor',
-    'DataLoader',
-    'backtest_progress_monitor',
-    'BacktestProgressData',
-    'BacktestProgressStage'
+    "BacktestExecutor",
+    "DataLoader",
+    "backtest_progress_monitor",
+    "BacktestProgressData",
+    "BacktestProgressStage",
 ]

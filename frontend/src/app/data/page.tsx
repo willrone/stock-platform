@@ -1,6 +1,6 @@
 /**
  * 数据管理页面 - 数据概览
- * 
+ *
  * 显示数据相关功能：
  * - 远端数据服务状态
  * - 远端股票列表
@@ -24,22 +24,11 @@ import {
   Tab,
   Box,
   Typography,
-  IconButton,
   Alert,
 } from '@mui/material';
-import {
-  Server,
-  RefreshCw,
-  Wifi,
-  WifiOff,
-  XCircle,
-  Zap,
-  Database,
-  Download,
-} from 'lucide-react';
+import { Server, RefreshCw, Wifi, WifiOff, XCircle, Zap, Database, Download } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
 
 interface ServiceStatus {
@@ -133,35 +122,29 @@ export default function DataManagementPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([
-        checkServiceStatus(),
-        loadRemoteStocks(),
-        loadLocalStocks()
-      ]);
+      await Promise.all([checkServiceStatus(), loadRemoteStocks(), loadLocalStocks()]);
       setLoading(false);
     };
-    
+
     loadData();
   }, []);
 
   // 刷新数据
   const handleRefresh = async () => {
     setLoading(true);
-    await Promise.all([
-      checkServiceStatus(),
-      loadRemoteStocks(),
-      loadLocalStocks()
-    ]);
+    await Promise.all([checkServiceStatus(), loadRemoteStocks(), loadLocalStocks()]);
     setLoading(false);
   };
 
   // 同步远端数据
   const handleSyncRemoteData = async () => {
-    if (syncing) return;
-    
+    if (syncing) {
+      return;
+    }
+
     setSyncing(true);
     setSyncResult(null);
-    
+
     try {
       const result = await DataService.syncRemoteData();
       setSyncResult({
@@ -171,7 +154,7 @@ export default function DataManagementPage() {
         total_files: result.total_files,
         total_size_mb: result.total_size_mb,
       });
-      
+
       // 如果同步成功，刷新数据
       if (result.success) {
         await handleRefresh();
@@ -189,18 +172,20 @@ export default function DataManagementPage() {
 
   // 触发Qlib预计算
   const handleTriggerQlibPrecompute = async () => {
-    if (precomputing) return;
-    
+    if (precomputing) {
+      return;
+    }
+
     setPrecomputing(true);
     setPrecomputeTask(null);
-    
+
     try {
       const task = await DataService.triggerQlibPrecompute();
       setPrecomputeTask({
         task_id: task.task_id,
         progress: task.progress,
         status: task.status,
-        message: '预计算任务已创建，正在处理...'
+        message: '预计算任务已创建，正在处理...',
       });
     } catch (error) {
       console.error('触发预计算失败:', error);
@@ -208,7 +193,7 @@ export default function DataManagementPage() {
         task_id: '',
         progress: 0,
         status: 'failed',
-        message: error instanceof Error ? error.message : '预计算任务创建失败'
+        message: error instanceof Error ? error.message : '预计算任务创建失败',
       });
       setPrecomputing(false);
     }
@@ -216,37 +201,51 @@ export default function DataManagementPage() {
 
   // WebSocket监听预计算任务进度
   useEffect(() => {
-    if (!precomputeTask) return;
+    if (!precomputeTask) {
+      return;
+    }
 
     const handleTaskProgress = (data: { task_id: string; progress: number; status: string }) => {
       if (data.task_id === precomputeTask.task_id) {
-        setPrecomputeTask(prev => prev ? {
-          ...prev,
-          progress: data.progress,
-          status: data.status
-        } : null);
+        setPrecomputeTask(prev =>
+          prev
+            ? {
+                ...prev,
+                progress: data.progress,
+                status: data.status,
+              }
+            : null
+        );
       }
     };
 
     const handleTaskCompleted = (data: { task_id: string; results: any }) => {
       if (data.task_id === precomputeTask.task_id) {
-        setPrecomputeTask(prev => prev ? {
-          ...prev,
-          progress: 100,
-          status: 'completed',
-          message: '预计算完成！所有指标和因子已生成，可用于训练/回测。'
-        } : null);
+        setPrecomputeTask(prev =>
+          prev
+            ? {
+                ...prev,
+                progress: 100,
+                status: 'completed',
+                message: '预计算完成！所有指标和因子已生成，可用于训练/回测。',
+              }
+            : null
+        );
         setPrecomputing(false);
       }
     };
 
     const handleTaskFailed = (data: { task_id: string; error: string }) => {
       if (data.task_id === precomputeTask.task_id) {
-        setPrecomputeTask(prev => prev ? {
-          ...prev,
-          status: 'failed',
-          message: `预计算失败: ${data.error}`
-        } : null);
+        setPrecomputeTask(prev =>
+          prev
+            ? {
+                ...prev,
+                status: 'failed',
+                message: `预计算失败: ${data.error}`,
+              }
+            : null
+        );
         setPrecomputing(false);
       }
     };
@@ -269,7 +268,15 @@ export default function DataManagementPage() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
             数据管理
@@ -295,16 +302,18 @@ export default function DataManagementPage() {
             size="large"
             startIcon={<Zap size={20} />}
             onClick={handleTriggerQlibPrecompute}
-            disabled={precomputing || (precomputeTask?.status === 'running')}
+            disabled={precomputing || precomputeTask?.status === 'running'}
           >
-            {precomputing || precomputeTask?.status === 'running' ? '预计算中...' : '离线生成 Qlib 指标/因子'}
+            {precomputing || precomputeTask?.status === 'running'
+              ? '预计算中...'
+              : '离线生成 Qlib 指标/因子'}
           </Button>
         </Box>
       </Box>
 
       {/* 同步结果提示 */}
       {syncResult && (
-        <Alert 
+        <Alert
           severity={syncResult.success ? 'success' : 'error'}
           icon={syncResult.success ? <Zap size={20} /> : <XCircle size={20} />}
         >
@@ -328,16 +337,22 @@ export default function DataManagementPage() {
 
       {/* 预计算任务进度提示 */}
       {precomputeTask && (
-        <Alert 
+        <Alert
           severity={
-            precomputeTask.status === 'completed' ? 'success' :
-            precomputeTask.status === 'failed' ? 'error' :
-            'info'
+            precomputeTask.status === 'completed'
+              ? 'success'
+              : precomputeTask.status === 'failed'
+                ? 'error'
+                : 'info'
           }
           icon={
-            precomputeTask.status === 'completed' ? <Zap size={20} /> :
-            precomputeTask.status === 'failed' ? <XCircle size={20} /> :
-            <Database size={20} />
+            precomputeTask.status === 'completed' ? (
+              <Zap size={20} />
+            ) : precomputeTask.status === 'failed' ? (
+              <XCircle size={20} />
+            ) : (
+              <Database size={20} />
+            )
           }
         >
           <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -345,7 +360,14 @@ export default function DataManagementPage() {
           </Typography>
           {precomputeTask.status === 'running' && (
             <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mb: 1,
+                }}
+              >
                 <Typography variant="caption" color="text.secondary">
                   进度: {precomputeTask.progress.toFixed(1)}%
                 </Typography>
@@ -359,7 +381,7 @@ export default function DataManagementPage() {
                   height: 8,
                   backgroundColor: 'rgba(0, 0, 0, 0.1)',
                   borderRadius: 1,
-                  overflow: 'hidden'
+                  overflow: 'hidden',
                 }}
               >
                 <Box
@@ -367,7 +389,7 @@ export default function DataManagementPage() {
                     width: `${precomputeTask.progress}%`,
                     height: '100%',
                     backgroundColor: 'primary.main',
-                    transition: 'width 0.3s ease'
+                    transition: 'width 0.3s ease',
                   }}
                 />
               </Box>
@@ -418,7 +440,7 @@ export default function DataManagementPage() {
               )}
             </Box>
           </Box>
-          
+
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="body2" color="text.secondary">
               服务地址
@@ -427,7 +449,7 @@ export default function DataManagementPage() {
               {serviceStatus?.service_url || '--'}
             </Typography>
           </Box>
-          
+
           {serviceStatus?.is_connected && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
@@ -441,24 +463,24 @@ export default function DataManagementPage() {
               </Box>
             </Box>
           )}
-          
+
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="body2" color="text.secondary">
               最后检查
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {serviceStatus?.last_check ? new Date(serviceStatus.last_check).toLocaleString() : '--'}
+              {serviceStatus?.last_check
+                ? new Date(serviceStatus.last_check).toLocaleString()
+                : '--'}
             </Typography>
           </Box>
-          
+
           {serviceStatus?.error_message && (
             <Alert severity="error" icon={<XCircle size={20} />}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 连接错误
               </Typography>
-              <Typography variant="caption">
-                {serviceStatus.error_message}
-              </Typography>
+              <Typography variant="caption">{serviceStatus.error_message}</Typography>
             </Alert>
           )}
         </CardContent>
@@ -520,7 +542,11 @@ export default function DataManagementPage() {
                     <Typography variant="body2" color="text.secondary">
                       暂无股票数据
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 1, display: 'block' }}
+                    >
                       请检查远端服务连接状态
                     </Typography>
                   </Box>
@@ -537,10 +563,13 @@ export default function DataManagementPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {remoteStocks.map((stock) => (
+                        {remoteStocks.map(stock => (
                           <TableRow key={stock.ts_code}>
                             <TableCell>
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                              >
                                 {stock.ts_code}
                               </Typography>
                             </TableCell>
@@ -562,7 +591,9 @@ export default function DataManagementPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {stock.last_update ? new Date(stock.last_update).toLocaleDateString() : '--'}
+                              {stock.last_update
+                                ? new Date(stock.last_update).toLocaleDateString()
+                                : '--'}
                             </TableCell>
                             <TableCell>
                               {stock.status === 'complete' ? (
@@ -591,7 +622,11 @@ export default function DataManagementPage() {
                     <Typography variant="body2" color="text.secondary">
                       暂无本地股票数据
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 1, display: 'block' }}
+                    >
                       请先同步远端数据
                     </Typography>
                   </Box>
@@ -609,10 +644,13 @@ export default function DataManagementPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {localStocks.map((stock) => (
+                        {localStocks.map(stock => (
                           <TableRow key={stock.ts_code}>
                             <TableCell>
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                              >
                                 {stock.ts_code}
                               </Typography>
                             </TableCell>
@@ -636,7 +674,9 @@ export default function DataManagementPage() {
                             <TableCell>{stock.file_count || 0}</TableCell>
                             <TableCell>{stock.record_count?.toLocaleString() || '--'}</TableCell>
                             <TableCell>
-                              {stock.total_size ? `${(stock.total_size / 1024 / 1024).toFixed(2)} MB` : '--'}
+                              {stock.total_size
+                                ? `${(stock.total_size / 1024 / 1024).toFixed(2)} MB`
+                                : '--'}
                             </TableCell>
                           </TableRow>
                         ))}

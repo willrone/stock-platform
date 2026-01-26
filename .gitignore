@@ -473,3 +473,20 @@ service_mapping.json
 # 重构日志文件
 refactor.log
 migration.log
+
+# ================================
+# 代码质量报告相关
+# ================================
+# 质量报告目录
+quality-reports/
+*.report.json
+bandit-report.json
+safety-report.json
+npm-audit.json
+
+# 测试结果XML
+test-results.xml
+junit.xml
+
+# Pre-commit备份
+.pre-commit-config.yaml.bak

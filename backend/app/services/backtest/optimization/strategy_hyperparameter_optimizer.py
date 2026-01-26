@@ -7,31 +7,31 @@
 import asyncio
 import concurrent.futures
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Callable, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 from loguru import logger
 
 try:
     import optuna
-    from optuna.samplers import TPESampler, NSGAIISampler
     from optuna.pruners import MedianPruner
+    from optuna.samplers import NSGAIISampler, TPESampler
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
     logger.error("请运行: pip install optuna>=3.4.0")
     raise ImportError(
-        "optuna 模块未安装。超参优化功能需要 optuna 库。"
-        "请运行: pip install optuna>=3.4.0"
+        "optuna 模块未安装。超参优化功能需要 optuna 库。" "请运行: pip install optuna>=3.4.0"
     ) from e
 
-from app.services.backtest import BacktestExecutor, BacktestConfig
 from app.core.config import settings
+from app.services.backtest import BacktestConfig, BacktestExecutor
 
 
 class StrategyHyperparameterOptimizer:
     """策略超参数优化器"""
-    
+
     def __init__(self):
         self.optimization_history = {}
-    
+
     async def optimize_strategy_parameters(
         self,
         strategy_name: str,
@@ -44,11 +44,11 @@ class StrategyHyperparameterOptimizer:
         n_trials: int = 50,
         optimization_method: str = "tpe",
         timeout: Optional[int] = None,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         优化策略参数
-        
+
         Args:
             strategy_name: 策略名称
             param_space: 参数空间定义
@@ -78,22 +78,30 @@ class StrategyHyperparameterOptimizer:
             optimization_method: 优化方法 ("tpe", "random", "grid", "nsga2", "motpe")
             timeout: 超时时间（秒）
             progress_callback: 进度回调函数
-            
+
         Returns:
             Dict: 优化结果
         """
-        logger.info(f"开始策略参数优化: {strategy_name}, 方法: {optimization_method}, 试验次数: {n_trials}")
-        
+        logger.info(
+            f"开始策略参数优化: {strategy_name}, 方法: {optimization_method}, 试验次数: {n_trials}"
+        )
+
         start_time = datetime.utcnow()
-        
+
         # 解析目标配置
         objective_metric = objective_config.get("objective_metric", "sharpe")
-        is_multi_objective = isinstance(objective_metric, list) and len(objective_metric) > 1
-        
+        is_multi_objective = (
+            isinstance(objective_metric, list) and len(objective_metric) > 1
+        )
+
         # 创建 Optuna study
         if is_multi_objective:
             # 多目标优化
-            directions = ["maximize" if objective_config.get("direction", "maximize") == "maximize" else "minimize"] * len(objective_metric)
+            directions = [
+                "maximize"
+                if objective_config.get("direction", "maximize") == "maximize"
+                else "minimize"
+            ] * len(objective_metric)
             if optimization_method == "nsga2":
                 sampler = NSGAIISampler()
             elif optimization_method == "motpe":
@@ -102,10 +110,7 @@ class StrategyHyperparameterOptimizer:
                 sampler = NSGAIISampler()
             else:
                 sampler = NSGAIISampler()  # 默认使用 NSGA-II
-            study = optuna.create_study(
-                directions=directions,
-                sampler=sampler
-            )
+            study = optuna.create_study(directions=directions, sampler=sampler)
         else:
             # 单目标优化
             direction = objective_config.get("direction", "maximize")
@@ -115,40 +120,43 @@ class StrategyHyperparameterOptimizer:
                 sampler = optuna.samplers.RandomSampler(seed=42)
             else:
                 sampler = TPESampler(seed=42)
-            
+
             study = optuna.create_study(
                 direction=direction,
                 sampler=sampler,
-                pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=10)
+                pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=10),
             )
-        
+
         # 创建回测执行器
         try:
             import os
-            enable_perf = os.getenv("ENABLE_BACKTEST_PERFORMANCE_PROFILING", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+            enable_perf = os.getenv(
+                "ENABLE_BACKTEST_PERFORMANCE_PROFILING", "false"
+            ).strip().lower() in {"1", "true", "yes", "y", "on"}
             executor = BacktestExecutor(
                 data_dir=str(settings.DATA_ROOT_PATH),
-                enable_performance_profiling=enable_perf
+                enable_performance_profiling=enable_perf,
             )
             logger.info(f"回测执行器已创建，数据目录: {settings.DATA_ROOT_PATH}")
         except Exception as e:
             logger.error(f"创建回测执行器失败: {e}", exc_info=True)
             raise
-        
+
         # 默认回测配置
         if backtest_config is None:
             backtest_config = {
                 "initial_cash": 100000.0,
                 "commission_rate": 0.0003,
-                "slippage_rate": 0.0001
+                "slippage_rate": 0.0001,
             }
-        
+
         backtest_cfg = BacktestConfig(
             initial_cash=backtest_config.get("initial_cash", 100000.0),
             commission_rate=backtest_config.get("commission_rate", 0.0003),
-            slippage_rate=backtest_config.get("slippage_rate", 0.0001)
+            slippage_rate=backtest_config.get("slippage_rate", 0.0001),
         )
-        
+
         # 定义目标函数
         def objective(trial: optuna.Trial):
             try:
@@ -159,31 +167,30 @@ class StrategyHyperparameterOptimizer:
                         # 使用默认值
                         strategy_params[param_name] = param_config.get("default")
                         continue
-                    
+
                     param_type = param_config.get("type", "float")
                     if param_type == "int":
                         strategy_params[param_name] = trial.suggest_int(
                             param_name,
                             param_config["low"],
                             param_config["high"],
-                            log=param_config.get("log", False)
+                            log=param_config.get("log", False),
                         )
                     elif param_type == "float":
                         strategy_params[param_name] = trial.suggest_float(
                             param_name,
                             param_config["low"],
                             param_config["high"],
-                            log=param_config.get("log", False)
+                            log=param_config.get("log", False),
                         )
                     elif param_type == "categorical":
                         strategy_params[param_name] = trial.suggest_categorical(
-                            param_name,
-                            param_config["choices"]
+                            param_name, param_config["choices"]
                         )
-                
+
                 # 记录采样到的参数（用于调试）
                 logger.info(f"Trial {trial.number}: 采样参数 = {strategy_params}")
-                
+
                 # 运行回测（在同步函数中运行异步代码）
                 # 在 Optuna 的 trial 函数中，需要安全地运行异步代码
                 # 使用新的事件循环，避免与外部事件循环冲突
@@ -192,6 +199,7 @@ class StrategyHyperparameterOptimizer:
                     loop = asyncio.get_running_loop()
                     # 如果已经有运行中的循环，在新线程中运行
                     with concurrent.futures.ThreadPoolExecutor() as executor_pool:
+
                         def run_in_new_loop():
                             new_loop = asyncio.new_event_loop()
                             asyncio.set_event_loop(new_loop)
@@ -203,12 +211,12 @@ class StrategyHyperparameterOptimizer:
                                         start_date=start_date,
                                         end_date=end_date,
                                         strategy_config=strategy_params,
-                                        backtest_config=backtest_cfg
+                                        backtest_config=backtest_cfg,
                                     )
                                 )
                             finally:
                                 new_loop.close()
-                        
+
                         future = executor_pool.submit(run_in_new_loop)
                         backtest_report = future.result()
                 except RuntimeError:
@@ -223,20 +231,22 @@ class StrategyHyperparameterOptimizer:
                                 start_date=start_date,
                                 end_date=end_date,
                                 strategy_config=strategy_params,
-                                backtest_config=backtest_cfg
+                                backtest_config=backtest_cfg,
                             )
                         )
                     finally:
                         new_loop.close()
-                
+
                 # 计算目标函数值
                 # 记录回测结果的关键指标（用于调试）
                 metrics = backtest_report.get("metrics", {})
-                logger.info(f"Trial {trial.number}: 回测指标 - sharpe_ratio={metrics.get('sharpe_ratio', 0):.4f}, "
-                           f"total_return={metrics.get('total_return', 0):.4f}, "
-                           f"annualized_return={metrics.get('annualized_return', 0):.4f}, "
-                           f"max_drawdown={metrics.get('max_drawdown', 0):.4f}")
-                
+                logger.info(
+                    f"Trial {trial.number}: 回测指标 - sharpe_ratio={metrics.get('sharpe_ratio', 0):.4f}, "
+                    f"total_return={metrics.get('total_return', 0):.4f}, "
+                    f"annualized_return={metrics.get('annualized_return', 0):.4f}, "
+                    f"max_drawdown={metrics.get('max_drawdown', 0):.4f}"
+                )
+
                 if is_multi_objective:
                     # 多目标：返回多个值
                     objectives = []
@@ -244,18 +254,42 @@ class StrategyHyperparameterOptimizer:
                         score = self._calculate_objective_score(
                             backtest_report,
                             metric,
-                            objective_config.get("objective_weights")
+                            objective_config.get("objective_weights"),
                         )
                         objectives.append(score)
                     logger.info(f"Trial {trial.number}: 多目标得分 = {objectives}")
-                    
+
                     # 更新进度（多目标优化）
                     if progress_callback:
                         # 计算 trial 统计信息
-                        completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
-                        running_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING])
-                        pruned_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
-                        failed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
+                        completed_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.COMPLETE
+                            ]
+                        )
+                        running_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.RUNNING
+                            ]
+                        )
+                        pruned_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.PRUNED
+                            ]
+                        )
+                        failed_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.FAIL
+                            ]
+                        )
                         trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
                         progress_callback(
                             trial_num,
@@ -269,26 +303,52 @@ class StrategyHyperparameterOptimizer:
                             failed_trials=failed_trials,
                             best_score=None,  # 多目标没有单一最佳得分
                             best_trial_number=None,
-                            best_params=None
+                            best_params=None,
                         )
-                    
+
                     return tuple(objectives)
                 else:
                     # 单目标：返回单个值
                     score = self._calculate_objective_score(
                         backtest_report,
                         objective_metric,
-                        objective_config.get("objective_weights")
+                        objective_config.get("objective_weights"),
                     )
-                    logger.info(f"Trial {trial.number}: 目标得分 = {score:.6f} (原始指标: {objective_metric})")
-                    
+                    logger.info(
+                        f"Trial {trial.number}: 目标得分 = {score:.6f} (原始指标: {objective_metric})"
+                    )
+
                     # 更新进度
                     if progress_callback:
                         # 计算 trial 统计信息
-                        completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
-                        running_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING])
-                        pruned_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
-                        failed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
+                        completed_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.COMPLETE
+                            ]
+                        )
+                        running_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.RUNNING
+                            ]
+                        )
+                        pruned_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.PRUNED
+                            ]
+                        )
+                        failed_trials = len(
+                            [
+                                t
+                                for t in study.trials
+                                if t.state == optuna.trial.TrialState.FAIL
+                            ]
+                        )
                         trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
                         progress_callback(
                             trial_num,
@@ -300,28 +360,50 @@ class StrategyHyperparameterOptimizer:
                             running_trials=running_trials,
                             pruned_trials=pruned_trials,
                             failed_trials=failed_trials,
-                            best_score=study.best_value if not is_multi_objective and len(study.trials) > 0 else None,
-                            best_trial_number=study.best_trial.number if not is_multi_objective and len(study.trials) > 0 else None,
-                            best_params=study.best_params if not is_multi_objective and len(study.trials) > 0 else None
+                            best_score=study.best_value
+                            if not is_multi_objective and len(study.trials) > 0
+                            else None,
+                            best_trial_number=study.best_trial.number
+                            if not is_multi_objective and len(study.trials) > 0
+                            else None,
+                            best_params=study.best_params
+                            if not is_multi_objective and len(study.trials) > 0
+                            else None,
                         )
-                    
+
                     return score
-                    
+
             except Exception as e:
                 logger.error(f"Trial {trial.number} 失败: {e}", exc_info=True)
                 logger.error(f"Trial {trial.number} 参数: {strategy_params}")
                 # 返回最差分数
                 if is_multi_objective:
-                    return tuple([float('-inf') if objective_config.get("direction", "maximize") == "maximize" else float('inf')] * len(objective_metric))
+                    return tuple(
+                        [
+                            float("-inf")
+                            if objective_config.get("direction", "maximize")
+                            == "maximize"
+                            else float("inf")
+                        ]
+                        * len(objective_metric)
+                    )
                 else:
-                    return float('-inf') if objective_config.get("direction", "maximize") == "maximize" else float('inf')
-        
+                    return (
+                        float("-inf")
+                        if objective_config.get("direction", "maximize") == "maximize"
+                        else float("inf")
+                    )
+
         # 执行优化
         try:
-            logger.info(f"开始执行优化，策略: {strategy_name}, 股票: {stock_codes}, 日期范围: {start_date} - {end_date}")
+            logger.info(
+                f"开始执行优化，策略: {strategy_name}, 股票: {stock_codes}, 日期范围: {start_date} - {end_date}"
+            )
             logger.info(f"参数空间: {list(param_space.keys())}")
-            logger.info(f"目标函数: {objective_metric}, 方向: {objective_config.get('direction', 'maximize')}")
-            
+            logger.info(
+                f"目标函数: {objective_metric}, 方向: {objective_config.get('direction', 'maximize')}"
+            )
+
             # 初始化进度状态（在优化开始前）
             if progress_callback:
                 progress_callback(
@@ -336,19 +418,16 @@ class StrategyHyperparameterOptimizer:
                     failed_trials=0,
                     best_score=None,
                     best_trial_number=None,
-                    best_params=None
+                    best_params=None,
                 )
-            
+
             study.optimize(
-                objective,
-                n_trials=n_trials,
-                timeout=timeout,
-                show_progress_bar=False
+                objective, n_trials=n_trials, timeout=timeout, show_progress_bar=False
             )
-            
+
             end_time = datetime.utcnow()
             duration = (end_time - start_time).total_seconds()
-            
+
             # 计算参数重要性（仅单目标）
             param_importance = {}
             if not is_multi_objective and len(study.trials) > 0:
@@ -357,7 +436,7 @@ class StrategyHyperparameterOptimizer:
                     param_importance = importance
                 except Exception as e:
                     logger.warning(f"计算参数重要性失败: {e}")
-            
+
             # 构建优化历史
             optimization_history = []
             for trial in study.trials:
@@ -365,31 +444,61 @@ class StrategyHyperparameterOptimizer:
                     "trial_number": trial.number,
                     "params": trial.params,
                     "state": trial.state.name.lower(),
-                    "duration_seconds": trial.duration.total_seconds() if trial.duration else None,
-                    "timestamp": trial.datetime_start.isoformat() if trial.datetime_start else None
+                    "duration_seconds": trial.duration.total_seconds()
+                    if trial.duration
+                    else None,
+                    "timestamp": trial.datetime_start.isoformat()
+                    if trial.datetime_start
+                    else None,
                 }
-                
+
                 if trial.state == optuna.trial.TrialState.COMPLETE:
                     if is_multi_objective:
                         trial_data["objectives"] = trial.values
                     else:
                         trial_data["score"] = trial.value
-                
+
                 optimization_history.append(trial_data)
-            
+
             # 构建结果
             result = {
                 "success": True,
                 "strategy_name": strategy_name,
-                "best_params": study.best_params if not is_multi_objective and len(study.trials) > 0 else None,
-                "best_score": study.best_value if not is_multi_objective and len(study.trials) > 0 else None,
-                "best_trial_number": study.best_trial.number if not is_multi_objective and len(study.trials) > 0 else None,
+                "best_params": study.best_params
+                if not is_multi_objective and len(study.trials) > 0
+                else None,
+                "best_score": study.best_value
+                if not is_multi_objective and len(study.trials) > 0
+                else None,
+                "best_trial_number": study.best_trial.number
+                if not is_multi_objective and len(study.trials) > 0
+                else None,
                 "objective_metric": objective_metric,
                 "n_trials": n_trials,
-                "completed_trials": len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
-                "running_trials": len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING]),
-                "pruned_trials": len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]),
-                "failed_trials": len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL]),
+                "completed_trials": len(
+                    [
+                        t
+                        for t in study.trials
+                        if t.state == optuna.trial.TrialState.COMPLETE
+                    ]
+                ),
+                "running_trials": len(
+                    [
+                        t
+                        for t in study.trials
+                        if t.state == optuna.trial.TrialState.RUNNING
+                    ]
+                ),
+                "pruned_trials": len(
+                    [
+                        t
+                        for t in study.trials
+                        if t.state == optuna.trial.TrialState.PRUNED
+                    ]
+                ),
+                "failed_trials": len(
+                    [t for t in study.trials if t.state == optuna.trial.TrialState.FAIL]
+                ),
                 "optimization_history": optimization_history,
                 "param_importance": param_importance,
                 "optimization_metadata": {
@@ -400,17 +509,22 @@ class StrategyHyperparameterOptimizer:
                     "end_time": end_time.isoformat(),
                     "data_period": {
                         "start_date": start_date.isoformat(),
-                        "end_date": end_date.isoformat()
-                    }
-                }
+                        "end_date": end_date.isoformat(),
+                    },
+                },
             }
-            
+
             # 多目标优化：添加 Pareto front
             if is_multi_objective:
                 # 计算 Pareto front（非支配解）
                 try:
-                    completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.values is not None]
-                    
+                    completed_trials = [
+                        t
+                        for t in study.trials
+                        if t.state == optuna.trial.TrialState.COMPLETE
+                        and t.values is not None
+                    ]
+
                     if len(completed_trials) > 0:
                         # 计算非支配解（Pareto front）
                         pareto_front = []
@@ -420,50 +534,56 @@ class StrategyHyperparameterOptimizer:
                                 if trial.number == other_trial.number:
                                     continue
                                 # 检查是否被支配：如果另一个解在所有目标上都更好或相等，且至少有一个目标更好
-                                if all(other_trial.values[i] >= trial.values[i] for i in range(len(trial.values))):
-                                    if any(other_trial.values[i] > trial.values[i] for i in range(len(trial.values))):
+                                if all(
+                                    other_trial.values[i] >= trial.values[i]
+                                    for i in range(len(trial.values))
+                                ):
+                                    if any(
+                                        other_trial.values[i] > trial.values[i]
+                                        for i in range(len(trial.values))
+                                    ):
                                         is_dominated = True
                                         break
                             if not is_dominated:
-                                pareto_front.append({
-                                    "trial_number": trial.number,
-                                    "params": trial.params,
-                                    "objectives": list(trial.values)
-                                })
+                                pareto_front.append(
+                                    {
+                                        "trial_number": trial.number,
+                                        "params": trial.params,
+                                        "objectives": list(trial.values),
+                                    }
+                                )
                         result["pareto_front"] = pareto_front
                     else:
                         result["pareto_front"] = []
                 except Exception as e:
                     logger.warning(f"计算 Pareto front 失败: {e}")
                     result["pareto_front"] = []
-            
-            logger.info(f"策略参数优化完成: {strategy_name}, 最佳得分: {result.get('best_score', 'N/A')}")
+
+            logger.info(
+                f"策略参数优化完成: {strategy_name}, 最佳得分: {result.get('best_score', 'N/A')}"
+            )
             return result
-            
+
         except Exception as e:
             logger.error(f"策略参数优化失败: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "strategy_name": strategy_name
-            }
-    
+            return {"success": False, "error": str(e), "strategy_name": strategy_name}
+
     def _calculate_objective_score(
         self,
         backtest_report: Dict[str, Any],
         objective_metric: str,
-        objective_weights: Optional[Dict[str, float]] = None
+        objective_weights: Optional[Dict[str, float]] = None,
     ) -> float:
         """
         计算目标函数得分
-        
+
         Args:
             backtest_report: 回测报告
             objective_metric: 目标指标 ("sharpe", "calmar", "ic", "ic_ir", "total_return",
                                        "annualized_return", "win_rate", "profit_factor",
                                        "max_drawdown", "cost", "custom")
             objective_weights: 自定义权重（custom 时使用）
-            
+
         Returns:
             float: 目标函数得分（统一归一化到 0-1，越大越好）
         """
@@ -478,16 +598,16 @@ class StrategyHyperparameterOptimizer:
                 "max_drawdown": backtest_report.get("max_drawdown", 0.0),
                 "win_rate": backtest_report.get("win_rate", 0.0),
             }
-        
+
         logger.debug(f"计算目标得分: metric={objective_metric}, metrics={metrics}")
-        
+
         if objective_metric == "sharpe":
             # 夏普比率
             sharpe_ratio = metrics.get("sharpe_ratio", 0.0)
             # 归一化到 0-1（假设夏普比率范围 -2 到 5）
             normalized = (sharpe_ratio + 2) / 7
             return max(0.0, min(1.0, normalized))
-        
+
         elif objective_metric == "calmar":
             # 卡玛比率 = 年化收益 / 最大回撤
             annualized_return = metrics.get("annualized_return", 0.0)
@@ -498,7 +618,7 @@ class StrategyHyperparameterOptimizer:
             # 归一化到 0-1（假设卡玛比率范围 0 到 10）
             normalized = min(1.0, calmar_ratio / 10)
             return max(0.0, normalized)
-        
+
         elif objective_metric == "ic":
             # 信息系数（简化版本：使用胜率作为近似）
             win_rate = metrics.get("win_rate", 0.0)
@@ -506,7 +626,7 @@ class StrategyHyperparameterOptimizer:
             ic = (win_rate - 0.5) * 2  # 将 0-1 映射到 -1 到 1
             normalized = (ic + 1) / 2  # 归一化到 0-1
             return max(0.0, min(1.0, normalized))
-        
+
         elif objective_metric == "ic_ir":
             # 使用无成本组合的 information_ratio 作为信息比率
             ir_info = backtest_report.get("excess_return_without_cost", {})
@@ -514,24 +634,24 @@ class StrategyHyperparameterOptimizer:
             # 与夏普类似的范围假设 [-2, 5]
             normalized = (information_ratio + 2) / 7
             return max(0.0, min(1.0, normalized))
-        
+
         elif objective_metric == "total_return":
             # 总收益率，假设范围 [-0.5, 1.0]
             total_return = metrics.get("total_return", 0.0)
             normalized = (total_return + 0.5) / 1.5
             return max(0.0, min(1.0, normalized))
-        
+
         elif objective_metric == "annualized_return":
             # 年化收益率，假设范围 [-0.5, 1.0]
             annualized_return = metrics.get("annualized_return", 0.0)
             normalized = (annualized_return + 0.5) / 1.5
             return max(0.0, min(1.0, normalized))
-        
+
         elif objective_metric == "win_rate":
             # 胜率本身已经在 0-1 之间
             win_rate = metrics.get("win_rate", 0.0)
             return max(0.0, min(1.0, win_rate))
-        
+
         elif objective_metric == "profit_factor":
             # Profit Factor，通常 0-5 之间，>1 才有意义
             profit_factor = metrics.get("profit_factor", 0.0)
@@ -540,7 +660,7 @@ class StrategyHyperparameterOptimizer:
             # 将 [0, 3] 映射到 [0, 1]，>3 视为 1
             normalized = min(1.0, profit_factor / 3.0)
             return max(0.0, normalized)
-        
+
         elif objective_metric == "max_drawdown":
             # 最大回撤（负数或0），越小越好，这里转换为“越大越好”的得分
             max_drawdown = metrics.get("max_drawdown", 0.0)
@@ -548,7 +668,7 @@ class StrategyHyperparameterOptimizer:
             # 假设 0-60% 的回撤区间，将 0 回撤映射到 1，60% 回撤映射到 0
             normalized = 1.0 - min(1.0, dd / 0.6)
             return max(0.0, normalized)
-        
+
         elif objective_metric == "cost":
             # 交易成本：手续费 + 滑点，占初始资金比例，越低越好
             cost_stats = backtest_report.get("cost_statistics", {})
@@ -556,15 +676,15 @@ class StrategyHyperparameterOptimizer:
             # 0 成本 → 1 分，5% 成本 → 0 分，线性下降
             normalized = 1.0 - min(1.0, max(0.0, cost_ratio) / 0.05)
             return max(0.0, normalized)
-        
+
         elif objective_metric == "custom":
             # 自定义组合
             if not objective_weights:
                 objective_weights = {"sharpe_ratio": 0.6, "total_return": 0.4}
-            
+
             total_score = 0.0
             total_weight = 0.0
-            
+
             for metric_name, weight in objective_weights.items():
                 if metric_name == "sharpe_ratio":
                     sharpe = metrics.get("sharpe_ratio", 0.0)
@@ -610,22 +730,22 @@ class StrategyHyperparameterOptimizer:
                     annualized_return_val = metrics.get("annualized_return", 0.0)
                     normalized = (annualized_return_val + 0.5) / 1.5
                     total_score += weight * max(0.0, min(1.0, normalized))
-                
+
                 total_weight += weight
-            
+
             if total_weight > 0:
                 return total_score / total_weight
             return 0.0
-        
+
         else:
             # 默认返回夏普比率
             sharpe_ratio = metrics.get("sharpe_ratio", 0.0)
             normalized = (sharpe_ratio + 2) / 7
             return max(0.0, min(1.0, normalized))
-    
+
     def get_default_param_space(self, strategy_name: str) -> Dict[str, Any]:
         """获取策略的默认参数空间"""
-        
+
         if strategy_name.lower() == "cointegration":
             return {
                 "lookback_period": {
@@ -633,31 +753,30 @@ class StrategyHyperparameterOptimizer:
                     "low": 30,
                     "high": 120,
                     "default": 60,
-                    "enabled": True
+                    "enabled": True,
                 },
                 "half_life": {
                     "type": "int",
                     "low": 10,
                     "high": 50,
                     "default": 20,
-                    "enabled": True
+                    "enabled": True,
                 },
                 "entry_threshold": {
                     "type": "float",
                     "low": 1.0,
                     "high": 3.0,
                     "default": 2.0,
-                    "enabled": True
+                    "enabled": True,
                 },
                 "exit_threshold": {
                     "type": "float",
                     "low": 0.1,
                     "high": 1.0,
                     "default": 0.5,
-                    "enabled": True
-                }
+                    "enabled": True,
+                },
             }
         else:
             # 其他策略的默认参数空间
             return {}
-

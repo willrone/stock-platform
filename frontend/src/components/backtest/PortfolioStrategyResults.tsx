@@ -1,6 +1,6 @@
 /**
  * 组合策略结果展示组件
- * 
+ *
  * 展示组合策略回测结果，包括：
  * - 策略贡献度可视化
  * - 策略权重分布图表
@@ -34,11 +34,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import {
-  TrendingUp,
-  PieChart as PieChartIcon,
-  BarChart3,
-} from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
 
 export interface PortfolioStrategyInfo {
   name: string;
@@ -183,10 +179,7 @@ export function PortfolioStrategyResults({
 
       {/* 权重分布图表 */}
       <Card>
-        <CardHeader
-          avatar={<PieChartIcon size={24} />}
-          title="策略权重分布"
-        />
+        <CardHeader avatar={<PieChartIcon size={24} />} title="策略权重分布" />
         <CardContent>
           <Box sx={{ height: 400 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -217,10 +210,7 @@ export function PortfolioStrategyResults({
       {contributionData.length > 0 && (
         <>
           <Card>
-            <CardHeader
-              avatar={<BarChart3 size={24} />}
-              title="策略收益贡献对比"
-            />
+            <CardHeader avatar={<BarChart3 size={24} />} title="策略收益贡献对比" />
             <CardContent>
               <Box sx={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -238,10 +228,7 @@ export function PortfolioStrategyResults({
           </Card>
 
           <Card>
-            <CardHeader
-              avatar={<TrendingUp size={24} />}
-              title="策略交易次数对比"
-            />
+            <CardHeader avatar={<TrendingUp size={24} />} title="策略交易次数对比" />
             <CardContent>
               <Box sx={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -263,10 +250,7 @@ export function PortfolioStrategyResults({
       {/* 组合策略总体表现 */}
       {backtestData.portfolio && (
         <Card>
-          <CardHeader
-            avatar={<TrendingUp size={24} />}
-            title="组合策略总体表现"
-          />
+          <CardHeader avatar={<TrendingUp size={24} />} title="组合策略总体表现" />
           <CardContent>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>

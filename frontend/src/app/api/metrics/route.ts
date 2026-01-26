@@ -5,28 +5,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // 简单的内存指标存储（生产环境应使用Redis等）
-let metrics = {
+const metrics = {
   page_views: 0,
   api_calls: 0,
   errors: 0,
-  last_reset: Date.now()
+  last_reset: Date.now(),
 };
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const prometheusMetrics = generatePrometheusMetrics();
-    
+
     return new Response(prometheusMetrics, {
       headers: {
-        'Content-Type': 'text/plain; version=0.0.4; charset=utf-8'
-      }
+        'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+      },
     });
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      message: '指标收集失败',
-      error: error instanceof Error ? error.message : '未知错误'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: '指标收集失败',
+        error: error instanceof Error ? error.message : '未知错误',
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { type, value = 1 } = body;
-    
+
     // 更新指标
     switch (type) {
       case 'page_view':
@@ -47,30 +50,36 @@ export async function POST(request: NextRequest) {
         metrics.errors += value;
         break;
       default:
-        return NextResponse.json({
-          success: false,
-          message: '未知的指标类型'
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            success: false,
+            message: '未知的指标类型',
+          },
+          { status: 400 }
+        );
     }
-    
+
     return NextResponse.json({
       success: true,
       message: '指标更新成功',
-      data: metrics
+      data: metrics,
     });
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      message: '指标更新失败',
-      error: error instanceof Error ? error.message : '未知错误'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: '指标更新失败',
+        error: error instanceof Error ? error.message : '未知错误',
+      },
+      { status: 500 }
+    );
   }
 }
 
 function generatePrometheusMetrics(): string {
   const now = Date.now();
   const uptime = (now - metrics.last_reset) / 1000;
-  
+
   return `# HELP frontend_page_views_total 页面访问总数
 # TYPE frontend_page_views_total counter
 frontend_page_views_total ${metrics.page_views}
@@ -93,6 +102,8 @@ frontend_memory_usage_bytes ${process.memoryUsage().heapUsed}
 
 # HELP frontend_info 前端应用信息
 # TYPE frontend_info info
-frontend_info{version="1.0.0",service="stock-prediction-frontend",environment="${process.env.NODE_ENV || 'development'}"} 1
+frontend_info{version="1.0.0",service="stock-prediction-frontend",environment="${
+    process.env.NODE_ENV || 'development'
+  }"} 1
 `;
 }

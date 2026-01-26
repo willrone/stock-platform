@@ -1,6 +1,6 @@
 /**
  * 系统健康状态卡片组件
- * 
+ *
  * 显示各个服务的健康状态，包括：
  * - 整体健康状态
  * - 各服务详细状态
@@ -23,14 +23,7 @@ import {
   IconButton,
   CircularProgress,
 } from '@mui/material';
-import {
-  Activity,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  RefreshCw,
-  Clock,
-} from 'lucide-react';
+import { Activity, CheckCircle, XCircle, AlertTriangle, RefreshCw, Clock } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 
 interface ServiceHealth {
@@ -66,7 +59,7 @@ export function SystemHealthCard() {
 
   useEffect(() => {
     loadHealthData();
-    
+
     // 每30秒自动刷新
     const interval = setInterval(loadHealthData, 30000);
     return () => clearInterval(interval);
@@ -89,17 +82,21 @@ export function SystemHealthCard() {
   };
 
   const getResponseTimeColor = (responseTime: number): string => {
-    if (responseTime < 100) return 'success.main';
-    if (responseTime < 500) return 'warning.main';
+    if (responseTime < 100) {
+      return 'success.main';
+    }
+    if (responseTime < 500) {
+      return 'warning.main';
+    }
     return 'error.main';
   };
 
   const formatServiceName = (serviceName: string) => {
     const nameMap: Record<string, string> = {
-      'data_service': '数据服务',
-      'indicators_service': '指标服务',
-      'parquet_manager': '文件管理',
-      'sync_engine': '同步引擎',
+      data_service: '数据服务',
+      indicators_service: '指标服务',
+      parquet_manager: '文件管理',
+      sync_engine: '同步引擎',
     };
     return nameMap[serviceName] || serviceName;
   };
@@ -107,10 +104,7 @@ export function SystemHealthCard() {
   if (loading && !healthData) {
     return (
       <Card>
-        <CardHeader
-          avatar={<Activity size={24} />}
-          title="系统健康状态"
-        />
+        <CardHeader avatar={<Activity size={24} />} title="系统健康状态" />
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={24} sx={{ mr: 1 }} />
@@ -142,70 +136,70 @@ export function SystemHealthCard() {
                 )
               }
             />
-            <IconButton
-              size="small"
-              onClick={loadHealthData}
-              disabled={loading}
-            >
+            <IconButton size="small" onClick={loadHealthData} disabled={loading}>
               <RefreshCw size={16} />
             </IconButton>
           </Box>
         }
       />
       <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {healthData?.services && Object.entries(healthData.services).map(([serviceName, service]) => (
-          <Box
-            key={serviceName}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              p: 1.5,
-              bgcolor: 'grey.50',
-              borderRadius: 1,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              {getServiceIcon(service)}
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {formatServiceName(serviceName)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  最后检查: {new Date(service.last_check).toLocaleTimeString()}
-                </Typography>
-              </Box>
-            </Box>
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box sx={{ textAlign: 'right' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Clock size={12} color="#666" />
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 500, color: getResponseTimeColor(service.response_time_ms) }}
-                  >
-                    {service.response_time_ms}ms
+        {healthData?.services &&
+          Object.entries(healthData.services).map(([serviceName, service]) => (
+            <Box
+              key={serviceName}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                p: 1.5,
+                bgcolor: 'grey.50',
+                borderRadius: 1,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {getServiceIcon(service)}
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {formatServiceName(serviceName)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    最后检查: {new Date(service.last_check).toLocaleTimeString()}
                   </Typography>
                 </Box>
-                {service.error_message && (
-                  <Tooltip title={service.error_message}>
-                    <Typography variant="caption" color="error" sx={{ cursor: 'help' }}>
-                      错误详情
-                    </Typography>
-                  </Tooltip>
-                )}
               </Box>
-              
-              <Chip
-                label={getServiceStatus(service).text}
-                color={getServiceStatus(service).color}
-                size="small"
-              />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Clock size={12} color="#666" />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 500,
+                        color: getResponseTimeColor(service.response_time_ms),
+                      }}
+                    >
+                      {service.response_time_ms}ms
+                    </Typography>
+                  </Box>
+                  {service.error_message && (
+                    <Tooltip title={service.error_message}>
+                      <Typography variant="caption" color="error" sx={{ cursor: 'help' }}>
+                        错误详情
+                      </Typography>
+                    </Tooltip>
+                  )}
+                </Box>
+
+                <Chip
+                  label={getServiceStatus(service).text}
+                  color={getServiceStatus(service).color}
+                  size="small"
+                />
+              </Box>
             </Box>
-          </Box>
-        ))}
-        
+          ))}
+
         <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">

@@ -1,6 +1,6 @@
 /**
  * 超参优化页面
- * 
+ *
  * 提供完整的超参优化功能：
  * - 创建优化任务
  * - 查看任务列表
@@ -11,15 +11,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  CardContent,
-  Tabs,
-  Tab,
-  Box,
-  Typography,
-} from '@mui/material';
-import { useRouter } from 'next/navigation';
+import { Card, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
 import { OptimizationService, OptimizationTask } from '../../services/optimizationService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import CreateOptimizationTaskForm from '../../components/optimization/CreateOptimizationTaskForm';
@@ -27,7 +19,6 @@ import OptimizationTaskList from '../../components/optimization/OptimizationTask
 import OptimizationTaskDetail from '../../components/optimization/OptimizationTaskDetail';
 
 export default function OptimizationPage() {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState('list');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<OptimizationTask[]>([]);
@@ -109,10 +100,7 @@ export default function OptimizationPage() {
         {activeTab === 'detail' && selectedTaskId && (
           <Card>
             <CardContent>
-              <OptimizationTaskDetail
-                taskId={selectedTaskId}
-                onBack={() => setActiveTab('list')}
-              />
+              <OptimizationTaskDetail taskId={selectedTaskId} onBack={() => setActiveTab('list')} />
             </CardContent>
           </Card>
         )}

@@ -1,6 +1,6 @@
 /**
  * 前端集成测试
- * 
+ *
  * 测试前端与后端的集成功能，包括：
  * - API服务集成
  * - WebSocket连接
@@ -8,8 +8,9 @@
  * - 用户工作流程
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { act } from 'react-dom/test-utils';
+// 测试工具导入（保留以备将来使用）
+// import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+// import { act } from 'react-dom/test-utils';
 
 // 模拟API服务
 jest.mock('../services/api', () => ({
@@ -71,7 +72,9 @@ describe('前端集成测试', () => {
         prediction_engine: { status: 'healthy', active_models: 3 },
       };
 
-      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(mockSystemStatus);
+      (apiRequest.get as jest.MockedFunction<typeof apiRequest.get>).mockResolvedValue(
+        mockSystemStatus
+      );
 
       const result = await apiRequest.get('/system/status');
       expect(result).toEqual(mockSystemStatus);
@@ -121,14 +124,14 @@ describe('前端集成测试', () => {
 
     it('应该能够订阅任务更新', () => {
       const taskId = 'test_task_123';
-      
+
       wsService.subscribeToTask(taskId);
       expect(wsService.subscribeToTask).toHaveBeenCalledWith(taskId);
     });
 
     it('应该能够取消订阅任务更新', () => {
       const taskId = 'test_task_123';
-      
+
       wsService.unsubscribeFromTask(taskId);
       expect(wsService.unsubscribeFromTask).toHaveBeenCalledWith(taskId);
     });
@@ -140,7 +143,7 @@ describe('前端集成测试', () => {
 
     it('应该能够发送消息', () => {
       const message = { type: 'ping' };
-      
+
       wsService.send('ping', message);
       expect(wsService.send).toHaveBeenCalledWith('ping', message);
     });

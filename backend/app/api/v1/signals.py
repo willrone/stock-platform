@@ -8,20 +8,19 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
-import json
 
 from app.api.v1.schemas import StandardResponse
 from app.core.config import settings
 from app.core.container import get_data_service
 from app.services.backtest import AdvancedStrategyFactory, SignalType, StrategyFactory
 from app.services.data import SimpleDataService
-
 
 router = APIRouter(prefix="/signals", tags=["策略信号"])
 
@@ -184,8 +183,8 @@ def _compute_latest_signal_for_stock(
     计算近window_days窗口内最后一次 BUY/SELL 事件；若无则 HOLD。
     返回：signal_side, signal_date, strength, price, reason
     """
-    stock_code = df.attrs.get('stock_code', 'unknown')
-    
+    stock_code = df.attrs.get("stock_code", "unknown")
+
     if df.empty:
         return "HOLD", None, 0.0, None, None
 
@@ -198,7 +197,7 @@ def _compute_latest_signal_for_stock(
         recent_dates = dates[-window_days:] if len(dates) > window_days else dates
         if not recent_dates:
             return "HOLD", None, 0.0, None, None
-            
+
         last_event: Optional[Tuple[str, datetime, float, float, str]] = None
 
         for dt in recent_dates:
@@ -211,9 +210,21 @@ def _compute_latest_signal_for_stock(
             for s in signals or []:
                 try:
                     if s.signal_type == SignalType.BUY:
-                        last_event = ("BUY", s.timestamp, float(s.strength), float(s.price), s.reason or "")
+                        last_event = (
+                            "BUY",
+                            s.timestamp,
+                            float(s.strength),
+                            float(s.price),
+                            s.reason or "",
+                        )
                     elif s.signal_type == SignalType.SELL:
-                        last_event = ("SELL", s.timestamp, float(s.strength), float(s.price), s.reason or "")
+                        last_event = (
+                            "SELL",
+                            s.timestamp,
+                            float(s.strength),
+                            float(s.price),
+                            s.reason or "",
+                        )
                 except (AttributeError, ValueError, TypeError) as e:
                     logger.debug(f"解析信号失败: {stock_code} @ {dt}: {e}")
                     continue
@@ -222,7 +233,9 @@ def _compute_latest_signal_for_stock(
             # 无事件，仍返回窗口末端日期作为“最后观察日”
             try:
                 last_date = recent_dates[-1].to_pydatetime() if recent_dates else None
-                last_price = float(df["close"].iloc[-1]) if not df["close"].empty else None
+                last_price = (
+                    float(df["close"].iloc[-1]) if not df["close"].empty else None
+                )
                 return "HOLD", last_date, 0.0, last_price, "窗口内无买卖事件"
             except (IndexError, KeyError, ValueError) as e:
                 logger.debug(f"获取默认值失败: {stock_code}: {e}")
@@ -237,10 +250,14 @@ def _compute_latest_signal_for_stock(
 
 @router.get("/latest", response_model=StandardResponse)
 async def get_latest_signals(
-    strategy_name: str = Query(..., description="策略名称（与 /backtest/strategies 的 key 对应）"),
+    strategy_name: str = Query(
+        ..., description="策略名称（与 /backtest/strategies 的 key 对应）"
+    ),
     strategy_config: Optional[str] = Query(None, description="策略参数（JSON字符串）"),
     days: int = Query(60, ge=5, le=365, description="观察窗口：最近N个交易日"),
-    source: SignalSource = Query("local", description="股票池来源：local=本地parquet，remote=远端数据服务"),
+    source: SignalSource = Query(
+        "local", description="股票池来源：local=本地parquet，remote=远端数据服务"
+    ),
     limit: int = Query(200, ge=1, le=2000, description="分页大小（全市场很大，建议分页）"),
     offset: int = Query(0, ge=0, description="分页偏移"),
     data_service: SimpleDataService = Depends(get_data_service),
@@ -253,7 +270,9 @@ async def get_latest_signals(
     """
     try:
         strategy_config_obj = _parse_json_param(strategy_config, "strategy_config")
-        all_codes = await _get_universe_stock_codes(source=source, data_service=data_service)
+        all_codes = await _get_universe_stock_codes(
+            source=source, data_service=data_service
+        )
         total = len(all_codes)
         page_codes = all_codes[offset : offset + limit]
 
@@ -270,7 +289,9 @@ async def get_latest_signals(
             try:
                 rows = await data_service.get_stock_data(code, start_dt, end_dt)
                 df = _stockdata_list_to_df(code, rows or [])
-                side, ts, strength, price, reason = _compute_latest_signal_for_stock(strategy, df, days)
+                side, ts, strength, price, reason = _compute_latest_signal_for_stock(
+                    strategy, df, days
+                )
                 results.append(
                     {
                         "stock_code": code,
@@ -309,7 +330,9 @@ async def get_latest_signals_multi(
     ),
     strategy_configs: Optional[str] = Query(None, description="多策略参数（JSON字符串，key为策略名）"),
     days: int = Query(60, ge=5, le=365, description="观察窗口：最近N个交易日"),
-    source: SignalSource = Query("local", description="股票池来源：local=本地parquet，remote=远端数据服务"),
+    source: SignalSource = Query(
+        "local", description="股票池来源：local=本地parquet，remote=远端数据服务"
+    ),
     limit: int = Query(200, ge=1, le=2000, description="分页大小（全市场很大，建议分页）"),
     offset: int = Query(0, ge=0, description="分页偏移"),
     data_service: SimpleDataService = Depends(get_data_service),
@@ -343,13 +366,17 @@ async def get_latest_signals_multi(
             raise HTTPException(status_code=400, detail="一次最多支持查询8个策略，请减少策略数量")
 
         strategy_configs_obj = _parse_json_param(strategy_configs, "strategy_configs")
-        all_codes = await _get_universe_stock_codes(source=source, data_service=data_service)
+        all_codes = await _get_universe_stock_codes(
+            source=source, data_service=data_service
+        )
         total = len(all_codes)
         page_codes = all_codes[offset : offset + limit]
 
         # 使用所有策略中需求最大的 warmup 窗口
         max_warmup = max(
-            _infer_warmup_days_for_config(name, strategy_configs_obj.get(name, {}), days)
+            _infer_warmup_days_for_config(
+                name, strategy_configs_obj.get(name, {}), days
+            )
             for name in uniq_strategy_names
         )
         end_dt = datetime.now()
@@ -359,7 +386,9 @@ async def get_latest_signals_multi(
         strategies: Dict[str, Any] = {}
         for name in uniq_strategy_names:
             try:
-                strategies[name] = _create_strategy(name, strategy_configs_obj.get(name, {}))
+                strategies[name] = _create_strategy(
+                    name, strategy_configs_obj.get(name, {})
+                )
             except Exception as e:
                 logger.error(f"创建策略失败: {name}: {e}")
                 raise HTTPException(status_code=400, detail=f"创建策略失败: {name}: {e}")
@@ -367,7 +396,7 @@ async def get_latest_signals_multi(
         results: List[Dict[str, Any]] = []
         failures: List[str] = []
         total_stocks = len(page_codes)
-        
+
         logger.info(f"开始处理多策略信号: {len(uniq_strategy_names)}个策略, {total_stocks}只股票")
 
         for idx, code in enumerate(page_codes, 1):
@@ -375,25 +404,33 @@ async def get_latest_signals_multi(
                 # 每处理10只股票记录一次进度
                 if idx % 10 == 0 or idx == total_stocks:
                     logger.info(f"处理进度: {idx}/{total_stocks} ({code})")
-                
+
                 rows = await data_service.get_stock_data(code, start_dt, end_dt)
                 df = _stockdata_list_to_df(code, rows or [])
-                
+
                 if df.empty:
                     logger.debug(f"股票 {code} 数据为空，跳过")
                     # 即使数据为空，也返回结果，但所有策略信号为 None
-                    results.append({
-                        "stock_code": code,
-                        "per_strategy": {name: None for name in uniq_strategy_names},
-                    })
+                    results.append(
+                        {
+                            "stock_code": code,
+                            "per_strategy": {
+                                name: None for name in uniq_strategy_names
+                            },
+                        }
+                    )
                     continue
 
                 per_strategy: Dict[str, Any] = {}
                 for name, strategy in strategies.items():
                     try:
-                        side, ts, strength, price, reason = _compute_latest_signal_for_stock(
-                            strategy, df, days
-                        )
+                        (
+                            side,
+                            ts,
+                            strength,
+                            price,
+                            reason,
+                        ) = _compute_latest_signal_for_stock(strategy, df, days)
                         per_strategy[name] = {
                             "latest_signal": side,
                             "signal_date": ts.isoformat() if ts else None,
@@ -423,12 +460,14 @@ async def get_latest_signals_multi(
                 logger.warning(f"处理股票失败: {error_msg}", exc_info=True)
                 failures.append(error_msg)
                 # 即使股票处理失败，也返回一个空结果，确保响应结构一致
-                results.append({
-                    "stock_code": code,
-                    "per_strategy": {name: None for name in uniq_strategy_names},
-                })
+                results.append(
+                    {
+                        "stock_code": code,
+                        "per_strategy": {name: None for name in uniq_strategy_names},
+                    }
+                )
                 continue
-        
+
         logger.info(f"多策略信号处理完成: 成功{len(results)}只股票, 失败{len(failures)}个")
 
         # 即使有部分失败，只要处理了部分股票，就返回部分结果
@@ -455,7 +494,7 @@ async def get_latest_signals_multi(
         raise
     except Exception as e:
         error_detail = f"获取多策略最新信号失败: {type(e).__name__}: {str(e)}"
-        if 'results' in locals():
+        if "results" in locals():
             error_detail += f" (已处理{len(results)}只股票)"
         logger.error(error_detail, exc_info=True)
         raise HTTPException(status_code=500, detail=error_detail)
@@ -464,7 +503,9 @@ async def get_latest_signals_multi(
 @router.get("/history", response_model=StandardResponse)
 async def get_signal_history(
     stock_code: str = Query(..., description="股票代码，如 000001.SZ"),
-    strategy_name: str = Query(..., description="策略名称（与 /backtest/strategies 的 key 对应）"),
+    strategy_name: str = Query(
+        ..., description="策略名称（与 /backtest/strategies 的 key 对应）"
+    ),
     strategy_config: Optional[str] = Query(None, description="策略参数（JSON字符串）"),
     days: int = Query(60, ge=5, le=365, description="最近N个交易日"),
     data_service: SimpleDataService = Depends(get_data_service),
@@ -560,7 +601,9 @@ async def get_signal_history_multi(
 
         strategy_configs_obj = _parse_json_param(strategy_configs, "strategy_configs")
         max_warmup = max(
-            _infer_warmup_days_for_config(name, strategy_configs_obj.get(name, {}), days)
+            _infer_warmup_days_for_config(
+                name, strategy_configs_obj.get(name, {}), days
+            )
             for name in uniq_strategy_names
         )
         end_dt = datetime.now()
@@ -603,7 +646,9 @@ async def get_signal_history_multi(
                     events_by_strategy[name].append(
                         {
                             "timestamp": s.timestamp.isoformat(),
-                            "signal": "BUY" if s.signal_type == SignalType.BUY else "SELL",
+                            "signal": "BUY"
+                            if s.signal_type == SignalType.BUY
+                            else "SELL",
                             "strength": float(s.strength),
                             "price": float(s.price),
                             "reason": s.reason,

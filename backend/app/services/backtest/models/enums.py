@@ -7,6 +7,7 @@ from enum import Enum
 
 class SignalType(Enum):
     """信号类型"""
+
     BUY = 1
     SELL = -1
     HOLD = 0
@@ -14,6 +15,7 @@ class SignalType(Enum):
 
 class OrderType(Enum):
     """订单类型"""
+
     MARKET = "market"
     LIMIT = "limit"
     STOP = "stop"

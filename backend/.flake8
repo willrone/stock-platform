@@ -1,0 +1,48 @@
+[flake8]
+# 最大行长度（与black保持一致）
+max-line-length = 88
+# 最大复杂度
+max-complexity = 10
+# 排除的目录和文件
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .eggs,
+    *.egg,
+    build,
+    dist,
+    .mypy_cache,
+    .pytest_cache,
+    migrations,
+    node_modules
+
+# 忽略的错误
+ignore =
+    # E203: 空格在':'前（与black冲突）
+    E203,
+    # W503: 行断点前二元运算符（与black冲突）
+    W503,
+    # E501: 行太长（由max-line-length控制）
+    E501
+
+# 选择的错误和警告
+select =
+    E,  # pycodestyle errors
+    W,  # pycodestyle warnings
+    F,  # pyflakes
+    C,  # mccabe complexity
+    B,  # flake8-bugbear
+    I   # isort
+
+# 每个文件的复杂度警告阈值
+max-complexity = 10
+
+# 每个文件的最大行数
+max-file-size = 1000
+
+# 统计信息
+statistics = True
+count = True

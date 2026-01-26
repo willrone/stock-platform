@@ -93,14 +93,16 @@ export default function InteractiveChartsContainer({
 
   // 加载图表数据
   const loadChartData = async (forceRefresh = false) => {
-    console.log(`[InteractiveChartsContainer] 开始加载图表数据: taskId=${taskId}, forceRefresh=${forceRefresh}`);
-    
+    console.log(
+      `[InteractiveChartsContainer] 开始加载图表数据: taskId=${taskId}, forceRefresh=${forceRefresh}`
+    );
+
     try {
       setLoading(true);
       setError(null);
 
-      console.log(`[InteractiveChartsContainer] 并行加载三种图表数据...`);
-      
+      console.log('[InteractiveChartsContainer] 并行加载三种图表数据...');
+
       // 并行加载所有图表数据，允许部分失败
       const [equityResult, drawdownResult, heatmapResult] = await Promise.allSettled([
         BacktestService.getChartData(taskId, 'equity_curve', forceRefresh),
@@ -114,32 +116,32 @@ export default function InteractiveChartsContainer({
       const heatmapData = heatmapResult.status === 'fulfilled' ? heatmapResult.value : null;
 
       if (equityResult.status === 'rejected') {
-        console.warn(`[InteractiveChartsContainer] 权益曲线数据加载失败:`, equityResult.reason);
+        console.warn('[InteractiveChartsContainer] 权益曲线数据加载失败:', equityResult.reason);
       }
       if (drawdownResult.status === 'rejected') {
-        console.warn(`[InteractiveChartsContainer] 回撤曲线数据加载失败:`, drawdownResult.reason);
+        console.warn('[InteractiveChartsContainer] 回撤曲线数据加载失败:', drawdownResult.reason);
       }
       if (heatmapResult.status === 'rejected') {
-        console.warn(`[InteractiveChartsContainer] 月度热力图数据加载失败:`, heatmapResult.reason);
+        console.warn('[InteractiveChartsContainer] 月度热力图数据加载失败:', heatmapResult.reason);
       }
 
       // 如果所有数据都加载失败，尝试从现有回测数据生成
       if (!equityData && !drawdownData && !heatmapData) {
-        console.log(`[InteractiveChartsContainer] 所有API数据加载失败，尝试从现有回测数据生成...`);
+        console.log('[InteractiveChartsContainer] 所有API数据加载失败，尝试从现有回测数据生成...');
         generateChartDataFromBacktest();
         return;
       }
 
-      console.log(`[InteractiveChartsContainer] 基础图表数据加载结果:`, {
+      console.log('[InteractiveChartsContainer] 基础图表数据加载结果:', {
         equityData: !!equityData,
         drawdownData: !!drawdownData,
-        heatmapData: !!heatmapData
+        heatmapData: !!heatmapData,
       });
 
       // 尝试加载基准数据（可选）
       let benchmarkData;
       try {
-        console.log(`[InteractiveChartsContainer] 尝试加载基准数据...`);
+        console.log('[InteractiveChartsContainer] 尝试加载基准数据...');
         const benchmark = await BacktestService.getBenchmarkData(taskId);
         if (benchmark && benchmark.benchmark_returns) {
           benchmarkData = {
@@ -147,9 +149,9 @@ export default function InteractiveChartsContainer({
             values: benchmark.benchmark_returns.map((r: any) => r.cumulative_return * 100000), // 假设初始值
             returns: benchmark.benchmark_returns.map((r: any) => r.return),
           };
-          console.log(`[InteractiveChartsContainer] 基准数据加载成功`);
+          console.log('[InteractiveChartsContainer] 基准数据加载成功');
         } else {
-          console.log(`[InteractiveChartsContainer] 基准数据为空`);
+          console.log('[InteractiveChartsContainer] 基准数据为空');
         }
       } catch (benchmarkError) {
         console.warn('[InteractiveChartsContainer] 无法加载基准数据:', benchmarkError);
@@ -161,14 +163,13 @@ export default function InteractiveChartsContainer({
         monthlyHeatmap: heatmapData as ChartData['monthlyHeatmap'],
         benchmarkData,
       };
-      
-      console.log(`[InteractiveChartsContainer] 所有图表数据设置完成:`, finalChartData);
-      setChartData(finalChartData);
 
+      console.log('[InteractiveChartsContainer] 所有图表数据设置完成:', finalChartData);
+      setChartData(finalChartData);
     } catch (err: any) {
       console.error('[InteractiveChartsContainer] 加载图表数据失败:', err);
       // 如果API加载失败，尝试从现有回测数据生成
-      console.log(`[InteractiveChartsContainer] 尝试从现有回测数据生成图表...`);
+      console.log('[InteractiveChartsContainer] 尝试从现有回测数据生成图表...');
       generateChartDataFromBacktest();
       if (!chartData || Object.keys(chartData).length === 0) {
         setError(err.message || '加载图表数据失败');
@@ -180,7 +181,9 @@ export default function InteractiveChartsContainer({
 
   // 从现有回测数据生成图表数据（备用方案）
   const generateChartDataFromBacktest = () => {
-    if (!backtestData) return;
+    if (!backtestData) {
+      return;
+    }
 
     try {
       // 生成权益曲线数据
@@ -192,15 +195,21 @@ export default function InteractiveChartsContainer({
           const dateB = new Date(b.date || b.snapshot_date).getTime();
           return dateA - dateB;
         });
-        
+
         const equityCurveData = {
           dates: sortedHistory.map((h: any) => h.date || h.snapshot_date),
           portfolioValues: sortedHistory.map((h: any) => h.portfolio_value),
           returns: sortedHistory.map((h: any) => h.total_return || 0),
           dailyReturns: sortedHistory.map((h: any) => h.daily_return || 0),
         };
-        
-        console.log(`[InteractiveChartsContainer] 从回测数据生成权益曲线: 数据量=${sortedHistory.length}, 日期范围=${equityCurveData.dates[0]} 至 ${equityCurveData.dates[equityCurveData.dates.length - 1]}`);
+
+        console.log(
+          `[InteractiveChartsContainer] 从回测数据生成权益曲线: 数据量=${
+            sortedHistory.length
+          }, 日期范围=${equityCurveData.dates[0]} 至 ${
+            equityCurveData.dates[equityCurveData.dates.length - 1]
+          }`
+        );
 
         // 生成回撤数据
         const values = equityCurveData.portfolioValues;
@@ -213,9 +222,9 @@ export default function InteractiveChartsContainer({
           if (value > peak) {
             peak = value;
           }
-          const drawdown = (peak - value) / peak * 100;
+          const drawdown = ((peak - value) / peak) * 100;
           drawdowns.push(-drawdown); // 负值表示回撤
-          
+
           if (drawdown > Math.abs(maxDrawdown)) {
             maxDrawdown = -drawdown;
             maxDrawdownDate = equityCurveData.dates[index];
@@ -260,15 +269,19 @@ export default function InteractiveChartsContainer({
   }, [taskId]);
 
   useEffect(() => {
-    console.log(`[InteractiveChartsContainer] 更新selectedStock:`, { stockCode, stockCodes, currentSelected: selectedStock });
-    
+    console.log('[InteractiveChartsContainer] 更新selectedStock:', {
+      stockCode,
+      stockCodes,
+      currentSelected: selectedStock,
+    });
+
     if (stockCode) {
       console.log(`[InteractiveChartsContainer] 使用stockCode: ${stockCode}`);
       setSelectedStock(stockCode);
     } else if (stockCodes && stockCodes.length > 0) {
       const defaultStock = stockCodes[0];
       console.log(`[InteractiveChartsContainer] 使用stockCodes[0]: ${defaultStock}`);
-      setSelectedStock((prev) => {
+      setSelectedStock(prev => {
         // 如果已经有选中的股票且该股票仍在列表中，保持选中
         if (prev && stockCodes.includes(prev)) {
           return prev;
@@ -276,7 +289,7 @@ export default function InteractiveChartsContainer({
         return defaultStock;
       });
     } else {
-      console.warn(`[InteractiveChartsContainer] 没有可用的股票代码`);
+      console.warn('[InteractiveChartsContainer] 没有可用的股票代码');
     }
   }, [stockCode, stockCodes]);
 
@@ -336,7 +349,15 @@ export default function InteractiveChartsContainer({
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              py: 6,
+            }}
+          >
             <CircularProgress size={48} />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               正在加载图表数据...
@@ -396,9 +417,9 @@ export default function InteractiveChartsContainer({
                   <Select
                     value={selectedStock || ''}
                     label="选择股票"
-                    onChange={(e) => setSelectedStock(e.target.value)}
+                    onChange={e => setSelectedStock(e.target.value)}
                   >
-                    {stockCodes.map((code) => (
+                    {stockCodes.map(code => (
                       <MenuItem key={code} value={code}>
                         {code}
                       </MenuItem>
@@ -406,7 +427,7 @@ export default function InteractiveChartsContainer({
                   </Select>
                 </FormControl>
               )}
-          
+
               <Button
                 size="small"
                 variant="outlined"
@@ -472,17 +493,29 @@ export default function InteractiveChartsContainer({
                   <TradingViewChart
                     stockCode={selectedStock}
                     startDate={(() => {
-                      const startDate = backtestData?.start_date || 
-                                       backtestData?.period?.start_date ||
-                                       backtestData?.backtest_config?.start_date;
-                      console.log(`[InteractiveChartsContainer] TradingViewChart startDate:`, startDate, 'from backtestData:', backtestData);
+                      const startDate =
+                        backtestData?.start_date ||
+                        backtestData?.period?.start_date ||
+                        backtestData?.backtest_config?.start_date;
+                      console.log(
+                        '[InteractiveChartsContainer] TradingViewChart startDate:',
+                        startDate,
+                        'from backtestData:',
+                        backtestData
+                      );
                       return startDate;
                     })()}
                     endDate={(() => {
-                      const endDate = backtestData?.end_date || 
-                                     backtestData?.period?.end_date ||
-                                     backtestData?.backtest_config?.end_date;
-                      console.log(`[InteractiveChartsContainer] TradingViewChart endDate:`, endDate, 'from backtestData:', backtestData);
+                      const endDate =
+                        backtestData?.end_date ||
+                        backtestData?.period?.end_date ||
+                        backtestData?.backtest_config?.end_date;
+                      console.log(
+                        '[InteractiveChartsContainer] TradingViewChart endDate:',
+                        endDate,
+                        'from backtestData:',
+                        backtestData
+                      );
                       return endDate;
                     })()}
                     trades={tradeRecords}
@@ -490,9 +523,13 @@ export default function InteractiveChartsContainer({
                     height={420}
                   />
                 ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}
+                  >
                     <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
-                    <Typography variant="body2" color="text.secondary">暂无股票代码</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无股票代码
+                    </Typography>
                   </Box>
                 )}
                 {tradeLoading && (
@@ -515,9 +552,13 @@ export default function InteractiveChartsContainer({
                     loading={false}
                   />
                 ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}
+                  >
                     <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
-                    <Typography variant="body2" color="text.secondary">暂无收益曲线数据</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无收益曲线数据
+                    </Typography>
                   </Box>
                 )}
               </Box>
@@ -526,15 +567,15 @@ export default function InteractiveChartsContainer({
             {activeTab === 'drawdown' && (
               <Box>
                 {chartData.drawdownCurve ? (
-                  <DrawdownChart
-                    taskId={taskId}
-                    data={chartData.drawdownCurve}
-                    loading={false}
-                  />
+                  <DrawdownChart taskId={taskId} data={chartData.drawdownCurve} loading={false} />
                 ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}
+                  >
                     <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
-                    <Typography variant="body2" color="text.secondary">暂无回撤分析数据</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无回撤分析数据
+                    </Typography>
                   </Box>
                 )}
               </Box>
@@ -549,9 +590,13 @@ export default function InteractiveChartsContainer({
                     loading={false}
                   />
                 ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6 }}
+                  >
                     <AlertCircle size={24} color="#666" style={{ marginRight: 8 }} />
-                    <Typography variant="body2" color="text.secondary">暂无月度收益数据</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无月度收益数据
+                    </Typography>
                   </Box>
                 )}
               </Box>

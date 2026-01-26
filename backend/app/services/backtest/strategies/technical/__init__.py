@@ -4,14 +4,6 @@
 包含基础技术分析策略实现
 """
 
-from .basic_strategies import (
-    MovingAverageStrategy,
-    RSIStrategy,
-    MACDStrategy
-)
+from .basic_strategies import MACDStrategy, MovingAverageStrategy, RSIStrategy
 
-__all__ = [
-    'MovingAverageStrategy',
-    'RSIStrategy',
-    'MACDStrategy'
-]
+__all__ = ["MovingAverageStrategy", "RSIStrategy", "MACDStrategy"]

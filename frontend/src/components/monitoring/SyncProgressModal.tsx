@@ -1,6 +1,6 @@
 /**
  * 同步进度模态框组件
- * 
+ *
  * 显示数据同步的实时进度，包括：
  * - 整体进度条
  * - 当前同步的股票
@@ -25,15 +25,7 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import {
-  Clock,
-  CheckCircle,
-  XCircle,
-  Activity,
-  Pause,
-  Play,
-  RotateCcw,
-} from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Activity, Pause, Play, RotateCcw } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 
 interface SyncProgressData {
@@ -56,25 +48,27 @@ interface SyncProgressModalProps {
   onSyncComplete?: () => void;
 }
 
-export function SyncProgressModal({ 
-  isOpen, 
-  onClose, 
-  syncId, 
-  onSyncComplete 
+export function SyncProgressModal({
+  isOpen,
+  onClose,
+  syncId,
+  onSyncComplete,
 }: SyncProgressModalProps) {
   const [progressData, setProgressData] = useState<SyncProgressData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadProgress = useCallback(async () => {
-    if (!syncId) return;
-    
+    if (!syncId) {
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       const data = await DataService.getSyncProgress(syncId);
       setProgressData(data);
-      
+
       // 如果同步完成，通知父组件
       if (data.status === 'completed' && onSyncComplete) {
         onSyncComplete();
@@ -90,7 +84,7 @@ export function SyncProgressModal({
   useEffect(() => {
     if (isOpen && syncId) {
       loadProgress();
-      
+
       // 每2秒更新一次进度
       const interval = setInterval(loadProgress, 2000);
       return () => clearInterval(interval);
@@ -98,8 +92,10 @@ export function SyncProgressModal({
   }, [isOpen, syncId, loadProgress]);
 
   const handleRetry = async () => {
-    if (!syncId) return;
-    
+    if (!syncId) {
+      return;
+    }
+
     try {
       setLoading(true);
       await DataService.retrySyncFailed(syncId);
@@ -113,12 +109,14 @@ export function SyncProgressModal({
   };
 
   const formatTime = (seconds: number | null) => {
-    if (!seconds) return '--';
-    
+    if (!seconds) {
+      return '--';
+    }
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    
+
     if (hours > 0) {
       return `${hours}小时${minutes}分钟`;
     } else if (minutes > 0) {
@@ -128,7 +126,7 @@ export function SyncProgressModal({
     }
   };
 
-  const getStatusColor = (status: string): "primary" | "success" | "error" | "warning" => {
+  const getStatusColor = (status: string): 'primary' | 'success' | 'error' | 'warning' => {
     switch (status) {
       case 'running':
         return 'primary';
@@ -174,12 +172,7 @@ export function SyncProgressModal({
   };
 
   return (
-    <Dialog 
-      open={isOpen} 
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-    >
+    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -193,7 +186,7 @@ export function SyncProgressModal({
           )}
         </Box>
       </DialogTitle>
-      
+
       <DialogContent>
         {error ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -201,11 +194,7 @@ export function SyncProgressModal({
             <Typography variant="body2" color="error" sx={{ fontWeight: 500, mb: 2 }}>
               {error}
             </Typography>
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={loadProgress}
-            >
+            <Button variant="outlined" color="primary" onClick={loadProgress}>
               重新加载
             </Button>
           </Box>
@@ -226,7 +215,7 @@ export function SyncProgressModal({
                   {progressData.progress_percentage.toFixed(1)}%
                 </Typography>
               </Box>
-              
+
               <LinearProgress
                 variant="determinate"
                 value={progressData.progress_percentage}
@@ -292,7 +281,7 @@ export function SyncProgressModal({
                   {new Date(progressData.start_time).toLocaleString()}
                 </Typography>
               </Box>
-              
+
               {progressData.estimated_remaining_time_seconds && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">
@@ -303,7 +292,7 @@ export function SyncProgressModal({
                   </Typography>
                 </Box>
               )}
-              
+
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" color="text.secondary">
                   最后更新
@@ -323,7 +312,7 @@ export function SyncProgressModal({
           </Box>
         )}
       </DialogContent>
-      
+
       <DialogActions>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
           {(progressData?.failed_stocks || 0) > 0 && progressData?.status !== 'running' && (
@@ -337,9 +326,9 @@ export function SyncProgressModal({
               重试失败项
             </Button>
           )}
-          
+
           <Box sx={{ flex: 1 }} />
-          
+
           {progressData?.status === 'completed' || progressData?.status === 'failed' ? (
             <Button variant="contained" color="primary" onClick={onClose}>
               关闭

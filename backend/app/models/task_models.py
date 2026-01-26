@@ -2,19 +2,21 @@
 任务管理相关数据模型
 """
 
+import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
-from sqlalchemy import Column, Integer, String, DateTime, Float, Text, JSON, Boolean
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-import uuid
 
 from app.core.database import Base
 
 
 class TaskType(Enum):
     """任务类型"""
+
     PREDICTION = "prediction"
     BACKTEST = "backtest"
     TRAINING = "training"
@@ -25,6 +27,7 @@ class TaskType(Enum):
 
 class TaskStatus(Enum):
     """任务状态"""
+
     CREATED = "created"
     QUEUED = "queued"
     RUNNING = "running"
@@ -36,8 +39,9 @@ class TaskStatus(Enum):
 
 class Task(Base):
     """任务表"""
+
     __tablename__ = "tasks"
-    
+
     task_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     task_name = Column(String(255), nullable=False)
     task_type = Column(String(50), nullable=False)
@@ -51,7 +55,7 @@ class Task(Base):
     result = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     estimated_duration = Column(Integer, nullable=True)  # 预估时长（秒）
-    
+
     def to_dict(self):
         return {
             "task_id": self.task_id,
@@ -62,18 +66,21 @@ class Task(Base):
             "config": self.config,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "progress": self.progress,
             "result": self.result,
             "error_message": self.error_message,
-            "estimated_duration": self.estimated_duration
+            "estimated_duration": self.estimated_duration,
         }
 
 
 class PredictionResult(Base):
     """预测结果表"""
+
     __tablename__ = "prediction_results"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     task_id = Column(String, nullable=False)
     stock_code = Column(String(20), nullable=False)
@@ -87,31 +94,34 @@ class PredictionResult(Base):
     features_used = Column(JSON, nullable=True)
     risk_metrics = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
+
     def to_dict(self):
         return {
             "id": self.id,
             "task_id": self.task_id,
             "stock_code": self.stock_code,
-            "prediction_date": self.prediction_date.isoformat() if self.prediction_date else None,
+            "prediction_date": self.prediction_date.isoformat()
+            if self.prediction_date
+            else None,
             "predicted_price": self.predicted_price,
             "predicted_direction": self.predicted_direction,
             "confidence_score": self.confidence_score,
             "confidence_interval": {
                 "lower": self.confidence_interval_lower,
-                "upper": self.confidence_interval_upper
+                "upper": self.confidence_interval_upper,
             },
             "model_id": self.model_id,
             "features_used": self.features_used,
             "risk_metrics": self.risk_metrics,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
 class BacktestResult(Base):
     """回测结果表"""
+
     __tablename__ = "backtest_results"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     task_id = Column(String, nullable=False)
     backtest_id = Column(String, nullable=False, unique=True)
@@ -130,7 +140,7 @@ class BacktestResult(Base):
     total_trades = Column(Integer, nullable=False)
     trade_history = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -139,33 +149,34 @@ class BacktestResult(Base):
             "strategy_name": self.strategy_name,
             "period": {
                 "start_date": self.start_date.isoformat() if self.start_date else None,
-                "end_date": self.end_date.isoformat() if self.end_date else None
+                "end_date": self.end_date.isoformat() if self.end_date else None,
             },
             "portfolio": {
                 "initial_cash": self.initial_cash,
                 "final_value": self.final_value,
                 "total_return": self.total_return,
-                "annualized_return": self.annualized_return
+                "annualized_return": self.annualized_return,
             },
             "risk_metrics": {
                 "volatility": self.volatility,
                 "sharpe_ratio": self.sharpe_ratio,
-                "max_drawdown": self.max_drawdown
+                "max_drawdown": self.max_drawdown,
             },
             "trading_stats": {
                 "total_trades": self.total_trades,
                 "win_rate": self.win_rate,
-                "profit_factor": self.profit_factor
+                "profit_factor": self.profit_factor,
             },
             "trade_history": self.trade_history,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
 class ModelInfo(Base):
     """模型信息表"""
+
     __tablename__ = "model_info"
-    
+
     model_id = Column(String, primary_key=True)
     model_name = Column(String(255), nullable=False)
     model_type = Column(String(100), nullable=False)
@@ -181,9 +192,11 @@ class ModelInfo(Base):
     training_stage = Column(String(100), nullable=True)  # 当前训练阶段
     evaluation_report = Column(JSON, nullable=True)  # 评估报告
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
     deployed_at = Column(DateTime, nullable=True)
-    
+
     def to_dict(self):
         return {
             "model_id": self.model_id,
@@ -193,8 +206,12 @@ class ModelInfo(Base):
             "parent_model_id": self.parent_model_id,
             "file_path": self.file_path,
             "training_data_period": {
-                "start": self.training_data_start.isoformat() if self.training_data_start else None,
-                "end": self.training_data_end.isoformat() if self.training_data_end else None
+                "start": self.training_data_start.isoformat()
+                if self.training_data_start
+                else None,
+                "end": self.training_data_end.isoformat()
+                if self.training_data_end
+                else None,
             },
             "performance_metrics": self.performance_metrics,
             "hyperparameters": self.hyperparameters,
@@ -204,14 +221,15 @@ class ModelInfo(Base):
             "evaluation_report": self.evaluation_report,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "deployed_at": self.deployed_at.isoformat() if self.deployed_at else None
+            "deployed_at": self.deployed_at.isoformat() if self.deployed_at else None,
         }
 
 
 class ModelLifecycleEvent(Base):
     """模型生命周期事件表"""
+
     __tablename__ = "model_lifecycle_events"
-    
+
     event_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     model_id = Column(String, nullable=False)
     from_status = Column(String(50), nullable=False)
@@ -219,7 +237,7 @@ class ModelLifecycleEvent(Base):
     reason = Column(Text, nullable=True)
     event_metadata = Column(JSON, nullable=True)  # 附加元数据
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    
+
     def to_dict(self):
         return {
             "event_id": self.event_id,
@@ -228,7 +246,7 @@ class ModelLifecycleEvent(Base):
             "to_status": self.to_status,
             "reason": self.reason,
             "event_metadata": self.event_metadata,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
@@ -236,6 +254,7 @@ class ModelLifecycleEvent(Base):
 @dataclass
 class PredictionTaskConfig:
     """预测任务配置"""
+
     stock_codes: List[str]
     model_id: str
     horizon: str = "short_term"
@@ -246,6 +265,7 @@ class PredictionTaskConfig:
 @dataclass
 class BacktestTaskConfig:
     """回测任务配置"""
+
     strategy_name: str
     stock_codes: List[str]
     start_date: datetime
@@ -257,6 +277,7 @@ class BacktestTaskConfig:
 @dataclass
 class TrainingTaskConfig:
     """训练任务配置"""
+
     model_name: str
     model_type: str
     stock_codes: List[str]
@@ -269,17 +290,18 @@ class TrainingTaskConfig:
 @dataclass
 class RiskMetrics:
     """风险指标"""
+
     value_at_risk: float
     expected_shortfall: float
     volatility: float
     max_drawdown: float
     sharpe_ratio: float
-    
+
     def to_dict(self):
         return {
             "value_at_risk": self.value_at_risk,
             "expected_shortfall": self.expected_shortfall,
             "volatility": self.volatility,
             "max_drawdown": self.max_drawdown,
-            "sharpe_ratio": self.sharpe_ratio
+            "sharpe_ratio": self.sharpe_ratio,
         }

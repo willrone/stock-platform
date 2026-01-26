@@ -1,6 +1,6 @@
 /**
  * 训练进度WebSocket客户端
- * 
+ *
  * 管理与后端的WebSocket连接，用于接收实时训练进度更新
  */
 
@@ -68,7 +68,7 @@ export class TrainingProgressWebSocket {
           resolve();
         };
 
-        this.ws.onmessage = (event) => {
+        this.ws.onmessage = event => {
           try {
             const data: TrainingProgressData = JSON.parse(event.data);
             this.handleMessage(data);
@@ -77,23 +77,22 @@ export class TrainingProgressWebSocket {
           }
         };
 
-        this.ws.onclose = (event) => {
+        this.ws.onclose = event => {
           console.log('训练进度WebSocket连接已关闭', event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
-          
+
           // 自动重连
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
           }
         };
 
-        this.ws.onerror = (error) => {
+        this.ws.onerror = error => {
           console.error('训练进度WebSocket连接错误:', error);
           this.isConnecting = false;
           reject(error);
         };
-
       } catch (error) {
         this.isConnecting = false;
         reject(error);
@@ -119,7 +118,7 @@ export class TrainingProgressWebSocket {
     if (!this.subscribers.has(modelId)) {
       this.subscribers.set(modelId, []);
     }
-    
+
     this.subscribers.get(modelId)!.push(callback);
 
     // 返回取消订阅函数
@@ -130,7 +129,7 @@ export class TrainingProgressWebSocket {
         if (index > -1) {
           callbacks.splice(index, 1);
         }
-        
+
         // 如果没有更多订阅者，删除该模型的订阅
         if (callbacks.length === 0) {
           this.subscribers.delete(modelId);
@@ -195,9 +194,9 @@ export class TrainingProgressWebSocket {
   private scheduleReconnect(): void {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // 指数退避
-    
+
     console.log(`${delay}ms后尝试重连 (第${this.reconnectAttempts}次)`);
-    
+
     setTimeout(() => {
       this.connect().catch(error => {
         console.error('重连失败:', error);

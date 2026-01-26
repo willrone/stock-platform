@@ -13,11 +13,7 @@ export const metadata: Metadata = {
   keywords: ['股票预测', 'AI', '机器学习', '量化交易', '投资分析'],
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
       <body className={inter.className}>
@@ -28,4 +24,5 @@ export default function RootLayout({
         </MUIThemeProvider>
       </body>
     </html>
-  );}
+  );
+}

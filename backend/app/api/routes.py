@@ -21,4 +21,4 @@ from fastapi import APIRouter
 from app.api.v1.api import api_router
 
 # 导出api_router以保持向后兼容
-__all__ = ['api_router']
+__all__ = ["api_router"]

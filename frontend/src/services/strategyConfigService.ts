@@ -1,6 +1,6 @@
 /**
  * 策略配置管理服务
- * 
+ *
  * 处理策略配置的API调用，包括：
  * - 获取配置列表
  * - 保存配置
@@ -60,15 +60,15 @@ export class StrategyConfigService {
     if (userId) {
       params.user_id = userId;
     }
-    
+
     const response = await apiRequest.get<{ configs: StrategyConfig[]; total_count: number }>(
       '/strategy-configs',
       params
     );
-    
+
     return {
       configs: response.configs || [],
-      total_count: response.total_count || 0
+      total_count: response.total_count || 0,
     };
   }
 
@@ -103,4 +103,3 @@ export class StrategyConfigService {
     return apiRequest.delete(`/strategy-configs/${configId}`);
   }
 }
-

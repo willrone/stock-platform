@@ -1,0 +1,72 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "prettier"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "project": "./tsconfig.json"
+  },
+  "plugins": ["@typescript-eslint", "react", "react-hooks"],
+  "rules": {
+    // TypeScript规则
+    "@typescript-eslint/no-unused-vars": ["error", { 
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_" 
+    }],
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-non-null-assertion": "warn",
+    
+    // React规则
+    "react/react-in-jsx-scope": "off",
+    "react/prop-types": "off",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    
+    // 通用规则
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-debugger": "error",
+    "prefer-const": "error",
+    "no-var": "error",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "curly": ["error", "all"],
+    "no-throw-literal": "error",
+    
+    // 代码风格（Prettier处理格式化，ESLint只检查逻辑）
+    "indent": "off",  // 由Prettier处理
+    "quotes": "off",  // 由Prettier处理
+    "semi": "off",  // 由Prettier处理
+    "comma-dangle": "off",  // 由Prettier处理
+    "object-curly-spacing": "off",  // 由Prettier处理
+    "array-bracket-spacing": "off"  // 由Prettier处理
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true,
+    "jest": true
+  },
+  "ignorePatterns": [
+    ".next",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage"
+  ]
+}

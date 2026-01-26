@@ -10,5 +10,5 @@
 from .simple_data_service import SimpleDataService
 
 __all__ = [
-    'SimpleDataService',
+    "SimpleDataService",
 ]

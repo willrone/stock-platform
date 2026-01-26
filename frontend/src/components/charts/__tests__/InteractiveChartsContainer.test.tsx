@@ -53,12 +53,7 @@ describe('InteractiveChartsContainer', () => {
     // Mock API调用返回pending promise
     mockBacktestService.getChartData.mockImplementation(() => new Promise(() => {}));
 
-    render(
-      <InteractiveChartsContainer
-        taskId={mockTaskId}
-        backtestData={mockBacktestData}
-      />
-    );
+    render(<InteractiveChartsContainer taskId={mockTaskId} backtestData={mockBacktestData} />);
 
     expect(screen.getByText('正在加载图表数据...')).toBeInTheDocument();
   });
@@ -84,9 +79,7 @@ describe('InteractiveChartsContainer', () => {
           });
         case 'monthly_heatmap':
           return Promise.resolve({
-            monthlyReturns: [
-              { year: 2023, month: 1, return: 0.01, date: '2023-01' },
-            ],
+            monthlyReturns: [{ year: 2023, month: 1, return: 0.01, date: '2023-01' }],
             years: [2023],
             months: [1],
           });
@@ -97,12 +90,7 @@ describe('InteractiveChartsContainer', () => {
 
     mockBacktestService.getBenchmarkData.mockRejectedValue(new Error('No benchmark data'));
 
-    render(
-      <InteractiveChartsContainer
-        taskId={mockTaskId}
-        backtestData={mockBacktestData}
-      />
-    );
+    render(<InteractiveChartsContainer taskId={mockTaskId} backtestData={mockBacktestData} />);
 
     // 等待加载完成
     await waitFor(() => {
@@ -119,12 +107,7 @@ describe('InteractiveChartsContainer', () => {
     // Mock API调用失败
     mockBacktestService.getChartData.mockRejectedValue(new Error('API Error'));
 
-    render(
-      <InteractiveChartsContainer
-        taskId={mockTaskId}
-        backtestData={mockBacktestData}
-      />
-    );
+    render(<InteractiveChartsContainer taskId={mockTaskId} backtestData={mockBacktestData} />);
 
     // 等待错误状态显示
     await waitFor(() => {
@@ -140,17 +123,24 @@ describe('InteractiveChartsContainer', () => {
     mockBacktestService.getChartData.mockResolvedValue({});
     mockBacktestService.getBenchmarkData.mockRejectedValue(new Error('No benchmark'));
 
-    render(
-      <InteractiveChartsContainer
-        taskId={mockTaskId}
-        backtestData={mockBacktestData}
-      />
-    );
+    render(<InteractiveChartsContainer taskId={mockTaskId} backtestData={mockBacktestData} />);
 
     await waitFor(() => {
-      expect(mockBacktestService.getChartData).toHaveBeenCalledWith(mockTaskId, 'equity_curve', false);
-      expect(mockBacktestService.getChartData).toHaveBeenCalledWith(mockTaskId, 'drawdown_curve', false);
-      expect(mockBacktestService.getChartData).toHaveBeenCalledWith(mockTaskId, 'monthly_heatmap', false);
+      expect(mockBacktestService.getChartData).toHaveBeenCalledWith(
+        mockTaskId,
+        'equity_curve',
+        false
+      );
+      expect(mockBacktestService.getChartData).toHaveBeenCalledWith(
+        mockTaskId,
+        'drawdown_curve',
+        false
+      );
+      expect(mockBacktestService.getChartData).toHaveBeenCalledWith(
+        mockTaskId,
+        'monthly_heatmap',
+        false
+      );
       expect(mockBacktestService.getBenchmarkData).toHaveBeenCalledWith(mockTaskId);
     });
   });

@@ -21,7 +21,7 @@ const mockTrades = [
     stock_code: '000001.SZ',
     action: 'BUY' as const,
     quantity: 1000,
-    price: 10.50,
+    price: 10.5,
     timestamp: '2024-01-01T09:30:00Z',
     commission: 5.25,
     pnl: 0,
@@ -33,9 +33,9 @@ const mockTrades = [
     stock_code: '000002.SZ',
     action: 'SELL' as const,
     quantity: 1000,
-    price: 11.00,
+    price: 11.0,
     timestamp: '2024-01-02T15:00:00Z',
-    commission: 5.50,
+    commission: 5.5,
     pnl: 494.25,
   },
 ];
@@ -109,9 +109,7 @@ describe('TradeHistoryTable', () => {
   });
 
   it('应该处理错误状态', async () => {
-    mockBacktestService.getTradeRecords.mockRejectedValue(
-      new Error('获取交易记录失败')
-    );
+    mockBacktestService.getTradeRecords.mockRejectedValue(new Error('获取交易记录失败'));
 
     render(<TradeHistoryTable taskId="test-task-1" />);
 

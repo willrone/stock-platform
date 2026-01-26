@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { PerformanceBreakdown } from '../PerformanceBreakdown';
 
@@ -79,7 +79,9 @@ const mockYearlyPerformance = [
 ];
 
 const mockSeasonalAnalysis = {
-  monthly_avg_returns: [0.02, 0.01, 0.03, 0.015, 0.025, 0.01, -0.005, 0.02, 0.018, 0.022, 0.015, 0.008],
+  monthly_avg_returns: [
+    0.02, 0.01, 0.03, 0.015, 0.025, 0.01, -0.005, 0.02, 0.018, 0.022, 0.015, 0.008,
+  ],
   monthly_win_rates: [0.65, 0.58, 0.72, 0.62, 0.68, 0.55, 0.48, 0.63, 0.61, 0.69, 0.59, 0.52],
   quarterly_performance: {
     q1: 0.06,
@@ -112,7 +114,7 @@ const mockBenchmarkComparison = {
 describe('PerformanceBreakdown', () => {
   it('应该渲染绩效分解组件', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -120,7 +122,7 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查年度统计概览
     expect(screen.getByText('平均年化收益')).toBeInTheDocument();
     expect(screen.getByText('平均波动率')).toBeInTheDocument();
@@ -130,7 +132,7 @@ describe('PerformanceBreakdown', () => {
 
   it('应该显示最佳和最差年份', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -138,11 +140,11 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查最佳年份
     expect(screen.getByText('最佳年份')).toBeInTheDocument();
     expect(screen.getAllByText('2023')[0]).toBeInTheDocument(); // 使用 getAllByText 获取第一个
-    
+
     // 检查最差年份
     expect(screen.getByText('最差年份')).toBeInTheDocument();
     expect(screen.getByText('2022')).toBeInTheDocument(); // 最差年份
@@ -150,7 +152,7 @@ describe('PerformanceBreakdown', () => {
 
   it('应该显示标签页组件', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -158,7 +160,7 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查 Tabs 组件是否渲染
     const tabsElement = screen.getByRole('tablist');
     expect(tabsElement).toBeInTheDocument();
@@ -166,7 +168,7 @@ describe('PerformanceBreakdown', () => {
 
   it('应该显示季度表现统计', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -174,14 +176,14 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查组件能正常渲染，不依赖标签页交互
     expect(screen.getByText('平均年化收益')).toBeInTheDocument();
   });
 
   it('应该显示年度绩效数据', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -189,7 +191,7 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查年度统计数据
     expect(screen.getByText('平均年化收益')).toBeInTheDocument();
     expect(screen.getByText('18.50%')).toBeInTheDocument(); // 计算出的平均收益
@@ -197,7 +199,7 @@ describe('PerformanceBreakdown', () => {
 
   it('应该显示基准对比数据', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -205,7 +207,7 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查基本组件渲染
     expect(screen.getByText('回测年数')).toBeInTheDocument();
     expect(screen.getByText('2 年')).toBeInTheDocument();
@@ -213,7 +215,7 @@ describe('PerformanceBreakdown', () => {
 
   it('应该处理空数据情况', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={[]}
         yearlyPerformance={[]}
@@ -221,14 +223,14 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查空数据提示
     expect(screen.getByText('暂无绩效分解数据')).toBeInTheDocument();
   });
 
   it('应该支持组件渲染', () => {
     render(
-      <PerformanceBreakdown 
+      <PerformanceBreakdown
         taskId="test-task-1"
         monthlyPerformance={mockMonthlyPerformance}
         yearlyPerformance={mockYearlyPerformance}
@@ -236,11 +238,11 @@ describe('PerformanceBreakdown', () => {
         benchmarkComparison={mockBenchmarkComparison}
       />
     );
-    
+
     // 检查基本统计信息
     expect(screen.getByText('平均年化收益')).toBeInTheDocument();
     expect(screen.getByText('平均波动率')).toBeInTheDocument();
-    
+
     // 检查 Tabs 组件渲染
     const tabsElement = screen.getByRole('tablist');
     expect(tabsElement).toBeInTheDocument();

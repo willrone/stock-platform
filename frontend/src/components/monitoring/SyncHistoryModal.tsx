@@ -1,6 +1,6 @@
 /**
  * 同步历史模态框组件
- * 
+ *
  * 显示数据同步的历史记录，包括：
  * - 历史同步任务列表
  * - 同步结果统计
@@ -30,15 +30,7 @@ import {
   IconButton,
   CircularProgress,
 } from '@mui/material';
-import {
-  History,
-  CheckCircle,
-  XCircle,
-  Clock,
-  RotateCcw,
-  Eye,
-  RefreshCw,
-} from 'lucide-react';
+import { History, CheckCircle, XCircle, Clock, RotateCcw, Eye, RefreshCw } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 
 interface SyncHistoryEntry {
@@ -112,7 +104,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
     const start = new Date(startTime);
     const end = endTime ? new Date(endTime) : new Date();
     const duration = Math.floor((end.getTime() - start.getTime()) / 1000);
-    
+
     if (duration < 60) {
       return `${duration}秒`;
     } else if (duration < 3600) {
@@ -122,16 +114,12 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
     }
   };
 
-  const getStatusColor = (success: boolean): "success" | "error" => {
+  const getStatusColor = (success: boolean): 'success' | 'error' => {
     return success ? 'success' : 'error';
   };
 
   const getStatusIcon = (success: boolean) => {
-    return success ? (
-      <CheckCircle size={16} />
-    ) : (
-      <XCircle size={16} />
-    );
+    return success ? <CheckCircle size={16} /> : <XCircle size={16} />;
   };
 
   const getSyncModeText = (mode: string) => {
@@ -147,12 +135,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
 
   return (
     <>
-      <Dialog 
-        open={isOpen} 
-        onClose={onClose}
-        maxWidth="xl"
-        fullWidth
-      >
+      <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -160,11 +143,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                 <History size={20} color="#1976d2" />
                 <span>同步历史记录</span>
               </Box>
-              <IconButton
-                size="small"
-                onClick={loadHistory}
-                disabled={loading}
-              >
+              <IconButton size="small" onClick={loadHistory} disabled={loading}>
                 <RefreshCw size={16} />
               </IconButton>
             </Box>
@@ -175,7 +154,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
             )}
           </Box>
         </DialogTitle>
-        
+
         <DialogContent>
           {loading && !historyData ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -200,7 +179,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {currentItems.map((entry) => (
+                    {currentItems.map(entry => (
                       <TableRow key={entry.sync_id} hover>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
@@ -210,7 +189,12 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                         <TableCell>
                           <Typography variant="body2">
                             <strong>{entry.request.stock_codes.length}</strong>
-                            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ ml: 0.5 }}
+                            >
                               只股票
                             </Typography>
                           </Typography>
@@ -218,7 +202,9 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                         <TableCell>
                           <Chip
                             label={getSyncModeText(entry.request.sync_mode)}
-                            color={entry.request.sync_mode === 'incremental' ? 'primary' : 'secondary'}
+                            color={
+                              entry.request.sync_mode === 'incremental' ? 'primary' : 'secondary'
+                            }
                             size="small"
                           />
                         </TableCell>
@@ -253,10 +239,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <Tooltip title="查看详情">
-                              <IconButton
-                                size="small"
-                                onClick={() => setSelectedEntry(entry)}
-                              >
+                              <IconButton size="small" onClick={() => setSelectedEntry(entry)}>
                                 <Eye size={16} />
                               </IconButton>
                             </Tooltip>
@@ -299,7 +282,7 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
             </Box>
           )}
         </DialogContent>
-        
+
         <DialogActions>
           <Button onClick={onClose}>关闭</Button>
         </DialogActions>
@@ -313,13 +296,17 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
           maxWidth="md"
           fullWidth
         >
-          <DialogTitle>
-            同步详情 - {selectedEntry.sync_id.substring(0, 12)}...
-          </DialogTitle>
+          <DialogTitle>同步详情 - {selectedEntry.sync_id.substring(0, 12)}...</DialogTitle>
           <DialogContent>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* 基本信息 */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                  gap: 2,
+                }}
+              >
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     同步模式
@@ -359,7 +346,14 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                 <Typography variant="body2" sx={{ fontWeight: 600, mb: 2 }}>
                   同步结果
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, textAlign: 'center' }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: 2,
+                    textAlign: 'center',
+                  }}
+                >
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       {selectedEntry.result.total_stocks}
@@ -400,9 +394,17 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
                 <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
                   同步股票列表
                 </Typography>
-                <Box sx={{ maxHeight: 128, overflowY: 'auto', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Box
+                  sx={{
+                    maxHeight: 128,
+                    overflowY: 'auto',
+                    p: 1.5,
+                    bgcolor: 'grey.50',
+                    borderRadius: 1,
+                  }}
+                >
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selectedEntry.request.stock_codes.map((code) => (
+                    {selectedEntry.request.stock_codes.map(code => (
                       <Chip key={code} label={code} size="small" />
                     ))}
                   </Box>

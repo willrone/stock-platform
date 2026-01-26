@@ -24,14 +24,7 @@ import {
   CircularProgress,
   IconButton,
 } from '@mui/material';
-import {
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  TrendingUp,
-  Info,
-  Calendar,
-} from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, TrendingUp, Info, Calendar } from 'lucide-react';
 
 interface EquityCurveChartProps {
   taskId: string;
@@ -122,7 +115,9 @@ export default function EquityCurveChart({
 
   // 初始化和更新图表
   useEffect(() => {
-    if (!chartRef.current || loading) return;
+    if (!chartRef.current || loading) {
+      return;
+    }
 
     // 销毁现有图表实例
     if (chartInstance.current) {
@@ -230,11 +225,11 @@ export default function EquityCurveChart({
         formatter: function (params: any) {
           const date = params[0].axisValue;
           let content = `<div style="margin-bottom: 4px;">${date}</div>`;
-          
+
           params.forEach((param: any) => {
             const value = param.value;
             const color = param.color;
-            
+
             if (chartType === 'value') {
               content += `<div style="color: ${color};">
                 ${param.seriesName}: ¥${value.toLocaleString()}
@@ -245,7 +240,7 @@ export default function EquityCurveChart({
               </div>`;
             }
           });
-          
+
           return content;
         },
       },
@@ -381,30 +376,34 @@ export default function EquityCurveChart({
 
     // 监听dataZoom事件，动态更新Y轴范围
     const handleDataZoom = () => {
-      if (!chartInstance.current) return;
-      
+      if (!chartInstance.current) {
+        return;
+      }
+
       const option = chartInstance.current.getOption();
       const dataZoom = option.dataZoom as any[];
-      
-      if (!dataZoom || dataZoom.length === 0) return;
-      
+
+      if (!dataZoom || dataZoom.length === 0) {
+        return;
+      }
+
       const xDataZoom = dataZoom.find((dz: any) => {
         if (dz.xAxisIndex !== undefined) {
           return Array.isArray(dz.xAxisIndex) ? dz.xAxisIndex.includes(0) : dz.xAxisIndex === 0;
         }
         return false;
       });
-      
+
       if (xDataZoom) {
         const startPercent = xDataZoom.start || 0;
         const endPercent = xDataZoom.end || 100;
-        
+
         const dataLength = filteredData.dates.length;
         const startIndex = Math.max(0, Math.floor((startPercent / 100) * dataLength));
         const endIndex = Math.min(dataLength, Math.ceil((endPercent / 100) * dataLength));
-        
+
         let visibleValues: number[] = [];
-        
+
         if (chartType === 'value') {
           visibleValues = filteredData.portfolioValues.slice(startIndex, endIndex);
           if (showBenchmark && filteredBenchmarkData) {
@@ -412,36 +411,43 @@ export default function EquityCurveChart({
             visibleValues.push(...visibleBenchmarkValues);
           }
         } else {
-          const visibleReturns = filteredData.returns.slice(startIndex, endIndex).map((r: number) => r * 100);
+          const visibleReturns = filteredData.returns
+            .slice(startIndex, endIndex)
+            .map((r: number) => r * 100);
           visibleValues = visibleReturns;
           if (showBenchmark && filteredBenchmarkData) {
-            const visibleBenchmarkReturns = filteredBenchmarkData.returns.slice(startIndex, endIndex).map((r: number) => r * 100);
+            const visibleBenchmarkReturns = filteredBenchmarkData.returns
+              .slice(startIndex, endIndex)
+              .map((r: number) => r * 100);
             visibleValues.push(...visibleBenchmarkReturns);
           }
         }
-        
+
         if (visibleValues.length > 0) {
           const minValue = Math.min(...visibleValues);
           const maxValue = Math.max(...visibleValues);
           const range = maxValue - minValue;
-          
+
           let padding = range * 0.1;
           if (range < 0.01) {
             padding = Math.max(0.5, Math.abs(minValue) * 0.1);
           }
-          
-          chartInstance.current.setOption({
-            yAxis: {
-              min: minValue - padding,
-              max: maxValue + padding,
-            }
-          }, false);
+
+          chartInstance.current.setOption(
+            {
+              yAxis: {
+                min: minValue - padding,
+                max: maxValue + padding,
+              },
+            },
+            false
+          );
         }
       }
     };
 
     chartInstance.current.on('dataZoom', handleDataZoom);
-    
+
     setTimeout(() => {
       handleDataZoom();
     }, 100);
@@ -525,7 +531,14 @@ export default function EquityCurveChart({
       <CardHeader
         title={
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingUp size={20} color="#1976d2" />
                 <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
@@ -540,29 +553,27 @@ export default function EquityCurveChart({
 
               {/* 图表控制按钮 */}
               <ButtonGroup size="small" variant="outlined">
-                <Button
-                  onClick={handleZoomIn}
-                  startIcon={<ZoomIn size={16} />}
-                >
+                <Button onClick={handleZoomIn} startIcon={<ZoomIn size={16} />}>
                   放大
                 </Button>
-                <Button
-                  onClick={handleZoomOut}
-                  startIcon={<ZoomOut size={16} />}
-                >
+                <Button onClick={handleZoomOut} startIcon={<ZoomOut size={16} />}>
                   缩小
                 </Button>
-                <Button
-                  onClick={handleReset}
-                  startIcon={<RotateCcw size={16} />}
-                >
+                <Button onClick={handleReset} startIcon={<RotateCcw size={16} />}>
                   重置
                 </Button>
               </ButtonGroup>
             </Box>
 
             {/* 图表选项 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 {/* 时间范围选择 */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -572,9 +583,9 @@ export default function EquityCurveChart({
                     <Select
                       value={selectedTimeRange}
                       label="选择时间范围"
-                      onChange={(e) => setSelectedTimeRange(e.target.value)}
+                      onChange={e => setSelectedTimeRange(e.target.value)}
                     >
-                      {TIME_RANGES.map((range) => (
+                      {TIME_RANGES.map(range => (
                         <MenuItem key={range.value} value={range.value}>
                           {range.label}
                         </MenuItem>
@@ -609,7 +620,7 @@ export default function EquityCurveChart({
                   <Switch
                     size="small"
                     checked={showBenchmark}
-                    onChange={(e) => setShowBenchmark(e.target.checked)}
+                    onChange={e => setShowBenchmark(e.target.checked)}
                   />
                 </Box>
               )}
@@ -619,10 +630,7 @@ export default function EquityCurveChart({
       />
 
       <CardContent>
-        <Box
-          ref={chartRef}
-          sx={{ height, width: '100%', minHeight: 400 }}
-        />
+        <Box ref={chartRef} sx={{ height, width: '100%', minHeight: 400 }} />
       </CardContent>
     </Card>
   );

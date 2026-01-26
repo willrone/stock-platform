@@ -1,6 +1,6 @@
 /**
  * 错误边界组件
- * 
+ *
  * 捕获和处理React组件错误，包括：
  * - 组件渲染错误
  * - 生命周期错误
@@ -11,15 +11,7 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import {
-  Card,
-  CardContent,
-  Button,
-  Box,
-  Typography,
-  Alert,
-  AlertTitle,
-} from '@mui/material';
+import { Card, CardContent, Button, Box, Typography, Alert } from '@mui/material';
 import { AlertTriangle, RefreshCw, Home, RotateCcw } from 'lucide-react';
 
 interface Props {
@@ -56,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // 记录错误信息
     console.error('ErrorBoundary捕获到错误:', error, errorInfo);
-    
+
     this.setState({
       error,
       errorInfo,
@@ -96,15 +88,29 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // 默认错误UI
       return (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', p: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            p: 3,
+          }}
+        >
           <Card sx={{ maxWidth: 800, width: '100%' }}>
-            <CardContent sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <CardContent
+              sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 3 }}
+            >
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 <AlertTriangle size={64} color="#d32f2f" />
               </Box>
-              
+
               <Box>
-                <Typography variant="h4" component="h1" sx={{ fontWeight: 600, color: 'error.main', mb: 1 }}>
+                <Typography
+                  variant="h4"
+                  component="h1"
+                  sx={{ fontWeight: 600, color: 'error.main', mb: 1 }}
+                >
                   页面出现错误
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
@@ -141,11 +147,13 @@ export class ErrorBoundary extends Component<Props, State> {
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <Card sx={{ mt: 3 }}>
                   <CardContent>
-                    <Box sx={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box
+                      sx={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}
+                    >
                       <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
                         错误详情（仅开发环境显示）
                       </Typography>
-                      
+
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                           错误信息：
@@ -154,7 +162,7 @@ export class ErrorBoundary extends Component<Props, State> {
                           {this.state.error.message}
                         </Alert>
                       </Box>
-                      
+
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                           错误堆栈：

@@ -32,7 +32,16 @@ import {
   InputLabel,
   TableSortLabel,
 } from '@mui/material';
-import { Search, Filter, Download, AlertCircle, CheckCircle, XCircle, Calendar, Zap } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  Download,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Calendar,
+  Zap,
+} from 'lucide-react';
 import { BacktestService, SignalRecord, SignalStatistics } from '../../services/backtestService';
 
 interface SignalHistoryTableProps {
@@ -60,19 +69,19 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
   const [statistics, setStatistics] = useState<SignalStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 50;
-  
+
   // 排序状态
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'timestamp',
-    direction: 'desc'
+    direction: 'desc',
   });
-  
+
   // 筛选状态
   const [filters, setFilters] = useState<SignalFilters>({
     stockCode: '',
@@ -81,12 +90,12 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
     startDate: '',
     endDate: '',
     minStrength: '',
-    maxStrength: ''
+    maxStrength: '',
   });
-  
+
   // 搜索状态
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // 模态框状态
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -97,7 +106,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
     try {
       setLoading(true);
       setError(null);
-      
+
       const options = {
         offset: (currentPage - 1) * itemsPerPage,
         limit: itemsPerPage,
@@ -105,21 +114,25 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
         orderDesc: sortConfig.direction === 'desc',
         stockCode: filters.stockCode || undefined,
         signalType: filters.signalType !== 'ALL' ? filters.signalType : undefined,
-        executed: filters.executed === 'EXECUTED' ? true : filters.executed === 'UNEXECUTED' ? false : undefined,
+        executed:
+          filters.executed === 'EXECUTED'
+            ? true
+            : filters.executed === 'UNEXECUTED'
+              ? false
+              : undefined,
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
       };
-      
+
       const [signalsResponse, statsResponse] = await Promise.all([
         BacktestService.getSignalRecords(taskId, options),
-        BacktestService.getSignalStatistics(taskId)
+        BacktestService.getSignalStatistics(taskId),
       ]);
-      
+
       setSignals(signalsResponse.signals);
       setTotalCount(signalsResponse.pagination.count);
       setTotalPages(Math.ceil(signalsResponse.pagination.count / itemsPerPage));
       setStatistics(statsResponse);
-      
     } catch (err: any) {
       console.error('获取信号记录失败:', err);
       setError(err.message || '获取信号记录失败');
@@ -137,14 +150,17 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
 
   // 筛选后的信号记录（用于搜索）
   const filteredSignals = useMemo(() => {
-    if (!searchTerm) return signals;
-    
+    if (!searchTerm) {
+      return signals;
+    }
+
     const term = searchTerm.toLowerCase();
-    return signals.filter(signal => 
-      signal.stock_code.toLowerCase().includes(term) ||
-      signal.signal_id.toLowerCase().includes(term) ||
-      signal.signal_type.toLowerCase().includes(term) ||
-      (signal.reason && signal.reason.toLowerCase().includes(term))
+    return signals.filter(
+      signal =>
+        signal.stock_code.toLowerCase().includes(term) ||
+        signal.signal_id.toLowerCase().includes(term) ||
+        signal.signal_type.toLowerCase().includes(term) ||
+        (signal.reason && signal.reason.toLowerCase().includes(term))
     );
   }, [signals, searchTerm]);
 
@@ -152,7 +168,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
   const handleSort = (key: keyof SignalRecord) => {
     setSortConfig(prev => ({
       key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
     setCurrentPage(1); // 重置到第一页
   };
@@ -172,7 +188,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
       startDate: '',
       endDate: '',
       minStrength: '',
-      maxStrength: ''
+      maxStrength: '',
     });
     setSearchTerm('');
     setCurrentPage(1);
@@ -193,46 +209,52 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
         limit: 10000,
         stockCode: filters.stockCode || undefined,
         signalType: filters.signalType !== 'ALL' ? filters.signalType : undefined,
-        executed: filters.executed === 'EXECUTED' ? true : filters.executed === 'UNEXECUTED' ? false : undefined,
+        executed:
+          filters.executed === 'EXECUTED'
+            ? true
+            : filters.executed === 'UNEXECUTED'
+              ? false
+              : undefined,
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
       });
-      
+
       // 转换为CSV格式
       const csvContent = [
         ['信号ID', '股票代码', '信号类型', '价格', '强度', '时间', '是否执行', '原因'].join(','),
-        ...allSignals.signals.map(signal => [
-          signal.signal_id,
-          signal.stock_code,
-          signal.signal_type,
-          signal.price,
-          signal.strength,
-          signal.timestamp,
-          signal.executed ? '是' : '否',
-          signal.reason || ''
-        ].join(','))
+        ...allSignals.signals.map(signal =>
+          [
+            signal.signal_id,
+            signal.stock_code,
+            signal.signal_type,
+            signal.price,
+            signal.strength,
+            signal.timestamp,
+            signal.executed ? '是' : '否',
+            signal.reason || '',
+          ].join(',')
+        ),
       ].join('\n');
-      
+
       // 下载文件
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `信号记录_${taskId}_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-      
     } catch (err: any) {
       console.error('导出信号记录失败:', err);
     }
   };
 
-  // 格式化数值
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('zh-CN', {
-      style: 'currency',
-      currency: 'CNY',
-      minimumFractionDigits: 2
-    }).format(value);
-  };
+  // 格式化数值（暂时未使用）
+  // const formatCurrency = (value: number) => {
+  //   return new Intl.NumberFormat('zh-CN', {
+  //     style: 'currency',
+  //     currency: 'CNY',
+  //     minimumFractionDigits: 2,
+  //   }).format(value);
+  // };
 
   const formatPercent = (value: number) => {
     return `${(value * 100).toFixed(2)}%`;
@@ -246,7 +268,15 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 256,
+            }}
+          >
             <CircularProgress size={48} />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               加载信号记录中...
@@ -261,7 +291,15 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
     return (
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 256 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 256,
+            }}
+          >
             <XCircle size={48} color="#d32f2f" style={{ marginBottom: 8 }} />
             <Typography variant="body2" color="error" sx={{ mb: 2 }}>
               {error}
@@ -279,7 +317,9 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 统计信息卡片 */}
       {statistics && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}
+        >
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -295,7 +335,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -311,7 +351,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -327,7 +367,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
               </Box>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -347,12 +387,20 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
       )}
 
       {/* 搜索和筛选工具栏 */}
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: 2,
+          alignItems: { xs: 'stretch', sm: 'center' },
+          justifyContent: 'space-between',
+        }}
+      >
         <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <TextField
             placeholder="搜索股票代码或信号ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={e => setSearchTerm(e.target.value)}
             size="small"
             InputProps={{
               startAdornment: (
@@ -371,19 +419,12 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
             筛选
           </Button>
         </Box>
-        
+
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            onClick={handleExport}
-            startIcon={<Download size={16} />}
-          >
+          <Button variant="outlined" onClick={handleExport} startIcon={<Download size={16} />}>
             导出
           </Button>
-          <Button
-            variant="outlined"
-            onClick={resetFilters}
-          >
+          <Button variant="outlined" onClick={resetFilters}>
             重置
           </Button>
         </Box>
@@ -455,7 +496,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSignals.map((signal) => (
+                  filteredSignals.map(signal => (
                     <TableRow key={signal.id} hover>
                       <TableCell>
                         <Tooltip title={formatDateTime(signal.timestamp)}>
@@ -465,7 +506,10 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                        >
                           {signal.stock_code}
                         </Typography>
                       </TableCell>
@@ -492,14 +536,15 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                               height: 4,
                               bgcolor: 'grey.300',
                               borderRadius: 1,
-                              overflow: 'hidden'
+                              overflow: 'hidden',
                             }}
                           >
                             <Box
                               sx={{
                                 width: `${signal.strength * 100}%`,
                                 height: '100%',
-                                bgcolor: signal.signal_type === 'BUY' ? 'success.main' : 'error.main'
+                                bgcolor:
+                                  signal.signal_type === 'BUY' ? 'success.main' : 'error.main',
                               }}
                             />
                           </Box>
@@ -521,7 +566,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                               maxWidth: 200,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {signal.reason || '-'}
@@ -538,7 +583,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                                 maxWidth: 200,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
+                                whiteSpace: 'nowrap',
                               }}
                             >
                               {signal.execution_reason}
@@ -584,75 +629,82 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
       <Dialog open={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>筛选信号记录</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mt: 1 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+              mt: 1,
+            }}
+          >
             <TextField
               label="股票代码"
               placeholder="输入股票代码"
               value={filters.stockCode}
-              onChange={(e) => handleFilterChange('stockCode', e.target.value)}
+              onChange={e => handleFilterChange('stockCode', e.target.value)}
               fullWidth
             />
-            
+
             <FormControl fullWidth>
               <InputLabel>信号类型</InputLabel>
               <Select
                 value={filters.signalType}
                 label="信号类型"
-                onChange={(e) => handleFilterChange('signalType', e.target.value as any)}
+                onChange={e => handleFilterChange('signalType', e.target.value as any)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="BUY">买入</MenuItem>
                 <MenuItem value="SELL">卖出</MenuItem>
               </Select>
             </FormControl>
-            
+
             <FormControl fullWidth>
               <InputLabel>执行状态</InputLabel>
               <Select
                 value={filters.executed}
                 label="执行状态"
-                onChange={(e) => handleFilterChange('executed', e.target.value as any)}
+                onChange={e => handleFilterChange('executed', e.target.value as any)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="EXECUTED">已执行</MenuItem>
                 <MenuItem value="UNEXECUTED">未执行</MenuItem>
               </Select>
             </FormControl>
-            
+
             <TextField
               type="date"
               label="开始日期"
               value={filters.startDate}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              onChange={e => handleFilterChange('startDate', e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
-            
+
             <TextField
               type="date"
               label="结束日期"
               value={filters.endDate}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              onChange={e => handleFilterChange('endDate', e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
-            
+
             <TextField
               type="number"
               label="最小强度"
               placeholder="0.0 - 1.0"
               value={filters.minStrength}
-              onChange={(e) => handleFilterChange('minStrength', e.target.value)}
+              onChange={e => handleFilterChange('minStrength', e.target.value)}
               fullWidth
               inputProps={{ min: 0, max: 1, step: 0.1 }}
             />
-            
+
             <TextField
               type="number"
               label="最大强度"
               placeholder="0.0 - 1.0"
               value={filters.maxStrength}
-              onChange={(e) => handleFilterChange('maxStrength', e.target.value)}
+              onChange={e => handleFilterChange('maxStrength', e.target.value)}
               fullWidth
               inputProps={{ min: 0, max: 1, step: 0.1 }}
             />
@@ -734,7 +786,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   />
                 </Box>
               </Box>
-              
+
               {selectedSignal.reason && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -745,13 +797,16 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   </Typography>
                 </Box>
               )}
-              
+
               {selectedSignal.metadata && Object.keys(selectedSignal.metadata).length > 0 && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     元数据
                   </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem' }}
+                  >
                     {JSON.stringify(selectedSignal.metadata, null, 2)}
                   </Typography>
                 </Box>
