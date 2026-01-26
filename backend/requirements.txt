@@ -45,7 +45,7 @@ aiohttp==3.9.1
 nest-asyncio>=1.6.0  # 允许在已有事件循环中嵌套运行异步代码
 
 # SFTP 客户端
-paramiko==3.4.0
+paramiko==4.0.0
 
 # 配置和环境
 pydantic==2.5.0
