@@ -449,15 +449,29 @@ def execute_backtest_task_simple(task_id: str):
                             async def _save_data():
                                 repository = BacktestDetailedRepository(session)
 
+                                # 辅助函数：将numpy类型转换为Python原生类型
+                                def to_python_type(value):
+                                    """将numpy类型转换为Python原生类型"""
+                                    import numpy as np
+                                    if isinstance(value, (np.integer, np.floating)):
+                                        return value.item()
+                                    elif isinstance(value, np.ndarray):
+                                        return value.tolist()
+                                    elif isinstance(value, dict):
+                                        return {k: to_python_type(v) for k, v in value.items()}
+                                    elif isinstance(value, (list, tuple)):
+                                        return [to_python_type(v) for v in value]
+                                    return value
+
                                 # 准备扩展指标数据
                                 extended_metrics = {}
                                 if enhanced_result.extended_risk_metrics:
                                     extended_metrics = {
-                                        "sortino_ratio": enhanced_result.extended_risk_metrics.sortino_ratio,
-                                        "calmar_ratio": enhanced_result.extended_risk_metrics.calmar_ratio,
-                                        "max_drawdown_duration": enhanced_result.extended_risk_metrics.max_drawdown_duration,
-                                        "var_95": enhanced_result.extended_risk_metrics.var_95,
-                                        "downside_deviation": enhanced_result.extended_risk_metrics.downside_deviation,
+                                        "sortino_ratio": to_python_type(enhanced_result.extended_risk_metrics.sortino_ratio),
+                                        "calmar_ratio": to_python_type(enhanced_result.extended_risk_metrics.calmar_ratio),
+                                        "max_drawdown_duration": to_python_type(enhanced_result.extended_risk_metrics.max_drawdown_duration),
+                                        "var_95": to_python_type(enhanced_result.extended_risk_metrics.var_95),
+                                        "downside_deviation": to_python_type(enhanced_result.extended_risk_metrics.downside_deviation),
                                     }
 
                                 # 准备分析数据
@@ -503,18 +517,19 @@ def execute_backtest_task_simple(task_id: str):
                                     )
 
                                 analysis_data = {
-                                    "drawdown_analysis": enhanced_result.drawdown_analysis.to_dict()
+                                    "drawdown_analysis": to_python_type(enhanced_result.drawdown_analysis.to_dict())
                                     if enhanced_result.drawdown_analysis
                                     else {},
-                                    "monthly_returns": [
+                                    "monthly_returns": to_python_type([
                                         mr.to_dict()
                                         for mr in enhanced_result.monthly_returns
-                                    ]
+                                    ])
                                     if enhanced_result.monthly_returns
                                     else [],
-                                    "position_analysis": position_analysis_data,
-                                    "benchmark_comparison": enhanced_result.benchmark_data
-                                    or {},
+                                    "position_analysis": to_python_type(position_analysis_data) if position_analysis_data else None,
+                                    "benchmark_comparison": to_python_type(enhanced_result.benchmark_data)
+                                    if enhanced_result.benchmark_data
+                                    else {},
                                     "rolling_metrics": {},
                                 }
 
@@ -555,20 +570,20 @@ def execute_backtest_task_simple(task_id: str):
                                         snapshots_data.append(
                                             {
                                                 "date": date_value,
-                                                "portfolio_value": snapshot.get(
+                                                "portfolio_value": to_python_type(snapshot.get(
                                                     "portfolio_value", 0
-                                                ),
-                                                "cash": snapshot.get("cash", 0),
-                                                "positions_count": snapshot.get(
+                                                )),
+                                                "cash": to_python_type(snapshot.get("cash", 0)),
+                                                "positions_count": to_python_type(snapshot.get(
                                                     "positions_count", 0
-                                                ),
-                                                "total_return": snapshot.get(
+                                                )),
+                                                "total_return": to_python_type(snapshot.get(
                                                     "total_return", 0
-                                                ),
+                                                )),
                                                 "drawdown": 0,
-                                                "positions": snapshot.get(
+                                                "positions": to_python_type(snapshot.get(
                                                     "positions", {}
-                                                ),
+                                                )),
                                             }
                                         )
 
@@ -631,16 +646,16 @@ def execute_backtest_task_simple(task_id: str):
                                                     "stock_code", ""
                                                 ),
                                                 "action": trade.get("action", ""),
-                                                "quantity": trade.get("quantity", 0),
-                                                "price": trade.get("price", 0),
+                                                "quantity": to_python_type(trade.get("quantity", 0)),
+                                                "price": to_python_type(trade.get("price", 0)),
                                                 "timestamp": timestamp_value,
-                                                "commission": trade.get(
+                                                "commission": to_python_type(trade.get(
                                                     "commission", 0
-                                                ),
-                                                "pnl": trade.get("pnl", 0),
-                                                "holding_days": trade.get(
+                                                )),
+                                                "pnl": to_python_type(trade.get("pnl", 0)),
+                                                "holding_days": to_python_type(trade.get(
                                                     "holding_days", 0
-                                                ),
+                                                )),
                                                 "technical_indicators": {},
                                             }
                                         )
@@ -668,7 +683,11 @@ def execute_backtest_task_simple(task_id: str):
                                 else:
                                     task_logger.warning(f"没有交易历史数据: task_id={task_id}")
 
-                                # 计算并保存统计信息
+                                # 先提交主数据，确保立即可查询
+                                await session.commit()
+                                task_logger.info(f"回测详细数据保存成功: {task_id}")
+
+                                # 计算并保存统计信息（在单独的事务中，不阻塞主数据查询）
                                 try:
                                     task_logger.info(f"开始计算统计信息: task_id={task_id}")
                                     calculator = StatisticsCalculator(session)
@@ -677,18 +696,17 @@ def execute_backtest_task_simple(task_id: str):
                                         task_id, backtest_id
                                     )
                                     await session.flush()
+                                    await session.commit()
                                     task_logger.info(
                                         f"统计信息计算并保存成功: task_id={task_id}, stats_id={stats.id}"
                                     )
                                 except Exception as stats_error:
+                                    await session.rollback()
                                     task_logger.error(
                                         f"计算统计信息失败: task_id={task_id}, 错误: {stats_error}",
                                         exc_info=True,
                                     )
                                     # 统计信息计算失败不影响主流程
-
-                                await session.commit()
-                                task_logger.info(f"回测详细数据保存成功: {task_id}")
 
                             await retry_db_operation(
                                 _save_data,
