@@ -70,7 +70,7 @@ radon==6.0.1  # 代码复杂度分析（可选）
 
 # 日志和监控
 loguru==0.7.2
-prometheus-client==0.19.0
+prometheus-client==0.24.1
 psutil==5.9.6
 GPUtil==1.4.0  # GPU监控库
 
