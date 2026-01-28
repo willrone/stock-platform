@@ -79,6 +79,35 @@ def main():
         allow_strategy_selection=True,
     )
 
+    # progress: print every 10 trials (Top3 snapshot)
+    progress_state = {"best": []}  # list of dicts sorted by score desc
+
+    def on_progress(info):
+        # info: {trial, score, annualized_return, max_drawdown, chosen}
+        try:
+            rec = {
+                "trial": int(info.get("trial")),
+                "score": float(info.get("score")),
+                "annualized_return": float(info.get("annualized_return")),
+                "max_drawdown": float(info.get("max_drawdown")),
+                "chosen": info.get("chosen"),
+            }
+        except Exception:
+            return
+
+        best = progress_state["best"]
+        best.append(rec)
+        best.sort(key=lambda x: x["score"], reverse=True)
+        del best[10:]
+
+        if (rec["trial"] + 1) % 10 == 0:
+            print(f"\n[progress] trials={rec['trial']+1}/{args.trials}")
+            for i, b in enumerate(best[:3], 1):
+                print(
+                    f"  Top{i}: score={b['score']:.4f} ann={b['annualized_return']:.4f} "
+                    f"mdd={b['max_drawdown']:.4f} chosen={b['chosen']}"
+                )
+
     result = __import__("asyncio").run(
         opt.optimize(
             all_stock_codes=all_codes,
@@ -88,6 +117,7 @@ def main():
             universe_seed=args.seed,
             n_trials=args.trials,
             cfg=cfg,
+            progress_callback=on_progress,
         )
     )
 

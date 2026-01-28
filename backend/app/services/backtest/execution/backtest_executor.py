@@ -645,63 +645,99 @@ class BacktestExecutor:
                 executed_trade_signals = []  # 记录已执行的交易对应的信号
                 unexecuted_signals = []  # 记录未执行的信号及原因
 
-                for signal in all_signals:
-                    # 验证信号
-                    is_valid, validation_reason = strategy.validate_signal(
-                        signal,
-                        portfolio_manager.get_portfolio_value(current_prices),
-                        portfolio_manager.positions,
+                # ===== trade execution mode =====
+                trade_mode = None
+                try:
+                    trade_mode = (strategy_config or {}).get("trade_mode")
+                except Exception:
+                    trade_mode = None
+
+                if trade_mode == "topk_buffer":
+                    # Daily TopK selection + buffer zone + max changes/day
+                    k = int((strategy_config or {}).get("topk", 10))
+                    buffer_n = int((strategy_config or {}).get("buffer", 20))
+                    max_changes = int((strategy_config or {}).get("max_changes_per_day", 2))
+                    trades_limit = max_changes
+
+                    # Build ranking scores from signals (BUY strength positive, SELL negative)
+                    scores: Dict[str, float] = {code: 0.0 for code in stock_data.keys()}
+                    for sig in all_signals:
+                        s = float(sig.strength or 0.0)
+                        if sig.signal_type == SignalType.BUY:
+                            scores[sig.stock_code] = max(scores.get(sig.stock_code, 0.0), s)
+                        elif sig.signal_type == SignalType.SELL:
+                            scores[sig.stock_code] = min(scores.get(sig.stock_code, 0.0), -s)
+
+                    # Rebalance according to TopK+buffer rules
+                    executed_trade_signals, unexecuted_signals, trades_this_day = self._rebalance_topk_buffer(
+                        portfolio_manager=portfolio_manager,
+                        current_prices=current_prices,
+                        current_date=current_date,
+                        scores=scores,
+                        topk=k,
+                        buffer_n=buffer_n,
+                        max_changes=trades_limit,
+                        strategy=strategy,
                     )
 
-                    if not is_valid:
-                        # 验证失败，记录未执行原因
-                        unexecuted_signals.append(
-                            {
-                                "stock_code": signal.stock_code,
-                                "timestamp": signal.timestamp,
-                                "signal_type": signal.signal_type.name,
-                                "execution_reason": validation_reason or "信号验证失败",
-                            }
-                        )
-                        continue
-
-                    # 验证通过，尝试执行
-                    trade_exec_start = (
-                        time.perf_counter()
-                        if self.enable_performance_profiling
-                        else None
-                    )
-                    trade, failure_reason = portfolio_manager.execute_signal(
-                        signal, current_prices
-                    )
-                    if self.enable_performance_profiling and trade_exec_start:
-                        trade_exec_duration = time.perf_counter() - trade_exec_start
-                        trade_execution_times.append(trade_exec_duration)
-                        self.performance_profiler.record_function_call(
-                            "execute_signal", trade_exec_duration
+                else:
+                    for signal in all_signals:
+                        # 验证信号
+                        is_valid, validation_reason = strategy.validate_signal(
+                            signal,
+                            portfolio_manager.get_portfolio_value(current_prices),
+                            portfolio_manager.positions,
                         )
 
-                    if trade:
-                        executed_trades += 1
-                        trades_this_day += 1
-                        # 记录已执行的信号，用于后续标记
-                        executed_trade_signals.append(
-                            {
-                                "stock_code": signal.stock_code,
-                                "timestamp": signal.timestamp,
-                                "signal_type": signal.signal_type.name,
-                            }
+                        if not is_valid:
+                            # 验证失败，记录未执行原因
+                            unexecuted_signals.append(
+                                {
+                                    "stock_code": signal.stock_code,
+                                    "timestamp": signal.timestamp,
+                                    "signal_type": signal.signal_type.name,
+                                    "execution_reason": validation_reason or "信号验证失败",
+                                }
+                            )
+                            continue
+
+                        # 验证通过，尝试执行
+                        trade_exec_start = (
+                            time.perf_counter()
+                            if self.enable_performance_profiling
+                            else None
                         )
-                    else:
-                        # 执行失败，记录未执行原因（从 execute_signal 直接获取）
-                        unexecuted_signals.append(
-                            {
-                                "stock_code": signal.stock_code,
-                                "timestamp": signal.timestamp,
-                                "signal_type": signal.signal_type.name,
-                                "execution_reason": failure_reason or "执行失败（未知原因）",
-                            }
+                        trade, failure_reason = portfolio_manager.execute_signal(
+                            signal, current_prices
                         )
+                        if self.enable_performance_profiling and trade_exec_start:
+                            trade_exec_duration = time.perf_counter() - trade_exec_start
+                            trade_execution_times.append(trade_exec_duration)
+                            self.performance_profiler.record_function_call(
+                                "execute_signal", trade_exec_duration
+                            )
+
+                        if trade:
+                            executed_trades += 1
+                            trades_this_day += 1
+                            # 记录已执行的信号，用于后续标记
+                            executed_trade_signals.append(
+                                {
+                                    "stock_code": signal.stock_code,
+                                    "timestamp": signal.timestamp,
+                                    "signal_type": signal.signal_type.name,
+                                }
+                            )
+                        else:
+                            # 执行失败，记录未执行原因（从 execute_signal 直接获取）
+                            unexecuted_signals.append(
+                                {
+                                    "stock_code": signal.stock_code,
+                                    "timestamp": signal.timestamp,
+                                    "signal_type": signal.signal_type.name,
+                                    "execution_reason": failure_reason or "执行失败（未知原因）",
+                                }
+                            )
 
                 # 记录交易执行总时间
                 if self.enable_performance_profiling and trade_start_time:
@@ -1091,6 +1127,155 @@ class BacktestExecutor:
         report.update(self._calculate_additional_metrics(portfolio_manager))
 
         return report
+
+    def _rebalance_topk_buffer(
+        self,
+        portfolio_manager: PortfolioManager,
+        current_prices: Dict[str, float],
+        current_date: datetime,
+        scores: Dict[str, float],
+        topk: int = 10,
+        buffer_n: int = 20,
+        max_changes: int = 2,
+        strategy: Optional[BaseStrategy] = None,
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
+        """每日 TopK 选股 + buffer 换仓 + 每天最多换 max_changes 只。
+
+        规则（实盘对齐版）：
+        - 目标持仓数量=topk
+        - 若持仓仍在 Top(topk+buffer_n) 内，则尽量保留（减少换手）
+        - 每天最多做 max_changes 个 "卖出+买入" 的替换
+
+        Returns:
+            executed_trade_signals, unexecuted_signals, trades_this_day
+        """
+        executed_trade_signals: List[Dict[str, Any]] = []
+        unexecuted_signals: List[Dict[str, Any]] = []
+        trades_this_day = 0
+
+        if topk <= 0:
+            return executed_trade_signals, unexecuted_signals, trades_this_day
+
+        # rank by score desc, tie-break by stock_code for determinism
+        ranked = sorted(scores.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
+        topk_list = [c for c, _ in ranked[:topk]]
+        buffer_list = [c for c, _ in ranked[: max(topk, topk + buffer_n)]]
+        buffer_set = set(buffer_list)
+
+        holdings = list(portfolio_manager.positions.keys())
+        holdings_set = set(holdings)
+
+        # Keep holdings inside buffer zone
+        kept = [c for c in holdings if c in buffer_set]
+
+        # If kept > topk, trim lowest-ranked among kept
+        rank_index = {c: i for i, (c, _) in enumerate(ranked)}
+        if len(kept) > topk:
+            kept_sorted = sorted(kept, key=lambda c: rank_index.get(c, 10**9))
+            kept = kept_sorted[:topk]
+
+        kept_set = set(kept)
+
+        # Sell candidates: holdings outside buffer OR trimmed
+        to_sell = [c for c in holdings if c not in kept_set]
+
+        # Buy candidates: topk names not already kept
+        to_buy = [c for c in topk_list if c not in kept_set]
+
+        # Apply max_changes (replacement pairs)
+        n_pairs = min(max_changes, len(to_sell), len(to_buy))
+        to_sell = to_sell[:n_pairs]
+        to_buy = to_buy[:n_pairs]
+
+        # Execute sells first
+        for code in to_sell:
+            sig = TradingSignal(
+                timestamp=current_date,
+                stock_code=code,
+                signal_type=SignalType.SELL,
+                strength=1.0,
+                price=float(current_prices.get(code, 0.0) or 0.0),
+                reason=f"topk_buffer rebalance sell (out of buffer/topk)",
+                metadata={"trade_mode": "topk_buffer"},
+            )
+            if strategy is not None:
+                is_valid, validation_reason = strategy.validate_signal(
+                    sig,
+                    portfolio_manager.get_portfolio_value(current_prices),
+                    portfolio_manager.positions,
+                )
+                if not is_valid:
+                    unexecuted_signals.append(
+                        {
+                            "stock_code": code,
+                            "timestamp": current_date,
+                            "signal_type": sig.signal_type.name,
+                            "execution_reason": validation_reason or "信号验证失败",
+                        }
+                    )
+                    continue
+
+            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            if trade:
+                trades_this_day += 1
+                executed_trade_signals.append(
+                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                )
+            else:
+                unexecuted_signals.append(
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                        "execution_reason": failure_reason or "执行失败（未知原因）",
+                    }
+                )
+
+        # Execute buys
+        for code in to_buy:
+            sig = TradingSignal(
+                timestamp=current_date,
+                stock_code=code,
+                signal_type=SignalType.BUY,
+                strength=1.0,
+                price=float(current_prices.get(code, 0.0) or 0.0),
+                reason=f"topk_buffer rebalance buy (enter top{topk})",
+                metadata={"trade_mode": "topk_buffer"},
+            )
+            if strategy is not None:
+                is_valid, validation_reason = strategy.validate_signal(
+                    sig,
+                    portfolio_manager.get_portfolio_value(current_prices),
+                    portfolio_manager.positions,
+                )
+                if not is_valid:
+                    unexecuted_signals.append(
+                        {
+                            "stock_code": code,
+                            "timestamp": current_date,
+                            "signal_type": sig.signal_type.name,
+                            "execution_reason": validation_reason or "信号验证失败",
+                        }
+                    )
+                    continue
+
+            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            if trade:
+                trades_this_day += 1
+                executed_trade_signals.append(
+                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                )
+            else:
+                unexecuted_signals.append(
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                        "execution_reason": failure_reason or "执行失败（未知原因）",
+                    }
+                )
+
+        return executed_trade_signals, unexecuted_signals, trades_this_day
 
     def _calculate_additional_metrics(
         self, portfolio_manager: PortfolioManager

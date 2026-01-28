@@ -20,6 +20,28 @@ from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 class DataLoader:
     """数据加载器"""
 
+    def _is_data_valid(
+        self,
+        data: pd.DataFrame,
+        start_date: datetime,
+        end_date: datetime,
+        min_rows: int = 30,
+        min_coverage_ratio: float = 0.7,
+    ) -> bool:
+        """简单的数据有效性过滤：行数>0 且 覆盖足够长，避免抽样到缺失股票影响结果"""
+        try:
+            if data is None or data.empty:
+                return False
+            if len(data) < min_rows:
+                return False
+            # coverage ratio: rows / expected business days (rough)
+            total_days = (end_date.date() - start_date.date()).days + 1
+            expected = max(1, total_days * 5 // 7)
+            coverage = len(data) / expected
+            return coverage >= min_coverage_ratio
+        except Exception:
+            return False
+
     def __init__(
         self, data_dir: str = "backend/data", max_workers: Optional[int] = None
     ):
@@ -285,9 +307,13 @@ class DataLoader:
                 for future in as_completed(futures):
                     stock_code, data, error, from_precomputed = future.result()
                     if data is not None:
-                        stock_data[stock_code] = data
-                        if from_precomputed:
-                            precomputed_count += 1
+                        # data validity filter: avoid missing/too-short coverage polluting universe sampling
+                        if self._is_data_valid(data, start_date, end_date):
+                            stock_data[stock_code] = data
+                            if from_precomputed:
+                                precomputed_count += 1
+                        else:
+                            failed_stocks.append(stock_code)
                     else:
                         failed_stocks.append(stock_code)
         else:
@@ -295,9 +321,12 @@ class DataLoader:
             for stock_code in stock_codes:
                 try:
                     data = self.load_stock_data(stock_code, start_date, end_date)
-                    stock_data[stock_code] = data
-                    if data.attrs.get("from_precomputed", False):
-                        precomputed_count += 1
+                    if self._is_data_valid(data, start_date, end_date):
+                        stock_data[stock_code] = data
+                        if data.attrs.get("from_precomputed", False):
+                            precomputed_count += 1
+                    else:
+                        failed_stocks.append(stock_code)
                 except Exception as e:
                     logger.error(f"加载股票数据失败: {stock_code}, 错误: {e}")
                     failed_stocks.append(stock_code)
