@@ -550,7 +550,7 @@ async def run_backtest(request: BacktestRequest):
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）
-        backtest_report = executor.run_backtest(
+        backtest_report = await executor.run_backtest(
             strategy_name=request.strategy_name,
             stock_codes=request.stock_codes,
             start_date=request.start_date,
