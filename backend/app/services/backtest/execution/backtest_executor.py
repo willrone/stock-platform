@@ -957,7 +957,15 @@ class BacktestExecutor:
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "initial_cash": config.initial_cash,
-            "final_value": portfolio_manager.get_portfolio_value({}),
+            # NOTE: Do NOT call get_portfolio_value({}) here — passing an empty price map
+            # will value all positions at 0 and return cash-only, which makes final_value
+            # inconsistent with total_return/portfolio_history.
+            # Use the last recorded portfolio value (already computed with prices) when available.
+            "final_value": (
+                portfolio_manager.portfolio_history[-1]["portfolio_value"]
+                if getattr(portfolio_manager, "portfolio_history", None)
+                else portfolio_manager.get_portfolio_value({})
+            ),
             # 收益指标
             "total_return": performance_metrics.get("total_return", 0),
             "annualized_return": performance_metrics.get("annualized_return", 0),
