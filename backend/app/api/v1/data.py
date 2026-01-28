@@ -582,6 +582,25 @@ async def sync_remote_data(
     request: RemoteDataSyncRequest,
     sftp_sync_service: SFTPSyncService = Depends(get_sftp_sync_service),
 ):
+    # Friendly message when SFTP sync is disabled (default)
+    if not getattr(sftp_sync_service, "enabled", False):
+        return StandardResponse(
+            success=False,
+            message=(
+                "SFTP同步未启用（SFTP_SYNC_ENABLED=false）。"
+                "如需在分布式部署中使用远端同步，请在backend/.env中开启并配置SFTP参数。"
+            ),
+            data={
+                "success": False,
+                "total_files": 0,
+                "synced_files": 0,
+                "failed_files": [],
+                "total_size": 0,
+                "total_size_mb": 0,
+                "duration_seconds": 0,
+            },
+        )
+
     """
     同步远端数据
 

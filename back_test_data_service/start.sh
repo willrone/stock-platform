@@ -55,6 +55,13 @@ if [ -d "$DATA_DIR" ] && [ ! -w "$DATA_DIR" ]; then
     echo "   请手动修复权限，例如: sudo chown -R $(whoami):staff '$DATA_DIR'"
 fi
 
+# Load env file if present (for local deployments). Do NOT commit secrets.
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
 # 解析命令行参数
 SERVICE_TYPE="${1:-all}"
 
