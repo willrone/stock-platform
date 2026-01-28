@@ -90,9 +90,11 @@ class ParquetDAO:
                 except Exception as e:
                     logger.warning(f"读取现有数据失败，将覆盖: {e}")
             
-            # 保存到Parquet文件
-            df.to_parquet(file_path, index=False, engine='pyarrow', compression='snappy')
-            
+            # 保存到Parquet文件（原子写入：先写临时文件再替换，避免读写冲突/半文件）
+            tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+            df.to_parquet(tmp_path, index=False, engine='pyarrow', compression='snappy')
+            os.replace(tmp_path, file_path)
+
             saved_count = len(df)
             logger.info(f"保存股票数据成功: {ts_code}, 记录数: {saved_count}")
             return saved_count
