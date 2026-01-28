@@ -41,16 +41,18 @@ fi
 # 确保日志目录存在
 mkdir -p "$SCRIPT_DIR/logs"
 
-# 确保数据目录存在并有正确权限
+# 确保数据目录存在
+# Use project-root data/parquet to share the dataset with the main backend.
 DATA_DIR="$SCRIPT_DIR/../data/parquet"
 mkdir -p "$DATA_DIR/stock_data"
-if [ -d "$DATA_DIR" ]; then
-    # 尝试修复权限（如果需要sudo）
-    if [ ! -w "$DATA_DIR" ]; then
-        echo "🔧 修复数据目录权限..."
-        echo "101618" | sudo -S chown -R $(whoami):staff "$DATA_DIR" 2>/dev/null || true
-        echo "101618" | sudo -S chmod -R 755 "$DATA_DIR" 2>/dev/null || true
-    fi
+
+# Point the service's ParquetDAO to the shared dataset directory.
+export PARQUET_DATA_DIR="$DATA_DIR"
+
+# Safety: do not attempt to sudo/chown from scripts.
+if [ -d "$DATA_DIR" ] && [ ! -w "$DATA_DIR" ]; then
+    echo "⚠️  警告: 数据目录不可写: $DATA_DIR"
+    echo "   请手动修复权限，例如: sudo chown -R $(whoami):staff '$DATA_DIR'"
 fi
 
 # 解析命令行参数
