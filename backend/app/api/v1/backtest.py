@@ -560,18 +560,28 @@ async def run_backtest(request: BacktestRequest):
         )
 
         # 转换数据格式以匹配前端期望
+        # NOTE: backtest_report may contain numpy scalar types; coerce to native Python
+        # types to avoid JSON serialization errors.
+        def _to_float(x, default=0.0):
+            try:
+                if x is None:
+                    return float(default)
+                return float(x)
+            except Exception:
+                return float(default)
+
         portfolio_history = backtest_report.get("portfolio_history", [])
         dates = [snapshot["date"] for snapshot in portfolio_history]
-        equity_curve = [snapshot["portfolio_value"] for snapshot in portfolio_history]
+        equity_curve = [_to_float(snapshot.get("portfolio_value", 0.0)) for snapshot in portfolio_history]
 
-        # 计算回撤曲线
+        # 计算回撤曲线（百分比）
         drawdown_curve = []
-        peak = backtest_config.initial_cash
+        peak = float(backtest_config.initial_cash)
         for value in equity_curve:
             if value > peak:
                 peak = value
-            drawdown = (value - peak) / peak * 100 if peak > 0 else 0
-            drawdown_curve.append(drawdown)
+            drawdown = (value - peak) / peak * 100 if peak > 0 else 0.0
+            drawdown_curve.append(float(drawdown))
 
         # 格式化交易记录
         trade_history = []
@@ -613,22 +623,26 @@ async def run_backtest(request: BacktestRequest):
                 ),
             },
             "portfolio": {
-                "initial_cash": backtest_report.get(
-                    "initial_cash", request.initial_cash
+                "initial_cash": _to_float(
+                    backtest_report.get("initial_cash", request.initial_cash),
+                    default=request.initial_cash,
                 ),
-                "final_value": backtest_report.get("final_value", request.initial_cash),
-                "total_return": backtest_report.get("total_return", 0),
-                "annualized_return": backtest_report.get("annualized_return", 0),
+                "final_value": _to_float(
+                    backtest_report.get("final_value", request.initial_cash),
+                    default=request.initial_cash,
+                ),
+                "total_return": _to_float(backtest_report.get("total_return", 0.0)),
+                "annualized_return": _to_float(backtest_report.get("annualized_return", 0.0)),
             },
             "risk_metrics": {
-                "volatility": backtest_report.get("volatility", 0),
-                "sharpe_ratio": backtest_report.get("sharpe_ratio", 0),
-                "max_drawdown": backtest_report.get("max_drawdown", 0),
+                "volatility": _to_float(backtest_report.get("volatility", 0.0)),
+                "sharpe_ratio": _to_float(backtest_report.get("sharpe_ratio", 0.0)),
+                "max_drawdown": _to_float(backtest_report.get("max_drawdown", 0.0)),
             },
             "trading_stats": {
-                "total_trades": backtest_report.get("total_trades", 0),
-                "win_rate": backtest_report.get("win_rate", 0),
-                "profit_factor": backtest_report.get("profit_factor", 0),
+                "total_trades": int(backtest_report.get("total_trades", 0) or 0),
+                "win_rate": _to_float(backtest_report.get("win_rate", 0.0)),
+                "profit_factor": _to_float(backtest_report.get("profit_factor", 0.0)),
             },
             "trade_history": trade_history,
             # 添加前端需要的图表数据
