@@ -590,9 +590,9 @@ async def run_backtest(request: BacktestRequest):
                 {
                     "date": trade.get("timestamp", ""),
                     "action": "buy" if trade.get("action") == "BUY" else "sell",
-                    "price": trade.get("price", 0),
-                    "quantity": trade.get("quantity", 0),
-                    "pnl": trade.get("pnl", 0),
+                    "price": _to_float(trade.get("price", 0.0)),
+                    "quantity": int(trade.get("quantity", 0) or 0),
+                    "pnl": _to_float(trade.get("pnl", 0.0)),
                 }
             )
 
