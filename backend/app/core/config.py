@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     REMOTE_DATA_SERVICE_URL: str = "http://192.168.3.62:5002"
     REMOTE_DATA_SERVICE_TIMEOUT: int = 30
 
+    # 数据同步（SFTP）配置（用于分布式部署：从数据服务器拉取parquet到本机）
+    SFTP_SYNC_ENABLED: bool = False
+    SFTP_HOST: Optional[str] = None
+    SFTP_PORT: int = 22
+    SFTP_USERNAME: Optional[str] = None
+    SFTP_PASSWORD: Optional[str] = None
+    SFTP_REMOTE_LIST_PATH: Optional[str] = None
+    SFTP_REMOTE_DATA_DIR: Optional[str] = None
+
     # 数据存储配置
     DATA_ROOT_PATH: str = "../data"  # 相对于backend目录
     PARQUET_DATA_PATH: str = "../data/stocks"

@@ -3,6 +3,7 @@ SFTP同步服务
 用于从远端服务器通过SFTP下载股票parquet数据
 """
 
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -38,12 +39,13 @@ class SFTPSyncService:
 
     def __init__(
         self,
-        host: str = "192.168.3.62",
-        username: str = "ronghui",
-        password: str = "101618",
-        remote_list_path: str = "/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_list.parquet",
-        remote_data_dir: str = "/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data",
-        local_data_dir: str = None,
+        host: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        remote_list_path: Optional[str] = None,
+        remote_data_dir: Optional[str] = None,
+        local_data_dir: Optional[str] = None,
+        port: Optional[int] = None,
     ):
         """
         初始化SFTP同步服务
@@ -56,11 +58,35 @@ class SFTPSyncService:
             remote_data_dir: 远端数据文件目录
             local_data_dir: 本地数据存储目录
         """
-        self.host = host
-        self.username = username
-        self.password = password
-        self.remote_list_path = remote_list_path
-        self.remote_data_dir = remote_data_dir
+        # SECURITY: do not hardcode credentials/paths in code. Use env-config via settings.
+        self.enabled = bool(settings.SFTP_SYNC_ENABLED)
+        self.host = host or settings.SFTP_HOST
+        self.port = port or settings.SFTP_PORT
+        self.username = username or settings.SFTP_USERNAME
+        self.password = password or settings.SFTP_PASSWORD
+        self.remote_list_path = remote_list_path or settings.SFTP_REMOTE_LIST_PATH
+        self.remote_data_dir = remote_data_dir or settings.SFTP_REMOTE_DATA_DIR
+
+        if not self.enabled:
+            logger.warning("SFTP同步未启用（SFTP_SYNC_ENABLED=false），远端同步接口将不可用")
+
+        # Validate required fields only when enabled
+        if self.enabled:
+            missing = [
+                k
+                for k, v in {
+                    "SFTP_HOST": self.host,
+                    "SFTP_USERNAME": self.username,
+                    "SFTP_PASSWORD": self.password,
+                    "SFTP_REMOTE_LIST_PATH": self.remote_list_path,
+                    "SFTP_REMOTE_DATA_DIR": self.remote_data_dir,
+                }.items()
+                if not v
+            ]
+            if missing:
+                raise RuntimeError(
+                    f"SFTP同步已启用但配置缺失: {', '.join(missing)}。请在backend/.env中设置对应环境变量。"
+                )
 
         # 本地数据目录，默认使用配置中的路径
         if local_data_dir is None:
@@ -79,7 +105,9 @@ class SFTPSyncService:
             Dict[str, str]
         ] = None  # {stock_code: actual_file_path}
 
-        logger.info(f"SFTP同步服务初始化: {host}, 本地目录: {self.local_data_dir}")
+        logger.info(
+            f"SFTP同步服务初始化: {self.host}:{self.port}, 本地目录: {self.local_data_dir}, enabled={self.enabled}"
+        )
 
     def _connect_sftp(self) -> Tuple[paramiko.SSHClient, paramiko.SFTPClient]:
         """
@@ -88,6 +116,11 @@ class SFTPSyncService:
         Returns:
             (SSHClient, SFTPClient) 元组
         """
+        if not self.enabled:
+            raise RuntimeError(
+                "SFTP同步未启用（SFTP_SYNC_ENABLED=false）。如需使用远端同步，请在backend/.env开启并配置SFTP参数。"
+            )
+
         logger.info(f"开始连接SFTP服务器: {self.host}, 用户: {self.username}")
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -96,6 +129,7 @@ class SFTPSyncService:
             logger.debug(f"正在建立SSH连接...")
             ssh.connect(
                 hostname=self.host,
+                port=self.port,
                 username=self.username,
                 password=self.password,
                 timeout=30,
@@ -376,7 +410,13 @@ class SFTPSyncService:
                 else:
                     logger.debug(f"[{stock_code}] 正在同步: {remote_file} -> {local_file}")
 
-                sftp.get(remote_file, str(local_file))
+                # 原子下载：先下到临时文件，再替换，避免覆盖/半文件
+                tmp_file = local_file.with_suffix(local_file.suffix + ".tmp")
+                if tmp_file.exists():
+                    tmp_file.unlink()
+
+                sftp.get(remote_file, str(tmp_file))
+                os.replace(tmp_file, local_file)
 
                 # 验证文件是否下载成功
                 if not local_file.exists():

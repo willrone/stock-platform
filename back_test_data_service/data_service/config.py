@@ -11,8 +11,8 @@ class Config:
     """数据服务配置管理"""
     
     # Tushare配置
-    # 优先从环境变量获取，如果没有则使用默认token
-    TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN', '3bb09d7c81ac1f83a90e57b505626391739a93bd02c717bdcb987da4')
+    # SECURITY: never hardcode tokens in source code. Provide via environment variables.
+    TUSHARE_TOKEN = os.getenv('TUSHARE_TOKEN')
     
     # MySQL配置（已废弃，使用Parquet存储）
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
@@ -54,11 +54,12 @@ class Config:
 
     @classmethod
     def validate(cls) -> bool:
-        """验证配置是否完整"""
+        """验证配置是否完整（缺失关键配置时直接失败）"""
         if not cls.TUSHARE_TOKEN:
-            print("⚠️  警告: TUSHARE_TOKEN 环境变量未设置，数据获取服务将无法启动")
-            print("   请设置环境变量: export TUSHARE_TOKEN='your_token'")
-            return False
+            raise RuntimeError(
+                "TUSHARE_TOKEN 环境变量未设置，数据获取服务无法启动。"
+                "请设置: export TUSHARE_TOKEN='your_token'"
+            )
         return True
 
     # 以下方法已废弃，不再使用服务发现功能
