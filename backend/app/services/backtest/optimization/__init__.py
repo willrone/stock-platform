@@ -1,13 +1,24 @@
-"""
-优化模块
+"""优化模块
 
-包含策略参数优化功能
+包含：
+- 单策略参数优化（StrategyHyperparameterOptimizer）
+- 组合/集成策略参数优化（PortfolioHyperparameterOptimizer）
 """
 
-# 导入优化器（如果存在）
+__all__ = []
+
+# 单策略优化器
 try:
     from .strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer
 
-    __all__ = ["StrategyHyperparameterOptimizer"]
+    __all__.append("StrategyHyperparameterOptimizer")
 except ImportError:
-    __all__ = []
+    pass
+
+# 组合策略优化器
+try:
+    from .portfolio_hyperparameter_optimizer import PortfolioHyperparameterOptimizer
+
+    __all__.append("PortfolioHyperparameterOptimizer")
+except ImportError:
+    pass
