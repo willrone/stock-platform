@@ -43,18 +43,27 @@ def main():
 
     loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
 
-    # 获取可用股票列表（当前 StockDataLoader 只有 load/check；这里直接扫 parquet 目录）
+    # 获取可用股票列表：优先从 qlib 预计算特征目录取（更稳定，避免抽到原始行情缺失的股票）
     import os
 
     all_codes = []
-    stock_parquet_dir = os.path.join(str(settings.DATA_ROOT_PATH), "parquet", "stock_data")
-    if os.path.isdir(stock_parquet_dir):
-        for name in os.listdir(stock_parquet_dir):
+    qlib_day_dir = os.path.join(str(settings.DATA_ROOT_PATH), "qlib_data", "features", "day")
+    if os.path.isdir(qlib_day_dir):
+        for name in os.listdir(qlib_day_dir):
             if not name.endswith(".parquet"):
                 continue
             # 文件名形如 000001_SZ.parquet -> 000001.SZ
             code = name.replace(".parquet", "").replace("_", ".")
             all_codes.append(code)
+    else:
+        # 兜底：扫原始 parquet 行情目录
+        stock_parquet_dir = os.path.join(str(settings.DATA_ROOT_PATH), "parquet", "stock_data")
+        if os.path.isdir(stock_parquet_dir):
+            for name in os.listdir(stock_parquet_dir):
+                if not name.endswith(".parquet"):
+                    continue
+                code = name.replace(".parquet", "").replace("_", ".")
+                all_codes.append(code)
 
     all_codes = [c for c in all_codes if isinstance(c, str) and c]
     all_codes = sorted(set(all_codes))
