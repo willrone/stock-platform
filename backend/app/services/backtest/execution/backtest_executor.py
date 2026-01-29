@@ -525,16 +525,22 @@ class BacktestExecutor:
                         if current_date not in data.index:
                             return ([], 0.0, 0.0)
 
-                        t0 = time.perf_counter()
-                        historical_data = data[data.index <= current_date]
-                        slice_dur = time.perf_counter() - t0
+                        # PERF: avoid slicing dataframe per day (O(T^2) copies). For strategies
+                        # that use current_date indexing (our portfolio setup does), passing
+                        # full data avoids repeated slicing cost and enables per-stock indicator caching.
+                        if current_date not in data.index:
+                            return ([], 0.0, 0.0)
 
-                        if len(historical_data) < 20:
+                        t0 = time.perf_counter()
+                        current_idx = int(data.index.get_loc(current_date))
+                        slice_dur = time.perf_counter() - t0  # kept for compatibility
+
+                        if current_idx < 20:
                             return ([], slice_dur, 0.0)
 
                         try:
                             t1 = time.perf_counter()
-                            sigs = strategy.generate_signals(historical_data, current_date)
+                            sigs = strategy.generate_signals(data, current_date)
                             gen_dur = time.perf_counter() - t1
                             return (sigs, slice_dur, gen_dur)
                         except Exception as e:
@@ -584,15 +590,18 @@ class BacktestExecutor:
                         if current_date in data.index:
                             # 获取到当前日期的历史数据
                             t0 = time.perf_counter()
-                            historical_data = data[data.index <= current_date]
+                            # same rationale as parallel path: avoid daily slicing copies
+                            current_idx = (
+                                int(data.index.get_loc(current_date))
+                                if current_date in data.index
+                                else -1
+                            )
                             slice_time_total += time.perf_counter() - t0
 
-                            if len(historical_data) >= 20:  # 确保有足够的历史数据
+                            if current_idx >= 20:
                                 try:
                                     t1 = time.perf_counter()
-                                    signals = strategy.generate_signals(
-                                        historical_data, current_date
-                                    )
+                                    signals = strategy.generate_signals(data, current_date)
                                     gen_time_total += time.perf_counter() - t1
                                     all_signals.extend(signals)
                                 except Exception as e:
@@ -610,14 +619,21 @@ class BacktestExecutor:
                     )
 
                     # 新口径：拆开看“切片”与“策略信号生成”的比例
+                    # 注意：并行模式下 slice_time_total / gen_time_total 是“各线程耗时求和”(work)，
+                    # 不是 wall-clock；用于判断 CPU work 构成，但不能直接当成整体耗时百分比。
                     if slice_time_total > 0:
                         self.performance_profiler.record_function_call(
-                            "slice_historical_data", float(slice_time_total)
+                            "slice_historical_data_work", float(slice_time_total)
                         )
                     if gen_time_total > 0:
                         self.performance_profiler.record_function_call(
-                            "generate_signals_core", float(gen_time_total)
+                            "generate_signals_core_work", float(gen_time_total)
                         )
+
+                    # 额外记录 wall-clock 口径（同 generate_signals，但名字更明确，便于报表阅读）
+                    self.performance_profiler.record_function_call(
+                        "generate_signals_wall", signal_duration
+                    )
 
                     # If StrategyPortfolio attached per-strategy timings, record them once per day.
                     try:

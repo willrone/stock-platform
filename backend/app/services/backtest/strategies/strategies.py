@@ -1020,8 +1020,31 @@ class MultiFactorStrategy(FactorStrategy):
         self.factor_weights = config.get("factor_weights", [0.33, 0.33, 0.34])
         self.weighting_method = config.get("weighting_method", "equal")
 
+        # PERF: indicators are expensive (rolling windows). In backtest we call generate_signals
+        # every day; without caching this becomes O(T^2). Cache per-stock dataframe.
+        import threading
+
+        self._indicator_cache: Dict[tuple, Dict[str, pd.Series]] = {}
+        self._indicator_cache_lock = threading.Lock()
+
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算多因子综合指标"""
+        """计算多因子综合指标
+
+        注意：该函数包含大量 rolling 计算，回测按天调用时必须做缓存，否则会成为主要性能瓶颈。
+        """
+        stock_code = data.attrs.get("stock_code", "UNKNOWN")
+        cache_key = (
+            stock_code,
+            id(data),
+            tuple(self.factors),
+            tuple(float(x) for x in self.factor_weights),
+            str(self.weighting_method),
+        )
+        with self._indicator_cache_lock:
+            cached = self._indicator_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         close_prices = data["close"]
 
         returns = close_prices.pct_change()
@@ -1065,7 +1088,7 @@ class MultiFactorStrategy(FactorStrategy):
 
         combined_score = combined_score.rolling(window=5).mean()
 
-        return {
+        out = {
             "combined_score": combined_score,
             "value_score": value_score,
             "momentum_score": momentum_normalized,
@@ -1073,6 +1096,11 @@ class MultiFactorStrategy(FactorStrategy):
             "price": close_prices,
             "volatility": volatility,
         }
+
+        with self._indicator_cache_lock:
+            self._indicator_cache[cache_key] = out
+
+        return out
 
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
