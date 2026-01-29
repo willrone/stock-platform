@@ -13,17 +13,27 @@ from ..models import SignalType, TradingSignal
 
 
 class SignalIntegrator:
-    """信号整合器 - 参考QuantConnect的信号融合算法"""
+    """信号整合器
+
+    - weighted_voting: 按股票聚合 BUY/SELL 信号，加权投票输出最终 BUY/SELL。
+    - rank_sum: 将各策略对股票的“看多强度”转成名次，名次求和后取 TopK（越小越好）。
+    - borda: Borda count 版本的 rank 融合（名次越靠前得分越高），再取 TopK。
+    - consensus_topk: 取各策略 TopK 的“交集/一致性”优先（出现次数越多越靠前）。
+
+    说明：rank 系列方法更贴近你们的“TopK 选股 + buffer/换手限制”的执行方式，
+    输出默认是 BUY 信号列表（TopK），SELL 留给执行器的 rebalance 逻辑处理。
+    """
+
+    SUPPORTED_METHODS = {"weighted_voting", "rank_sum", "borda", "consensus_topk"}
 
     def __init__(self, method: str = "weighted_voting"):
-        """
-        初始化信号整合器
+        """初始化信号整合器
 
         Args:
-            method: 整合方法，支持 "weighted_voting" (加权投票)
+            method: 整合方法
         """
         self.method = method
-        if method not in ["weighted_voting"]:
+        if method not in self.SUPPORTED_METHODS:
             raise ValueError(f"不支持的整合方法: {method}")
 
     def integrate(
@@ -31,6 +41,9 @@ class SignalIntegrator:
         signals: List[TradingSignal],
         weights: Dict[str, float],
         consistency_threshold: float = 0.6,
+        *,
+        topk: int = 10,
+        min_votes: int = 1,
     ) -> List[TradingSignal]:
         """
         整合多个策略的信号
@@ -53,6 +66,16 @@ class SignalIntegrator:
         if not signals:
             return []
 
+        # rank 系列融合：按“策略 → 股票强度排名”来融合
+        if self.method in {"rank_sum", "borda", "consensus_topk"}:
+            return self._integrate_rank_based(
+                signals=signals,
+                weights=weights,
+                topk=topk,
+                min_votes=min_votes,
+            )
+
+        # ===== weighted_voting =====
         # 归一化权重
         total_weight = sum(weights.values())
         if total_weight == 0:
@@ -64,7 +87,7 @@ class SignalIntegrator:
         for signal in signals:
             signals_by_stock[signal.stock_code].append(signal)
 
-        integrated_signals = []
+        integrated_signals: List[TradingSignal] = []
 
         for stock_code, stock_signals in signals_by_stock.items():
             integrated_signal = self._integrate_stock_signals(
@@ -208,6 +231,130 @@ class SignalIntegrator:
         )
 
         return integrated_signal
+
+    def _integrate_rank_based(
+        self,
+        *,
+        signals: List[TradingSignal],
+        weights: Dict[str, float],
+        topk: int,
+        min_votes: int,
+    ) -> List[TradingSignal]:
+        """Rank-based 融合：输出 BUY TopK。
+
+        约定：
+        - 仅使用 BUY 信号作为“看多候选”；SELL 由执行器的再平衡规则处理。
+        - 每个策略对股票按 strength 降序排序得到 rank（1..n）。
+        - rank_sum: 聚合 score = -Σ(rank * w)（越大越好，等价于 rank 越小越好）
+        - borda: 聚合 score = Σ((n-rank+1) * w)
+        - consensus_topk: 聚合 score = (出现次数, Σstrength*w)
+        """
+
+        if topk <= 0:
+            return []
+
+        # 归一化权重（如果传入为空，则按均匀权重）
+        if weights:
+            total_w = float(sum(weights.values()))
+            if total_w <= 0:
+                normalized_weights = {k: 1.0 / len(weights) for k in weights}
+            else:
+                normalized_weights = {k: float(v) / total_w for k, v in weights.items()}
+        else:
+            normalized_weights = {}
+
+        # 1) 收集每个策略的 BUY 信号强度：{strategy -> {code -> strength}}
+        per_strategy: Dict[str, Dict[str, float]] = defaultdict(dict)
+        # 同时记录 timestamp/price（用于输出信号）
+        last_seen: Dict[str, TradingSignal] = {}
+
+        for sig in signals:
+            last_seen[sig.stock_code] = sig
+            if sig.signal_type != SignalType.BUY:
+                continue
+            sname = self._extract_strategy_name(sig)
+            per_strategy[sname][sig.stock_code] = max(
+                float(sig.strength or 0.0), per_strategy[sname].get(sig.stock_code, 0.0)
+            )
+
+        if not per_strategy:
+            return []
+
+        # 2) 生成各策略的 rank 表：{strategy -> [(code, strength)] sorted}
+        ranked_lists: Dict[str, List[tuple[str, float]]] = {}
+        for sname, m in per_strategy.items():
+            ranked_lists[sname] = sorted(m.items(), key=lambda x: x[1], reverse=True)
+
+        # 3) 聚合
+        # vote_count: 出现次数；strength_sum: Σstrength*w；rank_sum_acc: Σrank*w；borda_acc: Σborda*w
+        vote_count: Dict[str, int] = defaultdict(int)
+        strength_sum: Dict[str, float] = defaultdict(float)
+        rank_sum_acc: Dict[str, float] = defaultdict(float)
+        borda_acc: Dict[str, float] = defaultdict(float)
+
+        for sname, items in ranked_lists.items():
+            n = len(items)
+            w = float(normalized_weights.get(sname, 1.0 / len(ranked_lists)))
+            for idx, (code, strength) in enumerate(items):
+                r = idx + 1
+                vote_count[code] += 1
+                strength_sum[code] += float(strength) * w
+                rank_sum_acc[code] += float(r) * w
+                borda_acc[code] += float(n - r + 1) * w
+
+        # 4) 选 TopK
+        # 先做 min_votes 过滤（默认 1，相当于不过滤）
+        candidates = [c for c in vote_count.keys() if vote_count[c] >= int(min_votes)]
+
+        if self.method == "rank_sum":
+            # 越小越好 → 转成越大越好
+            scored = [
+                (-(rank_sum_acc[c]), strength_sum[c], vote_count[c], c)
+                for c in candidates
+            ]
+            scored.sort(reverse=True)
+        elif self.method == "borda":
+            scored = [(borda_acc[c], strength_sum[c], vote_count[c], c) for c in candidates]
+            scored.sort(reverse=True)
+        else:  # consensus_topk
+            scored = [(vote_count[c], strength_sum[c], c) for c in candidates]
+            scored.sort(reverse=True)
+
+        top = scored[: int(topk)]
+
+        # 5) 输出 BUY 信号列表
+        out: List[TradingSignal] = []
+        now_ts = max((s.timestamp for s in signals), default=datetime.utcnow())
+
+        for item in top:
+            if self.method == "consensus_topk":
+                votes, ssum, code = item
+                extra = {"votes": int(votes), "score": float(votes), "strength_sum": float(ssum)}
+            else:
+                score, ssum, votes, code = item
+                extra = {"votes": int(votes), "score": float(score), "strength_sum": float(ssum)}
+
+            ref = last_seen.get(code)
+            price = float(ref.price) if ref else 0.0
+
+            out.append(
+                TradingSignal(
+                    timestamp=now_ts,
+                    stock_code=code,
+                    signal_type=SignalType.BUY,
+                    strength=min(1.0, max(0.0, float(ssum))),  # 简化：用加权强度和裁剪
+                    price=price,
+                    reason=f"rank_fusion({self.method})",
+                    metadata={
+                        "integration_method": self.method,
+                        "topk": int(topk),
+                        "min_votes": int(min_votes),
+                        **extra,
+                    },
+                )
+            )
+
+        return out
 
     def _extract_strategy_name(self, signal: TradingSignal) -> str:
         """
