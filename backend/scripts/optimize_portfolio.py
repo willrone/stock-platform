@@ -34,6 +34,18 @@ def main():
     p.add_argument("--max-strategies", type=int, default=3)
     p.add_argument("--start", type=str, default="2020-01-01")
     p.add_argument("--end", type=str, default="2021-12-31")
+
+    # 与实盘规则对齐（BacktestExecutor: trade_mode=topk_buffer）
+    p.add_argument("--trade-mode", type=str, default="topk_buffer")
+    p.add_argument("--topk", type=int, default=10)
+    p.add_argument("--buffer", type=int, default=20)
+    p.add_argument("--max-changes-per-day", type=int, default=2)
+
+    # 交易成本：默认固定；如需让 Optuna 一起优化，打开此开关
+    p.add_argument("--optimize-costs", action="store_true")
+    p.add_argument("--commission-rate", type=float, default=0.0003)
+    p.add_argument("--slippage-rate", type=float, default=0.0001)
+
     p.add_argument("--out", type=str, default="data/optimization/portfolio_last.json")
 
     args = p.parse_args()
@@ -77,6 +89,13 @@ def main():
         lambda_drawdown=args.lambda_dd,
         max_strategies=args.max_strategies,
         allow_strategy_selection=True,
+        trade_mode=args.trade_mode,
+        topk=args.topk,
+        buffer=args.buffer,
+        max_changes_per_day=args.max_changes_per_day,
+        optimize_costs=bool(args.optimize_costs),
+        commission_rate=float(args.commission_rate),
+        slippage_rate=float(args.slippage_rate),
     )
 
     # progress: print every 10 trials (Top3 snapshot)

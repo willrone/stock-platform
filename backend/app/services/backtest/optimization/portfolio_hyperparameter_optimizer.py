@@ -48,6 +48,22 @@ class PortfolioOptConfig:
     # 是否允许试验中“禁用”某策略（结构搜索）
     allow_strategy_selection: bool = True
 
+    # ===== 回测执行对齐实盘规则（topk_buffer） =====
+    # BacktestExecutor 内部会从 strategy_config 读取 trade_mode/topk/buffer/max_changes_per_day
+    trade_mode: str = "topk_buffer"  # "topk_buffer" | None
+    topk: int = 10
+    buffer: int = 20
+    max_changes_per_day: int = 2
+
+    # ===== 交易成本参数 =====
+    # True: 让 Optuna 一起优化 commission/slippage（可能“过拟合”成本）
+    # False: 固定为 BacktestConfig 的真实/默认值（更贴近实盘）
+    optimize_costs: bool = False
+
+    # 当 optimize_costs=False 时使用（也用于限定 optimize_costs=True 的搜索中心值）
+    commission_rate: float = 0.0003
+    slippage_rate: float = 0.0001
+
 
 def _normalize_weights(ws: List[float]) -> List[float]:
     s = float(sum(ws))
@@ -106,8 +122,8 @@ class PortfolioHyperparameterOptimizer:
 
         backtest_cfg = BacktestConfig(
             initial_cash=100000.0,
-            commission_rate=0.0003,
-            slippage_rate=0.0001,
+            commission_rate=float(cfg.commission_rate),
+            slippage_rate=float(cfg.slippage_rate),
         )
 
         # 3) 策略池（先从现有策略列表里挑常用的）
@@ -223,10 +239,27 @@ class PortfolioHyperparameterOptimizer:
             strategy_config: Dict[str, Any] = {
                 "strategies": strategies_payload,
                 "integration_method": integration_method,
-                # 同时允许优化执行参数（先小范围）
-                "commission_rate": trial.suggest_float("commission_rate", 0.0001, 0.001),
-                "slippage_rate": trial.suggest_float("slippage_rate", 0.0, 0.001),
+
+                # ===== 与实盘执行规则对齐 =====
+                # BacktestExecutor 会读取这些字段决定交易执行模式
+                "trade_mode": cfg.trade_mode,
+                "topk": int(cfg.topk),
+                "buffer": int(cfg.buffer),
+                "max_changes_per_day": int(cfg.max_changes_per_day),
             }
+
+            # ===== 交易成本：固定 or 一起优化 =====
+            if cfg.optimize_costs:
+                strategy_config["commission_rate"] = trial.suggest_float(
+                    "commission_rate", 0.0001, 0.001
+                )
+                strategy_config["slippage_rate"] = trial.suggest_float(
+                    "slippage_rate", 0.0, 0.001
+                )
+            else:
+                # 默认固定为 backtest_cfg 的值（更贴近实盘；避免 Optuna 通过“调低成本”刷分）
+                strategy_config["commission_rate"] = float(backtest_cfg.commission_rate)
+                strategy_config["slippage_rate"] = float(backtest_cfg.slippage_rate)
 
             # 3.5 运行回测（在 Optuna 同步 objective 内安全运行 async）
             def run_in_new_loop():
@@ -296,6 +329,15 @@ class PortfolioHyperparameterOptimizer:
             "end_date": end_date.isoformat(),
             "n_trials": n_trials,
             "lambda_drawdown": cfg.lambda_drawdown,
+            "execution": {
+                "trade_mode": cfg.trade_mode,
+                "topk": cfg.topk,
+                "buffer": cfg.buffer,
+                "max_changes_per_day": cfg.max_changes_per_day,
+                "optimize_costs": cfg.optimize_costs,
+                "commission_rate": backtest_cfg.commission_rate,
+                "slippage_rate": backtest_cfg.slippage_rate,
+            },
             "best": {
                 "score": best.value,
                 "params": best.params,
