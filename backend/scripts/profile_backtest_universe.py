@@ -44,6 +44,20 @@ def _list_codes() -> list[str]:
     return sorted(set([c for c in codes if c]))
 
 
+def _is_data_valid(df, start: datetime, end: datetime, *, min_rows: int = 30, min_coverage: float = 0.7) -> bool:
+    try:
+        n = int(len(df))
+    except Exception:
+        return False
+    if n < int(min_rows):
+        return False
+
+    # rough expected trading days (~5/7 of calendar days)
+    expected = max(1, int(((end - start).days + 1) * 5 / 7))
+    coverage = n / expected
+    return coverage >= float(min_coverage)
+
+
 async def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--universe-size", type=int, default=50)
@@ -53,14 +67,25 @@ async def main():
     ap.add_argument("--topk", type=int, default=10)
     ap.add_argument("--buffer", type=int, default=20)
     ap.add_argument("--max-changes-per-day", type=int, default=2)
+
+    # universe validity filter (defaults match DataLoader heuristic)
+    ap.add_argument("--min-rows", type=int, default=30)
+    ap.add_argument("--min-coverage", type=float, default=0.7)
+    ap.add_argument("--oversample", type=int, default=5, help="sample N*universe first, then filter")
+
     args = ap.parse_args()
 
     all_codes = _list_codes()
-    if len(all_codes) < args.universe_size:
-        raise SystemExit(f"Not enough codes: have={len(all_codes)} need={args.universe_size}")
+
+    start_dt = datetime.fromisoformat(args.start)
+    end_dt = datetime.fromisoformat(args.end)
 
     rng = random.Random(args.seed)
-    stock_codes = rng.sample(all_codes, args.universe_size)
+    pool_size = min(len(all_codes), int(args.universe_size) * int(args.oversample))
+    if pool_size < args.universe_size:
+        raise SystemExit(f"Not enough codes: have={len(all_codes)} need={args.universe_size}")
+
+    candidate_codes = rng.sample(all_codes, pool_size)
 
     executor = BacktestExecutor(
         data_dir=str(settings.DATA_ROOT_PATH),
@@ -68,11 +93,32 @@ async def main():
         enable_performance_profiling=True,
     )
 
+    # Load data once (DataLoader already does its own filtering, but we pre-filter universe here
+    # to avoid lots of missing/short-history tickers skewing profiling).
+    stock_data = executor.data_loader.load_multiple_stocks(candidate_codes, start_dt, end_dt)
+
+    valid_codes: list[str] = []
+    for code, df in stock_data.items():
+        if _is_data_valid(df, start_dt, end_dt, min_rows=args.min_rows, min_coverage=args.min_coverage):
+            valid_codes.append(code)
+
+    valid_codes = sorted(set(valid_codes))
+    if len(valid_codes) < args.universe_size:
+        raise SystemExit(
+            f"Not enough valid codes after filter: valid={len(valid_codes)} need={args.universe_size} "
+            f"(min_rows={args.min_rows} min_coverage={args.min_coverage} pool={pool_size})"
+        )
+
+    stock_codes = rng.sample(valid_codes, args.universe_size)
+    print(
+        f"[universe] candidates={pool_size} loaded={len(stock_data)} valid={len(valid_codes)} selected={len(stock_codes)}"
+    )
+
     res = await executor.run_backtest(
         strategy_name="portfolio",
         stock_codes=stock_codes,
-        start_date=datetime.fromisoformat(args.start),
-        end_date=datetime.fromisoformat(args.end),
+        start_date=start_dt,
+        end_date=end_dt,
         strategy_config={
             "integration_method": "weighted_voting",
             "trade_mode": "topk_buffer",
