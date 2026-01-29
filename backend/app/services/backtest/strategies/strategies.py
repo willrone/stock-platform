@@ -63,11 +63,9 @@ class BollingerBandStrategy(BaseStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.period:
                 return signals
 
@@ -151,11 +149,9 @@ class StochasticStrategy(BaseStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.k_period + self.d_period:
                 return signals
 
@@ -234,11 +230,9 @@ class CCIStrategy(BaseStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.period:
                 return signals
 
@@ -372,11 +366,9 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.lookback_period + 20:
                 return signals
 
@@ -468,11 +460,9 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.lookback_period:
                 return signals
 
@@ -601,11 +591,9 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.lookback_period:
                 return signals
 
@@ -807,11 +795,9 @@ class ValueFactorStrategy(FactorStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < 260:
                 return signals
 
@@ -893,11 +879,9 @@ class MomentumFactorStrategy(FactorStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.lookback_period:
                 return signals
 
@@ -974,11 +958,9 @@ class LowVolatilityStrategy(FactorStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.volatility_window:
                 return signals
 
@@ -1109,11 +1091,9 @@ class MultiFactorStrategy(FactorStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < 130:
                 return signals
 
