@@ -508,23 +508,38 @@ class BacktestExecutor:
                     time.perf_counter() if self.enable_performance_profiling else None
                 )
 
+                # 细分 profiling：把“切片”和“生成信号”拆开计时
+                slice_time_total = 0.0
+                gen_time_total = 0.0
+
                 if self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号
                     def generate_stock_signals(
                         stock_code: str, data: pd.DataFrame
-                    ) -> List[TradingSignal]:
-                        """为单只股票生成信号（用于并行执行）"""
-                        if current_date in data.index:
-                            historical_data = data[data.index <= current_date]
-                            if len(historical_data) >= 20:  # 确保有足够的历史数据
-                                try:
-                                    return strategy.generate_signals(
-                                        historical_data, current_date
-                                    )
-                                except Exception as e:
-                                    logger.warning(f"生成信号失败 {stock_code}: {e}")
-                                    return []
-                        return []
+                    ) -> Tuple[List[TradingSignal], float, float]:
+                        """为单只股票生成信号（用于并行执行）
+
+                        Returns:
+                          (signals, slice_duration, gen_duration)
+                        """
+                        if current_date not in data.index:
+                            return ([], 0.0, 0.0)
+
+                        t0 = time.perf_counter()
+                        historical_data = data[data.index <= current_date]
+                        slice_dur = time.perf_counter() - t0
+
+                        if len(historical_data) < 20:
+                            return ([], slice_dur, 0.0)
+
+                        try:
+                            t1 = time.perf_counter()
+                            sigs = strategy.generate_signals(historical_data, current_date)
+                            gen_dur = time.perf_counter() - t1
+                            return (sigs, slice_dur, gen_dur)
+                        except Exception as e:
+                            logger.warning(f"生成信号失败 {stock_code}: {e}")
+                            return ([], slice_dur, 0.0)
 
                     # 使用线程池并行生成信号
                     sequential_start = (
@@ -541,8 +556,10 @@ class BacktestExecutor:
 
                         for future in as_completed(futures):
                             try:
-                                signals = future.result()
+                                signals, slice_dur, gen_dur = future.result()
                                 all_signals.extend(signals)
+                                slice_time_total += float(slice_dur)
+                                gen_time_total += float(gen_dur)
                             except Exception as e:
                                 stock_code = futures[future]
                                 logger.error(f"并行生成信号失败 {stock_code}: {e}")
@@ -566,24 +583,41 @@ class BacktestExecutor:
                     for stock_code, data in stock_data.items():
                         if current_date in data.index:
                             # 获取到当前日期的历史数据
+                            t0 = time.perf_counter()
                             historical_data = data[data.index <= current_date]
+                            slice_time_total += time.perf_counter() - t0
+
                             if len(historical_data) >= 20:  # 确保有足够的历史数据
                                 try:
+                                    t1 = time.perf_counter()
                                     signals = strategy.generate_signals(
                                         historical_data, current_date
                                     )
+                                    gen_time_total += time.perf_counter() - t1
                                     all_signals.extend(signals)
                                 except Exception as e:
                                     logger.warning(f"生成信号失败 {stock_code}: {e}")
                                     continue
 
                 # 记录信号生成时间
-                if self.enable_performance_profiling and signal_start_time:
+                if self.enable_performance_profiling and signal_start_time and self.performance_profiler:
                     signal_duration = time.perf_counter() - signal_start_time
                     signal_generation_times.append(signal_duration)
+
+                    # 原有口径：整段信号生成（含切片、计算指标、融合等）
                     self.performance_profiler.record_function_call(
                         "generate_signals", signal_duration
                     )
+
+                    # 新口径：拆开看“切片”与“策略信号生成”的比例
+                    if slice_time_total > 0:
+                        self.performance_profiler.record_function_call(
+                            "slice_historical_data", float(slice_time_total)
+                        )
+                    if gen_time_total > 0:
+                        self.performance_profiler.record_function_call(
+                            "generate_signals_core", float(gen_time_total)
+                        )
 
                 total_signals += len(all_signals)
 
