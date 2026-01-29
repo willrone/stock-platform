@@ -112,12 +112,19 @@ class StrategyPortfolio(BaseStrategy):
         Returns:
             整合后的信号列表
         """
+        import time
+
         all_signals = []
+
+        # profiling: collect per-sub-strategy timings (seconds)
+        sub_strategy_times: Dict[str, float] = {}
 
         # 收集所有策略的信号
         for strategy in self.strategies:
             try:
+                t0 = time.perf_counter()
                 signals = strategy.generate_signals(data, current_date)
+                sub_strategy_times[strategy.name] = time.perf_counter() - t0
 
                 # 为每个信号添加策略名称到metadata
                 for signal in signals:
@@ -140,9 +147,21 @@ class StrategyPortfolio(BaseStrategy):
             return []
 
         # 使用信号整合器整合信号
+        t_int = time.perf_counter()
         integrated_signals = self.integrator.integrate(
             all_signals, self.weights, consistency_threshold=0.6
         )
+        integrate_time = time.perf_counter() - t_int
+
+        # Attach lightweight perf summary to the first integrated signal (for backtest-level profiling)
+        if integrated_signals:
+            sig0 = integrated_signals[0]
+            if sig0.metadata is None:
+                sig0.metadata = {}
+            sig0.metadata["portfolio_perf"] = {
+                "sub_strategy_times": sub_strategy_times,
+                "integrate_time": integrate_time,
+            }
 
         return integrated_signals
 

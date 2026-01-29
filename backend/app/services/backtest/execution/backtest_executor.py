@@ -619,6 +619,32 @@ class BacktestExecutor:
                             "generate_signals_core", float(gen_time_total)
                         )
 
+                    # If StrategyPortfolio attached per-strategy timings, record them once per day.
+                    try:
+                        perf_sig = None
+                        for _s in all_signals:
+                            md = getattr(_s, "metadata", None) or {}
+                            if isinstance(md, dict) and "portfolio_perf" in md:
+                                perf_sig = _s
+                                break
+                        if perf_sig is not None:
+                            md = perf_sig.metadata or {}
+                            pp = md.get("portfolio_perf") if isinstance(md, dict) else None
+                            if isinstance(pp, dict):
+                                sub = pp.get("sub_strategy_times")
+                                if isinstance(sub, dict):
+                                    for k, v in sub.items():
+                                        self.performance_profiler.record_function_call(
+                                            f"portfolio_substrategy__{k}", float(v)
+                                        )
+                                it = pp.get("integrate_time")
+                                if it is not None:
+                                    self.performance_profiler.record_function_call(
+                                        "portfolio_integrate", float(it)
+                                    )
+                    except Exception:
+                        pass
+
                 total_signals += len(all_signals)
 
                 # 保存信号记录到数据库
