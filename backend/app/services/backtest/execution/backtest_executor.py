@@ -539,9 +539,26 @@ class BacktestExecutor:
                             return ([], slice_dur, 0.0)
 
                         try:
+                            # measure wall time of strategy.generate_signals per stock
                             t1 = time.perf_counter()
                             sigs = strategy.generate_signals(data, current_date)
                             gen_dur = time.perf_counter() - t1
+
+                            # attach per-stock perf (kept tiny to reduce overhead)
+                            if sigs:
+                                try:
+                                    md = getattr(sigs[0], "metadata", None)
+                                    if md is None:
+                                        sigs[0].metadata = {}
+                                        md = sigs[0].metadata
+                                    if isinstance(md, dict):
+                                        md["_perf"] = {
+                                            "gen_wall": float(gen_dur),
+                                            "slice_wall": float(slice_dur),
+                                        }
+                                except Exception:
+                                    pass
+
                             return (sigs, slice_dur, gen_dur)
                         except Exception as e:
                             logger.warning(f"生成信号失败 {stock_code}: {e}")
@@ -553,6 +570,8 @@ class BacktestExecutor:
                         if self.enable_performance_profiling
                         else None
                     )
+
+                    gen_time_max = 0.0
 
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                         futures = {
@@ -566,6 +585,10 @@ class BacktestExecutor:
                                 all_signals.extend(signals)
                                 slice_time_total += float(slice_dur)
                                 gen_time_total += float(gen_dur)
+
+                                # record max per-stock wall time (critical path proxy)
+                                if gen_dur and gen_dur > gen_time_max:
+                                    gen_time_max = float(gen_dur)
                             except Exception as e:
                                 stock_code = futures[future]
                                 logger.error(f"并行生成信号失败 {stock_code}: {e}")
@@ -585,6 +608,7 @@ class BacktestExecutor:
                                 worker_count=self.max_workers,
                             )
                 else:
+                    gen_time_max = 0.0
                     # 顺序生成信号（股票数量少或禁用并行）
                     for stock_code, data in stock_data.items():
                         if current_date in data.index:
@@ -602,7 +626,10 @@ class BacktestExecutor:
                                 try:
                                     t1 = time.perf_counter()
                                     signals = strategy.generate_signals(data, current_date)
-                                    gen_time_total += time.perf_counter() - t1
+                                    _dur = time.perf_counter() - t1
+                                    gen_time_total += _dur
+                                    if _dur > gen_time_max:
+                                        gen_time_max = float(_dur)
                                     all_signals.extend(signals)
                                 except Exception as e:
                                     logger.warning(f"生成信号失败 {stock_code}: {e}")
@@ -634,6 +661,12 @@ class BacktestExecutor:
                     self.performance_profiler.record_function_call(
                         "generate_signals_wall", signal_duration
                     )
+
+                    # 并行路径下 critical path 近似：单日最慢股票的 generate_signals wall
+                    if gen_time_max > 0:
+                        self.performance_profiler.record_function_call(
+                            "generate_signals_core_wall_max", float(gen_time_max)
+                        )
 
                     # If StrategyPortfolio attached per-strategy timings, record them once per day.
                     try:
