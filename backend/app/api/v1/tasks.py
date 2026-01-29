@@ -166,9 +166,20 @@ async def list_tasks(status: Optional[str] = None, limit: int = 20, offset: int 
             stock_codes = config.get("stock_codes", [])
             model_id = config.get("model_id", "")
 
+            # 处理 task_type：可能是字符串或枚举对象
+            task_type_value = None
+            if task.task_type:
+                if hasattr(task.task_type, 'value'):
+                    # 如果是枚举对象，获取其值
+                    task_type_value = task.task_type.value
+                else:
+                    # 如果已经是字符串，直接使用
+                    task_type_value = task.task_type
+            
             task_data = {
                 "task_id": task.task_id,
                 "task_name": task.task_name,
+                "task_type": task_type_value,  # 添加任务类型字段
                 "status": task.status,
                 "progress": task.progress,
                 "stock_codes": stock_codes if isinstance(stock_codes, list) else [],
@@ -180,6 +191,7 @@ async def list_tasks(status: Optional[str] = None, limit: int = 20, offset: int 
                 if task.completed_at
                 else None,
                 "error_message": task.error_message,
+                "config": config,  # 添加完整配置，方便前端使用
             }
             task_list.append(task_data)
 

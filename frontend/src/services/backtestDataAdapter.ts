@@ -124,8 +124,33 @@ export class BacktestDataAdapter {
   /**
    * 将后端数据转换为风险指标格式
    */
-  static adaptRiskMetrics(detailedResult: BacktestDetailedResult): RiskMetrics {
-    const extended = detailedResult.extended_risk_metrics;
+  static adaptRiskMetrics(detailedResult: BacktestDetailedResult | null | undefined): RiskMetrics {
+    if (!detailedResult) {
+      // 返回默认值，避免页面崩溃
+      return {
+        sharpe_ratio: 0,
+        sortino_ratio: 0,
+        calmar_ratio: 0,
+        information_ratio: 0,
+        max_drawdown: 0,
+        avg_drawdown: 0,
+        drawdown_recovery_time: 0,
+        volatility_daily: 0,
+        volatility_monthly: 0,
+        volatility_annual: 0,
+        var_95: 0,
+        var_99: 0,
+        cvar_95: 0,
+        cvar_99: 0,
+        beta: 0,
+        alpha: 0,
+        tracking_error: 0,
+        upside_capture: 0,
+        downside_capture: 0,
+      };
+    }
+
+    const extended = detailedResult.extended_risk_metrics || {};
 
     // 从现有数据中提取或计算风险指标
     return {
@@ -154,7 +179,31 @@ export class BacktestDataAdapter {
   /**
    * 生成收益分布数据
    */
-  static generateReturnDistribution(detailedResult: BacktestDetailedResult): ReturnDistribution {
+  static generateReturnDistribution(detailedResult: BacktestDetailedResult | null | undefined): ReturnDistribution {
+    if (!detailedResult) {
+      // 返回默认值，避免页面崩溃
+      return {
+        daily_returns: [],
+        monthly_returns: [],
+        return_bins: [],
+        return_frequencies: [],
+        normality_test: {
+          statistic: 0,
+          p_value: 1,
+          is_normal: false,
+        },
+        skewness: 0,
+        kurtosis: 0,
+        percentiles: {
+          p5: 0,
+          p25: 0,
+          p50: 0,
+          p75: 0,
+          p95: 0,
+        },
+      };
+    }
+
     // 从月度收益数据中生成收益分布
     const monthlyReturns = detailedResult.monthly_returns?.map(m => m.monthly_return) || [];
 
@@ -186,7 +235,19 @@ export class BacktestDataAdapter {
   /**
    * 生成滚动指标数据
    */
-  static generateRollingMetrics(detailedResult: BacktestDetailedResult): RollingMetrics {
+  static generateRollingMetrics(detailedResult: BacktestDetailedResult | null | undefined): RollingMetrics {
+    if (!detailedResult) {
+      // 返回默认值，避免页面崩溃
+      return {
+        dates: [],
+        rolling_sharpe: [],
+        rolling_volatility: [],
+        rolling_drawdown: [],
+        rolling_beta: [],
+        window_size: 60,
+      };
+    }
+
     // 从回撤分析中获取日期序列
     const dates = detailedResult.drawdown_analysis?.drawdown_curve?.map(d => d.date) || [];
     const windowSize = 60; // 60日滚动窗口
@@ -207,8 +268,8 @@ export class BacktestDataAdapter {
   /**
    * 转换月度绩效数据
    */
-  static adaptMonthlyPerformance(detailedResult: BacktestDetailedResult): MonthlyPerformance[] {
-    if (!detailedResult.monthly_returns) {
+  static adaptMonthlyPerformance(detailedResult: BacktestDetailedResult | null | undefined): MonthlyPerformance[] {
+    if (!detailedResult || !detailedResult.monthly_returns) {
       return [];
     }
 
@@ -226,8 +287,8 @@ export class BacktestDataAdapter {
   /**
    * 生成年度绩效数据
    */
-  static generateYearlyPerformance(detailedResult: BacktestDetailedResult): YearlyPerformance[] {
-    if (!detailedResult.monthly_returns?.length) {
+  static generateYearlyPerformance(detailedResult: BacktestDetailedResult | null | undefined): YearlyPerformance[] {
+    if (!detailedResult || !detailedResult.monthly_returns?.length) {
       return [];
     }
 
@@ -290,8 +351,8 @@ export class BacktestDataAdapter {
   /**
    * 生成季节性分析数据
    */
-  static generateSeasonalAnalysis(detailedResult: BacktestDetailedResult): SeasonalAnalysis {
-    if (!detailedResult.monthly_returns) {
+  static generateSeasonalAnalysis(detailedResult: BacktestDetailedResult | null | undefined): SeasonalAnalysis {
+    if (!detailedResult || !detailedResult.monthly_returns) {
       return this.getDefaultSeasonalAnalysis();
     }
 
@@ -341,7 +402,22 @@ export class BacktestDataAdapter {
   /**
    * 生成基准对比数据
    */
-  static generateBenchmarkComparison(detailedResult: BacktestDetailedResult): BenchmarkComparison {
+  static generateBenchmarkComparison(detailedResult: BacktestDetailedResult | null | undefined): BenchmarkComparison {
+    if (!detailedResult) {
+      // 返回默认值，避免页面崩溃
+      return {
+        dates: [],
+        strategy_returns: [],
+        benchmark_returns: [],
+        excess_returns: [],
+        tracking_error: 0,
+        information_ratio: 0,
+        beta: 0,
+        alpha: 0,
+        correlation: 0,
+      };
+    }
+
     // 从回撤分析中获取日期序列
     const dates = detailedResult.drawdown_analysis?.drawdown_curve?.map(d => d.date) || [];
 
