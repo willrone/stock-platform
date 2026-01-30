@@ -599,6 +599,7 @@ export default function CreateOptimizationTaskForm({
             >
               <MenuItem value="sharpe">夏普比率 (Sharpe Ratio)</MenuItem>
               <MenuItem value="calmar">卡玛比率 (Calmar Ratio)</MenuItem>
+              <MenuItem value="stability">稳定赚钱 (Stability)</MenuItem>
               <MenuItem value="ic">信息系数 (IC)</MenuItem>
               <MenuItem value="ic_ir">信息比率 (IC_IR)</MenuItem>
               <MenuItem value="total_return">总收益率 (Total Return)</MenuItem>
