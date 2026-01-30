@@ -919,11 +919,20 @@ class BacktestExecutor:
                 # --- Sanity check (debug): topk_buffer must never exceed topk holdings ---
                 # 这条只做告警，不改变交易行为，用于定位“持仓数为何会>topk”。
                 try:
-                    if topk_limit is not None:
+                    tm = None
+                    k_limit = None
+                    try:
+                        tm = (strategy_config or {}).get("trade_mode")
+                        k_limit = int((strategy_config or {}).get("topk", 10))
+                    except Exception:
+                        tm = None
+                        k_limit = None
+
+                    if tm == "topk_buffer" and k_limit is not None:
                         current_holdings = list(portfolio_manager.positions.keys())
-                        if len(current_holdings) > int(topk_limit):
+                        if len(current_holdings) > int(k_limit):
                             logger.error(
-                                f"[topk_buffer][sanity] positions_count={len(current_holdings)} > topk={topk_limit} "
+                                f"[topk_buffer][sanity] positions_count={len(current_holdings)} > topk={k_limit} "
                                 f"date={current_date.strftime('%Y-%m-%d')} holdings={sorted(current_holdings)}"
                             )
                 except Exception as e:
