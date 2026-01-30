@@ -787,6 +787,7 @@ class BacktestExecutor:
                         buffer_n=buffer_n,
                         max_changes=trades_limit,
                         strategy=strategy,
+                        debug=bool((strategy_config or {}).get("debug_topk_buffer", False)),
                     )
 
                 else:
@@ -1247,6 +1248,7 @@ class BacktestExecutor:
         buffer_n: int = 20,
         max_changes: int = 2,
         strategy: Optional[BaseStrategy] = None,
+        debug: bool = False,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
         """每日 TopK 选股 + buffer 换仓 + 每天最多换 max_changes 只。
 
@@ -1291,10 +1293,35 @@ class BacktestExecutor:
         # Buy candidates: topk names not already kept
         to_buy = [c for c in topk_list if c not in kept_set]
 
-        # Apply max_changes (replacement pairs)
-        n_pairs = min(max_changes, len(to_sell), len(to_buy))
-        to_sell = to_sell[:n_pairs]
-        to_buy = to_buy[:n_pairs]
+        # Decide actions under max_changes
+        # - If current holdings < topk: allow buys even without sells (build initial positions)
+        # - Otherwise: do replacement pairs (sell+buy) up to max_changes
+        current_n = len(holdings)
+        if current_n < topk:
+            # how many new names to buy today
+            buy_quota = min(max_changes, topk - current_n, len(to_buy))
+            to_sell = []
+            to_buy = to_buy[:buy_quota]
+        else:
+            # replacement pairs
+            n_pairs = min(max_changes, len(to_sell), len(to_buy))
+            to_sell = to_sell[:n_pairs]
+            to_buy = to_buy[:n_pairs]
+
+        if debug:
+            try:
+                nonzero = sum(1 for _, s in scores.items() if isinstance(s, (int, float)) and s != 0)
+                logger.info(
+                    f"[topk_buffer] {current_date.date()} holdings={len(holdings)} nonzero_scores={nonzero} "
+                    f"topk={topk} buffer={buffer_n} max_changes={max_changes} "
+                    f"to_sell={len(to_sell)} to_buy={len(to_buy)}"
+                )
+                logger.info(
+                    f"[topk_buffer] topk_list(head)={topk_list[:min(5,len(topk_list))]} "
+                    f"holdings(head)={holdings[:min(5,len(holdings))]}"
+                )
+            except Exception:
+                pass
 
         # Execute sells first
         for code in to_sell:
