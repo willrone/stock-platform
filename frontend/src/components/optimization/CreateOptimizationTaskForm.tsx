@@ -58,7 +58,7 @@ export default function CreateOptimizationTaskForm({
     portfolio_strategies: [] as string[],
     start_date: '',
     end_date: '',
-    objective_metric: 'sharpe' as string | string[],
+    objective_metric: 'stability' as string | string[],
     direction: 'maximize' as 'maximize' | 'minimize',
     n_trials: 50,
     optimization_method: 'tpe',
