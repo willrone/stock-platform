@@ -743,6 +743,97 @@ class StrategyHyperparameterOptimizer:
             normalized = 1.0 - min(1.0, max(0.0, cost_ratio) / 0.05)
             return max(0.0, normalized)
 
+        elif objective_metric == "stability":
+            # 稳定赚钱：更偏向“样本外（后段）表现 + 低回撤 + 月度稳定”。
+            # 默认使用最后 30% 作为近似 out-of-sample 区间。
+            history = backtest_report.get("portfolio_history") or backtest_report.get(
+                "portfolioHistory"
+            )
+            try:
+                oos_ratio = float(
+                    (backtest_report.get("stability_config") or {}).get("oos_ratio", 0.3)
+                )
+            except Exception:
+                oos_ratio = 0.3
+            oos_ratio = max(0.05, min(0.5, oos_ratio))
+
+            def _max_drawdown(values: list[float]) -> float:
+                if not values:
+                    return 0.0
+                peak = values[0]
+                mdd = 0.0
+                for v in values:
+                    if v > peak:
+                        peak = v
+                    dd = (v / peak - 1.0) if peak != 0 else 0.0
+                    if dd < mdd:
+                        mdd = dd
+                return mdd  # negative
+
+            def _monthly_returns(dates: list[str], values: list[float]) -> list[float]:
+                # month -> first/last
+                if not dates or not values or len(dates) != len(values):
+                    return []
+                first: dict[str, float] = {}
+                last: dict[str, float] = {}
+                for d, v in zip(dates, values):
+                    m = str(d)[:7]
+                    if m not in first:
+                        first[m] = float(v)
+                    last[m] = float(v)
+                rets = []
+                for m in sorted(last.keys()):
+                    f = first.get(m)
+                    l = last.get(m)
+                    if f and f != 0:
+                        rets.append(l / f - 1.0)
+                return rets
+
+            if history and isinstance(history, list) and len(history) >= 10:
+                dates = [str(h.get("date") or h.get("snapshot_date") or "") for h in history]
+                values = [float(h.get("portfolio_value") or h.get("portfolioValue") or 0.0) for h in history]
+
+                n = len(values)
+                split = int(n * (1.0 - oos_ratio))
+                split = max(1, min(n - 1, split))
+                oos_dates = dates[split:]
+                oos_values = values[split:]
+
+                total_ret_oos = (oos_values[-1] / oos_values[0] - 1.0) if oos_values[0] else 0.0
+                mdd_oos = abs(_max_drawdown(oos_values))
+
+                mrets = _monthly_returns(oos_dates, oos_values)
+                if mrets:
+                    pos_month_ratio = sum(1 for r in mrets if r > 0) / len(mrets)
+                    mean = sum(mrets) / len(mrets)
+                    var = sum((r - mean) ** 2 for r in mrets) / len(mrets)
+                    mstd = var ** 0.5
+                else:
+                    pos_month_ratio = 0.0
+                    mstd = 0.0
+
+                # normalize components into [0,1]
+                # return: [-0.3, +0.6] -> [0,1]
+                ret_score = max(0.0, min(1.0, (total_ret_oos + 0.3) / 0.9))
+                # drawdown: 0..60% -> 1..0
+                dd_score = 1.0 - min(1.0, mdd_oos / 0.6)
+                # stability: monthly std 0..10% -> 1..0
+                std_score = 1.0 - min(1.0, mstd / 0.10)
+                pm_score = max(0.0, min(1.0, pos_month_ratio))
+
+                # weighted blend
+                score = 0.45 * ret_score + 0.30 * dd_score + 0.15 * pm_score + 0.10 * std_score
+                return max(0.0, min(1.0, score))
+
+            # fallback to calmar-like behavior when no history
+            annualized_return = metrics.get("annualized_return", 0.0)
+            max_drawdown = abs(metrics.get("max_drawdown", 0.0))
+            if max_drawdown <= 0:
+                return 0.0
+            calmar_ratio = annualized_return / max_drawdown
+            normalized = min(1.0, calmar_ratio / 10)
+            return max(0.0, normalized)
+
         elif objective_metric == "custom":
             # 自定义组合
             if not objective_weights:

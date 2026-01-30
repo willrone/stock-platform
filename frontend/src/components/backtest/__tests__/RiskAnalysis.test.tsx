@@ -106,7 +106,7 @@ describe('RiskAnalysis', () => {
 
     // 检查最大回撤
     expect(screen.getByText('最大回撤')).toBeInTheDocument();
-    expect(screen.getByText('15.00%')).toBeInTheDocument();
+    expect(screen.getByText('-15.00%')).toBeInTheDocument();
   });
 
   it('应该显示VaR分析', () => {

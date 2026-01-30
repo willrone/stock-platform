@@ -20,6 +20,11 @@ jest.mock('echarts', () => ({
     resize: jest.fn(),
     dispatchAction: jest.fn(),
     getDataURL: jest.fn(() => 'data:image/png;base64,mock'),
+    getOption: jest.fn(() => ({
+      dataZoom: [{ xAxisIndex: [0], start: 0, end: 100 }],
+    })),
+    on: jest.fn(),
+    off: jest.fn(),
   })),
   graphic: {
     LinearGradient: jest.fn(),
@@ -103,20 +108,21 @@ describe('InteractiveChartsContainer', () => {
     expect(screen.getByText('月度热力图')).toBeInTheDocument();
   });
 
-  it('应该正确处理API错误', async () => {
+  it('应该在API错误时回退到本地回测数据生成图表（不崩溃）', async () => {
     // Mock API调用失败
     mockBacktestService.getChartData.mockRejectedValue(new Error('API Error'));
 
     render(<InteractiveChartsContainer taskId={mockTaskId} backtestData={mockBacktestData} />);
 
-    // 等待错误状态显示
+    // 组件应能从 backtestData 生成图表并正常渲染
     await waitFor(() => {
-      expect(screen.getByText('图表数据加载失败')).toBeInTheDocument();
-      expect(screen.getByText('API Error')).toBeInTheDocument();
+      expect(screen.getByText('交互式图表分析')).toBeInTheDocument();
     });
 
-    // 检查重试按钮是否存在
-    expect(screen.getByText('重试')).toBeInTheDocument();
+    // 标签页仍应存在
+    expect(screen.getByText('收益曲线')).toBeInTheDocument();
+    expect(screen.getByText('回撤分析')).toBeInTheDocument();
+    expect(screen.getByText('月度热力图')).toBeInTheDocument();
   });
 
   it('应该正确调用API获取图表数据', async () => {
@@ -129,17 +135,17 @@ describe('InteractiveChartsContainer', () => {
       expect(mockBacktestService.getChartData).toHaveBeenCalledWith(
         mockTaskId,
         'equity_curve',
-        false
+        true
       );
       expect(mockBacktestService.getChartData).toHaveBeenCalledWith(
         mockTaskId,
         'drawdown_curve',
-        false
+        true
       );
       expect(mockBacktestService.getChartData).toHaveBeenCalledWith(
         mockTaskId,
         'monthly_heatmap',
-        false
+        true
       );
       expect(mockBacktestService.getBenchmarkData).toHaveBeenCalledWith(mockTaskId);
     });

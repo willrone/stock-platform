@@ -70,10 +70,18 @@ export default function EquityCurveChart({
   const [selectedTimeRange, setSelectedTimeRange] = useState('ALL');
   const [chartType, setChartType] = useState<'value' | 'return'>('value');
 
+  // Defensive: normalize possibly-empty data to avoid runtime errors in tests / partial API.
+  const safeData = {
+    dates: (data as any)?.dates || [],
+    portfolioValues: (data as any)?.portfolioValues || [],
+    returns: (data as any)?.returns || [],
+    dailyReturns: (data as any)?.dailyReturns || [],
+  };
+
   // 处理时间范围筛选
   const getFilteredData = () => {
-    if (!data.dates.length || selectedTimeRange === 'ALL') {
-      return data;
+    if (!safeData.dates.length || selectedTimeRange === 'ALL') {
+      return safeData;
     }
 
     const timeRange = TIME_RANGES.find(r => r.value === selectedTimeRange);
@@ -81,21 +89,29 @@ export default function EquityCurveChart({
       return data;
     }
 
-    const endIndex = data.dates.length - 1;
+    const endIndex = safeData.dates.length - 1;
     const startIndex = Math.max(0, endIndex - timeRange.days);
 
     return {
-      dates: data.dates.slice(startIndex),
-      portfolioValues: data.portfolioValues.slice(startIndex),
-      returns: data.returns.slice(startIndex),
-      dailyReturns: data.dailyReturns.slice(startIndex),
+      dates: safeData.dates.slice(startIndex),
+      portfolioValues: safeData.portfolioValues.slice(startIndex),
+      returns: safeData.returns.slice(startIndex),
+      dailyReturns: safeData.dailyReturns.slice(startIndex),
     };
   };
 
   // 处理基准数据筛选
   const getFilteredBenchmarkData = () => {
-    if (!benchmarkData || !benchmarkData.dates.length || selectedTimeRange === 'ALL') {
-      return benchmarkData;
+    const safeBenchmark = benchmarkData
+      ? {
+          dates: (benchmarkData as any)?.dates || [],
+          values: (benchmarkData as any)?.values || [],
+          returns: (benchmarkData as any)?.returns || [],
+        }
+      : undefined;
+
+    if (!safeBenchmark || !safeBenchmark.dates.length || selectedTimeRange === 'ALL') {
+      return safeBenchmark;
     }
 
     const timeRange = TIME_RANGES.find(r => r.value === selectedTimeRange);
@@ -103,13 +119,13 @@ export default function EquityCurveChart({
       return benchmarkData;
     }
 
-    const endIndex = benchmarkData.dates.length - 1;
+    const endIndex = safeBenchmark.dates.length - 1;
     const startIndex = Math.max(0, endIndex - timeRange.days);
 
     return {
-      dates: benchmarkData.dates.slice(startIndex),
-      values: benchmarkData.values.slice(startIndex),
-      returns: benchmarkData.returns.slice(startIndex),
+      dates: safeBenchmark.dates.slice(startIndex),
+      values: safeBenchmark.values.slice(startIndex),
+      returns: safeBenchmark.returns.slice(startIndex),
     };
   };
 
@@ -380,7 +396,11 @@ export default function EquityCurveChart({
         return;
       }
 
-      const option = chartInstance.current.getOption();
+      if (!(chartInstance.current as any)?.getOption) {
+        return;
+      }
+
+      const option = (chartInstance.current as any).getOption();
       const dataZoom = option.dataZoom as any[];
 
       if (!dataZoom || dataZoom.length === 0) {
@@ -446,7 +466,10 @@ export default function EquityCurveChart({
       }
     };
 
-    chartInstance.current.on('dataZoom', handleDataZoom);
+    // ECharts instance in tests may be a partial mock.
+    if ((chartInstance.current as any)?.on) {
+      (chartInstance.current as any).on('dataZoom', handleDataZoom);
+    }
 
     setTimeout(() => {
       handleDataZoom();
@@ -461,8 +484,8 @@ export default function EquityCurveChart({
     window.addEventListener('resize', handleResize);
 
     return () => {
-      if (chartInstance.current) {
-        chartInstance.current.off('dataZoom', handleDataZoom);
+      if ((chartInstance.current as any)?.off) {
+        (chartInstance.current as any).off('dataZoom', handleDataZoom);
       }
       window.removeEventListener('resize', handleResize);
       if (chartInstance.current) {
