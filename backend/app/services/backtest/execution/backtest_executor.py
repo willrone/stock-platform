@@ -756,6 +756,7 @@ class BacktestExecutor:
 
                 # ===== trade execution mode =====
                 trade_mode = None
+                topk_limit: int | None = None  # for post-trade sanity checks
                 try:
                     trade_mode = (strategy_config or {}).get("trade_mode")
                 except Exception:
@@ -764,6 +765,7 @@ class BacktestExecutor:
                 if trade_mode == "topk_buffer":
                     # Daily TopK selection + buffer zone + max changes/day
                     k = int((strategy_config or {}).get("topk", 10))
+                    topk_limit = k
                     buffer_n = int((strategy_config or {}).get("buffer", 20))
                     max_changes = int((strategy_config or {}).get("max_changes_per_day", 2))
                     trades_limit = max_changes
@@ -913,6 +915,19 @@ class BacktestExecutor:
                 portfolio_manager.record_portfolio_snapshot(
                     current_date, current_prices
                 )
+
+                # --- Sanity check (debug): topk_buffer must never exceed topk holdings ---
+                # 这条只做告警，不改变交易行为，用于定位“持仓数为何会>topk”。
+                try:
+                    if topk_limit is not None:
+                        current_holdings = list(portfolio_manager.positions.keys())
+                        if len(current_holdings) > int(topk_limit):
+                            logger.error(
+                                f"[topk_buffer][sanity] positions_count={len(current_holdings)} > topk={topk_limit} "
+                                f"date={current_date.strftime('%Y-%m-%d')} holdings={sorted(current_holdings)}"
+                            )
+                except Exception as e:
+                    logger.warning(f"[topk_buffer][sanity] check failed: {e}")
 
                 # 更新进度监控（同时更新数据库）
                 if task_id and i % 5 == 0:  # 每5天更新一次进度
