@@ -50,7 +50,12 @@ export default function CreateOptimizationTaskForm({
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     task_name: '',
+    // optimization_mode: single strategy vs portfolio (ensemble)
+    optimization_mode: 'single' as 'single' | 'portfolio',
+    // for single mode
     strategy_name: '',
+    // for portfolio mode
+    portfolio_strategies: [] as string[],
     start_date: '',
     end_date: '',
     objective_metric: 'sharpe' as string | string[],
@@ -92,14 +97,82 @@ export default function CreateOptimizationTaskForm({
     loadStrategies();
   }, []);
 
-  // 当选择策略时，加载默认参数空间
+  // 当选择策略/模式时，加载默认参数空间
   useEffect(() => {
+    // Portfolio mode: build a flattened param space based on selected sub-strategies.
+    if (formData.optimization_mode === 'portfolio') {
+      const defaultSpace: Record<string, ParamSpaceConfig> = {
+        // topk_buffer trade mode knobs
+        topk: { type: 'int', low: 5, high: 50, default: 10, enabled: true },
+        buffer: { type: 'int', low: 0, high: 80, default: 20, enabled: true },
+        max_changes_per_day: { type: 'int', low: 1, high: 10, default: 2, enabled: true },
+        // integration method for portfolio
+        integration_method: {
+          type: 'categorical',
+          choices: ['weighted_voting'],
+          default: 'weighted_voting',
+          enabled: true,
+        },
+      };
+
+      // For each chosen sub-strategy: enable switch + weight + its numeric/categorical params.
+      for (const key of formData.portfolio_strategies || []) {
+        defaultSpace[`use__${key}`] = {
+          type: 'categorical',
+          choices: [0, 1],
+          default: 1,
+          enabled: true,
+        };
+        defaultSpace[`weight__${key}`] = {
+          type: 'float',
+          low: 0.0,
+          high: 1.0,
+          default: 0.5,
+          enabled: true,
+        };
+
+        const st = strategies.find(s => s.key === key);
+        const params = st?.parameters || {};
+        Object.entries(params).forEach(([pname, p]: [string, any]) => {
+          const full = `${key}__${pname}`;
+          if (p?.type === 'int' && p.min !== undefined && p.max !== undefined) {
+            defaultSpace[full] = {
+              type: 'int',
+              low: p.min,
+              high: p.max,
+              default: p.default,
+              enabled: true,
+            };
+          } else if (p?.type === 'float' && p.min !== undefined && p.max !== undefined) {
+            defaultSpace[full] = {
+              type: 'float',
+              low: p.min,
+              high: p.max,
+              default: p.default,
+              enabled: true,
+            };
+          } else if (p?.type === 'categorical' && Array.isArray(p.options)) {
+            defaultSpace[full] = {
+              type: 'categorical',
+              choices: p.options,
+              default: p.default,
+              enabled: true,
+            };
+          }
+        });
+      }
+
+      setParamSpace(defaultSpace);
+      return;
+    }
+
+    // Single-strategy mode: same as before
     if (formData.strategy_name) {
       const strategy = strategies.find(s => s.key === formData.strategy_name);
       if (strategy?.parameters) {
         const defaultSpace: Record<string, ParamSpaceConfig> = {};
         Object.entries(strategy.parameters).forEach(([key, param]: [string, any]) => {
-          // 只处理可以优化的参数类型：int 和 float
+          // 只处理可以优化的参数类型：int/float/categorical
           if (param.type === 'int' && param.min !== undefined && param.max !== undefined) {
             defaultSpace[key] = {
               type: 'int',
@@ -116,12 +189,7 @@ export default function CreateOptimizationTaskForm({
               default: param.default,
               enabled: true,
             };
-          } else if (
-            param.type === 'categorical' &&
-            param.options &&
-            Array.isArray(param.options)
-          ) {
-            // 处理分类参数
+          } else if (param.type === 'categorical' && param.options && Array.isArray(param.options)) {
             defaultSpace[key] = {
               type: 'categorical',
               choices: param.options,
@@ -130,26 +198,25 @@ export default function CreateOptimizationTaskForm({
             };
           }
         });
-        console.log('加载的参数空间:', defaultSpace);
         setParamSpace(defaultSpace);
       } else {
-        // 如果策略没有参数定义，清空参数空间
         setParamSpace({});
       }
-    } else {
-      // 未选择策略时，清空参数空间
+      return;
+    }
+
+    // 未选择策略时，清空参数空间
       setParamSpace({});
     }
   }, [formData.strategy_name, strategies]);
 
   const handleSubmit = async () => {
-    if (
-      !formData.task_name ||
-      !formData.strategy_name ||
-      selectedStocks.length === 0 ||
-      !formData.start_date ||
-      !formData.end_date
-    ) {
+    const strategyValid =
+      formData.optimization_mode === 'single'
+        ? Boolean(formData.strategy_name)
+        : (formData.portfolio_strategies?.length || 0) > 0;
+
+    if (!formData.task_name || !strategyValid || selectedStocks.length === 0 || !formData.start_date || !formData.end_date) {
       alert('请填写所有必填字段');
       return;
     }
@@ -163,7 +230,8 @@ export default function CreateOptimizationTaskForm({
 
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
-        strategy_name: formData.strategy_name,
+        // backend will route portfolio optimization by strategy_name="portfolio"
+        strategy_name: formData.optimization_mode === 'portfolio' ? 'portfolio' : formData.strategy_name,
         stock_codes: selectedStocks,
         start_date: startDate,
         end_date: endDate,
@@ -186,7 +254,9 @@ export default function CreateOptimizationTaskForm({
       // 重置表单
       setFormData({
         task_name: '',
+        optimization_mode: 'single',
         strategy_name: '',
+        portfolio_strategies: [],
         start_date: '',
         end_date: '',
         objective_metric: 'sharpe',
@@ -238,21 +308,79 @@ export default function CreateOptimizationTaskForm({
             fullWidth
           />
 
-          <FormControl fullWidth required disabled={strategies.length === 0}>
-            <InputLabel>选择策略</InputLabel>
+          <FormControl fullWidth required>
+            <InputLabel>优化类型</InputLabel>
             <Select
-              value={formData.strategy_name}
-              label="选择策略"
-              onChange={e => setFormData(prev => ({ ...prev, strategy_name: e.target.value }))}
+              value={formData.optimization_mode}
+              label="优化类型"
+              onChange={e =>
+                setFormData(prev => ({
+                  ...prev,
+                  optimization_mode: e.target.value as 'single' | 'portfolio',
+                  // reset selections when switching
+                  strategy_name: '',
+                  portfolio_strategies: [],
+                }))
+              }
             >
-              {strategies.map(strategy => (
-                <MenuItem key={strategy.key} value={strategy.key}>
-                  {strategy.name || strategy.key}
-                </MenuItem>
-              ))}
+              <MenuItem value="single">单策略优化</MenuItem>
+              <MenuItem value="portfolio">组合策略优化（自由搭配）</MenuItem>
             </Select>
-            {strategies.length === 0 && <FormHelperText>正在加载策略列表...</FormHelperText>}
+            <FormHelperText>
+              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化 topk/buffer/权重等。
+            </FormHelperText>
           </FormControl>
+
+          {formData.optimization_mode === 'single' ? (
+            <FormControl fullWidth required disabled={strategies.length === 0}>
+              <InputLabel>选择策略</InputLabel>
+              <Select
+                value={formData.strategy_name}
+                label="选择策略"
+                onChange={e => setFormData(prev => ({ ...prev, strategy_name: e.target.value }))}
+              >
+                {strategies.map(strategy => (
+                  <MenuItem key={strategy.key} value={strategy.key}>
+                    {strategy.name || strategy.key}
+                  </MenuItem>
+                ))}
+              </Select>
+              {strategies.length === 0 && <FormHelperText>正在加载策略列表...</FormHelperText>}
+            </FormControl>
+          ) : (
+            <FormControl fullWidth required disabled={strategies.length === 0}>
+              <InputLabel>选择子策略（可多选）</InputLabel>
+              <Select
+                multiple
+                value={formData.portfolio_strategies}
+                label="选择子策略（可多选）"
+                onChange={e =>
+                  setFormData(prev => ({
+                    ...prev,
+                    portfolio_strategies: (e.target.value as string[]) || [],
+                  }))
+                }
+                renderValue={selected => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(selected as string[]).map(v => {
+                      const st = strategies.find(s => s.key === v);
+                      return <Chip key={v} label={st?.name || v} size="small" />;
+                    })}
+                  </Box>
+                )}
+              >
+                {strategies.map(strategy => (
+                  <MenuItem key={strategy.key} value={strategy.key}>
+                    {strategy.name || strategy.key}
+                  </MenuItem>
+                ))}
+              </Select>
+              {strategies.length === 0 && <FormHelperText>正在加载策略列表...</FormHelperText>}
+              {formData.portfolio_strategies.length === 0 && (
+                <FormHelperText>请至少选择 1 个子策略</FormHelperText>
+              )}
+            </FormControl>
+          )}
 
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
@@ -296,24 +424,29 @@ export default function CreateOptimizationTaskForm({
           subheader="配置需要优化的策略参数范围。只有数值型参数（整数、浮点数）和分类参数可以进行优化。"
         />
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {!formData.strategy_name ? (
+          {formData.optimization_mode === 'single' && !formData.strategy_name ? (
             <Typography variant="body2" color="text.secondary">
               请先选择策略，系统将自动加载该策略的可优化参数
+            </Typography>
+          ) : formData.optimization_mode === 'portfolio' && (formData.portfolio_strategies?.length || 0) === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              请先选择至少 1 个子策略，系统将自动展开组合策略的参数空间
             </Typography>
           ) : Object.entries(paramSpace).length === 0 ? (
             <Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                当前策略没有可优化的参数（需要数值型参数：整数或浮点数）
+                当前配置没有可优化的参数（需要数值型参数：整数/浮点数或分类参数）
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 提示：某些策略的参数可能是 JSON 对象、字符串或布尔值，这些参数类型不支持自动优化。
-                您可以在创建回测任务时手动配置这些参数。
+                组合策略模式目前只会自动展开 int/float/categorical。
               </Typography>
             </Box>
           ) : (
             Object.entries(paramSpace).map(([paramName, config]) => {
-              const strategy = strategies.find(s => s.key === formData.strategy_name);
-              const paramInfo = strategy?.parameters?.[paramName];
+              // single mode: show per-param description from selected strategy
+              const baseStrategy = strategies.find(s => s.key === formData.strategy_name);
+              const paramInfo = baseStrategy?.parameters?.[paramName];
               const paramDescription = paramInfo?.description || '';
 
               return (

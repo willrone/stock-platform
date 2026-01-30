@@ -191,6 +191,72 @@ class StrategyHyperparameterOptimizer:
                 # 记录采样到的参数（用于调试）
                 logger.info(f"Trial {trial.number}: 采样参数 = {strategy_params}")
 
+                # Build strategy_config for backtest.
+                # - single strategy: use sampled params directly
+                # - portfolio strategy: expand flattened params into portfolio config
+                strategy_config_payload: Dict[str, Any]
+                if str(strategy_name) == "portfolio":
+                    # portfolio config (trade_mode + ensemble strategies)
+                    topk = int(strategy_params.get("topk", 10) or 10)
+                    buffer_n = int(strategy_params.get("buffer", 20) or 20)
+                    max_changes = int(strategy_params.get("max_changes_per_day", 2) or 2)
+                    integration_method = strategy_params.get("integration_method") or "weighted_voting"
+
+                    # gather enabled sub-strategies
+                    strategies_list = []
+                    for k, v in list(strategy_params.items()):
+                        if not str(k).startswith("use__"):
+                            continue
+                        sk = str(k).split("use__", 1)[1]
+                        try:
+                            enabled = int(v) == 1
+                        except Exception:
+                            enabled = bool(v)
+                        if not enabled:
+                            continue
+
+                        # weight
+                        w = strategy_params.get(f"weight__{sk}")
+                        try:
+                            w = float(w) if w is not None else 0.5
+                        except Exception:
+                            w = 0.5
+
+                        # nested params: <sk>__<param>
+                        sub_cfg: Dict[str, Any] = {}
+                        prefix = f"{sk}__"
+                        for pk, pv in strategy_params.items():
+                            if str(pk).startswith(prefix):
+                                sub_cfg[str(pk)[len(prefix) :]] = pv
+
+                        strategies_list.append({"name": sk, "weight": w, "config": sub_cfg})
+
+                    # fallback: ensure at least 1
+                    if not strategies_list:
+                        # If user didn't include use__* in param_space, treat any prefixed params as enabled.
+                        inferred = set()
+                        for pk in strategy_params.keys():
+                            if "__" in str(pk):
+                                inferred.add(str(pk).split("__", 1)[0])
+                        for sk in sorted(inferred):
+                            sub_cfg: Dict[str, Any] = {}
+                            prefix = f"{sk}__"
+                            for pk, pv in strategy_params.items():
+                                if str(pk).startswith(prefix):
+                                    sub_cfg[str(pk)[len(prefix) :]] = pv
+                            strategies_list.append({"name": sk, "weight": 1.0 / max(1, len(inferred)), "config": sub_cfg})
+
+                    strategy_config_payload = {
+                        "integration_method": integration_method,
+                        "trade_mode": "topk_buffer",
+                        "topk": topk,
+                        "buffer": buffer_n,
+                        "max_changes_per_day": max_changes,
+                        "strategies": strategies_list,
+                    }
+                else:
+                    strategy_config_payload = strategy_params
+
                 # 运行回测（在同步函数中运行异步代码）
                 # 在 Optuna 的 trial 函数中，需要安全地运行异步代码
                 # 使用新的事件循环，避免与外部事件循环冲突
@@ -210,7 +276,7 @@ class StrategyHyperparameterOptimizer:
                                         stock_codes=stock_codes,
                                         start_date=start_date,
                                         end_date=end_date,
-                                        strategy_config=strategy_params,
+                                        strategy_config=strategy_config_payload,
                                         backtest_config=backtest_cfg,
                                     )
                                 )
