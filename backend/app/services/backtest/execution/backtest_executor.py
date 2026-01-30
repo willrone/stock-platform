@@ -256,8 +256,9 @@ class BacktestExecutor:
                 portfolio_manager,
                 stock_data,
                 trading_dates,
-                task_id,
-                backtest_id,
+                strategy_config=strategy_config,
+                task_id=task_id,
+                backtest_id=backtest_id,
             )
 
             if self.enable_performance_profiling:
@@ -432,6 +433,7 @@ class BacktestExecutor:
         portfolio_manager: PortfolioManager,
         stock_data: Dict[str, pd.DataFrame],
         trading_dates: List[datetime],
+        strategy_config: Optional[Dict[str, Any]] = None,
         task_id: str = None,
         backtest_id: str = None,
     ) -> Dict[str, Any]:
