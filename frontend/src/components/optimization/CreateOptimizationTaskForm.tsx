@@ -202,8 +202,7 @@ export default function CreateOptimizationTaskForm({
     }
 
     // 未选择策略时，清空参数空间
-      setParamSpace({});
-    }
+    setParamSpace({});
   }, [formData.strategy_name, strategies]);
 
   const handleSubmit = async () => {
