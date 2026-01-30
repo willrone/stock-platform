@@ -102,10 +102,6 @@ export default function CreateOptimizationTaskForm({
     // Portfolio mode: build a flattened param space based on selected sub-strategies.
     if (formData.optimization_mode === 'portfolio') {
       const defaultSpace: Record<string, ParamSpaceConfig> = {
-        // topk_buffer trade mode knobs
-        topk: { type: 'int', low: 5, high: 50, default: 10, enabled: true },
-        buffer: { type: 'int', low: 0, high: 80, default: 20, enabled: true },
-        max_changes_per_day: { type: 'int', low: 1, high: 10, default: 2, enabled: true },
         // integration method for portfolio
         integration_method: {
           type: 'categorical',
@@ -228,6 +224,19 @@ export default function CreateOptimizationTaskForm({
       const startDate = formData.start_date ? `${formData.start_date}T00:00:00` : '';
       const endDate = formData.end_date ? `${formData.end_date}T23:59:59` : '';
 
+      // Plan A: 固定 topk_buffer，不把 topk/buffer/max_changes_per_day 作为待优化参数。
+      const fixedTradeConfig = {
+        trade_mode: 'topk_buffer',
+        topk: 10,
+        buffer: 20,
+        max_changes_per_day: 2,
+      };
+
+      const filteredParamSpace: Record<string, ParamSpaceConfig> = { ...paramSpace };
+      delete filteredParamSpace.topk;
+      delete filteredParamSpace.buffer;
+      delete filteredParamSpace.max_changes_per_day;
+
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
         // backend will route portfolio optimization by strategy_name="portfolio"
@@ -235,7 +244,7 @@ export default function CreateOptimizationTaskForm({
         stock_codes: selectedStocks,
         start_date: startDate,
         end_date: endDate,
-        param_space: paramSpace,
+        param_space: filteredParamSpace,
         objective_config: {
           objective_metric: formData.objective_metric,
           direction: formData.direction,
@@ -244,6 +253,7 @@ export default function CreateOptimizationTaskForm({
         n_trials: formData.n_trials,
         optimization_method: formData.optimization_method,
         timeout: formData.timeout,
+        backtest_config: formData.optimization_mode === 'portfolio' ? fixedTradeConfig : undefined,
       };
 
       console.log('创建优化任务请求:', request);
@@ -259,7 +269,7 @@ export default function CreateOptimizationTaskForm({
         portfolio_strategies: [],
         start_date: '',
         end_date: '',
-        objective_metric: 'sharpe',
+        objective_metric: 'stability',
         direction: 'maximize',
         n_trials: 50,
         optimization_method: 'tpe',
@@ -327,7 +337,7 @@ export default function CreateOptimizationTaskForm({
               <MenuItem value="portfolio">组合策略优化（自由搭配）</MenuItem>
             </Select>
             <FormHelperText>
-              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化 topk/buffer/权重等。
+              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化权重与子策略参数（交易执行固定 topk_buffer）。
             </FormHelperText>
           </FormControl>
 

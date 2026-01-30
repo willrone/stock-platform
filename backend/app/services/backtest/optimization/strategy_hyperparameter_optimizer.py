@@ -197,9 +197,10 @@ class StrategyHyperparameterOptimizer:
                 strategy_config_payload: Dict[str, Any]
                 if str(strategy_name) == "portfolio":
                     # portfolio config (trade_mode + ensemble strategies)
-                    topk = int(strategy_params.get("topk", 10) or 10)
-                    buffer_n = int(strategy_params.get("buffer", 20) or 20)
-                    max_changes = int(strategy_params.get("max_changes_per_day", 2) or 2)
+                    # Plan A: trade_mode/topk/buffer/max_changes_per_day 固定，不进入 param_space。
+                    topk = int((backtest_config or {}).get("topk", 10) or 10)
+                    buffer_n = int((backtest_config or {}).get("buffer", 20) or 20)
+                    max_changes = int((backtest_config or {}).get("max_changes_per_day", 2) or 2)
                     integration_method = strategy_params.get("integration_method") or "weighted_voting"
 
                     # gather enabled sub-strategies
@@ -296,7 +297,7 @@ class StrategyHyperparameterOptimizer:
                                 stock_codes=stock_codes,
                                 start_date=start_date,
                                 end_date=end_date,
-                                strategy_config=strategy_params,
+                                strategy_config=strategy_config_payload,
                                 backtest_config=backtest_cfg,
                             )
                         )
