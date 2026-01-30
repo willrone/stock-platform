@@ -1324,6 +1324,7 @@ class BacktestExecutor:
                 pass
 
         # Execute sells first
+        successful_sells = 0
         for code in to_sell:
             sig = TradingSignal(
                 timestamp=current_date,
@@ -1353,6 +1354,7 @@ class BacktestExecutor:
 
             trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
             if trade:
+                successful_sells += 1
                 trades_this_day += 1
                 executed_trade_signals.append(
                     {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
@@ -1368,7 +1370,34 @@ class BacktestExecutor:
                 )
 
         # Execute buys
+        # Guardrails:
+        # 1) replacement 模式下：只允许用「成功卖出」换入，避免卖失败仍买导致持仓膨胀
+        # 2) 任何情况下都不允许持仓数超过 topk
+        current_positions_n = len(portfolio_manager.positions)
+        remaining_capacity = max(0, topk - current_positions_n)
+
+        if current_n >= topk:
+            # replacement mode: buys must be backed by successful sells
+            buy_quota = min(len(to_buy), successful_sells, remaining_capacity)
+        else:
+            # build mode: still respect capacity
+            buy_quota = min(len(to_buy), remaining_capacity)
+
+        to_buy = to_buy[:buy_quota]
+
         for code in to_buy:
+            # Hard cap: never allow positions to exceed topk (even if earlier logic misbehaves)
+            if len(portfolio_manager.positions) >= topk:
+                unexecuted_signals.append(
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": SignalType.BUY.name,
+                        "execution_reason": f"超过topk持仓上限(topk={topk})，跳过买入",
+                    }
+                )
+                break
+
             sig = TradingSignal(
                 timestamp=current_date,
                 stock_code=code,
