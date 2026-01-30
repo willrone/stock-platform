@@ -381,6 +381,132 @@ class StrategyHyperparameterOptimizer:
                         objective_metric,
                         objective_config.get("objective_weights"),
                     )
+
+                    # 记录 stability 的分解细节到 trial.user_attrs，便于前端/接口展示。
+                    # 同时确保 score 永远是可比较数值（避免 NaN -> null）。
+                    direction = str(objective_config.get("direction", "maximize")).lower()
+                    if objective_metric == "stability":
+                        try:
+                            import math
+
+                            # 复用 stability 计算逻辑（从 backtest_report 里提取 OOS 分量）
+                            history = backtest_report.get("portfolio_history") or backtest_report.get(
+                                "portfolioHistory"
+                            )
+                            oos_ratio = float(
+                                (backtest_report.get("stability_config") or {}).get("oos_ratio", 0.3)
+                            )
+                            oos_ratio = max(0.05, min(0.5, oos_ratio))
+
+                            raw_dates = [
+                                str(h.get("date") or h.get("snapshot_date") or "") for h in (history or [])
+                            ]
+                            raw_values = [
+                                float(h.get("portfolio_value") or h.get("portfolioValue") or 0.0)
+                                for h in (history or [])
+                            ]
+                            dates = []
+                            values = []
+                            for d, v in zip(raw_dates, raw_values):
+                                if isinstance(v, (int, float)) and math.isfinite(v):
+                                    dates.append(d)
+                                    values.append(float(v))
+
+                            details = {
+                                "oos_ratio": oos_ratio,
+                                "oos_total_return": None,
+                                "oos_max_drawdown": None,
+                                "oos_pos_month_ratio": None,
+                                "oos_monthly_std": None,
+                                "ret_score": None,
+                                "dd_score": None,
+                                "pm_score": None,
+                                "std_score": None,
+                                "blend": None,
+                            }
+
+                            if len(values) >= 10:
+                                n = len(values)
+                                split = max(1, min(n - 1, int(n * (1.0 - oos_ratio))))
+                                oos_dates = dates[split:]
+                                oos_values = values[split:]
+
+                                # total return
+                                total_ret_oos = (
+                                    (oos_values[-1] / oos_values[0] - 1.0) if oos_values and oos_values[0] else 0.0
+                                )
+
+                                # max drawdown
+                                peak = oos_values[0] if oos_values else 0.0
+                                mdd = 0.0
+                                for v in oos_values:
+                                    if v > peak:
+                                        peak = v
+                                    dd = (v / peak - 1.0) if peak else 0.0
+                                    if dd < mdd:
+                                        mdd = dd
+                                mdd_oos = abs(mdd)
+
+                                # monthly returns
+                                first = {}
+                                last = {}
+                                for d, v in zip(oos_dates, oos_values):
+                                    if not (isinstance(v, (int, float)) and math.isfinite(v)):
+                                        continue
+                                    m = str(d)[:7]
+                                    if m not in first:
+                                        first[m] = float(v)
+                                    last[m] = float(v)
+                                mrets = []
+                                for m in sorted(last.keys()):
+                                    f = first.get(m)
+                                    l = last.get(m)
+                                    if f and f != 0 and math.isfinite(f) and math.isfinite(l):
+                                        mrets.append(l / f - 1.0)
+
+                                if mrets:
+                                    pos_month_ratio = sum(1 for r in mrets if r > 0) / len(mrets)
+                                    mean = sum(mrets) / len(mrets)
+                                    var = sum((r - mean) ** 2 for r in mrets) / len(mrets)
+                                    mstd = var ** 0.5
+                                else:
+                                    pos_month_ratio = 0.0
+                                    mstd = 0.0
+
+                                ret_score = max(0.0, min(1.0, (total_ret_oos + 0.3) / 0.9))
+                                dd_score = 1.0 - min(1.0, mdd_oos / 0.6)
+                                std_score = 1.0 - min(1.0, mstd / 0.10)
+                                pm_score = max(0.0, min(1.0, pos_month_ratio))
+                                blend = 0.45 * ret_score + 0.30 * dd_score + 0.15 * pm_score + 0.10 * std_score
+
+                                details.update(
+                                    {
+                                        "oos_total_return": total_ret_oos,
+                                        "oos_max_drawdown": mdd_oos,
+                                        "oos_pos_month_ratio": pos_month_ratio,
+                                        "oos_monthly_std": mstd,
+                                        "ret_score": ret_score,
+                                        "dd_score": dd_score,
+                                        "pm_score": pm_score,
+                                        "std_score": std_score,
+                                        "blend": blend,
+                                    }
+                                )
+
+                            trial.set_user_attr("objective_details", details)
+                        except Exception:
+                            # 细节计算失败不应影响 trial
+                            pass
+
+                    # score 兜底：NaN/None -> 最差值，避免 API 中出现 null
+                    try:
+                        import math
+
+                        if score is None or not (isinstance(score, (int, float)) and math.isfinite(score)):
+                            score = float("-inf") if direction == "maximize" else float("inf")
+                    except Exception:
+                        score = float("-inf") if direction == "maximize" else float("inf")
+
                     logger.info(
                         f"Trial {trial.number}: 目标得分 = {score:.6f} (原始指标: {objective_metric})"
                     )
@@ -534,6 +660,13 @@ class StrategyHyperparameterOptimizer:
                         trial_data["objectives"] = trial.values
                     else:
                         trial_data["score"] = trial.value
+                        # 附加 objective 的分解细节（例如 stability 的各分量）
+                        if isinstance(trial.user_attrs, dict) and trial.user_attrs.get(
+                            "objective_details"
+                        ):
+                            trial_data["objective_details"] = trial.user_attrs.get(
+                                "objective_details"
+                            )
 
                 optimization_history.append(trial_data)
 
@@ -757,6 +890,12 @@ class StrategyHyperparameterOptimizer:
         elif objective_metric == "stability":
             # 稳定赚钱：更偏向“样本外（后段）表现 + 低回撤 + 月度稳定”。
             # 默认使用最后 30% 作为近似 out-of-sample 区间。
+            #
+            # 注意：回测过程中 portfolio_value 可能出现 NaN/inf（数据缺失/除零/溢出），
+            # 会导致 stability 的 score 变成 NaN，最终在 API/JSON 层表现为 null。
+            # 这里做 finite 过滤 + 兜底，确保返回值永远是可比较的 float。
+            import math
+
             history = backtest_report.get("portfolio_history") or backtest_report.get(
                 "portfolioHistory"
             )
@@ -788,6 +927,8 @@ class StrategyHyperparameterOptimizer:
                 first: dict[str, float] = {}
                 last: dict[str, float] = {}
                 for d, v in zip(dates, values):
+                    if not (isinstance(v, (int, float)) and math.isfinite(v)):
+                        continue
                     m = str(d)[:7]
                     if m not in first:
                         first[m] = float(v)
@@ -796,54 +937,77 @@ class StrategyHyperparameterOptimizer:
                 for m in sorted(last.keys()):
                     f = first.get(m)
                     l = last.get(m)
-                    if f and f != 0:
+                    if f and f != 0 and math.isfinite(f) and math.isfinite(l):
                         rets.append(l / f - 1.0)
                 return rets
 
             if history and isinstance(history, list) and len(history) >= 10:
-                dates = [str(h.get("date") or h.get("snapshot_date") or "") for h in history]
-                values = [float(h.get("portfolio_value") or h.get("portfolioValue") or 0.0) for h in history]
+                raw_dates = [
+                    str(h.get("date") or h.get("snapshot_date") or "") for h in history
+                ]
+                raw_values = [
+                    float(h.get("portfolio_value") or h.get("portfolioValue") or 0.0)
+                    for h in history
+                ]
 
-                n = len(values)
-                split = int(n * (1.0 - oos_ratio))
-                split = max(1, min(n - 1, split))
-                oos_dates = dates[split:]
-                oos_values = values[split:]
+                # filter non-finite points (keep alignment)
+                dates: list[str] = []
+                values: list[float] = []
+                for d, v in zip(raw_dates, raw_values):
+                    if isinstance(v, (int, float)) and math.isfinite(v):
+                        dates.append(d)
+                        values.append(float(v))
 
-                total_ret_oos = (oos_values[-1] / oos_values[0] - 1.0) if oos_values[0] else 0.0
-                mdd_oos = abs(_max_drawdown(oos_values))
+                if len(values) >= 10:
+                    n = len(values)
+                    split = int(n * (1.0 - oos_ratio))
+                    split = max(1, min(n - 1, split))
+                    oos_dates = dates[split:]
+                    oos_values = values[split:]
 
-                mrets = _monthly_returns(oos_dates, oos_values)
-                if mrets:
-                    pos_month_ratio = sum(1 for r in mrets if r > 0) / len(mrets)
-                    mean = sum(mrets) / len(mrets)
-                    var = sum((r - mean) ** 2 for r in mrets) / len(mrets)
-                    mstd = var ** 0.5
-                else:
-                    pos_month_ratio = 0.0
-                    mstd = 0.0
+                    total_ret_oos = (
+                        (oos_values[-1] / oos_values[0] - 1.0) if oos_values[0] else 0.0
+                    )
+                    mdd_oos = abs(_max_drawdown(oos_values))
 
-                # normalize components into [0,1]
-                # return: [-0.3, +0.6] -> [0,1]
-                ret_score = max(0.0, min(1.0, (total_ret_oos + 0.3) / 0.9))
-                # drawdown: 0..60% -> 1..0
-                dd_score = 1.0 - min(1.0, mdd_oos / 0.6)
-                # stability: monthly std 0..10% -> 1..0
-                std_score = 1.0 - min(1.0, mstd / 0.10)
-                pm_score = max(0.0, min(1.0, pos_month_ratio))
+                    mrets = _monthly_returns(oos_dates, oos_values)
+                    if mrets:
+                        pos_month_ratio = sum(1 for r in mrets if r > 0) / len(mrets)
+                        mean = sum(mrets) / len(mrets)
+                        var = sum((r - mean) ** 2 for r in mrets) / len(mrets)
+                        mstd = var ** 0.5
+                    else:
+                        pos_month_ratio = 0.0
+                        mstd = 0.0
 
-                # weighted blend
-                score = 0.45 * ret_score + 0.30 * dd_score + 0.15 * pm_score + 0.10 * std_score
-                return max(0.0, min(1.0, score))
+                    # normalize components into [0,1]
+                    # return: [-0.3, +0.6] -> [0,1]
+                    ret_score = max(0.0, min(1.0, (total_ret_oos + 0.3) / 0.9))
+                    # drawdown: 0..60% -> 1..0
+                    dd_score = 1.0 - min(1.0, mdd_oos / 0.6)
+                    # stability: monthly std 0..10% -> 1..0
+                    std_score = 1.0 - min(1.0, mstd / 0.10)
+                    pm_score = max(0.0, min(1.0, pos_month_ratio))
 
-            # fallback to calmar-like behavior when no history
+                    # weighted blend
+                    score = (
+                        0.45 * ret_score
+                        + 0.30 * dd_score
+                        + 0.15 * pm_score
+                        + 0.10 * std_score
+                    )
+                    if not (isinstance(score, (int, float)) and math.isfinite(score)):
+                        return float("nan")
+                    return max(0.0, min(1.0, float(score)))
+
+            # fallback to calmar-like behavior when no usable history
             annualized_return = metrics.get("annualized_return", 0.0)
             max_drawdown = abs(metrics.get("max_drawdown", 0.0))
             if max_drawdown <= 0:
                 return 0.0
             calmar_ratio = annualized_return / max_drawdown
             normalized = min(1.0, calmar_ratio / 10)
-            return max(0.0, normalized)
+            return max(0.0, float(normalized))
 
         elif objective_metric == "custom":
             # 自定义组合
