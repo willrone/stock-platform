@@ -762,6 +762,16 @@ class BacktestExecutor:
                 except Exception:
                     trade_mode = None
 
+                # --- debug aid: log which trade path is used (only when needed) ---
+                try:
+                    if current_date.strftime("%Y-%m-%d") in ("2023-05-19", "2023-05-22", "2023-05-23"):
+                        logger.info(
+                            f"[trade_path] date={current_date.strftime('%Y-%m-%d')} trade_mode={trade_mode} "
+                            f"signals={len(all_signals)} strategy_config_keys={list((strategy_config or {}).keys())}"
+                        )
+                except Exception:
+                    pass
+
                 if trade_mode == "topk_buffer":
                     # Daily TopK selection + buffer zone + max changes/day
                     k = int((strategy_config or {}).get("topk", 10))
@@ -791,6 +801,16 @@ class BacktestExecutor:
                         strategy=strategy,
                         debug=bool((strategy_config or {}).get("debug_topk_buffer", False)),
                     )
+
+                    # Debug: show what was executed on key dates / when trades happen
+                    try:
+                        if trades_this_day > 0 or current_date.strftime("%Y-%m-%d") in ("2023-05-22",):
+                            logger.info(
+                                f"[trade_exec][topk_buffer] date={current_date.strftime('%Y-%m-%d')} trades_this_day={trades_this_day} "
+                                f"executed={len(executed_trade_signals)} unexecuted={len(unexecuted_signals)} holdings_after={len(portfolio_manager.positions)}"
+                            )
+                    except Exception:
+                        pass
 
                 else:
                     for signal in all_signals:
