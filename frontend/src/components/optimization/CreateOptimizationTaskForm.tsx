@@ -203,7 +203,7 @@ export default function CreateOptimizationTaskForm({
 
     // 未选择策略时，清空参数空间
     setParamSpace({});
-  }, [formData.strategy_name, strategies]);
+  }, [formData.optimization_mode, formData.strategy_name, formData.portfolio_strategies, strategies]);
 
   const handleSubmit = async () => {
     const strategyValid =
