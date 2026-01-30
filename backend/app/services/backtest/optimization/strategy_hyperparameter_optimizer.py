@@ -417,6 +417,22 @@ class StrategyHyperparameterOptimizer:
                             ]
                         )
                         trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
+                        # 注意：在 objective 回调里，当前 trial 还未被 Optuna 标记为 COMPLETE，
+                        # 直接访问 study.best_trial 可能抛出 "No trials are completed yet"。
+                        best_score = None
+                        best_trial_number = None
+                        best_params = None
+                        if not is_multi_objective:
+                            try:
+                                best_score = study.best_value
+                                best_trial_number = study.best_trial.number
+                                best_params = study.best_params
+                            except Exception:
+                                # fallback：至少给出当前 trial 的信息，避免把本 trial 误判为失败
+                                best_score = score
+                                best_trial_number = trial.number
+                                best_params = strategy_params
+
                         progress_callback(
                             trial_num,
                             n_trials,
@@ -427,15 +443,9 @@ class StrategyHyperparameterOptimizer:
                             running_trials=running_trials,
                             pruned_trials=pruned_trials,
                             failed_trials=failed_trials,
-                            best_score=study.best_value
-                            if not is_multi_objective and len(study.trials) > 0
-                            else None,
-                            best_trial_number=study.best_trial.number
-                            if not is_multi_objective and len(study.trials) > 0
-                            else None,
-                            best_params=study.best_params
-                            if not is_multi_objective and len(study.trials) > 0
-                            else None,
+                            best_score=best_score,
+                            best_trial_number=best_trial_number,
+                            best_params=best_params,
                         )
 
                     return score
