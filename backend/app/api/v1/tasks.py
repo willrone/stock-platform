@@ -59,10 +59,22 @@ async def create_task(request: TaskCreateRequest):
         else:  # BACKTEST
             if not request.backtest_config:
                 raise HTTPException(status_code=400, detail="回测任务需要提供backtest_config")
-            config = {
-                "stock_codes": request.stock_codes,
-                **(request.backtest_config or {}),
-            }
+
+            # 兼容前端/调用方使用 backtest_config 内的 strategy_type / strategy_params 字段。
+            # 后端执行器期望字段：
+            # - strategy_name: 策略名称（如 multi_factor / momentum_factor / low_volatility 等）
+            # - strategy_config: 策略参数字典
+            #
+            # 这里做一次映射：
+            # - strategy_type -> strategy_name
+            # - strategy_params -> strategy_config
+            backtest_config = dict(request.backtest_config or {})
+            if "strategy_type" in backtest_config and "strategy_name" not in backtest_config:
+                backtest_config["strategy_name"] = backtest_config["strategy_type"]
+            if "strategy_params" in backtest_config and "strategy_config" not in backtest_config:
+                backtest_config["strategy_config"] = backtest_config["strategy_params"]
+
+            config = {"stock_codes": request.stock_codes, **backtest_config}
 
         # 创建任务
         task = task_repository.create_task(
