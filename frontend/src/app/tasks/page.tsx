@@ -46,6 +46,7 @@ import { useTaskStore, Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { MobileTaskCard } from '../../components/mobile/MobileTaskCard';
 
 export default function TasksPage() {
   const router = useRouter();
@@ -417,7 +418,33 @@ export default function TasksPage() {
       {/* 任务列表 */}
       <Card>
         <CardContent>
-          <Box sx={{ overflowX: 'auto' }}>
+          {/* 移动端：卡片列表 */}
+          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+            {filteredTasks.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {statusFilter ? '该状态下暂无任务' : '暂无任务'}
+                </Typography>
+              </Box>
+            ) : (
+              filteredTasks.map(task => (
+                <MobileTaskCard
+                  key={task.task_id}
+                  task={task}
+                  onDelete={(id) => {
+                    setTaskToDelete(id);
+                    setIsDeleteOpen(true);
+                  }}
+                  onToggle={(id) => {
+                    console.log('暂停功能开发中', id);
+                  }}
+                />
+              ))
+            )}
+          </Box>
+
+          {/* 桌面端：表格 */}
+          <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
             <Table>
               <TableHead>
                 <TableRow>

@@ -7,8 +7,10 @@
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ReactNode } from 'react';
+import { getMobileOverrides } from './mobileOverrides';
 
-const theme = createTheme({
+// 创建基础主题
+const baseTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
@@ -102,6 +104,10 @@ const theme = createTheme({
     },
   },
 });
+
+// 合并移动端优化配置
+const mobileOverrides = getMobileOverrides(baseTheme);
+const theme = createTheme(baseTheme, mobileOverrides);
 
 interface MUIThemeProviderProps {
   children: ReactNode;

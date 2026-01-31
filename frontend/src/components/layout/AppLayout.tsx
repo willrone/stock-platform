@@ -354,7 +354,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       {/* 主内容区域 */}
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, maxWidth: '1400px', mx: 'auto', width: '100%' }}
+        sx={{ 
+          flexGrow: 1, 
+          p: { xs: 1.5, sm: 2, md: 3 },  // 响应式 padding
+          maxWidth: '1400px', 
+          mx: 'auto', 
+          width: '100%',
+        }}
       >
         {children}
       </Box>
