@@ -333,6 +333,9 @@ class BacktestExecutor:
                 performance_metrics,
                 strategy_config=strategy_config,
             )
+            # 将回测循环统计（信号数、交易日等）写入报告，便于排查“无信号记录”等问题
+            backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
+            backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
 
             if self.enable_performance_profiling:
                 self.performance_profiler.end_stage(

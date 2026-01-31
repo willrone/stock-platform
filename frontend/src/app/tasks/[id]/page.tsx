@@ -523,14 +523,28 @@ export default function TaskDetailPage() {
     return strategyName === 'portfolio' ? '组合策略' : strategyName;
   };
 
-  const renderStrategyParameters = (parameters: Record<string, any>) => {
-    const strategies = Array.isArray(parameters.strategies) ? parameters.strategies : null;
+  // 组合策略在未配置子策略时与后端默认一致，用于展示
+  const DEFAULT_PORTFOLIO_STRATEGIES = [
+    { name: 'bollinger', weight: 1, config: { period: 20, std_dev: 2, entry_threshold: 0.02 } },
+    { name: 'cci', weight: 1, config: { period: 20, oversold: -100, overbought: 100 } },
+    { name: 'macd', weight: 1, config: { fast_period: 12, slow_period: 26, signal_period: 9 } },
+  ];
 
-    if (strategies) {
+  const renderStrategyParameters = (parameters: Record<string, any>) => {
+    const raw = Array.isArray(parameters.strategies) ? parameters.strategies : null;
+    // 组合策略子列表为空时用默认展示，避免显示「0 个」；非组合策略（raw 为 null）不进入本块
+    const strategies =
+      raw === null ? null : raw.length > 0 ? raw : DEFAULT_PORTFOLIO_STRATEGIES;
+
+    if (strategies && strategies.length > 0) {
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-            <Chip size="small" color="secondary" label={`组合策略 · ${strategies.length} 个`} />
+            <Chip
+              size="small"
+              color="secondary"
+              label={`组合策略 · ${strategies.length} 个${raw?.length === 0 ? '（默认）' : ''}`}
+            />
             <Chip
               size="small"
               variant="outlined"

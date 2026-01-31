@@ -114,9 +114,9 @@ class ChartCacheService:
                     # 计算数据哈希值
                     data_hash = self._calculate_data_hash(chart_data)
 
-                    # 计算过期时间
-                    expiry_hours = expiry_hours or self.DEFAULT_CACHE_EXPIRY_HOURS
-                    expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
+                    # 计算过期时间（避免闭包内同名赋值导致 UnboundLocalError）
+                    hours = expiry_hours if expiry_hours is not None else self.DEFAULT_CACHE_EXPIRY_HOURS
+                    expires_at = datetime.utcnow() + timedelta(hours=hours)
 
                     # 查找现有记录
                     stmt = select(BacktestChartCache).where(
