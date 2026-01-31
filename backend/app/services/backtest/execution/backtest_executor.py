@@ -334,6 +334,9 @@ class BacktestExecutor:
                 performance_metrics,
                 strategy_config=strategy_config,
             )
+            # 将回测循环统计（信号数、交易日等）写入报告，便于排查“无信号记录”等问题
+            backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
+            backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
 
             if self.enable_performance_profiling:
                 self.performance_profiler.end_stage(
@@ -516,93 +519,186 @@ class BacktestExecutor:
 
                 if self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号
-                    def generate_stock_signals(
-                        stock_code: str, data: pd.DataFrame
-                    ) -> Tuple[List[TradingSignal], float, float]:
-                        """为单只股票生成信号（用于并行执行）
+                    # PERF: avoid per-day ThreadPoolExecutor creation and avoid per-stock futures.
+                    # We batch stocks into coarse tasks to reduce scheduling overhead.
 
-                        Returns:
-                          (signals, slice_duration, gen_duration)
-                        """
-                        if current_date not in data.index:
-                            return ([], 0.0, 0.0)
+                    # PERF: switch from "per-day submit many tasks" to "persistent workers".
+                    # This dramatically reduces thread scheduling overhead when stock_count is large.
+                    import threading
 
-                        # PERF: avoid slicing dataframe per day (O(T^2) copies). For strategies
-                        # that use current_date indexing (our portfolio setup does), passing
-                        # full data avoids repeated slicing cost and enables per-stock indicator caching.
-                        if current_date not in data.index:
-                            return ([], 0.0, 0.0)
+                    # Initialize worker context once (first trading day)
+                    if not hasattr(self, "_signal_worker_ctx") or self._signal_worker_ctx is None:
+                        items = list(stock_data.items())
 
-                        t0 = time.perf_counter()
-                        current_idx = int(data.index.get_loc(current_date))
-                        slice_dur = time.perf_counter() - t0  # kept for compatibility
+                        # Greedy balance chunks by estimated per-stock compute cost.
+                        # Cost proxy: number of trading days the stock participates (after warmup) with
+                        # a small penalty for missing days.
+                        scored = []
+                        total_days = len(trading_dates) if trading_dates else 0
 
-                        if current_idx < 20:
-                            return ([], slice_dur, 0.0)
+                        for code, df in items:
+                            try:
+                                # count how many trading_dates exist in this df
+                                # (O(T) per stock; ok for init and much better load balance than len(df))
+                                avail = df.index
+                                avail_days = 0
+                                for _d in trading_dates:
+                                    if _d in avail:
+                                        avail_days += 1
+                                missing_ratio = (
+                                    1.0 - (avail_days / total_days)
+                                    if total_days > 0
+                                    else 0.0
+                                )
+                                # warmup skip (executor only calls strategy when idx>=20)
+                                effective_days = max(0, avail_days - 20)
+                                cost = float(effective_days) * (1.0 + 0.10 * missing_ratio)
+                                scored.append((cost, code, df))
+                            except Exception:
+                                scored.append((0.0, code, df))
 
-                        try:
-                            # measure wall time of strategy.generate_signals per stock
-                            t1 = time.perf_counter()
-                            sigs = strategy.generate_signals(data, current_date)
-                            gen_dur = time.perf_counter() - t1
+                        scored.sort(reverse=True)
 
-                            # attach per-stock perf (kept tiny to reduce overhead)
-                            if sigs:
+                        worker_n = max(1, int(self.max_workers or 1))
+                        buckets = [([], 0.0) for _ in range(worker_n)]  # ([(code,df)], total_cost)
+                        for cost, code, df in scored:
+                            # pick bucket with smallest total_cost
+                            bi = min(range(worker_n), key=lambda x: buckets[x][1])
+                            buckets[bi][0].append((code, df))
+                            buckets[bi] = (buckets[bi][0], buckets[bi][1] + float(cost))
+
+                        chunks: List[List[Tuple[str, pd.DataFrame]]] = [b[0] for b in buckets]
+
+                        shared = {"date": None, "error": None}
+                        results: List[Tuple[List[TradingSignal], float, float, float]] = [
+                            ([], 0.0, 0.0, 0.0) for _ in range(worker_n)
+                        ]
+
+                        barrier_start = threading.Barrier(worker_n + 1)
+                        barrier_end = threading.Barrier(worker_n + 1)
+
+                        def _worker(idx: int):
+                            nonlocal chunks, shared, results
+                            while True:
                                 try:
-                                    md = getattr(sigs[0], "metadata", None)
-                                    if md is None:
-                                        sigs[0].metadata = {}
-                                        md = sigs[0].metadata
-                                    if isinstance(md, dict):
-                                        md["_perf"] = {
-                                            "gen_wall": float(gen_dur),
-                                            "slice_wall": float(slice_dur),
-                                        }
+                                    barrier_start.wait()
                                 except Exception:
-                                    pass
+                                    return
 
-                            return (sigs, slice_dur, gen_dur)
-                        except Exception as e:
-                            logger.warning(f"生成信号失败 {stock_code}: {e}")
-                            return ([], slice_dur, 0.0)
+                                cd = shared.get("date")
+                                if cd is None:
+                                    # shutdown signal
+                                    try:
+                                        barrier_end.wait()
+                                    except Exception:
+                                        pass
+                                    return
 
-                    # 使用线程池并行生成信号
+                                batch_signals: List[TradingSignal] = []
+                                slice_sum = 0.0
+                                gen_sum = 0.0
+                                gen_max = 0.0
+
+                                try:
+                                    for stock_code, data in chunks[idx]:
+                                        if cd not in data.index:
+                                            continue
+
+                                        t0 = time.perf_counter()
+                                        current_idx = int(data.index.get_loc(cd))
+                                        try:
+                                            data.attrs["_current_date"] = cd
+                                            data.attrs["_current_idx"] = current_idx
+                                        except Exception:
+                                            pass
+                                        slice_dur = time.perf_counter() - t0
+                                        slice_sum += float(slice_dur)
+
+                                        if current_idx < 20:
+                                            continue
+
+                                        t1 = time.perf_counter()
+                                        sigs = strategy.generate_signals(data, cd)
+                                        gen_dur = time.perf_counter() - t1
+                                        gen_sum += float(gen_dur)
+                                        if gen_dur > gen_max:
+                                            gen_max = float(gen_dur)
+
+                                        if sigs:
+                                            try:
+                                                md = getattr(sigs[0], "metadata", None)
+                                                if md is None:
+                                                    sigs[0].metadata = {}
+                                                    md = sigs[0].metadata
+                                                if isinstance(md, dict):
+                                                    md["_perf"] = {
+                                                        "gen_wall": float(gen_dur),
+                                                        "slice_wall": float(slice_dur),
+                                                    }
+                                            except Exception:
+                                                pass
+
+                                        batch_signals.extend(sigs)
+
+                                    results[idx] = (batch_signals, slice_sum, gen_sum, gen_max)
+                                except Exception as e:
+                                    shared["error"] = e
+                                    results[idx] = ([], slice_sum, gen_sum, gen_max)
+
+                                try:
+                                    barrier_end.wait()
+                                except Exception:
+                                    return
+
+                        threads = []
+                        for wi in range(worker_n):
+                            t = threading.Thread(target=_worker, args=(wi,), daemon=True)
+                            t.start()
+                            threads.append(t)
+
+                        self._signal_worker_ctx = {
+                            "worker_n": worker_n,
+                            "shared": shared,
+                            "results": results,
+                            "barrier_start": barrier_start,
+                            "barrier_end": barrier_end,
+                            "threads": threads,
+                        }
+
+                    ctx = self._signal_worker_ctx
+
                     sequential_start = (
-                        time.perf_counter()
-                        if self.enable_performance_profiling
-                        else None
+                        time.perf_counter() if self.enable_performance_profiling else None
                     )
 
                     gen_time_max = 0.0
 
-                    with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                        futures = {
-                            executor.submit(generate_stock_signals, code, data): code
-                            for code, data in stock_data.items()
-                        }
+                    # Broadcast date to workers and collect
+                    ctx["shared"]["date"] = current_date
+                    ctx["shared"]["error"] = None
 
-                        for future in as_completed(futures):
-                            try:
-                                signals, slice_dur, gen_dur = future.result()
-                                all_signals.extend(signals)
-                                slice_time_total += float(slice_dur)
-                                gen_time_total += float(gen_dur)
+                    try:
+                        ctx["barrier_start"].wait()
+                        ctx["barrier_end"].wait()
+                    except Exception as e:
+                        logger.error(f"并行生成信号同步失败: {e}")
 
-                                # record max per-stock wall time (critical path proxy)
-                                if gen_dur and gen_dur > gen_time_max:
-                                    gen_time_max = float(gen_dur)
-                            except Exception as e:
-                                stock_code = futures[future]
-                                logger.error(f"并行生成信号失败 {stock_code}: {e}")
+                    err = ctx["shared"].get("error")
+                    if err is not None:
+                        raise err
+
+                    for (signals, slice_sum, gen_sum, gen_max) in ctx["results"]:
+                        all_signals.extend(signals)
+                        slice_time_total += float(slice_sum)
+                        gen_time_total += float(gen_sum)
+                        if gen_max and gen_max > gen_time_max:
+                            gen_time_max = float(gen_max)
 
                     # 记录并行化效率（估算顺序执行时间）
                     if self.enable_performance_profiling and sequential_start:
                         parallel_time = time.perf_counter() - sequential_start
-                        # 估算顺序执行时间（假设每只股票耗时相同）
-                        estimated_sequential_time = (
-                            parallel_time * len(stock_data) / self.max_workers
-                        )
-                        if i == 0:  # 只在第一次记录
+                        estimated_sequential_time = parallel_time * len(stock_data) / max(1, self.max_workers)
+                        if i == 0:
                             self.performance_profiler.record_parallel_efficiency(
                                 operation_name="signal_generation",
                                 sequential_time=estimated_sequential_time,
@@ -622,6 +718,12 @@ class BacktestExecutor:
                                 if current_date in data.index
                                 else -1
                             )
+                            # Provide fast-path hint for strategies (avoid repeated get_loc)
+                            try:
+                                data.attrs["_current_date"] = current_date
+                                data.attrs["_current_idx"] = current_idx
+                            except Exception:
+                                pass
                             slice_time_total += time.perf_counter() - t0
 
                             if current_idx >= 20:
@@ -669,6 +771,13 @@ class BacktestExecutor:
                         self.performance_profiler.record_function_call(
                             "generate_signals_core_wall_max", float(gen_time_max)
                         )
+
+                        # 线程/调度开销（粗略）：整段 wall - 单日最慢单股 wall
+                        overhead = float(signal_duration) - float(gen_time_max)
+                        if overhead > 0:
+                            self.performance_profiler.record_function_call(
+                                "signal_generation_overhead_wall", overhead
+                            )
 
                     # If StrategyPortfolio attached per-strategy timings, record them once per day.
                     try:

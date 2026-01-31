@@ -57,13 +57,11 @@ class MovingAverageStrategy(BaseStrategy):
         signals = []
 
         try:
-            # 计算指标
-            indicators = self.calculate_indicators(data)
+            # 计算指标（按 DataFrame 缓存，避免每个交易日重复计算整段 rolling 指标）
+            indicators = self.get_cached_indicators(data)
 
-            # 获取当前数据点
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            # 获取当前数据点（优先使用执行器写入的 attrs 快路径）
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.long_window:
                 return signals  # 数据不足
 
@@ -357,11 +355,10 @@ class RSIStrategy(BaseStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            # 计算指标（按 DataFrame 缓存）
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < max(self.rsi_period, self.trend_ma_period):
                 return signals
 
@@ -608,11 +605,9 @@ class MACDStrategy(BaseStrategy):
         signals = []
 
         try:
-            indicators = self.calculate_indicators(data)
+            indicators = self.get_cached_indicators(data)
 
-            current_idx = (
-                data.index.get_loc(current_date) if current_date in data.index else -1
-            )
+            current_idx = self._get_current_idx(data, current_date)
             if current_idx < self.slow_period + self.signal_period:
                 return signals
 

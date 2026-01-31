@@ -19,7 +19,53 @@ class BaseStrategy(ABC):
     def __init__(self, name: str, config: Dict):
         self.name = name
         self.config = config
+        # NOTE: Prefer per-DataFrame caching via data.attrs to avoid cross-stock pollution.
+        # self.indicators kept for backward compatibility / ad-hoc usage.
         self.indicators = {}
+
+    def _get_current_idx(self, data: pd.DataFrame, current_date: datetime) -> int:
+        """Fast path for locating current_date index.
+
+        BacktestExecutor can set:
+          data.attrs["_current_date"] = current_date
+          data.attrs["_current_idx"] = int
+
+        Strategies can use this helper to avoid repeated data.index.get_loc calls.
+        """
+        try:
+            if data is not None:
+                cd = data.attrs.get("_current_date")
+                ci = data.attrs.get("_current_idx")
+                if cd == current_date and ci is not None:
+                    return int(ci)
+        except Exception:
+            pass
+
+        # Fallback
+        return int(data.index.get_loc(current_date)) if current_date in data.index else -1
+
+    def get_cached_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """Calculate indicators once per (strategy instance, DataFrame).
+
+        Many strategies compute full rolling indicators inside generate_signals(). If that
+        happens per trading day, it becomes O(T^2). Caching makes it O(T).
+        """
+        if data is None:
+            return self.calculate_indicators(data)
+
+        try:
+            cache = data.attrs.setdefault("_strategy_indicators_cache", {})
+            # Include instance id to keep different configs isolated.
+            key = (id(self), self.name)
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+            indicators = self.calculate_indicators(data)
+            cache[key] = indicators
+            return indicators
+        except Exception:
+            # Never let caching break trading logic
+            return self.calculate_indicators(data)
 
     @abstractmethod
     def generate_signals(

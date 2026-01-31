@@ -351,7 +351,7 @@ class BacktestTaskExecutor:
                     slippage_rate=strategy_config.get("slippage_rate", 0.0001),
                 )
 
-                # 执行回测
+                # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）
                 backtest_report = executor.run_backtest(
                     strategy_name=strategy_name,
                     stock_codes=stock_codes,
@@ -359,6 +359,7 @@ class BacktestTaskExecutor:
                     end_date=end_date,
                     strategy_config=strategy_config,
                     backtest_config=backtest_config,
+                    task_id=task_id,
                 )
 
                 # 步骤4: 计算回测结果

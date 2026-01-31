@@ -109,10 +109,14 @@ class StrategyFactory:
         Returns:
             策略组合实例
         """
-        if "strategies" not in config:
-            raise TaskError(
-                message="组合策略配置中必须包含'strategies'字段", severity=ErrorSeverity.MEDIUM
-            )
+        # 兼容前端未传或传空 strategies 的情况，使用默认组合
+        if "strategies" not in config or not config["strategies"]:
+            config = dict(config)
+            config["strategies"] = [
+                {"name": "bollinger", "weight": 1.0, "config": {"period": 20, "std_dev": 2, "entry_threshold": 0.02}},
+                {"name": "cci", "weight": 1.0, "config": {"period": 20, "oversold": -100, "overbought": 100}},
+                {"name": "macd", "weight": 1.0, "config": {"fast_period": 12, "slow_period": 26, "signal_period": 9}},
+            ]
 
         strategy_configs = config["strategies"]
         if not isinstance(strategy_configs, list) or len(strategy_configs) == 0:
