@@ -285,3 +285,28 @@ cd frontend && npm test
 ---
 
 **注意**: 本项目仅用于学习和研究目的，不构成投资建议。投资有风险，入市需谨慎。
+## 📂 项目目录规范
+
+**为了保持项目整洁，请严格遵守以下目录存放规则：**
+
+### 1. 文档归档 (`docs/`)
+- 所有项目相关的 `.md` 文档必须归档至 `docs/` 下的对应分类子目录中。
+- `docs/README.md` 是所有文档的索引。
+- 分类包括：`guides/` (指南), `mobile/` (移动端优化), `backtest/` (回测), `qlib/` (模型算法), `mlops/` (运维管理), `quality/` (质量规范), `reports/` (阶段总结), `fixes/` (修复记录)。
+
+### 2. 测试与工具脚本 (`tests/`)
+- 严禁在根目录存放临时的 `.py`, `.js`, `.sh` 等脚本。
+- `tests/integration/`: 用于集成测试和数据验证。
+- `tests/scripts/`: 用于任务管理、状态修复等实用工具。
+- `tests/manual/`: 用于手动验证 API 或通信的工具。
+
+### 3. 核心开发目录
+- `backend/`: FastAPI 后端代码。
+- `frontend/`: Next.js 前端代码。
+- `back_test_data_service/`: 独立回测数据服务。
+
+### 4. 系统环境与配置
+- `nginx/`, `monitoring/`, `systemd/`, `scripts/`: 分别存放代理、监控、服务和系统安装脚本。
+
+---
+*以后新增任何文件，请根据上述规则放入对应目录。*
