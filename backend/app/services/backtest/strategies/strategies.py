@@ -573,6 +573,48 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         self.entry_threshold = config.get("entry_threshold", 2.0)
         self.exit_threshold = config.get("exit_threshold", 0.5)
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化预计算全量协整信号（按 Z-score 穿越阈值生成买卖信号）"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            zscore = indicators.get("zscore")
+            if zscore is None:
+                return None
+
+            prev_z = zscore.shift(1)
+
+            # 均值回归强度（当前实现为全局常数 Series）
+            mean_rev = indicators.get("mean_reversion_strength")
+            if mean_rev is None:
+                return None
+
+            # 与日线版本保持一致：
+            # prev_z <= -entry 且 z > -entry -> BUY
+            # prev_z >=  entry 且 z <  entry -> SELL
+            buy_mask = (prev_z <= -self.entry_threshold) & (zscore > -self.entry_threshold)
+            sell_mask = (prev_z >= self.entry_threshold) & (zscore < self.entry_threshold)
+
+            # 只有在均值回归为负（beta[1]<0）时启用（当前 mean_rev 为负常数/0）
+            buy_mask &= (mean_rev < 0)
+            sell_mask &= (mean_rev < 0)
+
+            # 数据不足：前 lookback_period 天不产生信号
+            if len(data.index) > 0:
+                idx = np.arange(len(data.index))
+                enough_data = idx >= self.lookback_period
+                # enough_data 是 ndarray，需要对齐到 index
+                enough_data = pd.Series(enough_data, index=data.index)
+                buy_mask &= enough_data
+                sell_mask &= enough_data
+
+            signals = pd.Series(index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
+            return signals
+        except Exception as e:
+            logger.error(f"Cointegration策略向量化计算失败: {e}")
+            return None
+
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算协整指标"""
         close_prices = data["close"]
@@ -634,6 +676,39 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成协整交易信号"""
+        # 性能优化：优先使用全量预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if sig_type:
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_zscore = indicators["zscore"].iloc[current_idx]
+                    half_life = indicators.get("half_life")
+                    mean_reversion = indicators["mean_reversion_strength"].iloc[current_idx]
+
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=min(1.0, abs(current_zscore) / self.entry_threshold) if self.entry_threshold else 0.8,
+                            price=current_price,
+                            reason=f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, 半衰期: {float(half_life):.1f}",
+                            metadata={
+                                "zscore": float(current_zscore),
+                                "half_life": float(half_life) if half_life is not None else None,
+                                "mean_reversion_strength": float(mean_reversion),
+                            },
+                        )
+                    ]
+                return []
+        except Exception:
+            pass
+
         signals = []
 
         try:
