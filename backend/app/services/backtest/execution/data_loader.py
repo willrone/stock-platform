@@ -255,6 +255,31 @@ class DataLoader:
         data.attrs["stock_code"] = stock_code
         data.attrs["from_precomputed"] = False
 
+        # [性能优化] 预计算常用技术指标列，供策略复用，避免每个策略重复 rolling
+        try:
+            close = data["close"]
+
+            # 常用均线/波动（当前验收组合用到：MA20/MA50/MA60 + STD20/STD60 + RSI14）
+            for p in (20, 50, 60):
+                col = f"MA{p}"
+                if col not in data.columns:
+                    data[col] = close.rolling(window=p).mean()
+
+            for p in (20, 60):
+                col = f"STD{p}"
+                if col not in data.columns:
+                    data[col] = close.rolling(window=p).std()
+
+            # RSI14（Wilder 简化版，和策略 fallback 保持一致口径）
+            if "RSI14" not in data.columns:
+                delta = close.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                data["RSI14"] = 100 - (100 / (1 + rs))
+        except Exception as e:
+            logger.warning(f"预计算常用指标失败 {stock_code}: {e}")
+
         logger.info(
             f"从Parquet加载股票数据: {stock_code}, 数据量: {len(data)}, 日期范围: {data.index[0]} - {data.index[-1]}"
         )

@@ -35,11 +35,23 @@ class BollingerBandStrategy(BaseStrategy):
         self.entry_threshold = config.get("entry_threshold", 0.02)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算布林带指标"""
+        """计算布林带指标（优先复用 DataLoader 预计算列，避免重复 rolling）"""
         close_prices = data["close"]
 
-        sma = close_prices.rolling(window=self.period).mean()
-        std = close_prices.rolling(window=self.period).std()
+        # 尝试从预计算数据提取
+        pre = self._extract_indicators_from_precomputed(
+            data,
+            {
+                "sma": f"MA{self.period}",
+                "std": f"STD{self.period}",
+            },
+        )
+        if pre is not None and "sma" in pre and "std" in pre:
+            sma = pre["sma"]
+            std = pre["std"]
+        else:
+            sma = close_prices.rolling(window=self.period).mean()
+            std = close_prices.rolling(window=self.period).std()
 
         upper_band = sma + (std * self.std_dev)
         lower_band = sma - (std * self.std_dev)
@@ -617,14 +629,25 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             return None
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算协整指标"""
+        """计算协整指标（优先复用 DataLoader 预计算列，避免重复 rolling）"""
         close_prices = data["close"]
 
         returns = close_prices.pct_change().dropna()
         half_life = self._estimate_half_life(returns)
 
-        sma = close_prices.rolling(window=self.lookback_period).mean()
-        std = close_prices.rolling(window=self.lookback_period).std()
+        pre = self._extract_indicators_from_precomputed(
+            data,
+            {
+                "sma": f"MA{self.lookback_period}",
+                "std": f"STD{self.lookback_period}",
+            },
+        )
+        if pre is not None and "sma" in pre and "std" in pre:
+            sma = pre["sma"]
+            std = pre["std"]
+        else:
+            sma = close_prices.rolling(window=self.lookback_period).mean()
+            std = close_prices.rolling(window=self.lookback_period).std()
 
         zscore = (close_prices - sma) / (std + 0.001)
 
