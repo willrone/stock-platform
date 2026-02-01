@@ -41,6 +41,7 @@ import {
   PortfolioStrategyItem,
 } from '../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfig, StrategyConfigService } from '../../services/strategyConfigService';
+import { MobileSignalCard } from '../../components/mobile/MobileSignalCard';
 
 export default function SignalsPage() {
   const [strategies, setStrategies] = useState<
@@ -698,7 +699,47 @@ export default function SignalsPage() {
             </Stack>
           </Stack>
 
-          <Box sx={{ mt: 2, overflowX: 'auto' }}>
+          {/* 移动端：卡片列表 */}
+          <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 2 }}>
+            {loading ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <CircularProgress size={24} />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  计算中...
+                </Typography>
+              </Box>
+            ) : filteredRows.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  暂无信号数据
+                </Typography>
+              </Box>
+            ) : (
+              filteredRows.map((row, idx) => {
+                // 合并所有策略的信号（移动端简化显示）
+                const signals = selectedStrategyNames.map(name => row[name]).filter(Boolean);
+                if (signals.length === 0) return null;
+                
+                return signals.map((sig, sidx) => (
+                  <MobileSignalCard 
+                    key={`${idx}-${sidx}`}
+                    signal={{
+                      stock_code: row.stock_code,
+                      stock_name: row.stock_name,
+                      signal: sig.signal,
+                      price: sig.price,
+                      change_percent: sig.change_pct,
+                      signal_time: sig.signal_time,
+                      strategy: selectedStrategyNames[sidx],
+                    }}
+                  />
+                ));
+              })
+            )}
+          </Box>
+
+          {/* 桌面端：表格 */}
+          <Box sx={{ display: { xs: 'none', md: 'block' }, mt: 2, overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -772,6 +813,7 @@ export default function SignalsPage() {
                 )}
               </TableBody>
             </Table>
+          </Box>
           </Box>
 
           {failures.length > 0 && (
