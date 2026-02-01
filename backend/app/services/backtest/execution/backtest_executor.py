@@ -492,21 +492,45 @@ class BacktestExecutor:
         # 统计预计算成功的股票数
         success_count = 0
         total_stocks = len(stock_data)
-        
-        for stock_code, data in stock_data.items():
+
+        # 并行预计算（按股票维度），显著降低整体 wall-time
+        def _work_one(item):
+            stock_code, data = item
             try:
-                # 调用策略的向量化接口
                 all_sigs = strategy.precompute_all_signals(data)
                 if all_sigs is not None:
-                    # 存储在 DataFrame 的 attrs 中
                     cache = data.attrs.setdefault("_precomputed_signals", {})
                     cache[id(strategy)] = all_sigs
-                    success_count += 1
+                    return True, stock_code, None
+                return False, stock_code, None
             except Exception as e:
-                logger.warning(f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {e}")
-        
+                return False, stock_code, str(e)
+
+        if self.enable_parallel and total_stocks >= 4:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
+                futures = [ex.submit(_work_one, it) for it in stock_data.items()]
+                for fu in as_completed(futures):
+                    ok, stock_code, err = fu.result()
+                    if ok:
+                        success_count += 1
+                    elif err:
+                        logger.warning(
+                            f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
+                        )
+        else:
+            for it in stock_data.items():
+                ok, stock_code, err = _work_one(it)
+                if ok:
+                    success_count += 1
+                elif err:
+                    logger.warning(
+                        f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
+                    )
+
         if success_count > 0:
-            logger.info(f"✅ 策略 {strategy.name} 向量化预计算完成: {success_count}/{total_stocks} 只股票")
+            logger.info(
+                f"✅ 策略 {strategy.name} 向量化预计算完成: {success_count}/{total_stocks} 只股票"
+            )
 
     async def _execute_backtest_loop(
         self,
