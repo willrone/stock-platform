@@ -47,6 +47,7 @@ import { useTaskStore, Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { MobileBacktestCard } from '../../components/mobile/MobileBacktestCard';
 
 export default function BacktestPage() {
   const router = useRouter();
@@ -272,7 +273,24 @@ export default function BacktestPage() {
               </Button>
             </Box>
           ) : (
-            <TableContainer component={Paper}>
+            <Box>
+              {/* 移动端：卡片列表 */}
+              <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                {backtestTasks.map(task => (
+                  <MobileBacktestCard
+                    key={task.task_id}
+                    task={task}
+                    onDelete={(id) => {
+                      setSelectedTask(backtestTasks.find(t => t.task_id === id) || null);
+                      setIsDeleteOpen(true);
+                    }}
+                  />
+                ))}
+              </Box>
+
+              {/* 桌面端：表格 */}
+              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+              <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
@@ -388,6 +406,8 @@ export default function BacktestPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            </Box>
+            </Box>
           )}
         </CardContent>
       </Card>

@@ -37,6 +37,7 @@ import { DataService } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { SystemHealthCard } from '../../components/monitoring/SystemHealthCard';
 import { PerformanceMetricsCard } from '../../components/monitoring/PerformanceMetricsCard';
+import { MobileErrorCard } from '../../components/mobile/MobileErrorCard';
 
 interface ErrorStatistics {
   time_range_hours: number;
@@ -346,7 +347,23 @@ export default function MonitoringPage() {
             <Card>
               <CardHeader title="错误详情" />
               <CardContent>
-                <Box sx={{ overflowX: 'auto' }}>
+                {/* 移动端：卡片列表 */}
+                <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                  {errorStats?.error_statistics.length === 0 ? (
+                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        暂无错误记录
+                      </Typography>
+                    </Box>
+                  ) : (
+                    errorStats?.error_statistics.map((error, index) => (
+                      <MobileErrorCard key={index} error={error} />
+                    ))
+                  )}
+                </Box>
+
+                {/* 桌面端：表格 */}
+                <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -403,6 +420,7 @@ export default function MonitoringPage() {
                       )}
                     </TableBody>
                   </Table>
+                </Box>
                 </Box>
               </CardContent>
             </Card>
