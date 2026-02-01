@@ -624,6 +624,7 @@ export default function DataManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    </Box>
                   </Box>
                 )}
               </Box>
@@ -645,7 +646,20 @@ export default function DataManagementPage() {
                     </Typography>
                   </Box>
                 ) : (
-                  <Box sx={{ overflowX: 'auto' }}>
+                  <Box>
+                    {/* 移动端：卡片列表 */}
+                    <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                      {localStocks.map(stock => (
+                        <MobileStockCard 
+                          key={stock.ts_code} 
+                          stock={stock} 
+                          type="local" 
+                        />
+                      ))}
+                    </Box>
+
+                    {/* 桌面端：表格 */}
+                    <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
                     <Table>
                       <TableHead>
                         <TableRow>
@@ -696,6 +710,7 @@ export default function DataManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    </Box>
                   </Box>
                 )}
               </Box>
