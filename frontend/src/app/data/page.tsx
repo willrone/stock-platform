@@ -30,6 +30,7 @@ import { Server, RefreshCw, Wifi, WifiOff, XCircle, Zap, Database, Download } fr
 import { DataService } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { wsService } from '../../services/websocket';
+import { MobileStockCard } from '../../components/mobile/MobileStockCard';
 
 interface ServiceStatus {
   service_url: string;
@@ -551,7 +552,20 @@ export default function DataManagementPage() {
                     </Typography>
                   </Box>
                 ) : (
-                  <Box sx={{ overflowX: 'auto' }}>
+                  <Box>
+                    {/* 移动端：卡片列表 */}
+                    <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                      {remoteStocks.map(stock => (
+                        <MobileStockCard 
+                          key={stock.ts_code} 
+                          stock={stock} 
+                          type="remote" 
+                        />
+                      ))}
+                    </Box>
+
+                    {/* 桌面端：表格 */}
+                    <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
                     <Table>
                       <TableHead>
                         <TableRow>

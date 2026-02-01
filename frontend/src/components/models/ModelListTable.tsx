@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { Trash2 } from 'lucide-react';
 import { Model } from '../../stores/useDataStore';
+import { MobileModelCard } from '../mobile/MobileModelCard';
 
 interface ModelListTableProps {
   models: Model[];
@@ -48,8 +49,28 @@ export function ModelListTable({
   deleting,
 }: ModelListTableProps) {
   return (
-    <Box sx={{ overflowX: 'auto' }}>
-      <Table>
+    <Box>
+      {/* 移动端：卡片列表 */}
+      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+        {models.map(model => (
+          <MobileModelCard
+            key={model.model_id}
+            model={model}
+            trainingProgress={trainingProgress[model.model_id]}
+            getStatusColor={getStatusColor}
+            getStatusText={getStatusText}
+            getStageText={getStageText}
+            onShowTrainingReport={onShowTrainingReport}
+            onShowLiveTraining={onShowLiveTraining}
+            onDeleteModel={onDeleteModel}
+            deleting={deleting}
+          />
+        ))}
+      </Box>
+
+      {/* 桌面端：表格 */}
+      <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
+        <Table>
         <TableHead>
           <TableRow>
             <TableCell>模型名称</TableCell>
@@ -191,6 +212,7 @@ export function ModelListTable({
           ))}
         </TableBody>
       </Table>
+    </Box>
     </Box>
   );
 }
