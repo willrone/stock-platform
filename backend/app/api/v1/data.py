@@ -353,10 +353,23 @@ async def get_local_stock_list():
                     stock_data_map[stock_code]["total_size"] += file_stat.st_size
                     stock_data_map[stock_code]["record_count"] += len(stock_df)
 
-                    # 收集日期
-                    if "date" in stock_df.columns:
-                        dates = pd.to_datetime(stock_df["date"]).tolist()
+                    # 收集日期 - 支持多种日期列名
+                    date_col = None
+                    for col_name in ["date", "trade_date", "datetime", "time", "Date", "TradeDate"]:
+                        if col_name in stock_df.columns:
+                            date_col = col_name
+                            break
+                    
+                    # 如果列中没有日期，尝试从索引获取
+                    if date_col is None and isinstance(stock_df.index, pd.DatetimeIndex):
+                        dates = stock_df.index.tolist()
                         stock_data_map[stock_code]["dates"].extend(dates)
+                    elif date_col:
+                        try:
+                            dates = pd.to_datetime(stock_df[date_col]).tolist()
+                            stock_data_map[stock_code]["dates"].extend(dates)
+                        except Exception as e:
+                            logger.debug(f"解析日期列 {date_col} 失败 {stock_code}: {e}")
 
             except Exception as e:
                 error_count += 1

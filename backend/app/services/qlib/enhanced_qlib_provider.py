@@ -3059,25 +3059,86 @@ class EnhancedQlibDataProvider:
         return df_optimized
 
     def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
-        """处理缺失值"""
+        """处理缺失值 - 改进版：区分缺失值类型，使用更智能的填充策略"""
         df_filled = df.copy()
 
-        # 基础价格数据：前向填充
+        # 确保数据按时间排序（避免未来信息泄漏）
+        if isinstance(df_filled.index, pd.MultiIndex):
+            df_filled = df_filled.sort_index()
+        elif df_filled.index.name in ["datetime", "date", "time"] or isinstance(
+            df_filled.index, pd.DatetimeIndex
+        ):
+            df_filled = df_filled.sort_index()
+
+        # 基础价格数据：前向填充（停牌等情况）
         price_cols = ["$open", "$high", "$low", "$close", "$volume"]
         for col in price_cols:
             if col in df_filled.columns:
-                df_filled[col] = df_filled[col].ffill()
+                # 前向填充，然后后向填充（处理开头缺失）
+                df_filled[col] = df_filled[col].ffill().bfill()
 
-        # 技术指标：使用0填充（因为计算窗口不足时为NaN是正常的）
-        indicator_cols = [col for col in df_filled.columns if col not in price_cols]
+        # 技术指标：区分缺失原因
+        indicator_cols = [
+            col for col in df_filled.columns if col not in price_cols + ["label"]
+        ]
+        
         for col in indicator_cols:
-            if col in df_filled.columns:
-                df_filled[col] = df_filled[col].fillna(0)
+            if col not in df_filled.columns:
+                continue
+                
+            col_data = df_filled[col]
+            missing_mask = col_data.isna()
+            
+            if not missing_mask.any():
+                continue
+            
+            missing_count = missing_mask.sum()
+            total_count = len(col_data)
+            missing_ratio = missing_count / total_count if total_count > 0 else 0
+            
+            # 判断缺失原因：
+            # 1. 如果缺失比例很高（>50%），可能是计算窗口不足，使用中位数填充
+            # 2. 如果缺失比例较低，可能是数据缺失，使用前向填充
+            # 3. 对于技术指标，如果开头缺失（计算窗口不足），使用NaN或中位数
+            # 4. 对于中间缺失（数据缺失），使用前向填充
+            
+            if missing_ratio > 0.5:
+                # 高缺失率：可能是计算窗口不足，使用中位数填充
+                median_value = col_data.median()
+                if pd.notna(median_value):
+                    df_filled[col] = col_data.fillna(median_value)
+                else:
+                    # 如果中位数也是NaN，使用0（作为最后手段）
+                    df_filled[col] = col_data.fillna(0)
+                logger.debug(
+                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用中位数填充"
+                )
+            else:
+                # 低缺失率：可能是数据缺失，使用前向填充
+                # 先前向填充，然后后向填充（处理开头缺失）
+                df_filled[col] = col_data.ffill().bfill()
+                
+                # 如果仍有缺失（开头），使用中位数
+                if df_filled[col].isna().any():
+                    median_value = df_filled[col].median()
+                    if pd.notna(median_value):
+                        df_filled[col] = df_filled[col].fillna(median_value)
+                    else:
+                        df_filled[col] = df_filled[col].fillna(0)
+                
+                logger.debug(
+                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数"
+                )
 
         # 记录缺失值处理情况
-        missing_counts = df.isnull().sum()
-        if missing_counts.sum() > 0:
-            logger.debug(f"处理缺失值: {missing_counts[missing_counts > 0].to_dict()}")
+        missing_counts_before = df.isnull().sum()
+        missing_counts_after = df_filled.isnull().sum()
+        
+        if missing_counts_before.sum() > 0:
+            logger.debug(
+                f"缺失值处理完成 - 处理前: {missing_counts_before[missing_counts_before > 0].to_dict()}, "
+                f"处理后: {missing_counts_after[missing_counts_after > 0].to_dict()}"
+            )
 
         return df_filled
 
@@ -3127,7 +3188,8 @@ class EnhancedQlibDataProvider:
             "class": "LGBModel",  # 默认使用LightGBM
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
-                "loss": "mse",
+                "loss": "huber",  # 使用Huber损失，对异常值更鲁棒
+                "huber_delta": hyperparameters.get("huber_delta", 0.1) if hyperparameters else 0.1,  # Huber损失的delta参数
                 "colsample_bytree": 0.8879,
                 "learning_rate": 0.0421,
                 "subsample": 0.8789,

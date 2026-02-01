@@ -208,7 +208,8 @@ class LightGBMAdapter(BaseModelAdapter):
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
-                "loss": "mse",
+                "loss": "huber",  # 使用Huber损失，对异常值更鲁棒
+                "huber_delta": hyperparameters.get("huber_delta", 0.1),  # Huber损失的delta参数
                 "learning_rate": hyperparameters.get("learning_rate", 0.1),
                 "num_leaves": hyperparameters.get("num_leaves", 31),
                 "max_depth": hyperparameters.get("max_depth", -1),

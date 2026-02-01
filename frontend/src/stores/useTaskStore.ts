@@ -60,6 +60,13 @@ export interface Task {
       };
     }>;
   };
+  optimization_info?: {
+    n_trials: number;
+    completed_trials: number;
+    running_trials?: number;
+    pruned_trials?: number;
+    failed_trials?: number;
+  };
 }
 
 interface TaskState {

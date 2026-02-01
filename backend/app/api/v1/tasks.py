@@ -602,6 +602,34 @@ async def export_backtest_report(task_id: str, export_request: BacktestExportReq
         session.close()
 
 
+@router.get("/stats", response_model=StandardResponse)
+async def get_task_stats():
+    """获取任务统计信息"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        stats = task_repository.get_task_statistics(user_id="default_user", days=30)
+
+        # 转换为前端期望的格式
+        status_counts = stats.get("status_counts", {})
+        task_stats = {
+            "total": stats.get("total_tasks", 0),
+            "completed": status_counts.get(TaskStatus.COMPLETED.value, 0),
+            "running": status_counts.get(TaskStatus.RUNNING.value, 0)
+            + status_counts.get(TaskStatus.QUEUED.value, 0),
+            "failed": status_counts.get(TaskStatus.FAILED.value, 0),
+            "success_rate": stats.get("success_rate", 0.0),
+        }
+
+        return StandardResponse(success=True, message="任务统计获取成功", data=task_stats)
+
+    except Exception as e:
+        logger.error(f"获取任务统计失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取任务统计失败: {str(e)}")
+    finally:
+        session.close()
+
+
 @router.get("/{task_id}", response_model=StandardResponse)
 async def get_task_detail(task_id: str):
     """获取任务详情"""
@@ -727,6 +755,21 @@ async def get_task_detail(task_id: str):
                         f"回测任务但无结果数据: task_id={task_id}, result={task.result}"
                     )
 
+        # 处理超参优化任务的轮次信息
+        optimization_info = None
+        if task.task_type == "hyperparameter_optimization":
+            result = task.result or {}
+            optimization_config = config.get("optimization_config", {})
+            n_trials = result.get("n_trials") or optimization_config.get("n_trials", 0)
+            completed_trials = result.get("completed_trials", 0)
+            optimization_info = {
+                "n_trials": n_trials,
+                "completed_trials": completed_trials,
+                "running_trials": result.get("running_trials", 0),
+                "pruned_trials": result.get("pruned_trials", 0),
+                "failed_trials": result.get("failed_trials", 0),
+            }
+
         # 构建任务详情（含 config，供回测结果页策略配置卡片等使用）
         task_detail = {
             "task_id": task.task_id,
@@ -757,6 +800,7 @@ async def get_task_detail(task_id: str):
             if backtest_results is not None
             else None,
             "result": backtest_results if backtest_results is not None else None,
+            "optimization_info": optimization_info,
         }
 
         # 添加调试日志
@@ -915,34 +959,6 @@ async def retry_task(task_id: str):
     except Exception as e:
         logger.error(f"重试任务失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"重试任务失败: {str(e)}")
-    finally:
-        session.close()
-
-
-@router.get("/stats", response_model=StandardResponse)
-async def get_task_stats():
-    """获取任务统计信息"""
-    session = SessionLocal()
-    try:
-        task_repository = TaskRepository(session)
-        stats = task_repository.get_task_statistics(user_id="default_user", days=30)
-
-        # 转换为前端期望的格式
-        status_counts = stats.get("status_counts", {})
-        task_stats = {
-            "total": stats.get("total_tasks", 0),
-            "completed": status_counts.get(TaskStatus.COMPLETED.value, 0),
-            "running": status_counts.get(TaskStatus.RUNNING.value, 0)
-            + status_counts.get(TaskStatus.QUEUED.value, 0),
-            "failed": status_counts.get(TaskStatus.FAILED.value, 0),
-            "success_rate": stats.get("success_rate", 0.0),
-        }
-
-        return StandardResponse(success=True, message="任务统计获取成功", data=task_stats)
-
-    except Exception as e:
-        logger.error(f"获取任务统计失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取任务统计失败: {str(e)}")
     finally:
         session.close()
 

@@ -111,7 +111,7 @@ export default function DataManagementPage() {
   // 加载本地股票列表
   const loadLocalStocks = async () => {
     try {
-      const result = await DataService.getLocalStockList();
+      const result = await DataService.getLocalStockListDetailed();
       setLocalStocks(result.stocks || []);
     } catch (error) {
       console.error('加载本地股票列表失败:', error);

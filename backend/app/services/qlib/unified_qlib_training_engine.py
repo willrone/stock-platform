@@ -173,6 +173,192 @@ class QlibTrainingResult:
         }
 
 
+class OutlierHandler:
+    """异常值处理器 - 对收益率标签进行Winsorize处理"""
+    
+    def __init__(self, method: str = "winsorize", lower_percentile: float = 0.01, upper_percentile: float = 0.99):
+        """
+        初始化异常值处理器
+        
+        Args:
+            method: 处理方法，'winsorize' 或 'clip'
+            lower_percentile: 下分位数（用于Winsorize）
+            upper_percentile: 上分位数（用于Winsorize）
+        """
+        self.method = method
+        self.lower_percentile = lower_percentile
+        self.upper_percentile = upper_percentile
+    
+    def handle_label_outliers(self, data: pd.DataFrame, label_col: str = "label") -> pd.DataFrame:
+        """
+        处理标签中的异常值
+        
+        Args:
+            data: 数据DataFrame
+            label_col: 标签列名
+        
+        Returns:
+            处理后的DataFrame
+        """
+        if label_col not in data.columns:
+            return data
+        
+        data_processed = data.copy()
+        label_values = data_processed[label_col]
+        
+        # 移除NaN和无穷值
+        valid_mask = pd.notna(label_values) & np.isfinite(label_values)
+        if not valid_mask.any():
+            logger.warning(f"标签列 {label_col} 没有有效值")
+            return data_processed
+        
+        valid_labels = label_values[valid_mask]
+        
+        if self.method == "winsorize":
+            # Winsorize方法：将极端值截断到分位数
+            lower_bound = valid_labels.quantile(self.lower_percentile)
+            upper_bound = valid_labels.quantile(self.upper_percentile)
+            
+            # 记录异常值数量
+            outliers_lower = (label_values < lower_bound).sum()
+            outliers_upper = (label_values > upper_bound).sum()
+            
+            if outliers_lower > 0 or outliers_upper > 0:
+                logger.info(
+                    f"标签异常值处理: 下界={lower_bound:.6f} (异常值={outliers_lower}), "
+                    f"上界={upper_bound:.6f} (异常值={outliers_upper})"
+                )
+            
+            # 截断到分位数
+            data_processed[label_col] = label_values.clip(
+                lower=lower_bound, upper=upper_bound
+            )
+            
+        elif self.method == "clip":
+            # Clip方法：使用Z-score方法检测异常值
+            mean = valid_labels.mean()
+            std = valid_labels.std()
+            
+            if std > 0:
+                z_scores = np.abs((label_values - mean) / std)
+                # 使用3倍标准差作为阈值
+                threshold = 3.0
+                outliers = z_scores > threshold
+                
+                if outliers.sum() > 0:
+                    logger.info(
+                        f"标签异常值处理: 使用Z-score方法，检测到 {outliers.sum()} 个异常值"
+                    )
+                    # 将异常值截断到阈值
+                    data_processed.loc[outliers, label_col] = np.sign(
+                        label_values[outliers] - mean
+                    ) * threshold * std + mean
+        
+        # 处理极端价格变化（可能是除权除息）
+        # 如果收益率超过50%，标记为可疑
+        extreme_mask = np.abs(data_processed[label_col]) > 0.5
+        if extreme_mask.sum() > 0:
+            logger.warning(
+                f"检测到 {extreme_mask.sum()} 个极端收益率（>50%），可能是除权除息，已处理"
+            )
+        
+        return data_processed
+
+
+class RobustFeatureScaler:
+    """鲁棒特征标准化器（时间序列安全）"""
+    
+    def __init__(self):
+        try:
+            from sklearn.preprocessing import RobustScaler
+            self.RobustScaler = RobustScaler
+        except ImportError:
+            logger.warning("sklearn不可用，特征标准化将使用简单标准化")
+            self.RobustScaler = None
+        
+        self.scalers = {}
+        self.fitted = False
+        self.feature_cols = None
+    
+    def fit_transform(
+        self, data: pd.DataFrame, feature_cols: List[str]
+    ) -> pd.DataFrame:
+        """按时间序列方式标准化（避免未来信息泄漏）"""
+        if self.RobustScaler is None:
+            logger.warning("sklearn不可用，跳过特征标准化")
+            return data
+        
+        data_scaled = data.copy()
+        self.feature_cols = feature_cols
+        
+        # 确保数据按时间排序
+        if isinstance(data.index, pd.MultiIndex):
+            data_scaled = data_scaled.sort_index()
+        elif isinstance(data.index, pd.DatetimeIndex):
+            data_scaled = data_scaled.sort_index()
+        
+        for col in feature_cols:
+            if col not in data_scaled.columns:
+                continue
+            
+            # 跳过标签列和非数值列
+            if col == "label" or not pd.api.types.is_numeric_dtype(data_scaled[col]):
+                continue
+            
+            try:
+                scaler = self.RobustScaler()
+                # 只使用历史数据拟合（时间序列安全）
+                col_values = data_scaled[col].values.reshape(-1, 1)
+                # 移除NaN值进行拟合
+                valid_mask = ~np.isnan(col_values.flatten())
+                if valid_mask.sum() > 0:
+                    scaler.fit(col_values[valid_mask])
+                    # 转换所有值（包括NaN，NaN会保持为NaN）
+                    data_scaled[col] = scaler.transform(col_values).flatten()
+                    self.scalers[col] = scaler
+                else:
+                    logger.warning(f"列 {col} 全为NaN，跳过标准化")
+            except Exception as e:
+                logger.warning(f"标准化列 {col} 时出错: {e}，跳过该列")
+                continue
+        
+        self.fitted = True
+        logger.info(f"特征标准化完成，标准化了 {len(self.scalers)} 个特征列")
+        return data_scaled
+    
+    def transform(
+        self, data: pd.DataFrame, feature_cols: List[str] = None
+    ) -> pd.DataFrame:
+        """转换新数据"""
+        if not self.fitted:
+            raise ValueError("Scaler尚未拟合，请先调用fit_transform")
+        
+        if feature_cols is None:
+            feature_cols = self.feature_cols
+        
+        if feature_cols is None:
+            logger.warning("未指定特征列，返回原始数据")
+            return data
+        
+        if self.RobustScaler is None:
+            return data
+        
+        data_scaled = data.copy()
+        
+        for col in feature_cols:
+            if col not in data_scaled.columns or col not in self.scalers:
+                continue
+            
+            try:
+                col_values = data_scaled[col].values.reshape(-1, 1)
+                data_scaled[col] = self.scalers[col].transform(col_values).flatten()
+            except Exception as e:
+                logger.warning(f"转换列 {col} 时出错: {e}，保持原值")
+                continue
+        
+        return data_scaled
+
+
 class UnifiedQlibTrainingEngine:
     """统一Qlib训练引擎"""
 
@@ -528,7 +714,7 @@ class UnifiedQlibTrainingEngine:
             raise
 
     def _process_stock_data(
-        self, stock_data: pd.DataFrame, stock_code: str
+        self, stock_data: pd.DataFrame, stock_code: str, prediction_horizon: int = 5
     ) -> pd.DataFrame:
         """处理单个股票的数据，包括特征计算和标签生成"""
         try:
@@ -556,19 +742,22 @@ class UnifiedQlibTrainingEngine:
                 processed_data["VOL1"] = volume.pct_change(1)
                 processed_data["VOL5"] = volume.pct_change(5)
 
-            # 生成标签
+            # 生成标签 - 修复：使用prediction_horizon参数计算未来N天收益率
             if "$close" in processed_data.columns:
-                # 计算未来收益率作为标签
+                # 正确计算未来N天收益率作为标签
+                current_price = processed_data["$close"]
                 if isinstance(processed_data.index, pd.MultiIndex):
-                    label_values = (
+                    # 按股票分组，计算未来N天的价格
+                    future_price = (
                         processed_data.groupby(level=0)["$close"]
-                        .pct_change(periods=1)
-                        .shift(-1)
+                        .shift(-prediction_horizon)
                     )
                 else:
-                    label_values = (
-                        processed_data["$close"].pct_change(periods=1).shift(-1)
-                    )
+                    # 直接计算未来N天的价格
+                    future_price = processed_data["$close"].shift(-prediction_horizon)
+
+                # 计算收益率：(未来价格 - 当前价格) / 当前价格
+                label_values = (future_price - current_price) / current_price
 
                 if isinstance(label_values, pd.Series):
                     processed_data["label"] = label_values.fillna(0)
@@ -579,6 +768,11 @@ class UnifiedQlibTrainingEngine:
                         else label_values,
                         index=processed_data.index,
                     ).fillna(0)
+                
+                logger.debug(
+                    f"股票 {stock_code} 标签创建完成，预测周期={prediction_horizon}天，"
+                    f"标签范围=[{processed_data['label'].min():.6f}, {processed_data['label'].max():.6f}]"
+                )
 
             # 填充缺失值
             processed_data = processed_data.fillna(0)
@@ -627,6 +821,9 @@ class UnifiedQlibTrainingEngine:
             processed_stocks = []
 
             max_workers = min(mp.cpu_count(), 8)
+            # 获取prediction_horizon参数
+            prediction_horizon = config.prediction_horizon if config else 5
+            
             if len(stock_groups) > 1 and max_workers > 1:
                 # 多进程处理
                 logger.info(f"使用 {max_workers} 个进程并行处理数据")
@@ -637,7 +834,7 @@ class UnifiedQlibTrainingEngine:
                     # 提交任务
                     for stock_code, stock_data in stock_groups.items():
                         future = executor.submit(
-                            self._process_stock_data, stock_data, stock_code
+                            self._process_stock_data, stock_data, stock_code, prediction_horizon
                         )
                         futures[future] = stock_code
 
@@ -655,7 +852,7 @@ class UnifiedQlibTrainingEngine:
                 # 单进程处理
                 logger.info("使用单进程处理数据")
                 for stock_code, stock_data in stock_groups.items():
-                    processed_data = self._process_stock_data(stock_data, stock_code)
+                    processed_data = self._process_stock_data(stock_data, stock_code, prediction_horizon)
                     if not processed_data.empty:
                         processed_stocks.append(processed_data)
                         logger.debug(f"完成股票 {stock_code} 的数据处理")
@@ -685,11 +882,38 @@ class UnifiedQlibTrainingEngine:
             train_data = dataset[dataset.index.isin(train_dates)]
             val_data = dataset[dataset.index.isin(val_dates)]
 
+        # 异常值处理（在标签创建后、特征标准化前）
+        outlier_handler = OutlierHandler(method="winsorize", lower_percentile=0.01, upper_percentile=0.99)
+        if "label" in train_data.columns:
+            logger.info("开始处理标签异常值")
+            train_data = outlier_handler.handle_label_outliers(train_data, label_col="label")
+            if val_data is not None and "label" in val_data.columns:
+                val_data = outlier_handler.handle_label_outliers(val_data, label_col="label")
+            logger.info("标签异常值处理完成")
+
+        # 特征标准化（时间序列安全）
+        feature_scaler = RobustFeatureScaler()
+        # 获取特征列（排除标签列）
+        feature_cols = [
+            col for col in train_data.columns if col != "label"
+        ]
+        
+        if feature_cols:
+            logger.info(f"开始特征标准化，特征列数: {len(feature_cols)}")
+            # 在训练集上拟合并转换
+            train_data = feature_scaler.fit_transform(train_data, feature_cols)
+            # 在验证集上只转换（使用训练集的统计量）
+            if val_data is not None and len(val_data) > 0:
+                val_data = feature_scaler.transform(val_data, feature_cols)
+            logger.info("特征标准化完成")
+        else:
+            logger.warning("未找到特征列，跳过特征标准化")
+
         # 创建DatasetH适配器，使DataFrame具有qlib DatasetH的接口
         class DataFrameDatasetAdapter:
             """将DataFrame适配为qlib DatasetH格式"""
 
-            def __init__(self, train_data: pd.DataFrame, val_data: pd.DataFrame = None):
+            def __init__(self, train_data: pd.DataFrame, val_data: pd.DataFrame = None, prediction_horizon: int = 5):
                 self.train_data = train_data.copy()
                 self.val_data = val_data.copy() if val_data is not None else None
                 # qlib模型期望有segments属性，包含train和valid
@@ -700,8 +924,8 @@ class UnifiedQlibTrainingEngine:
                 self.data = self.train_data
 
                 # 处理训练集和验证集的标签
-                def _create_label_for_data(data, data_name):
-                    """为数据集创建标签"""
+                def _create_label_for_data(data, data_name, horizon):
+                    """为数据集创建标签 - 修复：使用prediction_horizon参数"""
                     if data is None or "label" in data.columns:
                         return
 
@@ -713,17 +937,20 @@ class UnifiedQlibTrainingEngine:
                             break
 
                     if close_col is not None:
-                        # 计算未来收益率作为标签
+                        # 正确计算未来N天收益率作为标签
+                        current_price = data[close_col]
                         if isinstance(data.index, pd.MultiIndex):
-                            label_values = (
+                            # 按股票分组，计算未来N天的价格
+                            future_price = (
                                 data.groupby(level=0)[close_col]
-                                .pct_change(periods=1)
-                                .shift(-1)
+                                .shift(-horizon)
                             )
                         else:
-                            label_values = (
-                                data[close_col].pct_change(periods=1).shift(-1)
-                            )
+                            # 直接计算未来N天的价格
+                            future_price = data[close_col].shift(-horizon)
+
+                        # 计算收益率：(未来价格 - 当前价格) / 当前价格
+                        label_values = (future_price - current_price) / current_price
 
                         if isinstance(label_values, pd.Series):
                             data["label"] = label_values.fillna(0)
@@ -735,7 +962,7 @@ class UnifiedQlibTrainingEngine:
                                 index=data.index,
                             ).fillna(0)
                         logger.info(
-                            f"{data_name}自动创建标签列（未来收益率），标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
+                            f"{data_name}自动创建标签列（未来{horizon}天收益率），标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
                         )
                     else:
                         # 如果没有收盘价，使用最后一列作为标签
@@ -753,8 +980,9 @@ class UnifiedQlibTrainingEngine:
                             f"{data_name}未找到收盘价列，使用最后一列作为标签，标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
                         )
 
-                _create_label_for_data(self.train_data, "训练集")
-                _create_label_for_data(self.val_data, "验证集")
+                prediction_horizon = config.prediction_horizon if config else 5
+                _create_label_for_data(self.train_data, "训练集", prediction_horizon)
+                _create_label_for_data(self.val_data, "验证集", prediction_horizon)
 
                 # 记录数据维度信息
                 logger.info(
@@ -1208,8 +1436,9 @@ class UnifiedQlibTrainingEngine:
                 return getattr(self.data, name)
 
         # 创建包含训练集和验证集的适配器
+        prediction_horizon = config.prediction_horizon if config else 5
         combined_adapter = DataFrameDatasetAdapter(
-            train_data, val_data if len(val_data) > 0 else None
+            train_data, val_data if len(val_data) > 0 else None, prediction_horizon
         )
         # 为了兼容现有代码，也返回单独的适配器引用
         train_dataset = combined_adapter

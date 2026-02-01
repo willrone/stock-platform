@@ -823,6 +823,15 @@ export default function TaskDetailPage() {
                     sx={{ height: 10, borderRadius: 5 }}
                   />
                 </Box>
+                {currentTask.task_type === 'hyperparameter_optimization' &&
+                  currentTask.optimization_info && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        已完成轮次: {currentTask.optimization_info.completed_trials} /{' '}
+                        {currentTask.optimization_info.n_trials}
+                      </Typography>
+                    </Box>
+                  )}
                 {currentTask.status === 'running' && (
                   <Typography variant="caption" color="text.secondary">
                     任务正在执行中，请耐心等待...
@@ -1536,25 +1545,39 @@ export default function TaskDetailPage() {
                 <CardContent>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          模型
-                        </Typography>
-                        <Chip
-                          label={currentTask.model_id}
-                          color="secondary"
-                          size="small"
-                          sx={{ mt: 0.5 }}
-                        />
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          股票数量
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
-                          {currentTask.stock_codes.length}
-                        </Typography>
-                      </Box>
+                      {currentTask.task_type === 'hyperparameter_optimization' ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            已完成轮次
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                            {currentTask.optimization_info?.completed_trials ?? 0} /{' '}
+                            {currentTask.optimization_info?.n_trials ?? 0}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              模型
+                            </Typography>
+                            <Chip
+                              label={currentTask.model_id}
+                              color="secondary"
+                              size="small"
+                              sx={{ mt: 0.5 }}
+                            />
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              股票数量
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.5 }}>
+                              {currentTask.stock_codes.length}
+                            </Typography>
+                          </Box>
+                        </>
+                      )}
                       <Box>
                         <Typography variant="caption" color="text.secondary">
                           创建时间
