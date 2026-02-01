@@ -50,10 +50,59 @@ class MovingAverageStrategy(BaseStrategy):
 
         return indicators
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量均线交叉信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            ma_diff = indicators["ma_diff"]
+            prev_ma_diff = ma_diff.shift(1)
+
+            # 向量化逻辑判断
+            buy_mask = (prev_ma_diff <= 0) & (ma_diff > 0) & (abs(ma_diff) > self.signal_threshold)
+            sell_mask = (prev_ma_diff >= 0) & (ma_diff < 0) & (abs(ma_diff) > self.signal_threshold)
+
+            # 构造全量信号 Series
+            signals = pd.Series(index=data.index, dtype=object)
+            signals[buy_mask] = SignalType.BUY
+            signals[sell_mask] = SignalType.SELL
+            
+            return signals
+        except Exception as e:
+            logger.error(f"MA策略向量化计算失败: {e}")
+            return None
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成移动平均交叉信号"""
+        # 性能优化：优先检查是否已有全量预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if sig_type:
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_ma_diff = indicators["ma_diff"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=min(1.0, abs(current_ma_diff) * 10),
+                        price=current_price,
+                        reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
+                        metadata={
+                            "sma_short": indicators["sma_short"].iloc[current_idx],
+                            "sma_long": indicators["sma_long"].iloc[current_idx],
+                            "ma_diff": current_ma_diff,
+                        },
+                    )]
+                return []
+        except Exception:
+            pass
+
         signals = []
 
         try:
@@ -221,6 +270,25 @@ class RSIStrategy(BaseStrategy):
 
         return indicators
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量RSI信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            rsi = indicators["rsi"]
+            prev_rsi = rsi.shift(1)
+
+            # 简化版逻辑：从超卖区回升 -> 买入；从超买区回调 -> 卖出
+            buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
+            sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
+
+            signals = pd.Series(index=data.index, dtype=object)
+            signals[buy_mask] = SignalType.BUY
+            signals[sell_mask] = SignalType.SELL
+            return signals
+        except Exception as e:
+            logger.error(f"RSI策略向量化计算失败: {e}")
+            return None
+
     def _detect_trend(self, indicators: Dict[str, pd.Series], current_idx: int) -> str:
         """检测当前趋势：'uptrend', 'downtrend', 'sideways'"""
         if current_idx < self.trend_ma_period:
@@ -352,6 +420,30 @@ class RSIStrategy(BaseStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成优化的RSI信号"""
+        # 性能优化：优先检查是否已有全量预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if sig_type:
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_rsi = indicators["rsi"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=0.8,
+                        price=current_price,
+                        reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
+                        metadata={"rsi": current_rsi},
+                    )]
+                return []
+        except Exception:
+            pass
+
         signals = []
 
         try:

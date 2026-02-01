@@ -202,6 +202,9 @@ class BacktestExecutor:
             # 经验上这是纯收益（相比指标预热，不会把计算串行化）。
             self._build_date_index(stock_data)
 
+            # ✅ 信号向量化预计算：在进入每日循环前，先尝试一次性算出全量买卖点
+            self._precompute_strategy_signals(strategy, stock_data)
+
             # 注：指标预热（_warm_indicator_cache）如果在主线程顺序执行，可能会把原本并行的指标计算串行化，
             # 因而未默认开启；后续可按需实现并行预热。
 
@@ -468,6 +471,33 @@ class BacktestExecutor:
                 strategy.get_cached_indicators(data)
             except Exception:
                 pass
+
+    def _precompute_strategy_signals(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+    ) -> None:
+        """[性能优化] 在回测循环开始前，尝试对所有股票进行向量化信号预计算。"""
+        try:
+            from ..core.strategy_portfolio import StrategyPortfolio
+
+            if isinstance(strategy, StrategyPortfolio):
+                for sub in strategy.strategies:
+                    self._precompute_strategy_signals(sub, stock_data)
+                return
+        except Exception:
+            pass
+
+        for stock_code, data in stock_data.items():
+            try:
+                # 调用策略的向量化接口
+                all_sigs = strategy.precompute_all_signals(data)
+                if all_sigs is not None:
+                    # 存储在 DataFrame 的 attrs 中
+                    cache = data.attrs.setdefault("_precomputed_signals", {})
+                    cache[id(strategy)] = all_sigs
+            except Exception as e:
+                logger.warning(f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {e}")
 
     async def _execute_backtest_loop(
         self,

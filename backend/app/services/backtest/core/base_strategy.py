@@ -79,6 +79,15 @@ class BaseStrategy(ABC):
         """计算技术指标"""
         pass
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """
+        [性能优化] 在回测开始前，利用向量化计算一次性生成全量信号序列。
+        
+        返回一个 Series，索引与 data.index 一致，值为信号类型或强度。
+        默认返回 None，由子类实现以开启极速模式。
+        """
+        return None
+
     def _extract_indicators_from_precomputed(
         self, data: pd.DataFrame, indicator_mapping: Dict[str, str]
     ) -> Optional[Dict[str, pd.Series]]:
