@@ -482,12 +482,17 @@ class BacktestExecutor:
             from ..core.strategy_portfolio import StrategyPortfolio
 
             if isinstance(strategy, StrategyPortfolio):
+                logger.info(f"🚀 Portfolio策略检测到，递归预计算 {len(strategy.strategies)} 个子策略")
                 for sub in strategy.strategies:
                     self._precompute_strategy_signals(sub, stock_data)
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Portfolio策略递归预计算失败: {e}")
 
+        # 统计预计算成功的股票数
+        success_count = 0
+        total_stocks = len(stock_data)
+        
         for stock_code, data in stock_data.items():
             try:
                 # 调用策略的向量化接口
@@ -496,8 +501,12 @@ class BacktestExecutor:
                     # 存储在 DataFrame 的 attrs 中
                     cache = data.attrs.setdefault("_precomputed_signals", {})
                     cache[id(strategy)] = all_sigs
+                    success_count += 1
             except Exception as e:
                 logger.warning(f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {e}")
+        
+        if success_count > 0:
+            logger.info(f"✅ 策略 {strategy.name} 向量化预计算完成: {success_count}/{total_stocks} 只股票")
 
     async def _execute_backtest_loop(
         self,
