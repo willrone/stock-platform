@@ -747,7 +747,8 @@ export default function CreateOptimizationTaskForm({
             onChange={e =>
               setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))
             }
-            inputProps={{ min: 10, max: 200 }}
+            inputProps={{ min: 10, max: 1000 }}
+            helperText="参数空间较大时建议 300–500+，上限 1000"
             fullWidth
           />
 

@@ -132,20 +132,14 @@ async def list_optimization_tasks(
     try:
         task_repository = TaskRepository(db)
 
-        # 筛选优化任务
-        tasks = task_repository.get_tasks_by_user(
+        # 直接按任务类型查询优化任务，避免先取全部再过滤导致列表为空
+        optimization_tasks = task_repository.get_tasks_by_user(
             user_id="default_user",  # TODO: 从认证中获取
             limit=limit,
             offset=offset,
             status_filter=TaskStatus[status.upper()] if status else None,
+            task_type_filter=TaskType.HYPERPARAMETER_OPTIMIZATION,
         )
-
-        # 过滤出优化任务
-        optimization_tasks = [
-            t
-            for t in tasks
-            if t.task_type == TaskType.HYPERPARAMETER_OPTIMIZATION.value
-        ]
 
         # 转换为前端格式
         task_list = []

@@ -139,6 +139,7 @@ class TaskRepository:
         limit: int = 100,
         offset: int = 0,
         status_filter: Optional[TaskStatus] = None,
+        task_type_filter: Optional[TaskType] = None,
     ) -> List[Task]:
         """获取用户的任务列表"""
         try:
@@ -146,6 +147,9 @@ class TaskRepository:
 
             if status_filter:
                 query = query.filter(Task.status == status_filter.value)
+
+            if task_type_filter:
+                query = query.filter(Task.task_type == task_type_filter.value)
 
             tasks = (
                 query.order_by(desc(Task.created_at)).offset(offset).limit(limit).all()

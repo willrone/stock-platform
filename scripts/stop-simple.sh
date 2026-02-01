@@ -38,13 +38,52 @@ echo ""
 
 cd "$PROJECT_ROOT"
 
-# 停止后端服务
+# 校验 PID 是否有效（正整数，且不能为 0，避免误杀进程组）
+is_valid_pid() {
+    local pid=$1
+    [[ -z "$pid" ]] && return 1
+    [[ ! "$pid" =~ ^[1-9][0-9]*$ ]] && return 1
+    return 0
+}
+
+# 递归停止进程及其所有子进程（先子后父）
+kill_process_tree() {
+    local pid=$1
+    local force=${2:-false}
+    is_valid_pid "$pid" || return 0
+    kill -0 "$pid" 2>/dev/null || return 0
+
+    local children
+    children=$(pgrep -P "$pid" 2>/dev/null || true)
+    if [ -n "$children" ]; then
+        for child in $children; do
+            kill_process_tree "$child" "$force"
+        done
+        sleep 0.5
+    fi
+
+    if [ "$force" = "true" ]; then
+        kill -9 "$pid" 2>/dev/null || true
+    else
+        kill "$pid" 2>/dev/null || true
+    fi
+}
+
+# 停止后端服务（先杀所有子进程，再杀主进程）
 stop_backend() {
     if [ -f "data/backend.pid" ]; then
-        backend_pid=$(cat data/backend.pid)
-        if kill -0 $backend_pid 2>/dev/null; then
-            log_info "停止后端服务 (PID: $backend_pid)..."
-            kill $backend_pid
+        backend_pid=$(cat data/backend.pid | tr -d '[:space:]')
+        if ! is_valid_pid "$backend_pid"; then
+            log_warning "后端PID文件内容无效: '$backend_pid'，已删除"
+            rm -f data/backend.pid
+        elif kill -0 "$backend_pid" 2>/dev/null; then
+            log_info "停止后端服务 (PID: $backend_pid) 及其所有子进程..."
+            kill_process_tree "$backend_pid" false
+            sleep 2
+            if kill -0 "$backend_pid" 2>/dev/null; then
+                log_warning "进程未响应，强制停止..."
+                kill_process_tree "$backend_pid" true
+            fi
             rm -f data/backend.pid
             log_success "后端服务已停止"
         else
@@ -56,13 +95,20 @@ stop_backend() {
     fi
 }
 
-# 停止前端服务
+# 停止前端服务（先杀所有子进程，再杀主进程）
 stop_frontend() {
     if [ -f "data/frontend.pid" ]; then
-        frontend_pid=$(cat data/frontend.pid)
-        if kill -0 $frontend_pid 2>/dev/null; then
-            log_info "停止前端服务 (PID: $frontend_pid)..."
-            kill $frontend_pid
+        frontend_pid=$(cat data/frontend.pid | tr -d '[:space:]')
+        if ! is_valid_pid "$frontend_pid"; then
+            log_warning "前端PID文件内容无效: '$frontend_pid'，已删除"
+            rm -f data/frontend.pid
+        elif kill -0 "$frontend_pid" 2>/dev/null; then
+            log_info "停止前端服务 (PID: $frontend_pid) 及其所有子进程..."
+            kill_process_tree "$frontend_pid" false
+            sleep 1
+            if kill -0 "$frontend_pid" 2>/dev/null; then
+                kill_process_tree "$frontend_pid" true
+            fi
             rm -f data/frontend.pid
             log_success "前端服务已停止"
         else

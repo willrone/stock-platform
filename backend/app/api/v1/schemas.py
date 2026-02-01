@@ -171,7 +171,12 @@ class OptimizationConfig(BaseModel):
     strategy_name: str = Field(..., description="策略名称")
     param_space: Dict[str, ParamSpaceConfig] = Field(..., description="参数空间")
     objective_config: ObjectiveConfig = Field(..., description="目标函数配置")
-    n_trials: int = Field(default=50, description="试验次数")
+    n_trials: int = Field(
+        default=50,
+        ge=1,
+        le=1000,
+        description="试验次数，参数空间大时建议 300–500+，上限 1000",
+    )
     optimization_method: str = Field(
         default="tpe", description="优化方法: tpe, random, grid, nsga2, motpe"
     )
@@ -188,7 +193,12 @@ class HyperparameterOptimizationRequest(BaseModel):
     end_date: datetime = Field(..., description="回测结束日期")
     param_space: Dict[str, ParamSpaceConfig] = Field(..., description="参数空间")
     objective_config: ObjectiveConfig = Field(..., description="目标函数配置")
-    n_trials: int = Field(default=50, description="试验次数")
+    n_trials: int = Field(
+        default=50,
+        ge=1,
+        le=1000,
+        description="试验次数，上限 1000",
+    )
     optimization_method: str = Field(default="tpe", description="优化方法")
     timeout: Optional[int] = Field(None, description="超时时间（秒）")
     backtest_config: Optional[Dict[str, Any]] = Field(

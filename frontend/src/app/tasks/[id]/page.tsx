@@ -73,9 +73,6 @@ import BacktestTaskStatus from '../../../components/backtest/BacktestTaskStatus'
 import BacktestProgressMonitor from '../../../components/backtest/BacktestProgressMonitor';
 import { TradeHistoryTable } from '../../../components/backtest/TradeHistoryTable';
 import { SignalHistoryTable } from '../../../components/backtest/SignalHistoryTable';
-import { PositionAnalysis } from '../../../components/backtest/PositionAnalysis';
-import { RiskAnalysis } from '../../../components/backtest/RiskAnalysis';
-import { PerformanceBreakdown } from '../../../components/backtest/PerformanceBreakdown';
 import { SaveStrategyConfigDialog } from '../../../components/backtest/SaveStrategyConfigDialog';
 import { StrategyConfigService } from '../../../services/strategyConfigService';
 import dynamic from 'next/dynamic';
@@ -102,6 +99,20 @@ const InteractiveChartsContainer = dynamic(
     ssr: false,
     loading: () => <div className="h-96 flex items-center justify-center">加载交互式图表中...</div>,
   }
+);
+
+// 依赖 ECharts 的组件需客户端加载，避免服务端 vendor-chunks/echarts.js 报错
+const PositionAnalysis = dynamic(
+  () => import('../../../components/backtest/PositionAnalysis').then(mod => ({ default: mod.PositionAnalysis })),
+  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载持仓分析中...</div> }
+);
+const RiskAnalysis = dynamic(
+  () => import('../../../components/backtest/RiskAnalysis').then(mod => ({ default: mod.RiskAnalysis })),
+  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载风险分析中...</div> }
+);
+const PerformanceBreakdown = dynamic(
+  () => import('../../../components/backtest/PerformanceBreakdown').then(mod => ({ default: mod.PerformanceBreakdown })),
+  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载绩效分析中...</div> }
 );
 
 export default function TaskDetailPage() {
