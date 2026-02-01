@@ -68,9 +68,10 @@ class BollingerBandStrategy(BaseStrategy):
             # 价格突破上轨 (prev >= 1 and current < 1)
             sell_mask = (prev_pb >= 1) & (pb < 1)
 
-            signals = pd.Series(index=data.index, dtype=object)
-            signals[buy_mask] = SignalType.BUY
-            signals[sell_mask] = SignalType.SELL
+            # 用 None 初始化，避免未赋值位置默认为 NaN(float)，导致下游误判为 truthy
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
         except Exception as e:
             logger.error(f"布林带策略向量化计算失败: {e}")
@@ -85,7 +86,7 @@ class BollingerBandStrategy(BaseStrategy):
             precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
-                if sig_type:
+                if isinstance(sig_type, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     current_price = indicators["price"].iloc[current_idx]
@@ -607,7 +608,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                 buy_mask &= enough_data
                 sell_mask &= enough_data
 
-            signals = pd.Series(index=data.index, dtype=object)
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -681,7 +682,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
-                if sig_type:
+                if isinstance(sig_type, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")

@@ -62,9 +62,9 @@ class MovingAverageStrategy(BaseStrategy):
             sell_mask = (prev_ma_diff >= 0) & (ma_diff < 0) & (abs(ma_diff) > self.signal_threshold)
 
             # 构造全量信号 Series
-            signals = pd.Series(index=data.index, dtype=object)
-            signals[buy_mask] = SignalType.BUY
-            signals[sell_mask] = SignalType.SELL
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
             
             return signals
         except Exception as e:
@@ -80,7 +80,7 @@ class MovingAverageStrategy(BaseStrategy):
             precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
-                if sig_type:
+                if isinstance(sig_type, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
@@ -281,9 +281,9 @@ class RSIStrategy(BaseStrategy):
             buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
             sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
 
-            signals = pd.Series(index=data.index, dtype=object)
-            signals[buy_mask] = SignalType.BUY
-            signals[sell_mask] = SignalType.SELL
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
         except Exception as e:
             logger.error(f"RSI策略向量化计算失败: {e}")
@@ -425,7 +425,7 @@ class RSIStrategy(BaseStrategy):
             precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
-                if sig_type:
+                if isinstance(sig_type, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
