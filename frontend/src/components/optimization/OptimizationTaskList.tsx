@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { Eye, RefreshCw } from 'lucide-react';
 import { OptimizationTask } from '../../services/optimizationService';
+import { MobileOptimizationCard } from '../mobile/MobileOptimizationCard';
 
 interface OptimizationTaskListProps {
   tasks: OptimizationTask[];
@@ -84,7 +85,20 @@ export default function OptimizationTaskList({
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ overflowX: 'auto' }}>
+        <Box>
+          {/* 移动端：卡片列表 */}
+          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+            {tasks.map(task => (
+              <MobileOptimizationCard
+                key={task.task_id}
+                task={task}
+                onViewDetails={onTaskSelect}
+              />
+            ))}
+          </Box>
+
+          {/* 桌面端：表格 */}
+          <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -166,6 +180,7 @@ export default function OptimizationTaskList({
               ))}
             </TableBody>
           </Table>
+          </Box>
         </Box>
       )}
     </Box>
