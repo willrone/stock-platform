@@ -12,6 +12,7 @@ aiosqlite==0.19.0
 # 数据处理和存储
 pandas>=2.2.0
 numpy>=1.26.0
+orjson>=3.9.0  # 高性能 JSON（回测报告/缓存哈希，见 docs/backtest-optimization.md）
 pyarrow==14.0.1
 polars==0.19.19
 scipy>=1.11.0  # 科学计算库，用于统计分析和风险计算

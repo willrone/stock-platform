@@ -469,8 +469,18 @@ class BacktestPerformanceProfiler:
         report = self.generate_report()
 
         try:
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+            try:
+                import orjson
+                payload = orjson.dumps(
+                    report,
+                    option=orjson.OPT_INDENT_2,
+                    default=str,
+                )
+                with open(filepath, "wb") as f:
+                    f.write(payload)
+            except (ImportError, TypeError):
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(report, f, indent=2, ensure_ascii=False, default=str)
             logger.info(f"性能报告已保存到: {filepath}")
         except Exception as e:
             logger.error(f"保存性能报告失败: {e}")

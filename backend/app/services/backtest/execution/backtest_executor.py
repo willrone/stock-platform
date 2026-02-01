@@ -198,6 +198,13 @@ class BacktestExecutor:
             # 获取交易日历
             trading_dates = self._get_trading_calendar(stock_data, start_date, end_date)
 
+            # ✅ 日期预索引：为每只股票建立 date->idx 映射，回测循环里用 O(1) 查找替代 get_loc
+            # 经验上这是纯收益（相比指标预热，不会把计算串行化）。
+            self._build_date_index(stock_data)
+
+            # 注：指标预热（_warm_indicator_cache）如果在主线程顺序执行，可能会把原本并行的指标计算串行化，
+            # 因而未默认开启；后续可按需实现并行预热。
+
             if len(trading_dates) < 20:
                 error_msg = f"交易日数量不足: {len(trading_dates)}，至少需要20个交易日"
                 if task_id:
@@ -430,6 +437,38 @@ class BacktestExecutor:
 
         return trading_dates
 
+    def _build_date_index(self, stock_data: Dict[str, pd.DataFrame]) -> None:
+        """为每只股票建立日期->整数索引，避免回测循环中重复 get_loc。"""
+        for data in stock_data.values():
+            try:
+                if "_date_to_idx" not in data.attrs:
+                    data.attrs["_date_to_idx"] = {
+                        d: i for i, d in enumerate(data.index)
+                    }
+            except Exception:
+                pass
+
+    def _warm_indicator_cache(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+    ) -> None:
+        """回测开始前预计算并缓存所有股票的指标，避免首日/首股现场计算。"""
+        try:
+            from ..core.strategy_portfolio import StrategyPortfolio
+
+            if isinstance(strategy, StrategyPortfolio):
+                for sub in strategy.strategies:
+                    self._warm_indicator_cache(sub, stock_data)
+                return
+        except Exception:
+            pass
+        for data in stock_data.values():
+            try:
+                strategy.get_cached_indicators(data)
+            except Exception:
+                pass
+
     async def _execute_backtest_loop(
         self,
         strategy: BaseStrategy,
@@ -605,7 +644,16 @@ class BacktestExecutor:
                                             continue
 
                                         t0 = time.perf_counter()
-                                        current_idx = int(data.index.get_loc(cd))
+                                        idx_map = None
+                                        try:
+                                            idx_map = data.attrs.get("_date_to_idx")
+                                        except Exception:
+                                            idx_map = None
+                                        current_idx = (
+                                            int(idx_map.get(cd))
+                                            if isinstance(idx_map, dict) and cd in idx_map
+                                            else int(data.index.get_loc(cd))
+                                        )
                                         try:
                                             data.attrs["_current_date"] = cd
                                             data.attrs["_current_idx"] = current_idx
@@ -713,8 +761,15 @@ class BacktestExecutor:
                             # 获取到当前日期的历史数据
                             t0 = time.perf_counter()
                             # same rationale as parallel path: avoid daily slicing copies
+                            idx_map = None
+                            try:
+                                idx_map = data.attrs.get("_date_to_idx")
+                            except Exception:
+                                idx_map = None
                             current_idx = (
-                                int(data.index.get_loc(current_date))
+                                int(idx_map.get(current_date))
+                                if isinstance(idx_map, dict) and current_date in idx_map
+                                else int(data.index.get_loc(current_date))
                                 if current_date in data.index
                                 else -1
                             )

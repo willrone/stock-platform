@@ -334,11 +334,15 @@ class ChartCacheService:
                 break
 
     def _calculate_data_hash(self, data: Dict[str, Any]) -> str:
-        """计算数据的哈希值"""
+        """计算数据的哈希值（优先 orjson 加速）"""
         try:
-            # 将数据转换为JSON字符串并计算MD5哈希
-            data_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
-            return hashlib.md5(data_str.encode("utf-8")).hexdigest()
+            try:
+                import orjson
+                data_bytes = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
+                return hashlib.md5(data_bytes).hexdigest()
+            except (ImportError, TypeError):
+                data_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
+                return hashlib.md5(data_str.encode("utf-8")).hexdigest()
         except Exception as e:
             self.logger.warning(f"计算数据哈希失败: {e}")
             return ""
