@@ -3,23 +3,13 @@
 测试Qlib内置Alpha158功能是否可用
 """
 
-import sys
+import pytest
 import pandas as pd
 from datetime import datetime
 
-print("=" * 60)
-print("Qlib Alpha158 可用性测试")
-print("=" * 60)
-
-# 1. 检查Qlib是否安装
-print("\n1. 检查Qlib安装...")
-try:
-    import qlib
-    from qlib.config import REG_CN
-    print(f"   ✓ Qlib已安装，版本: {getattr(qlib, '__version__', 'unknown')}")
-except ImportError as e:
-    print(f"   ✗ Qlib未安装: {e}")
-    sys.exit(1)
+# 检查Qlib是否安装，如果未安装则跳过所有测试
+qlib = pytest.importorskip("qlib")
+from qlib.config import REG_CN
 
 # 2. 检查Alpha158是否可以导入
 print("\n2. 检查Alpha158导入...")

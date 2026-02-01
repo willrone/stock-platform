@@ -261,8 +261,9 @@ class TestPortfolioBacktestIntegration:
         
         # 权重应该自动归一化
         assert abs(sum(strategy.weights.values()) - 1.0) < 0.001
-        assert abs(strategy.weights["rsi"] - 0.5) < 0.001
-        assert abs(strategy.weights["macd"] - 0.5) < 0.001
+        # 策略名称是大写的（如 "RSI", "MACD"）
+        assert abs(strategy.weights["RSI"] - 0.5) < 0.001
+        assert abs(strategy.weights["MACD"] - 0.5) < 0.001
     
     def test_portfolio_with_missing_strategy_signals(self, sample_stock_data):
         """测试组合策略处理缺失信号的情况"""
@@ -312,7 +313,7 @@ class TestPortfolioBacktestIntegration:
         assert len(strategy.strategies) == 2
         assert abs(sum(strategy.weights.values()) - 1.0) < 0.001
         
-        # 移除策略
-        strategy.remove_strategy("rsi")
+        # 移除策略（使用策略名称，如 "RSI"）
+        strategy.remove_strategy("RSI")
         assert len(strategy.strategies) == 1
-        assert "macd" in strategy.weights
+        assert "MACD" in strategy.weights

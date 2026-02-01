@@ -7,6 +7,7 @@
 
 import asyncio
 import sys
+import pytest
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 from typing import Dict, Any, Optional, List
@@ -292,6 +293,7 @@ class SimpleBacktestProgressMonitor:
         progress_data.overall_progress = min(weighted_progress / total_weight * 100, 100)
 
 
+@pytest.mark.asyncio
 async def test_basic_functionality():
     """测试基本功能"""
     print("🧪 测试基本功能...")
@@ -332,6 +334,7 @@ async def test_basic_functionality():
     return True
 
 
+@pytest.mark.asyncio
 async def test_error_handling():
     """测试错误处理"""
     print("🧪 测试错误处理...")
@@ -359,6 +362,7 @@ async def test_error_handling():
     return True
 
 
+@pytest.mark.asyncio
 async def test_cancellation():
     """测试取消功能"""
     print("🧪 测试取消功能...")

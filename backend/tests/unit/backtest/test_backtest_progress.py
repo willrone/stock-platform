@@ -8,18 +8,20 @@
 import asyncio
 import sys
 import os
+import pytest
 from datetime import datetime
 
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
-from app.services.backtest.backtest_progress_monitor import (
+from app.services.backtest.execution.backtest_progress_monitor import (
     BacktestProgressMonitor, 
     BacktestProgressData,
     BacktestProgressStage
 )
 
 
+@pytest.mark.asyncio
 async def test_progress_monitor():
     """测试进度监控器"""
     print("🧪 开始测试回测进度监控器...")
@@ -98,6 +100,7 @@ async def test_progress_monitor():
         return False
 
 
+@pytest.mark.asyncio
 async def test_error_handling():
     """测试错误处理"""
     print("\n🧪 测试错误处理...")
@@ -122,6 +125,7 @@ async def test_error_handling():
         return False
 
 
+@pytest.mark.asyncio
 async def test_cancellation():
     """测试取消功能"""
     print("\n🧪 测试取消功能...")

@@ -26,6 +26,13 @@
 *   `BACKTEST_PERFORMANCE_MONITORING_USAGE.md` - 性能监控使用说明
 *   `回测结果保存问题分析.md` - 持久化问题排查
 *   `回测统计表优化方案.md` - 数据库表结构优化
+*   `回测信号记录缺失原因分析.md` - 信号记录缺失问题分析
+*   `CODE_REFACTORING_SUMMARY.md` - 代码重构总结
+*   `COINTEGRATION_STRATEGY.md` - 协整策略文档
+*   `MULTI_STRATEGY_DEVELOPMENT_PLAN.md` - 多策略开发计划
+*   `MULTI_STRATEGY_IMPLEMENTATION_SUMMARY.md` - 多策略实施总结
+*   `MULTI_STRATEGY_PLAN_SUMMARY.md` - 多策略计划总结
+*   `REFACTORING_NOTES.md` - 重构笔记
 
 ### 🧠 [模型与算法 (Qlib/Factors)](./docs/qlib/)
 *   `ALPHA_FACTORS_EXPLANATION.md` - 因子含义说明
@@ -33,6 +40,7 @@
 *   `QLIB_PRECOMPUTE_IMPLEMENTATION_PLAN.md` - 因子预计算方案
 *   `QLIB_PERFORMANCE_OPTIMIZATION.md` - Qlib 性能调优
 *   `QLIB_PROGRESS_REPORT.md` - Qlib 集成进度报告
+*   `README_qlib_optimizations.md` - Qlib优化功能单元测试说明
 
 ### 🚀 [MLOps 管理](./docs/mlops/)
 *   `MLOPS_IMPLEMENTATION_COMPLETION_REPORT.md` - MLOps 实施完成报告
@@ -49,6 +57,7 @@
 *   `质量修复完成报告.md` - 整体质量修复总结
 *   `CODE_STANDARDS.md` - 代码规范
 *   `QUALITY_IMPROVEMENT_PLAN.md` - 质量改进计划
+*   `TEST_FIXES.md` - 测试用例修复说明
 
 ### 📋 [阶段性报告](./docs/reports/)
 *   `IMPLEMENTATION_SUMMARY.md` - 整体实施总结

@@ -8,7 +8,16 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-client = TestClient(app)
+# 创建不带测试环境标识的客户端，用于实际测试限流功能
+class NonTestClient(TestClient):
+    """非测试客户端，用于测试限流功能"""
+    def __init__(self, app, base_url="http://testserver"):
+        super().__init__(app, base_url=base_url)
+        # 移除测试环境标识，使用普通User-Agent
+        self.headers.pop("user-agent", None)
+        self.headers["user-agent"] = "rate-limit-test-client"
+
+client = NonTestClient(app)
 
 
 class TestRateLimiting:

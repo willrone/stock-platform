@@ -18,6 +18,7 @@ from pathlib import Path
 from app.core.container import ServiceContainer
 from app.services.data import SimpleDataService as StockDataService
 from app.services.data.parquet_manager import ParquetManager
+from app.services.data.data_validator import DataValidator
 from app.services.infrastructure.cache_service import cache_manager
 from app.services.infrastructure.monitoring_service import DataMonitoringService
 
@@ -68,23 +69,29 @@ class TestIntegrationProperties:
         from app.services.data import SimpleDataService as StockDataService
         from app.services.data.parquet_manager import ParquetManager
         from app.services.infrastructure.monitoring_service import DataMonitoringService
-        from app.services.data import DataValidator
+        from app.services.data.data_validator import DataValidator
+        from app.services.prediction import TechnicalIndicatorCalculator
         
         self.stock_data_service = StockDataService()
         self.parquet_manager = ParquetManager()
-        self.monitoring_service = DataMonitoringService()
+        self.indicators_service = TechnicalIndicatorCalculator()
+        self.monitoring_service = DataMonitoringService(
+            data_service=self.stock_data_service,
+            indicators_service=self.indicators_service,
+            parquet_manager=self.parquet_manager
+        )
         self.data_validator = DataValidator()
         
         # 设置临时数据路径
-        self.original_data_path = self.parquet_manager.data_path
-        self.parquet_manager.data_path = self.temp_path / "data"
-        self.parquet_manager.data_path.mkdir(parents=True, exist_ok=True)
+        self.original_data_path = self.parquet_manager.base_path
+        self.parquet_manager.base_path = self.temp_path / "data"
+        self.parquet_manager.base_path.mkdir(parents=True, exist_ok=True)
     
     def teardown_method(self):
         """测试后清理"""
         # 恢复原始数据路径
         if self.original_data_path:
-            self.parquet_manager.data_path = self.original_data_path
+            self.parquet_manager.base_path = self.original_data_path
         
         shutil.rmtree(self.temp_dir, ignore_errors=True)
     

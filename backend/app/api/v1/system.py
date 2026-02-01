@@ -52,20 +52,26 @@ async def get_api_version():
 async def get_system_status(request: Request):
     """获取系统状态"""
     try:
-        # 获取错误处理中间件的统计信息
+        # 获取错误处理中间件的统计信息（如果可用）
         error_stats = {}
-        for middleware in request.app.middleware_stack:
-            if (
-                hasattr(middleware, "cls")
-                and middleware.cls.__name__ == "ErrorHandlingMiddleware"
-            ):
-                if hasattr(middleware, "kwargs") and "app" in middleware.kwargs:
-                    error_middleware = middleware.kwargs.get("error_middleware")
-                    if error_middleware and hasattr(
-                        error_middleware, "get_error_stats"
+        try:
+            # 尝试从中间件获取错误统计，如果失败则使用空字典
+            if hasattr(request.app, "middleware_stack"):
+                for middleware in request.app.middleware_stack:
+                    if (
+                        hasattr(middleware, "cls")
+                        and middleware.cls.__name__ == "ErrorHandlingMiddleware"
                     ):
-                        error_stats = error_middleware.get_error_stats()
-                break
+                        if hasattr(middleware, "kwargs") and "app" in middleware.kwargs:
+                            error_middleware = middleware.kwargs.get("error_middleware")
+                            if error_middleware and hasattr(
+                                error_middleware, "get_error_stats"
+                            ):
+                                error_stats = error_middleware.get_error_stats()
+                        break
+        except Exception:
+            # 如果获取错误统计失败，使用空字典
+            error_stats = {}
 
         system_status = {
             "api_server": {"status": "healthy", "uptime": "5 days"},
@@ -83,5 +89,5 @@ async def get_system_status(request: Request):
         return StandardResponse(success=True, message="系统状态获取成功", data=system_status)
 
     except Exception as e:
-        logger.error(f"获取系统状态失败: {e}")
+        logger.error(f"获取系统状态失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取系统状态失败: {str(e)}")
