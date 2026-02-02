@@ -115,17 +115,30 @@ class StrategyHyperparameterOptimizer:
             # 单目标优化
             direction = objective_config.get("direction", "maximize")
             if optimization_method == "tpe":
-                sampler = TPESampler(seed=42)
+                # 启用 multivariate 模式，学习参数间相关性，提升收敛速度
+                sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
             elif optimization_method == "random":
                 sampler = optuna.samplers.RandomSampler(seed=42)
             else:
-                sampler = TPESampler(seed=42)
+                sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
             study = optuna.create_study(
                 direction=direction,
                 sampler=sampler,
                 pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=10),
             )
+
+        # 注入先验知识：将默认参数作为第一个 trial，加速收敛
+        default_params = {}
+        for param_name, param_config in param_space.items():
+            if param_config.get("enabled", True) and "default" in param_config:
+                default_params[param_name] = param_config["default"]
+        if default_params and not is_multi_objective:
+            try:
+                study.enqueue_trial(default_params)
+                logger.info(f"注入默认参数作为初始 trial: {list(default_params.keys())}")
+            except Exception as e:
+                logger.warning(f"注入默认参数失败: {e}")
 
         # 创建回测执行器
         try:
