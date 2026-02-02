@@ -201,10 +201,70 @@ class StochasticStrategy(BaseStrategy):
 
         return {"k_percent": k_percent, "d_percent": d_percent, "price": close}
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量随机指标信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            k = indicators["k_percent"]
+            d = indicators["d_percent"]
+            prev_k = k.shift(1)
+            prev_d = d.shift(1)
+
+            # 向量化逻辑判断
+            # 买入：超卖区金叉 (K < oversold 且 K 上穿 D)
+            buy_mask = (
+                (k < self.oversold) &
+                (prev_k < self.oversold) &
+                (k > d) &
+                (prev_k <= prev_d)
+            )
+            # 卖出：超买区死叉 (K > overbought 且 K 下穿 D)
+            sell_mask = (
+                (k > self.overbought) &
+                (prev_k > self.overbought) &
+                (k < d) &
+                (prev_k >= prev_d)
+            )
+
+            # 构造全量信号 Series
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
+
+            return signals
+        except Exception as e:
+            logger.error(f"Stochastic策略向量化计算失败: {e}")
+            return None
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成随机指标交易信号"""
+        # 性能优化：优先检查是否已有全量预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if isinstance(sig_type, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_k = indicators["k_percent"].iloc[current_idx]
+                    current_d = indicators["d_percent"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=0.8,
+                        price=current_price,
+                        reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
+                        metadata={"k_percent": current_k, "d_percent": current_d},
+                    )]
+                return []
+        except Exception:
+            pass
+
         signals = []
 
         try:
@@ -282,10 +342,57 @@ class CCIStrategy(BaseStrategy):
 
         return {"cci": cci, "typical_price": typical_price, "price": close}
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量CCI信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            cci = indicators["cci"]
+            prev_cci = cci.shift(1)
+
+            # 向量化逻辑判断
+            # 买入：CCI 下穿超卖线
+            buy_mask = (cci < self.oversold) & (prev_cci >= self.oversold)
+            # 卖出：CCI 上穿超买线
+            sell_mask = (cci > self.overbought) & (prev_cci <= self.overbought)
+
+            # 构造全量信号 Series
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
+
+            return signals
+        except Exception as e:
+            logger.error(f"CCI策略向量化计算失败: {e}")
+            return None
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成CCI交易信号"""
+        # 性能优化：优先检查是否已有全量预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if isinstance(sig_type, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_cci = indicators["cci"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=0.8,
+                        price=current_price,
+                        reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
+                        metadata={"cci": current_cci},
+                    )]
+                return []
+        except Exception:
+            pass
+
         signals = []
 
         try:

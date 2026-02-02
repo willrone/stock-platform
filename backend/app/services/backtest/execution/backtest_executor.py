@@ -38,6 +38,72 @@ except ImportError:
     PerformanceContext = None
 
 
+def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Dict], Optional[str]]:
+    """
+    多进程预计算 worker 函数（模块级，可被 pickle 序列化）。
+
+    Args:
+        task: (stock_code, data_dict, strategy_info) 元组
+
+    Returns:
+        (success, stock_code, signals_dict, error_message)
+    """
+    stock_code, data_dict, strategy_info = task
+
+    try:
+        # 重建 DataFrame
+        df = pd.DataFrame(data_dict['values'], columns=data_dict['columns'])
+        df.index = pd.to_datetime(data_dict['index'])
+        df.attrs['stock_code'] = data_dict['stock_code']
+
+        # 重建策略对象
+        from ..strategies.strategy_factory import StrategyFactory, AdvancedStrategyFactory
+
+        strategy_name = strategy_info['name']  # 使用策略名称（如 "MACD"）
+        strategy_class_name = strategy_info['class_name']  # 类名（如 "MACDStrategy"）
+        strategy_config = strategy_info['config']
+
+        # 尝试从工厂创建策略（尝试多种名称格式）
+        strategy = None
+        names_to_try = [
+            strategy_name,  # 原始名称
+            strategy_name.lower(),  # 小写
+            strategy_class_name,  # 类名
+            strategy_class_name.replace('Strategy', ''),  # 去掉 Strategy 后缀
+            strategy_class_name.replace('Strategy', '').lower(),  # 去掉后缀并小写
+        ]
+
+        for name in names_to_try:
+            if strategy is not None:
+                break
+            try:
+                strategy = StrategyFactory.create_strategy(name, strategy_config)
+            except Exception:
+                try:
+                    strategy = AdvancedStrategyFactory.create_strategy(name, strategy_config)
+                except Exception:
+                    pass
+
+        if strategy is None:
+            return (False, stock_code, None, f"无法创建策略 {strategy_name} (尝试了: {names_to_try})")
+
+        # 执行向量化预计算
+        signals = strategy.precompute_all_signals(df)
+
+        if signals is not None:
+            # 将 Series 转换为可序列化格式
+            signals_dict = {
+                'values': signals.tolist(),
+                'index': [str(idx) for idx in signals.index],
+            }
+            return (True, stock_code, signals_dict, None)
+        else:
+            return (False, stock_code, None, "precompute_all_signals 返回 None")
+
+    except Exception as e:
+        return (False, stock_code, None, str(e))
+
+
 class BacktestExecutor:
     """回测执行器"""
 
@@ -47,6 +113,7 @@ class BacktestExecutor:
         enable_parallel: bool = True,
         max_workers: Optional[int] = None,
         enable_performance_profiling: bool = False,
+        use_multiprocessing: bool = False,
     ):
         """
         初始化回测执行器
@@ -56,6 +123,9 @@ class BacktestExecutor:
             enable_parallel: 是否启用并行化（默认True）
             max_workers: 最大工作线程数，默认使用CPU核心数
             enable_performance_profiling: 是否启用性能分析（默认False）
+            use_multiprocessing: 是否使用多进程（突破GIL限制，默认False）
+                - True: 使用 ProcessPoolExecutor，适合 CPU 密集型策略
+                - False: 使用 ThreadPoolExecutor，序列化开销小
         """
         import os
 
@@ -64,6 +134,7 @@ class BacktestExecutor:
 
         self.enable_parallel = enable_parallel
         self.max_workers = max_workers
+        self.use_multiprocessing = use_multiprocessing
         self.data_loader = DataLoader(
             data_dir, max_workers=max_workers if enable_parallel else None
         )
@@ -80,7 +151,8 @@ class BacktestExecutor:
         self.performance_profiler: Optional[BacktestPerformanceProfiler] = None
 
         if enable_parallel:
-            logger.info(f"回测执行器已启用并行化，最大工作线程数: {max_workers}")
+            mode = "多进程" if use_multiprocessing else "多线程"
+            logger.info(f"回测执行器已启用并行化（{mode}），最大工作进程/线程数: {max_workers}")
 
         if self.enable_performance_profiling:
             logger.info("回测执行器已启用性能分析")
@@ -494,6 +566,10 @@ class BacktestExecutor:
         total_stocks = len(stock_data)
 
         # 并行预计算（按股票维度），显著降低整体 wall-time
+        # 注：使用 ProcessPoolExecutor 可突破 GIL 限制，但需要序列化数据
+        # 这里使用混合策略：CPU 密集型任务用多进程，I/O 密集型用多线程
+        use_multiprocessing = getattr(self, 'use_multiprocessing', False)
+
         def _work_one(item):
             stock_code, data = item
             try:
@@ -507,16 +583,38 @@ class BacktestExecutor:
                 return False, stock_code, str(e)
 
         if self.enable_parallel and total_stocks >= 4:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
-                futures = [ex.submit(_work_one, it) for it in stock_data.items()]
-                for fu in as_completed(futures):
-                    ok, stock_code, err = fu.result()
-                    if ok:
-                        success_count += 1
-                    elif err:
-                        logger.warning(
-                            f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
-                        )
+            if use_multiprocessing:
+                # 多进程模式：突破 GIL 限制，适合 CPU 密集型策略计算
+                # 注意：需要将数据序列化传递，开销较大但可真正并行
+                try:
+                    from concurrent.futures import ProcessPoolExecutor as PoolExecutor
+                    # 多进程需要使用模块级函数，这里使用包装器
+                    results = self._precompute_signals_multiprocess(
+                        strategy, stock_data
+                    )
+                    for ok, stock_code, err in results:
+                        if ok:
+                            success_count += 1
+                        elif err:
+                            logger.warning(
+                                f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
+                            )
+                except Exception as e:
+                    logger.warning(f"多进程预计算失败，回退到多线程: {e}")
+                    use_multiprocessing = False
+
+            if not use_multiprocessing:
+                # 多线程模式：受 GIL 限制，但序列化开销小
+                with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
+                    futures = [ex.submit(_work_one, it) for it in stock_data.items()]
+                    for fu in as_completed(futures):
+                        ok, stock_code, err = fu.result()
+                        if ok:
+                            success_count += 1
+                        elif err:
+                            logger.warning(
+                                f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
+                            )
         else:
             for it in stock_data.items():
                 ok, stock_code, err = _work_one(it)
@@ -531,6 +629,87 @@ class BacktestExecutor:
             logger.info(
                 f"✅ 策略 {strategy.name} 向量化预计算完成: {success_count}/{total_stocks} 只股票"
             )
+
+    def _precompute_signals_multiprocess(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+    ) -> List[Tuple[bool, str, Optional[str]]]:
+        """
+        [性能优化] 使用多进程进行信号预计算，突破 GIL 限制。
+
+        注意：多进程需要序列化数据，因此：
+        1. 将 DataFrame 转换为可序列化格式
+        2. 在子进程中重建策略对象
+        3. 计算完成后将结果返回主进程
+        """
+        from concurrent.futures import ProcessPoolExecutor
+        import pickle
+
+        results = []
+
+        # 准备可序列化的任务数据
+        tasks = []
+        for stock_code, data in stock_data.items():
+            try:
+                # 序列化策略配置（而非策略对象本身）
+                strategy_info = {
+                    'name': strategy.name,
+                    'class_name': strategy.__class__.__name__,
+                    'config': getattr(strategy, 'config', {}),
+                }
+                # 将 DataFrame 转换为字典格式（可序列化）
+                data_dict = {
+                    'values': data.to_dict('list'),
+                    'index': list(data.index),
+                    'columns': list(data.columns),
+                    'stock_code': data.attrs.get('stock_code', stock_code),
+                }
+                tasks.append((stock_code, data_dict, strategy_info))
+            except Exception as e:
+                logger.warning(f"准备股票 {stock_code} 数据失败: {e}")
+                results.append((False, stock_code, str(e)))
+
+        if not tasks:
+            return results
+
+        # 使用进程池并行计算
+        try:
+            with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        _multiprocess_precompute_worker, task
+                    ): task[0] for task in tasks
+                }
+
+                for future in as_completed(futures):
+                    stock_code = futures[future]
+                    try:
+                        ok, code, signals_dict, err = future.result(timeout=60)
+                        if ok and signals_dict is not None:
+                            # 将结果写回原始 DataFrame 的 attrs
+                            original_data = stock_data[code]
+                            # 重建 Series
+                            signals = pd.Series(
+                                signals_dict['values'],
+                                index=pd.to_datetime(signals_dict['index']),
+                                dtype=object
+                            )
+                            cache = original_data.attrs.setdefault("_precomputed_signals", {})
+                            cache[id(strategy)] = signals
+                            results.append((True, code, None))
+                        else:
+                            results.append((False, code, err))
+                    except Exception as e:
+                        results.append((False, stock_code, str(e)))
+        except Exception as e:
+            logger.error(f"多进程预计算执行失败: {e}")
+            # 返回所有任务失败
+            for stock_code, _, _ in tasks:
+                if not any(r[1] == stock_code for r in results):
+                    results.append((False, stock_code, str(e)))
+
+        return results
 
     async def _execute_backtest_loop(
         self,

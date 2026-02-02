@@ -690,10 +690,59 @@ class MACDStrategy(BaseStrategy):
             "price": close_prices,
         }
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量MACD信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            macd_hist = indicators["macd_hist"]
+            prev_hist = macd_hist.shift(1)
+
+            # 向量化逻辑判断：金叉和死叉
+            buy_mask = (prev_hist <= 0) & (macd_hist > 0)
+            sell_mask = (prev_hist >= 0) & (macd_hist < 0)
+
+            # 构造全量信号 Series
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
+
+            return signals
+        except Exception as e:
+            logger.error(f"MACD策略向量化计算失败: {e}")
+            return None
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成MACD信号"""
+        # 性能优化：优先��查是否已有全量预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if isinstance(sig_type, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_hist = indicators["macd_hist"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=min(1.0, abs(current_hist) * 100),
+                        price=current_price,
+                        reason=f"[向量化] MACD{'金叉' if sig_type == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
+                        metadata={
+                            "macd": indicators["macd"].iloc[current_idx],
+                            "macd_signal": indicators["macd_signal"].iloc[current_idx],
+                            "macd_hist": current_hist,
+                        },
+                    )]
+                return []
+        except Exception:
+            pass
+
         signals = []
 
         try:
