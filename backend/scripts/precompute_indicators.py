@@ -26,8 +26,12 @@ from app.services.data.qlib_format_converter import QlibFormatConverter
 class IndicatorPrecomputer:
     """技术指标预计算器"""
 
-    def __init__(self, data_root: str = "backend/data"):
-        self.data_root = Path(data_root)
+    def __init__(self, data_root: str = None):
+        # 默认使用 backend/data 目录
+        if data_root is None:
+            self.data_root = backend_dir / "data"
+        else:
+            self.data_root = Path(data_root)
         self.qlib_data_path = Path(settings.QLIB_DATA_PATH) / "features" / "day"
         self.qlib_data_path.mkdir(parents=True, exist_ok=True)
         
@@ -216,8 +220,8 @@ def main():
     
     # 确定要处理的股票列表
     if args.all:
-        # 扫描 data 目录获取所有股票
-        data_dir = Path("backend/data")
+        # 扫描 data/parquet/stock_data 目录获取所有股票
+        data_dir = backend_dir / "data" / "parquet" / "stock_data"
         stock_files = list(data_dir.glob("*.parquet"))
         stock_codes = [f.stem for f in stock_files]
         logger.info(f"找到 {len(stock_codes)} 只股票")
