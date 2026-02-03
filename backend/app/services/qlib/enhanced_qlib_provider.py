@@ -57,8 +57,8 @@ try:
                     path_str = (
                         path_str.rstrip(":\\").rstrip(":/").rstrip("\\").rstrip("/")
                     )
-                    # 如果路径中有 :\/，替换为 /
-                    path_str = path_str.replace(":\/", "/").replace(":\\/", "/")
+                    # 如果路径中有 :/，替换为 /
+                    path_str = path_str.replace(r":/", "/").replace(r":\\/", "/")
                     return path_str
 
                 # 确保 mount_path 是字符串，而不是 Path 对象
@@ -98,7 +98,7 @@ try:
                                 # 如果路径有问题，记录并修复
                                 if (
                                     ":\\" in path_str
-                                    or ":\/" in path_str
+                                    or r":/" in path_str
                                     or path_str.endswith(":\\")
                                     or path_str.endswith(":/")
                                 ):
@@ -140,7 +140,7 @@ try:
                 _original_load_calendar = CalendarProvider.load_calendar
 
                 def _patched_load_calendar(self, freq, future=False):
-                    """修复后的 load_calendar，修复路径拼接问题（:\/ 字符）"""
+                    r"""修复后的 load_calendar，修复路径拼接问题（:/ 字符）"""
                     try:
                         # 调用原始方法
                         return _original_load_calendar(self, freq, future)
@@ -148,8 +148,8 @@ try:
                         error_msg = str(e)
                         # 如果错误信息中包含路径问题（:\/ 或 :\\/），尝试修复
                         if "calendar not exists" in error_msg.lower() and (
-                            ":\\/" in error_msg
-                            or ":\/" in error_msg
+                            r":\/" in error_msg
+                            or r":/" in error_msg
                             or ":\\\\/" in error_msg
                         ):
                             # 提取错误的路径
@@ -163,9 +163,9 @@ try:
                                 # 修复路径：将 :\/ 或 :\\/ 替换为 /
                                 # 处理多种可能的转义形式
                                 fixed_path = (
-                                    wrong_path.replace(":\\\\/", "/")
-                                    .replace(":\\/", "/")
-                                    .replace(":\/", "/")
+                                    wrong_path.replace(r":\\/", "/")
+                                    .replace(r":\\/", "/")
+                                    .replace(r":/", "/")
                                 )
                                 fixed_path_obj = Path(fixed_path)
 
@@ -2659,8 +2659,8 @@ class EnhancedQlibDataProvider:
                                 .rstrip("\\")
                                 .rstrip("/")
                             )
-                            # 如果路径中有 :\/，替换为 /
-                            fixed = fixed.replace(":\/", "/").replace(":\\/", "/")
+                            # 如果路径中有 :/，替换为 /
+                            fixed = fixed.replace(r":/", "/").replace(r":\\/", "/")
                             return fixed
 
                         # 修复字典中的每个路径
@@ -2673,7 +2673,7 @@ class EnhancedQlibDataProvider:
                             # 检查是否需要修复
                             if (
                                 ":\\" in path_str
-                                or ":\/" in path_str
+                                or r":/" in path_str
                                 or path_str.endswith(":\\")
                                 or path_str.endswith(":/")
                             ):

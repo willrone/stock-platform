@@ -102,14 +102,11 @@ class DataFetcher:
         
         while retry_count < max_retries:
             try:
-                # 获取前复权数据，添加limit参数
-                df = ts.pro_bar(
+                # 使用 pro.daily() 接口替代 pro_bar()（兼容新版 pandas）
+                df = self.pro.daily(
                     ts_code=ts_code,
-                    adj='qfq',  # qfq=前复权
                     start_date=start_date,
-                    end_date=end_date,
-                    factors=['tor', 'vr'],
-                    limit=self.max_limit  # 设置最大返回记录数
+                    end_date=end_date
                 )
                 
                 # 检查数据是否为空
