@@ -2,10 +2,17 @@
 策略超参数优化器
 
 使用 Optuna 对策略参数进行优化，支持单目标和多目标优化
+
+优化特性（2026-02 增强）：
+- SQLite 持久化存储，支持断点续跑
+- 多进程并行优化（n_jobs 可配置）
+- 激进剪枝策略（HyperbandPruner）
+- 数据预加载缓存
 """
 
 import asyncio
 import concurrent.futures
+import os
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -13,8 +20,9 @@ from loguru import logger
 
 try:
     import optuna
-    from optuna.pruners import MedianPruner
+    from optuna.pruners import MedianPruner, HyperbandPruner
     from optuna.samplers import NSGAIISampler, TPESampler
+    from optuna.storages import RDBStorage
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
     logger.error("请运行: pip install optuna>=3.4.0")
@@ -24,13 +32,30 @@ except ImportError as e:
 
 from app.core.config import settings
 from app.services.backtest import BacktestConfig, BacktestExecutor
+from app.services.backtest.optimization.data_cache import get_data_cache
 
 
 class StrategyHyperparameterOptimizer:
     """策略超参数优化器"""
 
-    def __init__(self):
+    def __init__(self, n_jobs: int = 4, use_persistent_storage: bool = True):
+        """
+        初始化优化器
+        
+        Args:
+            n_jobs: 并行进程数（默认 4）
+            use_persistent_storage: 是否使用 SQLite 持久化存储（支持断点续跑）
+        """
         self.optimization_history = {}
+        self.n_jobs = n_jobs
+        self.use_persistent_storage = use_persistent_storage
+        self._data_cache = get_data_cache()
+        
+        # 确保 optuna 存储目录存在
+        self._storage_dir = os.path.join(settings.DATA_ROOT_PATH, "optuna_studies")
+        os.makedirs(self._storage_dir, exist_ok=True)
+        
+        logger.info(f"StrategyHyperparameterOptimizer 初始化: n_jobs={n_jobs}, persistent={use_persistent_storage}")
 
     async def optimize_strategy_parameters(
         self,
@@ -94,6 +119,29 @@ class StrategyHyperparameterOptimizer:
             isinstance(objective_metric, list) and len(objective_metric) > 1
         )
 
+        # 预加载数据到缓存（避免每个 trial 重复加载）
+        logger.info(f"预加载股票数据: {len(stock_codes)} 只股票")
+        await self._data_cache.preload_async(stock_codes, start_date, end_date)
+        logger.info("数据预加载完成")
+
+        # 创建 SQLite 存储（支持断点续跑和并行）
+        storage = None
+        study_name = f"{strategy_name}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
+        if self.use_persistent_storage:
+            storage_path = os.path.join(self._storage_dir, f"{study_name}.db")
+            storage = RDBStorage(
+                url=f"sqlite:///{storage_path}",
+                engine_kwargs={"connect_args": {"timeout": 30}}
+            )
+            logger.info(f"使用 SQLite 存储: {storage_path}")
+
+        # 创建激进剪枝器（比 MedianPruner 更早终止差的 trial）
+        pruner = HyperbandPruner(
+            min_resource=1,
+            max_resource=n_trials,
+            reduction_factor=3
+        )
+
         # 创建 Optuna study
         if is_multi_objective:
             # 多目标优化
@@ -110,12 +158,18 @@ class StrategyHyperparameterOptimizer:
                 sampler = NSGAIISampler()
             else:
                 sampler = NSGAIISampler()  # 默认使用 NSGA-II
-            study = optuna.create_study(directions=directions, sampler=sampler)
+            study = optuna.create_study(
+                study_name=study_name,
+                directions=directions,
+                sampler=sampler,
+                storage=storage,
+                load_if_exists=True  # 支持断点续跑
+            )
         else:
             # 单目标优化
             direction = objective_config.get("direction", "maximize")
             if optimization_method == "tpe":
-                # 启用 multivariate 模式，学习参数间相关性，提升收敛速度
+# 启用 multivariate 模式，学习参数间相关性，提升收敛速度
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
             elif optimization_method == "random":
                 sampler = optuna.samplers.RandomSampler(seed=42)
@@ -123,9 +177,12 @@ class StrategyHyperparameterOptimizer:
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
             study = optuna.create_study(
+                study_name=study_name,
                 direction=direction,
                 sampler=sampler,
-                pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=10),
+                pruner=pruner,
+                storage=storage,
+                load_if_exists=True  # 支持断点续跑
             )
 
         # 注入先验知识：将默认参数作为第一个 trial，加速收敛
@@ -637,8 +694,15 @@ class StrategyHyperparameterOptimizer:
                     best_params=None,
                 )
 
+            # 启用并行优化（n_jobs 控制并发数）
+            # 注意：SQLite 存储支持多进程并发访问
+            logger.info(f"开始优化: n_trials={n_trials}, n_jobs={self.n_jobs}, timeout={timeout}")
             study.optimize(
-                objective, n_trials=n_trials, timeout=timeout, show_progress_bar=False
+                objective, 
+                n_trials=n_trials, 
+                timeout=timeout, 
+                n_jobs=self.n_jobs,  # 并行执行
+                show_progress_bar=False
             )
 
             end_time = datetime.utcnow()
