@@ -768,6 +768,11 @@ class BacktestExecutor:
                 return True  # 检查失败时继续执行，避免因检查错误而中断
 
         for i, current_date in enumerate(trading_dates):
+            # PERF/BUGFIX: 统一初始化计时变量，避免某些分支/异常路径引用未赋值导致 UnboundLocalError
+            slice_time_total = 0.0
+            gen_time_total = 0.0
+            gen_time_max = 0.0
+
             # 在循环开始时检查任务状态（每10个交易日检查一次，避免频繁检查）
             if task_id and i % 10 == 0 and i > 0:
                 if not check_task_status():
@@ -794,9 +799,7 @@ class BacktestExecutor:
                     time.perf_counter() if self.enable_performance_profiling else None
                 )
 
-                # 细分 profiling：把“切片”和“生成信号”拆开计时
-                slice_time_total = 0.0
-                gen_time_total = 0.0
+                # 细分 profiling：把“切片”和“生成信号”拆开计时（变量已在循环开头初始化）
 
                 if self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号

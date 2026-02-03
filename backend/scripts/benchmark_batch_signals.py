@@ -142,10 +142,14 @@ async def benchmark_backtest(
         logger.info(f"=" * 80)
         logger.info(f"总耗时: {elapsed:.2f} 秒")
         logger.info(f"股票数: {stock_count}")
-        logger.info(f"交易日: {result.get('total_trading_days', 'N/A')}")
-        logger.info(f"信号数: {result.get('total_signals', 'N/A')}")
-        logger.info(f"交易数: {result.get('executed_trades', 'N/A')}")
-        logger.info(f"吞吐量: {result.get('total_trading_days', 0) / elapsed:.2f} 天/秒")
+        trading_days = result.get('total_trading_days') or result.get('trading_days') or 0
+        total_signals = result.get('total_signals') or result.get('signals_generated') or 0
+        executed_trades = result.get('executed_trades') or result.get('total_trades') or 0
+
+        logger.info(f"交易日: {trading_days if trading_days else 'N/A'}")
+        logger.info(f"信号数: {total_signals if total_signals else 'N/A'}")
+        logger.info(f"交易数: {executed_trades if executed_trades else 'N/A'}")
+        logger.info(f"吞吐量: {trading_days / elapsed:.2f} 天/秒")
         
         # 性能分析
         if executor.enable_performance_profiling and executor.performance_profiler:
@@ -168,10 +172,10 @@ async def benchmark_backtest(
         return {
             'elapsed': elapsed,
             'stock_count': stock_count,
-            'days': result.get('total_trading_days', 0),
-            'signals': result.get('total_signals', 0),
-            'trades': result.get('executed_trades', 0),
-            'throughput': result.get('total_trading_days', 0) / elapsed if elapsed > 0 else 0
+            'days': trading_days,
+            'signals': total_signals,
+            'trades': executed_trades,
+            'throughput': trading_days / elapsed if elapsed > 0 else 0
         }
 
     except Exception as e:

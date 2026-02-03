@@ -113,9 +113,11 @@ class DataLoader:
             # 尝试从单股票文件加载
             stock_file = self.qlib_data_path / f"{safe_code}.parquet"
             if stock_file.exists():
+                # Qlib 文件通常以下划线命名（000001_SZ），内部 index level 0 也可能是该格式。
+                # 为避免 KeyError + 大量 warning，统一用 safe_code 去读取/过滤。
                 qlib_data = converter.load_qlib_data(
                     stock_file,
-                    stock_code=stock_code,
+                    stock_code=safe_code,
                     start_date=start_date,
                     end_date=end_date,
                 )
@@ -126,7 +128,7 @@ class DataLoader:
                     if isinstance(qlib_data.index, pd.MultiIndex):
                         try:
                             stock_data = qlib_data.xs(
-                                stock_code, level=0, drop_level=False
+                                safe_code, level=0, drop_level=False
                             )
                             # 将日期索引提取出来
                             stock_data.index = stock_data.index.get_level_values(1)
@@ -158,12 +160,17 @@ class DataLoader:
                         stock_data.attrs["from_precomputed"] = True
                         return stock_data
 
-            # 尝试从合并文件加载
+            # 尝试从合并文件加载（可选；默认关闭以避免大量 miss 导致 I/O+日志开销）
+            try:
+                use_all = bool(getattr(settings, "QLIB_USE_ALL_STOCKS_FILE", False))
+            except Exception:
+                use_all = False
+
             all_stocks_file = self.qlib_data_path / "all_stocks.parquet"
-            if all_stocks_file.exists():
+            if use_all and all_stocks_file.exists():
                 qlib_data = converter.load_qlib_data(
                     all_stocks_file,
-                    stock_code=stock_code,
+                    stock_code=safe_code,
                     start_date=start_date,
                     end_date=end_date,
                 )
@@ -173,7 +180,7 @@ class DataLoader:
                     if isinstance(qlib_data.index, pd.MultiIndex):
                         try:
                             stock_data = qlib_data.xs(
-                                stock_code, level=0, drop_level=False
+                                safe_code, level=0, drop_level=False
                             )
                             stock_data.index = stock_data.index.get_level_values(1)
                         except KeyError:

@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from app.core.config import settings
+
 from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
 
 
@@ -344,13 +346,14 @@ class PortfolioManager:
         )
 
         # --- sanity log (debug aid) ---
-        # 这里不做强制限制，只记录异常持仓数量，帮助定位上层换仓逻辑问题。
+        # 性能注意：大规模回测会极其频繁调用该函数；默认关闭该日志，避免刷屏/IO 成为瓶颈。
         try:
-            if len(self.positions) > 10:  # default topk is 10; for topk_buffer strategy
-                logger.error(
-                    f"[portfolio_snapshot][sanity] positions_count={len(self.positions)} date={date.strftime('%Y-%m-%d')} "
-                    f"holdings={sorted(list(self.positions.keys()))}"
-                )
+            if getattr(settings, "ENABLE_PORTFOLIO_SNAPSHOT_SANITY_LOG", False):
+                if len(self.positions) > 10:  # default topk is 10; for topk_buffer strategy
+                    logger.warning(
+                        f"[portfolio_snapshot][sanity] positions_count={len(self.positions)} date={date.strftime('%Y-%m-%d')} "
+                        f"holdings={sorted(list(self.positions.keys()))}"
+                    )
         except Exception:
             pass
 

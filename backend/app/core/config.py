@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # Qlib 配置
     QLIB_DATA_PATH: str = "../data/qlib_data"
     QLIB_CACHE_PATH: str = "../data/qlib_cache"
+    # 性能：如果 all_stocks.parquet 很大且经常 miss，会带来大量 I/O 与日志；默认关闭
+    QLIB_USE_ALL_STOCKS_FILE: bool = False
+
+    # 性能：组合快照 sanity 日志会在持仓数较大时刷屏；默认关闭
+    ENABLE_PORTFOLIO_SNAPSHOT_SANITY_LOG: bool = False
 
     # 任务配置
     MAX_CONCURRENT_TASKS: int = 3
