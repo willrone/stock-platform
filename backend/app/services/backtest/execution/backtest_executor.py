@@ -19,6 +19,7 @@ from app.models.task_models import BacktestResult
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
+from ..core.portfolio_manager_array import PortfolioManagerArray
 from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
@@ -135,6 +136,7 @@ class BacktestExecutor:
         self.enable_parallel = enable_parallel
         self.max_workers = max_workers
         self.use_multiprocessing = use_multiprocessing
+        self.use_array_portfolio = True  # Phase 1: 启用数组化持仓管理
         self.data_loader = DataLoader(
             data_dir, max_workers=max_workers if enable_parallel else None
         )
@@ -233,7 +235,8 @@ class BacktestExecutor:
                 )
 
             # 创建组合管理器
-            portfolio_manager = PortfolioManager(backtest_config)
+            # Phase 1: 数据加载后再创建（需要 stock_codes）
+            portfolio_manager = None
 
             # 加载数据（性能监控）
             _t0 = time.perf_counter()
@@ -274,6 +277,15 @@ class BacktestExecutor:
                 await backtest_progress_monitor.update_stage(
                     task_id, "data_loading", progress=100, status="completed"
                 )
+
+            # Phase 1: 数据加载后创建组合管理器（使用实际加载的股票列表）
+            actual_stock_codes = list(stock_data.keys())
+            if self.use_array_portfolio:
+                portfolio_manager = PortfolioManagerArray(backtest_config, actual_stock_codes)
+                logger.info(f"✅ Phase 1: 使用数组化持仓管理器 (stocks={len(actual_stock_codes)})")
+            else:
+                portfolio_manager = PortfolioManager(backtest_config)
+                logger.info(f"使用传统持仓管理器 (stocks={len(actual_stock_codes)})")
 
             # 获取交易日历
             trading_dates = self._get_trading_calendar(stock_data, start_date, end_date)
@@ -1914,15 +1926,15 @@ class BacktestExecutor:
             # 交易记录
             "trade_history": [
                 {
-                    "trade_id": trade.trade_id,
-                    "stock_code": trade.stock_code,
-                    "action": trade.action,
-                    "quantity": trade.quantity,
-                    "price": trade.price,
-                    "timestamp": trade.timestamp.isoformat(),
-                    "commission": trade.commission,
-                    "slippage_cost": getattr(trade, "slippage_cost", 0.0),
-                    "pnl": trade.pnl,
+                    "trade_id": trade.trade_id if hasattr(trade, 'trade_id') else trade['trade_id'],
+                    "stock_code": trade.stock_code if hasattr(trade, 'stock_code') else trade['stock_code'],
+                    "action": trade.action if hasattr(trade, 'action') else trade['action'],
+                    "quantity": trade.quantity if hasattr(trade, 'quantity') else trade['quantity'],
+                    "price": trade.price if hasattr(trade, 'price') else trade['price'],
+                    "timestamp": (trade.timestamp if hasattr(trade, 'timestamp') else trade['timestamp']).isoformat(),
+                    "commission": trade.commission if hasattr(trade, 'commission') else trade['commission'],
+                    "slippage_cost": getattr(trade, "slippage_cost", 0.0) if hasattr(trade, 'slippage_cost') else trade.get('slippage_cost', 0.0),
+                    "pnl": trade.pnl if hasattr(trade, 'pnl') else trade['pnl'],
                 }
                 for trade in portfolio_manager.trades
             ],
