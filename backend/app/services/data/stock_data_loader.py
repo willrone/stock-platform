@@ -27,7 +27,13 @@ class StockDataLoader:
         if data_root is None:
             self.data_root = Path(settings.DATA_ROOT_PATH)
         else:
-            self.data_root = Path(data_root)
+            data_path = Path(data_root)
+            # 确保使用绝对路径（多进程环境下相对路径会失效）
+            if not data_path.is_absolute():
+                # 相对路径：从项目根目录解析
+                project_root = Path(__file__).parent.parent.parent.parent.parent
+                data_path = (project_root / data_root).resolve()
+            self.data_root = data_path
         
         # Qlib 预计算特征路径
         self.qlib_features_path = Path(settings.QLIB_DATA_PATH) / "features" / "day"

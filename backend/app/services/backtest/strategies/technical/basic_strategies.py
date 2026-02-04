@@ -200,18 +200,32 @@ class RSIStrategy(BaseStrategy):
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """
-        计算RSI指标 - 性能优化版（移除复杂的趋势和背离计算）
+        计算RSI指标 - 性能优化版（使用 Numba 加速）
         """
         close_prices = data["close"]
 
-        # 计算RSI
-        if TALIB_AVAILABLE:
-            rsi = pd.Series(
-                talib.RSI(close_prices.values, timeperiod=self.rsi_period),
-                index=close_prices.index,
-            )
-        else:
-            # 使用pandas实现RSI（Wilder's smoothing method）
+        # 优先使用 Numba 加速版本（Phase 3 优化）
+        try:
+            from .numba_indicators import NUMBA_AVAILABLE, rsi_wilder
+            
+            if NUMBA_AVAILABLE:
+                rsi_values = rsi_wilder(close_prices.values, self.rsi_period)
+                rsi = pd.Series(rsi_values, index=close_prices.index)
+            elif TALIB_AVAILABLE:
+                rsi = pd.Series(
+                    talib.RSI(close_prices.values, timeperiod=self.rsi_period),
+                    index=close_prices.index,
+                )
+            else:
+                # Fallback: 使用pandas实现RSI（Wilder's smoothing method）
+                delta = close_prices.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+                rs = gain / loss
+                rsi = 100 - (100 / (1 + rs))
+        except Exception as e:
+            logger.warning(f"Numba RSI 计算失败，回退到 pandas: {e}")
+            # Fallback to pandas
             delta = close_prices.diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()

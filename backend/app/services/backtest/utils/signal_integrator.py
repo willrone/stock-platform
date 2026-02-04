@@ -195,8 +195,24 @@ class SignalIntegrator:
                 else 0.0
             )
         else:
-            # 得分相等或都为0，返回HOLD信号
-            return None
+            # 得分相等或都为0时，选择信号数量更多的方向
+            if buy_count > sell_count:
+                final_type = SignalType.BUY
+                final_strength = (
+                    buy_weighted_strength_sum / buy_weight_sum
+                    if buy_weight_sum > 0
+                    else 0.0
+                )
+            elif sell_count > buy_count:
+                final_type = SignalType.SELL
+                final_strength = (
+                    sell_weighted_strength_sum / sell_weight_sum
+                    if sell_weight_sum > 0
+                    else 0.0
+                )
+            else:
+                # 完全平局（信号数量和得分都相等），返回 None
+                return None
 
         # 应用一致性增强
         if consistency >= consistency_threshold:

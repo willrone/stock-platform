@@ -341,6 +341,8 @@ class BacktestTaskExecutor:
                 executor = BacktestExecutor(
                     data_dir=str(settings.DATA_ROOT_PATH),
                     enable_performance_profiling=enable_perf,
+                    use_multiprocessing=True,  # Phase 2: 启用多进程信号预计算
+                    max_workers=6,  # 8核CPU，留2核给系统
                 )
 
                 # 创建回测配置

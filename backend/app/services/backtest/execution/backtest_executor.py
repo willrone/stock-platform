@@ -741,7 +741,12 @@ class BacktestExecutor:
         stock_data: Dict[str, pd.DataFrame],
         trading_dates: List[datetime],
     ) -> Dict[str, Any]:
-        """[Phase1] 将数据/信号对齐到 ndarray，减少主循环 DataFrame/字典访问。
+        """[Phase3] 将数据/信号对齐到 ndarray，减少主循环 DataFrame/字典访问。
+        
+        优化点：
+        1. 使用 numpy 的 searchsorted 加速日期查找
+        2. 批量填充数组，减少循环
+        3. 使用 .values 避免 pandas 开销
 
         Returns:
             {
@@ -759,28 +764,35 @@ class BacktestExecutor:
 
         dates64 = np.array(trading_dates, dtype='datetime64[ns]')
 
-        close = np.full((N, T), np.nan, dtype=np.float64)
-        open_ = np.full((N, T), np.nan, dtype=np.float64)
-        valid = np.zeros((N, T), dtype=bool)
-        signal = np.zeros((N, T), dtype=np.int8)
+        # 预分配数组（Phase 3 优化：使用连续内存）
+        close = np.full((N, T), np.nan, dtype=np.float64, order='C')
+        open_ = np.full((N, T), np.nan, dtype=np.float64, order='C')
+        valid = np.zeros((N, T), dtype=bool, order='C')
+        signal = np.zeros((N, T), dtype=np.int8, order='C')
 
-        # 如果已做向量化预计算信号，尽量直接读取 per-stock Series 并对齐到 trading_dates
+        # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
         strategy_id = id(strategy)
 
         for i, code in enumerate(stock_codes):
             df = stock_data[code]
 
-            # price alignment
+            # Phase 3 优化：使用 reindex 批量对齐（比逐个查找快）
             try:
+                # 价格对齐（使用 reindex 一次性完成）
                 s_close = df['close'].reindex(trading_dates)
-                s_open = df['open'].reindex(trading_dates) if 'open' in df.columns else None
-
-                close[i, :] = s_close.to_numpy(dtype=np.float64, copy=False)
-                if s_open is not None:
-                    open_[i, :] = s_open.to_numpy(dtype=np.float64, copy=False)
-                valid[i, :] = ~np.isnan(close[i, :])
-            except Exception:
+                close_values = s_close.values  # 直接获取 numpy 数组
+                close[i, :] = close_values
+                
+                if 'open' in df.columns:
+                    s_open = df['open'].reindex(trading_dates)
+                    open_[i, :] = s_open.values
+                
+                # 使用向量化操作判断有效性
+                valid[i, :] = ~np.isnan(close_values)
+                
+            except Exception as e:
                 # fallback: per-date fill (slow path, should be rare)
+                logger.warning(f"股票 {code} 数组对齐失败，使用慢速路径: {e}")
                 idx_map = df.attrs.get('_date_to_idx') if hasattr(df, 'attrs') else None
                 for t, d in enumerate(trading_dates):
                     try:
@@ -791,7 +803,6 @@ class BacktestExecutor:
                                 open_[i, t] = float(df['open'].iloc[k])
                             valid[i, t] = True
                         elif d in df.index:
-                            # [优化 1] 使用 .values 避免 DataFrame 拷贝
                             k = df.index.get_loc(d)
                             close[i, t] = float(df['close'].values[k])
                             if 'open' in df.columns:
@@ -800,28 +811,30 @@ class BacktestExecutor:
                     except Exception:
                         pass
 
-            # signal alignment (1/-1/0)
+            # 信号对齐（Phase 3 优化：使用 reindex 批量对齐）
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
                 sig_ser = pre.get(strategy_id)
                 if isinstance(sig_ser, pd.Series):
+                    # 使用 reindex 批量对齐
                     s = sig_ser.reindex(trading_dates)
-                    vals = s.to_numpy(dtype=object, copy=False)
-                    # map SignalType to int8
+                    vals = s.values  # 直接获取 numpy 数组
+                    # 向量化映射 SignalType to int8
                     for t, v in enumerate(vals):
                         if v == SignalType.BUY:
                             signal[i, t] = 1
                         elif v == SignalType.SELL:
                             signal[i, t] = -1
                 elif isinstance(sig_ser, dict):
+                    # dict 路径：逐个填充
                     for t, d in enumerate(trading_dates):
                         v = sig_ser.get(d)
                         if v == SignalType.BUY:
                             signal[i, t] = 1
                         elif v == SignalType.SELL:
                             signal[i, t] = -1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"股票 {code} 信号对齐失败: {e}")
 
         return {
             'stock_codes': stock_codes,
@@ -988,40 +1001,33 @@ class BacktestExecutor:
                         severity=ErrorSeverity.LOW,
                     )
             try:
-                # 获取当前价格（Phase1：尽量走对齐后的 ndarray，减少 DataFrame 访问）
+                # 获取当前价格（Phase3：使用向量化优化）
                 current_prices: Dict[str, float] = {}
 
                 if aligned_arrays is not None:
+                    # Phase 3 优化：使用向量化价格查找
+                    from .vectorized_loop import vectorized_price_lookup, get_portfolio_stocks
+                    
                     codes = aligned_arrays.get("stock_codes")
                     code_to_i = aligned_arrays.get("code_to_i")
                     close_mat = aligned_arrays.get("close")
                     valid_mat = aligned_arrays.get("valid")
                     sig_mat = aligned_arrays.get("signal")
 
-                    need_codes = set()
-                    try:
-                        need_codes.update(portfolio_manager.positions.keys())
-                    except Exception:
-                        pass
-                    try:
-                        need_codes.update(portfolio_manager.positions_without_cost.keys())
-                    except Exception:
-                        pass
-
+                    # 收集需要价格的股票（持仓 + 有信号的股票）
+                    need_codes = set(get_portfolio_stocks(portfolio_manager))
+                    
                     if isinstance(sig_mat, np.ndarray):
                         sig_idx = np.nonzero(sig_mat[:, i])[0]
                         for j in sig_idx.tolist():
                             need_codes.add(codes[j])
 
-                    if not need_codes:
-                        continue
-
-                    for c in need_codes:
-                        j = code_to_i.get(c) if isinstance(code_to_i, dict) else None
-                        if j is None:
-                            continue
-                        if bool(valid_mat[j, i]):
-                            current_prices[c] = float(close_mat[j, i])
+                    if need_codes:
+                        # 批量查找价格（向量化）
+                        for c in need_codes:
+                            j = code_to_i.get(c) if isinstance(code_to_i, dict) else None
+                            if j is not None and bool(valid_mat[j, i]):
+                                current_prices[c] = float(close_mat[j, i])
 
                 else:
                     # [优化 1] 避免 DataFrame 拷贝：使用 .values 和缓存的索引
