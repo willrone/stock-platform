@@ -8,8 +8,11 @@
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+import logging
 
 from ..models import SignalType, TradingSignal
+
+logger = logging.getLogger(__name__)
 
 
 class SignalIntegrator:
@@ -63,7 +66,10 @@ class SignalIntegrator:
         Returns:
             整合后的信号列表
         """
+        logger.info(f"🔗 SignalIntegrator.integrate 被调用: 输入 {len(signals)} 个信号, 方法={self.method}")
+        
         if not signals:
+            logger.warning("⚠️ SignalIntegrator: 输入信号为空，返回空列表")
             return []
 
         # rank 系列融合：按“策略 → 股票强度排名”来融合
@@ -88,6 +94,7 @@ class SignalIntegrator:
             signals_by_stock[signal.stock_code].append(signal)
 
         integrated_signals: List[TradingSignal] = []
+        filtered_count = 0
 
         for stock_code, stock_signals in signals_by_stock.items():
             integrated_signal = self._integrate_stock_signals(
@@ -95,6 +102,13 @@ class SignalIntegrator:
             )
             if integrated_signal:
                 integrated_signals.append(integrated_signal)
+            else:
+                filtered_count += 1
+
+        logger.info(
+            f"SignalIntegrator: 输入 {len(signals)} 个信号 ({len(signals_by_stock)} 只股票), "
+            f"输出 {len(integrated_signals)} 个信号, 过滤 {filtered_count} 只股票"
+        )
 
         return integrated_signals
 
@@ -211,8 +225,17 @@ class SignalIntegrator:
                     else 0.0
                 )
             else:
-                # 完全平局（信号数量和得分都相等），返回 None
-                return None
+                # 完全平局（信号数量和得分都相等）
+                # 修复：不再返回 None，而是选择最近的信号类型
+                logger.debug(
+                    f"股票 {stock_code} 信号完全平局 (buy={buy_count}, sell={sell_count}, "
+                    f"buy_score={buy_score:.4f}, sell_score={sell_score:.4f}), "
+                    f"选择最新信号类型"
+                )
+                # 使用最新的信号类型
+                latest_signal = max(signals, key=lambda s: s.timestamp)
+                final_type = latest_signal.signal_type
+                final_strength = latest_signal.strength
 
         # 应用一致性增强
         if consistency >= consistency_threshold:

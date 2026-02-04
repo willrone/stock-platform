@@ -694,15 +694,68 @@ class BacktestExecutor:
         
         try:
             from ..core.strategy_portfolio import StrategyPortfolio
+            from ..models import TradingSignal
             
             if isinstance(strategy, StrategyPortfolio):
-                # Portfolio策略：递归提取所有子策略的信号
+                logger.info(f"🔄 Portfolio策略信号整合开始: {len(strategy.strategies)} 个子策略")
+                
+                # 1. 递归提取所有子策略的信号
+                all_sub_signals: Dict[Tuple[str, datetime], Any] = {}
                 for sub in strategy.strategies:
                     sub_signals = self._extract_precomputed_signals_to_dict(sub, stock_data)
-                    signal_dict.update(sub_signals)
+                    all_sub_signals.update(sub_signals)
+                
+                logger.info(f"📊 子策略信号总数: {len(all_sub_signals)}")
+                
+                # 2. 按日期分组子策略信号
+                from collections import defaultdict
+                signals_by_date: Dict[datetime, List[TradingSignal]] = defaultdict(list)
+                
+                for (stock_code, date), signal_type in all_sub_signals.items():
+                    # 构造 TradingSignal 对象
+                    from ..models import SignalType
+                    if signal_type == SignalType.BUY or signal_type == SignalType.SELL:
+                        # 获取价格
+                        try:
+                            df = stock_data.get(stock_code)
+                            if df is not None and date in df.index:
+                                price = float(df.loc[date, 'close'])
+                                signal = TradingSignal(
+                                    timestamp=date,
+                                    stock_code=stock_code,
+                                    signal_type=signal_type,
+                                    strength=1.0,
+                                    price=price,
+                                    reason="precomputed",
+                                    metadata={}
+                                )
+                                signals_by_date[date].append(signal)
+                        except Exception as e:
+                            logger.warning(f"构造信号失败 {stock_code} @ {date}: {e}")
+                
+                # 3. 对每个日期的信号进行整合
+                integrated_count = 0
+                for date, signals in signals_by_date.items():
+                    if signals:
+                        # 调用 Portfolio 的信号整合器
+                        integrated = strategy.integrator.integrate(
+                            signals, 
+                            strategy.weights,
+                            consistency_threshold=0.6
+                        )
+                        
+                        # 将整合后的信号添加到字典
+                        for sig in integrated:
+                            signal_dict[(sig.stock_code, sig.timestamp)] = sig.signal_type
+                            integrated_count += 1
+                
+                logger.info(f"✅ Portfolio策略信号整合完成: {integrated_count} 个整合信号")
                 return signal_dict
+                
         except Exception as e:
             logger.warning(f"Portfolio策略信号提取失败: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
         
         # 提取单个策略的信号
         strategy_id = id(strategy)
@@ -985,6 +1038,14 @@ class BacktestExecutor:
             except Exception as e:
                 logger.warning(f"检查任务状态失败: {e}，继续执行")
                 return True  # 检查失败时继续执行，避免因检查错误而中断
+
+        # ========== PERF优化：批量收集数据库操作，循环结束后一次性写入 ==========
+        # 避免在730天循环内每天都做数据库操作（原来是72秒的主要瓶颈）
+        _batch_signals_data: List[dict] = []  # 收集所有信号记录
+        _batch_executed_signals: List[dict] = []  # 收集已执行的信号
+        _batch_unexecuted_signals: List[dict] = []  # 收集未执行的信号
+        _current_backtest_id: str | None = None  # 缓存 backtest_id
+        # ========== END PERF优化 ==========
 
         for i, current_date in enumerate(trading_dates):
             # PERF/BUGFIX: 统一初始化计时变量，避免某些分支/异常路径引用未赋值导致 UnboundLocalError
@@ -1484,30 +1545,25 @@ class BacktestExecutor:
 
                 total_signals += len(all_signals)
 
-                # 保存信号记录到数据库
+                # PERF优化：收集信号记录到内存，循环结束后批量写入数据库
                 if task_id and all_signals:
                     try:
                         import uuid
 
-                        from app.core.database import get_async_session_context
-                        from app.repositories.backtest_detailed_repository import (
-                            BacktestDetailedRepository,
-                        )
+                        # 使用传入的backtest_id或生成一个（只生成一次）
+                        if _current_backtest_id is None:
+                            _current_backtest_id = backtest_id or (
+                                f"bt_{task_id[:8]}"
+                                if task_id
+                                else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            )
 
-                        # 使用传入的backtest_id或生成一个
-                        current_backtest_id = backtest_id or (
-                            f"bt_{task_id[:8]}"
-                            if task_id
-                            else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                        )
-
-                        # 批量保存信号记录
-                        signals_data = []
+                        # 收集信号记录到内存列表（不再每天写数据库）
                         for signal in all_signals:
                             signal_data = {
                                 "signal_id": f"sig_{uuid.uuid4().hex[:12]}",
                                 "stock_code": signal.stock_code,
-                                "stock_name": None,  # 可以从股票数据中获取
+                                "stock_name": None,
                                 "signal_type": signal.signal_type.name,
                                 "timestamp": signal.timestamp,
                                 "price": signal.price,
@@ -1516,21 +1572,7 @@ class BacktestExecutor:
                                 "metadata": signal.metadata,
                                 "executed": False,
                             }
-                            signals_data.append(signal_data)
-
-                        # 异步保存信号记录
-                        async with get_async_session_context() as session:
-                            try:
-                                repository = BacktestDetailedRepository(session)
-                                await repository.batch_save_signal_records(
-                                    task_id=task_id,
-                                    backtest_id=current_backtest_id,
-                                    signals_data=signals_data,
-                                )
-                                await session.commit()
-                            except Exception as e:
-                                await session.rollback()
-                                logger.warning(f"保存信号记录失败: {e}")
+                            _batch_signals_data.append(signal_data)
                     except Exception as e:
                         logger.warning(f"保存信号记录时出错: {e}")
 
@@ -1666,58 +1708,12 @@ class BacktestExecutor:
                         "execute_trades_batch", trade_duration
                     )
 
-                # 更新未执行信号的原因
+                # PERF优化：收集未执行和已执行信号到内存，循环结束后批量写入
                 if task_id and unexecuted_signals:
-                    try:
-                        from app.core.database import get_async_session_context
-                        from app.repositories.backtest_detailed_repository import (
-                            BacktestDetailedRepository,
-                        )
+                    _batch_unexecuted_signals.extend(unexecuted_signals)
 
-                        async with get_async_session_context() as session:
-                            try:
-                                repository = BacktestDetailedRepository(session)
-                                for unexecuted_signal in unexecuted_signals:
-                                    await repository.update_signal_execution_reason(
-                                        task_id=task_id,
-                                        stock_code=unexecuted_signal["stock_code"],
-                                        timestamp=unexecuted_signal["timestamp"],
-                                        signal_type=unexecuted_signal["signal_type"],
-                                        execution_reason=unexecuted_signal[
-                                            "execution_reason"
-                                        ],
-                                    )
-                                await session.commit()
-                            except Exception as e:
-                                await session.rollback()
-                                logger.warning(f"更新信号未执行原因失败: {e}")
-                    except Exception as e:
-                        logger.warning(f"更新信号未执行原因时出错: {e}")
-
-                # 标记已执行的信号
                 if task_id and executed_trade_signals:
-                    try:
-                        from app.core.database import get_async_session_context
-                        from app.repositories.backtest_detailed_repository import (
-                            BacktestDetailedRepository,
-                        )
-
-                        async with get_async_session_context() as session:
-                            try:
-                                repository = BacktestDetailedRepository(session)
-                                for executed_signal in executed_trade_signals:
-                                    await repository.mark_signal_as_executed(
-                                        task_id=task_id,
-                                        stock_code=executed_signal["stock_code"],
-                                        timestamp=executed_signal["timestamp"],
-                                        signal_type=executed_signal["signal_type"],
-                                    )
-                                await session.commit()
-                            except Exception as e:
-                                await session.rollback()
-                                logger.warning(f"标记信号为已执行失败: {e}")
-                    except Exception as e:
-                        logger.warning(f"标记信号为已执行时出错: {e}")
+                    _batch_executed_signals.extend(executed_trade_signals)
 
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(
@@ -1871,6 +1867,63 @@ class BacktestExecutor:
                     await backtest_progress_monitor.add_warning(task_id, error_msg)
 
                 continue
+
+        # ========== PERF优化：循环结束后批量写入数据库 ==========
+        # 将循环内收集的所有数据一次性写入，避免730次数据库操作
+        if task_id:
+            logger.info(f"🔄 开始批量写入数据库: 信号={len(_batch_signals_data)}, 已执行={len(_batch_executed_signals)}, 未执行={len(_batch_unexecuted_signals)}")
+            
+            try:
+                from app.core.database import get_async_session_context
+                from app.repositories.backtest_detailed_repository import (
+                    BacktestDetailedRepository,
+                )
+
+                async with get_async_session_context() as session:
+                    try:
+                        repository = BacktestDetailedRepository(session)
+                        
+                        # 1. 批量保存所有信号记录
+                        if _batch_signals_data:
+                            await repository.batch_save_signal_records(
+                                task_id=task_id,
+                                backtest_id=_current_backtest_id,
+                                signals_data=_batch_signals_data,
+                            )
+                            logger.info(f"✅ 批量保存信号记录完成: {len(_batch_signals_data)} 条")
+                        
+                        # 2. 批量更新未执行信号的原因
+                        if _batch_unexecuted_signals:
+                            for unexecuted_signal in _batch_unexecuted_signals:
+                                await repository.update_signal_execution_reason(
+                                    task_id=task_id,
+                                    stock_code=unexecuted_signal["stock_code"],
+                                    timestamp=unexecuted_signal["timestamp"],
+                                    signal_type=unexecuted_signal["signal_type"],
+                                    execution_reason=unexecuted_signal["execution_reason"],
+                                )
+                            logger.info(f"✅ 批量更新未执行原因完成: {len(_batch_unexecuted_signals)} 条")
+                        
+                        # 3. 批量标记已执行的信号
+                        if _batch_executed_signals:
+                            for executed_signal in _batch_executed_signals:
+                                await repository.mark_signal_as_executed(
+                                    task_id=task_id,
+                                    stock_code=executed_signal["stock_code"],
+                                    timestamp=executed_signal["timestamp"],
+                                    signal_type=executed_signal["signal_type"],
+                                )
+                            logger.info(f"✅ 批量标记已执行完成: {len(_batch_executed_signals)} 条")
+                        
+                        await session.commit()
+                        logger.info("✅ 所有数据库操作批量提交成功")
+                        
+                    except Exception as e:
+                        await session.rollback()
+                        logger.warning(f"批量写入数据库失败: {e}")
+            except Exception as e:
+                logger.warning(f"批量写入数据库时出错: {e}")
+        # ========== END PERF优化 ==========
 
         # 最终进度更新
         if task_id:
