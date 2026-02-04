@@ -411,17 +411,70 @@ class ModelTrainingService:
         config: TrainingConfig,
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """准备训练数据"""
-        # 创建模拟数据
-        np.random.seed(42)
-        n_samples = 1000
-        n_features = 10
+        from ..data.stock_data_loader import StockDataLoader
 
-        # 生成特征数据
-        feature_names = [f"feature_{i}" for i in range(n_features)]
-        X = pd.DataFrame(np.random.randn(n_samples, n_features), columns=feature_names)
+        loader = StockDataLoader(data_root=str(self.data_dir))
+        all_data = []
 
-        # 生成目标变量
-        y = pd.Series(np.random.randn(n_samples), name="target")
+        for stock_code in stock_codes:
+            try:
+                stock_data = loader.load_stock_data(
+                    stock_code, start_date=start_date, end_date=end_date
+                )
+                if not stock_data.empty:
+                    stock_data["stock_code"] = stock_code
+                    all_data.append(stock_data)
+            except Exception as e:
+                logger.warning(f"加载股票 {stock_code} 数据失败: {e}")
+                continue
+
+        if not all_data:
+            # 如果没有加载到任何数据，回退到模拟数据并记录警告
+            logger.warning("未能加载任何真实股票数据，使用模拟数据进行训练")
+            np.random.seed(42)
+            n_samples = 1000
+            n_features = 10
+            feature_names = [f"feature_{i}" for i in range(n_features)]
+            X = pd.DataFrame(np.random.randn(n_samples, n_features), columns=feature_names)
+            y = pd.Series(np.random.randn(n_samples), name="target")
+            return X, y
+
+        # 合并所有股票数据
+        combined_data = pd.concat(all_data, ignore_index=True)
+
+        # 确定特征列
+        if config.feature_columns:
+            feature_cols = [col for col in config.feature_columns if col in combined_data.columns]
+        else:
+            # 排除非特征列
+            exclude_cols = ["stock_code", "date", config.target_column, "target"]
+            feature_cols = [col for col in combined_data.columns if col not in exclude_cols]
+
+        if not feature_cols:
+            raise ValueError("没有可用的特征列")
+
+        # 准备特征和目标
+        X = combined_data[feature_cols].copy()
+
+        # 确定目标列
+        target_col = config.target_column if config.target_column in combined_data.columns else "close"
+        if target_col not in combined_data.columns:
+            # 如果目标列不存在，计算收益率作为目标
+            if "close" in combined_data.columns:
+                y = combined_data["close"].pct_change().shift(-1)  # 预测下一期收益率
+            else:
+                raise ValueError(f"目标列 {target_col} 不存在")
+        else:
+            y = combined_data[target_col].copy()
+
+        # 处理缺失值
+        X = X.ffill().bfill().fillna(0)
+        y = y.ffill().bfill().fillna(0)
+
+        # 移除包含无效值的行
+        valid_mask = ~(X.isna().any(axis=1) | y.isna())
+        X = X[valid_mask]
+        y = y[valid_mask]
 
         logger.info(f"训练数据准备完成: {len(X)} 样本, {len(X.columns)} 特征")
 

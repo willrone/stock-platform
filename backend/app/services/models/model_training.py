@@ -438,11 +438,11 @@ class ModelTrainingService:
 
         data_service = SimpleDataService()
 
-        # 使用新的DataProvider替代QlibDataProvider
+        # 使用QlibDataProvider作为数据提供器
         from app.core.config import settings
 
-        self.data_provider = DataProvider(data_service, settings.DATA_ROOT_PATH)
-        await self.data_provider.initialize()
+        self.data_provider = QlibDataProvider(data_service)
+        await self.data_provider.initialize_qlib()
 
         # 初始化高级训练服务（传入self避免循环依赖）
         if ADVANCED_TRAINING_AVAILABLE and AdvancedTrainingService is not None:
@@ -609,8 +609,17 @@ class ModelTrainingService:
             col for col in config.feature_columns if col in features_df.columns
         ]
 
-        # 填充缺失值
-        features_df[feature_cols] = features_df[feature_cols].ffill().fillna(0)
+        # 填充缺失值（使用更合理的策略）
+        # 对于价格类特征使用前向填充，对于其他特征使用中位数填充
+        price_cols = [col for col in feature_cols if col in ['open', 'high', 'low', 'close', 'volume']]
+        other_cols = [col for col in feature_cols if col not in price_cols]
+
+        if price_cols:
+            features_df[price_cols] = features_df[price_cols].ffill().bfill()
+        if other_cols:
+            for col in other_cols:
+                median_val = features_df[col].median()
+                features_df[col] = features_df[col].ffill().fillna(median_val if pd.notna(median_val) else 0)
 
         # 为每只股票创建序列数据
         X_list, y_list = [], []
@@ -790,60 +799,62 @@ class ModelTrainingService:
         # 训练循环
         best_val_loss = float("inf")
         patience_counter = 0
+        best_model_state = model.state_dict().copy()  # 初始化为当前模型状态
 
-        for epoch in range(config.epochs):
-            # 训练阶段
-            model.train()
-            train_loss = 0
+        try:
+            for epoch in range(config.epochs):
+                # 训练阶段
+                model.train()
+                train_loss = 0
 
-            # 简单的批次训练（实际应用中应该使用DataLoader）
-            for i in range(0, len(train_X_tensor), config.batch_size):
-                batch_X = train_X_tensor[i : i + config.batch_size]
-                batch_y = train_y_tensor[i : i + config.batch_size]
+                # 简单的批次训练（实际应用中应该使用DataLoader）
+                for i in range(0, len(train_X_tensor), config.batch_size):
+                    batch_X = train_X_tensor[i : i + config.batch_size]
+                    batch_y = train_y_tensor[i : i + config.batch_size]
 
-                optimizer.zero_grad()
-                outputs = model(batch_X)
-                loss = criterion(outputs, batch_y)
-                loss.backward()
-                optimizer.step()
+                    optimizer.zero_grad()
+                    outputs = model(batch_X)
+                    loss = criterion(outputs, batch_y)
+                    loss.backward()
+                    optimizer.step()
 
-                train_loss += loss.item()
+                    train_loss += loss.item()
 
-            # 验证阶段
-            model.eval()
-            with torch.no_grad():
-                val_outputs = model(val_X_tensor)
-                val_loss = criterion(val_outputs, val_y_tensor).item()
+                # 验证阶段
+                model.eval()
+                with torch.no_grad():
+                    val_outputs = model(val_X_tensor)
+                    val_loss = criterion(val_outputs, val_y_tensor).item()
 
-                # 早停检查
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    patience_counter = 0
-                    # 保存最佳模型状态
-                    best_model_state = model.state_dict().copy()
-                else:
-                    patience_counter += 1
+                    # 早停检查
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        patience_counter = 0
+                        # 保存最佳模型状态
+                        best_model_state = model.state_dict().copy()
+                    else:
+                        patience_counter += 1
 
-                if patience_counter >= config.early_stopping_patience:
-                    logger.info(f"早停触发，在第 {epoch+1} 轮停止训练")
-                    break
+                    if patience_counter >= config.early_stopping_patience:
+                        logger.info(f"早停触发，在第 {epoch+1} 轮停止训练")
+                        break
 
-            if (epoch + 1) % 10 == 0:
-                logger.info(
-                    f"Epoch {epoch+1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
-                )
-                if device.type == "cuda":
+                if (epoch + 1) % 10 == 0:
                     logger.info(
-                        f"GPU内存使用: {torch.cuda.memory_allocated(device) / 1024**2:.2f} MB"
+                        f"Epoch {epoch+1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
                     )
+                    if device.type == "cuda":
+                        logger.info(
+                            f"GPU内存使用: {torch.cuda.memory_allocated(device) / 1024**2:.2f} MB"
+                        )
 
-        # 恢复最佳模型状态
-        model.load_state_dict(best_model_state)
-
-        # 清理GPU内存
-        if device.type == "cuda":
-            torch.cuda.empty_cache()
-            logger.info("GPU内存已清理")
+            # 恢复最佳模型状态
+            model.load_state_dict(best_model_state)
+        finally:
+            # 清理GPU内存（无论是否发生异常都会执行）
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+                logger.info("GPU内存已清理")
 
         logger.info(f"深度学习模型训练完成: {config.model_type.value}")
         return model
@@ -908,22 +919,20 @@ class ModelTrainingService:
             model_path = self.models_dir / f"{model_filename}.pth"
             torch.save(model.state_dict(), model_path)
 
-        # 保存模型元数据到数据库
-        async with get_db_session() as session:
-            # 这里应该插入到model_metadata表，但为了简化先记录日志
-            metadata = {
-                "id": model_id,
-                "name": model_filename,
-                "type": config.model_type.value,
-                "version": "1.0",
-                "parameters": config.__dict__,
-                "performance_metrics": metrics.to_dict(),
-                "file_path": str(model_path),
-                "created_at": datetime.now().isoformat(),
-                "is_active": True,
-            }
+        # 保存模型元数据（记录日志，后续可扩展为写入数据库）
+        metadata = {
+            "id": model_id,
+            "name": model_filename,
+            "type": config.model_type.value,
+            "version": "1.0",
+            "parameters": {k: str(v) if isinstance(v, ModelType) else v for k, v in config.__dict__.items()},
+            "performance_metrics": metrics.to_dict() if hasattr(metrics, 'to_dict') else {},
+            "file_path": str(model_path),
+            "created_at": datetime.now().isoformat(),
+            "is_active": True,
+        }
 
-            logger.info(f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False)}")
+        logger.info(f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}")
 
         return str(model_path)
 
