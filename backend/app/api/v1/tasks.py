@@ -13,6 +13,7 @@ from loguru import logger
 from app.api.v1.dependencies import (
     execute_backtest_task_simple,
     execute_prediction_task_simple,
+    get_current_user,
 )
 from app.api.v1.schemas import (
     BacktestCompareRequest,
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
 
 @router.post("", response_model=StandardResponse)
-async def create_task(request: TaskCreateRequest):
+async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_current_user)):
     """创建任务（支持预测和回测）"""
     session = SessionLocal()
     try:
@@ -80,7 +81,7 @@ async def create_task(request: TaskCreateRequest):
         task = task_repository.create_task(
             task_name=request.task_name,
             task_type=task_type,
-            user_id="default_user",  # TODO: 从认证中获取真实用户ID
+            user_id=user_id,
             config=config,
         )
 
@@ -143,7 +144,12 @@ async def create_task(request: TaskCreateRequest):
 
 
 @router.get("", response_model=StandardResponse)
-async def list_tasks(status: Optional[str] = None, limit: int = 20, offset: int = 0):
+async def list_tasks(
+    status: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    user_id: str = Depends(get_current_user),
+):
     """获取任务列表"""
     session = SessionLocal()
     try:
@@ -159,7 +165,7 @@ async def list_tasks(status: Optional[str] = None, limit: int = 20, offset: int 
 
         # 获取任务列表
         tasks = task_repository.get_tasks_by_user(
-            user_id="default_user",
+            user_id=user_id,
             limit=limit,
             offset=offset,
             status_filter=status_filter,
@@ -167,7 +173,7 @@ async def list_tasks(status: Optional[str] = None, limit: int = 20, offset: int 
 
         # 获取总数
         total_tasks = task_repository.get_tasks_by_user(
-            user_id="default_user", limit=10000, offset=0, status_filter=status_filter
+            user_id=user_id, limit=10000, offset=0, status_filter=status_filter
         )
         total = len(total_tasks)
 
@@ -603,12 +609,12 @@ async def export_backtest_report(task_id: str, export_request: BacktestExportReq
 
 
 @router.get("/stats", response_model=StandardResponse)
-async def get_task_stats():
+async def get_task_stats(user_id: str = Depends(get_current_user)):
     """获取任务统计信息"""
     session = SessionLocal()
     try:
         task_repository = TaskRepository(session)
-        stats = task_repository.get_task_statistics(user_id="default_user", days=30)
+        stats = task_repository.get_task_statistics(user_id=user_id, days=30)
 
         # 转换为前端期望的格式
         status_counts = stats.get("status_counts", {})
@@ -822,7 +828,9 @@ async def get_task_detail(task_id: str):
 
 @router.delete("/{task_id}", response_model=StandardResponse)
 async def delete_task(
-    task_id: str, force: bool = Query(False, description="是否强制删除运行中的任务")
+    task_id: str,
+    force: bool = Query(False, description="是否强制删除运行中的任务"),
+    user_id: str = Depends(get_current_user),
 ):
     """删除任务"""
     session = SessionLocal()
@@ -831,7 +839,7 @@ async def delete_task(
 
         try:
             success = task_repository.delete_task(
-                task_id=task_id, user_id="default_user", force=force
+                task_id=task_id, user_id=user_id, force=force
             )
 
             if not success:

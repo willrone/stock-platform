@@ -3,7 +3,10 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修正预计算脚本的数据路径配置\n\n- 优化 data_root 参数处理，使用 backend_dir 变量替代硬编码路径\n- 修正股票文件扫描路径为实际存储位置 data/parquet/stock_data\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修正预计算脚本的数据路径配置\n\n- 优化 data_root 参数处理，使用 backend_dir 变量替代硬编码路径\n- 修正股票文件扫描路径为实际存储位置 data/parquet/stock_data\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python3 -m py_compile:*)"
     ]
   }
 }

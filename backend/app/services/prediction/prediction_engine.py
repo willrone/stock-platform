@@ -344,7 +344,27 @@ class RiskAssessment:
         confidence_level: float = 0.95,
     ) -> RiskMetrics:
         """评估预测风险"""
+        # 数据验证
+        if historical_prices is None or len(historical_prices) < 2:
+            logger.warning("历史价格数据不足，返回默认风险指标")
+            return RiskMetrics(0.0, 0.0, 0.0, 0.0, 0.0)
+
+        # 验证置信水平
+        if not 0.5 <= confidence_level <= 0.99:
+            logger.warning(f"置信水平 {confidence_level} 超出有效范围，使用默认值 0.95")
+            confidence_level = 0.95
+
+        # 验证预测价格
+        if predicted_price is None or predicted_price <= 0:
+            logger.warning(f"预测价格无效: {predicted_price}，返回默认风险指标")
+            return RiskMetrics(0.0, 0.0, 0.0, 0.0, 0.0)
+
         returns = historical_prices.pct_change().dropna()
+
+        # 验证收益率数据
+        if len(returns) == 0:
+            logger.warning("收益率数据为空，返回默认风险指标")
+            return RiskMetrics(0.0, 0.0, 0.0, 0.0, 0.0)
 
         # 计算各项风险指标
         var = RiskAssessment.calculate_var(returns, confidence_level)
@@ -398,8 +418,9 @@ class PredictionEngine:
             if end_date is None:
                 end_date = datetime.now()
 
-            # 检查缓存
-            cache_key = f"{stock_code}_{config.model_id}_{end_date.date()}"
+            # 检查缓存 - 使用更精确的缓存键（包含配置哈希）
+            config_hash = hash((config.horizon, config.confidence_level, config.prediction_days, config.use_ensemble))
+            cache_key = f"{stock_code}_{config.model_id}_{end_date.date()}_{config_hash}"
             if cache_key in self.prediction_cache:
                 cached_prediction = self.prediction_cache[cache_key]
                 if datetime.now() - cached_prediction.prediction_date < self.cache_ttl:
@@ -647,8 +668,20 @@ class PredictionEngine:
     ) -> Dict[str, Any]:
         """执行预测计算"""
         try:
-            # 获取最新特征
-            latest_features = features.iloc[-1:].fillna(0)
+            # 获取最新特征，使用与训练一致的预处理方式
+            latest_features = features.iloc[-1:].ffill(axis=0).bfill(axis=0).fillna(0)
+
+            # 特征列对齐验证
+            expected_features = model_metadata.get("feature_columns")
+            if expected_features:
+                missing_features = set(expected_features) - set(latest_features.columns)
+                if missing_features:
+                    logger.warning(f"缺少特征列: {missing_features}，将用0填充")
+                    for feat in missing_features:
+                        latest_features[feat] = 0.0
+                # 按训练时的顺序排列特征
+                available_features = [f for f in expected_features if f in latest_features.columns]
+                latest_features = latest_features[available_features]
 
             # 执行预测
             if hasattr(model, "predict"):

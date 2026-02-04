@@ -7,7 +7,9 @@ API依赖注入和共享函数
 
 import os
 from datetime import datetime
+from typing import Optional
 
+from fastapi import Header, Request
 from loguru import logger
 
 from app.core.database import SessionLocal
@@ -18,6 +20,48 @@ from app.repositories.task_repository import (
     TaskRepository,
 )
 from app.services.tasks import TaskQueueManager
+
+
+# 用户认证依赖
+async def get_current_user(
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    authorization: Optional[str] = Header(None),
+) -> str:
+    """
+    获取当前用户ID
+
+    支持多种认证方式：
+    1. X-User-ID 请求头（简单模式，用于开发和内部系统）
+    2. Authorization 请求头（Bearer token，用于生产环境）
+    3. ��认用户（当没有提供认证信息时）
+
+    Args:
+        x_user_id: 通过 X-User-ID 请求头传递的用户ID
+        authorization: Authorization 请求头（Bearer token）
+
+    Returns:
+        用户ID字符串
+    """
+    # 优先使用 X-User-ID 请求头
+    if x_user_id:
+        logger.debug(f"使用 X-User-ID 认证: {x_user_id}")
+        return x_user_id
+
+    # 尝试从 Authorization 头解析用户信息
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        # 这里可以添加 JWT 解析逻辑
+        # 目前简单处理：如果 token 格式为 "user:{user_id}"，则提取用户ID
+        if token.startswith("user:"):
+            user_id = token[5:]
+            logger.debug(f"使用 Bearer token 认证: {user_id}")
+            return user_id
+
+    # 默认用户（用于开发环境或未认证请求）
+    default_user = os.getenv("DEFAULT_USER_ID", "default_user")
+    logger.debug(f"使用默认用户: {default_user}")
+    return default_user
+
 
 # 全局任务队列管理器实例（仅用于主进程的任务调度）
 task_queue_manager = TaskQueueManager()

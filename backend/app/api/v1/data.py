@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
+from app.api.v1.dependencies import get_current_user
 from app.api.v1.schemas import (
     QlibPrecomputeRequest,
     RemoteDataSyncRequest,
@@ -36,7 +37,10 @@ router = APIRouter(prefix="/data", tags=["数据管理"])
     summary="触发Qlib指标/因子预计算",
     description="为全市场所有股票（或指定股票）预计算所有指标和因子，存储为Qlib格式",
 )
-async def trigger_qlib_precompute(request: QlibPrecomputeRequest):
+async def trigger_qlib_precompute(
+    request: QlibPrecomputeRequest,
+    user_id: str = Depends(get_current_user),
+):
     """
     触发Qlib指标/因子预计算任务
 
@@ -74,7 +78,7 @@ async def trigger_qlib_precompute(request: QlibPrecomputeRequest):
         task = task_repository.create_task(
             task_name=f"Qlib预计算任务",
             task_type=TaskType.QLIB_PRECOMPUTE,
-            user_id="default_user",  # TODO: 从认证中获取真实用户ID
+            user_id=user_id,
             config=config,
         )
 

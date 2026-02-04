@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from app.api.v1.dependencies import get_current_user
 from app.api.v1.schemas import HyperparameterOptimizationRequest, StandardResponse
 from app.core.database import SessionLocal
 from app.models.task_models import TaskStatus, TaskType
@@ -35,7 +36,9 @@ def get_db():
 
 @router.post("/tasks", response_model=StandardResponse)
 async def create_optimization_task(
-    request: HyperparameterOptimizationRequest, db: Session = Depends(get_db)
+    request: HyperparameterOptimizationRequest,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
 ):
     """创建超参优化任务"""
     try:
@@ -76,7 +79,7 @@ async def create_optimization_task(
         task = task_repository.create_task(
             task_name=request.task_name,
             task_type=TaskType.HYPERPARAMETER_OPTIMIZATION,
-            user_id="default_user",  # TODO: 从认证中获取真实用户ID
+            user_id=user_id,
             config=config,
         )
 
@@ -127,6 +130,7 @@ async def list_optimization_tasks(
     limit: int = 20,
     offset: int = 0,
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
 ):
     """获取超参优化任务列表"""
     try:
@@ -134,7 +138,7 @@ async def list_optimization_tasks(
 
         # 直接按任务类型查询优化任务，避免先取全部再过滤导致列表为空
         optimization_tasks = task_repository.get_tasks_by_user(
-            user_id="default_user",  # TODO: 从认证中获取
+            user_id=user_id,
             limit=limit,
             offset=offset,
             status_filter=TaskStatus[status.upper()] if status else None,
