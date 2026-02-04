@@ -530,6 +530,9 @@ async def run_backtest(request: BacktestRequest):
             enable_performance_profiling=_parse_bool_env(
                 "ENABLE_BACKTEST_PERFORMANCE_PROFILING", default=False
             ),
+            enable_parallel=True,
+            use_multiprocessing=True,  # 启用多进程以突破GIL限制
+            max_workers=8,  # 使用8个工作进程
         )
 
         # 验证参数

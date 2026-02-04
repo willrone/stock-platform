@@ -1058,7 +1058,8 @@ class HyperparameterOptimizationTaskExecutor:
                     logger.error(error_msg)
                     raise ValueError(error_msg) from e
 
-                optimizer = StrategyHyperparameterOptimizer()
+                # 使用 n_jobs=1 避免多进程状态同步问题
+                optimizer = StrategyHyperparameterOptimizer(n_jobs=1)
 
                 # 创建新的事件循环来运行异步代码
                 new_loop = asyncio.new_event_loop()

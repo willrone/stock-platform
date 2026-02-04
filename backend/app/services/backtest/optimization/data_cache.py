@@ -6,6 +6,7 @@
 
 import hashlib
 import threading
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -115,6 +116,29 @@ class BacktestDataCache:
         
         logger.info(f"预加载完成: {loaded_count}/{len(stock_codes)} 只股票")
         return loaded_count
+
+    async def preload_async(
+        self,
+        stock_codes: List[str],
+        start_date: datetime,
+        end_date: datetime,
+        data_loader: Optional[callable] = None,
+    ) -> int:
+        """异步预加载（供优化器使用）。
+
+        `StrategyHyperparameterOptimizer` 只调用 `preload_async(stock_codes, start_date, end_date)`。
+        为了保持兼容：
+        - 如果提供 data_loader，则在后台线程中执行同步预加载。
+        - 如果未提供 data_loader，则作为 no-op（返回 0），让优化流程继续走。
+          （数据加载会由回测执行器在后续步骤自行完成，只是少了预热缓存。）
+        """
+        if data_loader is None:
+            logger.info("preload_async: 未提供 data_loader，跳过预加载（兼容模式）")
+            return 0
+
+        return await asyncio.to_thread(
+            self.preload_stock_data, stock_codes, start_date, end_date, data_loader
+        )
     
     def get_stock_data(
         self,

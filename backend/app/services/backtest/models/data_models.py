@@ -64,3 +64,9 @@ class BacktestConfig:
     stop_loss_pct: float = 0.05  # 止损比例
     take_profit_pct: float = 0.15  # 止盈比例
     rebalance_frequency: str = "daily"  # 调仓频率
+
+    # 性能：大规模回测默认不需要每天的完整组合快照；
+    # equity 曲线单独记录，不受该开关影响。
+    record_portfolio_history: bool = True
+    portfolio_history_stride: int = 1  # >1 表示降采样（每 stride 天记录一次）
+    record_positions_in_history: bool = True  # False 时快照不包含 positions 明细

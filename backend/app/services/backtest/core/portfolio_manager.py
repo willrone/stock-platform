@@ -25,7 +25,12 @@ class PortfolioManager:
         self.positions: Dict[str, Position] = {}
         self.trades: List[Trade] = []
         self.portfolio_history: List[Dict[str, Any]] = []
+        # 轻量 equity 曲线（始终记录）
+        self.equity_curve: List[Tuple[datetime, float]] = []
         self.trade_counter = 0
+
+        # 内部计数：用于 portfolio_history 降采样
+        self._snapshot_counter = 0
 
         # 无成本组合跟踪（用于计算无成本收益）
         self.cash_without_cost = config.initial_cash
@@ -256,7 +261,7 @@ class PortfolioManager:
         )
 
         self.trades.append(trade)
-        logger.info(
+        logger.debug(
             f"执行买入: {stock_code}, 数量: {quantity}, 价格: {price:.2f}, 手续费: {commission:.2f}, 滑点: {slippage_cost:.2f}"
         )
 
@@ -330,7 +335,7 @@ class PortfolioManager:
         )
 
         self.trades.append(trade)
-        logger.info(
+        logger.debug(
             f"执行卖出: {stock_code}, 数量: {quantity}, 价格: {price:.2f}, 盈亏: {pnl:.2f}, 手续费: {commission:.2f}, 滑点: {slippage_cost:.2f}"
         )
 
@@ -345,6 +350,9 @@ class PortfolioManager:
             current_prices
         )
 
+        # 轻量记录（用于指标计算/画 equity），不受 record_portfolio_history 影响
+        self.equity_curve.append((date, float(portfolio_value)))
+
         # --- sanity log (debug aid) ---
         # 性能注意：大规模回测会极其频繁调用该函数；默认关闭该日志，避免刷屏/IO 成为瓶颈。
         try:
@@ -357,55 +365,77 @@ class PortfolioManager:
         except Exception:
             pass
 
-        snapshot = {
-            "date": date,
-            "cash": self.cash,
-            "portfolio_value": portfolio_value,
-            "portfolio_value_without_cost": portfolio_value_without_cost,  # 无成本组合价值
-            "positions": {
-                code: {
-                    "quantity": pos.quantity,
-                    "avg_cost": pos.avg_cost,
-                    "current_price": pos.current_price,
-                    "market_value": pos.market_value,
-                    "unrealized_pnl": pos.unrealized_pnl,
+        # 可选记录完整快照（可能非常耗时/耗内存）
+        self._snapshot_counter += 1
+        if getattr(self.config, "record_portfolio_history", True):
+            stride = int(getattr(self.config, "portfolio_history_stride", 1) or 1)
+            if stride <= 1 or (self._snapshot_counter % stride == 0):
+                if getattr(self.config, "record_positions_in_history", True):
+                    positions_payload = {
+                        code: {
+                            "quantity": pos.quantity,
+                            "avg_cost": pos.avg_cost,
+                            "current_price": pos.current_price,
+                            "market_value": pos.market_value,
+                            "unrealized_pnl": pos.unrealized_pnl,
+                        }
+                        for code, pos in self.positions.items()
+                    }
+                else:
+                    positions_payload = {}
+
+                snapshot = {
+                    "date": date,
+                    "cash": self.cash,
+                    "portfolio_value": portfolio_value,
+                    "portfolio_value_without_cost": portfolio_value_without_cost,  # 无成本组合价值
+                    "positions": positions_payload,
+                    "total_trades": len(self.trades),
+                    "total_commission": self.total_commission,
+                    "total_slippage": self.total_slippage,
                 }
-                for code, pos in self.positions.items()
-            },
-            "total_trades": len(self.trades),
-            "total_commission": self.total_commission,
-            "total_slippage": self.total_slippage,
-        }
 
-        self.portfolio_history.append(snapshot)
+                self.portfolio_history.append(snapshot)
 
-        # 记录无成本组合快照
-        snapshot_without_cost = {
-            "date": date,
-            "cash": self.cash_without_cost,
-            "portfolio_value": portfolio_value_without_cost,
-            "positions": {
-                code: {
-                    "quantity": pos.quantity,
-                    "avg_cost": pos.avg_cost,
-                    "current_price": pos.current_price,
-                    "market_value": pos.market_value,
-                    "unrealized_pnl": pos.unrealized_pnl,
+        # 记录无成本组合快照（同样受 record_portfolio_history 控制）
+        if getattr(self.config, "record_portfolio_history", True):
+            stride = int(getattr(self.config, "portfolio_history_stride", 1) or 1)
+            if stride <= 1 or (self._snapshot_counter % stride == 0):
+                if getattr(self.config, "record_positions_in_history", True):
+                    positions_payload_nc = {
+                        code: {
+                            "quantity": pos.quantity,
+                            "avg_cost": pos.avg_cost,
+                            "current_price": pos.current_price,
+                            "market_value": pos.market_value,
+                            "unrealized_pnl": pos.unrealized_pnl,
+                        }
+                        for code, pos in self.positions_without_cost.items()
+                    }
+                else:
+                    positions_payload_nc = {}
+
+                snapshot_without_cost = {
+                    "date": date,
+                    "cash": self.cash_without_cost,
+                    "portfolio_value": portfolio_value_without_cost,
+                    "positions": positions_payload_nc,
+                    "total_trades": len(self.trades),
                 }
-                for code, pos in self.positions_without_cost.items()
-            },
-            "total_trades": len(self.trades),
-        }
 
-        self.portfolio_history_without_cost.append(snapshot_without_cost)
+                self.portfolio_history_without_cost.append(snapshot_without_cost)
 
     def get_performance_metrics(self) -> Dict[str, float]:
         """计算绩效指标（含成本）"""
-        if not self.portfolio_history:
+        # 优先使用轻量 equity_curve
+        if self.equity_curve:
+            values = [v for _, v in self.equity_curve]
+        elif self.portfolio_history:
+            values = [snapshot["portfolio_value"] for snapshot in self.portfolio_history]
+        else:
             return {}
 
         # 计算收益序列
-        values = [snapshot["portfolio_value"] for snapshot in self.portfolio_history]
         returns = pd.Series(values).pct_change().dropna()
 
         if len(returns) == 0:
@@ -417,9 +447,10 @@ class PortfolioManager:
         ) / self.config.initial_cash
 
         # 年化收益率
-        days = (
-            self.portfolio_history[-1]["date"] - self.portfolio_history[0]["date"]
-        ).days
+        if self.equity_curve:
+            days = (self.equity_curve[-1][0] - self.equity_curve[0][0]).days
+        else:
+            days = (self.portfolio_history[-1]["date"] - self.portfolio_history[0]["date"]).days
         annualized_return = (
             (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
         )

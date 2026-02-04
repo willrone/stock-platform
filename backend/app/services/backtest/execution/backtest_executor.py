@@ -168,6 +168,10 @@ class BacktestExecutor:
         task_id: str = None,
     ) -> Dict[str, Any]:
         """运行回测"""
+        # 轻量分段计时（始终可用，不依赖 performance_profiler）
+        perf_breakdown: Dict[str, float] = {}
+        _t_total0 = time.perf_counter()
+
         # 初始化性能分析器
         if self.enable_performance_profiling:
             self.performance_profiler = BacktestPerformanceProfiler(
@@ -196,6 +200,7 @@ class BacktestExecutor:
                 )
 
             # 创建策略（性能监控）
+            _t0 = time.perf_counter()
             if self.enable_performance_profiling:
                 self.performance_profiler.start_stage(
                     "strategy_setup",
@@ -220,6 +225,7 @@ class BacktestExecutor:
 
             if self.enable_performance_profiling:
                 self.performance_profiler.end_stage("strategy_setup")
+            perf_breakdown["strategy_setup_s"] = time.perf_counter() - _t0
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -230,6 +236,7 @@ class BacktestExecutor:
             portfolio_manager = PortfolioManager(backtest_config)
 
             # 加载数据（性能监控）
+            _t0 = time.perf_counter()
             if self.enable_performance_profiling:
                 self.performance_profiler.start_stage(
                     "data_loading",
@@ -261,6 +268,7 @@ class BacktestExecutor:
                     },
                 )
                 self.performance_profiler.take_memory_snapshot("after_data_loading")
+            perf_breakdown["data_loading_s"] = time.perf_counter() - _t0
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -270,12 +278,21 @@ class BacktestExecutor:
             # 获取交易日历
             trading_dates = self._get_trading_calendar(stock_data, start_date, end_date)
 
+            # 预处理（日期索引 + 预计算信号 + 信号提取）
+            _t0 = time.perf_counter()
+
             # ✅ 日期预索引：为每只股票建立 date->idx 映射，回测循环里用 O(1) 查找替代 get_loc
             # 经验上这是纯收益（相比指标预热，不会把计算串行化）。
             self._build_date_index(stock_data)
 
             # ✅ 信号向量化预计算：在进入每日循环前，先尝试一次性算出全量买卖点
             self._precompute_strategy_signals(strategy, stock_data)
+            
+            # ✅ 信号提取优化：将预计算信号提取到扁平字典，避免回测循环中重复查找 attrs
+            precomputed_signals = self._extract_precomputed_signals_to_dict(strategy, stock_data)
+
+            perf_breakdown["precompute_signals_s"] = time.perf_counter() - _t0
+            # align_arrays_s 统计在 main_loop 前单独记录
 
             # 注：指标预热（_warm_indicator_cache）如果在主线程顺序执行，可能会把原本并行的指标计算串行化，
             # 因而未默认开启；后续可按需实现并行预热。
@@ -333,6 +350,12 @@ class BacktestExecutor:
                     task_id, "backtest_execution", status="running"
                 )
 
+            _t0 = time.perf_counter()
+            # Phase1 预备：将 close/valid/signal 对齐成 ndarray，减少主循环 DataFrame/dict 访问
+            _t1 = time.perf_counter()
+            aligned_arrays = self._build_aligned_arrays(strategy, stock_data, trading_dates)
+            perf_breakdown["align_arrays_s"] = time.perf_counter() - _t1
+
             backtest_results = await self._execute_backtest_loop(
                 strategy,
                 portfolio_manager,
@@ -341,7 +364,10 @@ class BacktestExecutor:
                 strategy_config=strategy_config,
                 task_id=task_id,
                 backtest_id=backtest_id,
+                precomputed_signals=precomputed_signals,
+                aligned_arrays=aligned_arrays,
             )
+            perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
 
             if self.enable_performance_profiling:
                 self.performance_profiler.end_stage(
@@ -375,7 +401,9 @@ class BacktestExecutor:
                     task_id, "metrics_calculation", status="running"
                 )
 
+            _t0 = time.perf_counter()
             performance_metrics = portfolio_manager.get_performance_metrics()
+            perf_breakdown["metrics_s"] = time.perf_counter() - _t0
 
             if self.enable_performance_profiling:
                 self.performance_profiler.end_stage("metrics_calculation")
@@ -406,6 +434,7 @@ class BacktestExecutor:
                     f"策略配置为空或无效: {strategy_config}, 类型: {type(strategy_config)}"
                 )
 
+            _t0 = time.perf_counter()
             backtest_report = self._generate_backtest_report(
                 strategy_name,
                 stock_codes,
@@ -416,7 +445,8 @@ class BacktestExecutor:
                 performance_metrics,
                 strategy_config=strategy_config,
             )
-            # 将回测循环统计（信号数、交易日等）写入报告，便于排查“无信号记录”等问题
+            perf_breakdown["report_generation_s"] = time.perf_counter() - _t0
+            # 将回测循环统计（信号数、交易日等）写入报告，便于排查"无信号记录"等问题
             backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
             backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
 
@@ -471,6 +501,10 @@ class BacktestExecutor:
                         logger.info(f"性能报告已保存到: {performance_file}")
                     except Exception as e:
                         logger.warning(f"保存性能报告失败: {e}")
+
+            # 轻量分段计时结果写入报告（bench脚本唯一入口依赖此字段）
+            perf_breakdown["total_wall_s"] = time.perf_counter() - _t_total0
+            backtest_report["perf_breakdown"] = perf_breakdown
 
             return backtest_report
 
@@ -630,6 +664,162 @@ class BacktestExecutor:
                 f"✅ 策略 {strategy.name} 向量化预计算完成: {success_count}/{total_stocks} 只股票"
             )
 
+    def _extract_precomputed_signals_to_dict(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+    ) -> Dict[Tuple[str, datetime], Any]:
+        """
+        [性能优化] 将预计算的信号从 DataFrame.attrs 提取到扁平字典。
+        
+        这样在回测循环中可以直接用 (stock_code, date) 查找信号，
+        避免每次都访问 attrs 字典和 id(strategy) 查找。
+        
+        Returns:
+            Dict[(stock_code, date), signal]: 扁平的信号字典
+        """
+        signal_dict = {}
+        
+        try:
+            from ..core.strategy_portfolio import StrategyPortfolio
+            
+            if isinstance(strategy, StrategyPortfolio):
+                # Portfolio策略：递归提取所有子策略的信号
+                for sub in strategy.strategies:
+                    sub_signals = self._extract_precomputed_signals_to_dict(sub, stock_data)
+                    signal_dict.update(sub_signals)
+                return signal_dict
+        except Exception as e:
+            logger.warning(f"Portfolio策略信号提取失败: {e}")
+        
+        # 提取单个策略的信号
+        strategy_id = id(strategy)
+        extracted_count = 0
+        
+        for stock_code, data in stock_data.items():
+            try:
+                precomputed = data.attrs.get("_precomputed_signals", {})
+                signals = precomputed.get(strategy_id)
+                
+                if signals is not None:
+                    # signals 可能是 pd.Series 或 dict
+                    if isinstance(signals, pd.Series):
+                        for date, signal in signals.items():
+                            if signal is not None:
+                                signal_dict[(stock_code, date)] = signal
+                                extracted_count += 1
+                    elif isinstance(signals, dict):
+                        for date, signal in signals.items():
+                            if signal is not None:
+                                signal_dict[(stock_code, date)] = signal
+                                extracted_count += 1
+            except Exception as e:
+                logger.warning(f"提取股票 {stock_code} 的信号失败: {e}")
+        
+        if extracted_count > 0:
+            logger.info(
+                f"✅ 策略 {strategy.name} 信号提取完成: {extracted_count} 个信号"
+            )
+        
+        return signal_dict
+
+    def _build_aligned_arrays(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+        trading_dates: List[datetime],
+    ) -> Dict[str, Any]:
+        """[Phase1] 将数据/信号对齐到 ndarray，减少主循环 DataFrame/字典访问。
+
+        Returns:
+            {
+              'stock_codes': [...],
+              'dates': np.ndarray[datetime64],
+              'close': float64[N,T] (nan=missing),
+              'open':  float64[N,T] (nan=missing),
+              'valid': bool[N,T],
+              'signal': int8[N,T] (1=BUY, -1=SELL, 0=NONE)
+            }
+        """
+        stock_codes = list(stock_data.keys())
+        T = len(trading_dates)
+        N = len(stock_codes)
+
+        dates64 = np.array(trading_dates, dtype='datetime64[ns]')
+
+        close = np.full((N, T), np.nan, dtype=np.float64)
+        open_ = np.full((N, T), np.nan, dtype=np.float64)
+        valid = np.zeros((N, T), dtype=bool)
+        signal = np.zeros((N, T), dtype=np.int8)
+
+        # 如果已做向量化预计算信号，尽量直接读取 per-stock Series 并对齐到 trading_dates
+        strategy_id = id(strategy)
+
+        for i, code in enumerate(stock_codes):
+            df = stock_data[code]
+
+            # price alignment
+            try:
+                s_close = df['close'].reindex(trading_dates)
+                s_open = df['open'].reindex(trading_dates) if 'open' in df.columns else None
+
+                close[i, :] = s_close.to_numpy(dtype=np.float64, copy=False)
+                if s_open is not None:
+                    open_[i, :] = s_open.to_numpy(dtype=np.float64, copy=False)
+                valid[i, :] = ~np.isnan(close[i, :])
+            except Exception:
+                # fallback: per-date fill (slow path, should be rare)
+                idx_map = df.attrs.get('_date_to_idx') if hasattr(df, 'attrs') else None
+                for t, d in enumerate(trading_dates):
+                    try:
+                        if idx_map and d in idx_map:
+                            k = int(idx_map[d])
+                            close[i, t] = float(df['close'].iloc[k])
+                            if 'open' in df.columns:
+                                open_[i, t] = float(df['open'].iloc[k])
+                            valid[i, t] = True
+                        elif d in df.index:
+                            close[i, t] = float(df.loc[d, 'close'])
+                            if 'open' in df.columns:
+                                open_[i, t] = float(df.loc[d, 'open'])
+                            valid[i, t] = True
+                    except Exception:
+                        pass
+
+            # signal alignment (1/-1/0)
+            try:
+                pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
+                sig_ser = pre.get(strategy_id)
+                if isinstance(sig_ser, pd.Series):
+                    s = sig_ser.reindex(trading_dates)
+                    vals = s.to_numpy(dtype=object, copy=False)
+                    # map SignalType to int8
+                    for t, v in enumerate(vals):
+                        if v == SignalType.BUY:
+                            signal[i, t] = 1
+                        elif v == SignalType.SELL:
+                            signal[i, t] = -1
+                elif isinstance(sig_ser, dict):
+                    for t, d in enumerate(trading_dates):
+                        v = sig_ser.get(d)
+                        if v == SignalType.BUY:
+                            signal[i, t] = 1
+                        elif v == SignalType.SELL:
+                            signal[i, t] = -1
+            except Exception:
+                pass
+
+        return {
+            'stock_codes': stock_codes,
+            'code_to_i': {c: idx for idx, c in enumerate(stock_codes)},
+            'dates': dates64,
+            'close': close,
+            'open': open_,
+            'valid': valid,
+            'signal': signal,
+        }
+
+
     def _precompute_signals_multiprocess(
         self,
         strategy: BaseStrategy,
@@ -720,6 +910,8 @@ class BacktestExecutor:
         strategy_config: Optional[Dict[str, Any]] = None,
         task_id: str = None,
         backtest_id: str = None,
+        precomputed_signals: Optional[Dict[Tuple[str, datetime], Any]] = None,
+        aligned_arrays: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """执行回测主循环"""
         total_signals = 0
@@ -773,8 +965,8 @@ class BacktestExecutor:
             gen_time_total = 0.0
             gen_time_max = 0.0
 
-            # 在循环开始时检查任务状态（每10个交易日检查一次，避免频繁检查）
-            if task_id and i % 10 == 0 and i > 0:
+            # 在循环开始时检查任务状态（每50个交易日检查一次，避免频繁检查）
+            if task_id and i % 50 == 0 and i > 0:
                 if not check_task_status():
                     logger.info(f"任务状态检查失败，停止回测执行: {task_id}")
                     raise TaskError(
@@ -782,26 +974,129 @@ class BacktestExecutor:
                         severity=ErrorSeverity.LOW,
                     )
             try:
-                # 获取当前价格
-                current_prices = {}
-                for stock_code, data in stock_data.items():
-                    if current_date in data.index:
-                        current_prices[stock_code] = data.loc[current_date, "close"]
+                # 获取当前价格（Phase1：尽量走对齐后的 ndarray，减少 DataFrame 访问）
+                current_prices: Dict[str, float] = {}
+
+                if aligned_arrays is not None:
+                    codes = aligned_arrays.get("stock_codes")
+                    code_to_i = aligned_arrays.get("code_to_i")
+                    close_mat = aligned_arrays.get("close")
+                    valid_mat = aligned_arrays.get("valid")
+                    sig_mat = aligned_arrays.get("signal")
+
+                    need_codes = set()
+                    try:
+                        need_codes.update(portfolio_manager.positions.keys())
+                    except Exception:
+                        pass
+                    try:
+                        need_codes.update(portfolio_manager.positions_without_cost.keys())
+                    except Exception:
+                        pass
+
+                    if isinstance(sig_mat, np.ndarray):
+                        sig_idx = np.nonzero(sig_mat[:, i])[0]
+                        for j in sig_idx.tolist():
+                            need_codes.add(codes[j])
+
+                    if not need_codes:
+                        continue
+
+                    for c in need_codes:
+                        j = code_to_i.get(c) if isinstance(code_to_i, dict) else None
+                        if j is None:
+                            continue
+                        if bool(valid_mat[j, i]):
+                            current_prices[c] = float(close_mat[j, i])
+
+                else:
+                    for stock_code, data in stock_data.items():
+                        if current_date in data.index:
+                            current_prices[stock_code] = data.loc[current_date, "close"]
 
                 if not current_prices:
                     continue
 
-                # 生成交易信号（支持并行生成多股票信号）
-                all_signals = []
+                # 生成交易信号（Phase1：优先用 ndarray signal matrix）
+                all_signals: List[TradingSignal] = []
+
+                if aligned_arrays is not None:
+                    sig_mat = aligned_arrays.get("signal")
+                    codes = aligned_arrays.get("stock_codes")
+                    close_mat = aligned_arrays.get("close")
+                    valid_mat = aligned_arrays.get("valid")
+                    if isinstance(sig_mat, np.ndarray):
+                        sig_idx = np.nonzero(sig_mat[:, i])[0]
+                        if sig_idx.size > 0:
+                            for j in sig_idx.tolist():
+                                if not bool(valid_mat[j, i]):
+                                    continue
+                                st = int(sig_mat[j, i])
+                                if st == 1:
+                                    stype = SignalType.BUY
+                                elif st == -1:
+                                    stype = SignalType.SELL
+                                else:
+                                    continue
+                                code = codes[j]
+                                price = float(close_mat[j, i])
+                                all_signals.append(
+                                    TradingSignal(
+                                        timestamp=current_date,
+                                        stock_code=code,
+                                        signal_type=stype,
+                                        strength=1.0,
+                                        price=price,
+                                        reason="[aligned] precomputed",
+                                        metadata=None,
+                                    )
+                                )
+
+                # 若对齐数组未生成信号，再走原有路径（兼容其它策略）
+                if not all_signals:
+                    # 生成交易信号（支持并行生成多股票信号）
+                    all_signals = []
 
                 # 性能监控：记录信号生成时间
                 signal_start_time = (
                     time.perf_counter() if self.enable_performance_profiling else None
                 )
 
-                # 细分 profiling：把“切片”和“生成信号”拆开计时（变量已在循环开头初始化）
+                # ��分 profiling：把"切片"和"生成信号"拆开计时（变量已在循环开头初始化）
 
-                if self.enable_parallel and len(stock_data) > 3:
+                
+                # 辅助函数：快速查找预计算信号
+                def get_precomputed_signal_fast(stock_code: str, date: datetime):
+                    """从预计算字典中快速查找信号，如果没有则返回None"""
+                    if precomputed_signals:
+                        signal = precomputed_signals.get((stock_code, date))
+                        if signal is not None:
+                            # 将信号类型转换为 TradingSignal 对象
+                            from ..models import TradingSignal, SignalType
+                            if isinstance(signal, SignalType):
+                                # 获取当前价格
+                                try:
+                                    data = stock_data.get(stock_code)
+                                    if data is not None and date in data.index:
+                                        current_price = float(data.loc[date, "close"])
+                                    else:
+                                        current_price = 0.0
+                                except Exception:
+                                    current_price = 0.0
+                                
+                                return [TradingSignal(
+                                    signal_type=signal,
+                                    stock_code=stock_code,
+                                    timestamp=date,
+                                    price=current_price,
+                                    strength=1.0,
+                                    reason=f"Precomputed signal"
+                                )]
+                            return [signal] if not isinstance(signal, list) else signal
+                    return None
+
+                # PERF OPTIMIZATION: 禁用per-day并行，因为信号已经预计算，串行更快
+                if False and self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号
                     # PERF: avoid per-day ThreadPoolExecutor creation and avoid per-stock futures.
                     # We batch stocks into coarse tasks to reduce scheduling overhead.
@@ -911,7 +1206,11 @@ class BacktestExecutor:
                                             continue
 
                                         t1 = time.perf_counter()
-                                        sigs = strategy.generate_signals(data, cd)
+                                        # 优先使用预计算信号
+                                        sigs = get_precomputed_signal_fast(stock_code, cd)
+                                        if sigs is None:
+                                            # Fallback: 调用策略生成
+                                            sigs = strategy.generate_signals(data, cd)
                                         gen_dur = time.perf_counter() - t1
                                         gen_sum += float(gen_dur)
                                         if gen_dur > gen_max:
@@ -1029,7 +1328,11 @@ class BacktestExecutor:
                             if current_idx >= 20:
                                 try:
                                     t1 = time.perf_counter()
-                                    signals = strategy.generate_signals(data, current_date)
+                                    # 优先使用预计算信号
+                                    signals = get_precomputed_signal_fast(stock_code, current_date)
+                                    if signals is None:
+                                        # Fallback: 调用策略生成
+                                        signals = strategy.generate_signals(data, current_date)
                                     _dur = time.perf_counter() - t1
                                     gen_time_total += _dur
                                     if _dur > gen_time_max:
@@ -1049,8 +1352,8 @@ class BacktestExecutor:
                         "generate_signals", signal_duration
                     )
 
-                    # 新口径：拆开看“切片”与“策略信号生成”的比例
-                    # 注意：并行模式下 slice_time_total / gen_time_total 是“各线程耗时求和”(work)，
+                    # 新口径：拆开看"切片"与"策略信号生成"的比例
+                    # 注意：并行模式下 slice_time_total / gen_time_total 是"各线程耗时求和"(work)，
                     # 不是 wall-clock；用于判断 CPU work 构成，但不能直接当成整体耗时百分比。
                     if slice_time_total > 0:
                         self.performance_profiler.record_function_call(
@@ -1348,7 +1651,7 @@ class BacktestExecutor:
                 )
 
                 # --- Sanity check (debug): topk_buffer must never exceed topk holdings ---
-                # 这条只做告警，不改变交易行为，用于定位“持仓数为何会>topk”。
+                # 这条只做告警，不改变交易行为，用于定位"持仓数为何会>topk"。
                 try:
                     tm = None
                     k_limit = None
@@ -1558,7 +1861,7 @@ class BacktestExecutor:
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "initial_cash": config.initial_cash,
-            # NOTE: Do NOT call get_portfolio_value({}) here — passing an empty price map
+            # NOTE: Do NOT call get_portfolio_value({}) here - passing an empty price map
             # will value all positions at 0 and return cash-only, which makes final_value
             # inconsistent with total_return/portfolio_history.
             # Use the last recorded portfolio value (already computed with prices) when available.
@@ -1919,7 +2222,8 @@ class BacktestExecutor:
             ).sort_index()
 
             # 月度收益（月末权益）
-            monthly_values = portfolio_values.resample("M").last()
+            # pandas>=3.0: 'M' deprecated, use month-end 'ME'
+            monthly_values = portfolio_values.resample("ME").last()
             monthly_returns = monthly_values.pct_change().dropna()
 
             if len(monthly_returns) > 0:
@@ -2035,9 +2339,9 @@ class BacktestExecutor:
             if not stock_codes or len(stock_codes) == 0:
                 raise TaskError(message="股票代码列表不能为空", severity=ErrorSeverity.MEDIUM)
 
-            if len(stock_codes) > 50:
+            if len(stock_codes) > 1000:
                 raise TaskError(
-                    message=f"股票数量过多: {len(stock_codes)}，最多支持50只股票",
+                    message=f"股票数量过多: {len(stock_codes)}，最多支持1000只股票",
                     severity=ErrorSeverity.MEDIUM,
                 )
 

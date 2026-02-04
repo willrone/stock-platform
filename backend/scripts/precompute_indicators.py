@@ -98,11 +98,13 @@ class IndicatorPrecomputer:
         try:
             # 1. 加载原始数据
             logger.info(f"加载股票数据: {stock_code}")
-            data = self.loader.load_stock_data(
-                stock_code,
-                start_date=start_date,
-                end_date=end_date
-            )
+            # 这里强制从原始 parquet 读 OHLCV，避免“预计算已存在时又读预计算”形成不必要的 IO
+            #（也避免已有指标列影响本次重新计算的指标列是否覆盖）
+            data = self.loader._load_base_data(stock_code)
+            if start_date is not None:
+                data = data[data.index >= pd.Timestamp(start_date)]
+            if end_date is not None:
+                data = data[data.index <= pd.Timestamp(end_date)]
             
             if data.empty:
                 logger.warning(f"股票数据为空: {stock_code}")
@@ -219,11 +221,24 @@ def main():
     precomputer = IndicatorPrecomputer()
     
     # 确定要处理的股票列表
+    def safe_to_ts_code(stem: str) -> str:
+        """将 safe_code 文件名转换为 ts_code（尽量还原为 000001.SZ 形式）。
+
+        - 常见 parquet 文件名是 000001_SZ（StockDataLoader 也用 '.'->'_' 的规则）
+        - 若无法识别，则原样返回
+        """
+        if "_" in stem and "." not in stem:
+            parts = stem.split("_")
+            if len(parts) >= 2:
+                # 只把最后一个 '_' 还原为 '.'，避免未来出现更多分段时误伤
+                return "_".join(parts[:-1]) + "." + parts[-1]
+        return stem
+
     if args.all:
         # 扫描 data/parquet/stock_data 目录获取所有股票
         data_dir = backend_dir / "data" / "parquet" / "stock_data"
         stock_files = list(data_dir.glob("*.parquet"))
-        stock_codes = [f.stem for f in stock_files]
+        stock_codes = [safe_to_ts_code(f.stem) for f in stock_files]
         logger.info(f"找到 {len(stock_codes)} 只股票")
     elif args.stocks:
         stock_codes = args.stocks

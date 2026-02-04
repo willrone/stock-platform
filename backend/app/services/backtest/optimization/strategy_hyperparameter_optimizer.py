@@ -199,8 +199,6 @@ class StrategyHyperparameterOptimizer:
 
         # 创建回测执行器
         try:
-            import os
-
             enable_perf = os.getenv(
                 "ENABLE_BACKTEST_PERFORMANCE_PROFILING", "false"
             ).strip().lower() in {"1", "true", "yes", "y", "on"}
