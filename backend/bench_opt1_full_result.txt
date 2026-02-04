@@ -1,0 +1,27 @@
+2026-02-04 10:19:46.920 | WARNING  | app.services.backtest.strategies.technical.basic_strategies:<module>:24 - TA-Lib未安装，将使用pandas实现技术指标
+/Users/ronghui/Documents/GitHub/willrone/backend/app/services/infrastructure/compatibility_validator.py:17: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+2026-02-04 10:19:47.195 | INFO     | app.services.infrastructure.compatibility_validator:__init__:728 - 模型兼容性验证器初始化完成
+2026-02-04 10:19:47.198 | INFO     | app.services.infrastructure.deployment_manager:register_check:156 - 注册健康检查: model_file
+2026-02-04 10:19:47.198 | INFO     | app.services.infrastructure.deployment_manager:register_check:156 - 注册健康检查: model_load
+2026-02-04 10:19:47.198 | INFO     | app.services.infrastructure.deployment_manager:register_collector:192 - 注册指标收集器: response_time_ms
+2026-02-04 10:19:47.198 | INFO     | app.services.infrastructure.deployment_manager:register_collector:192 - 注册指标收集器: error_rate
+2026-02-04 10:19:47.198 | INFO     | app.services.infrastructure.deployment_manager:__init__:249 - 部署管理器初始化完成
+2026-02-04 10:19:47.204 | INFO     | app.services.infrastructure.health_monitor:register_check:126 - 注册健康检查: model_file
+2026-02-04 10:19:47.204 | INFO     | app.services.infrastructure.health_monitor:register_check:126 - 注册健康检查: model_load
+2026-02-04 10:19:47.204 | INFO     | app.services.infrastructure.health_monitor:register_check:126 - 注册健康检查: api_connectivity
+2026-02-04 10:19:47.204 | INFO     | app.services.infrastructure.health_monitor:register_test:243 - 注册性能测试: model_prediction
+2026-02-04 10:19:47.204 | INFO     | app.services.infrastructure.health_monitor:__init__:500 - 健康监控服务初始化完成
+[universe] from file: /Users/ronghui/Documents/GitHub/willrone/backend/data/universe_500.txt (codes=500)
+[done] n=10 wall=0.871s load=0.187s precompute=0.398s align=0.201s loop=0.279s metrics=0.001s
+[done] n=50 wall=3.683s load=0.223s precompute=1.943s align=1.011s loop=1.489s metrics=0.001s
+[done] n=100 wall=7.462s load=0.391s precompute=3.834s align=2.045s loop=3.184s metrics=0.001s
+[done] n=200 wall=15.450s load=0.743s precompute=7.687s align=4.067s loop=6.916s metrics=0.001s
+
+=== BENCH RESULT (seconds) ===
+  N |    wall |    load | precomp |   align |    loop | metrics
+----+---------+---------+---------+---------+---------+--------
+ 10 |   0.871 |   0.187 |   0.398 |   0.201 |   0.279 |   0.001
+ 50 |   3.683 |   0.223 |   1.943 |   1.011 |   1.489 |   0.001
+100 |   7.462 |   0.391 |   3.834 |   2.045 |   3.184 |   0.001
+200 |  15.450 |   0.743 |   7.687 |   4.067 |   6.916 |   0.001
