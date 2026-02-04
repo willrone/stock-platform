@@ -791,9 +791,11 @@ class BacktestExecutor:
                                 open_[i, t] = float(df['open'].iloc[k])
                             valid[i, t] = True
                         elif d in df.index:
-                            close[i, t] = float(df.loc[d, 'close'])
+                            # [优化 1] 使用 .values 避免 DataFrame 拷贝
+                            k = df.index.get_loc(d)
+                            close[i, t] = float(df['close'].values[k])
                             if 'open' in df.columns:
-                                open_[i, t] = float(df.loc[d, 'open'])
+                                open_[i, t] = float(df['open'].values[k])
                             valid[i, t] = True
                     except Exception:
                         pass
@@ -1022,9 +1024,21 @@ class BacktestExecutor:
                             current_prices[c] = float(close_mat[j, i])
 
                 else:
+                    # [优化 1] 避免 DataFrame 拷贝：使用 .values 和缓存的索引
                     for stock_code, data in stock_data.items():
-                        if current_date in data.index:
-                            current_prices[stock_code] = data.loc[current_date, "close"]
+                        try:
+                            # 优先使用缓存的 date_to_idx 映射
+                            date_to_idx = data.attrs.get("_date_to_idx")
+                            if date_to_idx is not None and current_date in date_to_idx:
+                                idx = date_to_idx[current_date]
+                                # 使用 .values 直接访问底层数组
+                                current_prices[stock_code] = float(data['close'].values[idx])
+                            elif current_date in data.index:
+                                # Fallback: 使用 iloc（比 loc 快）
+                                idx = data.index.get_loc(current_date)
+                                current_prices[stock_code] = float(data['close'].values[idx])
+                        except Exception:
+                            pass
 
                 if not current_prices:
                     continue
@@ -1079,22 +1093,64 @@ class BacktestExecutor:
                 
                 # 辅助函数：快速查找预计算信号
                 def get_precomputed_signal_fast(stock_code: str, date: datetime):
-                    """从预计算字典中快速查找信号，如果没有则返回None"""
+                    """
+                    [优化 1] 从预计算字典中快速查找信号，避免 DataFrame 拷贝
+                    
+                    优化点：
+                    1. 优先使用 aligned_arrays 的 numpy 数组（O(1) 查找）
+                    2. 使用 .values 直接访问底层数组，避免创建 Series 对象
+                    3. 缓存 date_to_idx 映射，避免重复 get_loc() 调用
+                    """
                     if precomputed_signals:
                         signal = precomputed_signals.get((stock_code, date))
                         if signal is not None:
                             # 将信号类型转换为 TradingSignal 对象
                             from ..models import TradingSignal, SignalType
                             if isinstance(signal, SignalType):
-                                # 获取当前价格
+                                # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
+                                current_price = 0.0
+                                
                                 try:
-                                    data = stock_data.get(stock_code)
-                                    if data is not None and date in data.index:
-                                        current_price = float(data.loc[date, "close"])
-                                    else:
-                                        current_price = 0.0
-                                except Exception:
-                                    current_price = 0.0
+                                    # 方法 1: 优先使用 aligned_arrays（最快，O(1) 查找）
+                                    if aligned_arrays is not None:
+                                        code_to_i = aligned_arrays.get("code_to_i")
+                                        close_mat = aligned_arrays.get("close")
+                                        dates = aligned_arrays.get("dates")
+                                        
+                                        if code_to_i is not None and close_mat is not None and dates is not None:
+                                            stock_idx = code_to_i.get(stock_code)
+                                            if stock_idx is not None:
+                                                # 找到日期索引
+                                                date_idx = None
+                                                date_np = np.datetime64(date)
+                                                # 使用 numpy 的向量化查找
+                                                matches = np.where(dates == date_np)[0]
+                                                if len(matches) > 0:
+                                                    date_idx = int(matches[0])
+                                                    # 直接从 numpy 数组读取，无 pandas 开销
+                                                    price_val = close_mat[stock_idx, date_idx]
+                                                    if not np.isnan(price_val):
+                                                        current_price = float(price_val)
+                                    
+                                    # 方法 2: 如果 aligned_arrays 不可用，使用优化的 DataFrame 访问
+                                    if current_price == 0.0:
+                                        data = stock_data.get(stock_code)
+                                        if data is not None:
+                                            # 使用缓存的 date_to_idx 映射（避免重复 get_loc）
+                                            date_to_idx = data.attrs.get("_date_to_idx")
+                                            if date_to_idx is not None and date in date_to_idx:
+                                                idx = date_to_idx[date]
+                                                # 使用 .values 直接访问底层数组，避免创建 Series
+                                                close_values = data['close'].values
+                                                current_price = float(close_values[idx])
+                                            elif date in data.index:
+                                                # Fallback: 使用 iloc（比 loc 快，但仍会触发一些开销）
+                                                idx = data.index.get_loc(date)
+                                                current_price = float(data['close'].values[idx])
+                                
+                                except Exception as e:
+                                    # 静默失败，使用默认价格 0.0
+                                    pass
                                 
                                 return [TradingSignal(
                                     signal_type=signal,
