@@ -31,7 +31,9 @@ class MovingAverageStrategy(BaseStrategy):
         super().__init__("MovingAverage", config)
         self.short_window = config.get("short_window", 5)
         self.long_window = config.get("long_window", 20)
-        self.signal_threshold = config.get("signal_threshold", 0.02)
+        # 降低默认阈值：从 0.02 (2%) 降到 0.005 (0.5%)
+        # 原因：实际市场中，金叉/死叉时的 ma_diff 通常小于 1%
+        self.signal_threshold = config.get("signal_threshold", 0.005)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算移动平均指标"""

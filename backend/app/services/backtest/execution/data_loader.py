@@ -43,13 +43,16 @@ class DataLoader:
             return False
 
     def __init__(
-        self, data_dir: str = "backend/data", max_workers: Optional[int] = None
+        self, data_dir: str = "data", max_workers: Optional[int] = None
     ):
         # 确保使用绝对路径（多进程环境下相对路径会失效）
         data_path = Path(data_dir)
         if not data_path.is_absolute():
             # 相对路径：从项目根目录解析
-            project_root = Path(__file__).parent.parent.parent.parent.parent
+            # data_loader.py 位于 backend/app/services/backtest/execution/
+            # 项目根目录是 willrone/（不是 willrone/backend/）
+            # 数据目录是 willrone/data/
+            project_root = Path(__file__).parent.parent.parent.parent.parent.parent
             data_path = (project_root / data_dir).resolve()
         
         self.data_dir = data_path
