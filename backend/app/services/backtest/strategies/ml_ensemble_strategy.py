@@ -388,43 +388,67 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             return None
     
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """预计算所有信号（向量化优化）"""
+        """预计算所有信号（向量化优化）
+        
+        返回 SignalType 序列，与其他策略保持一致。
+        """
         if data is None or len(data) < 60:
             return None
         
-        indicators = self.calculate_indicators(data)
-        
-        # 向量化计算概率
-        score = pd.Series(0.5, index=data.index)
-        
-        # RSI
-        if "rsi_14" in indicators:
-            rsi = indicators["rsi_14"]
-            score = score + ((rsi < 30).astype(float) * 0.15)
-            score = score - ((rsi > 70).astype(float) * 0.15)
-        
-        # MACD
-        if "macd_hist" in indicators and "macd_hist_slope" in indicators:
-            macd_hist = indicators["macd_hist"]
-            macd_slope = indicators["macd_hist_slope"]
-            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
-            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
-        
-        # 动量
-        if "momentum_short" in indicators:
-            mom = indicators["momentum_short"]
-            score = score + (mom * 2).clip(-0.1, 0.1)
-        
-        # 布林带
-        if "bb_position" in indicators:
-            bb = indicators["bb_position"]
-            score = score + ((bb < -1).astype(float) * 0.1)
-            score = score - ((bb > 1).astype(float) * 0.1)
-        
-        # MA 排列
-        if "ma_alignment" in indicators:
-            ma = indicators["ma_alignment"]
-            score = score + ((ma == 2).astype(float) * 0.05)
-            score = score - ((ma == 0).astype(float) * 0.05)
-        
-        return score.clip(0, 1)
+        try:
+            indicators = self.calculate_indicators(data)
+            
+            # 向量化计算概率分数
+            score = pd.Series(0.5, index=data.index)
+            
+            # RSI
+            if "rsi_14" in indicators:
+                rsi = indicators["rsi_14"]
+                score = score + ((rsi < 30).astype(float) * 0.15)
+                score = score - ((rsi > 70).astype(float) * 0.15)
+            
+            # MACD
+            if "macd_hist" in indicators and "macd_hist_slope" in indicators:
+                macd_hist = indicators["macd_hist"]
+                macd_slope = indicators["macd_hist_slope"]
+                score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
+                score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
+            
+            # 动量
+            if "momentum_short" in indicators:
+                mom = indicators["momentum_short"]
+                score = score + (mom * 2).clip(-0.1, 0.1)
+            
+            # 布林带
+            if "bb_position" in indicators:
+                bb = indicators["bb_position"]
+                score = score + ((bb < -1).astype(float) * 0.1)
+                score = score - ((bb > 1).astype(float) * 0.1)
+            
+            # MA 排列
+            if "ma_alignment" in indicators:
+                ma = indicators["ma_alignment"]
+                score = score + ((ma == 2).astype(float) * 0.05)
+                score = score - ((ma == 0).astype(float) * 0.05)
+            
+            score = score.clip(0, 1)
+            
+            # 将概率分数转换为 SignalType（与其他策略保持一致）
+            # 使用 None 初始化，避免未赋值位置默认为 NaN
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            
+            # 买入信号：概率 > 阈值
+            buy_mask = score > self.prob_threshold
+            signals[buy_mask] = SignalType.BUY
+            
+            # 卖出信号：概率 < (1 - 阈值)，即低于 0.5 时卖出
+            sell_threshold = 1 - self.prob_threshold
+            sell_mask = score < sell_threshold
+            signals[sell_mask] = SignalType.SELL
+            
+            return signals
+            
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"ML策略预计算信号失败: {e}")
+            return None
