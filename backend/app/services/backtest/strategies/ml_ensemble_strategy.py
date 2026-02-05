@@ -392,10 +392,15 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         
         返回 SignalType 序列，与其他策略保持一致。
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if data is None or len(data) < 60:
+            logger.warning(f"ML策略预计算跳过: data is None={data is None}, len={len(data) if data is not None else 0}")
             return None
         
         try:
+            logger.info(f"ML策略开始预计算信号: {len(data)} 行数据")
             indicators = self.calculate_indicators(data)
             
             # 向量化计算概率分数
@@ -445,6 +450,11 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             sell_threshold = 1 - self.prob_threshold
             sell_mask = score < sell_threshold
             signals[sell_mask] = SignalType.SELL
+            
+            buy_count = (signals == SignalType.BUY).sum()
+            sell_count = (signals == SignalType.SELL).sum()
+            none_count = signals.isna().sum()
+            logger.info(f"ML策略预计算完成: BUY={buy_count}, SELL={sell_count}, None={none_count}")
             
             return signals
             

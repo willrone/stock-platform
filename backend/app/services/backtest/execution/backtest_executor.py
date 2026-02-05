@@ -302,6 +302,13 @@ class BacktestExecutor:
             
             # ✅ 信号提取优化：将预计算信号提取到扁平字典，避免回测循环中重复查找 attrs
             precomputed_signals = self._extract_precomputed_signals_to_dict(strategy, stock_data)
+            
+            # 🔍 调试日志：检查预计算信号
+            logger.info(f"🔍 预计算信号字典大小: {len(precomputed_signals)}")
+            if precomputed_signals:
+                sample_keys = list(precomputed_signals.keys())[:3]
+                for k in sample_keys:
+                    logger.info(f"  示例 key: {k}, value: {precomputed_signals[k]}")
 
             perf_breakdown["precompute_signals_s"] = time.perf_counter() - _t0
             # align_arrays_s 统计在 main_loop 前单独记录
