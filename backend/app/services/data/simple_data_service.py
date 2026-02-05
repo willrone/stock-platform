@@ -206,23 +206,106 @@ class SimpleDataService:
     def load_from_local(
         self, stock_code: str, start_date: datetime, end_date: datetime
     ) -> Optional[List[Dict[str, Any]]]:
-        """Load raw dict rows from local JSON file filtered by date range."""
+        """Load raw dict rows from local JSON or Parquet file filtered by date range."""
+        logger.info(f"🔍 load_from_local called: {stock_code}, {start_date} to {end_date}")
+        
+        # First try JSON cache
         path = self.get_local_data_path(stock_code)
-        if not path.exists():
-            return None
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-            out: List[Dict[str, Any]] = []
-            for item in raw:
-                d = self._parse_date(item["date"])
-                if start_date <= d <= end_date:
-                    row = dict(item)
-                    row["date"] = d.isoformat()
-                    out.append(row)
-            return out
-        except Exception as e:
-            logger.error(f"加载本地数据失败: {stock_code}, {e}")
-            return None
+        logger.info(f"🔍 Checking JSON cache: {path}, exists={path.exists()}")
+        if path.exists():
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                out: List[Dict[str, Any]] = []
+                for item in raw:
+                    d = self._parse_date(item["date"])
+                    if start_date <= d <= end_date:
+                        row = dict(item)
+                        row["date"] = d.isoformat()
+                        out.append(row)
+                if out:
+                    logger.info(f"✅ Loaded {len(out)} rows from JSON cache")
+                    return out
+            except Exception as e:
+                logger.error(f"加载本地JSON数据失败: {stock_code}, {e}")
+        
+        # Then try Parquet file (real stock data)
+        logger.info(f"🔍 Trying Parquet file for {stock_code}")
+        parquet_data = self.load_from_parquet(stock_code, start_date, end_date)
+        if parquet_data:
+            logger.info(f"✅ Loaded {len(parquet_data)} rows from Parquet")
+            return parquet_data
+        
+        logger.warning(f"⚠️ No local data found for {stock_code}")
+        return None
+    
+    def load_from_parquet(
+        self, stock_code: str, start_date: datetime, end_date: datetime
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Load raw dict rows from local Parquet file filtered by date range."""
+        # Try multiple parquet paths - include project root data folder
+        project_root = Path(__file__).parent.parent.parent.parent.parent  # backend/../ = willrone/
+        logger.info(f"load_from_parquet called: {stock_code}, project_root={project_root}")
+        parquet_paths = [
+            # Project root data folder (where real stock data lives)
+            project_root / "data" / "parquet" / "stock_data" / f"{stock_code.replace('.', '_')}.parquet",
+            project_root / "data" / "parquet" / f"{stock_code.replace('.', '_')}.parquet",
+            # Backend data folder
+            self.data_path / "parquet" / "stock_data" / f"{stock_code.replace('.', '_')}.parquet",
+            self.data_path / "parquet" / f"{stock_code.replace('.', '_')}.parquet",
+            self.data_path / "parquet" / "stock_data" / f"{stock_code}.parquet",
+            self.data_path / "parquet" / f"{stock_code}.parquet",
+        ]
+        
+        for parquet_path in parquet_paths:
+            logger.debug(f"Checking parquet path: {parquet_path}, exists={parquet_path.exists()}")
+            if parquet_path.exists():
+                try:
+                    df = pd.read_parquet(parquet_path)
+                    
+                    # Normalize column names - handle different naming conventions
+                    col_mapping = {
+                        'ts_code': 'stock_code',
+                        'trade_date': 'date',
+                    }
+                    df = df.rename(columns={k: v for k, v in col_mapping.items() if k in df.columns})
+                    
+                    # Ensure date column exists and is datetime
+                    if 'date' not in df.columns:
+                        logger.warning(f"Parquet文件缺少date列: {parquet_path}")
+                        continue
+                    
+                    df['date'] = pd.to_datetime(df['date'])
+                    
+                    # Filter by date range
+                    mask = (df['date'] >= pd.Timestamp(start_date)) & (df['date'] <= pd.Timestamp(end_date))
+                    df_filtered = df[mask].copy()
+                    
+                    if df_filtered.empty:
+                        logger.debug(f"Parquet文件在指定日期范围内无数据: {parquet_path}")
+                        continue
+                    
+                    # Convert to list of dicts
+                    out: List[Dict[str, Any]] = []
+                    for _, row in df_filtered.iterrows():
+                        item = {
+                            "stock_code": stock_code,
+                            "date": row['date'].isoformat(),
+                            "open": float(row.get('open', 0)),
+                            "high": float(row.get('high', 0)),
+                            "low": float(row.get('low', 0)),
+                            "close": float(row.get('close', 0)),
+                            "volume": float(row.get('volume', 0)),
+                            "adj_close": float(row.get('adj_close', row.get('close', 0))),
+                        }
+                        out.append(item)
+                    
+                    logger.info(f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录")
+                    return out
+                except Exception as e:
+                    logger.error(f"加载Parquet数据失败: {parquet_path}, {e}")
+                    continue
+        
+        return None
 
     def check_local_data_exists(self, stock_code: str, start_date: datetime, end_date: datetime) -> bool:
         """Return True if local cache exists and fully covers the requested date range."""

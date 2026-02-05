@@ -23,6 +23,7 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
     ValueFactorStrategy,
 )
 from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy, RSIStrategy
+from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
 
 
 class StrategyFactory:
@@ -46,6 +47,8 @@ class StrategyFactory:
         "momentum_factor": MomentumFactorStrategy,
         "low_volatility": LowVolatilityStrategy,
         "multi_factor": MultiFactorStrategy,
+        # ML 集成策略
+        "ml_ensemble_lgb_xgb_riskctl": MLEnsembleLgbXgbRiskCtlStrategy,
     }
 
     @classmethod

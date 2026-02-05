@@ -2389,19 +2389,29 @@ class BacktestExecutor:
             if portfolio_manager.trades:
                 stock_performance: Dict[str, Dict[str, Any]] = {}
 
+                # 辅助函数：统一访问 trade 属性（支持 Trade 对象和字典）
+                def get_trade_attr(trade, attr: str):
+                    if isinstance(trade, dict):
+                        return trade.get(attr)
+                    return getattr(trade, attr, None)
+
                 for trade in portfolio_manager.trades:
+                    stock_code = get_trade_attr(trade, 'stock_code')
+                    action = get_trade_attr(trade, 'action')
+                    pnl = get_trade_attr(trade, 'pnl') or 0.0
+
                     stock_stats = stock_performance.setdefault(
-                        trade.stock_code,
+                        stock_code,
                         {
-                            "stock_code": trade.stock_code,
+                            "stock_code": stock_code,
                             "total_pnl": 0.0,
                             "trade_count": 0,
                         },
                     )
                     stock_stats["trade_count"] += 1
                     # 只有卖出交易才有实现盈亏
-                    if trade.action == "SELL":
-                        stock_stats["total_pnl"] += float(trade.pnl)
+                    if action == "SELL":
+                        stock_stats["total_pnl"] += float(pnl)
 
                 # 计算每只股票的平均单笔盈亏
                 for stats in stock_performance.values():
@@ -2428,7 +2438,7 @@ class BacktestExecutor:
                 )
 
                 # 单笔交易分布的整体特征（便于前端画直方图/统计）
-                pnls = [float(t.pnl) for t in portfolio_manager.trades]
+                pnls = [float(get_trade_attr(t, 'pnl') or 0.0) for t in portfolio_manager.trades]
                 if pnls:
                     pnl_series = pd.Series(pnls)
                     additional_metrics.update(
