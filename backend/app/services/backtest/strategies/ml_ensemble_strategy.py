@@ -252,7 +252,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         return scale
     
     def generate_signals(
-        self, data: pd.DataFrame, current_date: datetime
+        self, data: pd.DataFrame, current_date: datetime, stock_code: str = ""
     ) -> List[TradingSignal]:
         """生成交易信号"""
         signals = []
@@ -263,6 +263,10 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         idx = self._get_current_idx(data, current_date)
         if idx < 60:
             return signals
+        
+        # 尝试从 data.attrs 获取 stock_code
+        if not stock_code:
+            stock_code = data.attrs.get("stock_code", "UNKNOWN")
         
         indicators = self.get_cached_indicators(data)
         
@@ -298,6 +302,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             strength *= position_scale  # 应用仓位缩放
             
             signals.append(TradingSignal(
+                stock_code=stock_code,
                 signal_type=SignalType.BUY,
                 strength=min(strength, 1.0),
                 price=data["close"].iloc[idx],
@@ -307,6 +312,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         elif prob < 0.4 or position_scale == 0:
             # 卖出信号
             signals.append(TradingSignal(
+                stock_code=stock_code,
                 signal_type=SignalType.SELL,
                 strength=0.8 if position_scale == 0 else 0.5,
                 price=data["close"].iloc[idx],
