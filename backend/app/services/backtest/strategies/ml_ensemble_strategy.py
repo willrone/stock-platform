@@ -56,7 +56,11 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         self.vol_scale_max = config.get("vol_scale_max", 2.0)
         
         # 模型路径（可选，如果提供则加载预训练模型）
-        self.model_path = config.get("model_path", None)
+        # 默认使用项目根目录下的 data/models 目录
+        # __file__ 是 backend/app/services/backtest/strategies/ml_ensemble_strategy.py
+        # 需要向上 6 层到 willrone/，然后进入 data/models
+        default_model_path = Path(__file__).parent.parent.parent.parent.parent.parent / "data" / "models"
+        self.model_path = config.get("model_path", str(default_model_path))
         self.lgb_model = None
         self.xgb_model = None
         
@@ -65,6 +69,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         self._cumulative_return = 1.0
         self._peak = 1.0
         self._market_returns = []
+        
+        # 加载预训练模型
+        self._load_models()
         
     def _load_models(self):
         """加载预训练模型"""
@@ -388,65 +395,62 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             return None
     
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """预计算所有信号（向量化优化）
+        """预计算所有信号（使用 ML 模型）
         
-        返回 SignalType 序列，与其他策略保持一致。
+        返回 SignalType 序列，与其他策���保持一致。
         """
         import logging
+        import xgboost as xgb
         logger = logging.getLogger(__name__)
         
         if data is None or len(data) < 60:
             logger.warning(f"ML策略预计算跳过: data is None={data is None}, len={len(data) if data is not None else 0}")
             return None
         
+        # 检查模型是否加载
+        if self.lgb_model is None or self.xgb_model is None:
+            logger.warning("ML模型未加载，使用 fallback 规则")
+            return self._precompute_fallback(data)
+        
         try:
-            logger.info(f"ML策略开始预计算信号: {len(data)} 行数据")
+            logger.info(f"ML策略开始预计算信号（使用ML模型）: {len(data)} 行数据")
             indicators = self.calculate_indicators(data)
             
-            # 向量化计算概率分数
-            score = pd.Series(0.5, index=data.index)
+            # 获取训练时使用的特征名
+            feature_names = self._get_feature_names()
             
-            # RSI
-            if "rsi_14" in indicators:
-                rsi = indicators["rsi_14"]
-                score = score + ((rsi < 30).astype(float) * 0.15)
-                score = score - ((rsi > 70).astype(float) * 0.15)
+            # 构建特征矩阵
+            features_df = pd.DataFrame(index=data.index)
+            missing_features = []
+            for name in feature_names:
+                if name in indicators:
+                    features_df[name] = indicators[name]
+                else:
+                    features_df[name] = 0.0  # 缺失特征填0
+                    missing_features.append(name)
             
-            # MACD
-            if "macd_hist" in indicators and "macd_hist_slope" in indicators:
-                macd_hist = indicators["macd_hist"]
-                macd_slope = indicators["macd_hist_slope"]
-                score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
-                score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
+            if missing_features:
+                logger.debug(f"缺失特征（已填0）: {missing_features[:5]}... 共{len(missing_features)}个")
             
-            # 动量
-            if "momentum_short" in indicators:
-                mom = indicators["momentum_short"]
-                score = score + (mom * 2).clip(-0.1, 0.1)
+            features_df = features_df.fillna(0)
+            X = features_df.values
             
-            # 布林带
-            if "bb_position" in indicators:
-                bb = indicators["bb_position"]
-                score = score + ((bb < -1).astype(float) * 0.1)
-                score = score - ((bb > 1).astype(float) * 0.1)
+            # 模型预测
+            lgb_prob = self.lgb_model.predict(X)
+            xgb_prob = self.xgb_model.predict(xgb.DMatrix(X))
+            prob = self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
             
-            # MA 排列
-            if "ma_alignment" in indicators:
-                ma = indicators["ma_alignment"]
-                score = score + ((ma == 2).astype(float) * 0.05)
-                score = score - ((ma == 0).astype(float) * 0.05)
+            # 转换为 pandas Series
+            score = pd.Series(prob, index=data.index)
             
-            score = score.clip(0, 1)
-            
-            # 将概率分数转换为 SignalType（与其他策略保持一致）
-            # 使用 None 初始化，避免未赋值位置默认为 NaN
+            # 将概率分数转换为 SignalType
             signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
             
             # 买入信号：概率 > 阈值
             buy_mask = score > self.prob_threshold
             signals[buy_mask] = SignalType.BUY
             
-            # 卖出信号：概率 < (1 - 阈值)，即低于 0.5 时卖出
+            # 卖出信号：概率 < (1 - 阈值)
             sell_threshold = 1 - self.prob_threshold
             sell_mask = score < sell_threshold
             signals[sell_mask] = SignalType.SELL
@@ -454,11 +458,421 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             buy_count = (signals == SignalType.BUY).sum()
             sell_count = (signals == SignalType.SELL).sum()
             none_count = signals.isna().sum()
-            logger.info(f"ML策略预计算完成: BUY={buy_count}, SELL={sell_count}, None={none_count}")
+            avg_prob = score.mean()
+            logger.info(f"ML策略预计算完成: BUY={buy_count}, SELL={sell_count}, None={none_count}, 平均概率={avg_prob:.4f}")
             
             return signals
             
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"ML策略预计算信号失败: {e}")
+            import traceback
+            logger.error(f"ML策略预计算信号失败: {e}\n{traceback.format_exc()}")
+            return self._precompute_fallback(data)
+    
+    def _precompute_fallback(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """Fallback: 使用简化规则计算信号"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("使用 fallback 规则计算信号")
+        
+        indicators = self.calculate_indicators(data)
+        score = pd.Series(0.5, index=data.index)
+        
+        # RSI
+        if "rsi_14" in indicators:
+            rsi = indicators["rsi_14"]
+            score = score + ((rsi < 30).astype(float) * 0.15)
+            score = score - ((rsi > 70).astype(float) * 0.15)
+        
+        # MACD
+        if "macd_hist" in indicators and "macd_hist_slope" in indicators:
+            macd_hist = indicators["macd_hist"]
+            macd_slope = indicators["macd_hist_slope"]
+            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
+            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
+        
+        # 动量
+        if "momentum_short" in indicators:
+            mom = indicators["momentum_short"]
+            score = score + (mom * 2).clip(-0.1, 0.1)
+        
+        score = score.clip(0, 1)
+        
+        signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+        signals[score > self.prob_threshold] = SignalType.BUY
+        signals[score < (1 - self.prob_threshold)] = SignalType.SELL
+        
+        return signals
+    
+    def _calculate_score_fallback(self, indicators: Dict[str, pd.Series], index) -> pd.Series:
+        """使用简化规则计算分数（fallback）"""
+        score = pd.Series(0.5, index=index)
+        
+        # RSI
+        if "rsi_14" in indicators:
+            rsi = indicators["rsi_14"]
+            score = score + ((rsi < 30).astype(float) * 0.15)
+            score = score - ((rsi > 70).astype(float) * 0.15)
+        
+        # MACD
+        if "macd_hist" in indicators and "macd_hist_slope" in indicators:
+            macd_hist = indicators["macd_hist"]
+            macd_slope = indicators["macd_hist_slope"]
+            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
+            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
+        
+        # 动量
+        if "momentum_short" in indicators:
+            mom = indicators["momentum_short"]
+            score = score + (mom * 2).clip(-0.1, 0.1)
+        
+        # 布林带
+        if "bb_position" in indicators:
+            bb = indicators["bb_position"]
+            score = score + ((bb < -1).astype(float) * 0.1)
+            score = score - ((bb > 1).astype(float) * 0.1)
+        
+        # MA 排列
+        if "ma_alignment" in indicators:
+            ma = indicators["ma_alignment"]
+            score = score + ((ma == 2).astype(float) * 0.05)
+            score = score - ((ma == 0).astype(float) * 0.05)
+        
+        return score
+    
+    def _get_feature_names(self) -> List[str]:
+        """获取特征名列表（与训练时保持一致，共 62 个特征）"""
+        return [
+            # 收益率特征 (6)
+            'return_1d', 'return_2d', 'return_3d', 'return_5d', 'return_10d', 'return_20d',
+            # 动量特征 (6)
+            'momentum_short', 'momentum_long', 'momentum_reversal',
+            'momentum_strength_5', 'momentum_strength_10', 'momentum_strength_20',
+            # 截面特征 - 相对强度 (3)
+            'relative_strength_5d', 'relative_strength_20d', 'relative_momentum',
+            # 截面特征 - 排名 (5)
+            'return_1d_rank', 'return_5d_rank', 'return_20d_rank', 'volume_rank', 'volatility_20_rank',
+            # 截面特征 - 市场状态 (1)
+            'market_up_ratio',
+            # 移动平均特征 (9)
+            'ma_ratio_5', 'ma_ratio_10', 'ma_ratio_20', 'ma_ratio_60',
+            'ma_slope_5', 'ma_slope_10', 'ma_slope_20', 'ma_alignment',
+            # 波动率特征 (5)
+            'volatility_5', 'volatility_20', 'volatility_60', 'vol_regime', 'volatility_skew',
+            # 成交量特征 (4)
+            'vol_ratio', 'vol_ma_ratio', 'vol_std', 'vol_price_diverge',
+            # RSI 特征 (3)
+            'rsi_6', 'rsi_14', 'rsi_diff',
+            # MACD 特征 (4)
+            'macd', 'macd_signal', 'macd_hist', 'macd_hist_slope',
+            # 布林带特征 (2)
+            'bb_position', 'bb_width',
+            # 价格形态特征 (6)
+            'body', 'wick_upper', 'wick_lower', 'range_pct',
+            'consecutive_up', 'consecutive_down',
+            # 价格位置特征 (6)
+            'price_pos_20', 'price_pos_60',
+            'dist_high_20', 'dist_low_20', 'dist_high_60', 'dist_low_60',
+            # ATR 和趋势特征 (3)
+            'atr_pct', 'di_diff', 'adx',
+        ]
+    
+    def precompute_all_signals_batch(self, combined_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """批量预计算所有股票的信号（支持截面特征）
+        
+        这个方法接收合并后的多股票数据，可以计算截面特征（排名、相对强度等）。
+        
+        Args:
+            combined_df: MultiIndex DataFrame，index=(stock_code, date)
+                        包含所有股票的历史数据
+        
+        Returns:
+            DataFrame with columns: signal_type, strength, price
+            index: (stock_code, date)
+        """
+        import logging
+        import xgboost as xgb
+        logger = logging.getLogger(__name__)
+        
+        if combined_df is None or len(combined_df) == 0:
+            logger.warning("批量预计算跳过: 数据为空")
             return None
+        
+        # 检查模型是否加载
+        if self.lgb_model is None or self.xgb_model is None:
+            logger.warning("ML模型未加载，无法进行批量预计算")
+            return None
+        
+        try:
+            logger.info(f"ML策略批量预计算开始: {len(combined_df)} 行数据")
+            
+            # 重置索引以便处理
+            df = combined_df.reset_index()
+            if 'level_0' in df.columns:
+                df = df.rename(columns={'level_0': 'stock_code', 'level_1': 'date'})
+            
+            # 确保有 stock_code 和 date 列
+            if 'stock_code' not in df.columns:
+                logger.error("数据缺少 stock_code 列")
+                return None
+            
+            # 1. 逐股票计算时序特征
+            logger.info("计算时序特征...")
+            all_features = []
+            
+            for stock_code, stock_df in df.groupby('stock_code'):
+                stock_df = stock_df.sort_values('date').reset_index(drop=True)
+                
+                if len(stock_df) < 60:
+                    continue
+                
+                # 计算时序指标
+                indicators = self._calculate_time_series_features(stock_df)
+                
+                # 构建特征 DataFrame
+                feat_df = pd.DataFrame(index=stock_df.index)
+                feat_df['stock_code'] = stock_code
+                feat_df['date'] = stock_df['date']
+                feat_df['close'] = stock_df['close']
+                
+                # 添加用于截面特征计算的原始数据
+                feat_df['volume'] = stock_df['volume']
+                
+                # 添加时序特征
+                for name, series in indicators.items():
+                    feat_df[name] = series.values
+                
+                all_features.append(feat_df)
+            
+            if not all_features:
+                logger.warning("没有足够数据计算特征")
+                return None
+            
+            features_df = pd.concat(all_features, ignore_index=True)
+            logger.info(f"时序特征计算完成: {len(features_df)} 行")
+            
+            # 2. 计算截面特征（需要当日所有股票数据）
+            logger.info("计算截面特征...")
+            features_df = self._calculate_cross_sectional_features(features_df)
+            
+            # 3. 准备模型输入
+            feature_names = self._get_feature_names()
+            
+            # 构建特征矩阵
+            X_df = pd.DataFrame(index=features_df.index)
+            missing_features = []
+            for name in feature_names:
+                if name in features_df.columns:
+                    X_df[name] = features_df[name]
+                else:
+                    X_df[name] = 0.0
+                    missing_features.append(name)
+            
+            if missing_features:
+                logger.debug(f"缺失特征（已填0）: {missing_features}")
+            
+            X_df = X_df.fillna(0)
+            X = X_df.values
+            
+            # 4. 模型预测
+            logger.info("执行模型预测...")
+            lgb_prob = self.lgb_model.predict(X)
+            xgb_prob = self.xgb_model.predict(xgb.DMatrix(X))
+            prob = self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+            
+            features_df['prob'] = prob
+            
+            # 5. 生成信号
+            logger.info("生成交易信号...")
+            signals = []
+            
+            for _, row in features_df.iterrows():
+                p = row['prob']
+                
+                if p > self.prob_threshold:
+                    signal_type = SignalType.BUY
+                    strength = (p - self.prob_threshold) / (1 - self.prob_threshold)
+                elif p < (1 - self.prob_threshold):
+                    signal_type = SignalType.SELL
+                    strength = ((1 - self.prob_threshold) - p) / (1 - self.prob_threshold)
+                else:
+                    continue  # 无信号
+                
+                signals.append({
+                    'stock_code': row['stock_code'],
+                    'date': row['date'],
+                    'signal_type': signal_type,
+                    'strength': min(strength, 1.0),
+                    'price': row['close'],
+                })
+            
+            if not signals:
+                logger.warning("未生成任何信号")
+                return None
+            
+            result_df = pd.DataFrame(signals)
+            result_df.set_index(['stock_code', 'date'], inplace=True)
+            
+            buy_count = (result_df['signal_type'] == SignalType.BUY).sum()
+            sell_count = (result_df['signal_type'] == SignalType.SELL).sum()
+            avg_prob = prob.mean()
+            
+            logger.info(f"ML策略批量预计算完成: BUY={buy_count}, SELL={sell_count}, 平均概率={avg_prob:.4f}")
+            
+            return result_df
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"ML策略批量预计算失败: {e}\n{traceback.format_exc()}")
+            return None
+    
+    def _calculate_time_series_features(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
+        """计算单只股票的时序特征（与 calculate_indicators 类似但返回 dict）"""
+        indicators = {}
+        
+        close = df['close']
+        high = df['high']
+        low = df['low']
+        volume = df['volume']
+        open_ = df['open']
+        
+        # 收益率
+        for period in [1, 2, 3, 5, 10, 20]:
+            indicators[f'return_{period}d'] = close.pct_change(period)
+        
+        # 动量
+        indicators['momentum_short'] = indicators['return_5d'] - indicators['return_10d']
+        indicators['momentum_long'] = indicators['return_10d'] - indicators['return_20d']
+        indicators['momentum_reversal'] = -indicators['return_1d']
+        
+        returns = close.pct_change()
+        for period in [5, 10, 20]:
+            up_days = (returns > 0).rolling(period).sum()
+            indicators[f'momentum_strength_{period}'] = up_days / period
+        
+        # 移动平均
+        for window in [5, 10, 20, 60]:
+            ma = close.rolling(window).mean()
+            indicators[f'ma_ratio_{window}'] = close / ma - 1
+            indicators[f'ma_slope_{window}'] = ma.pct_change(5)
+        
+        ma_5 = close.rolling(5).mean()
+        ma_10 = close.rolling(10).mean()
+        ma_20 = close.rolling(20).mean()
+        indicators['ma_alignment'] = ((ma_5 > ma_10).astype(int) + (ma_10 > ma_20).astype(int))
+        
+        # 波动率
+        for window in [5, 20, 60]:
+            indicators[f'volatility_{window}'] = returns.rolling(window).std()
+        indicators['vol_regime'] = indicators['volatility_5'] / (indicators['volatility_20'] + 1e-10)
+        indicators['volatility_skew'] = returns.rolling(20).skew()
+        
+        # 成交量
+        vol_ma20 = volume.rolling(20).mean()
+        vol_ma5 = volume.rolling(5).mean()
+        indicators['vol_ratio'] = volume / (vol_ma20 + 1)
+        indicators['vol_ma_ratio'] = vol_ma5 / (vol_ma20 + 1)
+        indicators['vol_std'] = volume.rolling(20).std() / (vol_ma20 + 1)
+        price_up = (close > close.shift(1)).astype(int)
+        vol_up = (volume > volume.shift(1)).astype(int)
+        indicators['vol_price_diverge'] = (price_up != vol_up).astype(int)
+        
+        # RSI
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        for period in [6, 14]:
+            avg_gain = gain.ewm(span=period, adjust=False).mean()
+            avg_loss = loss.ewm(span=period, adjust=False).mean()
+            rs = avg_gain / (avg_loss + 1e-10)
+            indicators[f'rsi_{period}'] = 100 - (100 / (1 + rs))
+        indicators['rsi_diff'] = indicators['rsi_6'] - indicators['rsi_14']
+        
+        # MACD
+        ema12 = close.ewm(span=12, adjust=False).mean()
+        ema26 = close.ewm(span=26, adjust=False).mean()
+        indicators['macd'] = ema12 - ema26
+        indicators['macd_signal'] = indicators['macd'].ewm(span=9, adjust=False).mean()
+        indicators['macd_hist'] = indicators['macd'] - indicators['macd_signal']
+        indicators['macd_hist_slope'] = indicators['macd_hist'].diff(3)
+        
+        # 布林带
+        bb_mid = close.rolling(20).mean()
+        bb_std = close.rolling(20).std()
+        indicators['bb_position'] = (close - bb_mid) / (2 * bb_std + 1e-10)
+        indicators['bb_width'] = 4 * bb_std / (bb_mid + 1e-10)
+        
+        # 价格形态
+        indicators['body'] = (close - open_) / (open_ + 1e-10)
+        indicators['wick_upper'] = (high - np.maximum(close, open_)) / (high - low + 1e-10)
+        indicators['wick_lower'] = (np.minimum(close, open_) - low) / (high - low + 1e-10)
+        indicators['range_pct'] = (high - low) / (close + 1e-10)
+        indicators['consecutive_up'] = (close > close.shift(1)).rolling(5).sum()
+        indicators['consecutive_down'] = (close < close.shift(1)).rolling(5).sum()
+        
+        # 价格位置
+        for window in [20, 60]:
+            high_n = high.rolling(window).max()
+            low_n = low.rolling(window).min()
+            indicators[f'price_pos_{window}'] = (close - low_n) / (high_n - low_n + 1e-10)
+            indicators[f'dist_high_{window}'] = (high_n - close) / (close + 1e-10)
+            indicators[f'dist_low_{window}'] = (close - low_n) / (close + 1e-10)
+        
+        # ATR
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs()
+        ], axis=1).max(axis=1)
+        indicators['atr'] = tr.rolling(14).mean()
+        indicators['atr_pct'] = indicators['atr'] / (close + 1e-10)
+        
+        # ADX
+        plus_dm = high.diff()
+        minus_dm = -low.diff()
+        plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+        minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+        atr14 = tr.rolling(14).mean()
+        plus_di = 100 * plus_dm.rolling(14).mean() / (atr14 + 1e-10)
+        minus_di = 100 * minus_dm.rolling(14).mean() / (atr14 + 1e-10)
+        indicators['di_diff'] = plus_di - minus_di
+        indicators['adx'] = (plus_di - minus_di).abs().rolling(14).mean()
+        
+        return indicators
+    
+    def _calculate_cross_sectional_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """计算截面特征（每日排名、相对强度等）
+        
+        这些特征需要��日所有股票数据才能计算。
+        """
+        result = df.copy()
+        
+        # 排名特征（每日截面排名，百分位）
+        for col in ['return_1d', 'return_5d', 'return_20d']:
+            if col in result.columns:
+                result[f'{col}_rank'] = result.groupby('date')[col].rank(pct=True)
+        
+        if 'volume' in result.columns:
+            result['volume_rank'] = result.groupby('date')['volume'].rank(pct=True)
+        
+        if 'volatility_20' in result.columns:
+            result['volatility_20_rank'] = result.groupby('date')['volatility_20'].rank(pct=True)
+        
+        # 市场状态特征
+        if 'return_1d' in result.columns:
+            result['market_up_ratio'] = result.groupby('date')['return_1d'].transform(
+                lambda x: (x > 0).sum() / len(x) if len(x) > 0 else 0.5
+            )
+        
+        # 相对强度特征
+        if 'return_5d' in result.columns:
+            market_return_5d = result.groupby('date')['return_5d'].transform('mean')
+            result['relative_strength_5d'] = result['return_5d'] - market_return_5d
+        
+        if 'return_20d' in result.columns:
+            market_return_20d = result.groupby('date')['return_20d'].transform('mean')
+            result['relative_strength_20d'] = result['return_20d'] - market_return_20d
+        
+        if 'relative_strength_5d' in result.columns and 'relative_strength_20d' in result.columns:
+            result['relative_momentum'] = result['relative_strength_5d'] - result['relative_strength_20d']
+        
+        return result

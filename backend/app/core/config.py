@@ -2,10 +2,14 @@
 应用程序配置管理
 """
 
+from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 获取 backend 目录的绝对路径（config.py 所在目录的父级的父级）
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -92,6 +96,24 @@ class Settings(BaseSettings):
     def database_url_sync(self) -> str:
         """同步数据库URL"""
         return self.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite:///")
+
+    @model_validator(mode="after")
+    def resolve_relative_paths(self) -> "Settings":
+        """将相对路径转换为绝对路径，确保进程池子进程也能正确找到数据"""
+        path_fields = [
+            "DATA_ROOT_PATH",
+            "PARQUET_DATA_PATH",
+            "MODEL_STORAGE_PATH",
+            "QLIB_DATA_PATH",
+            "QLIB_CACHE_PATH",
+        ]
+        for field in path_fields:
+            value = getattr(self, field)
+            if value and value.startswith(".."):
+                # 相对路径，转换为绝对路径
+                abs_path = str((_BACKEND_DIR / value).resolve())
+                object.__setattr__(self, field, abs_path)
+        return self
 
 
 settings = Settings()

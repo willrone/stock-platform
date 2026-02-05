@@ -629,7 +629,8 @@ class BacktestExecutor:
                 all_sigs = strategy.precompute_all_signals(data)
                 if all_sigs is not None:
                     cache = data.attrs.setdefault("_precomputed_signals", {})
-                    cache[id(strategy)] = all_sigs
+                    # 使用 strategy.name 作为稳定的 key，避免多进程环境下 id() 变化
+                    cache[strategy.name] = all_sigs
                     return True, stock_code, None
                 return False, stock_code, None
             except Exception as e:
@@ -765,13 +766,14 @@ class BacktestExecutor:
             logger.warning(traceback.format_exc())
         
         # 提取单个策略的信号
-        strategy_id = id(strategy)
+        # 使用 strategy.name 作为稳定的 key，避免多进程环境下 id() 变化
+        strategy_key = strategy.name
         extracted_count = 0
         
         for stock_code, data in stock_data.items():
             try:
                 precomputed = data.attrs.get("_precomputed_signals", {})
-                signals = precomputed.get(strategy_id)
+                signals = precomputed.get(strategy_key)
                 
                 if signals is not None:
                     # signals 可能是 pd.Series 或 dict
@@ -831,7 +833,7 @@ class BacktestExecutor:
         signal = np.zeros((N, T), dtype=np.int8, order='C')
 
         # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
-        strategy_id = id(strategy)
+        strategy_key = strategy.name  # 使用 strategy.name 作为稳定的 key
 
         for i, code in enumerate(stock_codes):
             df = stock_data[code]
@@ -874,7 +876,7 @@ class BacktestExecutor:
             # 信号对齐（Phase 3 优化：使用 reindex 批量对齐）
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
-                sig_ser = pre.get(strategy_id)
+                sig_ser = pre.get(strategy_key)
                 if isinstance(sig_ser, pd.Series):
                     # 使用 reindex 批量对齐
                     s = sig_ser.reindex(trading_dates)
@@ -973,7 +975,7 @@ class BacktestExecutor:
                                 dtype=object
                             )
                             cache = original_data.attrs.setdefault("_precomputed_signals", {})
-                            cache[id(strategy)] = signals
+                            cache[strategy.name] = signals  # 使用 strategy.name 作为稳定的 key
                             results.append((True, code, None))
                         else:
                             results.append((False, code, err))
