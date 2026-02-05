@@ -1472,9 +1472,19 @@ class BacktestExecutor:
                                     t1 = time.perf_counter()
                                     # 优先使用预计算信号
                                     signals = get_precomputed_signal_fast(stock_code, current_date)
+                                    
+                                    # 调试日志
+                                    if current_idx == 20:  # 只在第一次打印
+                                        logger.info(f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals else '无'}")
+                                    
                                     if signals is None:
                                         # Fallback: 调用策略生成
                                         signals = strategy.generate_signals(data, current_date)
+                                    
+                                    # 调试日志：记录信号内容
+                                    if signals and current_idx == 20:
+                                        logger.info(f"🔍 信号内容: {signals}")
+                                    
                                     _dur = time.perf_counter() - t1
                                     gen_time_total += _dur
                                     if _dur > gen_time_max:
