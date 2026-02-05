@@ -814,7 +814,6 @@ export default function SignalsPage() {
               </TableBody>
             </Table>
           </Box>
-          </Box>
 
           {failures.length > 0 && (
             <Box sx={{ mt: 2 }}>

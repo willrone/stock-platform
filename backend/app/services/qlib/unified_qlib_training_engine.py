@@ -824,7 +824,8 @@ class UnifiedQlibTrainingEngine:
             # 获取prediction_horizon参数
             prediction_horizon = config.prediction_horizon if config else 5
             
-            if len(stock_groups) > 1 and max_workers > 1:
+            # 临时禁用多进程以避免 pickle 序列化问题
+            if False and len(stock_groups) > 1 and max_workers > 1:
                 # 多进程处理
                 logger.info(f"使用 {max_workers} 个进程并行处理数据")
 

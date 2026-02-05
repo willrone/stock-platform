@@ -41,7 +41,6 @@ import { TaskService } from '../../services/taskService';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { tasks } = useTaskStore();
 
   const [loading, setLoading] = useState(true);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
@@ -64,12 +63,16 @@ export default function DashboardPage() {
         const tasksResult = await TaskService.getTasks(undefined, 5, 0);
         setRecentTasks(tasksResult.tasks);
 
+        // 加载所有任务以计算统计数据
+        const allTasksResult = await TaskService.getTasks(undefined, 1000, 0);
+        const allTasks = allTasksResult.tasks;
+
         // 计算统计数据
         const stats = {
-          totalTasks: tasks.length,
-          runningTasks: tasks.filter(t => t.status === 'running').length,
-          completedTasks: tasks.filter(t => t.status === 'completed').length,
-          failedTasks: tasks.filter(t => t.status === 'failed').length,
+          totalTasks: allTasks.length,
+          runningTasks: allTasks.filter(t => t.status === 'running').length,
+          completedTasks: allTasks.filter(t => t.status === 'completed').length,
+          failedTasks: allTasks.filter(t => t.status === 'failed').length,
           dataFiles: 156, // 模拟数据
           systemHealth: 'good' as const,
         };
@@ -82,7 +85,7 @@ export default function DashboardPage() {
     };
 
     loadDashboardData();
-  }, [tasks]);
+  }, []);
 
   // 获取任务状态颜色
   const getTaskStatusColor = (status: string): 'primary' | 'success' | 'error' | 'default' => {

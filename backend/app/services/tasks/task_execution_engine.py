@@ -468,6 +468,13 @@ class BacktestTaskExecutor:
                     task_id, TaskStatus.COMPLETED, progress=100.0, result=task_result
                 )
 
+                # 将交易记录写入 trade_records 表（供前端详细页面使用）
+                self._save_trade_records_to_db(
+                    task_id=task_id,
+                    backtest_report=backtest_report,
+                    stock_codes=stock_codes,
+                )
+
                 # 验证保存后的数据
                 saved_task = self.task_repository.get_task_by_id(task_id)
                 if saved_task and saved_task.result:
@@ -502,6 +509,68 @@ class BacktestTaskExecutor:
                     context=ErrorContext(task_id=task_id, user_id=queued_task.user_id),
                     original_exception=e,
                 )
+
+    def _save_trade_records_to_db(
+        self,
+        task_id: str,
+        backtest_report: Dict[str, Any],
+        stock_codes: List[str],
+    ) -> None:
+        """将交易记录写入 trade_records 表（供前端详细页面使用）"""
+        try:
+            from app.models.backtest_detailed_models import TradeRecord
+            from uuid import uuid4
+
+            trade_history = backtest_report.get("trade_history", [])
+            if not trade_history:
+                logger.info(f"任务 {task_id} 没有交易记录，跳过写入 trade_records")
+                return
+
+            backtest_id = str(uuid4())  # 生成一个 backtest_id
+            records_to_add = []
+
+            for idx, trade in enumerate(trade_history):
+                # 解析时间戳
+                timestamp = trade.get("timestamp")
+                if isinstance(timestamp, str):
+                    try:
+                        timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    except ValueError:
+                        timestamp = datetime.utcnow()
+                elif hasattr(timestamp, 'to_pydatetime'):
+                    # pandas Timestamp 转换为 Python datetime
+                    timestamp = timestamp.to_pydatetime()
+                elif not isinstance(timestamp, datetime):
+                    timestamp = datetime.utcnow()
+
+                record = TradeRecord(
+                    task_id=task_id,
+                    backtest_id=backtest_id,
+                    trade_id=f"trade_{task_id[:8]}_{idx:06d}",
+                    stock_code=trade.get("stock_code", stock_codes[0] if stock_codes else "UNKNOWN"),
+                    stock_name=trade.get("stock_name"),
+                    action=trade.get("action", "BUY"),
+                    quantity=trade.get("quantity", 0),
+                    price=trade.get("price", 0.0),
+                    timestamp=timestamp,
+                    commission=trade.get("commission", 0.0),
+                    pnl=trade.get("pnl"),
+                    holding_days=trade.get("holding_days"),
+                    technical_indicators=trade.get("technical_indicators"),
+                )
+                records_to_add.append(record)
+
+            # 批量写入数据库
+            if records_to_add:
+                self.task_repository.db.add_all(records_to_add)
+                self.task_repository.db.commit()
+                logger.info(
+                    f"成功写入 {len(records_to_add)} 条交易记录到 trade_records 表: task_id={task_id}"
+                )
+
+        except Exception as e:
+            logger.error(f"写入 trade_records 失败: {e}", exc_info=True)
+            # 不抛出异常，避免影响主流程
 
 
 class TrainingTaskExecutor:

@@ -103,7 +103,6 @@ class TaskMonitor:
                 task_id=task_id,
                 status=getattr(TaskStatus, status.upper()),
                 progress=100.0,
-                completed_at=datetime.now(),
             )
 
             if task:

@@ -1,0 +1,28 @@
+{
+  "strategy_name": "RSI",
+  "stock_count": 500,
+  "start_date": "2023-02-04T00:00:00",
+  "end_date": "2026-02-04T00:00:00",
+  "total_signals": 9841,
+  "executed_trades": 3682,
+  "trading_days": 730,
+  "performance_metrics": {
+    "total_return": 0.32874087912233824,
+    "annualized_return": 0.09956791019253375,
+    "volatility": 0.1730248170170207,
+    "sharpe_ratio": 0.5754545036319219,
+    "max_drawdown": -0.22851612388397513,
+    "total_trades": 3682
+  },
+  "perf_breakdown": {
+    "data_loading_s": 1.8885853329993552,
+    "serialize_s": 0.5783532500063302,
+    "multiprocess_s": 8.530365207989234,
+    "merge_s": 0.006107166991569102,
+    "total_wall_s": 11.204593541988288
+  },
+  "num_workers": 8,
+  "speedup": 30.64133019168213,
+  "vs_target": 0.06268947453888056,
+  "achieved_target": true
+}

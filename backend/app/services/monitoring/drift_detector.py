@@ -749,6 +749,112 @@ class DriftDetector:
                 del self.reference_data[key]
                 logger.info(f"已清除模型 {key} 的参考数据")
 
+    def get_drift_metrics(
+        self,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        model_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """获取漂移检测指标（API 兼容方法）"""
+        with self.lock:
+            reports = self.drift_reports.copy()
+        
+        # 时间过滤
+        if start_time:
+            reports = [r for r in reports if r.timestamp >= start_time]
+        if end_time:
+            reports = [r for r in reports if r.timestamp <= end_time]
+        
+        # 模型过滤
+        if model_id:
+            reports = [r for r in reports if r.model_id == model_id]
+        
+        return [r.to_dict() for r in reports[-limit:]]
+
+    def get_model_drift_status(
+        self,
+        model_id: str,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """获取模型漂移状态（API 兼容方法）"""
+        with self.lock:
+            reports = [r for r in self.drift_reports if r.model_id == model_id]
+        
+        # 时间过滤
+        if start_time:
+            reports = [r for r in reports if r.timestamp >= start_time]
+        if end_time:
+            reports = [r for r in reports if r.timestamp <= end_time]
+        
+        if not reports:
+            return {
+                "model_id": model_id,
+                "drift_detected": False,
+                "drift_score": 0,
+                "last_drift_time": None,
+            }
+        
+        latest_report = reports[-1]
+        drift_detected = latest_report.overall_severity not in [DriftSeverity.NONE, DriftSeverity.LOW]
+        
+        return {
+            "model_id": model_id,
+            "drift_detected": drift_detected,
+            "drift_score": latest_report.overall_drift_score,
+            "severity": latest_report.overall_severity.value,
+            "last_drift_time": latest_report.timestamp.isoformat() if drift_detected else None,
+            "total_reports": len(reports),
+        }
+
+    def get_overall_drift_status(self) -> Dict[str, Any]:
+        """获取整体漂移状态（API 兼容方法）"""
+        with self.lock:
+            if not self.drift_reports:
+                return {
+                    "total_models_monitored": 0,
+                    "models_with_drift": 0,
+                    "overall_health": "healthy",
+                    "last_check": None,
+                }
+            
+            # 获取最近的报告（每个模型最新的一个）
+            latest_by_model: Dict[str, DriftReport] = {}
+            for report in self.drift_reports:
+                key = f"{report.model_id}_{report.model_version}"
+                latest_by_model[key] = report
+            
+            # 统计
+            models_with_drift = sum(
+                1 for r in latest_by_model.values()
+                if r.overall_severity not in [DriftSeverity.NONE, DriftSeverity.LOW]
+            )
+            
+            # 确定整体健康状态
+            severities = [r.overall_severity for r in latest_by_model.values()]
+            if any(s == DriftSeverity.CRITICAL for s in severities):
+                overall_health = "critical"
+            elif any(s == DriftSeverity.HIGH for s in severities):
+                overall_health = "warning"
+            elif any(s == DriftSeverity.MEDIUM for s in severities):
+                overall_health = "attention"
+            else:
+                overall_health = "healthy"
+            
+            latest_report = max(self.drift_reports, key=lambda r: r.timestamp)
+            
+            return {
+                "total_models_monitored": len(latest_by_model),
+                "models_with_drift": models_with_drift,
+                "overall_health": overall_health,
+                "last_check": latest_report.timestamp.isoformat(),
+                "severity_distribution": {
+                    s.value: sum(1 for r in latest_by_model.values() if r.overall_severity == s)
+                    for s in DriftSeverity
+                },
+            }
+
 
 # 全局漂移检测器实例
 drift_detector = DriftDetector()

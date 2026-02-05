@@ -421,7 +421,6 @@ export default function MonitoringPage() {
                     </TableBody>
                   </Table>
                 </Box>
-                </Box>
               </CardContent>
             </Card>
           </Box>

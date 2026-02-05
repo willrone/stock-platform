@@ -495,14 +495,23 @@ def execute_backtest_task_simple(task_id: str):
 
                                 # 辅助函数：将numpy类型转换为Python原生类型
                                 def to_python_type(value):
-                                    """将numpy类型转换为Python原生类型"""
+                                    """将numpy/pandas类型转换为Python原生类型"""
                                     import numpy as np
+                                    from datetime import datetime
+                                    
                                     if isinstance(value, (np.integer, np.floating)):
                                         return value.item()
                                     elif isinstance(value, np.ndarray):
                                         return value.tolist()
+                                    elif hasattr(value, 'to_pydatetime'):
+                                        # pandas Timestamp 转换为 Python datetime，然后转为 ISO 字符串
+                                        return value.to_pydatetime().isoformat()
+                                    elif isinstance(value, datetime):
+                                        # Python datetime 转为 ISO 字符串
+                                        return value.isoformat()
                                     elif isinstance(value, dict):
-                                        return {k: to_python_type(v) for k, v in value.items()}
+                                        # 处理字典的 key 和 value（key 也可能是 Timestamp）
+                                        return {to_python_type(k): to_python_type(v) for k, v in value.items()}
                                     elif isinstance(value, (list, tuple)):
                                         return [to_python_type(v) for v in value]
                                     return value

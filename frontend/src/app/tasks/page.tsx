@@ -485,7 +485,14 @@ export default function TasksPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip label={task.model_id} size="small" />
+                      {task.model_id ? (
+                        <Chip label={task.model_id} size="small" />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          {task.task_type === 'backtest' ? '回测任务' : 
+                           task.task_type === 'hyperparameter_optimization' ? '超参优化' : '-'}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
