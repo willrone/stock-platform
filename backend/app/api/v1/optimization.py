@@ -9,13 +9,13 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import get_current_user
 from app.api.v1.schemas import HyperparameterOptimizationRequest, StandardResponse
-from app.core.database import SessionLocal
+from app.core.database import get_async_session
 from app.models.task_models import TaskStatus, TaskType
-from app.repositories.task_repository import TaskRepository
+from app.repositories.async_task_repository import AsyncTaskRepository
 from app.services.tasks.process_executor import get_process_executor
 from app.services.tasks.task_execution_engine import (
     HyperparameterOptimizationTaskExecutor,
@@ -25,24 +25,15 @@ from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext, Task
 router = APIRouter(prefix="/optimization", tags=["超参优化"])
 
 
-def get_db():
-    """获取数据库会话"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.post("/tasks", response_model=StandardResponse)
 async def create_optimization_task(
     request: HyperparameterOptimizationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_session),
     user_id: str = Depends(get_current_user),
 ):
     """创建超参优化任务"""
     try:
-        task_repository = TaskRepository(db)
+        task_repository = AsyncTaskRepository(db)
 
         # 构建任务配置
         config = {
@@ -76,7 +67,7 @@ async def create_optimization_task(
         }
 
         # 创建任务
-        task = task_repository.create_task(
+        task = await task_repository.create_task(
             task_name=request.task_name,
             task_type=TaskType.HYPERPARAMETER_OPTIMIZATION,
             user_id=user_id,
@@ -95,7 +86,7 @@ async def create_optimization_task(
             logger.info(f"超参优化任务已提交到进程池: {task.task_id}")
         except Exception as submit_error:
             logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
-            task_repository.update_task_status(
+            await task_repository.update_task_status(
                 task_id=task.task_id,
                 status=TaskStatus.FAILED,
                 error_message=f"任务提交失败: {str(submit_error)}",
@@ -120,8 +111,6 @@ async def create_optimization_task(
     except Exception as e:
         logger.error(f"创建超参优化任务失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"创建超参优化任务失败: {str(e)}")
-    finally:
-        db.close()
 
 
 @router.get("/tasks", response_model=StandardResponse)
@@ -129,15 +118,15 @@ async def list_optimization_tasks(
     status: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_session),
     user_id: str = Depends(get_current_user),
 ):
     """获取超参优化任务列表"""
     try:
-        task_repository = TaskRepository(db)
+        task_repository = AsyncTaskRepository(db)
 
         # 直接按任务类型查询优化任务，避免先取全部再过滤导致列表为空
-        optimization_tasks = task_repository.get_tasks_by_user(
+        optimization_tasks = await task_repository.get_tasks_by_user(
             user_id=user_id,
             limit=limit,
             offset=offset,
@@ -183,16 +172,14 @@ async def list_optimization_tasks(
     except Exception as e:
         logger.error(f"获取超参优化任务列表失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取超参优化任务列表失败: {str(e)}")
-    finally:
-        db.close()
 
 
 @router.get("/tasks/{task_id}", response_model=StandardResponse)
-async def get_optimization_task(task_id: str, db: Session = Depends(get_db)):
+async def get_optimization_task(task_id: str, db: AsyncSession = Depends(get_async_session)):
     """获取超参优化任务详情"""
     try:
-        task_repository = TaskRepository(db)
-        task = task_repository.get_task_by_id(task_id)
+        task_repository = AsyncTaskRepository(db)
+        task = await task_repository.get_task_by_id(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -233,16 +220,14 @@ async def get_optimization_task(task_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"获取超参优化任务详情失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取超参优化任务详情失败: {str(e)}")
-    finally:
-        db.close()
 
 
 @router.get("/tasks/{task_id}/status", response_model=StandardResponse)
-async def get_optimization_status(task_id: str, db: Session = Depends(get_db)):
+async def get_optimization_status(task_id: str, db: AsyncSession = Depends(get_async_session)):
     """获取优化任务实时状态"""
     try:
-        task_repository = TaskRepository(db)
-        task = task_repository.get_task_by_id(task_id)
+        task_repository = AsyncTaskRepository(db)
+        task = await task_repository.get_task_by_id(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -281,16 +266,14 @@ async def get_optimization_status(task_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"获取优化状态失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取优化状态失败: {str(e)}")
-    finally:
-        db.close()
 
 
 @router.get("/tasks/{task_id}/param-importance", response_model=StandardResponse)
-async def get_param_importance(task_id: str, db: Session = Depends(get_db)):
+async def get_param_importance(task_id: str, db: AsyncSession = Depends(get_async_session)):
     """获取参数重要性"""
     try:
-        task_repository = TaskRepository(db)
-        task = task_repository.get_task_by_id(task_id)
+        task_repository = AsyncTaskRepository(db)
+        task = await task_repository.get_task_by_id(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -310,16 +293,14 @@ async def get_param_importance(task_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"获取参数重要性失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取参数重要性失败: {str(e)}")
-    finally:
-        db.close()
 
 
 @router.get("/tasks/{task_id}/pareto-front", response_model=StandardResponse)
-async def get_pareto_front(task_id: str, db: Session = Depends(get_db)):
+async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_session)):
     """获取帕累托前沿（多目标优化时）"""
     try:
-        task_repository = TaskRepository(db)
-        task = task_repository.get_task_by_id(task_id)
+        task_repository = AsyncTaskRepository(db)
+        task = await task_repository.get_task_by_id(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
@@ -340,8 +321,6 @@ async def get_pareto_front(task_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"获取帕累托前沿失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取帕累托前沿失败: {str(e)}")
-    finally:
-        db.close()
 
 
 def execute_optimization_task_simple(task_id: str):
