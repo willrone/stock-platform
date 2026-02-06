@@ -17,6 +17,11 @@ const nextConfig = {
       : `http://${backendHost}`;
     
     return [
+      // 兼容前端直接调用后端的 /api/v1/... 路径（当前任务创建页会用到）
+      {
+        source: '/api/v1/:path*',
+        destination: `${backendUrl}/api/v1/:path*`,
+      },
       {
         source: '/api/:path*',
         destination: `${backendUrl}/api/:path*`,
