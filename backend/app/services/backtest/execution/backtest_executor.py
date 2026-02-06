@@ -1054,6 +1054,82 @@ class BacktestExecutor:
         _batch_executed_signals: List[dict] = []  # 收集已执行的信号
         _batch_unexecuted_signals: List[dict] = []  # 收集未执行的信号
         _current_backtest_id: str | None = None  # 缓存 backtest_id
+        _BATCH_FLUSH_THRESHOLD = 1000  # 流式写入阈值
+
+        # 流式写入辅助函数：当积累足够数据时写入数据库
+        async def _flush_batch_to_db(
+            signals_data: List[dict],
+            executed_signals: List[dict],
+            unexecuted_signals: List[dict],
+            backtest_id: str | None,
+            clear_after: bool = True,
+        ) -> None:
+            """流式写入批量数据到数据库"""
+            if not task_id:
+                return
+            total_count = len(signals_data) + len(executed_signals) + len(unexecuted_signals)
+            if total_count == 0:
+                return
+
+            logger.info(f"🔄 流式写入数据库: 信号={len(signals_data)}, 已执行={len(executed_signals)}, 未执行={len(unexecuted_signals)}")
+
+            try:
+                from app.core.database import get_async_session_context
+                from app.repositories.backtest_detailed_repository import (
+                    BacktestDetailedRepository,
+                )
+
+                async with get_async_session_context() as session:
+                    try:
+                        repository = BacktestDetailedRepository(session)
+
+                        # 1. 批量保存所有信号记录
+                        if signals_data:
+                            await repository.batch_save_signal_records(
+                                task_id=task_id,
+                                backtest_id=backtest_id,
+                                signals_data=list(signals_data),  # 复制列表避免清空后问题
+                            )
+
+                        # 2. 批量更新未执行信号的原因
+                        if unexecuted_signals:
+                            signal_reasons = [
+                                (
+                                    sig["stock_code"],
+                                    sig["timestamp"],
+                                    sig["signal_type"],
+                                    sig["execution_reason"]
+                                )
+                                for sig in unexecuted_signals
+                            ]
+                            await repository.batch_update_signal_execution_reasons(
+                                task_id=task_id,
+                                signal_reasons=signal_reasons
+                            )
+
+                        # 3. 批量标记已执行的信号
+                        if executed_signals:
+                            signal_keys = [
+                                (
+                                    sig["stock_code"],
+                                    sig["timestamp"],
+                                    sig["signal_type"]
+                                )
+                                for sig in executed_signals
+                            ]
+                            await repository.batch_mark_signals_as_executed(
+                                task_id=task_id,
+                                signal_keys=signal_keys
+                            )
+
+                        await session.commit()
+                        logger.info(f"✅ 流式写入完成: {total_count} 条记录")
+
+                    except Exception as e:
+                        await session.rollback()
+                        logger.warning(f"流式写入数据库失败: {e}")
+            except Exception as e:
+                logger.warning(f"流式写入数据库时出错: {e}")
         # ========== END PERF优化 ==========
 
         for i, current_date in enumerate(trading_dates):
@@ -1739,6 +1815,19 @@ class BacktestExecutor:
                 if task_id and executed_trade_signals:
                     _batch_executed_signals.extend(executed_trade_signals)
 
+                # PERF优化A：流式增量写入 - 每积累1000条记录就写入一次数据库
+                if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) >= _BATCH_FLUSH_THRESHOLD:
+                    await _flush_batch_to_db(
+                        signals_data=_batch_signals_data,
+                        executed_signals=_batch_executed_signals,
+                        unexecuted_signals=_batch_unexecuted_signals,
+                        backtest_id=_current_backtest_id,
+                    )
+                    # 写入后清空列表
+                    _batch_signals_data.clear()
+                    _batch_executed_signals.clear()
+                    _batch_unexecuted_signals.clear()
+
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(
                     current_date, current_prices
@@ -1892,61 +1981,16 @@ class BacktestExecutor:
 
                 continue
 
-        # ========== PERF优化：循环结束后批量写入数据库 ==========
-        # 将循环内收集的所有数据一次性写入，避免730次数据库操作
-        if task_id:
-            logger.info(f"🔄 开始批量写入数据库: 信号={len(_batch_signals_data)}, 已执行={len(_batch_executed_signals)}, 未执行={len(_batch_unexecuted_signals)}")
-            
-            try:
-                from app.core.database import get_async_session_context
-                from app.repositories.backtest_detailed_repository import (
-                    BacktestDetailedRepository,
-                )
-
-                async with get_async_session_context() as session:
-                    try:
-                        repository = BacktestDetailedRepository(session)
-                        
-                        # 1. 批量保存所有信号记录
-                        if _batch_signals_data:
-                            await repository.batch_save_signal_records(
-                                task_id=task_id,
-                                backtest_id=_current_backtest_id,
-                                signals_data=_batch_signals_data,
-                            )
-                            logger.info(f"✅ 批量保存信号记录完成: {len(_batch_signals_data)} 条")
-                        
-                        # 2. 批量更新未执行信号的原因
-                        if _batch_unexecuted_signals:
-                            for unexecuted_signal in _batch_unexecuted_signals:
-                                await repository.update_signal_execution_reason(
-                                    task_id=task_id,
-                                    stock_code=unexecuted_signal["stock_code"],
-                                    timestamp=unexecuted_signal["timestamp"],
-                                    signal_type=unexecuted_signal["signal_type"],
-                                    execution_reason=unexecuted_signal["execution_reason"],
-                                )
-                            logger.info(f"✅ 批量更新未执行原因完成: {len(_batch_unexecuted_signals)} 条")
-                        
-                        # 3. 批量标记已执行的信号
-                        if _batch_executed_signals:
-                            for executed_signal in _batch_executed_signals:
-                                await repository.mark_signal_as_executed(
-                                    task_id=task_id,
-                                    stock_code=executed_signal["stock_code"],
-                                    timestamp=executed_signal["timestamp"],
-                                    signal_type=executed_signal["signal_type"],
-                                )
-                            logger.info(f"✅ 批量标记已执行完成: {len(_batch_executed_signals)} 条")
-                        
-                        await session.commit()
-                        logger.info("✅ 所有数据库操作批量提交成功")
-                        
-                    except Exception as e:
-                        await session.rollback()
-                        logger.warning(f"批量写入数据库失败: {e}")
-            except Exception as e:
-                logger.warning(f"批量写入数据库时出错: {e}")
+        # ========== PERF优化：循环结束后写入剩余数据 ==========
+        # 写入流式写入未处理完的剩余数据
+        if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) > 0:
+            logger.info(f"🔄 写入剩余数据: 信号={len(_batch_signals_data)}, 已执行={len(_batch_executed_signals)}, 未执行={len(_batch_unexecuted_signals)}")
+            await _flush_batch_to_db(
+                signals_data=_batch_signals_data,
+                executed_signals=_batch_executed_signals,
+                unexecuted_signals=_batch_unexecuted_signals,
+                backtest_id=_current_backtest_id,
+            )
         # ========== END PERF优化 ==========
 
         # 最终进度更新

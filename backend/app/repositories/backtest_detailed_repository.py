@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from sqlalchemy import and_, asc, delete, desc, func, or_, select
+from sqlalchemy import and_, asc, delete, desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -915,6 +915,133 @@ class BacktestDetailedRepository:
         except Exception as e:
             self.logger.error("更新信号未执行原因失败: {}", e, exc_info=True)
             return False
+
+    async def batch_mark_signals_as_executed(
+        self, task_id: str, signal_keys: List[tuple]
+    ) -> int:
+        """
+        批量标记信号为已执行
+
+        Args:
+            task_id: 任务ID
+            signal_keys: 信号键列表，每个元素为 (stock_code, timestamp, signal_type)
+
+        Returns:
+            成功更新的记录数
+        """
+        if not signal_keys:
+            return 0
+
+        try:
+            # 构建 CASE WHEN 语句
+            case_conditions = []
+            params = {"task_id": task_id}
+
+            for i, (stock_code, timestamp, signal_type) in enumerate(signal_keys):
+                # 将时间戳转换为日期范围
+                ts = self._ensure_datetime(timestamp)
+                timestamp_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+                timestamp_end = timestamp_start + timedelta(days=1)
+
+                params[f"stock_code_{i}"] = stock_code
+                params[f"signal_type_{i}"] = signal_type
+                params[f"ts_start_{i}"] = timestamp_start
+                params[f"ts_end_{i}"] = timestamp_end
+
+                case_conditions.append(
+                    f"(stock_code = :stock_code_{i} AND signal_type = :signal_type_{i} "
+                    f"AND timestamp >= :ts_start_{i} AND timestamp < :ts_end_{i})"
+                )
+
+            # 构建完整的 UPDATE 语句
+            where_clause = " OR ".join(case_conditions)
+            sql = text(f"""
+                UPDATE signal_records
+                SET executed = 1, execution_reason = NULL
+                WHERE task_id = :task_id
+                AND executed = 0
+                AND ({where_clause})
+            """)
+
+            result = await self.session.execute(sql, params)
+            updated_count = result.rowcount
+            await self.session.flush()
+
+            self.logger.info(
+                f"批量标记信号为已执行: task_id={task_id}, "
+                f"请求数={len(signal_keys)}, 更新数={updated_count}"
+            )
+            return updated_count
+
+        except Exception as e:
+            self.logger.error("批量标记信号为已执行失败: {}", e, exc_info=True)
+            return 0
+
+    async def batch_update_signal_execution_reasons(
+        self, task_id: str, signal_reasons: List[tuple]
+    ) -> int:
+        """
+        批量更新信号的未执行原因
+
+        Args:
+            task_id: 任务ID
+            signal_reasons: 信号原因列表，每个元素为 (stock_code, timestamp, signal_type, execution_reason)
+
+        Returns:
+            成功更新的记录数
+        """
+        if not signal_reasons:
+            return 0
+
+        try:
+            # 构建 CASE WHEN 语句用于 execution_reason
+            case_when_parts = []
+            where_conditions = []
+            params = {"task_id": task_id}
+
+            for i, (stock_code, timestamp, signal_type, execution_reason) in enumerate(signal_reasons):
+                # 将时间戳转换为日期范围
+                ts = self._ensure_datetime(timestamp)
+                timestamp_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+                timestamp_end = timestamp_start + timedelta(days=1)
+
+                params[f"stock_code_{i}"] = stock_code
+                params[f"signal_type_{i}"] = signal_type
+                params[f"ts_start_{i}"] = timestamp_start
+                params[f"ts_end_{i}"] = timestamp_end
+                params[f"reason_{i}"] = execution_reason
+
+                condition = (
+                    f"(stock_code = :stock_code_{i} AND signal_type = :signal_type_{i} "
+                    f"AND timestamp >= :ts_start_{i} AND timestamp < :ts_end_{i})"
+                )
+                where_conditions.append(condition)
+                case_when_parts.append(f"WHEN {condition} THEN :reason_{i}")
+
+            # 构建完整的 UPDATE 语句
+            case_when_clause = " ".join(case_when_parts)
+            where_clause = " OR ".join(where_conditions)
+            sql = text(f"""
+                UPDATE signal_records
+                SET execution_reason = CASE {case_when_clause} END
+                WHERE task_id = :task_id
+                AND executed = 0
+                AND ({where_clause})
+            """)
+
+            result = await self.session.execute(sql, params)
+            updated_count = result.rowcount
+            await self.session.flush()
+
+            self.logger.info(
+                f"批量更新信号未执行原因: task_id={task_id}, "
+                f"请求数={len(signal_reasons)}, 更新数={updated_count}"
+            )
+            return updated_count
+
+        except Exception as e:
+            self.logger.error("批量更新信号未执行原因失败: {}", e, exc_info=True)
+            return 0
 
     # ==================== BacktestBenchmark 相关操作 ====================
 
