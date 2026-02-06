@@ -871,7 +871,7 @@ class BacktestExecutor:
                     except Exception:
                         pass
 
-            # 信号对齐（Phase 3 优化：使用 reindex 批量对齐）
+            # 信号对齐（Phase 3 优化：使用 reindex 批量对齐 + 向量化映射）
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
                 sig_ser = pre.get(strategy_key)
@@ -879,20 +879,22 @@ class BacktestExecutor:
                     # 使用 reindex 批量对齐
                     s = sig_ser.reindex(trading_dates)
                     vals = s.values  # 直接获取 numpy 数组
-                    # 向量化映射 SignalType to int8
-                    for t, v in enumerate(vals):
-                        if v == SignalType.BUY:
-                            signal[i, t] = 1
-                        elif v == SignalType.SELL:
-                            signal[i, t] = -1
+                    # 向量化映射 SignalType to int8（优化：避免 Python 循环）
+                    # 使用 np.where 进行向量化条件赋值
+                    buy_mask = vals == SignalType.BUY
+                    sell_mask = vals == SignalType.SELL
+                    signal[i, buy_mask] = 1
+                    signal[i, sell_mask] = -1
                 elif isinstance(sig_ser, dict):
-                    # dict 路径：逐个填充
-                    for t, d in enumerate(trading_dates):
-                        v = sig_ser.get(d)
-                        if v == SignalType.BUY:
-                            signal[i, t] = 1
-                        elif v == SignalType.SELL:
-                            signal[i, t] = -1
+                    # dict 路径：向量化填充（优化：避免 Python 循环）
+                    # 将 dict 转换为 Series 后使用向量化操作
+                    sig_series = pd.Series(sig_ser)
+                    s = sig_series.reindex(trading_dates)
+                    vals = s.values
+                    buy_mask = vals == SignalType.BUY
+                    sell_mask = vals == SignalType.SELL
+                    signal[i, buy_mask] = 1
+                    signal[i, sell_mask] = -1
             except Exception as e:
                 logger.warning(f"股票 {code} 信号对齐失败: {e}")
 
