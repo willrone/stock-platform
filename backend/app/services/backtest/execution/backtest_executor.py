@@ -559,9 +559,7 @@ class BacktestExecutor:
             all_dates.update(data.index.tolist())
 
         # 过滤日期范围并排序
-        trading_dates = sorted(
-            [date for date in all_dates if start_date <= date <= end_date]
-        )
+        trading_dates = np.sort(np.array([date for date in all_dates if start_date <= date <= end_date])).tolist()
 
         return trading_dates
 
