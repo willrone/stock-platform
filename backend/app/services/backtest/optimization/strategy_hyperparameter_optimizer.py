@@ -125,8 +125,23 @@ class StrategyHyperparameterOptimizer:
         logger.info("数据预加载完成")
 
         # 创建 SQLite 存储（支持断点续跑和并行）
+        #
+        # ⚠️ 重要：study_name 不能只用 strategy_name + 日期区间。
+        # 否则不同 param_space / 不同实验会复用同一个 optuna study，导致“0 trials 就完成/复用旧最优值”。
+        # 这里加入 param_space 的稳定签名，确保不同实验隔离，同时仍支持断点续跑。
         storage = None
-        study_name = f"{strategy_name}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
+        import hashlib
+        import json
+
+        base_study_name = f"{strategy_name}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
+        try:
+            sig_src = json.dumps(param_space, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+            param_sig = hashlib.sha1(sig_src).hexdigest()[:8]
+        except Exception:
+            param_sig = "nosig"
+
+        study_name = f"{base_study_name}_{param_sig}"
+
         if self.use_persistent_storage:
             storage_path = os.path.join(self._storage_dir, f"{study_name}.db")
             storage = RDBStorage(
@@ -134,6 +149,7 @@ class StrategyHyperparameterOptimizer:
                 engine_kwargs={"connect_args": {"timeout": 30}}
             )
             logger.info(f"使用 SQLite 存储: {storage_path}")
+            logger.info(f"Optuna study_name: {study_name} (base={base_study_name}, sig={param_sig})")
 
         # 创建激进剪枝器（比 MedianPruner 更早终止差的 trial）
         pruner = HyperbandPruner(

@@ -222,7 +222,8 @@ start_backend() {
     # 后台启动后端服务，将启动错误捕获到backend.log
     # 注意：启动阶段的错误（如导入错误、配置错误）会写入backend.log
     # 运行时的日志由loguru管理，写入app.log
-    nohup python run.py > ../data/logs/backend.log 2>&1 &
+    # 使用虚拟环境的 Python，确保 worker 进程也能找到依赖
+    nohup ./venv/bin/python run.py > ../data/logs/backend.log 2>&1 &
     backend_pid=$!
     echo $backend_pid > ../data/backend.pid
     

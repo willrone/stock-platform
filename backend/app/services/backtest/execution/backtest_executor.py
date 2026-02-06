@@ -110,7 +110,7 @@ class BacktestExecutor:
 
     def __init__(
         self,
-        data_dir: str = "backend/data",
+        data_dir: str = "data",
         enable_parallel: bool = True,
         max_workers: Optional[int] = None,
         enable_performance_profiling: bool = False,
@@ -1092,6 +1092,11 @@ class BacktestExecutor:
                         for j in sig_idx.tolist():
                             need_codes.add(codes[j])
 
+                    # BUGFIX: 如果没有预计算信号且持仓为空，需要为所有股票获取价格
+                    # 否则无法生成信号（因为 generate_signals 需要当前价格）
+                    if not need_codes:
+                        need_codes = set(codes)
+
                     if need_codes:
                         # 批量查找价格（向量化）
                         for c in need_codes:
@@ -1776,8 +1781,8 @@ class BacktestExecutor:
 
                     # 更新数据库中的任务进度（包含详细数据）
                     try:
-                        from datetime import datetime
-
+                        # 注意：datetime 已在文件顶部导入，不要在此重复导入
+                        # 否则会导致 "cannot access local variable 'datetime'" 错误
                         from app.core.database import SessionLocal
                         from app.models.task_models import TaskStatus
                         from app.repositories.task_repository import TaskRepository

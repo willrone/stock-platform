@@ -93,6 +93,90 @@ class StrategyPortfolio(BaseStrategy):
 
         self.weights = {k: v / total_weight for k, v in self.weights.items()}
 
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """
+        [性能优化] 向量化预计算组合策略的整合信号
+        
+        对于组合策略，需要：
+        1. 收集所有子策略的预计算信号
+        2. 按日期进行向量化的加权投票整合
+        3. 返回整合后的信号序列
+        
+        Args:
+            data: 股票数据 DataFrame
+            
+        Returns:
+            整合后的信号 Series，index 为日期，值为 SignalType 或 None
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # 1. 收集所有子策略的预计算信号
+            sub_signals_map: Dict[str, pd.Series] = {}
+            
+            for strategy in self.strategies:
+                try:
+                    sig_series = strategy.precompute_all_signals(data)
+                    if sig_series is not None and len(sig_series) > 0:
+                        sub_signals_map[strategy.name] = sig_series
+                except Exception as e:
+                    logger.warning(f"子策略 {strategy.name} 预计算失败: {e}")
+                    continue
+            
+            if not sub_signals_map:
+                logger.warning("组合策略: 所有子策略预计算均失败，返回 None")
+                return None
+            
+            # 2. 向量化整合信号（按日期加权投票）
+            # 获取所有日期的并集
+            all_dates = data.index
+            
+            # 初始化结果
+            result = pd.Series([None] * len(all_dates), index=all_dates, dtype=object)
+            
+            # 归一化权重
+            total_weight = sum(self.weights.get(name, 1.0) for name in sub_signals_map.keys())
+            if total_weight == 0:
+                total_weight = len(sub_signals_map)
+            
+            # 对每个日期进行加权投票
+            for date in all_dates:
+                buy_score = 0.0
+                sell_score = 0.0
+                
+                for strategy_name, sig_series in sub_signals_map.items():
+                    weight = self.weights.get(strategy_name, 1.0) / total_weight
+                    
+                    try:
+                        if date in sig_series.index:
+                            sig = sig_series.loc[date]
+                            if sig == SignalType.BUY:
+                                buy_score += weight
+                            elif sig == SignalType.SELL:
+                                sell_score += weight
+                    except Exception:
+                        continue
+                
+                # 根据加权投票结果确定最终信号
+                # 使用一致性阈值 0.3（至少30%的权重同意）
+                consistency_threshold = 0.3
+                if buy_score > sell_score and buy_score >= consistency_threshold:
+                    result.loc[date] = SignalType.BUY
+                elif sell_score > buy_score and sell_score >= consistency_threshold:
+                    result.loc[date] = SignalType.SELL
+            
+            # 统计信号数量
+            buy_count = (result == SignalType.BUY).sum()
+            sell_count = (result == SignalType.SELL).sum()
+            logger.info(f"✅ 组合策略向量化预计算完成: BUY={buy_count}, SELL={sell_count}, 子策略数={len(sub_signals_map)}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"组合策略向量化预计算失败: {e}")
+            return None
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
@@ -100,10 +184,11 @@ class StrategyPortfolio(BaseStrategy):
         生成组合信号
 
         流程：
-        1. 收集所有策略的信号
-        2. 为每个信号添加策略名称到metadata
-        3. 使用SignalIntegrator整合信号
-        4. 返回最终信号
+        1. 优先使用预计算信号（如果存在）
+        2. 否则收集所有策略的信号
+        3. 为每个信号添加策略名称到metadata
+        4. 使用SignalIntegrator整合信号
+        5. 返回最终信号
 
         Args:
             data: 股票数据
@@ -113,6 +198,43 @@ class StrategyPortfolio(BaseStrategy):
             整合后的信号列表
         """
         import time
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 性能优化：优先使用预计算信号
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
+            if precomputed is not None:
+                sig_type = None
+                if isinstance(precomputed, pd.Series):
+                    sig_type = precomputed.get(current_date)
+                elif isinstance(precomputed, dict):
+                    sig_type = precomputed.get(current_date)
+                
+                if isinstance(sig_type, SignalType):
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    # 获取当前价格
+                    try:
+                        current_price = float(data.loc[current_date, 'close'])
+                    except Exception:
+                        current_price = 0.0
+                    
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=0.8,  # 组合策略默认强度
+                        price=current_price,
+                        reason=f"[向量化] 组合策略信号 ({len(self.strategies)} 子策略)",
+                        metadata={
+                            "strategy_name": self.name,
+                            "source_strategy": self.name,
+                            "sub_strategies": [s.name for s in self.strategies],
+                        },
+                    )]
+                return []
+        except Exception as e:
+            logger.debug(f"组合策略预计算信号查找失败: {e}")
 
         all_signals = []
 

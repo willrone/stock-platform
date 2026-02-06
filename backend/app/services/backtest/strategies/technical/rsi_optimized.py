@@ -88,7 +88,7 @@ class RSIOptimizedStrategy(BaseStrategy):
         """生成RSI信号 - 简化版"""
         # 优先使用预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):

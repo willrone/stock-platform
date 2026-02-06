@@ -95,7 +95,7 @@ class BollingerBandStrategy(BaseStrategy):
         """生成布林带交易信号"""
         # 性能优化：优先使用预计算信号序列
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
@@ -242,7 +242,7 @@ class StochasticStrategy(BaseStrategy):
         """生成随机指标交易信号"""
         # 性能优化：优先检查是否已有全量预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
@@ -371,7 +371,7 @@ class CCIStrategy(BaseStrategy):
         """生成CCI交易信号"""
         # 性能优化：优先检查是否已有全量预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
@@ -809,7 +809,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         """生成协整交易信号"""
         # 性能优化：优先使用全量预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
@@ -973,7 +973,12 @@ class FactorStrategy(BaseStrategy):
 
 
 class ValueFactorStrategy(FactorStrategy):
-    """价值因子策略"""
+    """价值因子策略
+
+    2026-02：支持可选的估值阈值筛选（用于提升信号质量/稳定性）。
+    注意：当前回测数据源未包含真实财务报表 ROE 等字段；
+    因此这里的 PE/PB 为策略内部估计序列，仅用于“相对过滤/去极值”。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("ValueFactor", config)
@@ -981,6 +986,13 @@ class ValueFactorStrategy(FactorStrategy):
         self.pb_weight = config.get("pb_weight", 0.25)
         self.ps_weight = config.get("ps_weight", 0.25)
         self.ev_ebitda_weight = config.get("ev_ebitda_weight", 0.25)
+
+        # Optional valuation thresholds (filters)
+        # If set, a BUY signal will only be emitted when estimated ratios satisfy the constraints.
+        self.pe_max = config.get("pe_max", None)
+        self.pb_max = config.get("pb_max", None)
+        # placeholder for future fundamental integration
+        self.roe_min = config.get("roe_min", None)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算价值因子指标"""
@@ -1060,18 +1072,33 @@ class ValueFactorStrategy(FactorStrategy):
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
             if prev_score <= 0 and current_score > 0:
+                # Optional valuation thresholds
+                current_pe = float(indicators["pe_ratio"].iloc[current_idx])
+                current_pb = float(indicators["pb_ratio"].iloc[current_idx])
+
+                if self.pe_max is not None and current_pe > float(self.pe_max):
+                    return signals
+                if self.pb_max is not None and current_pb > float(self.pb_max):
+                    return signals
+
                 strength = min(1.0, current_score)
+                reason = f"价值因子评分转正: {current_score:.3f}"
+                if self.pe_max is not None or self.pb_max is not None:
+                    reason += f" (PE≤{self.pe_max}, PB≤{self.pb_max})"
+
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.BUY,
                     strength=strength,
                     price=current_price,
-                    reason=f"价值因子评分转正: {current_score:.3f}",
+                    reason=reason,
                     metadata={
                         "value_score": current_score,
-                        "pe_ratio": indicators["pe_ratio"].iloc[current_idx],
-                        "pb_ratio": indicators["pb_ratio"].iloc[current_idx],
+                        "pe_ratio": current_pe,
+                        "pb_ratio": current_pb,
+                        "pe_max": self.pe_max,
+                        "pb_max": self.pb_max,
                     },
                 )
                 signals.append(signal)

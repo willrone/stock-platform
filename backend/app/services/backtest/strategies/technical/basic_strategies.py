@@ -79,7 +79,7 @@ class MovingAverageStrategy(BaseStrategy):
         """生成移动平均交叉信号"""
         # 性能优化：优先检查是否已有全量预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
@@ -264,7 +264,7 @@ class RSIStrategy(BaseStrategy):
         """生成RSI信号 - 简化版（移除复杂的趋势和背离检测）"""
         # 性能优化：优先检查是否已有全量预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
@@ -407,7 +407,7 @@ class MACDStrategy(BaseStrategy):
         """生成MACD信号"""
         # 性能优化：优先��查是否已有全量预计算信号
         try:
-            precomputed = data.attrs.get("_precomputed_signals", {}).get(id(self))
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_type = precomputed.get(current_date)
                 if isinstance(sig_type, SignalType):
