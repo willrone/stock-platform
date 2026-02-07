@@ -1864,8 +1864,8 @@ class BacktestExecutor:
                     logger.warning(f"[topk_buffer][sanity] check failed: {e}")
 
                 # 更新进度监控（同时更新数据库）
-                # 性能优化: 降低数据库更新频率，从每5天改为每50天，减少I/O开销
-                if task_id and i % 50 == 0:
+                # 性能优化: 降低数据库更新频率，从每5天改为每100天，减少I/O开销
+                if task_id and i % 100 == 0:
                     portfolio_value = portfolio_manager.get_portfolio_value(
                         current_prices
                     )
