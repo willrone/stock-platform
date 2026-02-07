@@ -114,7 +114,7 @@ class BacktestExecutor:
         enable_parallel: bool = True,
         max_workers: Optional[int] = None,
         enable_performance_profiling: bool = False,
-        use_multiprocessing: bool = False,
+        use_multiprocessing: bool = True,  # P3优化: 启用多进程并行，突破GIL限制
     ):
         """
         初始化回测执行器
