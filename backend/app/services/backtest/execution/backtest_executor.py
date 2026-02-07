@@ -937,76 +937,51 @@ class BacktestExecutor:
         stock_data: Dict[str, pd.DataFrame],
     ) -> List[Tuple[bool, str, Optional[str]]]:
         """
-        [性能优化] 使用多进程进行信号预计算，突破 GIL 限制。
+        [性能优化] 使用多线程进行信号预计算，避免序列化开销。
 
-        注意：多进程需要序列化数据，因此：
-        1. 将 DataFrame 转换为可序列化格式
-        2. 在子进程中重建策略对象
-        3. 计算完成后将结果返回主进程
+        优化 #4：改用 ThreadPoolExecutor 替代 ProcessPoolExecutor
+        - 避免 DataFrame 和策略对象的序列化/反序列化开销
+        - 信号预计算主要是 numpy/pandas 操作，会释放 GIL
+        - 预期提升 8-12 秒
         """
-        from concurrent.futures import ProcessPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor
         import pickle
 
         results = []
 
-        # 准备可序列化的任务数据
-        tasks = []
-        for stock_code, data in stock_data.items():
+        # 优化 #4：使用多线程，直接传递 DataFrame 和策略对象，避免序列化
+        def compute_signals(stock_code: str, data: pd.DataFrame) -> Tuple[bool, str, Optional[str]]:
+            """线程 worker 函数"""
             try:
-                # 序列化策略配置（而非策略对象本身）
-                strategy_info = {
-                    'name': strategy.name,
-                    'class_name': strategy.__class__.__name__,
-                    'config': getattr(strategy, 'config', {}),
-                }
-                # 将 DataFrame 转换为字典格式（可序列化）
-                data_dict = {
-                    'values': data.to_dict('list'),
-                    'index': list(data.index),
-                    'columns': list(data.columns),
-                    'stock_code': data.attrs.get('stock_code', stock_code),
-                }
-                tasks.append((stock_code, data_dict, strategy_info))
+                signals = strategy.precompute_all_signals(data)
+                if signals is not None:
+                    cache = data.attrs.setdefault("_precomputed_signals", {})
+                    cache[strategy.name] = signals
+                    return (True, stock_code, None)
+                else:
+                    return (False, stock_code, "precompute_all_signals 返回 None")
             except Exception as e:
-                logger.warning(f"准备股票 {stock_code} 数据失败: {e}")
-                results.append((False, stock_code, str(e)))
+                return (False, stock_code, str(e))
 
-        if not tasks:
-            return results
-
-        # 使用进程池并行计算
+        # 使用线程池并行计算
         try:
-            with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {
-                    executor.submit(
-                        _multiprocess_precompute_worker, task
-                    ): task[0] for task in tasks
+                    executor.submit(compute_signals, stock_code, data): stock_code
+                    for stock_code, data in stock_data.items()
                 }
 
                 for future in as_completed(futures):
                     stock_code = futures[future]
                     try:
-                        ok, code, signals_dict, err = future.result(timeout=60)
-                        if ok and signals_dict is not None:
-                            # 将结果写回原始 DataFrame 的 attrs
-                            original_data = stock_data[code]
-                            # 重建 Series
-                            signals = pd.Series(
-                                signals_dict['values'],
-                                index=pd.to_datetime(signals_dict['index']),
-                                dtype=object
-                            )
-                            cache = original_data.attrs.setdefault("_precomputed_signals", {})
-                            cache[strategy.name] = signals  # 使用 strategy.name 作为稳定的 key
-                            results.append((True, code, None))
-                        else:
-                            results.append((False, code, err))
+                        result = future.result(timeout=60)
+                        results.append(result)
                     except Exception as e:
                         results.append((False, stock_code, str(e)))
         except Exception as e:
-            logger.error(f"多进程预计算执行失败: {e}")
+            logger.error(f"多线程预计算执行失败: {e}")
             # 返回所有任务失败
-            for stock_code, _, _ in tasks:
+            for stock_code in stock_data.keys():
                 if not any(r[1] == stock_code for r in results):
                     results.append((False, stock_code, str(e)))
 
@@ -1182,13 +1157,15 @@ class BacktestExecutor:
                     valid_mat = aligned_arrays.get("valid")
                     sig_mat = aligned_arrays.get("signal")
 
-                    # 收集需要价格的股票（持仓 + 有信号的股票）
-                    need_codes = set(get_portfolio_stocks(portfolio_manager))
+                    # 优化 #5：缓存 portfolio stocks set，避免重复调用
+                    portfolio_stocks = set(get_portfolio_stocks(portfolio_manager))
+                    need_codes = portfolio_stocks.copy()
                     
                     if isinstance(sig_mat, np.ndarray):
+                        # 优化 #5：使用向量化操作获取有信号的股票
                         sig_idx = np.nonzero(sig_mat[:, i])[0]
-                        for j in sig_idx.tolist():
-                            need_codes.add(codes[j])
+                        if len(sig_idx) > 0:
+                            need_codes.update(codes[j] for j in sig_idx)
 
                     # BUGFIX: 如果没有预计算信号且持仓为空，需要为所有股票获取价格
                     # 否则无法生成信号（因为 generate_signals 需要当前价格）
