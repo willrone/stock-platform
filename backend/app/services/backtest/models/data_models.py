@@ -68,5 +68,5 @@ class BacktestConfig:
     # 性能：大规模回测默认不需要每天的完整组合快照；
     # equity 曲线单独记录，不受该开关影响。
     record_portfolio_history: bool = True
-    portfolio_history_stride: int = 1  # >1 表示降采样（每 stride 天记录一次）
+    portfolio_history_stride: int = 5  # 性能优化: 默认每5天记录一次快照，减少内存和I/O开销
     record_positions_in_history: bool = True  # False 时快照不包含 positions 明细

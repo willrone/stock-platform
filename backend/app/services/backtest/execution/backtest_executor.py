@@ -902,6 +902,7 @@ class BacktestExecutor:
             'stock_codes': stock_codes,
             'code_to_i': {c: idx for idx, c in enumerate(stock_codes)},
             'dates': dates64,
+            'date_to_i': {d: idx for idx, d in enumerate(trading_dates)},  # [P1 优化] 日期到索引的O(1)映射
             'close': close,
             'open': open_,
             'valid': valid,
@@ -1200,6 +1201,11 @@ class BacktestExecutor:
                 if not current_prices:
                     continue
 
+                # [P2 优化] 批量设置当前价格到数组，后续的 get_portfolio_value 等方法
+                # 可以直接使用向量化计算，避免重复的字典查找
+                if hasattr(portfolio_manager, 'set_current_prices'):
+                    portfolio_manager.set_current_prices(current_prices)
+
                 # 生成交易信号（Phase1：优先用 ndarray signal matrix）
                 all_signals: List[TradingSignal] = []
 
@@ -1277,13 +1283,11 @@ class BacktestExecutor:
                                         if code_to_i is not None and close_mat is not None and dates is not None:
                                             stock_idx = code_to_i.get(stock_code)
                                             if stock_idx is not None:
-                                                # 找到日期索引
-                                                date_idx = None
-                                                date_np = np.datetime64(date)
-                                                # 使用 numpy 的向量化查找
-                                                matches = np.where(dates == date_np)[0]
-                                                if len(matches) > 0:
-                                                    date_idx = int(matches[0])
+                                                # [P1 优化] 使用 O(1) 字典查找替代 O(n) 的 np.where
+                                                date_to_i = aligned_arrays.get("date_to_i")
+                                                date_idx = date_to_i.get(date) if date_to_i else None
+                                                
+                                                if date_idx is not None:
                                                     # 直接从 numpy 数组读取，无 pandas 开销
                                                     price_val = close_mat[stock_idx, date_idx]
                                                     if not np.isnan(price_val):
@@ -1743,12 +1747,16 @@ class BacktestExecutor:
                         pass
 
                 else:
+                    # P1优化：每日缓存 portfolio_value 和 positions，避免循环内重复计算
+                    daily_portfolio_value = portfolio_manager.get_portfolio_value(current_prices)
+                    daily_positions = portfolio_manager.positions
+
                     for signal in all_signals:
                         # 验证信号
                         is_valid, validation_reason = strategy.validate_signal(
                             signal,
-                            portfolio_manager.get_portfolio_value(current_prices),
-                            portfolio_manager.positions,
+                            daily_portfolio_value,
+                            daily_positions,
                         )
 
                         if not is_valid:
@@ -1856,7 +1864,8 @@ class BacktestExecutor:
                     logger.warning(f"[topk_buffer][sanity] check failed: {e}")
 
                 # 更新进度监控（同时更新数据库）
-                if task_id and i % 5 == 0:  # 每5天更新一次进度
+                # 性能优化: 降低数据库更新频率，从每5天改为每50天，减少I/O开销
+                if task_id and i % 50 == 0:
                     portfolio_value = portfolio_manager.get_portfolio_value(
                         current_prices
                     )

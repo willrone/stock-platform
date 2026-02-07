@@ -64,28 +64,69 @@ class PortfolioManagerArray:
         self.portfolio_history: List[Dict[str, Any]] = []
         self.portfolio_history_without_cost: List[Dict[str, Any]] = []
 
-    def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
-        """计算组合总价值（含成本）- 向量化版本"""
-        total_value = self.cash
-        
-        # 向量化计算持仓市值
-        for code, price in current_prices.items():
-            idx = self.code_to_idx.get(code)
-            if idx is not None and self.quantities[idx] > 0:
-                total_value += self.quantities[idx] * price
-        
-        return total_value
+        # [P2 优化] 价格数组缓存，避免每次调用 get_portfolio_value 时重复转换
+        self._price_array = np.zeros(self.n_stocks, dtype=np.float64)
+        self._price_array_valid = False  # 标记缓存是否有效
 
-    def get_portfolio_value_without_cost(self, current_prices: Dict[str, float]) -> float:
-        """计算组合总价值（无成本）- 向量化版本"""
-        total_value = self.cash_without_cost
-        
+        # [P0 优化] positions 缓存，避免每次调用 positions 属性时重复构建字典
+        self._positions_cache: Optional[Dict[str, Position]] = None
+        self._positions_cache_valid = False
+
+    def _invalidate_positions_cache(self) -> None:
+        """[P0 优化] 使 positions 缓存失效，在持仓变化时调用"""
+        self._positions_cache_valid = False
+
+    def set_current_prices(self, current_prices: Dict[str, float]) -> None:
+        """[P2 优化] 批量设置当前价格到数组，供后续向量化计算使用
+
+        在每个交易日开始时调用一次，后续的 get_portfolio_value 等方法
+        可以直接使用缓存的价格数组，避免重复的字典查找和转换。
+        """
+        # 重置价格数组
+        self._price_array.fill(0.0)
+
+        # 批量填充价格
         for code, price in current_prices.items():
             idx = self.code_to_idx.get(code)
-            if idx is not None and self.quantities_without_cost[idx] > 0:
-                total_value += self.quantities_without_cost[idx] * price
-        
-        return total_value
+            if idx is not None:
+                self._price_array[idx] = price
+
+        self._price_array_valid = True
+
+    def get_portfolio_value(self, current_prices: Dict[str, float] = None) -> float:
+        """计算组合总价值（含成本）- 向量化版本
+
+        [P2 优化] 如果已调用 set_current_prices()，则使用缓存的价格数组进行向量化计算。
+        否则回退到原有的字典遍历方式（兼容性）。
+        """
+        # 快速路径：使用缓存的价格数组（None 或空字典都走这条路径）
+        if current_prices is None or len(current_prices) == 0:
+            if self._price_array_valid:
+                # 纯向量化计算：cash + dot(quantities, prices)
+                return self.cash + np.dot(self.quantities, self._price_array)
+            else:
+                # 没有缓存，返回纯现金（兼容旧行为）
+                return self.cash
+
+        # 如果传入了非空 current_prices，更新缓存并使用向量化计算
+        self.set_current_prices(current_prices)
+        return self.cash + np.dot(self.quantities, self._price_array)
+
+    def get_portfolio_value_without_cost(self, current_prices: Dict[str, float] = None) -> float:
+        """计算组合总价值（无成本）- 向量化版本
+
+        [P2 优化] 如果已调用 set_current_prices()，则使用缓存的价格数组进行向量化计算。
+        """
+        # 快速路径：使用缓存的价格数组（None 或空字典都走这条路径）
+        if current_prices is None or len(current_prices) == 0:
+            if self._price_array_valid:
+                return self.cash_without_cost + np.dot(self.quantities_without_cost, self._price_array)
+            else:
+                return self.cash_without_cost
+
+        # 如果传入了非空 current_prices，更新缓存并使用向量化计算
+        self.set_current_prices(current_prices)
+        return self.cash_without_cost + np.dot(self.quantities_without_cost, self._price_array)
 
     def get_position(self, stock_code: str) -> Optional[Position]:
         """获取持仓信息（兼容接口）"""
@@ -105,20 +146,30 @@ class PortfolioManagerArray:
 
     @property
     def positions(self) -> Dict[str, Position]:
-        """返回持仓字典（兼容接口）"""
+        """返回持仓字典（兼容接口）- [P0 优化] 带缓存"""
+        # 检查缓存是否有效
+        if self._positions_cache_valid and self._positions_cache is not None:
+            return self._positions_cache
+
+        # 使用 np.nonzero 向量化查找有持仓的股票索引
+        position_indices = np.nonzero(self.quantities > 0)[0]
+
         result = {}
-        for i in range(self.n_stocks):
-            if self.quantities[i] > 0:
-                code = self.stock_codes[i]
-                result[code] = Position(
-                    stock_code=code,
-                    quantity=int(self.quantities[i]),
-                    avg_cost=float(self.avg_costs[i]),
-                    current_price=0.0,
-                    market_value=0.0,
-                    unrealized_pnl=0.0,
-                    realized_pnl=float(self.realized_pnl[i]),
-                )
+        for i in position_indices:
+            code = self.stock_codes[i]
+            result[code] = Position(
+                stock_code=code,
+                quantity=int(self.quantities[i]),
+                avg_cost=float(self.avg_costs[i]),
+                current_price=0.0,
+                market_value=0.0,
+                unrealized_pnl=0.0,
+                realized_pnl=float(self.realized_pnl[i]),
+            )
+
+        # 缓存结果并标记有效
+        self._positions_cache = result
+        self._positions_cache_valid = True
         return result
 
     @property
@@ -238,6 +289,9 @@ class PortfolioManagerArray:
         
         self.quantities[idx] = new_quantity
 
+        # [P0 优化] 持仓变化，使缓存失效
+        self._invalidate_positions_cache()
+
         # 执行交易（无成本）
         cost_without_fees = quantity * original_price
         self.cash_without_cost -= cost_without_fees
@@ -318,6 +372,9 @@ class PortfolioManagerArray:
         self.quantities[idx] = 0
         self.avg_costs[idx] = 0.0
 
+        # [P0 优化] 持仓变化，使缓存失效
+        self._invalidate_positions_cache()
+
         # 执行交易（无成本）
         proceeds_without_fees = quantity * original_price
         cost_basis_without_cost = quantity * self.avg_costs_without_cost[idx]
@@ -361,10 +418,18 @@ class PortfolioManagerArray:
 
         return trade, None
 
-    def record_portfolio_snapshot(self, date: datetime, current_prices: Dict[str, float]):
-        """记录组合快照"""
-        portfolio_value = self.get_portfolio_value(current_prices)
-        portfolio_value_without_cost = self.get_portfolio_value_without_cost(current_prices)
+    def record_portfolio_snapshot(self, date: datetime, current_prices: Dict[str, float] = None):
+        """记录组合快照
+
+        [P2 优化] 如果已调用 set_current_prices()，可以传入 None 使用缓存的价格数组。
+        """
+        # 如果传入了价格，先更新缓存
+        if current_prices is not None:
+            self.set_current_prices(current_prices)
+
+        # 使用向量化计算（利用缓存的价格数组）
+        portfolio_value = self.get_portfolio_value()
+        portfolio_value_without_cost = self.get_portfolio_value_without_cost()
 
         # 轻量记录（用于指标计算）
         self.equity_curve.append((date, float(portfolio_value)))

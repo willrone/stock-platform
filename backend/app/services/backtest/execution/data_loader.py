@@ -25,18 +25,18 @@ class DataLoader:
         data: pd.DataFrame,
         start_date: datetime,
         end_date: datetime,
-        min_rows: int = 30,
         min_coverage_ratio: float = 0.7,
     ) -> bool:
         """简单的数据有效性过滤：行数>0 且 覆盖足够长，避免抽样到缺失股票影响结果"""
         try:
             if data is None or data.empty:
                 return False
-            if len(data) < min_rows:
-                return False
             # coverage ratio: rows / expected business days (rough)
             total_days = (end_date.date() - start_date.date()).days + 1
             expected = max(1, total_days * 5 // 7)
+            min_rows = 30
+            if len(data) < min_rows:
+                return False
             coverage = len(data) / expected
             return coverage >= min_coverage_ratio
         except Exception:
