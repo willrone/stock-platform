@@ -836,19 +836,29 @@ class BacktestExecutor:
         for i, code in enumerate(stock_codes):
             df = stock_data[code]
 
-            # Phase 3 优化：使用 reindex 批量对齐（比逐个查找快）
+            # Phase 3 优化：使用 numpy searchsorted 替代 pandas reindex（更快）
             try:
-                # 价格对齐（使用 reindex 一次性完成）
-                s_close = df['close'].reindex(trading_dates)
-                close_values = s_close.values  # 直接获取 numpy 数组
+                # 价格对齐（使用 searchsorted 进行索引���射）
+                df_dates = df.index.values
+                # 使用 searchsorted 找到每个 trading_date 在 df_dates 中的位置
+                indices = np.searchsorted(df_dates, trading_dates)
+                # 处理越界情况
+                indices = np.clip(indices, 0, len(df_dates) - 1)
+                # 检查是否精确匹配
+                matches = df_dates[indices] == trading_dates
+                
+                # 填充价格数据
+                close_values = df['close'].values[indices]
+                close_values[~matches] = np.nan
                 close[i, :] = close_values
                 
                 if 'open' in df.columns:
-                    s_open = df['open'].reindex(trading_dates)
-                    open_[i, :] = s_open.values
+                    open_values = df['open'].values[indices]
+                    open_values[~matches] = np.nan
+                    open_[i, :] = open_values
                 
                 # 使用向量化操作判断有效性
-                valid[i, :] = ~np.isnan(close_values)
+                valid[i, :] = matches & ~np.isnan(close_values)
                 
             except Exception as e:
                 # fallback: per-date fill (slow path, should be rare)
@@ -871,26 +881,37 @@ class BacktestExecutor:
                     except Exception:
                         pass
 
-            # 信号对齐（Phase 3 优化：使用 reindex 批量对齐 + 向量化映射）
+            # 信号对齐（Phase 3 优化：使用 numpy searchsorted 替代 pandas reindex）
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
                 sig_ser = pre.get(strategy_key)
                 if isinstance(sig_ser, pd.Series):
-                    # 使用 reindex 批量对齐
-                    s = sig_ser.reindex(trading_dates)
-                    vals = s.values  # 直接获取 numpy 数组
-                    # 向量化映射 SignalType to int8（优化：避免 Python 循环）
-                    # 使用 np.where 进行向量化条件赋值
+                    # 使用 searchsorted 批量对齐
+                    sig_dates = sig_ser.index.values
+                    sig_indices = np.searchsorted(sig_dates, trading_dates)
+                    sig_indices = np.clip(sig_indices, 0, len(sig_dates) - 1)
+                    sig_matches = sig_dates[sig_indices] == trading_dates
+                    
+                    # 获取信号值
+                    vals = sig_ser.values[sig_indices]
+                    vals[~sig_matches] = None  # 不匹配的设为 None
+                    
+                    # 向量化映射 SignalType to int8
                     buy_mask = vals == SignalType.BUY
                     sell_mask = vals == SignalType.SELL
                     signal[i, buy_mask] = 1
                     signal[i, sell_mask] = -1
                 elif isinstance(sig_ser, dict):
-                    # dict 路径：向量化填充（优化：避免 Python 循环）
-                    # 将 dict 转换为 Series 后使用向量化操作
+                    # dict 路径：转换为数组后使用向量化操作
                     sig_series = pd.Series(sig_ser)
-                    s = sig_series.reindex(trading_dates)
-                    vals = s.values
+                    sig_dates = sig_series.index.values
+                    sig_indices = np.searchsorted(sig_dates, trading_dates)
+                    sig_indices = np.clip(sig_indices, 0, len(sig_dates) - 1)
+                    sig_matches = sig_dates[sig_indices] == trading_dates
+                    
+                    vals = sig_series.values[sig_indices]
+                    vals[~sig_matches] = None
+                    
                     buy_mask = vals == SignalType.BUY
                     sell_mask = vals == SignalType.SELL
                     signal[i, buy_mask] = 1
