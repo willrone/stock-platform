@@ -2229,10 +2229,17 @@ class BacktestExecutor:
         if topk <= 0:
             return executed_trade_signals, unexecuted_signals, trades_this_day
 
+        # P2 优化: 使用 NumPy 向量化排序，替代 Python sorted()
         # rank by score desc, tie-break by stock_code for determinism
-        ranked = sorted(scores.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
-        topk_list = [c for c, _ in ranked[:topk]]
-        buffer_list = [c for c, _ in ranked[: max(topk, topk + buffer_n)]]
+        codes = list(scores.keys())
+        score_values = np.array([scores[c] for c in codes])
+        
+        # argsort 默认升序，用负号实现降序
+        sorted_indices = np.argsort(-score_values)
+        ranked_codes = [codes[i] for i in sorted_indices]
+        
+        topk_list = ranked_codes[:topk]
+        buffer_list = ranked_codes[: max(topk, topk + buffer_n)]
         buffer_set = set(buffer_list)
 
         holdings = list(portfolio_manager.positions.keys())
@@ -2241,11 +2248,14 @@ class BacktestExecutor:
         # Keep holdings inside buffer zone
         kept = [c for c in holdings if c in buffer_set]
 
+        # P2 优化: 使用 NumPy 向量化 rank_index 查找
         # If kept > topk, trim lowest-ranked among kept
-        rank_index = {c: i for i, (c, _) in enumerate(ranked)}
+        rank_index = {c: i for i, c in enumerate(ranked_codes)}
         if len(kept) > topk:
-            kept_sorted = sorted(kept, key=lambda c: rank_index.get(c, 10**9))
-            kept = kept_sorted[:topk]
+            # 使用 NumPy 数组操作替代 sorted
+            kept_ranks = np.array([rank_index.get(c, 10**9) for c in kept])
+            kept_sorted_indices = np.argsort(kept_ranks)
+            kept = [kept[i] for i in kept_sorted_indices[:topk]]
 
         kept_set = set(kept)
 
