@@ -479,8 +479,17 @@ export default function TaskDetailPage() {
       
       if (bc) {
         if (bc.strategy_name) params.set('strategy_name', bc.strategy_name);
-        if (bc.start_date) params.set('start_date', bc.start_date);
-        if (bc.end_date) params.set('end_date', bc.end_date);
+        
+        // 日期格式转换：从 ISO 格式转为 YYYY-MM-DD
+        if (bc.start_date) {
+          const startDate = bc.start_date.split('T')[0];
+          params.set('start_date', startDate);
+        }
+        if (bc.end_date) {
+          const endDate = bc.end_date.split('T')[0];
+          params.set('end_date', endDate);
+        }
+        
         if (bc.initial_cash !== undefined) params.set('initial_cash', bc.initial_cash.toString());
         if (bc.commission_rate !== undefined) params.set('commission_rate', bc.commission_rate.toString());
         if (bc.slippage_rate !== undefined) params.set('slippage_rate', bc.slippage_rate.toString());
