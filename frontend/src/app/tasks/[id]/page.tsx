@@ -472,9 +472,10 @@ export default function TaskDetailPage() {
     }
 
     if (currentTask.task_type === 'backtest') {
-      // 回测任务配置
-      const cfg = currentTask.config;
-      const bc = cfg?.backtest_config;
+      // 回测任务配置 - 优先从 result.backtest_config 读取，其次从 config.backtest_config
+      const resultBc = currentTask.result?.backtest_config;
+      const configBc = currentTask.config?.backtest_config;
+      const bc = resultBc || configBc;
       
       if (bc) {
         if (bc.strategy_name) params.set('strategy_name', bc.strategy_name);
