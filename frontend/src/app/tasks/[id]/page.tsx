@@ -543,7 +543,7 @@ export default function TaskDetailPage() {
       }
       
       // 跳转到优化任务创建页面
-      router.push(`/optimization/create?${params.toString()}`);
+      router.push(`/optimization?${params.toString()}`);
     } else if (currentTask.task_type === 'prediction') {
       // 预测任务配置
       if (currentTask.model_id) params.set('model_id', currentTask.model_id);
