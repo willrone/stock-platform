@@ -504,45 +504,43 @@ export default function TaskDetailPage() {
       // 跳转到回测创建页面
       router.push(`/tasks/create?${params.toString()}`);
     } else if (currentTask.task_type === 'hyperparameter_optimization') {
-      // 超参优化任务配置
-      const optConfig = currentTask.config?.optimization_config || currentTask.result?.optimization_config;
-      const backtestConfig = currentTask.config?.backtest_config || currentTask.result?.backtest_config;
+      // 超参优化任务��置
+      const cfg = currentTask.config;
+      const optConfig = cfg?.optimization_config;
       
-      // 策略名称
-      if (optConfig?.strategy_name || backtestConfig?.strategy_name) {
-        params.set('strategy_name', optConfig?.strategy_name || backtestConfig?.strategy_name);
+      // 策略名称（在 optimization_config 中）
+      if (optConfig?.strategy_name) {
+        params.set('strategy_name', optConfig.strategy_name);
       }
       
-      // 日期范围
-      if (backtestConfig?.start_date) {
-        const startDate = backtestConfig.start_date.split('T')[0];
+      // 日期范围（在 config 顶层）
+      if (cfg?.start_date) {
+        const startDate = cfg.start_date.split('T')[0];
         params.set('start_date', startDate);
       }
-      if (backtestConfig?.end_date) {
-        const endDate = backtestConfig.end_date.split('T')[0];
+      if (cfg?.end_date) {
+        const endDate = cfg.end_date.split('T')[0];
         params.set('end_date', endDate);
       }
       
-      // 优化配置
-      if (optConfig?.objective_metric) {
-        params.set('objective_metric', Array.isArray(optConfig.objective_metric) 
-          ? optConfig.objective_metric.join(',') 
-          : optConfig.objective_metric);
+      // 优化配置（从 objective_config 中读取）
+      const objConfig = optConfig?.objective_config;
+      if (objConfig?.objective_metric) {
+        params.set('objective_metric', Array.isArray(objConfig.objective_metric) 
+          ? objConfig.objective_metric.join(',') 
+          : objConfig.objective_metric);
       }
-      if (optConfig?.direction) params.set('direction', optConfig.direction);
+      if (objConfig?.direction) params.set('direction', objConfig.direction);
       if (optConfig?.n_trials !== undefined) params.set('n_trials', optConfig.n_trials.toString());
       if (optConfig?.optimization_method) params.set('optimization_method', optConfig.optimization_method);
-      if (optConfig?.timeout !== undefined) params.set('timeout', optConfig.timeout.toString());
+      if (optConfig?.timeout !== undefined && optConfig.timeout !== null) {
+        params.set('timeout', optConfig.timeout.toString());
+      }
       
       // 参数空间配置
       if (optConfig?.param_space) {
         params.set('param_space', JSON.stringify(optConfig.param_space));
       }
-      
-      // 回测基础配置
-      if (backtestConfig?.initial_cash !== undefined) params.set('initial_cash', backtestConfig.initial_cash.toString());
-      if (backtestConfig?.commission_rate !== undefined) params.set('commission_rate', backtestConfig.commission_rate.toString());
-      if (backtestConfig?.slippage_rate !== undefined) params.set('slippage_rate', backtestConfig.slippage_rate.toString());
       
       // 跳转到优化任务创建页面
       router.push(`/optimization/create?${params.toString()}`);
