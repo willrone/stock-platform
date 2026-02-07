@@ -59,6 +59,7 @@ import {
   Calendar,
   FileText,
   Save,
+  Copy,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTaskStore, Task } from '../../../stores/useTaskStore';
@@ -455,6 +456,56 @@ export default function TaskDetailPage() {
     }
   };
 
+  // 重建任务
+  const handleRebuild = () => {
+    if (!currentTask) return;
+
+    // 构建配置参数
+    const params = new URLSearchParams();
+    params.set('rebuild', 'true');
+    params.set('task_type', currentTask.task_type);
+    params.set('task_name', `${currentTask.task_name} (重建)`);
+    
+    // 股票代码
+    if (currentTask.stock_codes && currentTask.stock_codes.length > 0) {
+      params.set('stock_codes', currentTask.stock_codes.join(','));
+    }
+
+    if (currentTask.task_type === 'backtest') {
+      // 回测任务配置
+      const cfg = currentTask.config;
+      const bc = cfg?.backtest_config;
+      
+      if (bc) {
+        if (bc.strategy_name) params.set('strategy_name', bc.strategy_name);
+        if (bc.start_date) params.set('start_date', bc.start_date);
+        if (bc.end_date) params.set('end_date', bc.end_date);
+        if (bc.initial_cash !== undefined) params.set('initial_cash', bc.initial_cash.toString());
+        if (bc.commission_rate !== undefined) params.set('commission_rate', bc.commission_rate.toString());
+        if (bc.slippage_rate !== undefined) params.set('slippage_rate', bc.slippage_rate.toString());
+        if (bc.enable_performance_profiling !== undefined) params.set('enable_performance_profiling', bc.enable_performance_profiling.toString());
+        
+        // 策略配置
+        if (bc.strategy_config) {
+          params.set('strategy_config', JSON.stringify(bc.strategy_config));
+        }
+      }
+    } else if (currentTask.task_type === 'prediction') {
+      // 预测任务配置
+      if (currentTask.model_id) params.set('model_id', currentTask.model_id);
+      
+      const predConfig = currentTask.config?.prediction_config;
+      if (predConfig) {
+        if (predConfig.horizon) params.set('horizon', predConfig.horizon);
+        if (predConfig.confidence_level !== undefined) params.set('confidence_level', (predConfig.confidence_level * 100).toString());
+        if (predConfig.risk_assessment !== undefined) params.set('risk_assessment', predConfig.risk_assessment.toString());
+      }
+    }
+
+    // 跳转到创建页面
+    router.push(`/tasks/create?${params.toString()}`);
+  };
+
   // 获取策略配置信息（支持 config 嵌套 backtest_config 或扁平 strategy_name/strategy_config）
   const getStrategyConfig = () => {
     if (!currentTask || currentTask.task_type !== 'backtest') {
@@ -762,6 +813,15 @@ export default function TaskDetailPage() {
             disabled={refreshing}
           >
             刷新
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<Copy size={16} />}
+            onClick={handleRebuild}
+          >
+            重建任务
           </Button>
 
           {currentTask.status === 'failed' && (
