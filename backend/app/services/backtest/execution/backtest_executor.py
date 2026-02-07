@@ -1139,8 +1139,8 @@ class BacktestExecutor:
             gen_time_total = 0.0
             gen_time_max = 0.0
 
-            # 在循环开始时检查任务状态（每50个交易日检查一次，避免频繁检查）
-            if task_id and i % 50 == 0 and i > 0:
+            # 在循环开始时检查任务状态（每10个交易日检查一次，避免频繁检查）
+            if task_id and i % 10 == 0 and i > 0:
                 if not check_task_status():
                     logger.info(f"任务状态检查失败，停止回测执行: {task_id}")
                     raise TaskError(
