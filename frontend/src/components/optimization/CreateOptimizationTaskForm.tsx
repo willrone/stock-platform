@@ -23,6 +23,7 @@ import {
   FormHelperText,
 } from '@mui/material';
 import { Save, Loader2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import {
   OptimizationService,
   CreateOptimizationTaskRequest,
@@ -45,6 +46,7 @@ interface Strategy {
 export default function CreateOptimizationTaskForm({
   onTaskCreated,
 }: CreateOptimizationTaskFormProps) {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
@@ -76,6 +78,73 @@ export default function CreateOptimizationTaskForm({
 
   const isMultiObjectiveMethod =
     formData.optimization_method === 'nsga2' || formData.optimization_method === 'motpe';
+
+  // 从 URL 参数加载重建配置
+  useEffect(() => {
+    const isRebuild = searchParams.get('rebuild') === 'true';
+    if (!isRebuild) return;
+
+    console.log('[CreateOptimizationTaskForm] 检测到重建任务请求，开始加载配置...');
+
+    // 任务名称
+    const taskName = searchParams.get('task_name');
+    if (taskName) {
+      setFormData(prev => ({ ...prev, task_name: taskName }));
+    }
+
+    // 股票代码
+    const stockCodes = searchParams.get('stock_codes');
+    if (stockCodes) {
+      setSelectedStocks(stockCodes.split(','));
+    }
+
+    // 策略名称
+    const strategyName = searchParams.get('strategy_name');
+    if (strategyName) {
+      setFormData(prev => ({ 
+        ...prev, 
+        strategy_name: strategyName,
+        optimization_mode: strategyName === 'portfolio' ? 'portfolio' : 'single'
+      }));
+    }
+
+    // 日期范围
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+    if (startDate) setFormData(prev => ({ ...prev, start_date: startDate }));
+    if (endDate) setFormData(prev => ({ ...prev, end_date: endDate }));
+
+    // 优化配置
+    const objectiveMetric = searchParams.get('objective_metric');
+    const direction = searchParams.get('direction');
+    const nTrials = searchParams.get('n_trials');
+    const optimizationMethod = searchParams.get('optimization_method');
+    const timeout = searchParams.get('timeout');
+
+    if (objectiveMetric) {
+      setFormData(prev => ({ 
+        ...prev, 
+        objective_metric: objectiveMetric.includes(',') ? objectiveMetric.split(',') : objectiveMetric 
+      }));
+    }
+    if (direction) setFormData(prev => ({ ...prev, direction: direction as 'maximize' | 'minimize' }));
+    if (nTrials) setFormData(prev => ({ ...prev, n_trials: parseInt(nTrials) }));
+    if (optimizationMethod) setFormData(prev => ({ ...prev, optimization_method: optimizationMethod }));
+    if (timeout) setFormData(prev => ({ ...prev, timeout: parseInt(timeout) }));
+
+    // 参数空间配置
+    const paramSpaceStr = searchParams.get('param_space');
+    if (paramSpaceStr) {
+      try {
+        const parsedParamSpace = JSON.parse(paramSpaceStr);
+        setParamSpace(parsedParamSpace);
+      } catch (error) {
+        console.error('[CreateOptimizationTaskForm] 解析参数空间配置失败:', error);
+      }
+    }
+
+    console.log('[CreateOptimizationTaskForm] 配置加载完成');
+  }, [searchParams]);
 
   // 加载策略列表
   useEffect(() => {
