@@ -11,7 +11,9 @@
       "Bash(timeout 10 python:*)",
       "Bash(python:*)",
       "Bash(source:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)"
     ]
   }
 }
