@@ -129,6 +129,367 @@ async function executeBacktest(
 
 ---
 
+## 复杂度规范
+
+### 2.1 圈复杂度 (Cyclomatic Complexity)
+
+#### 定义
+圈复杂度衡量代码的控制流复杂度，即代码中独立路径的数量。
+
+#### 强制规则
+- ✅ **函数圈复杂度 ≤10**（警戒线 15，禁止 >20）
+- ✅ **类圈复杂度 ≤50**（警戒线 80，禁止 >100）
+
+#### 计算方法
+```
+圈复杂度 = 判断节点数 + 1
+
+判断节点包括：
+- if/elif/else
+- for/while 循环
+- and/or 逻辑运算符
+- try/except
+- 三元运算符
+- match/case (Python 3.10+)
+```
+
+#### 示例
+
+```python
+# ❌ 坏的示例：圈复杂度 = 8（过高）
+def calculate_discount(user_type: str, amount: float, is_vip: bool, 
+                       has_coupon: bool, order_count: int) -> float:
+    discount = 0.0
+    
+    if user_type == "new":  # +1
+        discount = 0.1
+    elif user_type == "regular":  # +1
+        discount = 0.05
+    elif user_type == "premium":  # +1
+        discount = 0.15
+    
+    if is_vip:  # +1
+        discount += 0.05
+    
+    if has_coupon:  # +1
+        discount += 0.1
+    
+    if order_count > 10:  # +1
+        discount += 0.05
+    elif order_count > 5:  # +1
+        discount += 0.02
+    
+    return amount * (1 - discount)
+
+# ✅ 好的示例：拆分为多个函数，降低复杂度
+def get_base_discount(user_type: str) -> float:
+    """获取基础折扣"""
+    discount_map = {
+        "new": 0.1,
+        "regular": 0.05,
+        "premium": 0.15,
+    }
+    return discount_map.get(user_type, 0.0)
+
+def get_loyalty_discount(is_vip: bool, order_count: int) -> float:
+    """获取忠诚度折扣"""
+    discount = 0.05 if is_vip else 0.0
+    
+    if order_count > 10:
+        discount += 0.05
+    elif order_count > 5:
+        discount += 0.02
+    
+    return discount
+
+def calculate_discount(user_type: str, amount: float, is_vip: bool,
+                       has_coupon: bool, order_count: int) -> float:
+    """计算最终折扣（圈复杂度 = 2）"""
+    discount = get_base_discount(user_type)
+    discount += get_loyalty_discount(is_vip, order_count)
+    
+    if has_coupon:  # +1
+        discount += 0.1
+    
+    return amount * (1 - discount)
+```
+
+#### 降低圈复杂度的方法
+1. **提取方法**: 将复杂逻辑拆分为多个小函数
+2. **使用字典/映射**: 替代多个 if-elif
+3. **策略模式**: 使用多态替代条件判断
+4. **提前返回**: 减少嵌套层级
+5. **使用卫语句**: 先处理异常情况
+
+#### 检测工具
+- Python: `radon` - `pip install radon`
+  ```bash
+  radon cc backend/app/services/ -a -nb
+  ```
+- TypeScript: `eslint-plugin-complexity`
+
+---
+
+### 2.2 时间复杂度 (Time Complexity)
+
+#### 定义
+算法执行时间随输入规模增长的趋势。
+
+#### 强制规则
+- ✅ **核心算法必须标注时间复杂度**
+- ✅ **避免不必要的 O(n²) 及以上复杂度**
+- ✅ **大数据集操作优先使用 O(n) 或 O(n log n)**
+
+#### 常见复杂度等级
+
+| 复杂度 | 名称 | 示例 | 性能 |
+|--------|------|------|------|
+| O(1) | 常数 | 数组索引、哈希表查找 | ⭐⭐⭐⭐⭐ |
+| O(log n) | 对数 | 二分查找 | ⭐⭐⭐⭐ |
+| O(n) | 线性 | 遍历数组 | ⭐⭐⭐ |
+| O(n log n) | 线性对数 | 快速排序、归并排序 | ⭐⭐ |
+| O(n²) | 平方 | 双层循环 | ⭐ |
+| O(2ⁿ) | 指数 | 递归斐波那契 | ❌ |
+
+#### 示例
+
+```python
+# ❌ 坏的示例：O(n²) - 双层循环
+def find_duplicates(data: List[str]) -> List[str]:
+    """查找重复项（时间复杂度 O(n²)）"""
+    duplicates = []
+    for i in range(len(data)):
+        for j in range(i + 1, len(data)):
+            if data[i] == data[j] and data[i] not in duplicates:
+                duplicates.append(data[i])
+    return duplicates
+
+# ✅ ��的示例：O(n) - 使用哈希表
+def find_duplicates(data: List[str]) -> List[str]:
+    """
+    查找重复项
+    
+    时间复杂度: O(n)
+    空间复杂度: O(n)
+    """
+    seen = set()
+    duplicates = set()
+    
+    for item in data:
+        if item in seen:
+            duplicates.add(item)
+        else:
+            seen.add(item)
+    
+    return list(duplicates)
+
+# ✅ 好的示例：O(n) - 使用 pandas 向量化操作
+def calculate_moving_average(prices: pd.Series, window: int) -> pd.Series:
+    """
+    计算移动平均
+    
+    时间复杂度: O(n)
+    空间复杂度: O(n)
+    """
+    return prices.rolling(window=window).mean()
+
+# ❌ 坏的示例：O(n²) - 逐行计算
+def calculate_moving_average_slow(prices: List[float], window: int) -> List[float]:
+    """时间复杂度 O(n²)"""
+    result = []
+    for i in range(len(prices)):
+        window_data = prices[max(0, i-window+1):i+1]
+        result.append(sum(window_data) / len(window_data))
+    return result
+```
+
+#### 优化策略
+1. **使用合适的数据结构**:
+   - 查找频繁 → 使用 dict/set (O(1))
+   - 有序数据 → 使用二分查找 (O(log n))
+   - 大数据集 → 使用 numpy/pandas 向量化
+
+2. **避免重复计算**:
+   - 使用缓存 (`@lru_cache`)
+   - 使用动态规划
+
+3. **批量操作**:
+   - 数据库批量插入/更新
+   - 向量化计算代替循环
+
+---
+
+### 2.3 空间复杂度 (Space Complexity)
+
+#### 定义
+算法执行过程中所需的额外内存空间随输入规模增长的趋势。
+
+#### 强制规则
+- ✅ **核心算法必须标注空间复杂度**
+- ✅ **大数据集处理优先使用生成器/迭代器**
+- ✅ **避免不必要的数据复制**
+
+#### 示例
+
+```python
+# ❌ 坏的示例：O(n) 空间 - 创建新列表
+def process_large_file(file_path: str) -> List[dict]:
+    """
+    处理大文件
+    
+    时间复杂度: O(n)
+    空间复杂度: O(n) - 将所有数据加载到内存
+    """
+    with open(file_path) as f:
+        data = [json.loads(line) for line in f]  # 全部加载到内存
+    
+    return [process_item(item) for item in data]
+
+# ✅ 好的示例：O(1) 空间 - 使用生成器
+def process_large_file(file_path: str) -> Iterator[dict]:
+    """
+    处理大文件
+    
+    时间复杂度: O(n)
+    空间复杂度: O(1) - 逐行处理，不占用额外内存
+    """
+    with open(file_path) as f:
+        for line in f:
+            item = json.loads(line)
+            yield process_item(item)
+
+# 使用示例
+for result in process_large_file("large_data.jsonl"):
+    save_to_db(result)
+
+# ✅ 好的示例：避免数据复制
+def filter_stock_data(df: pd.DataFrame, condition: str) -> pd.DataFrame:
+    """
+    过滤股票数据
+    
+    时间复杂度: O(n)
+    空间复杂度: O(1) - 使用视图，不复制数据
+    """
+    # 使用 query 返回视图，不复制数据
+    return df.query(condition, inplace=False)
+
+# ❌ 坏的示例：不必要的数据复制
+def filter_stock_data_slow(df: pd.DataFrame, min_price: float) -> pd.DataFrame:
+    """空间复杂度 O(n) - 创建多个副本"""
+    df_copy = df.copy()  # 第一次复制
+    filtered = df_copy[df_copy['price'] > min_price]  # 第二次复制
+    return filtered.copy()  # 第三次复制
+```
+
+#### 优化策略
+1. **使用生成器**:
+   ```python
+   # ✅ 好的
+   def read_large_file(path: str) -> Iterator[str]:
+       with open(path) as f:
+           for line in f:
+               yield line.strip()
+   
+   # ❌ 坏的
+   def read_large_file(path: str) -> List[str]:
+       with open(path) as f:
+           return [line.strip() for line in f]
+   ```
+
+2. **就地修改**:
+   ```python
+   # ✅ 好的：就地排序
+   data.sort()  # O(1) 空间
+   
+   # ❌ 坏的：创建新列表
+   sorted_data = sorted(data)  # O(n) 空间
+   ```
+
+3. **使用视图而非副本**:
+   ```python
+   # ✅ 好的：使用切片视图
+   subset = df.iloc[100:200]  # 视图，O(1) 空间
+   
+   # ❌ 坏的：复制数据
+   subset = df.iloc[100:200].copy()  # 副本，O(n) 空间
+   ```
+
+4. **分块处理**:
+   ```python
+   # ✅ 好的：分块读取大文件
+   def process_large_csv(file_path: str, chunk_size: int = 10000):
+       """
+       分块处理大型 CSV
+       
+       时间复杂度: O(n)
+       空间复杂度: O(chunk_size) - 固定内存占用
+       """
+       for chunk in pd.read_csv(file_path, chunksize=chunk_size):
+           process_chunk(chunk)
+   ```
+
+---
+
+### 2.4 复杂度标注规范
+
+#### 强制规则
+- ✅ **所有核心算法函数必须在文档字符串中标注复杂度**
+- ✅ **复杂度分析必须包含最坏情况**
+- ✅ **如果时间和空间复杂度有权衡，必须说明**
+
+#### 标注模板
+
+```python
+def algorithm_name(data: List[int]) -> List[int]:
+    """
+    算法功能描述
+    
+    Args:
+        data: 输入数据描述
+    
+    Returns:
+        返回值描述
+    
+    Complexity:
+        Time: O(n log n) - 快速排序的平均情况
+        Space: O(log n) - 递归调用栈深度
+        
+        最坏情况:
+        Time: O(n²) - 当数据已排序时
+        Space: O(n) - 递归调用栈最大深度
+    
+    Note:
+        使用快速排序而不是归并排序，因为：
+        1. 平均性能更好
+        2. 空间复杂度更低（O(log n) vs O(n)）
+        3. 缓存友好
+    """
+    pass
+```
+
+#### TypeScript 标注
+
+```typescript
+/**
+ * 算法功能描述
+ * 
+ * @param data - 输入数据描述
+ * @returns 返回值描述
+ * 
+ * @complexity
+ * Time: O(n log n) - 快速排序的平均情况
+ * Space: O(log n) - 递归调用栈深度
+ * 
+ * @remarks
+ * 最坏情况下时间复杂度为 O(n²)
+ */
+function algorithmName(data: number[]): number[] {
+  // 实现
+}
+```
+
+---
+
 ## Python 后端规范
 
 ### 2.1 代码风格
