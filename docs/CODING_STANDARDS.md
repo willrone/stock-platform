@@ -1,6 +1,6 @@
 # Willrone 代码开发规范
 
-**版本**: 1.0.0  
+**版本**: 1.1.0  
 **生效日期**: 2026-02-08  
 **适用范围**: 所有 Willrone 项目代码（后端 Python + 前端 TypeScript/React）
 
@@ -9,6 +9,435 @@
 ## 📋 目录
 
 1. [通用规范](#通用规范)
+2. [代码质量规范](#代码质量规范)
+3. [Python 后端规范](#python-后端规范)
+4. [TypeScript/React 前端规范](#typescriptreact-前端规范)
+5. [Git 提交规范](#git-提交规范)
+6. [代码审查规范](#代码审查规范)
+7. [测试规范](#测试规范)
+
+---
+
+## 代码质量规范
+
+### 2.1 圈复杂度 (Cyclomatic Complexity)
+
+#### 定义
+圈复杂度衡量代码的控制流复杂度，即代码中独立路径的数量。
+
+#### 强制规则
+- ✅ **函数圈复杂度 ≤10**（警戒线 15，禁止 >20）
+- ✅ **类圈复杂度 ≤50**（警戒线 80，禁止 >100）
+
+#### 计算方法
+```
+圈复杂度 = 判断节点数 + 1
+
+判断节点包括：
+- if/elif/else
+- for/while 循环
+- and/or 逻辑运算符
+- try/except
+- 三元运算符
+- match/case (Python 3.10+)
+```
+
+#### 示例
+
+```python
+# ❌ 坏的示例：圈复杂度 = 8（过高）
+def calculate_discount(user_type: str, amount: float, is_vip: bool, 
+                       has_coupon: bool, order_count: int) -> float:
+    discount = 0.0
+    
+    if user_type == "new":  # +1
+        discount = 0.1
+    elif user_type == "regular":  # +1
+        discount = 0.05
+    elif user_type == "premium":  # +1
+        discount = 0.15
+    
+    if is_vip:  # +1
+        discount += 0.05
+    
+    if has_coupon:  # +1
+        discount += 0.1
+    
+    if order_count > 10:  # +1
+        discount += 0.05
+    elif order_count > 5:  # +1
+        discount += 0.02
+    
+    return amount * (1 - discount)
+
+# ✅ 好的示例：拆分为多个函数，降低复杂度
+def get_base_discount(user_type: str) -> float:
+    """获取基础折扣"""
+    discount_map = {
+        "new": 0.1,
+        "regular": 0.05,
+        "premium": 0.15,
+    }
+    return discount_map.get(user_type, 0.0)
+
+def get_loyalty_discount(is_vip: bool, order_count: int) -> float:
+    """获取忠诚度折扣"""
+    discount = 0.05 if is_vip else 0.0
+    
+    if order_count > 10:
+        discount += 0.05
+    elif order_count > 5:
+        discount += 0.02
+    
+    return discount
+
+def calculate_discount(user_type: str, amount: float, is_vip: bool,
+                       has_coupon: bool, order_count: int) -> float:
+    """计算最终折扣（圈复杂度 = 2）"""
+    discount = get_base_discount(user_type)
+    discount += get_loyalty_discount(is_vip, order_count)
+    
+    if has_coupon:  # +1
+        discount += 0.1
+    
+    return amount * (1 - discount)
+```
+
+#### 降低圈复杂度的方法
+1. **提取方法**: 将复杂逻辑拆分为多个小函数
+2. **使用字典/映射**: 替代多个 if-elif
+3. **策略模式**: 使用多态替代条件判断
+4. **提前返回**: 减少嵌套层级
+5. **使用卫语句**: 先处理异常情况
+
+#### 检测工具
+- Python: `radon` - `pip install radon`
+  ```bash
+  radon cc backend/app/services/ -a -nb
+  ```
+- TypeScript: `eslint-plugin-complexity`
+
+---
+
+### 2.2 函数参数规范
+
+#### 强制规则
+- ✅ **函数参数数量 ≤3 个**（理想 0-2 个）
+- ✅ **超过 3 个参数使用对象/字典**
+- ✅ **避免布尔参数**（通常意味着函数做了两件事）
+- ✅ **使用命名参数提高可读性**
+
+#### 示例
+
+```python
+# ❌ 坏的示例：参数过多
+def create_user(name: str, email: str, age: int, address: str, 
+                phone: str, role: str, department: str):
+    pass
+
+# ✅ 好的示例：使用对象
+from pydantic import BaseModel
+
+class UserCreateData(BaseModel):
+    name: str
+    email: str
+    age: int
+    address: str
+    phone: str
+    role: str
+    department: str
+
+def create_user(user_data: UserCreateData):
+    pass
+
+# ❌ 坏的示例：布尔参数
+def save_data(data: dict, is_compressed: bool):
+    if is_compressed:
+        # 压缩保存
+        pass
+    else:
+        # 直接保存
+        pass
+
+# ✅ 好的示例：拆分函数
+def save_data(data: dict):
+    """直接保存数据"""
+    pass
+
+def save_compressed_data(data: dict):
+    """压缩后保存数据"""
+    pass
+```
+
+---
+
+### 2.3 常量与魔法值
+
+#### 强制规则
+- ✅ **禁止使用魔法数字/字符串**
+- ✅ **所有常量必须命名（UPPER_SNAKE_CASE）**
+- ✅ **相关常量使用枚举类**
+
+#### 示例
+
+```python
+# ❌ 坏的示例：魔法数字
+if user.age > 18:
+    pass
+
+if status == 1:
+    pass
+
+if retry_count < 3:
+    pass
+
+# ✅ 好的示例：命名常量
+ADULT_AGE = 18
+MAX_RETRY_COUNT = 3
+
+if user.age > ADULT_AGE:
+    pass
+
+if retry_count < MAX_RETRY_COUNT:
+    pass
+
+# ✅ 好的示例：使用枚举
+from enum import Enum
+
+class TaskStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+if task.status == TaskStatus.RUNNING:
+    pass
+
+# TypeScript 示例
+enum TaskStatus {
+  PENDING = 'pending',
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+if (task.status === TaskStatus.RUNNING) {
+  // ...
+}
+```
+
+---
+
+### 2.4 边界条件处理
+
+#### 强制规则
+- ✅ **明确处理空值（None/null/undefined）**
+- ✅ **测试边界值（0, 1, -1, 最大值, 最小值）**
+- ✅ **空集合必须有明确处理逻辑**
+
+#### 示例
+
+```python
+# ❌ 坏的示例：未处理空值
+def calculate_average(numbers: List[float]) -> float:
+    return sum(numbers) / len(numbers)  # numbers 为空时会报错
+
+# ✅ 好的示例：明确处理空值
+def calculate_average(numbers: List[float]) -> Optional[float]:
+    """
+    计算平均值
+    
+    Args:
+        numbers: 数字列表
+    
+    Returns:
+        平均值，如果列表为空则返回 None
+    """
+    if not numbers:
+        return None
+    return sum(numbers) / len(numbers)
+
+# ✅ 好的示例：使用 Optional 类型
+def find_user(user_id: str) -> Optional[User]:
+    """
+    查找用户
+    
+    Args:
+        user_id: 用户 ID
+    
+    Returns:
+        用户对象，找不到返回 None
+    """
+    user = db.query(User).filter_by(id=user_id).first()
+    return user
+
+# ✅ 好的示例：边界值处理
+def get_page_data(page: int, page_size: int) -> List[dict]:
+    """获取分页数据"""
+    # 处理边界值
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 10
+    if page_size > 100:
+        page_size = 100
+    
+    offset = (page - 1) * page_size
+    return db.query().offset(offset).limit(page_size).all()
+```
+
+---
+
+### 2.5 日志规范
+
+#### 强制规则
+- ✅ **使用正确的日志级别**
+- ✅ **敏感信息必须脱敏**
+- ✅ **关键业务流程必须记录日志**
+- ✅ **使用结构化日志（推荐 JSON 格式）**
+
+#### 日志级别使用规范
+
+| 级别 | 用途 | 示例 |
+|------|------|------|
+| DEBUG | 详细的调试信息 | 变量值、函数调用栈 |
+| INFO | 关键业务流程 | 任务开始/完成、用户登录 |
+| WARNING | 可恢复的异常情况 | 重试、降级、配置缺失 |
+| ERROR | 错误但程序可继续 | API 调用失败、数据验证失败 |
+| CRITICAL | 严重错误，程序可能崩溃 | 数据库连接失败、内存溢出 |
+
+#### 示例
+
+```python
+from loguru import logger
+
+# ✅ 好的示例：结构化日志
+logger.info(
+    "回测任务开始",
+    extra={
+        "task_id": task_id,
+        "strategy": strategy_name,
+        "stock_count": len(stock_codes),
+        "date_range": f"{start_date} to {end_date}",
+    }
+)
+
+# ✅ 好的示例：敏感信息脱敏
+logger.info(f"用户登录: {username}, token: {token[:8]}***")
+
+# ✅ 好的示例：错误日志包含上下文
+try:
+    result = execute_backtest(config)
+except Exception as e:
+    logger.error(
+        "回测执行失败",
+        extra={
+            "task_id": task_id,
+            "strategy": config.strategy_name,
+            "error": str(e),
+        },
+        exc_info=True  # 包含完整堆栈
+    )
+    raise
+
+# ❌ 坏的示例：日志级别错误
+logger.debug("用户登录成功")  # 应该用 INFO
+logger.error("开始处理数据")  # 应该用 INFO
+logger.info("数据库连接失败")  # 应该用 ERROR
+
+# ❌ 坏的示例：敏感信息未脱敏
+logger.info(f"用户密码: {password}")  # 禁止记录密码
+logger.info(f"API Token: {api_token}")  # 应该脱敏
+```
+
+---
+
+### 2.6 代码坏味道
+
+#### 2.6.1 重复代码 (DRY 原则)
+
+**强制规则**：
+- ✅ **代码重复三次必须提取**
+- ✅ **Don't Repeat Yourself**
+
+```python
+# ❌ 坏的示例：重复代码
+def process_user_data(user):
+    if user.age < 18:
+        logger.warning(f"未成年用户: {user.name}")
+        return False
+    if user.email is None:
+        logger.warning(f"邮箱为空: {user.name}")
+        return False
+    return True
+
+def process_order_data(order):
+    if order.amount < 0:
+        logger.warning(f"金额异常: {order.id}")
+        return False
+    if order.user_id is None:
+        logger.warning(f"用户ID为空: {order.id}")
+        return False
+    return True
+
+# ✅ 好的示例：提取公共逻辑
+def validate_and_log(condition: bool, message: str) -> bool:
+    """验证条件并记录日志"""
+    if not condition:
+        logger.warning(message)
+        return False
+    return True
+
+def process_user_data(user):
+    if not validate_and_log(user.age >= 18, f"未成年用户: {user.name}"):
+        return False
+    if not validate_and_log(user.email is not None, f"邮箱为空: {user.name}"):
+        return False
+    return True
+```
+
+#### 2.6.2 过多注释
+
+**强制规则**：
+- ✅ **代码应该自解释**
+- ✅ **注释应该解释"为什么"，而不是"做什么"**
+- ✅ **删除注释掉的代码**（使用 Git 管理历史）
+
+```python
+# ❌ 坏的示例：注释解释代码做什么
+# 检查用户是否是管理员
+if user.role == 'admin':
+    pass
+
+# 循环遍历所有任务
+for task in tasks:
+    # 处理任务
+    process_task(task)
+
+# ✅ 好的示例：代码自解释
+if user.is_admin():
+    pass
+
+for task in tasks:
+    process_task(task)
+
+# ✅ 好的示例：注释解释为什么
+# 使用 SHA-256 而不是 MD5，因为 MD5 已被证明不安全
+hash_value = hashlib.sha256(data).hexdigest()
+
+# 等待 100ms 避免 API 限流（每秒最多 10 次请求）
+time.sleep(0.1)
+
+# ❌ 坏的示例：注释掉的代码
+# def old_calculate_method(data):
+#     return data * 2
+
+# 应该删除，使用 Git 查看历史
+```
+
+---
+
+## Python 后端规范
 2. [Python 后端规范](#python-后端规范)
 3. [TypeScript/React 前端规范](#typescriptreact-前端规���)
 4. [Git 提交规范](#git-提交规范)
@@ -129,7 +558,9 @@ async function executeBacktest(
 
 ---
 
-## 复杂度规范
+---
+
+## 代码质量规范
 
 ### 2.1 圈复杂度 (Cyclomatic Complexity)
 
@@ -230,266 +661,325 @@ def calculate_discount(user_type: str, amount: float, is_vip: bool,
 
 ---
 
-### 2.2 时间复杂度 (Time Complexity)
-
-#### 定义
-算法执行时间随输入规模增长的趋势。
+### 2.2 函数参数规范
 
 #### 强制规则
-- ✅ **核心算法必须标注时间复杂度**
-- ✅ **避免不必要的 O(n²) 及以上复杂度**
-- ✅ **大数据集操作优先使用 O(n) 或 O(n log n)**
-
-#### 常见复杂度等级
-
-| 复杂度 | 名称 | 示例 | 性能 |
-|--------|------|------|------|
-| O(1) | 常数 | 数组索引、哈希表查找 | ⭐⭐⭐⭐⭐ |
-| O(log n) | 对数 | 二分查找 | ⭐⭐⭐⭐ |
-| O(n) | 线性 | 遍历数组 | ⭐⭐⭐ |
-| O(n log n) | 线性对数 | 快速排序、归并排序 | ⭐⭐ |
-| O(n²) | 平方 | 双层循环 | ⭐ |
-| O(2ⁿ) | 指数 | 递归斐波那契 | ❌ |
+- ✅ **函数参数数量 ≤3 个**（理想 0-2 个）
+- ✅ **超过 3 个参数使用对象/字典**
+- ✅ **避免布尔参数**（通常意味着函数做了两件事）
+- ✅ **使用命名参数提高可读性**
 
 #### 示例
 
 ```python
-# ❌ 坏的示例：O(n²) - 双层循环
-def find_duplicates(data: List[str]) -> List[str]:
-    """查找重复项（时间复杂度 O(n²)）"""
-    duplicates = []
-    for i in range(len(data)):
-        for j in range(i + 1, len(data)):
-            if data[i] == data[j] and data[i] not in duplicates:
-                duplicates.append(data[i])
-    return duplicates
+# ❌ 坏的示例：参数过多
+def create_user(name: str, email: str, age: int, address: str, 
+                phone: str, role: str, department: str):
+    pass
 
-# ✅ ��的示例：O(n) - 使用哈希表
-def find_duplicates(data: List[str]) -> List[str]:
-    """
-    查找重复项
-    
-    时间复杂度: O(n)
-    空间复杂度: O(n)
-    """
-    seen = set()
-    duplicates = set()
-    
-    for item in data:
-        if item in seen:
-            duplicates.add(item)
-        else:
-            seen.add(item)
-    
-    return list(duplicates)
+# ✅ 好的示例：使用对象
+from pydantic import BaseModel
 
-# ✅ 好的示例：O(n) - 使用 pandas 向量化操作
-def calculate_moving_average(prices: pd.Series, window: int) -> pd.Series:
-    """
-    计算移动平均
-    
-    时间复杂度: O(n)
-    空间复杂度: O(n)
-    """
-    return prices.rolling(window=window).mean()
+class UserCreateData(BaseModel):
+    name: str
+    email: str
+    age: int
+    address: str
+    phone: str
+    role: str
+    department: str
 
-# ❌ 坏的示例：O(n²) - 逐行计算
-def calculate_moving_average_slow(prices: List[float], window: int) -> List[float]:
-    """时间复杂度 O(n²)"""
-    result = []
-    for i in range(len(prices)):
-        window_data = prices[max(0, i-window+1):i+1]
-        result.append(sum(window_data) / len(window_data))
-    return result
-```
+def create_user(user_data: UserCreateData):
+    pass
 
-#### 优化策略
-1. **使用合适的数据结构**:
-   - 查找频繁 → 使用 dict/set (O(1))
-   - 有序数据 → 使用二分查找 (O(log n))
-   - 大数据集 → 使用 numpy/pandas 向量化
+# ❌ 坏的示例：布尔参数
+def save_data(data: dict, is_compressed: bool):
+    if is_compressed:
+        # 压缩保存
+        pass
+    else:
+        # 直接保存
+        pass
 
-2. **避免重复计算**:
-   - 使用缓存 (`@lru_cache`)
-   - 使用动态规划
+# ✅ 好的示例：拆分函数
+def save_data(data: dict):
+    """直接保存数据"""
+    pass
 
-3. **批量操作**:
-   - 数据库批量插入/更新
-   - 向量化计算代替循环
-
----
-
-### 2.3 空间复杂度 (Space Complexity)
-
-#### 定义
-算法执行过程中所需的额外内存空间随输入规模增长的趋势。
-
-#### 强制规则
-- ✅ **核心算法必须标注空间复杂度**
-- ✅ **大数据集处理优先使用生成器/迭代器**
-- ✅ **避免不必要的数据复制**
-
-#### 示例
-
-```python
-# ❌ 坏的示例：O(n) 空间 - 创建新列表
-def process_large_file(file_path: str) -> List[dict]:
-    """
-    处理大文件
-    
-    时间复杂度: O(n)
-    空间复杂度: O(n) - 将所有数据加载到内存
-    """
-    with open(file_path) as f:
-        data = [json.loads(line) for line in f]  # 全部加载到内存
-    
-    return [process_item(item) for item in data]
-
-# ✅ 好的示例：O(1) 空间 - 使用生成器
-def process_large_file(file_path: str) -> Iterator[dict]:
-    """
-    处理大文件
-    
-    时间复杂度: O(n)
-    空间复杂度: O(1) - 逐行处理，不占用额外内存
-    """
-    with open(file_path) as f:
-        for line in f:
-            item = json.loads(line)
-            yield process_item(item)
-
-# 使用示例
-for result in process_large_file("large_data.jsonl"):
-    save_to_db(result)
-
-# ✅ 好的示例：避免数据复制
-def filter_stock_data(df: pd.DataFrame, condition: str) -> pd.DataFrame:
-    """
-    过滤股票数据
-    
-    时间复杂度: O(n)
-    空间复杂度: O(1) - 使用视图，不复制数据
-    """
-    # 使用 query 返回视图，不复制数据
-    return df.query(condition, inplace=False)
-
-# ❌ 坏的示例：不必要的数据复制
-def filter_stock_data_slow(df: pd.DataFrame, min_price: float) -> pd.DataFrame:
-    """空间复杂度 O(n) - 创建多个副本"""
-    df_copy = df.copy()  # 第一次复制
-    filtered = df_copy[df_copy['price'] > min_price]  # 第二次复制
-    return filtered.copy()  # 第三次复制
-```
-
-#### 优化策略
-1. **使用生成器**:
-   ```python
-   # ✅ 好的
-   def read_large_file(path: str) -> Iterator[str]:
-       with open(path) as f:
-           for line in f:
-               yield line.strip()
-   
-   # ❌ 坏的
-   def read_large_file(path: str) -> List[str]:
-       with open(path) as f:
-           return [line.strip() for line in f]
-   ```
-
-2. **就地修改**:
-   ```python
-   # ✅ 好的：就地排序
-   data.sort()  # O(1) 空间
-   
-   # ❌ 坏的：创建新列表
-   sorted_data = sorted(data)  # O(n) 空间
-   ```
-
-3. **使用视图而非副本**:
-   ```python
-   # ✅ 好的：使用切片视图
-   subset = df.iloc[100:200]  # 视图，O(1) 空间
-   
-   # ❌ 坏的：复制数据
-   subset = df.iloc[100:200].copy()  # 副本，O(n) 空间
-   ```
-
-4. **分块处理**:
-   ```python
-   # ✅ 好的：分块读取大文件
-   def process_large_csv(file_path: str, chunk_size: int = 10000):
-       """
-       分块处理大型 CSV
-       
-       时间复杂度: O(n)
-       空间复杂度: O(chunk_size) - 固定内存占用
-       """
-       for chunk in pd.read_csv(file_path, chunksize=chunk_size):
-           process_chunk(chunk)
-   ```
-
----
-
-### 2.4 复杂度标注规范
-
-#### 强制规则
-- ✅ **所有核心算法函数必须在文档字符串中标注复杂度**
-- ✅ **复杂度分析必须包含最坏情况**
-- ✅ **如果时间和空间复杂度有权衡，必须说明**
-
-#### 标注模板
-
-```python
-def algorithm_name(data: List[int]) -> List[int]:
-    """
-    算法功能描述
-    
-    Args:
-        data: 输入数据描述
-    
-    Returns:
-        返回值描述
-    
-    Complexity:
-        Time: O(n log n) - 快速排序的平均情况
-        Space: O(log n) - 递归调用栈深度
-        
-        最坏情况:
-        Time: O(n²) - 当数据已排序时
-        Space: O(n) - 递归调用栈最大深度
-    
-    Note:
-        使用快速排序而不是归并排序，因为：
-        1. 平均性能更好
-        2. 空间复杂度更低（O(log n) vs O(n)）
-        3. 缓存友好
-    """
+def save_compressed_data(data: dict):
+    """压缩后保存数据"""
     pass
 ```
 
-#### TypeScript 标注
+---
 
-```typescript
-/**
- * 算法功能描述
- * 
- * @param data - 输入数据描述
- * @returns 返回值描述
- * 
- * @complexity
- * Time: O(n log n) - 快速排序的平均情况
- * Space: O(log n) - 递归调用栈深度
- * 
- * @remarks
- * 最坏情况下时间复杂度为 O(n²)
- */
-function algorithmName(data: number[]): number[] {
-  // 实现
+### 2.3 常量与魔法值
+
+#### 强制规则
+- ✅ **禁止使用魔法数字/字符串**
+- ✅ **所有常量必须命名（UPPER_SNAKE_CASE）**
+- ✅ **相关常量使用枚举类**
+
+#### 示例
+
+```python
+# ❌ 坏的示例：魔法数字
+if user.age > 18:
+    pass
+
+if status == 1:
+    pass
+
+if retry_count < 3:
+    pass
+
+# ✅ 好的示例：命名常量
+ADULT_AGE = 18
+MAX_RETRY_COUNT = 3
+
+if user.age > ADULT_AGE:
+    pass
+
+if retry_count < MAX_RETRY_COUNT:
+    pass
+
+# ✅ 好的示例：使用枚举
+from enum import Enum
+
+class TaskStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+if task.status == TaskStatus.RUNNING:
+    pass
+
+# TypeScript 示例
+enum TaskStatus {
+  PENDING = 'pending',
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+if (task.status === TaskStatus.RUNNING) {
+  // ...
 }
 ```
 
 ---
 
+### 2.4 边界条件处理
+
+#### 强制规则
+- ✅ **明确处理空值（None/null/undefined）**
+- ✅ **测试边界值（0, 1, -1, 最大值, 最小值）**
+- ✅ **空集合必须有明确处理逻辑**
+
+#### 示例
+
+```python
+# ❌ 坏的示例：未处理空值
+def calculate_average(numbers: List[float]) -> float:
+    return sum(numbers) / len(numbers)  # numbers 为空时会报错
+
+# ✅ 好的示例：明确处理空值
+def calculate_average(numbers: List[float]) -> Optional[float]:
+    """
+    计算平均值
+    
+    Args:
+        numbers: 数字列表
+    
+    Returns:
+        平均值，如果列表为空则返回 None
+    """
+    if not numbers:
+        return None
+    return sum(numbers) / len(numbers)
+
+# ✅ 好的示例：使用 Optional 类型
+def find_user(user_id: str) -> Optional[User]:
+    """
+    查找用户
+    
+    Args:
+        user_id: 用户 ID
+    
+    Returns:
+        用户对象，找不到返回 None
+    """
+    user = db.query(User).filter_by(id=user_id).first()
+    return user
+
+# ✅ 好的示例：边界值处理
+def get_page_data(page: int, page_size: int) -> List[dict]:
+    """获取分页数据"""
+    # 处理边界值
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 10
+    if page_size > 100:
+        page_size = 100
+    
+    offset = (page - 1) * page_size
+    return db.query().offset(offset).limit(page_size).all()
+```
+
+---
+
+### 2.5 日志规范
+
+#### 强制规则
+- ✅ **使用正确的日志级别**
+- ✅ **敏感信息必须脱敏**
+- ✅ **关键业务流程必须记录日志**
+- ✅ **使用结构化日志（推荐 JSON 格式）**
+
+#### 日志级别使用规范
+
+| 级别 | 用途 | 示例 |
+|------|------|------|
+| DEBUG | 详细的调试信息 | 变量值、函数调用栈 |
+| INFO | 关键业务流程 | 任务开始/完成、用户登录 |
+| WARNING | 可恢复的异常情况 | 重试、降级、配置缺失 |
+| ERROR | 错误但程序可继续 | API 调用失败、数据验证失败 |
+| CRITICAL | 严重错误，程序可能崩溃 | 数据库连接失败、内存溢出 |
+
+#### 示例
+
+```python
+from loguru import logger
+
+# ✅ 好的示例：结构化日志
+logger.info(
+    "回测任务开始",
+    extra={
+        "task_id": task_id,
+        "strategy": strategy_name,
+        "stock_count": len(stock_codes),
+        "date_range": f"{start_date} to {end_date}",
+    }
+)
+
+# ✅ 好的示例：敏感信息脱敏
+logger.info(f"用户登录: {username}, token: {token[:8]}***")
+
+# ✅ 好的示例：错误日志包含上下文
+try:
+    result = execute_backtest(config)
+except Exception as e:
+    logger.error(
+        "回测执行失败",
+        extra={
+            "task_id": task_id,
+            "strategy": config.strategy_name,
+            "error": str(e),
+        },
+        exc_info=True  # 包含完整堆栈
+    )
+    raise
+
+# ❌ 坏的示例：日志级别错误
+logger.debug("用户登录成功")  # 应该用 INFO
+logger.error("开始处理数据")  # 应该用 INFO
+logger.info("数据库连接失败")  # 应该用 ERROR
+
+# ❌ 坏的示例：敏感信息未脱敏
+logger.info(f"用户密码: {password}")  # 禁止记录密码
+logger.info(f"API Token: {api_token}")  # 应该脱敏
+```
+
+---
+
+### 2.6 代码坏味道
+
+#### 2.6.1 重复代码 (DRY 原则)
+
+**强制规则**：
+- ✅ **代码重复三次必须提取**
+- ✅ **Don't Repeat Yourself**
+
+```python
+# ❌ 坏的示例：重复代码
+def process_user_data(user):
+    if user.age < 18:
+        logger.warning(f"未成年用户: {user.name}")
+        return False
+    if user.email is None:
+        logger.warning(f"邮箱为空: {user.name}")
+        return False
+    return True
+
+def process_order_data(order):
+    if order.amount < 0:
+        logger.warning(f"金额异常: {order.id}")
+        return False
+    if order.user_id is None:
+        logger.warning(f"用户ID为空: {order.id}")
+        return False
+    return True
+
+# ✅ 好的示例：提取公共逻辑
+def validate_and_log(condition: bool, message: str) -> bool:
+    """验证条件并记录日志"""
+    if not condition:
+        logger.warning(message)
+        return False
+    return True
+
+def process_user_data(user):
+    if not validate_and_log(user.age >= 18, f"未成年用户: {user.name}"):
+        return False
+    if not validate_and_log(user.email is not None, f"邮箱为空: {user.name}"):
+        return False
+    return True
+```
+
+#### 2.6.2 过多注释
+
+**强制规则**：
+- ✅ **代码应该自解释**
+- ✅ **注释应该解释"为什么"，而不是"做什么"**
+- ✅ **删除注释掉的代码**（使用 Git 管理历史）
+
+```python
+# ❌ 坏的示例：注释解释代码做什么
+# 检查用户是否是管理员
+if user.role == 'admin':
+    pass
+
+# 循环遍历所有任务
+for task in tasks:
+    # 处理任务
+    process_task(task)
+
+# ✅ 好的示例：代码自解释
+if user.is_admin():
+    pass
+
+for task in tasks:
+    process_task(task)
+
+# ✅ 好的示例：注释解释为什么
+# 使用 SHA-256 而不是 MD5，因为 MD5 已被证明不安全
+hash_value = hashlib.sha256(data).hexdigest()
+
+# 等待 100ms 避免 API 限流（每秒最多 10 次请求）
+time.sleep(0.1)
+
+# ❌ 坏的示例：注释掉的代码
+# def old_calculate_method(data):
+#     return data * 2
+
+# 应该删除，使用 Git 查看历史
+```
+
+---
+
+## Python 后端规范
 ## Python 后端规范
 
 ### 2.1 代码风格
