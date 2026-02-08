@@ -11,6 +11,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -49,6 +50,7 @@ import { StrategyConfigService, StrategyConfig } from '../../../services/strateg
 
 export default function CreateTaskPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { models, selectedModel, setModels, setSelectedModel } = useDataStore();
   const { setCreating } = useTaskStore();
 
@@ -91,6 +93,63 @@ export default function CreateTaskPage() {
     enable_performance_profiling: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 从 URL 参数恢复任务配置（重建任务功能）
+  useEffect(() => {
+    const rebuild = searchParams.get('rebuild');
+    if (rebuild === 'true') {
+      // 任务类型
+      const taskTypeParam = searchParams.get('task_type');
+      if (taskTypeParam === 'backtest' || taskTypeParam === 'prediction') {
+        setTaskType(taskTypeParam);
+      }
+
+      // 任务名称
+      const taskName = searchParams.get('task_name');
+      if (taskName) {
+        setFormData(prev => ({ ...prev, task_name: taskName }));
+      }
+
+      // 股票代码
+      const stockCodes = searchParams.get('stock_codes');
+      if (stockCodes) {
+        const codes = stockCodes.split(',').filter(c => c.trim());
+        setSelectedStocks(codes);
+      }
+
+      // 回测任务特定参数
+      if (taskTypeParam === 'backtest') {
+        const strategyName = searchParams.get('strategy_name');
+        const startDate = searchParams.get('start_date');
+        const endDate = searchParams.get('end_date');
+        const initialCash = searchParams.get('initial_cash');
+        const commissionRate = searchParams.get('commission_rate');
+        const slippageRate = searchParams.get('slippage_rate');
+        const enableProfiling = searchParams.get('enable_performance_profiling');
+        const strategyConfigStr = searchParams.get('strategy_config');
+
+        setFormData(prev => ({
+          ...prev,
+          strategy_name: strategyName || prev.strategy_name,
+          start_date: startDate || prev.start_date,
+          end_date: endDate || prev.end_date,
+          initial_cash: initialCash ? parseFloat(initialCash) : prev.initial_cash,
+          commission_rate: commissionRate ? parseFloat(commissionRate) : prev.commission_rate,
+          slippage_rate: slippageRate ? parseFloat(slippageRate) : prev.slippage_rate,
+          enable_performance_profiling: enableProfiling === 'true',
+        }));
+
+        if (strategyConfigStr) {
+          try {
+            const config = JSON.parse(strategyConfigStr);
+            setStrategyConfig(config);
+          } catch (e) {
+            console.error('Failed to parse strategy_config:', e);
+          }
+        }
+      }
+    }
+  }, [searchParams]);
 
   // 加载模型列表
   useEffect(() => {
