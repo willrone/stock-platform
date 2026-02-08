@@ -463,7 +463,7 @@ export default function TaskDetailPage() {
     // 构建配置参数
     const params = new URLSearchParams();
     params.set('rebuild', 'true');
-    params.set('task_type', currentTask.task_type || 'backtest');
+    params.set('task_type', currentTask.task_type);
     params.set('task_name', `${currentTask.task_name} (重建)`);
     
     // 股票代码
@@ -472,24 +472,14 @@ export default function TaskDetailPage() {
     }
 
     if (currentTask.task_type === 'backtest') {
-      // 回测任务配置 - 优先从 result.backtest_config 读取，其次从 config.backtest_config
-      const resultBc = currentTask.result?.backtest_config;
-      const configBc = currentTask.config?.backtest_config;
-      const bc = resultBc || configBc;
+      // 回测任务配置
+      const cfg = currentTask.config;
+      const bc = cfg?.backtest_config || cfg;
       
       if (bc) {
         if (bc.strategy_name) params.set('strategy_name', bc.strategy_name);
-        
-        // 日期格式转换：从 ISO 格式转为 YYYY-MM-DD
-        if (bc.start_date) {
-          const startDate = bc.start_date.split('T')[0];
-          params.set('start_date', startDate);
-        }
-        if (bc.end_date) {
-          const endDate = bc.end_date.split('T')[0];
-          params.set('end_date', endDate);
-        }
-        
+        if (bc.start_date) params.set('start_date', bc.start_date);
+        if (bc.end_date) params.set('end_date', bc.end_date);
         if (bc.initial_cash !== undefined) params.set('initial_cash', bc.initial_cash.toString());
         if (bc.commission_rate !== undefined) params.set('commission_rate', bc.commission_rate.toString());
         if (bc.slippage_rate !== undefined) params.set('slippage_rate', bc.slippage_rate.toString());
@@ -500,50 +490,6 @@ export default function TaskDetailPage() {
           params.set('strategy_config', JSON.stringify(bc.strategy_config));
         }
       }
-      
-      // 跳转到回测创建页面
-      router.push(`/tasks/create?${params.toString()}`);
-    } else if (currentTask.task_type === 'hyperparameter_optimization') {
-      // 超参优化任务��置
-      const cfg = currentTask.config;
-      const optConfig = cfg?.optimization_config;
-      
-      // 策略名称（在 optimization_config 中）
-      if (optConfig?.strategy_name) {
-        params.set('strategy_name', optConfig.strategy_name);
-      }
-      
-      // 日期范围（在 config 顶层）
-      if (cfg?.start_date) {
-        const startDate = cfg.start_date.split('T')[0];
-        params.set('start_date', startDate);
-      }
-      if (cfg?.end_date) {
-        const endDate = cfg.end_date.split('T')[0];
-        params.set('end_date', endDate);
-      }
-      
-      // 优化配置（从 objective_config 中读取）
-      const objConfig = optConfig?.objective_config;
-      if (objConfig?.objective_metric) {
-        params.set('objective_metric', Array.isArray(objConfig.objective_metric) 
-          ? objConfig.objective_metric.join(',') 
-          : objConfig.objective_metric);
-      }
-      if (objConfig?.direction) params.set('direction', objConfig.direction);
-      if (optConfig?.n_trials !== undefined) params.set('n_trials', optConfig.n_trials.toString());
-      if (optConfig?.optimization_method) params.set('optimization_method', optConfig.optimization_method);
-      if (optConfig?.timeout !== undefined && optConfig.timeout !== null) {
-        params.set('timeout', optConfig.timeout.toString());
-      }
-      
-      // 参数空间配置
-      if (optConfig?.param_space) {
-        params.set('param_space', JSON.stringify(optConfig.param_space));
-      }
-      
-      // 跳转到优化任务创建页面
-      router.push(`/optimization?${params.toString()}`);
     } else if (currentTask.task_type === 'prediction') {
       // 预测任务配置
       if (currentTask.model_id) params.set('model_id', currentTask.model_id);
@@ -551,18 +497,13 @@ export default function TaskDetailPage() {
       const predConfig = currentTask.config?.prediction_config;
       if (predConfig) {
         if (predConfig.horizon) params.set('horizon', predConfig.horizon);
-        if (predConfig.confidence_level !== undefined) {
-          // 注意：存储为小数（0.95），需要转换为百分比（95）
-          params.set('confidence_level', (predConfig.confidence_level * 100).toString());
-        }
-        if (predConfig.risk_assessment !== undefined) {
-          params.set('risk_assessment', predConfig.risk_assessment.toString());
-        }
+        if (predConfig.confidence_level !== undefined) params.set('confidence_level', (predConfig.confidence_level * 100).toString());
+        if (predConfig.risk_assessment !== undefined) params.set('risk_assessment', predConfig.risk_assessment.toString());
       }
-      
-      // 跳转到预测任务创建页面
-      router.push(`/tasks/create?${params.toString()}`);
     }
+
+    // 跳转到创建页面
+    router.push(`/tasks/create?${params.toString()}`);
   };
 
   // 获取策略配置信息（支持 config 嵌套 backtest_config 或扁平 strategy_name/strategy_config）

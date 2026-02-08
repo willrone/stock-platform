@@ -11,6 +11,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -31,7 +32,7 @@ import {
   IconButton,
 } from '@mui/material';
 import { ArrowLeft, Settings, Target, TrendingUp, Shield, Info, Activity } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useDataStore } from '../../../stores/useDataStore';
 import { useTaskStore } from '../../../stores/useTaskStore';
 import { TaskService, CreateTaskRequest } from '../../../services/taskService';
@@ -93,92 +94,61 @@ export default function CreateTaskPage() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // 从 URL 参数加载重建配置
+  // 从 URL 参数恢复任务配置（重建任务功能）
   useEffect(() => {
-    const isRebuild = searchParams.get('rebuild') === 'true';
-    if (!isRebuild) return;
-
-    console.log('[CreateTask] 检测到重建任务请求，开始加载配置...');
-
-    // 任务类型
-    const taskTypeParam = searchParams.get('task_type');
-    if (taskTypeParam === 'backtest' || taskTypeParam === 'prediction') {
-      setTaskType(taskTypeParam);
-    }
-
-    // 任务名称
-    const taskName = searchParams.get('task_name');
-    if (taskName) {
-      updateFormData('task_name', taskName);
-    }
-
-    // 股票代码
-    const stockCodes = searchParams.get('stock_codes');
-    if (stockCodes) {
-      setSelectedStocks(stockCodes.split(','));
-    }
-
-    // 回测配置
-    if (taskTypeParam === 'backtest') {
-      const strategyName = searchParams.get('strategy_name');
-      const startDate = searchParams.get('start_date');
-      const endDate = searchParams.get('end_date');
-      const initialCash = searchParams.get('initial_cash');
-      const commissionRate = searchParams.get('commission_rate');
-      const slippageRate = searchParams.get('slippage_rate');
-      const enableProfiling = searchParams.get('enable_performance_profiling');
-      const strategyConfigStr = searchParams.get('strategy_config');
-
-      if (strategyName) {
-        updateFormData('strategy_name', strategyName);
-        // 判断是否为组合策略
-        if (strategyName === 'portfolio') {
-          setStrategyType('portfolio');
-        }
+    const rebuild = searchParams.get('rebuild');
+    if (rebuild === 'true') {
+      // 任务类型
+      const taskTypeParam = searchParams.get('task_type');
+      if (taskTypeParam === 'backtest' || taskTypeParam === 'prediction') {
+        setTaskType(taskTypeParam);
       }
-      if (startDate) updateFormData('start_date', startDate);
-      if (endDate) updateFormData('end_date', endDate);
-      if (initialCash) updateFormData('initial_cash', parseFloat(initialCash));
-      if (commissionRate) updateFormData('commission_rate', parseFloat(commissionRate));
-      if (slippageRate) updateFormData('slippage_rate', parseFloat(slippageRate));
-      if (enableProfiling) updateFormData('enable_performance_profiling', enableProfiling === 'true');
 
-      // 策略配置
-      if (strategyConfigStr) {
-        try {
-          const config = JSON.parse(strategyConfigStr);
-          if (strategyName === 'portfolio' && config.strategies) {
-            // 组合策略
-            setPortfolioConfig({
-              strategies: config.strategies || [],
-              integration_method: config.integration_method || 'weighted_voting',
-            });
-            setPortfolioConfigKey(prev => prev + 1);
-          } else {
-            // 单一策略
+      // 任务名称
+      const taskName = searchParams.get('task_name');
+      if (taskName) {
+        setFormData(prev => ({ ...prev, task_name: taskName }));
+      }
+
+      // 股票代码
+      const stockCodes = searchParams.get('stock_codes');
+      if (stockCodes) {
+        const codes = stockCodes.split(',').filter(c => c.trim());
+        setSelectedStocks(codes);
+      }
+
+      // 回测任务特定参数
+      if (taskTypeParam === 'backtest') {
+        const strategyName = searchParams.get('strategy_name');
+        const startDate = searchParams.get('start_date');
+        const endDate = searchParams.get('end_date');
+        const initialCash = searchParams.get('initial_cash');
+        const commissionRate = searchParams.get('commission_rate');
+        const slippageRate = searchParams.get('slippage_rate');
+        const enableProfiling = searchParams.get('enable_performance_profiling');
+        const strategyConfigStr = searchParams.get('strategy_config');
+
+        setFormData(prev => ({
+          ...prev,
+          strategy_name: strategyName || prev.strategy_name,
+          start_date: startDate || prev.start_date,
+          end_date: endDate || prev.end_date,
+          initial_cash: initialCash ? parseFloat(initialCash) : prev.initial_cash,
+          commission_rate: commissionRate ? parseFloat(commissionRate) : prev.commission_rate,
+          slippage_rate: slippageRate ? parseFloat(slippageRate) : prev.slippage_rate,
+          enable_performance_profiling: enableProfiling === 'true',
+        }));
+
+        if (strategyConfigStr) {
+          try {
+            const config = JSON.parse(strategyConfigStr);
             setStrategyConfig(config);
-            setConfigFormKey(prev => prev + 1);
+          } catch (e) {
+            console.error('Failed to parse strategy_config:', e);
           }
-        } catch (error) {
-          console.error('[CreateTask] 解析策略配置失败:', error);
         }
       }
     }
-
-    // 预测配置
-    if (taskTypeParam === 'prediction') {
-      const modelId = searchParams.get('model_id');
-      const horizon = searchParams.get('horizon');
-      const confidenceLevel = searchParams.get('confidence_level');
-      const riskAssessment = searchParams.get('risk_assessment');
-
-      if (modelId) updateFormData('model_id', modelId);
-      if (horizon) updateFormData('horizon', horizon as any);
-      if (confidenceLevel) updateFormData('confidence_level', parseFloat(confidenceLevel));
-      if (riskAssessment) updateFormData('risk_assessment', riskAssessment === 'true');
-    }
-
-    console.log('[CreateTask] 配置加载完成');
   }, [searchParams]);
 
   // 加载模型列表
