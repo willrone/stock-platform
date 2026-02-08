@@ -1,5 +1,7 @@
 """
-高级策略工厂
+策略工厂
+
+负责创建和管理所有策略实例
 """
 
 from typing import Any, Dict, List
@@ -7,16 +9,18 @@ from typing import Any, Dict, List
 from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
-from .technical.bollinger_band import BollingerBandStrategy
-from .technical.stochastic import StochasticStrategy
-from .technical.cci import CCIStrategy
-from .statistical_arbitrage.pairs_trading import PairsTradingStrategy
-from .statistical_arbitrage.mean_reversion import MeanReversionStrategy
-from .statistical_arbitrage.cointegration import CointegrationStrategy
-from .factor.value_factor import ValueFactorStrategy
-from .factor.momentum_factor import MomentumFactorStrategy
-from .factor.low_volatility import LowVolatilityStrategy
-from .factor.multi_factor import MultiFactorStrategy
+from .factor import (
+    LowVolatilityStrategy,
+    MomentumFactorStrategy,
+    MultiFactorStrategy,
+    ValueFactorStrategy,
+)
+from .statistical_arbitrage import (
+    CointegrationStrategy,
+    MeanReversionStrategy,
+    PairsTradingStrategy,
+)
+from .technical import BollingerBandStrategy, CCIStrategy, StochasticStrategy
 
 
 class AdvancedStrategyFactory:
