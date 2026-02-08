@@ -19,9 +19,9 @@ from .evaluation import _evaluate_model
 from .feature_analysis import _analyze_feature_correlations, _extract_feature_importance
 from .model_config import create_qlib_model_config
 from .model_io import load_qlib_model, save_qlib_model
-from .prediction import predict_with_qlib_model
+# prediction 功能已集成到类方法中
 from .qlib_check import QLIB_AVAILABLE
-from .training import train_qlib_model
+from .training import _train_qlib_model
 from .utility import (
     get_model_config_template,
     get_supported_model_types,
@@ -229,7 +229,7 @@ class UnifiedQlibTrainingEngine:
                 )
 
             self.performance_monitor.start_stage("train_model")
-            training_result = await train_qlib_model(
+            training_result = await _train_qlib_model(
                 model_config,
                 train_dataset,
                 val_dataset,
@@ -377,9 +377,32 @@ class UnifiedQlibTrainingEngine:
         self, model, model_config, stock_codes, start_date, end_date
     ):
         """使用Qlib模型进行预测"""
-        return await predict_with_qlib_model(
-            self.data_provider, model, model_config, stock_codes, start_date, end_date
-        )
+        try:
+            # 准备预测数据
+            dataset = await self.data_provider.prepare_qlib_dataset(
+                stock_codes=stock_codes,
+                start_date=start_date,
+                end_date=end_date,
+                include_alpha_factors=True,
+                use_cache=True,
+            )
+
+            if dataset.empty:
+                raise ValueError("无法获取预测数据")
+
+            # 对齐特征
+            from .model_io import _align_prediction_features
+            if isinstance(dataset, pd.DataFrame):
+                dataset = _align_prediction_features(model, dataset)
+
+            # 进行预测
+            predictions = model.predict(dataset)
+            logger.info(f"Qlib模型预测完成: {len(predictions)} 条预测结果")
+            return predictions
+
+        except Exception as e:
+            logger.error(f"Qlib模型预测失败: {e}")
+            raise
 
     def get_supported_model_types(self):
         """获取支持的模型类型"""

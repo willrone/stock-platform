@@ -7,9 +7,10 @@
 import asyncio
 from typing import Any, Dict, List, Tuple
 
+import pandas as pd
 from loguru import logger
 
-from ...automl.early_stopping import create_default_early_stopping
+from ...automl.early_stopping import create_default_early_stopping, EarlyStoppingManager
 from .config import QlibTrainingConfig
 from .qlib_check import QLIB_AVAILABLE
 
