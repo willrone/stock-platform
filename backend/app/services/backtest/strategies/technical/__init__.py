@@ -5,5 +5,15 @@
 """
 
 from .basic_strategies import MACDStrategy, MovingAverageStrategy, RSIStrategy
+from .bollinger_band import BollingerBandStrategy
+from .cci import CCIStrategy
+from .stochastic import StochasticStrategy
 
-__all__ = ["MovingAverageStrategy", "RSIStrategy", "MACDStrategy"]
+__all__ = [
+    "MovingAverageStrategy",
+    "RSIStrategy",
+    "MACDStrategy",
+    "BollingerBandStrategy",
+    "CCIStrategy",
+    "StochasticStrategy",
+]
