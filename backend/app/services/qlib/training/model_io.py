@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+import pandas as pd
 from loguru import logger
 
 from .qlib_check import QLIB_AVAILABLE

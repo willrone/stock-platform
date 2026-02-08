@@ -15,8 +15,8 @@ from ..performance_monitor import get_performance_monitor
 from ..qlib_model_manager import QlibModelManager
 from .config import QlibTrainingConfig, QlibTrainingResult
 from .dataset_preparation import prepare_training_datasets
-from .evaluation import evaluate_model
-from .feature_analysis import analyze_feature_correlations, extract_feature_importance
+from .evaluation import _evaluate_model
+from .feature_analysis import _analyze_feature_correlations, _extract_feature_importance
 from .model_config import create_qlib_model_config
 from .model_io import load_qlib_model, save_qlib_model
 from .prediction import predict_with_qlib_model
@@ -257,7 +257,7 @@ class UnifiedQlibTrainingEngine:
                 await progress_callback(model_id, 85.0, "evaluating", "评估模型性能")
 
             self.performance_monitor.start_stage("evaluate_model")
-            training_metrics, validation_metrics = await evaluate_model(
+            training_metrics, validation_metrics = await _evaluate_model(
                 model, train_dataset, val_dataset, model_id
             )
             self.performance_monitor.end_stage("evaluate_model")
