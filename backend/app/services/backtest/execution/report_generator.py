@@ -9,7 +9,8 @@ import numpy as np
 from datetime import datetime
 from loguru import logger
 
-from ..models.data_models import BacktestConfig
+from ..models.data_models import BacktestConfig, TradingSignal
+from ..models.enums import SignalType
 from ..core.portfolio_manager import PortfolioManager
 from ..core.base_strategy import BaseStrategy
 
@@ -392,7 +393,7 @@ class BacktestReportGenerator:
         return executed_trade_signals, unexecuted_signals, trades_this_day
 
 
-    def calculate_additional_metrics(
+    def _calculate_additional_metrics(
         self, portfolio_manager: PortfolioManager
     ) -> Dict[str, Any]:
         """计算额外的分析指标（时间分段表现、个股表现等）"""

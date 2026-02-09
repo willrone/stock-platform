@@ -16,7 +16,7 @@ from ..core.portfolio_manager import PortfolioManager
 from ..core.portfolio_manager_array import PortfolioManagerArray
 from ..models import BacktestConfig
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
-from .backtest_progress_monitor import backtest_progress_monitor
+# from .backtest_progress_monitor import backtest_progress_monitor
 from .data_loader import DataLoader
 
 # 导入新模块
@@ -81,6 +81,10 @@ class BacktestExecutor:
         self.performance_tracker = PerformanceTracker(
             enable_profiling=enable_performance_profiling
         )
+        
+        # 显式导入进度监控器（避免潜在的循环导入或未定义问题）
+        from .backtest_progress_monitor import backtest_progress_monitor
+        self.progress_monitor = backtest_progress_monitor
 
         if enable_parallel:
             mode = "多进程" if use_multiprocessing else "多线程"
@@ -133,10 +137,10 @@ class BacktestExecutor:
 
             # 开始进度监控
             if task_id:
-                await backtest_progress_monitor.start_backtest_monitoring(
+                await self.progress_monitor.start_backtest_monitoring(
                     task_id=task_id, backtest_id=backtest_id
                 )
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "initialization", progress=100, status="completed"
                 )
 
@@ -148,7 +152,7 @@ class BacktestExecutor:
             )
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "strategy_setup", status="running"
                 )
 
@@ -166,7 +170,7 @@ class BacktestExecutor:
             perf_breakdown["strategy_setup_s"] = time.perf_counter() - _t0
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "strategy_setup", progress=100, status="completed"
                 )
 
@@ -182,7 +186,7 @@ class BacktestExecutor:
             )
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "data_loading", status="running"
                 )
 
@@ -204,7 +208,7 @@ class BacktestExecutor:
             perf_breakdown["data_loading_s"] = time.perf_counter() - _t0
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "data_loading", progress=100, status="completed"
                 )
 
@@ -244,12 +248,12 @@ class BacktestExecutor:
             if len(trading_dates) < 20:
                 error_msg = f"交易日数量不足: {len(trading_dates)}，至少需要20个交易日"
                 if task_id:
-                    await backtest_progress_monitor.set_error(task_id, error_msg)
+                    await self.progress_monitor.set_error(task_id, error_msg)
                 raise TaskError(message=error_msg, severity=ErrorSeverity.MEDIUM)
 
             # 更新总交易日数
             if task_id:
-                progress_data = backtest_progress_monitor.get_progress_data(task_id)
+                progress_data = self.progress_monitor.get_progress_data(task_id)
                 if progress_data:
                     progress_data.total_trading_days = len(trading_dates)
 
@@ -296,7 +300,7 @@ class BacktestExecutor:
             )
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "backtest_execution", status="running"
                 )
 
@@ -325,7 +329,7 @@ class BacktestExecutor:
             self.performance_tracker.take_memory_snapshot("after_backtest_execution")
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "backtest_execution", progress=100, status="completed"
                 )
 
@@ -333,7 +337,7 @@ class BacktestExecutor:
             self.performance_tracker.start_stage("metrics_calculation")
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "metrics_calculation", status="running"
                 )
 
@@ -344,7 +348,7 @@ class BacktestExecutor:
             self.performance_tracker.end_stage("metrics_calculation")
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "metrics_calculation", progress=100, status="completed"
                 )
 
@@ -352,7 +356,7 @@ class BacktestExecutor:
             self.performance_tracker.start_stage("report_generation")
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "report_generation", status="running"
                 )
 
@@ -367,7 +371,7 @@ class BacktestExecutor:
                 stock_codes=stock_codes,
                 start_date=start_date,
                 end_date=end_date,
-                backtest_config=backtest_config,
+                config=backtest_config,
                 portfolio_manager=portfolio_manager,
                 performance_metrics=performance_metrics,
                 strategy_config=strategy_config,
@@ -383,10 +387,10 @@ class BacktestExecutor:
             )
 
             if task_id:
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "report_generation", progress=100, status="completed"
                 )
-                await backtest_progress_monitor.update_stage(
+                await self.progress_monitor.update_stage(
                     task_id, "data_storage", progress=100, status="completed"
                 )
 
@@ -397,7 +401,7 @@ class BacktestExecutor:
 
             # 完成监控
             if task_id:
-                await backtest_progress_monitor.complete_backtest(
+                await self.progress_monitor.complete_backtest(
                     task_id,
                     {"total_return": performance_metrics.get("total_return", 0)},
                 )
@@ -441,7 +445,7 @@ class BacktestExecutor:
                 logger.warning(f"结束性能分析时出错: {perf_error}")
 
             if task_id:
-                await backtest_progress_monitor.set_error(task_id, error_msg)
+                await self.progress_monitor.set_error(task_id, error_msg)
 
             raise TaskError(
                 message=error_msg, severity=ErrorSeverity.HIGH, original_exception=e

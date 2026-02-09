@@ -3,6 +3,7 @@
 负责回测数据的预处理、索引构建、信号预计算等
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np

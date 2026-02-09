@@ -12,6 +12,7 @@ import pandas as pd
 from loguru import logger
 
 from app.core.error_handler import ErrorSeverity, TaskError
+from ..core.portfolio_manager import PortfolioManager
 
 
 class BacktestReportGenerator:
@@ -341,3 +342,130 @@ class BacktestReportGenerator:
                 severity=ErrorSeverity.HIGH,
                 original_exception=e,
             )
+
+    def _calculate_additional_metrics(
+        self, portfolio_manager: PortfolioManager
+    ) -> Dict[str, Any]:
+        """计算额外的分析指标（时间分段表现、个股表现等）"""
+        additional_metrics: Dict[str, Any] = {}
+
+        try:
+            if not portfolio_manager.portfolio_history:
+                return additional_metrics
+
+            # --- 时间分段表现：按月 / 按年收益 ---
+            portfolio_values = pd.Series(
+                [
+                    snapshot["portfolio_value"]
+                    for snapshot in portfolio_manager.portfolio_history
+                ],
+                index=[
+                    snapshot["date"] for snapshot in portfolio_manager.portfolio_history
+                ],
+            ).sort_index()
+
+            # 月度收益（月末权益）
+            # pandas>=3.0: 'M' deprecated, use month-end 'ME'
+            monthly_values = portfolio_values.resample("ME").last()
+            monthly_returns = monthly_values.pct_change().dropna()
+
+            if len(monthly_returns) > 0:
+                additional_metrics.update(
+                    {
+                        "monthly_return_mean": float(monthly_returns.mean()),
+                        "monthly_return_std": float(monthly_returns.std()),
+                        "best_month": float(monthly_returns.max()),
+                        "worst_month": float(monthly_returns.min()),
+                        "positive_months": int((monthly_returns > 0).sum()),
+                        "negative_months": int((monthly_returns < 0).sum()),
+                        "monthly_returns_detail": [
+                            {
+                                "month": period.strftime("%Y-%m"),
+                                "return": float(ret),
+                            }
+                            for period, ret in monthly_returns.items()
+                        ],
+                    }
+                )
+
+            # 年度收益（年末权益）
+            yearly_values = portfolio_values.resample("Y").last()
+            yearly_returns = yearly_values.pct_change().dropna()
+
+            if len(yearly_returns) > 0:
+                additional_metrics["yearly_returns_detail"] = [
+                    {
+                        "year": period.year,
+                        "return": float(ret),
+                    }
+                    for period, ret in yearly_returns.items()
+                ]
+
+            # --- 交易行为与个股表现 ---
+            if portfolio_manager.trades:
+                stock_performance: Dict[str, Dict[str, Any]] = {}
+
+                # 辅助函数：统一访问 trade 属性（支持 Trade 对象和字典）
+                def get_trade_attr(trade, attr: str):
+                    if isinstance(trade, dict):
+                        return trade.get(attr)
+                    return getattr(trade, attr, None)
+
+                for trade in portfolio_manager.trades:
+                    stock_code = get_trade_attr(trade, 'stock_code')
+                    action = get_trade_attr(trade, 'action')
+                    pnl = get_trade_attr(trade, 'pnl') or 0.0
+
+                    stock_stats = stock_performance.setdefault(
+                        stock_code,
+                        {
+                            "stock_code": stock_code,
+                            "total_pnl": 0.0,
+                            "trade_count": 0,
+                        },
+                    )
+                    stock_stats["trade_count"] += 1
+                    # 只有卖出交易才有实现盈亏
+                    if action == "SELL":
+                        stock_stats["total_pnl"] += float(pnl)
+
+                # 计算每只股票的平均单笔盈亏
+                for stats in stock_performance.values():
+                    trades = max(stats["trade_count"], 1)
+                    stats["avg_pnl_per_trade"] = float(stats["total_pnl"]) / trades
+
+                # 个股表现汇总
+                stock_perf_list = list(stock_performance.values())
+                additional_metrics.update(
+                    {
+                        "stock_performance_detail": stock_perf_list,
+                        "best_performing_stock": max(
+                            stock_perf_list, key=lambda x: x["total_pnl"]
+                        )
+                        if stock_perf_list
+                        else None,
+                        "worst_performing_stock": min(
+                            stock_perf_list, key=lambda x: x["total_pnl"]
+                        )
+                        if stock_perf_list
+                        else None,
+                        "stocks_traded": len(stock_perf_list),
+                    }
+                )
+
+                # 单笔交易分布的整体特征（便于前端画直方图/统计）
+                pnls = [float(get_trade_attr(t, 'pnl') or 0.0) for t in portfolio_manager.trades]
+                if pnls:
+                    pnl_series = pd.Series(pnls)
+                    additional_metrics.update(
+                        {
+                            "trade_pnl_mean": float(pnl_series.mean()),
+                            "trade_pnl_median": float(pnl_series.median()),
+                            "trade_pnl_std": float(pnl_series.std()),
+                        }
+                    )
+
+        except Exception as exc:
+            logger.error(f"计算额外指标失败: {exc}")
+
+        return additional_metrics

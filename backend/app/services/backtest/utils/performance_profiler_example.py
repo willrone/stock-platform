@@ -5,6 +5,7 @@
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 from ..core.backtest_engine import BacktestConfig

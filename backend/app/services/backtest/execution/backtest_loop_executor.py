@@ -10,6 +10,8 @@ from loguru import logger
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
+# 延迟导入以避免循环依赖
+# from .backtest_progress_monitor import backtest_progress_monitor
 
 
 class BacktestLoopExecutor:
@@ -17,7 +19,8 @@ class BacktestLoopExecutor:
 
     def __init__(self):
         """初始化回测循环执行器"""
-        pass
+        self.enable_performance_profiling = False
+        self.performance_profiler = None
 
     async def execute_backtest_loop(
         self,
@@ -32,6 +35,9 @@ class BacktestLoopExecutor:
         aligned_arrays: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """执行回测主循环"""
+        # 延迟导入以避免循环依赖
+        from .backtest_progress_monitor import backtest_progress_monitor
+        
         total_signals = 0
         executed_trades = 0
 
