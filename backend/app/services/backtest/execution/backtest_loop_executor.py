@@ -13,6 +13,7 @@ from loguru import logger
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..models import SignalType, TradingSignal
+from app.core.error_handler import ErrorSeverity, TaskError
 # 延迟导入以避免循环依赖
 # from .backtest_progress_monitor import backtest_progress_monitor
 
