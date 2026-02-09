@@ -16,6 +16,12 @@ from loguru import logger
 from .alpha158 import Alpha158Calculator
 from .cache import FactorCache
 from .converters import QlibFormatConverter
+from .data_processing import (
+    DataTypeOptimizer,
+    FundamentalFeatureCalculator,
+    MissingValueHandler,
+)
+from .model import QlibModelConfigBuilder, QlibModelPredictor
 from .patches import (
     ALPHA158_AVAILABLE,
     QLIB_AVAILABLE,
@@ -48,14 +54,31 @@ class EnhancedQlibDataProvider:
     - FactorCache: 因子缓存管理
     - QlibFormatConverter: 数据格式转换
     - DataQualityValidator: 数据质量验证
+    - DataTypeOptimizer: 数据类型优化
+    - MissingValueHandler: 缺失值处理
+    - FundamentalFeatureCalculator: 基本面特征计算
+    - QlibModelConfigBuilder: 模型配置构建
+    - QlibModelPredictor: 模型预测
     """
 
     def __init__(self, data_service: Optional[SimpleDataService] = None):
+        """初始化增强版 Qlib 数据提供器
+
+        Args:
+            data_service: 数据服务实例，用于获取股票数据
+        """
         self.data_service = data_service or SimpleDataService()
         self.indicator_calculator = TechnicalIndicatorCalculator()
+
+        # 初始化子模块
         self.alpha_calculator = Alpha158Calculator()
         self.format_converter = QlibFormatConverter()
         self.data_validator = DataQualityValidator()
+        self.data_type_optimizer = DataTypeOptimizer()
+        self.missing_value_handler = MissingValueHandler()
+        self.fundamental_calculator = FundamentalFeatureCalculator()
+        self.model_config_builder = QlibModelConfigBuilder()
+
         self._qlib_initialized = False
 
         logger.info("增强版 Qlib 数据提供器初始化完成")
@@ -91,13 +114,20 @@ class EnhancedQlibDataProvider:
             logger.info("Qlib 环境初始化成功")
 
         except Exception as e:
-            logger.error(f"Qlib 初始化失败: {e}")
-            raise
+            error_msg = str(e)
+            if "reinitialize" in error_msg.lower() or "already" in error_msg.lower():
+                logger.warning(f"Qlib 已初始化，跳过: {error_msg}")
+                _QLIB_GLOBAL_INITIALIZED = True
+                self._qlib_initialized = True
+            else:
+                logger.error(f"Qlib 初始化失败: {e}")
+                raise
 
     def _ensure_calendar_exists(self):
         """确保交易日历文件存在"""
         try:
             from app.services.data.qlib_calendar_generator import QlibCalendarGenerator
+
             calendar_generator = QlibCalendarGenerator()
             calendar_generator.ensure_calendar_exists()
         except Exception as e:
@@ -109,25 +139,53 @@ class EnhancedQlibDataProvider:
         start_date: datetime,
         end_date: datetime,
         include_alpha_factors: bool = True,
+        include_fundamental_features: bool = True,
         use_cache: bool = True,
+        optimize_dtypes: bool = True,
     ) -> pd.DataFrame:
-        """准备 Qlib 标准格式的数据集"""
+        """准备 Qlib 标准格式的数据集
+
+        Args:
+            stock_codes: 股票代码列表
+            start_date: 开始日期
+            end_date: 结束日期
+            include_alpha_factors: 是否包含 Alpha158 因子
+            include_fundamental_features: 是否包含基本面特征
+            use_cache: 是否使用缓存
+            optimize_dtypes: 是否优化数据类型
+
+        Returns:
+            Qlib 标准格式的 DataFrame
+        """
         logger.info(f"准备 Qlib 数据集: {len(stock_codes)} 只股票")
 
         # 1. 获取基础特征数据
-        base_features = await self._prepare_base_features(stock_codes, start_date, end_date)
+        base_features = await self._prepare_base_features(
+            stock_codes, start_date, end_date
+        )
         if base_features.empty:
             logger.warning("基础特征数据为空")
             return pd.DataFrame()
 
-        # 2. 转换为 Qlib 标准格式
+        # 2. 添加基本面特征
+        if include_fundamental_features:
+            base_features = self.fundamental_calculator.calculate(base_features)
+
+        # 3. 转换为 Qlib 标准格式
         qlib_data = self.format_converter.convert(
             base_features,
             date_column="date",
             instrument_column="stock_code",
         )
 
-        # 3. 计算 Alpha158 因子
+        # 4. 处理缺失值
+        qlib_data = self.missing_value_handler.handle(qlib_data)
+
+        # 5. 优化数据类型
+        if optimize_dtypes:
+            qlib_data = self.data_type_optimizer.optimize(qlib_data)
+
+        # 6. 计算 Alpha158 因子
         if include_alpha_factors and QLIB_AVAILABLE:
             qlib_data = await self._add_alpha_factors(
                 qlib_data, stock_codes, start_date, end_date, use_cache
@@ -144,15 +202,23 @@ class EnhancedQlibDataProvider:
 
         for stock_code in stock_codes:
             try:
-                stock_data = await self._load_stock_data(stock_code, start_date, end_date)
+                stock_data = await self._load_stock_data(
+                    stock_code, start_date, end_date
+                )
                 if stock_data.empty:
                     continue
 
                 # 计算技术指标
-                indicators = await self.indicator_calculator.calculate_all_indicators(stock_data)
-                features = stock_data.merge(
-                    indicators, left_index=True, right_index=True, how="left"
-                ) if not indicators.empty else stock_data.copy()
+                indicators = await self.indicator_calculator.calculate_all_indicators(
+                    stock_data
+                )
+                features = (
+                    stock_data.merge(
+                        indicators, left_index=True, right_index=True, how="left"
+                    )
+                    if not indicators.empty
+                    else stock_data.copy()
+                )
 
                 features["stock_code"] = stock_code
                 features = self._ensure_date_column(features)
@@ -174,7 +240,9 @@ class EnhancedQlibDataProvider:
         from app.services.data.stock_data_loader import StockDataLoader
 
         loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
-        stock_data = loader.load_stock_data(stock_code, start_date=start_date, end_date=end_date)
+        stock_data = loader.load_stock_data(
+            stock_code, start_date=start_date, end_date=end_date
+        )
 
         if stock_data.empty:
             stock_data = await self._fetch_remote_data(stock_code, start_date, end_date)
@@ -185,15 +253,25 @@ class EnhancedQlibDataProvider:
         self, stock_code: str, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
         """从远端服务获取数据"""
-        stock_data_list = await self.data_service.get_stock_data(stock_code, start_date, end_date)
+        stock_data_list = await self.data_service.get_stock_data(
+            stock_code, start_date, end_date
+        )
         if not stock_data_list:
             return pd.DataFrame()
 
-        df = pd.DataFrame([
-            {"date": item.date, "open": item.open, "high": item.high,
-             "low": item.low, "close": item.close, "volume": item.volume}
-            for item in stock_data_list
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "date": item.date,
+                    "open": item.open,
+                    "high": item.high,
+                    "low": item.low,
+                    "close": item.close,
+                    "volume": item.volume,
+                }
+                for item in stock_data_list
+            ]
+        )
         return df.set_index("date")
 
     def _ensure_date_column(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -235,6 +313,8 @@ class EnhancedQlibDataProvider:
         if isinstance(df.index, pd.MultiIndex):
             logger.info(f"MultiIndex 级别: {df.index.names}")
         logger.info(f"特征数: {len(df.columns)}")
+        if not df.empty:
+            logger.info(f"缺失值总数: {df.isnull().sum().sum()}")
         logger.info("=" * 40)
 
     async def validate_and_fix_qlib_format(
@@ -255,7 +335,9 @@ class EnhancedQlibDataProvider:
         is_valid = await self.validate_qlib_data_format(data)
         return is_valid, data
 
-    def _fix_data_issues(self, data: pd.DataFrame, report: ValidationReport) -> pd.DataFrame:
+    def _fix_data_issues(
+        self, data: pd.DataFrame, report: ValidationReport
+    ) -> pd.DataFrame:
         """修复数据问题"""
         df = data.copy()
 
@@ -265,7 +347,9 @@ class EnhancedQlibDataProvider:
             # 修复 high < low
             invalid_mask = df["$high"] < df["$low"]
             if invalid_mask.any():
-                df.loc[invalid_mask, ["$high", "$low"]] = df.loc[invalid_mask, ["$low", "$high"]].values
+                df.loc[invalid_mask, ["$high", "$low"]] = df.loc[
+                    invalid_mask, ["$low", "$high"]
+                ].values
 
             # 修复负价格
             for col in price_cols:
@@ -317,35 +401,44 @@ class EnhancedQlibDataProvider:
     async def create_qlib_model_config(
         self, model_type: str, hyperparameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """创建 Qlib 模型配置"""
-        config = {
-            "class": "LGBModel",
-            "module_path": "qlib.contrib.model.gbdt",
-            "kwargs": {
-                "loss": "huber",
-                "colsample_bytree": 0.8879,
-                "learning_rate": 0.0421,
-                "subsample": 0.8789,
-                "lambda_l1": 205.6999,
-                "lambda_l2": 580.9768,
-                "max_depth": 8,
-                "num_leaves": 210,
-            },
-        }
+        """创建 Qlib 模型配置
 
-        model_configs = {
-            "lightgbm": ("LGBModel", "qlib.contrib.model.gbdt"),
-            "xgboost": ("XGBModel", "qlib.contrib.model.xgboost"),
-            "mlp": ("DNNModelPytorch", "qlib.contrib.model.pytorch_nn"),
-        }
+        Args:
+            model_type: 模型类型（lightgbm, xgboost, mlp）
+            hyperparameters: 自定义超参数
 
-        if model_type.lower() in model_configs:
-            config["class"], config["module_path"] = model_configs[model_type.lower()]
+        Returns:
+            Qlib 模型配置字典
+        """
+        return self.model_config_builder.build(model_type, hyperparameters)
 
-        if hyperparameters:
-            config["kwargs"].update(hyperparameters)
+    async def get_qlib_model_predictions(
+        self,
+        model_config: Dict[str, Any],
+        dataset: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """使用 Qlib 模型进行预测
 
-        return config
+        Args:
+            model_config: 模型配置
+            dataset: 数据集
+
+        Returns:
+            预测结果 DataFrame
+        """
+        if not QLIB_AVAILABLE:
+            logger.warning("Qlib 不可用，无法进行预测")
+            return pd.DataFrame()
+
+        try:
+            await self.initialize_qlib()
+
+            predictor = QlibModelPredictor(model_config)
+            return predictor.fit_predict(dataset)
+
+        except Exception as e:
+            logger.error(f"Qlib 模型预测失败: {e}")
+            return pd.DataFrame()
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计信息"""
@@ -368,11 +461,22 @@ class EnhancedQlibDataProvider:
     async def get_qlib_format_example(self) -> Dict[str, Any]:
         """获取 Qlib 格式示例"""
         return {
-            "index": "MultiIndex (instrument, datetime)",
+            "index": "MultiIndex (datetime, instrument)",
             "required_columns": ["$open", "$high", "$low", "$close", "$volume"],
             "optional_columns": ["$factor", "$vwap", "$change"],
             "example": {
-                "index": [("000001.SZ", "2024-01-01"), ("000001.SZ", "2024-01-02")],
+                "index": [
+                    ("2024-01-01", "000001.SZ"),
+                    ("2024-01-02", "000001.SZ"),
+                ],
                 "columns": ["$open", "$close", "$high", "$low", "$volume"],
             },
         }
+
+    def get_supported_models(self) -> Dict[str, str]:
+        """获取支持的模型类型
+
+        Returns:
+            模型类型及其描述
+        """
+        return self.model_config_builder.get_supported_models()
