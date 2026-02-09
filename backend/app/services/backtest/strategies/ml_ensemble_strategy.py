@@ -287,15 +287,15 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         
         # 更新市场收益（用于市场过滤）
         if "return_1d" in indicators:
-            market_ret = indicators["return_1d"].iloc[idx]
+            market_ret = self._safe_scalar(indicators["return_1d"].iloc[idx], default=float('nan'))
             if not pd.isna(market_ret):
                 self._market_returns.append(market_ret)
                 if len(self._market_returns) > 20:
                     self._market_returns = self._market_returns[-20:]
         
         # 计算仓位缩放
-        last_return = indicators.get("return_1d", pd.Series()).iloc[idx] if "return_1d" in indicators else 0
-        position_scale = self._calculate_position_scale(last_return if not pd.isna(last_return) else 0)
+        last_return = self._safe_scalar(indicators["return_1d"].iloc[idx]) if "return_1d" in indicators else 0.0
+        position_scale = self._calculate_position_scale(last_return)
         
         # 更新日收益记录
         if not pd.isna(last_return):
@@ -330,6 +330,18 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         
         return signals
     
+    @staticmethod
+    def _safe_scalar(value, default=0.0) -> float:
+        """将 pandas/numpy 标量安全转为 Python float，避免 Series truth value 歧义"""
+        try:
+            if isinstance(value, pd.Series):
+                return float(value.iloc[0]) if len(value) == 1 else default
+            if pd.isna(value):
+                return float(default)
+            return float(value)
+        except (TypeError, ValueError, IndexError):
+            return float(default)
+
     def _calculate_ensemble_prob(self, indicators: Dict[str, pd.Series], idx: int) -> Optional[float]:
         """
         计算集成预测概率
@@ -342,9 +354,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             if features is not None:
                 try:
                     import xgboost as xgb
-                    lgb_prob = self.lgb_model.predict(features.reshape(1, -1))[0]
-                    xgb_prob = self.xgb_model.predict(xgb.DMatrix(features.reshape(1, -1)))[0]
-                    return self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+                    lgb_prob = float(self.lgb_model.predict(features.reshape(1, -1))[0])
+                    xgb_prob = float(self.xgb_model.predict(xgb.DMatrix(features.reshape(1, -1)))[0])
+                    return float(self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob)
                 except Exception:
                     pass
         
@@ -353,44 +365,39 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             score = 0.5  # 基础分
             
             # RSI 信号
-            rsi = indicators.get("rsi_14", pd.Series()).iloc[idx] if "rsi_14" in indicators else 50
-            if not pd.isna(rsi):
-                if rsi < 30:
-                    score += 0.15  # 超卖，看涨
-                elif rsi > 70:
-                    score -= 0.15  # 超买，看跌
+            rsi = self._safe_scalar(indicators["rsi_14"].iloc[idx], 50) if "rsi_14" in indicators else 50.0
+            if rsi < 30:
+                score += 0.15  # 超卖，看涨
+            elif rsi > 70:
+                score -= 0.15  # 超买，看跌
             
             # MACD 信号
-            macd_hist = indicators.get("macd_hist", pd.Series()).iloc[idx] if "macd_hist" in indicators else 0
-            macd_slope = indicators.get("macd_hist_slope", pd.Series()).iloc[idx] if "macd_hist_slope" in indicators else 0
-            if not pd.isna(macd_hist) and not pd.isna(macd_slope):
-                if macd_hist > 0 and macd_slope > 0:
-                    score += 0.1
-                elif macd_hist < 0 and macd_slope < 0:
-                    score -= 0.1
+            macd_hist = self._safe_scalar(indicators["macd_hist"].iloc[idx]) if "macd_hist" in indicators else 0.0
+            macd_slope = self._safe_scalar(indicators["macd_hist_slope"].iloc[idx]) if "macd_hist_slope" in indicators else 0.0
+            if macd_hist > 0 and macd_slope > 0:
+                score += 0.1
+            elif macd_hist < 0 and macd_slope < 0:
+                score -= 0.1
             
             # 动量信号
-            mom_short = indicators.get("momentum_short", pd.Series()).iloc[idx] if "momentum_short" in indicators else 0
-            if not pd.isna(mom_short):
-                score += np.clip(mom_short * 2, -0.1, 0.1)
+            mom_short = self._safe_scalar(indicators["momentum_short"].iloc[idx]) if "momentum_short" in indicators else 0.0
+            score += max(-0.1, min(mom_short * 2, 0.1))
             
             # 布林带位置
-            bb_pos = indicators.get("bb_position", pd.Series()).iloc[idx] if "bb_position" in indicators else 0
-            if not pd.isna(bb_pos):
-                if bb_pos < -1:
-                    score += 0.1  # 下轨附近，看涨
-                elif bb_pos > 1:
-                    score -= 0.1  # 上轨附近，看跌
+            bb_pos = self._safe_scalar(indicators["bb_position"].iloc[idx]) if "bb_position" in indicators else 0.0
+            if bb_pos < -1:
+                score += 0.1  # 下轨附近，看涨
+            elif bb_pos > 1:
+                score -= 0.1  # 上轨附近，看跌
             
             # MA 排列
-            ma_align = indicators.get("ma_alignment", pd.Series()).iloc[idx] if "ma_alignment" in indicators else 1
-            if not pd.isna(ma_align):
-                if ma_align == 2:
-                    score += 0.05  # 多头排列
-                elif ma_align == 0:
-                    score -= 0.05  # 空头排列
+            ma_align = self._safe_scalar(indicators["ma_alignment"].iloc[idx], 1) if "ma_alignment" in indicators else 1.0
+            if ma_align == 2:
+                score += 0.05  # 多头排列
+            elif ma_align == 0:
+                score -= 0.05  # 空头排列
             
-            return np.clip(score, 0, 1)
+            return float(max(0.0, min(score, 1.0)))
             
         except Exception:
             return None

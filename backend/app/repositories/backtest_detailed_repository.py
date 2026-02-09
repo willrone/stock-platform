@@ -34,6 +34,14 @@ class BacktestDetailedRepository:
         """Ensure datetime input for SQLite DateTime columns."""
         if value is None:
             return None
+        # Handle pandas Timestamp (must check before datetime since Timestamp
+        # may or may not be a datetime subclass depending on pandas version)
+        try:
+            import pandas as pd
+            if isinstance(value, pd.Timestamp):
+                return value.to_pydatetime()
+        except ImportError:
+            pass
         if isinstance(value, datetime):
             return value
         if isinstance(value, str):
@@ -945,8 +953,8 @@ class BacktestDetailedRepository:
 
                 params[f"stock_code_{i}"] = stock_code
                 params[f"signal_type_{i}"] = signal_type
-                params[f"ts_start_{i}"] = timestamp_start
-                params[f"ts_end_{i}"] = timestamp_end
+                params[f"ts_start_{i}"] = str(timestamp_start)
+                params[f"ts_end_{i}"] = str(timestamp_end)
 
                 case_conditions.append(
                     f"(stock_code = :stock_code_{i} AND signal_type = :signal_type_{i} "
@@ -1007,8 +1015,8 @@ class BacktestDetailedRepository:
 
                 params[f"stock_code_{i}"] = stock_code
                 params[f"signal_type_{i}"] = signal_type
-                params[f"ts_start_{i}"] = timestamp_start
-                params[f"ts_end_{i}"] = timestamp_end
+                params[f"ts_start_{i}"] = str(timestamp_start)
+                params[f"ts_end_{i}"] = str(timestamp_end)
                 params[f"reason_{i}"] = execution_reason
 
                 condition = (
