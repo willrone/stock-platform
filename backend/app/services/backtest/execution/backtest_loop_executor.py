@@ -5,6 +5,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from loguru import logger
 

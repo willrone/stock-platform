@@ -11,6 +11,7 @@ from datetime import datetime
 from loguru import logger
 
 from ..core.base_strategy import BaseStrategy
+from ..models.enums import SignalType
 
 # 多进程预计算 worker 函数
 def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Dict], Optional[str]]:
