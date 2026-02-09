@@ -12,6 +12,7 @@ from loguru import logger
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
+from ..models import SignalType, TradingSignal
 # 延迟导入以避免循环依赖
 # from .backtest_progress_monitor import backtest_progress_monitor
 
@@ -306,7 +307,6 @@ class BacktestLoopExecutor:
                         signal = precomputed_signals.get((stock_code, date))
                         if signal is not None:
                             # 将信号类型转换为 TradingSignal 对象
-                            from ..models import TradingSignal, SignalType
                             if isinstance(signal, SignalType):
                                 # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
                                 current_price = 0.0
