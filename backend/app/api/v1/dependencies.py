@@ -325,6 +325,39 @@ def execute_backtest_task_simple(task_id: str):
             task_logger.warning(f"配置中发现系统字段: {found_system_fields}")
 
         stock_codes = config.get("stock_codes", [])
+
+        # Bug fix: 展开 stock_pool_type 为完整股票列表
+        # 当 stock_pool_type 为 "fixed_500" 时，从 parquet 数据目录读取可用股票
+        stock_pool_type = config.get("stock_pool_type", "")
+        if stock_pool_type == "fixed_500" and len(stock_codes) <= 1:
+            try:
+                from pathlib import Path
+                data_root = Path(settings.DATA_ROOT_PATH).resolve()
+                parquet_dir = data_root / "parquet" / "stock_data"
+                if not parquet_dir.exists():
+                    # 尝试从项目根目录查找
+                    alt_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "parquet" / "stock_data"
+                    if alt_dir.exists():
+                        parquet_dir = alt_dir
+                if parquet_dir.exists():
+                    all_codes = sorted([
+                        f.stem.replace("_", ".")
+                        for f in parquet_dir.glob("*.parquet")
+                    ])
+                    if len(all_codes) >= 500:
+                        stock_codes = all_codes[:500]
+                    elif all_codes:
+                        stock_codes = all_codes
+                    task_logger.info(
+                        f"stock_pool_type=fixed_500: 展开为 {len(stock_codes)} 只股票"
+                    )
+                else:
+                    task_logger.warning(
+                        f"stock_pool_type=fixed_500 但 parquet 目录不存在: {parquet_dir}"
+                    )
+            except Exception as pool_err:
+                task_logger.error(f"展开 stock_pool_type 失败: {pool_err}")
+
         strategy_name = config.get("strategy_name", "default_strategy")
         start_date_str = config.get("start_date")
         end_date_str = config.get("end_date")

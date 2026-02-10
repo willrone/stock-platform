@@ -161,10 +161,20 @@ class DataPreprocessor:
             if isinstance(strategy, StrategyPortfolio):
                 logger.info(f"🚀 Portfolio策略检测到，递归预计算 {len(strategy.strategies)} 个子策略")
                 for sub in strategy.strategies:
-                    self._precompute_strategy_signals(sub, stock_data)
+                    self.precompute_strategy_signals(sub, stock_data)
                 return
         except Exception as e:
             logger.warning(f"Portfolio策略递归预计算失败: {e}")
+
+        # Bug fix: 当策略支持 batch 预计算（含截面特征）且有多只股票时，
+        # 优先调用 precompute_all_signals_batch，确保截面特征被正确计算
+        if (
+            hasattr(strategy, 'precompute_all_signals_batch')
+            and len(stock_data) > 1
+        ):
+            batch_ok = self._try_batch_precompute(strategy, stock_data)
+            if batch_ok:
+                return
 
         # 统计预计算成功的股票数
         success_count = 0
@@ -195,7 +205,7 @@ class DataPreprocessor:
                 try:
                     from concurrent.futures import ProcessPoolExecutor as PoolExecutor
                     # 多进程需要使用模块级函数，这里使用包装器
-                    results = self._precompute_signals_multiprocess(
+                    results = self.precompute_signals_multiprocess(
                         strategy, stock_data
                     )
                     for ok, stock_code, err in results:
@@ -235,6 +245,86 @@ class DataPreprocessor:
             logger.info(
                 f"✅ 策略 {strategy.name} 向量化预计算完成: {success_count}/{total_stocks} 只股票"
             )
+
+
+    def _try_batch_precompute(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+    ) -> bool:
+        """尝试使用 batch 预计算（含截面特征），成功返回 True。
+
+        将多只股票数据合并为 MultiIndex DataFrame，调用
+        strategy.precompute_all_signals_batch() 计算截面特征
+        （排名、相对强度、market_up_ratio 等），然后将结果
+        拆分回各股票的 attrs 缓存。
+        """
+        try:
+            logger.info(
+                f"🔬 尝试 batch 预计算（含截面特征）: "
+                f"{len(stock_data)} 只股票, 策略={strategy.name}"
+            )
+
+            # 1. 合并所有股票数据为 MultiIndex DataFrame
+            frames = []
+            for stock_code, df in stock_data.items():
+                if df is None or len(df) < 60:
+                    continue
+                tmp = df.copy()
+                tmp['stock_code'] = stock_code
+                tmp['date'] = tmp.index
+                frames.append(tmp)
+
+            if not frames:
+                logger.warning("batch 预计算: 无有效数据")
+                return False
+
+            combined_df = pd.concat(frames, ignore_index=True)
+            combined_df.set_index(['stock_code', 'date'], inplace=True)
+            logger.info(
+                f"合并数据: {len(combined_df)} 行, "
+                f"{combined_df.index.get_level_values(0).nunique()} 只股票"
+            )
+
+            # 2. 调用 batch 预计算
+            result_df = strategy.precompute_all_signals_batch(combined_df)
+            if result_df is None or len(result_df) == 0:
+                logger.warning("batch 预计算返回空结果，回退到单股票模式")
+                return False
+
+            # 3. 将结果拆分回各股票的 attrs 缓存
+            from ..models import SignalType
+            success_count = 0
+            for stock_code, df in stock_data.items():
+                try:
+                    if stock_code not in result_df.index.get_level_values(0):
+                        continue
+                    stock_signals = result_df.loc[stock_code]
+                    # 构建 SignalType Series，与单股票版格式一致
+                    signal_series = pd.Series(
+                        stock_signals['signal_type'].values,
+                        index=stock_signals.index,
+                        dtype=object,
+                    )
+                    cache = df.attrs.setdefault("_precomputed_signals", {})
+                    cache[strategy.name] = signal_series
+                    success_count += 1
+                except Exception as e:
+                    logger.warning(
+                        f"batch 结果拆分失败 {stock_code}: {e}"
+                    )
+
+            logger.info(
+                f"✅ batch 预计算完成（含截面特征）: "
+                f"{success_count}/{len(stock_data)} 只股票"
+            )
+            return success_count > 0
+
+        except Exception as e:
+            logger.warning(f"batch 预计算失败，回退到单股票模式: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return False
 
 
     def extract_precomputed_signals_to_dict(
