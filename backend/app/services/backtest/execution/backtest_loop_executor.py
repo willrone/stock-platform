@@ -1084,4 +1084,160 @@ class BacktestLoopExecutor:
             "trading_days": len(trading_dates),
         }
 
+    def _rebalance_topk_buffer(
+        self,
+        portfolio_manager: PortfolioManager,
+        current_prices: Dict[str, float],
+        current_date: datetime,
+        scores: Dict[str, float],
+        topk: int = 10,
+        buffer_n: int = 20,
+        max_changes: int = 2,
+        strategy: Optional[BaseStrategy] = None,
+        debug: bool = False,
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
+        """每日 TopK 选股 + buffer 换仓 + 每天最多换 max_changes 只。
+
+        规则（实盘对齐版）：
+        - 目标持仓数量=topk
+        - 若持仓仍在 Top(topk+buffer_n) 内，则尽量保留（减少换手）
+        - 每天最多做 max_changes 个 "卖出+买入" 的替换
+
+        Returns:
+            executed_trade_signals, unexecuted_signals, trades_this_day
+        """
+        executed_trade_signals: List[Dict[str, Any]] = []
+        unexecuted_signals: List[Dict[str, Any]] = []
+        trades_this_day = 0
+
+        if topk <= 0:
+            return executed_trade_signals, unexecuted_signals, trades_this_day
+
+        # rank by score desc, tie-break by stock_code for determinism
+        ranked = sorted(scores.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
+        topk_list = [c for c, _ in ranked[:topk]]
+        buffer_list = [c for c, _ in ranked[: max(topk, topk + buffer_n)]]
+        buffer_set = set(buffer_list)
+
+        holdings = list(portfolio_manager.positions.keys())
+        holdings_set = set(holdings)
+
+        # Keep holdings inside buffer zone
+        kept = [c for c in holdings if c in buffer_set]
+
+        # If kept > topk, trim lowest-ranked among kept
+        rank_index = {c: i for i, (c, _) in enumerate(ranked)}
+        if len(kept) > topk:
+            kept_sorted = sorted(kept, key=lambda c: rank_index.get(c, 10**9))
+            kept = kept_sorted[:topk]
+
+        kept_set = set(kept)
+
+        # Sell candidates: holdings outside buffer OR trimmed
+        to_sell = [c for c in holdings if c not in kept_set]
+
+        # Buy candidates: topk names not already kept
+        to_buy = [c for c in topk_list if c not in kept_set]
+
+        # 独立限制卖出和买入（修复：买卖耦合导致初始建仓失败）
+        n_sell = min(max_changes, len(to_sell))
+        n_buy = min(max_changes, len(to_buy))
+
+        # 初始建仓：holdings 为空时，允许直接买入 topk 只股票
+        if not holdings:
+            n_buy = min(topk, len(to_buy))
+
+        to_sell = to_sell[:n_sell]
+        to_buy = to_buy[:n_buy]
+
+        # Execute sells first
+        for code in to_sell:
+            sig = TradingSignal(
+                timestamp=current_date,
+                stock_code=code,
+                signal_type=SignalType.SELL,
+                strength=1.0,
+                price=float(current_prices.get(code, 0.0) or 0.0),
+                reason=f"topk_buffer rebalance sell (out of buffer/topk)",
+                metadata={"trade_mode": "topk_buffer"},
+            )
+            if strategy is not None:
+                is_valid, validation_reason = strategy.validate_signal(
+                    sig,
+                    portfolio_manager.get_portfolio_value(current_prices),
+                    portfolio_manager.positions,
+                )
+                if not is_valid:
+                    unexecuted_signals.append(
+                        {
+                            "stock_code": code,
+                            "timestamp": current_date,
+                            "signal_type": sig.signal_type.name,
+                            "execution_reason": validation_reason or "信号验证失败",
+                        }
+                    )
+                    continue
+
+            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            if trade:
+                trades_this_day += 1
+                executed_trade_signals.append(
+                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                )
+            else:
+                unexecuted_signals.append(
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                        "execution_reason": failure_reason or "执行失败（未知原因）",
+                    }
+                )
+
+        # Execute buys
+        for code in to_buy:
+            sig = TradingSignal(
+                timestamp=current_date,
+                stock_code=code,
+                signal_type=SignalType.BUY,
+                strength=1.0,
+                price=float(current_prices.get(code, 0.0) or 0.0),
+                reason=f"topk_buffer rebalance buy (enter top{topk})",
+                metadata={"trade_mode": "topk_buffer"},
+            )
+            if strategy is not None:
+                is_valid, validation_reason = strategy.validate_signal(
+                    sig,
+                    portfolio_manager.get_portfolio_value(current_prices),
+                    portfolio_manager.positions,
+                )
+                if not is_valid:
+                    unexecuted_signals.append(
+                        {
+                            "stock_code": code,
+                            "timestamp": current_date,
+                            "signal_type": sig.signal_type.name,
+                            "execution_reason": validation_reason or "信号验证失败",
+                        }
+                    )
+                    continue
+
+            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            if trade:
+                trades_this_day += 1
+                executed_trade_signals.append(
+                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                )
+            else:
+                unexecuted_signals.append(
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                        "execution_reason": failure_reason or "执行失败（未知原因）",
+                    }
+                )
+
+        return executed_trade_signals, unexecuted_signals, trades_this_day
+
 

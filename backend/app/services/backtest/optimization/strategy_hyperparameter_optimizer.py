@@ -213,6 +213,21 @@ class StrategyHyperparameterOptimizer:
             except Exception as e:
                 logger.warning(f"注入默认参数失败: {e}")
 
+        # 断点续跑：扣除已完成的 trials，避免重复执行
+        existing_completed = len([
+            t for t in study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ])
+        if existing_completed > 0:
+            remaining = max(0, n_trials - existing_completed)
+            logger.info(
+                f"断点续跑: 已有 {existing_completed} 个已完成 trials，"
+                f"原计划 {n_trials} 个，剩余需执行 {remaining} 个"
+            )
+            n_trials = remaining
+            if n_trials <= 0:
+                logger.info("所有 trials 已完成，无需继续优化")
+
         # 创建回测执行器
         try:
             enable_perf = os.getenv(
@@ -1060,6 +1075,10 @@ class StrategyHyperparameterOptimizer:
                         (oos_values[-1] / oos_values[0] - 1.0) if oos_values[0] else 0.0
                     )
                     mdd_oos = abs(_max_drawdown(oos_values))
+
+                    # 零交易惩罚：portfolio 完全平坦（无收益无回撤）说明没有实际交易
+                    if total_ret_oos == 0.0 and mdd_oos == 0.0:
+                        return 0.05
 
                     mrets = _monthly_returns(oos_dates, oos_values)
                     if mrets:
