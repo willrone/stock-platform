@@ -1,0 +1,51 @@
+"""
+训练常量定义
+
+所有魔法数字和字符串集中管理
+"""
+from pathlib import Path
+
+# === 路径常量 ===
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+DATA_DIR = PROJECT_ROOT / "data" / "parquet" / "stock_data"
+MODEL_DIR = PROJECT_ROOT / "data" / "models"
+
+# === 数据常量 ===
+RANDOM_SEED = 42
+DEFAULT_N_STOCKS = 350
+MIN_TRADING_DAYS = 200
+DEFAULT_START_DATE = "2018-01-01"
+DEFAULT_END_DATE = "2025-01-01"
+
+# === 时间分割常量 ===
+TRAIN_END_DATE = "2023-07-01"
+VAL_END_DATE = "2024-01-01"
+EMBARGO_DAYS = 20  # 训练集和验证集之间的缓冲期
+
+# === 特征常量 ===
+EPSILON = 1e-10  # 防止除零
+RSI_PERIODS = [6, 14]
+MA_WINDOWS = [5, 10, 20, 60]
+RETURN_PERIODS = [1, 2, 3, 5, 10, 20]
+VOLATILITY_WINDOWS = [5, 20, 60]
+PRICE_POSITION_WINDOWS = [20, 60]
+MOMENTUM_STRENGTH_PERIODS = [5, 10, 20]
+ATR_PERIOD = 14
+MACD_FAST = 12
+MACD_SLOW = 26
+MACD_SIGNAL = 9
+BB_WINDOW = 20
+
+# === 模型常量 ===
+MAX_BOOST_ROUNDS = 2000
+EARLY_STOPPING_ROUNDS = 100
+LOG_EVAL_PERIOD = 200
+
+# === 回测常量 ===
+DEFAULT_TOP_N = 5
+DEFAULT_TRANSACTION_COST = 0.001
+TRADING_DAYS_PER_YEAR = 252
+
+# === 标签常量（回归目标） ===
+LABEL_WINSORIZE_LOWER = 0.01
+LABEL_WINSORIZE_UPPER = 0.99
