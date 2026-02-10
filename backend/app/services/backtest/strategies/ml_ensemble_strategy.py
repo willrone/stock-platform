@@ -1,10 +1,10 @@
 """
-ML 集成策略：LightGBM + XGBoost 双模型集成 + 风控
+ML 集成策略��LightGBM + XGBoost 双模型集成 + 风控
 
 特点：
-- 双模型集成（LightGBM 50% + XGBoost 50%）
+- 双模型回归集成（LightGBM 50% + XGBoost 50%）
+- 选股逻辑：按预测收益率排序（回归模式）
 - 三重风控：止损 2% + 波动率缩放 + 市场过滤
-- 夏普比率 9.20，最大回撤 -6.0%
 
 命名：ml_ensemble_lgb_xgb_riskctl
 """
@@ -25,28 +25,30 @@ from ..models import SignalType, TradingSignal
 class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
     """
     ML 集成策略：LightGBM + XGBoost + 风控
-    
+
     特点：
-    - 双模型等权重集成（LGB 50% + XGB 50%）
+    - 双模型等权重回归集成（LGB 50% + XGB 50%）
+    - 选股逻辑：按预测收益率排序（回归模式，非概率阈值）
     - 止损 2%：单日亏损超 2% 截断
     - 波动率缩放：高波动减仓，低波动加仓
     - 市场过滤：大盘 5 日均线下跌时仓位减半
-    
-    性能指标（测试集 2024）：
-    - AUC: 0.5721
-    - 夏普比率: 9.20
-    - 最大回撤: -6.0%
-    - Calmar: 225.26
     """
-    
+
+    # 回归模式阈值常量
+    BUY_RETURN_THRESHOLD = 0.0     # 预测收益 > 0 视为买入信号
+    SELL_RETURN_THRESHOLD = -0.002  # 预测收益 < -0.2% 视为卖出信号
+    FALLBACK_BASE_SCORE = 0.0      # fallback 规则基础分（回归模式为 0）
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__("ml_ensemble_lgb_xgb_riskctl", config)
-        
+
         # 模型配置
         self.lgb_weight = config.get("lgb_weight", 0.5)
         self.xgb_weight = config.get("xgb_weight", 0.5)
         self.top_n = config.get("top_n", 5)  # 每日选股数量
-        self.prob_threshold = config.get("prob_threshold", 0.5)  # 买入概率阈值
+        self.buy_threshold = config.get("buy_threshold", self.BUY_RETURN_THRESHOLD)
+        # 向后兼容：保留 prob_threshold 但不再用于主逻辑
+        self.prob_threshold = config.get("prob_threshold", 0.5)
         
         # 风控配置
         self.stop_loss = config.get("stop_loss", -0.02)  # 止损阈值
@@ -303,14 +305,14 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             if len(self._daily_returns) > 60:
                 self._daily_returns = self._daily_returns[-60:]
         
-        # 生成信号
+        # 生成信号（回归模式：基于预测收益率）
         # 确保 prob 和 position_scale 是标量
-        prob = float(prob) if prob is not None else 0.0
+        pred_return = float(prob) if prob is not None else 0.0
         position_scale = float(position_scale) if position_scale is not None else 0.0
         
-        if prob > self.prob_threshold and position_scale > 0:
-            # 买入信号
-            strength = (prob - self.prob_threshold) / (1 - self.prob_threshold)
+        if pred_return > self.buy_threshold and position_scale > 0:
+            # 买入信号：预测收益率为正
+            strength = min(abs(pred_return) * 100, 1.0)  # 收益率映射到 0-1 强度
             strength *= position_scale  # 应用仓位缩放
             
             signals.append(TradingSignal(
@@ -319,21 +321,29 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                 strength=min(strength, 1.0),
                 price=data["close"].iloc[idx],
                 timestamp=current_date,
-                reason=f"ML集成预测概率={prob:.3f}, 仓位缩放={position_scale:.2f}"
+                reason=f"ML回归预测收益={pred_return:.4f}, 仓位缩放={position_scale:.2f}"
             ))
-        elif prob < 0.4 or position_scale == 0:
-            # 卖出信号
+        elif pred_return < self.SELL_RETURN_THRESHOLD or position_scale == 0:
+            # 卖出信号：预测收益率为负或触发风控
             signals.append(TradingSignal(
                 stock_code=stock_code,
                 signal_type=SignalType.SELL,
                 strength=0.8 if position_scale == 0 else 0.5,
                 price=data["close"].iloc[idx],
                 timestamp=current_date,
-                reason=f"ML集成预测概率={prob:.3f}, 触发风控" if position_scale == 0 else f"ML集成预测概率低={prob:.3f}"
+                reason=f"ML回归预测收益={pred_return:.4f}, 触发风控" if position_scale == 0 else f"ML回归预测收益低={pred_return:.4f}"
             ))
         
         return signals
     
+    def _predict_xgb(self, X):
+        """XGBoost 预测，兼容 sklearn API (XGBRegressor) 和 native API (Booster)"""
+        if hasattr(self.xgb_model, 'get_booster'):
+            return self.xgb_model.predict(X)
+        else:
+            import xgboost as xgb
+            return self.xgb_model.predict(xgb.DMatrix(X))
+
     @staticmethod
     def _safe_scalar(value, default=0.0) -> float:
         """将 pandas/numpy 标量安全转为 Python float，避免 Series truth value 歧义"""
@@ -348,8 +358,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
     def _calculate_ensemble_prob(self, indicators: Dict[str, pd.Series], idx: int) -> Optional[float]:
         """
-        计算集成预测概率
-        
+        计算集成预测值
+
+        回归模式：返回预测收益率（正值=看涨，负值=看跌）
         如果有预训练模型则使用模型预测，否则使用简化的规则组合
         """
         # 如果有预训练模型
@@ -357,52 +368,40 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             features = self._get_feature_vector(indicators, idx)
             if features is not None:
                 try:
-                    import xgboost as xgb
-                    lgb_prob = float(self.lgb_model.predict(features.reshape(1, -1))[0])
-                    xgb_prob = float(self.xgb_model.predict(xgb.DMatrix(features.reshape(1, -1)))[0])
-                    return float(self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob)
+                    lgb_pred = float(self.lgb_model.predict(features.reshape(1, -1))[0])
+                    xgb_pred = float(self._predict_xgb(features.reshape(1, -1))[0])
+                    return float(self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred)
                 except Exception:
                     pass
-        
-        # 简化版：基于技术指标组合计算概率
+
+        # 简化版 fallback：基于技术指标组合（回归模式，输出预测收益率）
+        return self._fallback_prediction(indicators, idx)
+
+    def _fallback_prediction(self, indicators: Dict[str, pd.Series], idx: int) -> Optional[float]:
+        """Fallback: 基于技术指标组合预测收益率（回归模式）"""
         try:
-            score = 0.5  # 基础分
-            
-            # RSI 信号
-            rsi = self._safe_scalar(indicators["rsi_14"].iloc[idx], 50) if "rsi_14" in indicators else 50.0
-            if rsi < 30:
-                score += 0.15  # 超卖，看涨
-            elif rsi > 70:
-                score -= 0.15  # 超买，看跌
-            
-            # MACD 信号
+            score = self.FALLBACK_BASE_SCORE
+
+            rsi = self._safe_scalar(indicators.get("rsi_14", pd.Series()).iloc[idx] if "rsi_14" in indicators else 50, 50)
+            score += 0.003 if rsi < 30 else (-0.003 if rsi > 70 else 0.0)
+
             macd_hist = self._safe_scalar(indicators["macd_hist"].iloc[idx]) if "macd_hist" in indicators else 0.0
             macd_slope = self._safe_scalar(indicators["macd_hist_slope"].iloc[idx]) if "macd_hist_slope" in indicators else 0.0
             if macd_hist > 0 and macd_slope > 0:
-                score += 0.1
+                score += 0.002
             elif macd_hist < 0 and macd_slope < 0:
-                score -= 0.1
-            
-            # 动量信号
-            mom_short = self._safe_scalar(indicators["momentum_short"].iloc[idx]) if "momentum_short" in indicators else 0.0
-            score += max(-0.1, min(mom_short * 2, 0.1))
-            
-            # 布林带位置
+                score -= 0.002
+
+            mom = self._safe_scalar(indicators["momentum_short"].iloc[idx]) if "momentum_short" in indicators else 0.0
+            score += max(-0.002, min(mom, 0.002))
+
             bb_pos = self._safe_scalar(indicators["bb_position"].iloc[idx]) if "bb_position" in indicators else 0.0
-            if bb_pos < -1:
-                score += 0.1  # 下轨附近，看涨
-            elif bb_pos > 1:
-                score -= 0.1  # 上轨附近，看跌
-            
-            # MA 排列
+            score += 0.002 if bb_pos < -1 else (-0.002 if bb_pos > 1 else 0.0)
+
             ma_align = self._safe_scalar(indicators["ma_alignment"].iloc[idx], 1) if "ma_alignment" in indicators else 1.0
-            if ma_align == 2:
-                score += 0.05  # 多头排列
-            elif ma_align == 0:
-                score -= 0.05  # 空头排列
-            
-            return float(max(0.0, min(score, 1.0)))
-            
+            score += 0.001 if ma_align == 2 else (-0.001 if ma_align == 0 else 0.0)
+
+            return float(score)
         except Exception:
             return None
     
@@ -447,31 +446,30 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             features_df = features_df.fillna(0)
             X = features_df.values
             
-            # 模型预测
-            lgb_prob = self.lgb_model.predict(X)
-            xgb_prob = self.xgb_model.predict(xgb.DMatrix(X))
-            prob = self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+            # 模型预测（回归模式：输出预测收益率）
+            lgb_pred = self.lgb_model.predict(X)
+            xgb_pred = self._predict_xgb(X)
+            pred_return = self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
             
             # 转换为 pandas Series
-            score = pd.Series(prob, index=data.index)
+            score = pd.Series(pred_return, index=data.index)
             
-            # 将概率分数转换为 SignalType
+            # 将预测收益率转换为 SignalType（回归模式）
             signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
             
-            # 买入信号：概率 > 阈值
-            buy_mask = score > self.prob_threshold
+            # 买入信号：预测收益率 > 0
+            buy_mask = score > self.BUY_RETURN_THRESHOLD
             signals[buy_mask] = SignalType.BUY
             
-            # 卖出信号：概率 < (1 - 阈值)
-            sell_threshold = 1 - self.prob_threshold
-            sell_mask = score < sell_threshold
+            # 卖出信号：预测收益率 < 卖出阈值
+            sell_mask = score < self.SELL_RETURN_THRESHOLD
             signals[sell_mask] = SignalType.SELL
             
             buy_count = (signals == SignalType.BUY).sum()
             sell_count = (signals == SignalType.SELL).sum()
             none_count = signals.isna().sum()
-            avg_prob = score.mean()
-            logger.info(f"ML策略预计算完成: BUY={buy_count}, SELL={sell_count}, None={none_count}, 平均概率={avg_prob:.4f}")
+            avg_pred = score.mean()
+            logger.info(f"ML策略预计算完成: BUY={buy_count}, SELL={sell_count}, None={none_count}, 平均预测收益={avg_pred:.6f}")
             
             return signals
             
@@ -481,73 +479,71 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             return self._precompute_fallback(data)
     
     def _precompute_fallback(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """Fallback: 使用简化规则计算信号"""
+        """Fallback: 使用简化规则计算信号（回归模式）"""
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("使用 fallback 规则计算信号")
+        logger.info("使用 fallback 规则计算信号（回归模式）")
         
         indicators = self.calculate_indicators(data)
-        score = pd.Series(0.5, index=data.index)
+        score = pd.Series(self.FALLBACK_BASE_SCORE, index=data.index)
         
-        # RSI
+        # RSI（回归模式：输出预测收益率量级）
         if "rsi_14" in indicators:
             rsi = indicators["rsi_14"]
-            score = score + ((rsi < 30).astype(float) * 0.15)
-            score = score - ((rsi > 70).astype(float) * 0.15)
+            score = score + ((rsi < 30).astype(float) * 0.003)
+            score = score - ((rsi > 70).astype(float) * 0.003)
         
         # MACD
         if "macd_hist" in indicators and "macd_hist_slope" in indicators:
             macd_hist = indicators["macd_hist"]
             macd_slope = indicators["macd_hist_slope"]
-            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
-            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
+            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.002
+            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.002
         
         # 动量
         if "momentum_short" in indicators:
             mom = indicators["momentum_short"]
-            score = score + (mom * 2).clip(-0.1, 0.1)
-        
-        score = score.clip(0, 1)
+            score = score + (mom).clip(-0.002, 0.002)
         
         signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
-        signals[score > self.prob_threshold] = SignalType.BUY
-        signals[score < (1 - self.prob_threshold)] = SignalType.SELL
+        signals[score > self.BUY_RETURN_THRESHOLD] = SignalType.BUY
+        signals[score < self.SELL_RETURN_THRESHOLD] = SignalType.SELL
         
         return signals
     
     def _calculate_score_fallback(self, indicators: Dict[str, pd.Series], index) -> pd.Series:
-        """使用简化规则计算分数（fallback）"""
-        score = pd.Series(0.5, index=index)
+        """使用简化规则计算预测收益率（fallback，回归模式）"""
+        score = pd.Series(self.FALLBACK_BASE_SCORE, index=index)
         
         # RSI
         if "rsi_14" in indicators:
             rsi = indicators["rsi_14"]
-            score = score + ((rsi < 30).astype(float) * 0.15)
-            score = score - ((rsi > 70).astype(float) * 0.15)
+            score = score + ((rsi < 30).astype(float) * 0.003)
+            score = score - ((rsi > 70).astype(float) * 0.003)
         
         # MACD
         if "macd_hist" in indicators and "macd_hist_slope" in indicators:
             macd_hist = indicators["macd_hist"]
             macd_slope = indicators["macd_hist_slope"]
-            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.1
-            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.1
+            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.002
+            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.002
         
         # 动量
         if "momentum_short" in indicators:
             mom = indicators["momentum_short"]
-            score = score + (mom * 2).clip(-0.1, 0.1)
+            score = score + (mom).clip(-0.002, 0.002)
         
         # 布林带
         if "bb_position" in indicators:
             bb = indicators["bb_position"]
-            score = score + ((bb < -1).astype(float) * 0.1)
-            score = score - ((bb > 1).astype(float) * 0.1)
+            score = score + ((bb < -1).astype(float) * 0.002)
+            score = score - ((bb > 1).astype(float) * 0.002)
         
         # MA 排列
         if "ma_alignment" in indicators:
             ma = indicators["ma_alignment"]
-            score = score + ((ma == 2).astype(float) * 0.05)
-            score = score - ((ma == 0).astype(float) * 0.05)
+            score = score + ((ma == 2).astype(float) * 0.001)
+            score = score - ((ma == 0).astype(float) * 0.001)
         
         return score
     
@@ -685,27 +681,27 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             X_df = X_df.fillna(0)
             X = X_df.values
             
-            # 4. 模型预测
-            logger.info("执行模型预测...")
-            lgb_prob = self.lgb_model.predict(X)
-            xgb_prob = self.xgb_model.predict(xgb.DMatrix(X))
-            prob = self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+            # 4. 模型预测（回归模式：输出预测收益率）
+            logger.info("执行模型预测（回归模式）...")
+            lgb_pred = self.lgb_model.predict(X)
+            xgb_pred = self._predict_xgb(X)
+            pred_return = self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
             
-            features_df['prob'] = prob
+            features_df['pred'] = pred_return
             
-            # 5. 生成信号
-            logger.info("生成交易信号...")
+            # 5. 生成信号（基于预测收益率排序）
+            logger.info("生成交易信号（回归模式）...")
             signals = []
             
             for _, row in features_df.iterrows():
-                p = row['prob']
+                p = row['pred']
                 
-                if p > self.prob_threshold:
+                if p > self.BUY_RETURN_THRESHOLD:
                     signal_type = SignalType.BUY
-                    strength = (p - self.prob_threshold) / (1 - self.prob_threshold)
-                elif p < (1 - self.prob_threshold):
+                    strength = min(abs(p) * 100, 1.0)
+                elif p < self.SELL_RETURN_THRESHOLD:
                     signal_type = SignalType.SELL
-                    strength = ((1 - self.prob_threshold) - p) / (1 - self.prob_threshold)
+                    strength = min(abs(p) * 100, 1.0)
                 else:
                     continue  # 无信号
                 
@@ -726,9 +722,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             
             buy_count = (result_df['signal_type'] == SignalType.BUY).sum()
             sell_count = (result_df['signal_type'] == SignalType.SELL).sum()
-            avg_prob = prob.mean()
+            avg_pred = pred_return.mean()
             
-            logger.info(f"ML策略批量预计算完成: BUY={buy_count}, SELL={sell_count}, 平均概率={avg_prob:.4f}")
+            logger.info(f"ML策略批量预计算完成: BUY={buy_count}, SELL={sell_count}, 平均预测收益={avg_pred:.6f}")
             
             return result_df
             
