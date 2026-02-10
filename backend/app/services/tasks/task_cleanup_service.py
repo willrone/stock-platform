@@ -131,5 +131,5 @@ class TaskCleanupService:
 task_cleanup_service = TaskCleanupService(
     cleanup_interval_minutes=30,  # 每30分钟检查一次
     task_timeout_minutes=60,  # 任务超时1小时
-    auto_cleanup=True,  # 自动清理
+    auto_cleanup=False,  # 暂时禁用自动清理（优化任务被误杀，待修复竞态条件后再开启）
 )

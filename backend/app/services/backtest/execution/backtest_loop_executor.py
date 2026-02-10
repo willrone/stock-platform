@@ -601,14 +601,14 @@ class BacktestLoopExecutor:
                                     
                                     # 调试日志
                                     if current_idx == 20:  # 只在第一次打印
-                                        logger.info(f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals else '无'}")
+                                        logger.info(f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals is not None else '无'}")
                                     
                                     if signals is None:
                                         # Fallback: 调用策略生成
                                         signals = strategy.generate_signals(data, current_date)
                                     
                                     # 调试日志：记录信号内容
-                                    if signals and current_idx == 20:
+                                    if signals is not None and current_idx == 20:
                                         logger.info(f"🔍 信号内容: {signals}")
                                     
                                     _dur = time.perf_counter() - t1
@@ -617,7 +617,8 @@ class BacktestLoopExecutor:
                                         gen_time_max = float(_dur)
                                     all_signals.extend(signals)
                                 except Exception as e:
-                                    logger.warning(f"生成信号失败 {stock_code}: {e}")
+                                    import traceback as _tb
+                                    logger.warning(f"生成信号失败 {stock_code}: {e}\n{_tb.format_exc()}")
                                     continue
 
                 # 记录信号生成时间

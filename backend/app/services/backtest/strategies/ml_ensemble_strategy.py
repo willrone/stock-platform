@@ -713,7 +713,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                     'price': row['close'],
                 })
             
-            if not signals:
+            if signals.isna().all():
                 logger.warning("未生成任何信号")
                 return None
             
