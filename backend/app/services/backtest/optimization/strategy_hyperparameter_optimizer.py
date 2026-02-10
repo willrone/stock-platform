@@ -227,6 +227,32 @@ class StrategyHyperparameterOptimizer:
             n_trials = remaining
             if n_trials <= 0:
                 logger.info("所有 trials 已完成，无需继续优化")
+                # 直接返回已有结果，避免 n_trials=0 导致后续除零错误
+                completed_trials = [
+                    t for t in study.trials
+                    if t.state == optuna.trial.TrialState.COMPLETE
+                ]
+                best_trial = study.best_trial if not is_multi_objective and completed_trials else None
+                return {
+                    "success": True,
+                    "strategy_name": strategy_name,
+                    "best_params": best_trial.params if best_trial else None,
+                    "best_score": best_trial.value if best_trial else None,
+                    "best_trial_number": best_trial.number if best_trial else None,
+                    "objective_metric": objective_metric,
+                    "n_trials": existing_completed,
+                    "completed_trials": existing_completed,
+                    "running_trials": 0,
+                    "pruned_trials": len([
+                        t for t in study.trials
+                        if t.state == optuna.trial.TrialState.PRUNED
+                    ]),
+                    "failed_trials": len([
+                        t for t in study.trials
+                        if t.state == optuna.trial.TrialState.FAIL
+                    ]),
+                    "message": f"断点续跑: 所有 {existing_completed} 个 trials 已完成，无需继续",
+                }
 
         # 创建回测执行器
         try:

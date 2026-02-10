@@ -1085,7 +1085,7 @@ class HyperparameterOptimizationTaskExecutor:
                     best_trial_number=None,
                     best_params=None,
                 ):
-                    progress = (trial_num / n_trials) * 100
+                    progress = (trial_num / n_trials) * 100 if n_trials > 0 else 100.0
                     message = f"Trial {trial_num}/{n_trials}"
                     if score is not None:
                         message += f", Score: {score:.4f}"
