@@ -14,8 +14,8 @@ from loguru import logger
 from .config import QlibModelType
 
 
-async def _extract_feature_importance(
-        self, model: Any, model_type: QlibModelType
+async def extract_feature_importance(
+        model: Any, model_type: QlibModelType
     ) -> Optional[Dict[str, float]]:
         """提取特征重要性"""
         try:
@@ -39,7 +39,7 @@ async def _extract_feature_importance(
             logger.warning(f"提取特征重要性失败: {e}")
             return None
 
-def _analyze_feature_correlations(self, dataset: pd.DataFrame) -> Dict[str, Any]:
+def analyze_feature_correlations(dataset: pd.DataFrame) -> Dict[str, Any]:
         """分析特征与标签的相关性"""
         try:
             if dataset.empty:

@@ -15,6 +15,13 @@ from app.api.v1.schemas import StandardResponse
 # from app.services.tasks.task_manager import task_manager  # 将在运行时导入
 from app.services.models.model_lifecycle_manager import model_lifecycle_manager
 
+
+def _get_task_manager():
+    """延迟导入 task_manager，避免循环依赖"""
+    from app.services.tasks.task_manager import task_manager
+    return task_manager
+
+
 router = APIRouter(prefix="/training", tags=["训练进度"])
 
 
@@ -78,7 +85,7 @@ async def get_training_tasks(
     """获取训练任务列表"""
     try:
         # 获取所有训练相关的任务
-        tasks = task_manager.get_tasks_by_type("model_training", limit=limit)
+        tasks = _get_task_manager().get_tasks_by_type("model_training", limit=limit)
 
         # 过滤条件
         if status:
@@ -126,7 +133,7 @@ async def get_training_tasks(
 async def get_training_task(task_id: str):
     """获取训练任务详情"""
     try:
-        task = task_manager.get_task(task_id)
+        task = _get_task_manager().get_task(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
@@ -164,7 +171,7 @@ async def get_training_task(task_id: str):
 async def get_training_progress(task_id: str):
     """获取训练进度"""
     try:
-        task = task_manager.get_task(task_id)
+        task = _get_task_manager().get_task(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
@@ -215,7 +222,7 @@ async def get_training_progress(task_id: str):
 async def get_training_metrics(task_id: str):
     """获取训练指标历史"""
     try:
-        task = task_manager.get_task(task_id)
+        task = _get_task_manager().get_task(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
@@ -274,7 +281,7 @@ async def get_training_metrics(task_id: str):
 async def control_training_task(task_id: str, request: TrainingControlRequest):
     """控制训练任务（暂停、恢复、停止等）"""
     try:
-        task = task_manager.get_task(task_id)
+        task = _get_task_manager().get_task(task_id)
 
         if not task:
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
@@ -283,22 +290,22 @@ async def control_training_task(task_id: str, request: TrainingControlRequest):
         result = {"action": action, "task_id": task_id, "success": False}
 
         if action == "pause":
-            success = task_manager.pause_task(task_id)
+            success = _get_task_manager().pause_task(task_id)
             result["success"] = success
             result["message"] = "任务已暂停" if success else "暂停任务失败"
 
         elif action == "resume":
-            success = task_manager.resume_task(task_id)
+            success = _get_task_manager().resume_task(task_id)
             result["success"] = success
             result["message"] = "任务已恢复" if success else "恢复任务失败"
 
         elif action == "stop":
-            success = task_manager.stop_task(task_id)
+            success = _get_task_manager().stop_task(task_id)
             result["success"] = success
             result["message"] = "任务已停止" if success else "停止任务失败"
 
         elif action == "cancel":
-            success = task_manager.cancel_task(task_id)
+            success = _get_task_manager().cancel_task(task_id)
             result["success"] = success
             result["message"] = "任务已取消" if success else "取消任务失败"
 
@@ -339,7 +346,7 @@ async def get_model_training_history(
     """获取模型的训练历史"""
     try:
         # 获取模型相关的训练任务
-        tasks = task_manager.get_tasks_by_metadata("model_id", model_id, limit=limit)
+        tasks = _get_task_manager().get_tasks_by_metadata("model_id", model_id, limit=limit)
 
         training_history = []
         for task in tasks:
@@ -379,7 +386,7 @@ async def get_training_stats():
     """获取训练统计信息"""
     try:
         # 获取所有训练任务
-        all_tasks = task_manager.get_tasks_by_type("model_training")
+        all_tasks = _get_task_manager().get_tasks_by_type("model_training")
 
         # 统计信息
         stats = {
@@ -451,14 +458,14 @@ async def start_training(request: TrainingConfigRequest):
             "batch_size": request.batch_size,
         }
 
-        task_id = task_manager.create_task(
+        task_id = _get_task_manager().create_task(
             task_type="model_training",
             task_config=task_config,
             metadata={"model_type": request.model_type, "training_config": task_config},
         )
 
         # 启动任务
-        success = task_manager.start_task(task_id)
+        success = _get_task_manager().start_task(task_id)
 
         if not success:
             raise HTTPException(status_code=500, detail="启动训练任务失败")
@@ -499,7 +506,7 @@ async def websocket_training_progress(websocket: WebSocket, task_id: str):
 
     try:
         # 发送初始状态
-        task = task_manager.get_task(task_id)
+        task = _get_task_manager().get_task(task_id)
         if task:
             initial_data = {
                 "type": "initial_status",
@@ -514,7 +521,7 @@ async def websocket_training_progress(websocket: WebSocket, task_id: str):
         while True:
             await asyncio.sleep(5)  # 每5秒更新一次
 
-            task = task_manager.get_task(task_id)
+            task = _get_task_manager().get_task(task_id)
             if task:
                 progress_data = {
                     "type": "progress_update",

@@ -398,17 +398,13 @@ class ProbAttention(nn.Module):
         attn_weights = F.softmax(top_scores, dim=-1)
         attn_weights = self.dropout(attn_weights)
 
-        # 注意力输出（简化版）
-        # 在实际实现中，这里需要更复杂的索引操作
-        attn_output = torch.matmul(attn_weights, V[:, :, :top_k, :])
-
-        # 如果输出维度不匹配，进行调整
-        if attn_output.shape[2] != seq_len:
-            # 简单的填充策略
-            padding = torch.zeros(batch_size, self.nhead, seq_len - top_k, self.d_k).to(
-                attn_output.device
-            )
-            attn_output = torch.cat([attn_output, padding], dim=2)
+        # 注意力输出：按 top_indices 从 V 中取对应行
+        # top_indices: (batch, nhead, seq_len, top_k) -> 取最后一维的索引对应 V 的 seq 维度
+        v_indices = top_indices[:, :, :, :top_k]  # (batch, nhead, seq_len, top_k)
+        v_indices_expanded = v_indices.unsqueeze(-1).expand(-1, -1, -1, -1, self.d_k)
+        V_expanded = V.unsqueeze(2).expand(-1, -1, seq_len, -1, -1)  # (batch, nhead, seq_len, seq_len, d_k)
+        V_selected = torch.gather(V_expanded, 3, v_indices_expanded)  # (batch, nhead, seq_len, top_k, d_k)
+        attn_output = torch.matmul(attn_weights.unsqueeze(-2), V_selected).squeeze(-2)  # (batch, nhead, seq_len, d_k)
 
         # 重塑和输出投影
         attn_output = (

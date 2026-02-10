@@ -613,7 +613,7 @@ class ModelVersionManager:
             return model
         elif model_path.suffix == ".pth":
             # PyTorch模型 - 需要模型结构信息
-            state_dict = torch.load(model_path, map_location="cpu")
+            state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
             # 这里需要根据model_type重新创建模型结构
             # 实际使用时需要完善这部分逻辑
             logger.warning("PyTorch模型加载需要模型结构信息")

@@ -16,7 +16,7 @@ from ..qlib_model_manager import QlibModelManager
 from .config import QlibTrainingConfig, QlibTrainingResult
 from .dataset_preparation import prepare_training_datasets
 from .evaluation import _evaluate_model
-from .feature_analysis import _analyze_feature_correlations, _extract_feature_importance
+from .feature_analysis import analyze_feature_correlations, extract_feature_importance
 from .model_config import create_qlib_model_config
 from .model_io import load_qlib_model, save_qlib_model
 # prediction 功能已集成到类方法中

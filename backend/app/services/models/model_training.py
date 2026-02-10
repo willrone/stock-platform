@@ -213,6 +213,8 @@ class QlibDataProvider:
     def __init__(self, data_service: SimpleDataService):
         self.data_service = data_service
         self.indicator_calculator = TechnicalIndicatorCalculator()
+        self.feature_engineer = None  # 可选：外部注入特征工程模块
+        self.data_root: Optional[str] = None  # 本地数据根目录，降级加载时使用
 
     async def initialize_qlib(self):
         """初始化Qlib环境"""
@@ -867,31 +869,53 @@ class ModelTrainingService:
         precision = precision_score(y_true, y_pred, zero_division=0)
         recall = recall_score(y_true, y_pred, zero_division=0)
 
-        # 计算金融指标（简化版本）
-        # 假设预测正确时获得正收益，错误时获得负收益
-        returns = []
-        for i in range(len(y_true)):
-            if y_pred[i] == y_true[i]:
-                returns.append(0.01)  # 1%收益
+        # 计算金融指标
+        # 只有当 y_true 代表真实收益率（回归任务）时，计算才有意义
+        # 对于分类任务（y_true为0/1），由于缺乏真实价格变动幅度，无法准确计算夏普率等
+        
+        # 简单启发式：唯一值多于10个认为是连续值（收益率）
+        is_regression = len(np.unique(y_true)) > 10
+        
+        if is_regression:
+            # 假设 y_true 是真实收益率
+            # 策略：如果预测上涨（分类预测为1 或 回归预测>0），则持有
+            
+            # 判断预测信号
+            if len(np.unique(y_pred)) <= 2: # 预测值是分类
+                signals = y_pred
+            else: # 预测值是回归
+                signals = (y_pred > 0).astype(int)
+                
+            # 计算策略收益
+            strategy_returns = signals * y_true
+            
+            # 夏普比率 (假设无风险利率 2%)
+            excess_returns = strategy_returns - 0.02 / 252
+            if np.std(excess_returns) > 1e-8:
+                sharpe_ratio = float(np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252))
             else:
-                returns.append(-0.01)  # -1%损失
+                sharpe_ratio = 0.0
 
-        returns = np.array(returns)
+            # 最大回撤
+            cumulative_returns = np.cumprod(1 + strategy_returns)
+            running_max = np.maximum.accumulate(cumulative_returns)
+            drawdown = (cumulative_returns - running_max) / (running_max + 1e-8)
+            max_drawdown = float(np.min(drawdown)) if len(drawdown) > 0 else 0.0
 
-        # 夏普比率
-        sharpe_ratio = np.mean(returns) / (np.std(returns) + 1e-8) * np.sqrt(252)
+            # 总收益
+            total_return = float(cumulative_returns[-1] - 1) if len(cumulative_returns) > 0 else 0.0
 
-        # 最大回撤
-        cumulative_returns = np.cumprod(1 + returns)
-        running_max = np.maximum.accumulate(cumulative_returns)
-        drawdown = (cumulative_returns - running_max) / running_max
-        max_drawdown = np.min(drawdown)
-
-        # 总收益
-        total_return = cumulative_returns[-1] - 1
-
-        # 胜率
-        win_rate = np.sum(returns > 0) / len(returns)
+            # 胜率 (正收益交易占比)
+            active_trades = strategy_returns[strategy_returns != 0]
+            win_rate = float(np.mean(active_trades > 0)) if len(active_trades) > 0 else 0.0
+            
+        else:
+            # 分类任务且无法获取真实收益率
+            # 避免返回误导性的固定收益率
+            sharpe_ratio = 0.0
+            max_drawdown = 0.0
+            total_return = 0.0
+            win_rate = float(accuracy) # 近似胜率
 
         return ModelMetrics(
             accuracy=accuracy,

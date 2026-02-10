@@ -7,6 +7,7 @@
 import asyncio
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -19,8 +20,81 @@ if QLIB_AVAILABLE:
     from qlib.utils import init_instance_by_config
 
 
+def _extract_training_history(
+    model: Any, config: Any, training_history: list
+) -> None:
+    """从模型中提取真实训练历史（LightGBM/XGBoost 等支持 evals_result）。
+
+    提取成功时会清空并重写 training_history；失败时保持不变。
+    """
+    try:
+        evals_result = None
+
+        # 方式1: 直接从 booster 获取
+        if hasattr(model, "booster") and hasattr(
+            model.booster, "evals_result_"
+        ):
+            evals_result = model.booster.evals_result_
+        # 方式2: 从 model 对象获取
+        elif hasattr(model, "evals_result_"):
+            evals_result = model.evals_result_
+        # 方式3: 从 model.model.booster 获取
+        elif hasattr(model, "model") and hasattr(model.model, "booster"):
+            if hasattr(model.model.booster, "evals_result_"):
+                evals_result = model.model.booster.evals_result_
+
+        if not evals_result:
+            return
+
+        for eval_name, eval_results in evals_result.items():
+            if not (
+                "l2" in eval_results
+                or "rmse" in eval_results
+                or "train" in eval_name.lower()
+            ):
+                continue
+
+            # 确定损失指标 key
+            loss_key = None
+            if "l2" in eval_results:
+                loss_key = "l2"
+            elif "rmse" in eval_results:
+                loss_key = "rmse"
+            elif "train" in eval_results:
+                for key in eval_results.keys():
+                    if any(k in key.lower() for k in ("loss", "l2", "rmse")):
+                        loss_key = key
+                        break
+
+            if not (loss_key and loss_key in eval_results):
+                continue
+
+            losses = eval_results[loss_key]
+            learning_rate = config.hyperparameters.get("learning_rate", 0.001)
+
+            training_history.clear()
+            for epoch, loss in enumerate(losses, 1):
+                training_history.append(
+                    {
+                        "epoch": epoch,
+                        "train_loss": round(loss, 4),
+                        "val_loss": None,
+                        "train_accuracy": 0.0,
+                        "val_accuracy": 0.0,
+                        "learning_rate": learning_rate,
+                    }
+                )
+
+            logger.info(
+                f"从模型获取到真实训练历史: {len(losses)} 轮 "
+                f"(来源: {eval_name}, 指标: {loss_key})"
+            )
+            break
+    except Exception as e:
+        logger.debug(f"无法从模型获取训练历史: {e}", exc_info=True)
+
+
 async def _train_qlib_model(
-        self,
         model_config: Dict[str, Any],
         train_dataset: Any,
         val_dataset: Any,
@@ -241,80 +315,15 @@ async def _train_qlib_model(
 
                     model.fit(dataset_to_fit)
 
-                    # 训练完成后，尝试从模型获取真实训练历史（LightGBM等模型可能支持）
-                    try:
-                        # 尝试多种方式获取训练历史
-                        evals_result = None
-
-                        # 方式1: 直接从booster获取
-                        if hasattr(model, "booster") and hasattr(
-                            model.booster, "evals_result_"
-                        ):
-                            evals_result = model.booster.evals_result_
-                        # 方式2: 从model对象获取
-                        elif hasattr(model, "evals_result_"):
-                            evals_result = model.evals_result_
-                        # 方式3: 从model对象获取booster属性
-                        elif hasattr(model, "model") and hasattr(
-                            model.model, "booster"
-                        ):
-                            if hasattr(model.model.booster, "evals_result_"):
-                                evals_result = model.model.booster.evals_result_
-
-                        if evals_result:
-                            # 提取训练历史
-                            for eval_name, eval_results in evals_result.items():
-                                if (
-                                    "l2" in eval_results
-                                    or "rmse" in eval_results
-                                    or "train" in eval_name.lower()
-                                ):
-                                    # 获取损失值
-                                    loss_key = None
-                                    if "l2" in eval_results:
-                                        loss_key = "l2"
-                                    elif "rmse" in eval_results:
-                                        loss_key = "rmse"
-                                    elif "train" in eval_results:
-                                        # 尝试获取train相关的指标
-                                        for key in eval_results.keys():
-                                            if (
-                                                "loss" in key.lower()
-                                                or "l2" in key.lower()
-                                                or "rmse" in key.lower()
-                                            ):
-                                                loss_key = key
-                                                break
-
-                                    if loss_key and loss_key in eval_results:
-                                        losses = eval_results[loss_key]
-
-                                        # 更新训练历史为真实值
-                                        training_history.clear()
-                                        for epoch, loss in enumerate(losses, 1):
-                                            training_history.append(
-                                                {
-                                                    "epoch": epoch,
-                                                    "train_loss": round(loss, 4),
-                                                    "val_loss": None,
-                                                    "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                                                    "val_accuracy": 0.0,
-                                                    "learning_rate": config.hyperparameters.get(
-                                                        "learning_rate", 0.001
-                                                    ),
-                                                }
-                                            )
-
-                                        logger.info(
-                                            f"从模型获取到真实训练历史: {len(losses)} 轮 (来源: {eval_name}, 指标: {loss_key})"
-                                        )
-                                        break
-                    except Exception as e:
-                        logger.debug(f"无法从模型获取训练历史: {e}", exc_info=True)
+                    # 训练完成后，尝试从模型获取真实训练历史
+                    real_history = _extract_training_history(model, config)
+                    if real_history:
+                        training_history.clear()
+                        training_history.extend(real_history)
 
                 except TypeError:
                     # 如果模型不支持回调，使用模拟训练过程（但模型仍然真实训练）
-                    await self._simulate_training_with_early_stopping(
+                    await _simulate_training_with_early_stopping(
                         model,
                         train_dataset,
                         val_dataset,
@@ -337,110 +346,18 @@ async def _train_qlib_model(
                     model.fit(dataset_to_fit)
 
                     # 训练完成后，尝试从模型获取真实训练历史
-                    try:
-                        # 尝试多种方式获取训练历史
-                        evals_result = None
-
-                        # 方式1: 直接从booster获取
-                        if hasattr(model, "booster") and hasattr(
-                            model.booster, "evals_result_"
-                        ):
-                            evals_result = model.booster.evals_result_
-                        # 方式2: 从model对象获取
-                        elif hasattr(model, "evals_result_"):
-                            evals_result = model.evals_result_
-                        # 方式3: 从model对象获取booster属性
-                        elif hasattr(model, "model") and hasattr(
-                            model.model, "booster"
-                        ):
-                            if hasattr(model.model.booster, "evals_result_"):
-                                evals_result = model.model.booster.evals_result_
-
-                        if evals_result:
-                            # 提取训练历史
-                            for eval_name, eval_results in evals_result.items():
-                                if (
-                                    "l2" in eval_results
-                                    or "rmse" in eval_results
-                                    or "train" in eval_name.lower()
-                                ):
-                                    # 获取损失值
-                                    loss_key = None
-                                    if "l2" in eval_results:
-                                        loss_key = "l2"
-                                    elif "rmse" in eval_results:
-                                        loss_key = "rmse"
-                                    elif "train" in eval_results:
-                                        # 尝试获取train相关的指标
-                                        for key in eval_results.keys():
-                                            if (
-                                                "loss" in key.lower()
-                                                or "l2" in key.lower()
-                                                or "rmse" in key.lower()
-                                            ):
-                                                loss_key = key
-                                                break
-
-                                    if loss_key and loss_key in eval_results:
-                                        losses = eval_results[loss_key]
-
-                                        # 更新训练历史为真实值
-                                        training_history.clear()
-                                        for epoch, loss in enumerate(losses, 1):
-                                            training_history.append(
-                                                {
-                                                    "epoch": epoch,
-                                                    "train_loss": round(loss, 4),
-                                                    "val_loss": None,
-                                                    "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                                                    "val_accuracy": 0.0,
-                                                    "learning_rate": config.hyperparameters.get(
-                                                        "learning_rate", 0.001
-                                                    ),
-                                                }
-                                            )
-
-                                        logger.info(
-                                            f"从模型获取到真实训练历史: {len(losses)} 轮 (来源: {eval_name}, 指标: {loss_key})"
-                                        )
-                                        break
-                    except Exception as e:
-                        logger.debug(f"无法从模型获取训练历史: {e}", exc_info=True)
+                    real_history = _extract_training_history(model, config)
+                    if real_history:
+                        training_history.clear()
+                        training_history.extend(real_history)
             else:
                 # 对于不支持验证集的模型，正常训练
                 model.fit(train_dataset)
 
                 # 尝试从模型获取真实训练历史
-                try:
-                    if hasattr(model, "booster") and hasattr(
-                        model.booster, "evals_result_"
-                    ):
-                        evals_result = model.booster.evals_result_
-                        if evals_result:
-                            for eval_name, eval_results in evals_result.items():
-                                if "l2" in eval_results or "rmse" in eval_results:
-                                    loss_key = "l2" if "l2" in eval_results else "rmse"
-                                    losses = eval_results[loss_key]
-
-                                    # 使用真实训练历史
-                                    for epoch, loss in enumerate(losses, 1):
-                                        training_history.append(
-                                            {
-                                                "epoch": epoch,
-                                                "train_loss": round(loss, 4),
-                                                "val_loss": None,
-                                                "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                                                "val_accuracy": 0.0,
-                                                "learning_rate": config.hyperparameters.get(
-                                                    "learning_rate", 0.001
-                                                ),
-                                            }
-                                        )
-
-                                    logger.info(f"从模型获取到真实训练历史: {len(losses)} 轮")
-                                    break
-                except Exception as e:
-                    logger.debug(f"无法从模型获取训练历史: {e}")
+                real_history = _extract_training_history(model, config)
+                if real_history:
+                    training_history.extend(real_history)
 
                 # 如果没有获取到真实历史，生成模拟训练历史（使用实际的迭代次数）
                 if not training_history:
@@ -511,7 +428,6 @@ async def _train_qlib_model(
 
 
 async def _simulate_training_with_early_stopping(
-        self,
         model: Any,
         train_dataset: pd.DataFrame,
         val_dataset: pd.DataFrame,
