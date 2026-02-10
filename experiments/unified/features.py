@@ -246,8 +246,28 @@ def neutralize_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def get_feature_columns() -> List[str]:
-    """获取完整的 62 个特征列名（与策略推理保持一致）"""
+def get_feature_columns(include_fundamental: bool = False) -> List[str]:
+    """
+    获取特征列名列表
+
+    Args:
+        include_fundamental: 是否包含基本面因子（默认 False，保持向后兼容）
+
+    Returns:
+        62 个技术因子 + 可选 13 个基本面因子
+    """
+    technical = get_technical_feature_columns()
+
+    if not include_fundamental:
+        return technical
+
+    from .fundamental_factors import get_fundamental_feature_names
+
+    return technical + get_fundamental_feature_names()
+
+
+def get_technical_feature_columns() -> List[str]:
+    """获取 62 个技术因子列名（与策略推理保持一致）"""
     return [
         # 收益率 (6)
         "return_1d", "return_2d", "return_3d", "return_5d", "return_10d", "return_20d",
