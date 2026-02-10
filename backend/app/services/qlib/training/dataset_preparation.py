@@ -155,6 +155,14 @@ async def prepare_training_datasets(
     train_dates = dates[:split_idx]
     val_dates = dates[split_idx:]
 
+    # Embargo 期：在训练集和验证集之间加入缓冲期
+    # 防止使用了 20 日均线等特征时的信息泄漏
+    embargo_days = config.embargo_days if config else 20
+    if len(train_dates) > embargo_days:
+        # 移除训练集末尾的 embargo 天数据
+        train_dates = train_dates[:-embargo_days]
+        logger.info(f"Embargo 期: 移除训练集末尾 {embargo_days} 天数据，防止信息泄漏")
+
     if isinstance(dataset.index, pd.MultiIndex):
         train_data = dataset[dataset.index.get_level_values(1).isin(train_dates)]
         val_data = dataset[dataset.index.get_level_values(1).isin(val_dates)]
