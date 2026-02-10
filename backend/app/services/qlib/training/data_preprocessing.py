@@ -97,7 +97,7 @@ class OutlierHandler:
         extreme_mask = np.abs(data_processed[label_col]) > 0.5
         if extreme_mask.sum() > 0:
             logger.warning(
-                f"检测到 {extreme_mask.sum()} 个极端收益率（>50%），可能是���权除息，已处理"
+                f"检测到 {extreme_mask.sum()} 个极端收益率（>50%），可能是权除息，已处理"
             )
         
         return data_processed
@@ -175,7 +175,7 @@ class RobustFeatureScaler:
             feature_cols = self.feature_cols
         
         if feature_cols is None:
-            logger.warning("未��定特征列，返回原始数据")
+            logger.warning("未指定特征列，返回原始数据")
             return data
         
         if self.RobustScaler is None:
@@ -195,3 +195,81 @@ class RobustFeatureScaler:
                 continue
         
         return data_scaled
+
+
+class CrossSectionalNeutralizer:
+    """截面中性化处理器"""
+
+    def __init__(self):
+        pass
+
+    def transform(self, data: pd.DataFrame, feature_cols: List[str]) -> pd.DataFrame:
+        """
+        对指定特征进行截面中性化（减去截面均值）
+        
+        Args:
+            data: 输入数据 DataFrame
+            feature_cols: 需要中性化的特征列名列表
+        
+        Returns:
+            中性化后的 DataFrame
+        """
+        if not feature_cols:
+            return data
+
+        df = data.copy()
+        
+        # 确定日期列
+        date_level = None
+        if isinstance(df.index, pd.MultiIndex):
+            # 假设 MultiIndex 为 (instrument, datetime)
+            if 'datetime' in df.index.names:
+                date_level = 'datetime'
+            elif 'date' in df.index.names:
+                date_level = 'date'
+            else:
+                # 尝试猜测，通常是 level 1
+                date_level = df.index.names[1]
+        elif 'date' in df.columns:
+            date_level = 'date'
+        elif 'datetime' in df.columns:
+            date_level = 'datetime'
+        
+        if not date_level:
+            logger.warning("无法确定日期列，跳过截面中性化")
+            return df
+            
+        logger.info(f"开始截面中性化，特征数: {len(feature_cols)}, 日期列: {date_level}")
+        
+        # 只处理存在的特征列
+        valid_features = [c for c in feature_cols if c in df.columns]
+        if not valid_features:
+            return df
+            
+        try:
+            # 批量计算均值并相减（比逐列循环快）
+            if isinstance(df.index, pd.MultiIndex):
+                # MultiIndex groupby
+                means = df.groupby(level=date_level)[valid_features].transform('mean')
+            else:
+                # Column groupby
+                means = df.groupby(date_level)[valid_features].transform('mean')
+            
+            # 执行中性化
+            df[valid_features] = df[valid_features] - means
+            logger.info("截面中性化完成")
+            
+        except Exception as e:
+            logger.error(f"截面中性化失败: {e}")
+            # 降级为逐列处理
+            for col in valid_features:
+                try:
+                    if isinstance(df.index, pd.MultiIndex):
+                        mean = df.groupby(level=date_level)[col].transform('mean')
+                    else:
+                        mean = df.groupby(date_level)[col].transform('mean')
+                    df[col] = df[col] - mean
+                except Exception as sub_e:
+                    logger.warning(f"特征 {col} 中性化失败: {sub_e}")
+        
+        return df

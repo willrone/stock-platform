@@ -47,6 +47,8 @@ class QlibTrainingConfig:
     enable_adaptive_patience: bool = True
     # Embargo 期配置（防止信息泄漏）
     embargo_days: int = 20
+    # 市场中性化配置
+    enable_neutralization: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -66,6 +68,7 @@ class QlibTrainingConfig:
             "enable_overfitting_detection": self.enable_overfitting_detection,
             "enable_adaptive_patience": self.enable_adaptive_patience,
             "embargo_days": self.embargo_days,
+            "enable_neutralization": self.enable_neutralization,
         }
 
 

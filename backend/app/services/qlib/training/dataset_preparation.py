@@ -14,7 +14,7 @@ import pandas as pd
 from loguru import logger
 
 from .config import QlibTrainingConfig
-from .data_preprocessing import OutlierHandler, RobustFeatureScaler
+from .data_preprocessing import CrossSectionalNeutralizer, OutlierHandler, RobustFeatureScaler
 from .qlib_check import QLIB_AVAILABLE
 
 
@@ -179,12 +179,23 @@ async def prepare_training_datasets(
             val_data = outlier_handler.handle_label_outliers(val_data, label_col="label")
         logger.info("标签异常值处理完成")
 
-    # 特征标准化（时间序列安全）
-    feature_scaler = RobustFeatureScaler()
     # 获取特征列（排除标签列）
     feature_cols = [
         col for col in train_data.columns if col != "label"
     ]
+
+    # 市场中性化处理（在标准化前进行）
+    enable_neutralization = config.enable_neutralization if config else True
+    if enable_neutralization and feature_cols:
+        neutralizer = CrossSectionalNeutralizer()
+        logger.info("开始截面中性化处理")
+        train_data = neutralizer.transform(train_data, feature_cols)
+        if val_data is not None and len(val_data) > 0:
+            val_data = neutralizer.transform(val_data, feature_cols)
+        logger.info("截面中性化处理完成")
+
+    # 特征标准化（时间序列安全）
+    feature_scaler = RobustFeatureScaler()
     
     if feature_cols:
         logger.info(f"开始特征标准化，特征列数: {len(feature_cols)}")
