@@ -304,6 +304,10 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                 self._daily_returns = self._daily_returns[-60:]
         
         # 生成信号
+        # 确保 prob 和 position_scale 是标量
+        prob = float(prob) if prob is not None else 0.0
+        position_scale = float(position_scale) if position_scale is not None else 0.0
+        
         if prob > self.prob_threshold and position_scale > 0:
             # 买入信号
             strength = (prob - self.prob_threshold) / (1 - self.prob_threshold)

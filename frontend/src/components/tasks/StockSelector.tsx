@@ -144,7 +144,8 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     }
 
     // 从过滤后的股票列表中随机选择（如果没有搜索，则从全部列表选择）
-    const availableStocks = filteredStocks.filter(stock => !value.includes(stock.code));
+    // 注意：不过滤已选股票，直接从全部可用股票中选择（替换模式）
+    const availableStocks = filteredStocks;
 
     if (availableStocks.length === 0) {
       console.warn('没有可选的股票');
@@ -158,11 +159,10 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     const shuffled = [...availableStocks].sort(() => Math.random() - 0.5);
     const selectedStocks = shuffled.slice(0, selectCount).map(stock => stock.code);
 
-    // 添加到已选列表
-    const newValue = [...value, ...selectedStocks];
-    onChange?.(newValue);
+    // 替换已选列表（而不是追加）
+    onChange?.(selectedStocks);
 
-    console.log(`随机选择了 ${selectedStocks.length} 只股票`);
+    console.log(`随机选择了 ${selectedStocks.length} 只股票（替换模式）`);
   };
 
   // 移除股票
