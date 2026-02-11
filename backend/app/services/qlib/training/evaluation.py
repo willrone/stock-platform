@@ -363,7 +363,7 @@ def _calculate_metrics(
             logger.error(f"计算真实指标失败: {e}", exc_info=True)
             return self._get_default_metrics()
 
-def _get_default_metrics(self) -> Dict[str, float]:
+    def _get_default_metrics(self) -> Dict[str, float]:
         """返回默认指标（当无法计算真实指标时使用）"""
         return {
             "accuracy": 0.5,
