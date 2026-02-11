@@ -17,7 +17,7 @@ from sklearn.model_selection import TimeSeriesSplit
 import warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """计算技术指标特征"""
@@ -361,5 +361,5 @@ if __name__ == '__main__':
     model = train_and_evaluate(data)
     
     # 保存
-    model.save_model('/Users/ronghui/Documents/GitHub/willrone/experiments/lgbm_model_v3.txt')
+    model.save_model('/Users/ronghui/Projects/willrone/experiments/lgbm_model_v3.txt')
     print("\n模型已保存")

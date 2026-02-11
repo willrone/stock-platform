@@ -20,7 +20,7 @@ warnings.filterwarnings('ignore')
 SEED = 42
 np.random.seed(SEED)
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 def compute_cross_sectional_features(df_all: pd.DataFrame) -> pd.DataFrame:
     """计算截面特征（每日排名）"""
@@ -475,8 +475,8 @@ if __name__ == '__main__':
     
     model, result = train_and_evaluate(data, use_optuna=True, n_trials=50)
     
-    model.save_model('/Users/ronghui/Documents/GitHub/willrone/experiments/lgbm_model_v4_final.txt')
+    model.save_model('/Users/ronghui/Projects/willrone/experiments/lgbm_model_v4_final.txt')
     print("\n模型已保存到: lgbm_model_v4_final.txt")
     
-    result.to_csv('/Users/ronghui/Documents/GitHub/willrone/experiments/lgbm_v4_final_results.csv', index=False)
+    result.to_csv('/Users/ronghui/Projects/willrone/experiments/lgbm_v4_final_results.csv', index=False)
     print("结果已保存到: lgbm_v4_final_results.csv")

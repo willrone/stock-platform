@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 SEED = 42
 np.random.seed(SEED)
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """计算技术指标特征"""
@@ -399,7 +399,7 @@ def main():
         print(f"  Calmar: {best['calmar']:.2f}")
     
     # 保存
-    results_df.to_csv('/Users/ronghui/Documents/GitHub/willrone/experiments/drawdown_optimization_results.csv', index=False)
+    results_df.to_csv('/Users/ronghui/Projects/willrone/experiments/drawdown_optimization_results.csv', index=False)
     print("\n结果已保存")
 
 if __name__ == '__main__':

@@ -88,7 +88,7 @@ def main():
     
     # 使用绝对路径
     import os
-    project_root = "/Users/ronghui/Documents/GitHub/willrone"
+    project_root = "/Users/ronghui/Projects/willrone"
     data_dir = os.path.join(project_root, "data")
     logger.info(f"  数据目录: {data_dir}")
     

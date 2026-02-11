@@ -10,7 +10,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 # 添加项目路径
-sys.path.insert(0, '/Users/ronghui/Documents/GitHub/willrone/backend')
+sys.path.insert(0, '/Users/ronghui/Projects/willrone/backend')
 
 from app.services.backtest.execution.vectorized_loop import (
     vectorized_price_lookup_core,

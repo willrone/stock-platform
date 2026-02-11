@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 SEED = 42
 np.random.seed(SEED)
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 def compute_cross_sectional_features(df_all: pd.DataFrame) -> pd.DataFrame:
     """计算截面特征（每日排名）"""
@@ -537,7 +537,7 @@ if __name__ == '__main__':
     ensemble, result, backtest_results = train_and_evaluate(data)
     
     # 保存结果
-    result.to_csv('/Users/ronghui/Documents/GitHub/willrone/experiments/ensemble_v1_results.csv', index=False)
+    result.to_csv('/Users/ronghui/Projects/willrone/experiments/ensemble_v1_results.csv', index=False)
     print("\n结果已保存到: ensemble_v1_results.csv")
     
     # 生成报告
@@ -579,7 +579,7 @@ if __name__ == '__main__':
 集成模型通过结合三种不同的梯度提升算法，利用模型多样性来提升预测稳定性。
 """
     
-    with open('/Users/ronghui/Documents/GitHub/willrone/experiments/ensemble_report.md', 'w') as f:
+    with open('/Users/ronghui/Projects/willrone/experiments/ensemble_report.md', 'w') as f:
         f.write(report)
     
     print("报告已保存到: ensemble_report.md")

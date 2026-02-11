@@ -8,7 +8,7 @@
 
 ## 📋 重构目标
 
-将 `/Users/ronghui/Documents/GitHub/willrone/backend/app/api/v1/models.py` (1,656行) 按功能模块拆分，提高代码可维护性和可读性，同时保持所有 API 接口向后兼容。
+将 `/Users/ronghui/Projects/willrone/backend/app/api/v1/models.py` (1,656行) 按功能模块拆分，提高代码可维护性和可读性，同时保持所有 API 接口向后兼容。
 
 ---
 

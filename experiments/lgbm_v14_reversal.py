@@ -13,7 +13,7 @@ from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 print("=" * 70)
 print("LightGBM v14: 反转因子版（针对 A 股特性）")

@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 数据路径
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 print("=" * 70)
 print("LightGBM v11: 稳健性验证")

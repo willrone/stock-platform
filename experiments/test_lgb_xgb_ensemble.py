@@ -16,7 +16,7 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 SEED = 42
 np.random.seed(SEED)
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """计算技术指标特征"""
@@ -459,7 +459,7 @@ def main():
     print(f"  回撤: {best['max_drawdown']*100:.1f}% ({'+' if best['max_drawdown'] > baseline['max_drawdown'] else ''}{(best['max_drawdown']-baseline['max_drawdown'])*100:.1f}%)")
     
     # 保存结果
-    results_df.to_csv('/Users/ronghui/Documents/GitHub/willrone/experiments/dual_ensemble_results.csv', index=False)
+    results_df.to_csv('/Users/ronghui/Projects/willrone/experiments/dual_ensemble_results.csv', index=False)
     print("\n结果已保存到 dual_ensemble_results.csv")
 
 if __name__ == '__main__':

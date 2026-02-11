@@ -9,7 +9,7 @@ Optuna 优化效率 POC 验证脚本
 4. 并行执行 (n_jobs)
 
 运行方式：
-    cd /Users/ronghui/Documents/GitHub/willrone/backend
+    cd /Users/ronghui/Projects/willrone/backend
     source venv/bin/activate
     python scripts/test_optuna_optimization.py
 """

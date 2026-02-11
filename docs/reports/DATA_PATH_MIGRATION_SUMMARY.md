@@ -81,7 +81,7 @@ DATA_ROOT_PATH="../data"
 
 ### SFTP同步配置
 - 远端服务器：192.168.3.62
-- 远端路径：`/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data`
+- 远端路径：`/Users/ronghui/Projects/willrone/data/parquet/stock_data`
 - 本地路径：`data/parquet/stock_data/`
 - ✅ 同步服务会自动将数据下载到正确位置
 

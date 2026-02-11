@@ -3,7 +3,7 @@
 测试不同集成权重方案
 """
 import sys
-sys.path.insert(0, '/Users/ronghui/Documents/GitHub/willrone/experiments')
+sys.path.insert(0, '/Users/ronghui/Projects/willrone/experiments')
 
 from ensemble_v1 import EnsembleModel, load_and_prepare_data
 import pandas as pd
@@ -146,7 +146,7 @@ def test_weight_schemes():
     print(f"  回撤: {best['max_drawdown']*100:.1f}%")
     
     # 保存结果
-    results_df.to_csv('/Users/ronghui/Documents/GitHub/willrone/experiments/weight_comparison.csv', index=False)
+    results_df.to_csv('/Users/ronghui/Projects/willrone/experiments/weight_comparison.csv', index=False)
     print("\n结果已保存到 weight_comparison.csv")
 
 if __name__ == '__main__':

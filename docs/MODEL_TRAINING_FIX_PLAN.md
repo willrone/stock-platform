@@ -156,7 +156,7 @@
 
 ## 三、执行规范
 
-1. **代码规范**: 严格遵守 `/Users/ronghui/Documents/GitHub/willrone/docs/CODING_STANDARDS.md`
+1. **代码规范**: 严格遵守 `/Users/ronghui/Projects/willrone/docs/CODING_STANDARDS.md`
    - 函数 ≤50 行，类 ≤300 行
    - 圈复杂度 ≤10
    - 函数参数 ≤3 个
