@@ -185,11 +185,13 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             indicators[f"dist_low_{window}"] = (close - low_n) / (close + 1e-10)
         
         # ATR
-        tr = pd.concat([
+        tr = np.maximum(
             high - low,
-            (high - close.shift()).abs(),
-            (low - close.shift()).abs()
-        ], axis=1).max(axis=1)
+            np.maximum(
+                (high - close.shift()).abs(),
+                (low - close.shift()).abs()
+            )
+        )
         indicators["atr"] = tr.rolling(14).mean()
         indicators["atr_pct"] = indicators["atr"] / (close + 1e-10)
         
@@ -826,11 +828,13 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             indicators[f'dist_low_{window}'] = (close - low_n) / (close + 1e-10)
         
         # ATR
-        tr = pd.concat([
+        tr = np.maximum(
             high - low,
-            (high - close.shift()).abs(),
-            (low - close.shift()).abs()
-        ], axis=1).max(axis=1)
+            np.maximum(
+                (high - close.shift()).abs(),
+                (low - close.shift()).abs()
+            )
+        )
         indicators['atr'] = tr.rolling(14).mean()
         indicators['atr_pct'] = indicators['atr'] / (close + 1e-10)
         

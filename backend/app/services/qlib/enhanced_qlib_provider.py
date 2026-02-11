@@ -220,6 +220,9 @@ class EnhancedQlibDataProvider:
                     else stock_data.copy()
                 )
 
+                # 删除原始的 ts_code 列（避免与 stock_code 同时被映射为 instrument）
+                if "ts_code" in features.columns:
+                    features = features.drop(columns=["ts_code"])
                 features["stock_code"] = stock_code
                 features = self._ensure_date_column(features)
                 all_features.append(features)
