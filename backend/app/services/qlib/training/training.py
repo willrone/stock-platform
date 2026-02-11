@@ -316,10 +316,7 @@ async def _train_qlib_model(
                     model.fit(dataset_to_fit)
 
                     # 训练完成后，尝试从模型获取真实训练历史
-                    real_history = _extract_training_history(model, config)
-                    if real_history:
-                        training_history.clear()
-                        training_history.extend(real_history)
+                    _extract_training_history(model, config, training_history)
 
                 except TypeError:
                     # 如果模型不支持回调，使用模拟训练过程（但模型仍然真实训练）
@@ -346,20 +343,15 @@ async def _train_qlib_model(
                     model.fit(dataset_to_fit)
 
                     # 训练完成后，尝试从模型获取真实训练历史
-                    real_history = _extract_training_history(model, config)
-                    if real_history:
-                        training_history.clear()
-                        training_history.extend(real_history)
+                    _extract_training_history(model, config, training_history)
             else:
                 # 对于不支持验证集的模型，正常训练
                 model.fit(train_dataset)
 
                 # 尝试从模型获取真实训练历史
-                real_history = _extract_training_history(model, config)
-                if real_history:
-                    training_history.extend(real_history)
+                _extract_training_history(model, config, training_history)
 
-                # 如果没有获取到真实历史，生成模拟训练历史（使用实际的迭代次数）
+                # 如果没有获取到真实历史，生成模拟训练历史（使用实际的迭代��数）
                 if not training_history:
                     num_iterations = (
                         config.hyperparameters.get("num_iterations")
