@@ -14,7 +14,6 @@ from .qlib_check import QLIB_AVAILABLE
 
 
 async def _evaluate_model(
-        self,
         model: Any,
         train_dataset: pd.DataFrame,
         val_dataset: pd.DataFrame,
@@ -58,12 +57,12 @@ async def _evaluate_model(
             )
 
             # 计算训练集指标（使用真实标签）
-            training_metrics = self._calculate_metrics(
+            training_metrics = _calculate_metrics(
                 train_dataset, train_pred, "训练集", model_id
             )
 
             # 计算验证集指标（使用真实标签）
-            validation_metrics = self._calculate_metrics(
+            validation_metrics = _calculate_metrics(
                 val_dataset, val_pred, "验证集", model_id
             )
 
@@ -75,12 +74,11 @@ async def _evaluate_model(
         except Exception as e:
             logger.error(f"模型评估失败: {e}", exc_info=True)
             # 返回默认指标
-            return self._get_default_metrics(), self._get_default_metrics()
+            return _get_default_metrics(), _get_default_metrics()
 
 
 
 def _calculate_metrics(
-        self,
         dataset: pd.DataFrame,
         predictions,
         dataset_name: str,
@@ -176,7 +174,7 @@ def _calculate_metrics(
                     logger.warning(
                         f"可用segments: {list(dataset.segments.keys()) if hasattr(dataset.segments, 'keys') else 'N/A'}"
                     )
-                return self._get_default_metrics()
+                return _get_default_metrics()
 
             # 记录标签统计信息
             logger.info(
@@ -195,7 +193,7 @@ def _calculate_metrics(
             min_len = min(len(y_true), len(y_pred))
             if min_len == 0:
                 logger.warning(f"数据集 {dataset_name} 为空，使用默认指标")
-                return self._get_default_metrics()
+                return _get_default_metrics()
 
             y_true = y_true[:min_len]
             y_pred = y_pred[:min_len]
@@ -204,7 +202,7 @@ def _calculate_metrics(
             valid_mask = ~(np.isnan(y_true) | np.isnan(y_pred))
             if valid_mask.sum() == 0:
                 logger.warning(f"数据集 {dataset_name} 中没有有效数据，使用默认指标")
-                return self._get_default_metrics()
+                return _get_default_metrics()
 
             y_true = y_true[valid_mask]
             y_pred = y_pred[valid_mask]
@@ -361,9 +359,9 @@ def _calculate_metrics(
 
         except Exception as e:
             logger.error(f"计算真实指标失败: {e}", exc_info=True)
-            return self._get_default_metrics()
+            return _get_default_metrics()
 
-        def _get_default_metrics(self) -> Dict[str, float]:
+def _get_default_metrics() -> Dict[str, float]:
         """返回默认指标（当无法计算真实指标时使用）"""
         return {
             "accuracy": 0.5,
