@@ -173,7 +173,7 @@ class DataFrameDatasetAdapter:
         # 分离特征和标签
         # 如果配置中指定了selected_features，则只使用选定的特征
         all_feature_cols = [col for col in data.columns if col != "label"]
-        if config and config.selected_features:
+        if hasattr(self, 'config') and self.config and self.config.selected_features:
             # 特征名称映射：将前端友好的名称转换为Qlib实际使用的名称
             def map_feature_name(feature_name: str) -> List[str]:
                 """将前端特征名称映射到可能的Qlib特征名称"""
@@ -283,7 +283,8 @@ class DataFrameDatasetAdapter:
 
             # 将前端特征名称映射到实际特征名称
             mapped_features = []
-            for user_feature in config.selected_features:
+            selected_features = getattr(self, 'config', None) and self.config.selected_features or []
+            for user_feature in selected_features:
                 possible_names = map_feature_name(user_feature)
                 # 查找第一个在数据中存在的特征名称
                 found = False
@@ -303,13 +304,13 @@ class DataFrameDatasetAdapter:
             ]
             if len(feature_cols) == 0:
                 logger.warning(
-                    f"用户指定的特征都不存在，使用所有可用特征。指定特征: {config.selected_features}, 可用特征: {all_feature_cols[:20]}"
+                    f"用户指定的特征都不存在，使用所有可用特征。指定特征: {selected_features}, 可用特征: {all_feature_cols[:20]}"
                 )
                 feature_cols = all_feature_cols
             else:
                 missing_features = [
                     col
-                    for col in config.selected_features
+                    for col in selected_features
                     if col
                     not in [f for f in mapped_features if f in all_feature_cols]
                 ]
