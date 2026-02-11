@@ -82,7 +82,7 @@ export function StrategyConfig({ task, onSaveConfig }: StrategyConfigProps) {
             sx={{
               display: 'grid',
               gap: 2,
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
             }}
           >
             {strategies.map((strategy: any, index: number) => (
@@ -203,7 +203,7 @@ export function StrategyConfig({ task, onSaveConfig }: StrategyConfigProps) {
             }}
           >
             <Box>
-              <Typography variant="h6" component="h4" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 策略配置
               </Typography>
               <Typography variant="caption" color="text.secondary">

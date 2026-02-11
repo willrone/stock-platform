@@ -243,16 +243,18 @@ export function BacktestTabs({
               <Box sx={{ mt: 2 }}>
                 {backtestDetailedData?.monthly_returns ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="h6" component="h4" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6" component="h4" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                       月度收益热力图
                     </Typography>
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(12, 1fr)',
-                        gap: 0.5,
-                      }}
-                    >
+                    <Box sx={{ overflowX: 'auto' }}>
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(12, 1fr)',
+                          gap: 0.5,
+                          minWidth: 500,
+                        }}
+                      >
                       {backtestDetailedData.monthly_returns.map((monthData: any) => (
                         <Box
                           key={`${monthData.year}-${monthData.month}`}
@@ -275,6 +277,7 @@ export function BacktestTabs({
                           {(monthData.monthly_return * 100).toFixed(1)}%
                         </Box>
                       ))}
+                      </Box>
                     </Box>
                   </Box>
                 ) : (

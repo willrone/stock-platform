@@ -280,7 +280,7 @@ export default function TasksPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题和统计 */}
       <Box>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
           任务管理
         </Typography>
         <Box
@@ -291,47 +291,47 @@ export default function TasksPage() {
           }}
         >
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                 <BarChart3 size={24} color="#1976d2" />
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {stats.total}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 总任务数
               </Typography>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {stats.running}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 运行中
               </Typography>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {stats.completed}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 已完成
               </Typography>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {stats.failed}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 失败
               </Typography>
             </CardContent>
@@ -570,6 +570,8 @@ export default function TasksPage() {
           setDeleteForce(false);
           setDeleteError(null);
         }}
+        fullWidth
+        maxWidth="sm"
       >
         <DialogTitle>确认删除</DialogTitle>
         <DialogContent>

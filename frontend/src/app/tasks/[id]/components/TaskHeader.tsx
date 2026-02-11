@@ -41,28 +41,29 @@ export function TaskHeader({
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, minWidth: 0 }}>
         <IconButton onClick={onBack} size="small">
           <ArrowLeft size={20} />
         </IconButton>
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.125rem', sm: '1.5rem', md: '2.125rem' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {task.task_name}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.625rem', sm: '0.75rem' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
             任务ID: {task.task_id}
           </Typography>
         </Box>
         {getStatusChip(task.status)}
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 1 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, ml: { xs: 0, md: 0 } }}>
         <Button
           variant="outlined"
           startIcon={<RefreshCw size={16} />}
           onClick={onRefresh}
           disabled={refreshing}
+          size="small"
         >
           刷新
         </Button>
@@ -72,6 +73,7 @@ export function TaskHeader({
           color="secondary"
           startIcon={<Copy size={16} />}
           onClick={onRebuild}
+          size="small"
         >
           重建任务
         </Button>
@@ -82,6 +84,7 @@ export function TaskHeader({
             color="primary"
             startIcon={<Play size={16} />}
             onClick={onRetry}
+            size="small"
           >
             重新运行
           </Button>
@@ -93,6 +96,7 @@ export function TaskHeader({
             color="secondary"
             startIcon={<Download size={16} />}
             onClick={onExport}
+            size="small"
           >
             导出结果
           </Button>
@@ -103,6 +107,7 @@ export function TaskHeader({
           color="error"
           startIcon={<Trash2 size={16} />}
           onClick={onDelete}
+          size="small"
         >
           删除
         </Button>

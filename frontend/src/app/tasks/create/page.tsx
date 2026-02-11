@@ -356,16 +356,16 @@ export default function CreateTaskPage() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* 页面标题 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* ��面标题 */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
         <IconButton onClick={handleBack}>
           <ArrowLeft size={20} />
         </IconButton>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
             创建任务
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
             配置股票预测或回测任务参数
           </Typography>
         </Box>
@@ -759,7 +759,7 @@ export default function CreateTaskPage() {
           )}
 
           {/* 提交按钮 */}
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
             <Button
               variant="contained"
               color="primary"
@@ -770,7 +770,7 @@ export default function CreateTaskPage() {
             >
               {loading ? '创建中...' : '创建任务'}
             </Button>
-            <Button variant="outlined" size="large" onClick={handleBack}>
+            <Button variant="outlined" size="large" onClick={handleBack} sx={{ minWidth: { sm: 100 } }}>
               取消
             </Button>
           </Box>

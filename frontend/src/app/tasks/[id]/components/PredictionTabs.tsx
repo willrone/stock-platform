@@ -93,15 +93,17 @@ export function PredictionTabs({
           <Box
             sx={{
               display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
               justifyContent: 'space-between',
-              alignItems: 'center',
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              gap: 1,
               width: '100%',
             }}
           >
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
               预测结果
             </Typography>
-            <FormControl size="small" sx={{ minWidth: 192 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 192 } }}>
               <InputLabel>选择股票</InputLabel>
               <Select
                 value={selectedStock || ''}
@@ -124,6 +126,8 @@ export function PredictionTabs({
             value={selectedTab}
             onChange={(e, newValue) => setSelectedTab(newValue)}
             aria-label="预测结果展示"
+            variant="scrollable"
+            scrollButtons="auto"
           >
             <Tab
               label={
@@ -178,16 +182,16 @@ export function PredictionTabs({
             )}
 
             {selectedTab === 'table' && (
-              <TableContainer component={Paper}>
-                <Table aria-label="预测结果表格">
+              <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+                <Table aria-label="预测结果表格" sx={{ minWidth: 600 }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell>股票代码</TableCell>
-                      <TableCell>预测方向</TableCell>
-                      <TableCell>预测收益率</TableCell>
-                      <TableCell>置信度</TableCell>
-                      <TableCell>置信区间</TableCell>
-                      <TableCell>VaR</TableCell>
+                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>股票代码</TableCell>
+                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>预测方向</TableCell>
+                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>预测收益率</TableCell>
+                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>置信度</TableCell>
+                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>置信区间</TableCell>
+                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>VaR</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>

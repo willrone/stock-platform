@@ -33,7 +33,7 @@ export function DeleteTaskDialog({
   onForceChange,
 }: DeleteTaskDialogProps) {
   return (
-    <Dialog open={isOpen} onClose={onClose}>
+    <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AlertTriangle size={20} color="#d32f2f" />

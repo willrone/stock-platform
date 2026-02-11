@@ -29,7 +29,7 @@ export function TaskInfo({ task }: TaskInfoProps) {
       <CardHeader title="任务信息" />
       <CardContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
             {task.task_type === 'hyperparameter_optimization' ? (
               <Box>
                 <Typography variant="caption" color="text.secondary">
