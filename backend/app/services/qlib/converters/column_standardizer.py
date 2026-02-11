@@ -268,15 +268,10 @@ class ColumnStandardizer:
         if col_lower in self._alias_to_standard:
             return self._alias_to_standard[col_lower]
 
-        # 模糊匹配（包含关系）— 仅当别名长度 >= 4 时才启用，
-        # 避免短别名（如 "vol"）误匹配到不相关的列名（如 "volatility"）
-        for standard_name, aliases in self.COLUMN_ALIASES.items():
-            for alias in aliases:
-                alias_lower = alias.lower()
-                if len(alias_lower) >= 4 and (
-                    alias_lower in col_lower or col_lower in alias_lower
-                ):
-                    return standard_name
+        # 注意：不再使用模糊匹配（包含关系）。
+        # 之前的模糊匹配会把 price_change → change、volume_change → volume 等
+        # 技术指标/衍生列错误映射为 OHLCV 标准列，导致重复列名。
+        # 如果需要支持新的数据源列名，请在 COLUMN_ALIASES 中添加精确别名。
 
         return None
 
