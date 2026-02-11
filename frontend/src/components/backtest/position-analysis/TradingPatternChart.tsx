@@ -56,9 +56,15 @@ export const TradingPatternChart: React.FC<TradingPatternChartProps> = ({
 
   return (
     <Card>
-      <CardHeader title="交易模式分析" />
-      <CardContent>
-        <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+      <CardHeader
+        title={
+          <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+            交易模式分析
+          </Typography>
+        }
+      />
+      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+        <Box ref={chartRef} sx={{ height: 400, width: '100%', overflowX: 'auto' }} />
         {/* 交易模式统计 */}
         <Box
           sx={{
@@ -70,19 +76,19 @@ export const TradingPatternChart: React.FC<TradingPatternChartProps> = ({
         >
           {tradingPatterns.size_patterns && (
             <>
-              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
                 <Typography variant="caption" color="text.secondary">
                   平均交易规模
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                   ¥{(tradingPatterns.size_patterns.avg_trade_size / 10000).toFixed(2)}万
                 </Typography>
               </Box>
-              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
                 <Typography variant="caption" color="text.secondary">
                   总交易量
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                   ¥{(tradingPatterns.size_patterns.total_volume / 10000).toFixed(2)}万
                 </Typography>
               </Box>
@@ -90,19 +96,19 @@ export const TradingPatternChart: React.FC<TradingPatternChartProps> = ({
           )}
           {tradingPatterns.frequency_patterns && (
             <>
-              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
                 <Typography variant="caption" color="text.secondary">
                   平均间隔
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                   {tradingPatterns.frequency_patterns.avg_interval_days.toFixed(1)}天
                 </Typography>
               </Box>
-              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
                 <Typography variant="caption" color="text.secondary">
                   月度交易次数
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                   {tradingPatterns.frequency_patterns.avg_monthly_trades.toFixed(1)}
                 </Typography>
               </Box>

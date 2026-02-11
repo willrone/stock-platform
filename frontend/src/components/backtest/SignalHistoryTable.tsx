@@ -328,7 +328,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     总信号数
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {statistics.total_signals}
                   </Typography>
                 </Box>
@@ -344,7 +344,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     执行率
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  <Typography sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {formatPercent(statistics.execution_rate)}
                   </Typography>
                 </Box>
@@ -360,7 +360,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     买入信号
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {statistics.buy_signals}
                   </Typography>
                 </Box>
@@ -376,7 +376,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     卖出信号
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {statistics.sell_signals}
                   </Typography>
                 </Box>
@@ -437,7 +437,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
             <Table stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                     <TableSortLabel
                       active={sortConfig.key === 'timestamp'}
                       direction={sortConfig.key === 'timestamp' ? sortConfig.direction : 'asc'}
@@ -446,7 +446,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                       时间
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                     <TableSortLabel
                       active={sortConfig.key === 'stock_code'}
                       direction={sortConfig.key === 'stock_code' ? sortConfig.direction : 'asc'}
@@ -455,8 +455,8 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                       股票代码
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>信号类型</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>信号类型</TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                     <TableSortLabel
                       active={sortConfig.key === 'price'}
                       direction={sortConfig.key === 'price' ? sortConfig.direction : 'asc'}
@@ -465,7 +465,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                       价格
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                     <TableSortLabel
                       active={sortConfig.key === 'strength'}
                       direction={sortConfig.key === 'strength' ? sortConfig.direction : 'asc'}
@@ -474,10 +474,10 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                       强度
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>是否执行</TableCell>
-                  <TableCell>信号原因</TableCell>
-                  <TableCell>未执行原因</TableCell>
-                  <TableCell>操作</TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>是否执行</TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>信号原因</TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>未执行原因</TableCell>
+                  <TableCell sx={{ padding: { xs: 1, md: 2 } }}>操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -498,35 +498,35 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                 ) : (
                   filteredSignals.map(signal => (
                     <TableRow key={signal.id} hover>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Tooltip title={formatDateTime(signal.timestamp)}>
-                          <Typography variant="body2">
+                          <Typography variant="body2" sx={{ overflow: 'hidden', wordBreak: 'break-word' }}>
                             {new Date(signal.timestamp).toLocaleDateString()}
                           </Typography>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Typography
                           variant="body2"
-                          sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                          sx={{ fontFamily: 'monospace', fontWeight: 500, overflow: 'hidden', wordBreak: 'break-word' }}
                         >
                           {signal.stock_code}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Chip
                           label={signal.signal_type === 'BUY' ? '买入' : '卖出'}
                           color={signal.signal_type === 'BUY' ? 'success' : 'error'}
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', overflow: 'hidden', wordBreak: 'break-word' }}>
                           ¥{signal.price.toFixed(2)}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, overflow: 'hidden', wordBreak: 'break-word' }}>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                             {(signal.strength * 100).toFixed(1)}%
                           </Typography>
@@ -550,7 +550,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                           </Box>
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Chip
                           label={signal.executed ? '已执行' : '未执行'}
                           color={signal.executed ? 'success' : 'default'}
@@ -558,7 +558,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                           icon={signal.executed ? <CheckCircle size={16} /> : <XCircle size={16} />}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Tooltip title={signal.reason || '无原因'}>
                           <Typography
                             variant="body2"
@@ -567,13 +567,14 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
+                              wordBreak: 'break-word',
                             }}
                           >
                             {signal.reason || '-'}
                           </Typography>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         {!signal.executed && signal.execution_reason ? (
                           <Tooltip title={signal.execution_reason}>
                             <Typography
@@ -584,6 +585,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
+                                wordBreak: 'break-word',
                               }}
                             >
                               {signal.execution_reason}
@@ -595,7 +597,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Button
                           size="small"
                           variant="outlined"

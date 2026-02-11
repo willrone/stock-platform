@@ -330,7 +330,7 @@ export function StrategyConfigForm({
       <CardHeader
         title={
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6" component="span">
+            <Typography variant="h6" component="span" sx={{ fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               策略配置参数
             </Typography>
             <Chip label={strategyName} size="small" color="secondary" />

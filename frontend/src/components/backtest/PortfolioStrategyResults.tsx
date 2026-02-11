@@ -139,7 +139,7 @@ export function PortfolioStrategyResults({
           >
             {strategies.map((strategy, index) => (
               <Box key={strategy.name}>
-                <Paper variant="outlined" sx={{ p: 2 }}>
+                <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Box
                       sx={{
@@ -186,7 +186,7 @@ export function PortfolioStrategyResults({
       <Card>
         <CardHeader avatar={<PieChartIcon size={24} />} title="策略权重分布" />
         <CardContent>
-          <Box sx={{ height: 400 }}>
+          <Box sx={{ height: { xs: 280, md: 400 } }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -220,7 +220,7 @@ export function PortfolioStrategyResults({
           <Card>
             <CardHeader avatar={<BarChart3 size={24} />} title="策略收益贡献对比" />
             <CardContent>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: { xs: 240, md: 300 } }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={contributionData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -238,7 +238,7 @@ export function PortfolioStrategyResults({
           <Card>
             <CardHeader avatar={<TrendingUp size={24} />} title="策略交易次数对比" />
             <CardContent>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: { xs: 240, md: 300 } }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={contributionData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -268,21 +268,21 @@ export function PortfolioStrategyResults({
               }}
             >
               <Box>
-                <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary">
                     总收益率
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, color: 'success.main', overflow: 'hidden', wordBreak: 'break-word' }}>
                     {(backtestData.portfolio.total_return * 100).toFixed(2)}%
                   </Typography>
                 </Paper>
               </Box>
               <Box>
-                <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary">
                     年化收益率
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, color: 'success.main', overflow: 'hidden', wordBreak: 'break-word' }}>
                     {(backtestData.portfolio.annualized_return * 100).toFixed(2)}%
                   </Typography>
                 </Paper>
@@ -290,21 +290,21 @@ export function PortfolioStrategyResults({
               {backtestData.risk_metrics && (
                 <>
                   <Box>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                    <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
                         夏普比率
                       </Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, overflow: 'hidden', wordBreak: 'break-word' }}>
                         {backtestData.risk_metrics.sharpe_ratio.toFixed(2)}
                       </Typography>
                     </Paper>
                   </Box>
                   <Box>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                    <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
                         最大回撤
                       </Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                      <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, color: 'error.main', overflow: 'hidden', wordBreak: 'break-word' }}>
                         {(backtestData.risk_metrics.max_drawdown * 100).toFixed(2)}%
                       </Typography>
                     </Paper>

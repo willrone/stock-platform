@@ -123,7 +123,7 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
       <CardHeader
         title={
           <Box>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               资金分配趋势
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -132,7 +132,7 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
           </Box>
         }
       />
-      <CardContent>
+      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
         {loading ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="body2" color="text.secondary">
@@ -140,7 +140,7 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
             </Typography>
           </Box>
         ) : data && data.dates.length > 0 ? (
-          <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+          <Box ref={chartRef} sx={{ height: 400, width: '100%', overflowX: 'auto' }} />
         ) : (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="body2" color="text.secondary">
@@ -164,12 +164,14 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
                 p: 1.5,
                 bgcolor: 'primary.light',
                 borderRadius: 1,
+                overflow: 'hidden',
+                wordBreak: 'break-word',
               }}
             >
               <Typography variant="caption" color="text.secondary">
                 平均总资金
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.dark' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.dark', fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 ¥
                 {(
                   data.totalCapital.reduce((a, b) => a + b, 0) /
@@ -185,12 +187,14 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
                 p: 1.5,
                 bgcolor: 'success.light',
                 borderRadius: 1,
+                overflow: 'hidden',
+                wordBreak: 'break-word',
               }}
             >
               <Typography variant="caption" color="text.secondary">
                 平均持仓资金
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.dark' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.dark', fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 ¥
                 {(
                   data.positionCapital.reduce((a, b) => a + b, 0) /
@@ -206,12 +210,14 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
                 p: 1.5,
                 bgcolor: 'warning.light',
                 borderRadius: 1,
+                overflow: 'hidden',
+                wordBreak: 'break-word',
               }}
             >
               <Typography variant="caption" color="text.secondary">
                 平均空闲资金
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.dark' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.dark', fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 ¥
                 {(
                   data.freeCapital.reduce((a, b) => a + b, 0) /
@@ -221,11 +227,11 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
                 万
               </Typography>
             </Box>
-            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
               <Typography variant="caption" color="text.secondary">
                 平均持仓比例
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 {(
                   (data.positionCapital.reduce((a, b) => a + b, 0) /
                     data.totalCapital.reduce((a, b) => a + b, 0)) *

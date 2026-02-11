@@ -38,8 +38,9 @@ export const PositionTable: React.FC<PositionTableProps> = ({
 }) => {
   return (
     <Card>
-      <CardContent sx={{ p: 0 }}>
-        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
+      <CardContent sx={{ p: { xs: 1, md: 0 } }}>
+        <Box sx={{ overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
           <Table stickyHeader>
             <TableHead>
               <TableRow>
@@ -171,6 +172,7 @@ export const PositionTable: React.FC<PositionTableProps> = ({
             </TableBody>
           </Table>
         </TableContainer>
+        </Box>
       </CardContent>
     </Card>
   );

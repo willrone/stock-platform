@@ -320,7 +320,7 @@ export default function BacktestProgressMonitor({
         <CardHeader
           title={
             <Box>
-              <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 回测进度监控
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -345,7 +345,7 @@ export default function BacktestProgressMonitor({
           }
         />
 
-        <CardContent>
+        <CardContent sx={{ p: { xs: 1.5, sm: 2, md: 3 } }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {error && (
               <Box
@@ -406,8 +406,8 @@ export default function BacktestProgressMonitor({
                     gap: 2,
                   }}
                 >
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                  <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
                       {progressData.processed_days}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -415,8 +415,8 @@ export default function BacktestProgressMonitor({
                     </Typography>
                   </Box>
 
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
                       {progressData.trades_executed}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -424,8 +424,8 @@ export default function BacktestProgressMonitor({
                     </Typography>
                   </Box>
 
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                  <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
                       {progressData.signals_generated}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -433,8 +433,8 @@ export default function BacktestProgressMonitor({
                     </Typography>
                   </Box>
 
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main' }}>
+                  <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
                       {formatNumber(progressData.portfolio_value, 0)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">

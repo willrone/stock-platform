@@ -77,7 +77,7 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ data, isActive }) =>
       <CardHeader
         title={
           <Box>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               持仓权重树状图
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -86,8 +86,8 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ data, isActive }) =>
           </Box>
         }
       />
-      <CardContent>
-        <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+        <Box ref={chartRef} sx={{ height: 400, width: '100%', overflowX: 'auto' }} />
       </CardContent>
     </Card>
   );

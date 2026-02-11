@@ -28,10 +28,10 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>股票详细分析</DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ p: { xs: 2, md: 3 } }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ textAlign: 'center', borderBottom: 1, borderColor: 'divider', pb: 2 }}>
-            <Typography variant="h4" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+            <Typography variant="h4" sx={{ fontFamily: 'monospace', fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
               {stock.stock_code}
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -48,6 +48,9 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                 variant="h4"
                 sx={{
                   fontWeight: 600,
+                  fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
                   color:
                     stock.total_return > 0
                       ? 'success.main'
@@ -64,7 +67,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
               <Typography variant="caption" color="text.secondary">
                 胜率
               </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {formatPercent(stock.win_rate)}
               </Typography>
             </Box>
@@ -73,7 +76,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
               <Typography variant="caption" color="text.secondary">
                 交易次数
               </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {stock.trade_count}
               </Typography>
             </Box>
@@ -82,7 +85,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
               <Typography variant="caption" color="text.secondary">
                 平均持仓期
               </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {stock.avg_holding_period} 天
               </Typography>
             </Box>
@@ -102,7 +105,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
               <Typography variant="caption" color="text.secondary">
                 盈利交易
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {stock.winning_trades}
               </Typography>
             </Box>
@@ -111,7 +114,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
               <Typography variant="caption" color="text.secondary">
                 亏损交易
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {stock.losing_trades}
               </Typography>
             </Box>
@@ -122,7 +125,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
             stock.avg_loss !== undefined ||
             stock.profit_factor !== undefined) && (
             <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 盈亏分析
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
@@ -131,7 +134,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       平均盈利
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       {formatCurrency(stock.avg_win)}
                     </Typography>
                   </Box>
@@ -141,7 +144,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       平均亏损
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       {formatCurrency(stock.avg_loss)}
                     </Typography>
                   </Box>
@@ -151,7 +154,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       最大盈利
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       {formatCurrency(stock.largest_win)}
                     </Typography>
                   </Box>
@@ -161,7 +164,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       最大亏损
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       {formatCurrency(stock.largest_loss)}
                     </Typography>
                   </Box>
@@ -175,6 +178,9 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                       variant="h6"
                       sx={{
                         fontWeight: 600,
+                        fontSize: { xs: '0.95rem', md: '1.25rem' },
+                        overflow: 'hidden',
+                        wordBreak: 'break-word',
                         color: stock.profit_factor >= 1 ? 'success.main' : 'error.main',
                       }}
                     >
@@ -191,7 +197,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
             stock.avg_sell_price !== undefined ||
             stock.price_improvement !== undefined) && (
             <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 价格分析
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
@@ -200,7 +206,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       平均买入价
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       ¥{stock.avg_buy_price.toFixed(2)}
                     </Typography>
                   </Box>
@@ -210,7 +216,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       平均卖出价
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       ¥{stock.avg_sell_price.toFixed(2)}
                     </Typography>
                   </Box>
@@ -224,6 +230,9 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                       variant="h6"
                       sx={{
                         fontWeight: 600,
+                        fontSize: { xs: '0.95rem', md: '1.25rem' },
+                        overflow: 'hidden',
+                        wordBreak: 'break-word',
                         color: stock.price_improvement >= 0 ? 'success.main' : 'error.main',
                       }}
                     >
@@ -239,7 +248,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
           {(stock.max_holding_period !== undefined ||
             stock.min_holding_period !== undefined) && (
             <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 持仓期详情
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
@@ -247,7 +256,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                   <Typography variant="caption" color="text.secondary">
                     平均持仓期
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {stock.avg_holding_period} 天
                   </Typography>
                 </Box>
@@ -256,7 +265,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       最长持仓期
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       {stock.max_holding_period} 天
                     </Typography>
                   </Box>
@@ -266,7 +275,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({ open, onClos
                     <Typography variant="caption" color="text.secondary">
                       最短持仓期
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                       {stock.min_holding_period} 天
                     </Typography>
                   </Box>

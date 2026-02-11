@@ -56,9 +56,15 @@ export const HoldingPeriodChart: React.FC<HoldingPeriodChartProps> = ({
 
   return (
     <Card>
-      <CardHeader title="持仓时间分析" />
-      <CardContent>
-        <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+      <CardHeader
+        title={
+          <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+            持仓时间分析
+          </Typography>
+        }
+      />
+      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+        <Box ref={chartRef} sx={{ height: 400, width: '100%', overflowX: 'auto' }} />
         {/* 持仓时间统计 */}
         <Box
           sx={{
@@ -68,38 +74,38 @@ export const HoldingPeriodChart: React.FC<HoldingPeriodChartProps> = ({
             gap: 2,
           }}
         >
-          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
             <Typography variant="caption" color="text.secondary">
               平均持仓期
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               {holdingPeriods.avg_holding_period.toFixed(1)}天
             </Typography>
           </Box>
-          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
             <Typography variant="caption" color="text.secondary">
               中位数持仓期
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               {holdingPeriods.median_holding_period.toFixed(1)}天
             </Typography>
           </Box>
-          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
             <Typography variant="caption" color="text.secondary">
               短期持仓
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               {holdingPeriods.short_term_positions}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               ≤7天
             </Typography>
           </Box>
-          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+          <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
             <Typography variant="caption" color="text.secondary">
               长期持仓
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               {holdingPeriods.long_term_positions}
             </Typography>
             <Typography variant="caption" color="text.secondary">

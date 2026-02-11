@@ -152,7 +152,7 @@ export const BarChart: React.FC<BarChartProps> = ({
               width: '100%',
             }}
           >
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               股票表现对比
             </Typography>
             <FormControl size="small" sx={{ minWidth: 128 }}>
@@ -171,8 +171,8 @@ export const BarChart: React.FC<BarChartProps> = ({
           </Box>
         }
       />
-      <CardContent>
-        <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+        <Box ref={chartRef} sx={{ height: 400, width: '100%', overflowX: 'auto' }} />
       </CardContent>
     </Card>
   );

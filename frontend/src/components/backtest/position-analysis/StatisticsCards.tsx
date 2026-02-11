@@ -34,14 +34,14 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
       }}
     >
       <Card>
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Target size={20} color="#1976d2" />
-            <Box>
+            <Box sx={{ overflow: 'hidden' }}>
               <Typography variant="caption" color="text.secondary">
                 持仓股票
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {statistics.totalStocks}
               </Typography>
             </Box>
@@ -50,14 +50,14 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
       </Card>
 
       <Card>
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TrendingUp size={20} color="#2e7d32" />
-            <Box>
+            <Box sx={{ overflow: 'hidden' }}>
               <Typography variant="caption" color="text.secondary">
                 盈利股票
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
+              <Typography sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.25rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {statistics.profitableStocks}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -69,14 +69,14 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
       </Card>
 
       <Card>
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Award size={20} color="#9c27b0" />
-            <Box>
+            <Box sx={{ overflow: 'hidden' }}>
               <Typography variant="caption" color="text.secondary">
                 平均胜率
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                 {formatPercent(statistics.avgWinRate)}
               </Typography>
             </Box>
@@ -85,18 +85,20 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
       </Card>
 
       <Card>
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TrendingUp size={20} color="#ed6c02" />
-            <Box>
+            <Box sx={{ overflow: 'hidden' }}>
               <Typography variant="caption" color="text.secondary">
                 总收益
               </Typography>
               <Typography
-                variant="h5"
                 sx={{
                   fontWeight: 600,
                   color: statistics.totalReturn >= 0 ? 'success.main' : 'error.main',
+                  fontSize: { xs: '1.25rem', md: '1.5rem' },
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
                 }}
               >
                 {formatCurrency(statistics.totalReturn)}

@@ -64,7 +64,7 @@ export const WeightChart: React.FC<WeightChartProps> = ({
       <CardHeader
         title={
           <Box>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
               持仓权重分析
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -73,9 +73,9 @@ export const WeightChart: React.FC<WeightChartProps> = ({
           </Box>
         }
       />
-      <CardContent>
+      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
         {data && data.length > 0 ? (
-          <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+          <Box ref={chartRef} sx={{ height: 400, width: '100%', overflowX: 'auto' }} />
         ) : (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="body2" color="text.secondary">
@@ -93,35 +93,35 @@ export const WeightChart: React.FC<WeightChartProps> = ({
               gap: 2,
             }}
           >
-            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
               <Typography variant="caption" color="text.secondary">
                 HHI指数
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 {concentrationMetrics.averages.avg_hhi.toFixed(3)}
               </Typography>
             </Box>
-            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
               <Typography variant="caption" color="text.secondary">
                 有效股票数
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 {concentrationMetrics.averages.avg_effective_stocks.toFixed(1)}
               </Typography>
             </Box>
-            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
               <Typography variant="caption" color="text.secondary">
                 前3大集中度
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 {(concentrationMetrics.averages.avg_top_3_concentration * 100).toFixed(1)}%
               </Typography>
             </Box>
-            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ textAlign: 'center', p: 1.5, bgcolor: 'grey.50', borderRadius: 1, overflow: 'hidden', wordBreak: 'break-word' }}>
               <Typography variant="caption" color="text.secondary">
                 前5大集中度
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                 {(concentrationMetrics.averages.avg_top_5_concentration * 100).toFixed(1)}%
               </Typography>
             </Box>
