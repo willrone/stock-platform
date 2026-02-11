@@ -360,7 +360,8 @@ class UnifiedQlibTrainingEngine:
             return result
 
         except Exception as e:
-            logger.error(f"Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
+            import traceback
+            logger.error(f"Qlib模型训练失败: {model_id}, 错误: {e}\n{traceback.format_exc()}")
             if progress_callback:
                 await progress_callback(model_id, 0.0, "failed", f"训练失败: {str(e)}")
             # 结束整体性能监控并打印摘要

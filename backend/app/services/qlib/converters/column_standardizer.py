@@ -138,17 +138,16 @@ class ColumnStandardizer:
             "股票代码",
             "代码",
         ],
-        "open": ["open", "Open", "OPEN", "开盘", "开盘价", "o"],
-        "close": ["close", "Close", "CLOSE", "收盘", "收盘价", "c"],
-        "high": ["high", "High", "HIGH", "最高", "最高价", "h"],
-        "low": ["low", "Low", "LOW", "最低", "最低价", "l"],
+        "open": ["open", "Open", "OPEN", "开���", "开盘价"],
+        "close": ["close", "Close", "CLOSE", "收盘", "收盘价"],
+        "high": ["high", "High", "HIGH", "最高", "最高价"],
+        "low": ["low", "Low", "LOW", "最低", "最低价"],
         "volume": [
             "volume",
             "Volume",
             "VOLUME",
             "vol",
             "成交量",
-            "v",
             "交易量",
         ],
         "amount": ["amount", "Amount", "AMOUNT", "成交额", "交易额", "turnover"],
@@ -269,11 +268,14 @@ class ColumnStandardizer:
         if col_lower in self._alias_to_standard:
             return self._alias_to_standard[col_lower]
 
-        # 模糊匹配（包含关系）
+        # 模糊匹配（包含关系）— 仅当别名长度 >= 4 时才启用，
+        # 避免短别名（如 "vol"）误匹配到不相关的列名（如 "volatility"）
         for standard_name, aliases in self.COLUMN_ALIASES.items():
             for alias in aliases:
                 alias_lower = alias.lower()
-                if alias_lower in col_lower or col_lower in alias_lower:
+                if len(alias_lower) >= 4 and (
+                    alias_lower in col_lower or col_lower in alias_lower
+                ):
                     return standard_name
 
         return None
