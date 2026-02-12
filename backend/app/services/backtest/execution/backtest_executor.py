@@ -102,6 +102,8 @@ class BacktestExecutor:
         strategy_config: Dict[str, Any],
         backtest_config: Optional[BacktestConfig] = None,
         task_id: str = None,
+        preloaded_stock_data: Optional[Dict[str, Any]] = None,
+        precomputed_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         运行回测
@@ -114,6 +116,8 @@ class BacktestExecutor:
             strategy_config: 策略配置
             backtest_config: 回测配置
             task_id: 任务ID
+            preloaded_stock_data: 预加载的股票数据（优化场景下跳过重复磁盘读取）
+            precomputed_context: 预计算的上下文（trading_dates 等，优化场景下跳过重复计算）
 
         Returns:
             回测报告字典
@@ -193,9 +197,15 @@ class BacktestExecutor:
             logger.info(
                 f"开始回测: {strategy_name}, 股票: {stock_codes}, 期间: {start_date} - {end_date}"
             )
-            stock_data = self.data_loader.load_multiple_stocks(
-                stock_codes, start_date, end_date
-            )
+
+            # perf: 优化场景下使用预加载数据，跳过重复磁盘 I/O
+            if preloaded_stock_data is not None:
+                stock_data = preloaded_stock_data
+                logger.info(f"使用预加载数据: {len(stock_data)} 只股票（跳过磁盘读取）")
+            else:
+                stock_data = self.data_loader.load_multiple_stocks(
+                    stock_codes, start_date, end_date
+                )
 
             self.performance_tracker.end_stage(
                 "data_loading",
@@ -224,10 +234,15 @@ class BacktestExecutor:
             # ========== 阶段 4: 数据预处理 ==========
             _t0 = time.perf_counter()
 
-            # 获取交易日历
-            trading_dates = self.data_preprocessor.get_trading_calendar(
-                stock_data, start_date, end_date
-            )
+            # perf: P0-2 优化场景下复用预计算的 trading_dates，避免每个 trial ��复计算
+            if precomputed_context and "trading_dates" in precomputed_context:
+                trading_dates = precomputed_context["trading_dates"]
+                logger.debug(f"使用预计算的 trading_dates: {len(trading_dates)} 天")
+            else:
+                # 获取交易日历
+                trading_dates = self.data_preprocessor.get_trading_calendar(
+                    stock_data, start_date, end_date
+                )
 
             # 构建日期索引
             self.data_preprocessor.build_date_index(stock_data)

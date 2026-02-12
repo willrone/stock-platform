@@ -1069,12 +1069,13 @@ class HyperparameterOptimizationTaskExecutor:
                 # 更新任务状态为运行中
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
 
-                # 创建进度回调（节流：每 50 trials 或每 30 秒写一次 DB，减少 SQLite 写入压力）
+                # 创建进度回调（节流：每 100 trials 或每 60 秒写一次 DB，减少 SQLite 写入压力）
+                # perf: P0-3 从 50 trials/30s 提升到 100 trials/60s，减少 SQLite 锁竞争
                 # 注意：StrategyHyperparameterOptimizer 的 progress_callback 签名已扩展，包含 trial 统计信息
                 import time as _time
 
-                PROGRESS_TRIAL_INTERVAL = 50   # 每 N 个 trials 更新一次
-                PROGRESS_TIME_INTERVAL = 30.0  # 每 N 秒更新一次
+                PROGRESS_TRIAL_INTERVAL = 100  # 每 N 个 trials 更新一次（从 50 提升到 100）
+                PROGRESS_TIME_INTERVAL = 60.0  # 每 N 秒更新一次（从 30 提升到 60）
                 _last_db_update_time = _time.monotonic()
                 _last_db_update_trial = 0
 

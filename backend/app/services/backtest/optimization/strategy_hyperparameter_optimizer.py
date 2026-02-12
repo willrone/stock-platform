@@ -21,7 +21,7 @@ from loguru import logger
 try:
     import optuna
     from optuna.pruners import MedianPruner, HyperbandPruner
-    from optuna.samplers import NSGAIISampler, TPESampler
+    from optuna.samplers import NSGAIISampler, TPESampler, GridSampler
     from optuna.storages import RDBStorage
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
@@ -56,6 +56,57 @@ class StrategyHyperparameterOptimizer:
         os.makedirs(self._storage_dir, exist_ok=True)
         
         logger.info(f"StrategyHyperparameterOptimizer 初始化: n_jobs={n_jobs}, persistent={use_persistent_storage}")
+
+    @staticmethod
+    def _build_grid_search_space(
+        param_space: Dict[str, Any],
+    ) -> Dict[str, list]:
+        """
+        从 param_space 构建 GridSampler 所需的离散搜索空间。
+
+        GridSampler 要求格式: {"param_name": [v1, v2, v3, ...]}
+        对于 int/float 类型，使用 step 字段离散化；无 step 则自动推断。
+        对于 categorical 类型，直接使用 choices。
+
+        Args:
+            param_space: 参数空间定义
+
+        Returns:
+            GridSampler 兼容的搜索空间字典
+        """
+        import numpy as np
+
+        search_space: Dict[str, list] = {}
+
+        for name, cfg in param_space.items():
+            if not cfg.get("enabled", True):
+                continue
+
+            param_type = cfg.get("type", "float")
+
+            if param_type == "categorical":
+                choices = cfg.get("choices", [])
+                if choices:
+                    search_space[name] = list(choices)
+                continue
+
+            low = cfg.get("low")
+            high = cfg.get("high")
+            if low is None or high is None:
+                continue
+
+            step = cfg.get("step")
+
+            if param_type == "int":
+                low_i, high_i = int(low), int(high)
+                step_i = int(step) if step else max(1, (high_i - low_i) // 10)
+                search_space[name] = list(range(low_i, high_i + 1, step_i))
+            elif param_type == "float":
+                step_f = float(step) if step else (high - low) / 10.0
+                values = np.arange(low, high + step_f * 0.5, step_f).tolist()
+                search_space[name] = [round(v, 6) for v in values]
+
+        return search_space
 
     async def optimize_strategy_parameters(
         self,
@@ -120,9 +171,19 @@ class StrategyHyperparameterOptimizer:
         )
 
         # 预加载数据到缓存（避免每个 trial 重复加载）
+        # perf: 创建临时 DataLoader 用于预加载，确保缓存真正生效
+        # 之前未传 data_loader 导致 preload_async 直接返回 0，缓存完全失效
+        from app.services.backtest.execution.data_loader import DataLoader as _DataLoader
+        _temp_loader = _DataLoader(
+            data_dir=str(settings.DATA_ROOT_PATH),
+            max_workers=4,
+        )
         logger.info(f"预加载股票数据: {len(stock_codes)} 只股票")
-        await self._data_cache.preload_async(stock_codes, start_date, end_date)
-        logger.info("数据预加载完成")
+        preloaded_count = await self._data_cache.preload_async(
+            stock_codes, start_date, end_date,
+            data_loader=_temp_loader.load_stock_data,
+        )
+        logger.info(f"数据预加载完成: {preloaded_count} 只股票已缓存")
 
         # 创建 SQLite 存储（支持断点续跑和并行）
         #
@@ -189,6 +250,20 @@ class StrategyHyperparameterOptimizer:
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
             elif optimization_method == "random":
                 sampler = optuna.samplers.RandomSampler(seed=42)
+            elif optimization_method == "grid":
+                grid_search_space = self._build_grid_search_space(param_space)
+                if not grid_search_space:
+                    logger.warning("网格搜索空间为空，回退到 TPE")
+                    sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
+                else:
+                    grid_total = 1
+                    for vals in grid_search_space.values():
+                        grid_total *= len(vals)
+                    logger.info(
+                        f"网格搜索空间: {len(grid_search_space)} 个参数, "
+                        f"共 {grid_total} 个组合"
+                    )
+                    sampler = GridSampler(grid_search_space)
             else:
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
@@ -196,16 +271,18 @@ class StrategyHyperparameterOptimizer:
                 study_name=study_name,
                 direction=direction,
                 sampler=sampler,
-                pruner=pruner,
+                pruner=pruner if optimization_method != "grid" else None,
                 storage=storage,
                 load_if_exists=True  # 支持断点续跑
             )
 
         # 注入先验知识：将默认参数作为第一个 trial，加速收敛
+        # 网格搜索不需要注入（GridSampler 会遍历所有组合）
         default_params = {}
-        for param_name, param_config in param_space.items():
-            if param_config.get("enabled", True) and "default" in param_config:
-                default_params[param_name] = param_config["default"]
+        if optimization_method != "grid":
+            for param_name, param_config in param_space.items():
+                if param_config.get("enabled", True) and "default" in param_config:
+                    default_params[param_name] = param_config["default"]
         if default_params and not is_multi_objective:
             try:
                 study.enqueue_trial(default_params)
@@ -263,10 +340,33 @@ class StrategyHyperparameterOptimizer:
                 data_dir=str(settings.DATA_ROOT_PATH),
                 enable_performance_profiling=enable_perf,
             )
-            logger.info(f"回测执行器已创建，数据目录: {settings.DATA_ROOT_PATH}")
+            logger.info(f"回测执���器已创建，数据目录: {settings.DATA_ROOT_PATH}")
         except Exception as e:
             logger.error(f"创建回测执行器失败: {e}", exc_info=True)
             raise
+
+        # perf: P0-1 一次性加载所有股票数据到内存，供所有 trial 复用
+        # 避免每个 trial 重复调用 load_multiple_stocks() 读取 500 个 parquet 文件
+        logger.info(f"一次性加载 {len(stock_codes)} 只股票数据到内存...")
+        _preloaded_stock_data = executor.data_loader.load_multiple_stocks(
+            stock_codes, start_date, end_date
+        )
+        logger.info(
+            f"股票数据加载完成: {len(_preloaded_stock_data)} 只股票, "
+            f"总记录数: {sum(len(df) for df in _preloaded_stock_data.values())}"
+        )
+
+        # perf: P0-2 预计算 trading_dates，所有 trial 共享同一份
+        # trading_dates 只取决于股票数据和日期范围，与策略参数无关
+        from app.services.backtest.execution.data_preprocessor import DataPreprocessor
+        _preprocessor = DataPreprocessor()
+        _precomputed_trading_dates = _preprocessor.get_trading_calendar(
+            _preloaded_stock_data, start_date, end_date
+        )
+        _precomputed_context = {
+            "trading_dates": _precomputed_trading_dates,
+        }
+        logger.info(f"预计算 trading_dates 完成: {len(_precomputed_trading_dates)} 个交易日")
 
         # 默认回测配置
         if backtest_config is None:
@@ -404,6 +504,8 @@ class StrategyHyperparameterOptimizer:
                                         end_date=end_date,
                                         strategy_config=strategy_config_payload,
                                         backtest_config=backtest_cfg,
+                                        preloaded_stock_data=_preloaded_stock_data,
+                                        precomputed_context=_precomputed_context,
                                     )
                                 )
                             finally:
@@ -424,6 +526,8 @@ class StrategyHyperparameterOptimizer:
                                 end_date=end_date,
                                 strategy_config=strategy_config_payload,
                                 backtest_config=backtest_cfg,
+                                preloaded_stock_data=_preloaded_stock_data,
+                                precomputed_context=_precomputed_context,
                             )
                         )
                     finally:
