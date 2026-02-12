@@ -30,7 +30,7 @@ from loguru import logger
 try:
     import optuna
     from optuna.pruners import MedianPruner
-    from optuna.samplers import TPESampler
+    from optuna.samplers import TPESampler, GridSampler
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
     raise

@@ -598,7 +598,7 @@ export default function CreateOptimizationTaskForm({
                         <Box
                           sx={{
                             display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                            gridTemplateColumns: { xs: '1fr', md: formData.optimization_method === 'grid' ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)' },
                             gap: 2,
                           }}
                         >
@@ -622,6 +622,22 @@ export default function CreateOptimizationTaskForm({
                             fullWidth
                             helperText={config.type === 'int' ? '整数' : '浮点数'}
                           />
+                          {formData.optimization_method === 'grid' && (
+                            <TextField
+                              type="number"
+                              label="步长"
+                              value={config.step?.toString() || ''}
+                              onChange={e =>
+                                updateParamSpace(paramName, 'step', parseFloat(e.target.value))
+                              }
+                              fullWidth
+                              helperText={
+                                config.low !== undefined && config.high !== undefined && config.step
+                                  ? `${Math.floor((config.high - config.low) / config.step) + 1} 个值`
+                                  : '网格搜索必填'
+                              }
+                            />
+                          )}
                         </Box>
                       )}
                     </>
@@ -816,8 +832,8 @@ export default function CreateOptimizationTaskForm({
             onChange={e =>
               setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))
             }
-            inputProps={{ min: 10, max: 1000 }}
-            helperText="参数空间较大时建议 300–500+，上限 1000"
+            inputProps={{ min: 10, max: 10000 }}
+            helperText={formData.optimization_method === 'grid' ? '网格搜索：应等于所有参数值的笛卡尔积数量' : '参数空间较大时建议 300–500+，上限 10000'}
             fullWidth
           />
 
@@ -846,6 +862,7 @@ export default function CreateOptimizationTaskForm({
             >
               <MenuItem value="tpe">TPE (Tree-structured Parzen Estimator)</MenuItem>
               <MenuItem value="random">随机搜索</MenuItem>
+              <MenuItem value="grid">网格搜索 (Grid Search)</MenuItem>
               <MenuItem value="nsga2">NSGA-II (多目标)</MenuItem>
               <MenuItem value="motpe">MOTPE (多目标)</MenuItem>
             </Select>

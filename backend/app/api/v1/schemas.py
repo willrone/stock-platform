@@ -164,6 +164,7 @@ class ParamSpaceConfig(BaseModel):
     type: str = Field(..., description="参数类型: int, float, categorical")
     low: Optional[float] = Field(None, description="最小值（数值类型）")
     high: Optional[float] = Field(None, description="最大值（数值类型）")
+    step: Optional[float] = Field(None, description="步长（网格搜索时使用）")
     choices: Optional[List[Any]] = Field(None, description="可选值列表（分类类型）")
     default: Optional[Any] = Field(None, description="默认值")
     enabled: bool = Field(default=True, description="是否启用优化")
@@ -199,8 +200,8 @@ class OptimizationConfig(BaseModel):
     n_trials: int = Field(
         default=50,
         ge=1,
-        le=1000,
-        description="试验次数，参数空间大时建议 300–500+，上限 1000",
+        le=10000,
+        description="试验次数，参数空间大时建议 300–500+，网格搜索可能需要更多",
     )
     optimization_method: str = Field(
         default="tpe", description="优化方法: tpe, random, grid, nsga2, motpe"
@@ -221,8 +222,8 @@ class HyperparameterOptimizationRequest(BaseModel):
     n_trials: int = Field(
         default=50,
         ge=1,
-        le=1000,
-        description="试验次数，上限 1000",
+        le=10000,
+        description="试验次数，网格搜索可能需要更多",
     )
     optimization_method: str = Field(default="tpe", description="优化方法")
     timeout: Optional[int] = Field(None, description="超时时间（秒）")
