@@ -190,9 +190,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           <IconButton
             edge="start"
             color="inherit"
-            aria-label="menu"
+            aria-label="打开导航菜单"
             onClick={() => setSidebarOpen(true)}
-            sx={{ display: { xs: 'block', lg: 'none' }, mr: 2 }}
+            sx={{ display: { xs: 'flex', lg: 'none' }, mr: 1 }}
           >
             <MenuIcon size={20} />
           </IconButton>
@@ -299,12 +299,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       {/* 移动端侧边栏 */}
       <Drawer
+        variant="temporary"
         anchor="left"
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        sx={{ display: { lg: 'none' } }}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { lg: 'none' },
+          '& .MuiDrawer-paper': { width: { xs: '80vw', sm: 280 }, maxWidth: 320 },
+        }}
       >
-        <Box sx={{ width: 256, p: 2 }}>
+        <Box sx={{ p: 2 }}>
           <Box
             sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}
           >

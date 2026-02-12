@@ -404,13 +404,13 @@ export default function InteractiveChartsContainer({
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <BarChart3 size={20} color="#1976d2" />
-              <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }}>
+              <Typography variant="h5" component="h2" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' } }}>
                 交互式图表分析
               </Typography>
             </Box>
           }
           action={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-end', sm: 'center' }, gap: 1 }}>
               {stockCodes && stockCodes.length > 0 && (
                 <FormControl size="small" sx={{ minWidth: 160 }}>
                   <InputLabel>选择股票</InputLabel>
@@ -441,12 +441,13 @@ export default function InteractiveChartsContainer({
           }
         />
 
-        <CardContent>
+        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <Tabs
             value={activeTab}
             onChange={(e, newValue) => setActiveTab(newValue)}
             variant="scrollable"
             scrollButtons="auto"
+            allowScrollButtonsMobile
           >
             <Tab
               label={

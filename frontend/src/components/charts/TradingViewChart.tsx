@@ -628,18 +628,18 @@ export default function TradingViewChart({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1, mb: 2 }}>
           <Box>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
               {stockCode} 价格走势
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
               当前价格: ¥
               {priceData.length > 0 ? priceData[priceData.length - 1]?.close.toFixed(2) : '--'}
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             <ButtonGroup size="small" variant="outlined">
               <Button
                 variant={timeframe === '1D' ? 'contained' : 'outlined'}
@@ -744,7 +744,9 @@ export default function TradingViewChart({
               </Typography>
             </Box>
           )}
-          <Box ref={chartContainerRef} sx={{ height: `${height}px`, width: '100%' }} />
+          <Box sx={{ overflowX: 'auto' }}>
+            <Box ref={chartContainerRef} sx={{ height: `${height}px`, width: '100%', minWidth: 350 }} />
+          </Box>
         </Box>
       </CardContent>
     </Card>

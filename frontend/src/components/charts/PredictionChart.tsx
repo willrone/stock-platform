@@ -207,10 +207,10 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* 预测摘要 */}
       <Box
-        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}
+        sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}
       >
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
               {prediction.predicted_direction > 0 ? (
                 <TrendingUp size={24} color="#2e7d32" />
@@ -220,7 +220,7 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
                 <Target size={24} color="#ed6c02" />
               )}
             </Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
               预测方向
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -234,36 +234,36 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
         </Card>
 
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+            <Typography sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, wordBreak: 'break-word' }}>
               {(prediction.predicted_return * 100).toFixed(2)}%
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
               预测收益率
             </Typography>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main' }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+            <Typography sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, wordBreak: 'break-word' }}>
               {(prediction.confidence_score * 100).toFixed(1)}%
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
               置信度
             </Typography>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+            <Typography sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, wordBreak: 'break-word' }}>
               {prediction.risk_assessment?.value_at_risk
                 ? (prediction.risk_assessment.value_at_risk * 100).toFixed(2)
                 : '--'}
               %
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
               风险价值(VaR)
             </Typography>
           </CardContent>
@@ -289,7 +289,9 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
               </Typography>
             </Box>
           ) : (
-            <Box ref={chartRef} sx={{ height: 400, width: '100%' }} />
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box ref={chartRef} sx={{ height: { xs: 300, sm: 400 }, width: '100%', minWidth: 400 }} />
+            </Box>
           )}
         </CardContent>
       </Card>
@@ -297,7 +299,7 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
       {/* 技术指标摘要 */}
       <Card>
         <CardContent>
-          <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+          <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
             技术指标分析
           </Typography>
           <Box
@@ -331,7 +333,7 @@ export default function PredictionChart({ taskId, stockCode, prediction }: Predi
       {/* 风险评估详情 */}
       <Card>
         <CardContent>
-          <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+          <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
             风险评估
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
