@@ -345,6 +345,13 @@ async def get_available_strategies():
                         "min": 5,
                         "max": 60,
                     },
+                    "exit_threshold": {
+                        "type": "float",
+                        "default": 0.5,
+                        "description": "出场阈值",
+                        "min": 0.1,
+                        "max": 2.0,
+                    },
                 },
             },
             # 因子投资策略
