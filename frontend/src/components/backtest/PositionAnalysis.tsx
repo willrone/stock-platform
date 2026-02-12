@@ -108,6 +108,7 @@ export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: Posit
           onChange={(e, newValue) => setSelectedTab(newValue)}
           variant="scrollable"
           scrollButtons="auto"
+          allowScrollButtonsMobile
         >
           <Tab
             label={

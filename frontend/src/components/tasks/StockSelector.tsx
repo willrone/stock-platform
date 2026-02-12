@@ -239,9 +239,9 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
       {/* 已选股票 */}
       <Card>
         <CardHeader
-          title="已选股票"
+          title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>已选股票</Typography>}
           action={
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
               {/* 随机选择 */}
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 <TextField
@@ -250,7 +250,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
                   value={randomCount}
                   onChange={e => setRandomCount(e.target.value)}
                   placeholder="数量"
-                  sx={{ width: 80 }}
+                  sx={{ width: { xs: 60, sm: 80 } }}
                   inputProps={{ min: 1 }}
                 />
                 <Button
@@ -261,7 +261,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
                   onClick={handleRandomSelect}
                   disabled={filteredStocks.length === 0 || loadingAllStocks}
                 >
-                  随机选择
+                  随机
                 </Button>
               </Box>
               {value.length > 0 && (
@@ -409,7 +409,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
         <CardHeader
           title={
             <Box>
-              <Typography variant="h6" component="span">
+              <Typography variant="h6" component="span" sx={{ fontSize: { xs: '0.9rem', sm: '1.25rem' } }}>
                 本地股票列表
               </Typography>
               {searchValue ? (
@@ -444,7 +444,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
+                  gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
                   gap: 1,
                 }}
               >

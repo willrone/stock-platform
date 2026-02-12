@@ -366,10 +366,10 @@ export default function CreateOptimizationTaskForm({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box>
-        <Typography variant="h5" component="h2" sx={{ fontWeight: 600, mb: 1 }}>
+        <Typography variant="h5" component="h2" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
           创建超参优化任务
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
           配置优化参数，寻找策略的最佳参数组合
         </Typography>
       </Box>
@@ -541,7 +541,7 @@ export default function CreateOptimizationTaskForm({
                   }}
                 >
                   <Box
-                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}
                   >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -867,13 +867,15 @@ export default function CreateOptimizationTaskForm({
         </CardContent>
       </Card>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: { xs: 'stretch', sm: 'flex-end' }, gap: 2 }}>
         <Button
           variant="contained"
           color="primary"
           onClick={handleSubmit}
           disabled={loading}
           startIcon={!loading && <Save size={16} />}
+          fullWidth={false}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           {loading ? '创建中...' : '创建优化任务'}
         </Button>

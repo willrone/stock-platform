@@ -172,6 +172,7 @@ export default function BacktestTaskStatus({
       <Card>
         <CardHeader
           title="任务状态"
+          titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }}
           action={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {statusConfig.icon}
@@ -248,7 +249,7 @@ export default function BacktestTaskStatus({
 
       {/* 任务基础信息 */}
       <Card>
-        <CardHeader title="基础信息" />
+        <CardHeader title="基础信息" titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }} />
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box
             sx={{
@@ -270,7 +271,7 @@ export default function BacktestTaskStatus({
               <Typography variant="caption" color="text.secondary">
                 任务ID
               </Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                 {task.task_id}
               </Typography>
             </Box>
@@ -471,7 +472,7 @@ export default function BacktestTaskStatus({
 
       {/* 回测配置信息 */}
       <Card>
-        <CardHeader avatar={<Settings size={24} />} title="回测配置" />
+        <CardHeader avatar={<Settings size={24} />} title="回测配置" titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }} />
         <CardContent>
           <Box
             sx={{
