@@ -67,6 +67,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger = logging.getLogger(__name__)
         logger.warning(f"启动进程池执行器失败: {e}")
 
+    # 恢复中断的任务
+    try:
+        from app.services.tasks.task_recovery_service import task_recovery_service
+
+        result = task_recovery_service.recover_interrupted_tasks()
+        import logging
+
+        logger = logging.getLogger(__name__)
+        if result["recovered"] > 0:
+            logger.info(
+                f"任务恢复完成: 成功恢复 {result['recovered']}/{result['total']} 个任务"
+            )
+        else:
+            logger.info("没有需要恢复的任务")
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(f"任务恢复失败: {e}")
+
     # 启动任务状态通知器（WebSocket同步）
     try:
         from app.services.tasks.task_notifier import task_notifier
