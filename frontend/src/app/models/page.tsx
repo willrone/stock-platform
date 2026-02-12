@@ -58,8 +58,14 @@ export default function ModelsPage() {
     description: '',
     hyperparameters: {} as Record<string, any>,
     enable_hyperparameter_tuning: false,
-    num_iterations: 100, // 训练迭代次数（epochs）
-    selected_features: [] as string[], // 选择的特征列表
+    num_iterations: 100,
+    selected_features: [] as string[],
+    feature_set: 'alpha158',
+    label_type: 'regression',
+    binary_threshold: 0.0,
+    split_method: 'ratio',
+    train_end_date: '',
+    val_end_date: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [useAllFeatures, setUseAllFeatures] = useState(true); // 是否使用所有特征
@@ -292,6 +298,15 @@ export default function ModelsPage() {
           : formData.selected_features.length > 0
             ? formData.selected_features
             : undefined,
+        // 新增训练选项
+        feature_set: formData.feature_set,
+        label_type: formData.label_type,
+        binary_threshold: formData.label_type === 'binary' ? formData.binary_threshold : undefined,
+        split_method: formData.split_method,
+        train_end_date: formData.split_method === 'hardcut' && formData.train_end_date
+          ? formData.train_end_date : undefined,
+        val_end_date: formData.split_method === 'hardcut' && formData.val_end_date
+          ? formData.val_end_date : undefined,
       };
       const result = await DataService.createModel(submitData);
       console.log('模型创建成功:', result);
@@ -308,6 +323,12 @@ export default function ModelsPage() {
         enable_hyperparameter_tuning: false,
         num_iterations: 100,
         selected_features: [],
+        feature_set: 'alpha158',
+        label_type: 'regression',
+        binary_threshold: 0.0,
+        split_method: 'ratio',
+        train_end_date: '',
+        val_end_date: '',
       });
       setErrors({});
       setUseAllFeatures(true);
@@ -345,14 +366,14 @@ export default function ModelsPage() {
   }
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 3 }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
       {/* 页面标题 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, mb: 3 }}>
         <Box>
           <Typography
             variant="h4"
             component="h1"
-            sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}
+            sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
           >
             <Brain size={32} />
             模型管理
@@ -420,7 +441,9 @@ export default function ModelsPage() {
       </Card>
 
       {/* 创建模型对话框 */}
-      <Dialog open={isOpen} onClose={() => setIsOpen(false)} maxWidth="lg" fullWidth>
+      <Dialog open={isOpen} onClose={() => setIsOpen(false)} maxWidth="lg" fullWidth
+        sx={{ '& .MuiDialog-paper': { m: { xs: 1, sm: 2 } } }}
+      >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Plus size={20} />

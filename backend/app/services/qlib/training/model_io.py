@@ -7,7 +7,7 @@
 import pickle
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -20,9 +20,18 @@ if QLIB_AVAILABLE:
 
 
 async def save_qlib_model(
-    model: Any, model_id: str, model_config: Dict[str, Any]
+    model: Any, model_id: str, model_config: Dict[str, Any],
+    training_meta: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """保存Qlib模型"""
+    """保存Qlib模型
+
+    Args:
+        model: 训练好的模型对象
+        model_id: 模型唯一标识
+        model_config: Qlib 模型配置（超参数等）
+        training_meta: 训练元数据（feature_set, label_type 等），
+                       供回测策略加载时识别模型特征
+    """
     try:
         # 创建模型保存目录
         from app.core.config import settings
@@ -37,10 +46,17 @@ async def save_qlib_model(
         # 保存模型（使用pickle格式）
         model_path = models_dir / f"{model_filename}.pkl"
 
+        payload = {
+            "model": model,
+            "config": model_config,
+            "timestamp": timestamp,
+        }
+        # 保存训练元数据（特征集、标签类型等）
+        if training_meta:
+            payload["training_meta"] = training_meta
+
         with open(model_path, "wb") as f:
-            pickle.dump(
-                {"model": model, "config": model_config, "timestamp": timestamp}, f
-            )
+            pickle.dump(payload, f)
 
         logger.info(f"Qlib模型保存成功: {model_path}")
         return str(model_path)

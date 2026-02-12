@@ -279,7 +279,7 @@ export default function DataManagementPage() {
         }}
       >
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
             数据管理
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -290,8 +290,8 @@ export default function DataManagementPage() {
           <Button
             variant="contained"
             color="primary"
-            size="large"
-            startIcon={<Download size={20} />}
+            size="small"
+            startIcon={<Download size={16} />}
             onClick={handleSyncRemoteData}
             disabled={syncing}
           >
@@ -300,14 +300,14 @@ export default function DataManagementPage() {
           <Button
             variant="contained"
             color="secondary"
-            size="large"
-            startIcon={<Zap size={20} />}
+            size="small"
+            startIcon={<Zap size={16} />}
             onClick={handleTriggerQlibPrecompute}
             disabled={precomputing || precomputeTask?.status === 'running'}
           >
             {precomputing || precomputeTask?.status === 'running'
               ? '预计算中...'
-              : '离线生成 Qlib 指标/因子'}
+              : 'Qlib 指标/因子'}
           </Button>
         </Box>
       </Box>

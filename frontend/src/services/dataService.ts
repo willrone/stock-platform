@@ -580,6 +580,12 @@ export class DataService {
     enable_hyperparameter_tuning?: boolean;
     hyperparameter_search_strategy?: string;
     hyperparameter_search_trials?: number;
+    feature_set?: string;
+    label_type?: string;
+    binary_threshold?: number;
+    split_method?: string;
+    train_end_date?: string;
+    val_end_date?: string;
   }): Promise<{
     model_id: string;
     model_name: string;

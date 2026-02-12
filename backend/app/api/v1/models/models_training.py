@@ -51,6 +51,13 @@ def _run_train_model_task_sync(
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
+    # 统一训练体系新增参数
+    feature_set: str = "alpha158",
+    label_type: str = "regression",
+    binary_threshold: float = 0.003,
+    split_method: str = "ratio",
+    train_end_date: Optional[str] = None,
+    val_end_date: Optional[str] = None,
 ):
     """
     同步包装函数，用于在线程池中执行异步训练任务
@@ -75,6 +82,12 @@ def _run_train_model_task_sync(
                     hyperparameter_search_trials=hyperparameter_search_trials,
                     selected_features=selected_features,
                     main_loop=main_loop,  # 传递主事件循环
+                    feature_set=feature_set,
+                    label_type=label_type,
+                    binary_threshold=binary_threshold,
+                    split_method=split_method,
+                    train_end_date=train_end_date,
+                    val_end_date=val_end_date,
                 )
             )
         finally:
@@ -110,6 +123,13 @@ async def train_model_task(
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
+    # 统一训练体系新增参数
+    feature_set: str = "alpha158",
+    label_type: str = "regression",
+    binary_threshold: float = 0.003,
+    split_method: str = "ratio",
+    train_end_date: Optional[str] = None,
+    val_end_date: Optional[str] = None,
 ):
     """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
@@ -240,6 +260,12 @@ async def train_model_task(
                         validation_split=0.2,
                         use_alpha_factors=True,
                         selected_features=selected_features,
+                        feature_set=feature_set,
+                        label_type=label_type,
+                        binary_threshold=binary_threshold,
+                        split_method=split_method,
+                        train_end_date=train_end_date,
+                        val_end_date=val_end_date,
                     )
 
                     try:
@@ -404,6 +430,12 @@ async def train_model_task(
                 use_alpha_factors=True,
                 cache_features=True,
                 selected_features=selected_features,  # 传递用户选择的特征
+                feature_set=feature_set,
+                label_type=label_type,
+                binary_threshold=binary_threshold,
+                split_method=split_method,
+                train_end_date=train_end_date,
+                val_end_date=val_end_date,
             )
 
             # 使用统一Qlib训练引擎训练模型
@@ -618,6 +650,12 @@ async def create_training_task(request: ModelTrainingRequest):
             hyperparameter_search_trials=request.hyperparameter_search_trials,
             selected_features=request.selected_features,
             main_loop=main_loop,  # 传递主事件循环
+            feature_set=request.feature_set,
+            label_type=request.label_type,
+            binary_threshold=request.binary_threshold,
+            split_method=request.split_method,
+            train_end_date=request.train_end_date,
+            val_end_date=request.val_end_date,
         )
 
         return StandardResponse(

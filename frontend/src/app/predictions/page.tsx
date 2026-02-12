@@ -177,8 +177,8 @@ export default function PredictionsPage() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 } }}>
+      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
         <Brain size={32} />
         预测分析
       </Typography>
@@ -285,8 +285,67 @@ export default function PredictionsPage() {
             }
           />
           <CardContent>
-            <TableContainer component={Paper} variant="outlined">
-              <Table>
+            {/* 移动端：卡片列表 */}
+            <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+              {predictions.map((prediction) => {
+                const direction = getDirectionDisplay(prediction.predicted_direction);
+                return (
+                  <Card key={prediction.stock_code} sx={{ mb: 1.5 }}>
+                    <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {prediction.stock_code}
+                        </Typography>
+                        <Chip
+                          icon={direction.icon}
+                          label={direction.text}
+                          size="small"
+                          sx={{
+                            backgroundColor: `${direction.color}20`,
+                            color: direction.color,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      </Box>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">预测收益率</Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 500, color: prediction.predicted_return >= 0 ? 'success.main' : 'error.main' }}
+                          >
+                            {prediction.predicted_return >= 0 ? '+' : ''}{formatPercent(prediction.predicted_return)}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">置信度</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {formatPercent(prediction.confidence_score)}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">置信区间</Typography>
+                          <Typography variant="caption">
+                            [{formatPercent(prediction.confidence_interval.lower)}, {formatPercent(prediction.confidence_interval.upper)}]
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">VaR</Typography>
+                          <Typography variant="body2" sx={{ color: 'error.main' }}>
+                            {prediction.risk_assessment.value_at_risk ? formatPercent(prediction.risk_assessment.value_at_risk) : 'N/A'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Box>
+
+            {/* 桌面端：表格 */}
+            <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 700 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>股票代码</TableCell>
@@ -396,6 +455,7 @@ export default function PredictionsPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            </Box>
 
             {/* 预测说明 */}
             <Alert severity="info" sx={{ mt: 2 }}>

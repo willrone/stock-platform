@@ -376,24 +376,31 @@ class XGBoostAdapter(BaseModelAdapter):
         ]
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
+        # Qlib XGBModel.__init__ stores all kwargs into self._params,
+        # which is passed directly to xgb.train() as the params dict.
+        # Only include valid xgboost native parameters here.
+        # n_estimators / num_boost_round are NOT xgb params — they are
+        # passed as a separate argument to xgb.train() via XGBModel.fit().
+        num_boost_round = (
+            hyperparameters.get("n_estimators")
+            or hyperparameters.get("num_iterations")
+            or hyperparameters.get("epochs")
+            or 1000
+        )
+
         config = {
             "class": "XGBModel",
             "module_path": "qlib.contrib.model.xgboost",
             "kwargs": {
-                "learning_rate": hyperparameters.get("learning_rate", 0.1),
+                "eta": hyperparameters.get("learning_rate", 0.1),
                 "max_depth": hyperparameters.get("max_depth", 6),
-                "n_estimators": hyperparameters.get("n_estimators", 100),
                 "subsample": hyperparameters.get("subsample", 0.8),
                 "colsample_bytree": hyperparameters.get("colsample_bytree", 0.8),
-                "random_state": 42,
+                "seed": 42,
+                "nthread": 20,
+                "verbosity": 1,
             },
         }
-
-        # 支持num_iterations或epochs作为n_estimators的别名
-        if "num_iterations" in hyperparameters:
-            config["kwargs"]["n_estimators"] = hyperparameters["num_iterations"]
-        elif "epochs" in hyperparameters:
-            config["kwargs"]["n_estimators"] = hyperparameters["epochs"]
 
         return config
 

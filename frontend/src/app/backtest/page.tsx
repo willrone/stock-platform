@@ -211,11 +211,11 @@ export default function BacktestPage() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题和操作 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Activity size={32} />
           <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
               策略回测
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -230,6 +230,7 @@ export default function BacktestPage() {
             startIcon={<RefreshCw size={16} />}
             onClick={loadTasks}
             disabled={refreshing}
+            size="small"
           >
             刷新
           </Button>
@@ -238,6 +239,7 @@ export default function BacktestPage() {
             color="primary"
             startIcon={<Plus size={16} />}
             onClick={handleCreateTask}
+            size="small"
           >
             创建回测任务
           </Button>

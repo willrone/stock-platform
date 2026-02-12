@@ -111,6 +111,31 @@ class ModelTrainingRequest(BaseModel):
         default="random_search", description="超参数搜索策略"
     )
     hyperparameter_search_trials: int = Field(default=10, description="超参数搜索试验次数")
+    # === 统一训练体系新增字段 ===
+    feature_set: str = Field(
+        default="alpha158",
+        description="特征集: alpha158 / technical_62 / custom",
+    )
+    label_type: str = Field(
+        default="regression",
+        description="标签类型: regression / binary",
+    )
+    binary_threshold: float = Field(
+        default=0.003,
+        description="二分类阈值（仅 label_type=binary 时生效）",
+    )
+    split_method: str = Field(
+        default="ratio",
+        description="数据分割方式: ratio / hardcut",
+    )
+    train_end_date: Optional[str] = Field(
+        default=None,
+        description="训练集截止日期（仅 split_method=hardcut 时生效）",
+    )
+    val_end_date: Optional[str] = Field(
+        default=None,
+        description="验证集截止日期（仅 split_method=hardcut 时生效）",
+    )
 
 
 class RemoteDataSyncRequest(BaseModel):

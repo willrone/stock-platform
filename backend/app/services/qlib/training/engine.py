@@ -29,6 +29,42 @@ from .utility import (
     recommend_models,
 )
 
+# LightGBM / XGBoost 二分类目标函数映射
+_BINARY_OBJECTIVE_MAP = {
+    "lightgbm": {"objective": "binary", "metric": "binary_logloss"},
+    "xgboost": {"objective": "binary:logistic", "eval_metric": "logloss"},
+}
+
+
+def _apply_binary_objective(
+    model_config: dict, config: QlibTrainingConfig,
+) -> dict:
+    """当 label_type=binary 时，自动将模型 objective 切换为二分类
+
+    Args:
+        model_config: Qlib 模型配置字典
+        config: 训练配置
+
+    Returns:
+        修改后的模型配置
+    """
+    model_type = config.model_type.value
+    overrides = _BINARY_OBJECTIVE_MAP.get(model_type)
+    if not overrides:
+        logger.info(
+            f"模型 {model_type} 无需切换二分类 objective",
+        )
+        return model_config
+
+    # Qlib 模型配置中 kwargs 存放超参数
+    kwargs = model_config.get("kwargs", {})
+    kwargs.update(overrides)
+    model_config["kwargs"] = kwargs
+    logger.info(
+        f"二分类模式: {model_type} objective 已切换为 {overrides}",
+    )
+    return model_config
+
 
 class UnifiedQlibTrainingEngine:
     """统一Qlib训练引擎"""
@@ -111,16 +147,21 @@ class UnifiedQlibTrainingEngine:
             await self.initialize()
             self.performance_monitor.end_stage("initialize_qlib")
 
-            # 2. 准备数据集（包含Alpha158因子）
+            # 2. 准备数据集（根据特征集选择不同路径）
+            feature_set = config.feature_set
+            skip_alpha = feature_set in ("technical_62", "custom")
             if progress_callback:
                 await progress_callback(
                     model_id,
                     15.0,
                     "preparing",
-                    "准备Qlib数据集",
+                    f"准备数据集 (特征集: {feature_set})",
                     {
                         "stock_count": len(stock_codes),
                         "date_range": f"{start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}",
+                        "feature_set": feature_set,
+                        "label_type": config.label_type,
+                        "split_method": config.split_method,
                     },
                 )
 
@@ -129,7 +170,7 @@ class UnifiedQlibTrainingEngine:
                 stock_codes=stock_codes,
                 start_date=start_date,
                 end_date=end_date,
-                include_alpha_factors=config.use_alpha_factors,
+                include_alpha_factors=config.use_alpha_factors and not skip_alpha,
                 use_cache=config.cache_features,
             )
             self.performance_monitor.end_stage("prepare_dataset")
@@ -176,6 +217,10 @@ class UnifiedQlibTrainingEngine:
             model_config = await create_qlib_model_config(self.model_manager, config)
             self.performance_monitor.end_stage("create_model_config")
 
+            # 二分类时自动切换 LightGBM/XGBoost 的 loss
+            if config.label_type == "binary":
+                model_config = _apply_binary_objective(model_config, config)
+
             self.performance_monitor.start_stage("analyze_features")
             feature_correlation = analyze_feature_correlations(dataset)
             self.performance_monitor.end_stage("analyze_features")
@@ -219,11 +264,13 @@ class UnifiedQlibTrainingEngine:
                     model_id,
                     45.0,
                     "training",
-                    "开始Qlib模型训练",
+                    f"开始训练 ({feature_set} + {config.label_type})",
                     {
                         "train_samples": len(train_dataset),
                         "val_samples": len(val_dataset),
                         "model_type": config.model_type.value,
+                        "feature_set": feature_set,
+                        "label_type": config.label_type,
                         "early_stopping_enabled": config.enable_early_stopping,
                     },
                 )
@@ -305,7 +352,16 @@ class UnifiedQlibTrainingEngine:
                 await progress_callback(model_id, 95.0, "saving", "保存模型")
 
             self.performance_monitor.start_stage("save_model")
-            model_path = await save_qlib_model(model, model_id, model_config)
+            training_meta = {
+                "feature_set": config.feature_set,
+                "label_type": config.label_type,
+                "binary_threshold": config.binary_threshold,
+                "split_method": config.split_method,
+                "prediction_horizon": config.prediction_horizon,
+            }
+            model_path = await save_qlib_model(
+                model, model_id, model_config, training_meta,
+            )
             self.performance_monitor.end_stage("save_model")
 
             # 9. 完成训练

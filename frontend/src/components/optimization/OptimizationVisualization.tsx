@@ -367,6 +367,8 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
           console.log('[OptimizationVisualization] Tab切换:', newValue);
         }}
         aria-label="可视化标签页"
+        variant="scrollable"
+        scrollButtons="auto"
       >
         <Tab label="优化历史" value="history" />
         <Tab label="参数重要性" value="importance" />
@@ -380,7 +382,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
           <Card>
             <CardContent>
               {result.optimization_history && result.optimization_history.length > 0 ? (
-                <Box ref={historyChartRef} sx={{ width: '100%', height: 400 }} />
+                <Box ref={historyChartRef} sx={{ width: '100%', height: { xs: 280, sm: 350, md: 400 }, minWidth: 400, overflowX: 'auto' }} />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -403,7 +405,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
           <Card>
             <CardContent>
               {result.param_importance && Object.keys(result.param_importance).length > 0 ? (
-                <Box ref={importanceChartRef} sx={{ width: '100%', height: 400 }} />
+                <Box ref={importanceChartRef} sx={{ width: '100%', height: { xs: 280, sm: 350, md: 400 }, minWidth: 400, overflowX: 'auto' }} />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -425,7 +427,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         {selectedTab === 'pareto' && result.pareto_front && result.pareto_front.length > 0 && (
           <Card>
             <CardContent>
-              <Box ref={paretoChartRef} sx={{ width: '100%', height: 400 }} />
+              <Box ref={paretoChartRef} sx={{ width: '100%', height: { xs: 280, sm: 350, md: 400 }, minWidth: 400, overflowX: 'auto' }} />
             </CardContent>
           </Card>
         )}

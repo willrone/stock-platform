@@ -18,7 +18,6 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  Grid,
   Snackbar,
   Alert,
 } from '@mui/material';
@@ -165,18 +164,18 @@ export default function SettingsPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Settings size={32} className="text-blue-600" />
+        <Settings size={32} />
         <Box>
-          <Typography variant="h4" fontWeight="bold">系统设置</Typography>
+          <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>系统设置</Typography>
           <Typography variant="body2" color="text.secondary">配置系统参数和偏好设置</Typography>
         </Box>
       </Box>
 
       <Card>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="settings tabs">
+          <Tabs value={tabValue} onChange={handleTabChange} aria-label="settings tabs" variant="scrollable" scrollButtons="auto">
             <Tab icon={<Palette size={18} />} iconPosition="start" label="通用设置" />
             <Tab icon={<Database size={18} />} iconPosition="start" label="数据设置" />
             <Tab icon={<Bell size={18} />} iconPosition="start" label="通知设置" />
@@ -192,16 +191,16 @@ export default function SettingsPage() {
               配置系统的基本参数
             </Typography>
 
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+              <Box>
                 <TextField
                   fullWidth
                   label="系统名称"
                   value={generalSettings.systemName}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, systemName: e.target.value })}
                 />
-              </Grid>
-              <Grid item xs={12} md={6}>
+              </Box>
+              <Box>
                 <FormControl fullWidth>
                   <InputLabel>语言</InputLabel>
                   <Select
@@ -213,8 +212,8 @@ export default function SettingsPage() {
                     <MenuItem value="en-US">English</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
+              </Box>
+              <Box>
                 <FormControl fullWidth>
                   <InputLabel>时区</InputLabel>
                   <Select
@@ -227,8 +226,8 @@ export default function SettingsPage() {
                     <MenuItem value="UTC">UTC</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
+              </Box>
+              <Box>
                 <FormControl fullWidth>
                   <InputLabel>日期格式</InputLabel>
                   <Select
@@ -241,8 +240,8 @@ export default function SettingsPage() {
                     <MenuItem value="MM/DD/YYYY">MM/DD/YYYY</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
 
             <Divider sx={{ my: 3 }} />
 
@@ -267,8 +266,8 @@ export default function SettingsPage() {
               配置数据服务和缓存参数
             </Typography>
 
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+              <Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <TextField
                     fullWidth
@@ -280,8 +279,8 @@ export default function SettingsPage() {
                     <RefreshCw size={20} />
                   </IconButton>
                 </Box>
-              </Grid>
-              <Grid item xs={12} md={6}>
+              </Box>
+              <Box>
                 <TextField
                   fullWidth
                   type="number"
@@ -289,8 +288,8 @@ export default function SettingsPage() {
                   value={dataSettings.syncInterval}
                   onChange={(e) => setDataSettings({ ...dataSettings, syncInterval: parseInt(e.target.value) })}
                 />
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
 
             <Box sx={{ mt: 3 }}>
               <FormControlLabel
@@ -461,8 +460,8 @@ export default function SettingsPage() {
               配置系统性能参数
             </Typography>
 
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+              <Box>
                 <TextField
                   fullWidth
                   type="number"
@@ -472,8 +471,8 @@ export default function SettingsPage() {
                   helperText="建议设置为 CPU 核心数"
                   inputProps={{ min: 1, max: 16 }}
                 />
-              </Grid>
-              <Grid item xs={12} md={6}>
+              </Box>
+              <Box>
                 <TextField
                   fullWidth
                   type="number"
@@ -483,8 +482,8 @@ export default function SettingsPage() {
                   helperText="每批处理的股票数量"
                   inputProps={{ min: 10, max: 1000 }}
                 />
-              </Grid>
-              <Grid item xs={12} md={6}>
+              </Box>
+              <Box>
                 <FormControl fullWidth>
                   <InputLabel>日志级别</InputLabel>
                   <Select
@@ -498,8 +497,8 @@ export default function SettingsPage() {
                     <MenuItem value="ERROR">ERROR</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
 
             <Box sx={{ mt: 3 }}>
               <FormControlLabel

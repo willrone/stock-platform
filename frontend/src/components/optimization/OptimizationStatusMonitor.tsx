@@ -50,7 +50,7 @@ export default function OptimizationStatusMonitor({
         <Card>
           <CardContent>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {status.completed_trials || 0} / {status.n_trials || 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -63,7 +63,7 @@ export default function OptimizationStatusMonitor({
         <Card>
           <CardContent>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {status.running_trials || 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -76,7 +76,7 @@ export default function OptimizationStatusMonitor({
         <Card>
           <CardContent>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {status.pruned_trials || 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -89,7 +89,7 @@ export default function OptimizationStatusMonitor({
         <Card>
           <CardContent>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main' }}>
+              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}>
                 {status.failed_trials || 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -147,7 +147,7 @@ export default function OptimizationStatusMonitor({
                 <Typography variant="body2" color="text.secondary">
                   最佳得分:
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
                   {(status.best_score || 0).toFixed(4)}
                 </Typography>
               </Box>
@@ -166,7 +166,7 @@ export default function OptimizationStatusMonitor({
                   <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                     最佳参数:
                   </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1 }}>
                     {Object.entries(status.best_params).map(([key, value]) => (
                       <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Typography variant="caption" color="text.secondary">

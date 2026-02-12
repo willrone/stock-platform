@@ -12,14 +12,113 @@ from loguru import logger
 
 from .config import QlibTrainingConfig
 
+DEFAULT_BINARY_THRESHOLD = 0.003
+
+
+def _create_label_for_data(
+    data: pd.DataFrame,
+    data_name: str,
+    horizon: int,
+    label_type: str = "regression",
+    binary_threshold: float = DEFAULT_BINARY_THRESHOLD,
+) -> None:
+    """为数据集创建标签（原地修改）
+
+    Args:
+        data: 数据集 DataFrame
+        data_name: 数据集名称（用于日志）
+        horizon: 预测周期（天）
+        label_type: 标签类型 "regression" 或 "binary"
+        binary_threshold: 二分类阈值（仅 binary 时生效）
+    """
+    if data is None or "label" in data.columns:
+        return
+
+    close_col = _find_close_column(data)
+    if close_col is not None:
+        _create_return_label(data, close_col, horizon)
+    else:
+        _create_fallback_label(data, data_name)
+        return
+
+    # 二分类转换
+    if label_type == "binary":
+        positive_before = data["label"].mean()
+        data["label"] = (data["label"] > binary_threshold).astype(int)
+        logger.info(
+            f"{data_name}二分类标签: 阈值={binary_threshold}, "
+            f"正样本比例={data['label'].mean():.4f}",
+        )
+    else:
+        logger.info(
+            f"{data_name}自动创建标签列（未来{horizon}天收益率），"
+            f"范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]",
+        )
+
+
+def _find_close_column(data: pd.DataFrame) -> str:
+    """查找收盘价列名"""
+    for col in ["$close", "close", "Close", "CLOSE"]:
+        if col in data.columns:
+            return col
+    return None
+
+
+def _create_return_label(
+    data: pd.DataFrame, close_col: str, horizon: int,
+) -> None:
+    """计算未来N天收益率标签（原地修改）"""
+    current_price = data[close_col]
+    if isinstance(data.index, pd.MultiIndex):
+        future_price = data.groupby(level=0)[close_col].shift(-horizon)
+    else:
+        future_price = data[close_col].shift(-horizon)
+
+    label_values = (future_price - current_price) / current_price
+    if isinstance(label_values, pd.Series):
+        data["label"] = label_values.fillna(0)
+    else:
+        data["label"] = pd.Series(
+            label_values.iloc[:, 0].values
+            if hasattr(label_values, "iloc")
+            else label_values,
+            index=data.index,
+        ).fillna(0)
+
+
+def _create_fallback_label(
+    data: pd.DataFrame, data_name: str,
+) -> None:
+    """使用最后一列作为标签（原地修改）"""
+    last_col = data.iloc[:, -1]
+    if isinstance(last_col, pd.Series):
+        data["label"] = last_col
+    else:
+        data["label"] = pd.Series(
+            last_col.iloc[:, 0].values
+            if hasattr(last_col, "iloc")
+            else last_col,
+            index=data.index,
+        )
+    logger.warning(
+        f"{data_name}未找到收盘价列，使用最后一列作为标签",
+    )
+
 
 # 创建DatasetH适配器，使DataFrame具有qlib DatasetH的接口
 class DataFrameDatasetAdapter:
     """将DataFrame适配为qlib DatasetH格式"""
 
-    def __init__(self, train_data: pd.DataFrame, val_data: pd.DataFrame = None, prediction_horizon: int = 5):
+    def __init__(
+        self,
+        train_data: pd.DataFrame,
+        val_data: pd.DataFrame = None,
+        prediction_horizon: int = 5,
+        config: "QlibTrainingConfig" = None,
+    ):
         self.train_data = train_data.copy()
         self.val_data = val_data.copy() if val_data is not None else None
+        self.config = config
         # qlib模型期望有segments属性，包含train和valid
         self.segments = {"train": self.train_data}
         if self.val_data is not None:
@@ -28,65 +127,17 @@ class DataFrameDatasetAdapter:
         self.data = self.train_data
 
         # 处理训练集和验证集的标签
-        def _create_label_for_data(data, data_name, horizon):
-            """为数据集创建标签 - 修复：使用prediction_horizon参数"""
-            if data is None or "label" in data.columns:
-                return
+        label_type = config.label_type if config else "regression"
+        binary_threshold = config.binary_threshold if config else 0.003
 
-            # 尝试找到收盘价列
-            close_col = None
-            for col in ["$close", "close", "Close", "CLOSE"]:
-                if col in data.columns:
-                    close_col = col
-                    break
-
-            if close_col is not None:
-                # 正确计算未来N天收益率作为标签
-                current_price = data[close_col]
-                if isinstance(data.index, pd.MultiIndex):
-                    # 按股票分组，计算未来N天的价格
-                    future_price = (
-                        data.groupby(level=0)[close_col]
-                        .shift(-horizon)
-                    )
-                else:
-                    # 直接计算未来N天的价格
-                    future_price = data[close_col].shift(-horizon)
-
-                # 计算收益率：(未来价格 - 当前价格) / 当前价格
-                label_values = (future_price - current_price) / current_price
-
-                if isinstance(label_values, pd.Series):
-                    data["label"] = label_values.fillna(0)
-                else:
-                    data["label"] = pd.Series(
-                        label_values.iloc[:, 0].values
-                        if hasattr(label_values, "iloc")
-                        else label_values,
-                        index=data.index,
-                    ).fillna(0)
-                logger.info(
-                    f"{data_name}自动创建标签列（未来{horizon}天收益率），标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
-                )
-            else:
-                # 如果没有收盘价，使用最后一列作为标签
-                last_col = data.iloc[:, -1]
-                if isinstance(last_col, pd.Series):
-                    data["label"] = last_col
-                else:
-                    data["label"] = pd.Series(
-                        last_col.iloc[:, 0].values
-                        if hasattr(last_col, "iloc")
-                        else last_col,
-                        index=data.index,
-                    )
-                logger.warning(
-                    f"{data_name}未找到收盘价列，使用最后一列作为标签，标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
-                )
-
-        prediction_horizon = prediction_horizon
-        _create_label_for_data(self.train_data, "训练集", prediction_horizon)
-        _create_label_for_data(self.val_data, "验证集", prediction_horizon)
+        _create_label_for_data(
+            self.train_data, "训练集", prediction_horizon,
+            label_type, binary_threshold,
+        )
+        _create_label_for_data(
+            self.val_data, "验证集", prediction_horizon,
+            label_type, binary_threshold,
+        )
 
         # 记录数据维度信息
         logger.info(
@@ -111,17 +162,28 @@ class DataFrameDatasetAdapter:
 
     def prepare(
         self,
-        key: str,
+        key,
         col_set: Union[List[str], str] = None,
         data_key: str = None,
     ):
-        """实现qlib DatasetH的prepare方法"""
+        """实现qlib DatasetH的prepare方法
+
+        支持 key 为字符串（如 "train"）或列表（如 ["train", "valid"]）。
+        当 key 为列表时，返回对应数据集的元组，兼容 Qlib 的
+        ``df_train, df_valid = dataset.prepare(["train", "valid"], ...)`` 用法。
+        """
         if col_set is None:
             col_set = ["feature", "label"]
 
         # 处理col_set可能是字符串的情况（Qlib的predict传入"feature"字符串）
         if isinstance(col_set, str):
             col_set = [col_set]
+
+        # 如果 key 是列表，递归调用并返回元组
+        if isinstance(key, (list, tuple)):
+            return tuple(
+                self.prepare(k, col_set=col_set, data_key=data_key) for k in key
+            )
 
         # 根据key选择对应的数据集
         if key == "train":

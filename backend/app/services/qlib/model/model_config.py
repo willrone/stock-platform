@@ -25,16 +25,18 @@ class QlibModelConfigBuilder:
 
     # LightGBM 默认参数（经过优化）
     DEFAULT_LGB_PARAMS = {
-        "loss": "huber",
-        "huber_delta": 0.1,
+        "loss": "mse",
         "colsample_bytree": 0.8879,
-        "learning_rate": 0.0421,
+        "learning_rate": 0.05,
         "subsample": 0.8789,
         "lambda_l1": 205.6999,
         "lambda_l2": 580.9768,
         "max_depth": 8,
         "num_leaves": 210,
         "num_threads": 20,
+        "num_boost_round": 2000,
+        "early_stopping_rounds": 100,
+        "min_child_samples": 100,
     }
 
     # XGBoost 默认参数

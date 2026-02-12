@@ -31,6 +31,12 @@ interface CreateModelFormProps {
     enable_hyperparameter_tuning: boolean;
     num_iterations: number;
     selected_features: string[];
+    feature_set: string;
+    label_type: string;
+    binary_threshold: number;
+    split_method: string;
+    train_end_date: string;
+    val_end_date: string;
   };
   errors: Record<string, string>;
   useAllFeatures: boolean;
@@ -178,6 +184,88 @@ export function CreateModelForm({
         />
         <Typography variant="body2">启用自动超参数调优</Typography>
       </Box>
+
+      {/* 特征集选择 */}
+      <FormControl fullWidth>
+        <InputLabel>特征集</InputLabel>
+        <Select
+          value={formData.feature_set}
+          label="特征集"
+          onChange={e => onFormDataChange('feature_set', e.target.value)}
+        >
+          <MenuItem value="alpha158">Alpha158（158个因子，推荐）</MenuItem>
+          <MenuItem value="technical_62">手工62特征</MenuItem>
+          <MenuItem value="custom">自定义</MenuItem>
+        </Select>
+        <FormHelperText>选择用于训练的特征集</FormHelperText>
+      </FormControl>
+
+      {/* 标签类型选择 */}
+      <FormControl fullWidth>
+        <InputLabel>标签类型</InputLabel>
+        <Select
+          value={formData.label_type}
+          label="标签类型"
+          onChange={e => onFormDataChange('label_type', e.target.value)}
+        >
+          <MenuItem value="regression">回归（预测收益率）</MenuItem>
+          <MenuItem value="binary">二分类（预测涨跌）</MenuItem>
+        </Select>
+        <FormHelperText>回归适合排序选股，二分类适合涨跌判断</FormHelperText>
+      </FormControl>
+
+      {/* 二分类阈值（仅 binary 时显示） */}
+      {formData.label_type === 'binary' && (
+        <TextField
+          type="number"
+          label="二分类阈值"
+          value={formData.binary_threshold}
+          onChange={e => onFormDataChange('binary_threshold', parseFloat(e.target.value) || 0)}
+          helperText="收益率高于此阈值标记为1（涨），否则为0（跌）。默认0.0"
+          inputProps={{ step: 0.001 }}
+          fullWidth
+        />
+      )}
+
+      {/* 数据分割方式 */}
+      <FormControl fullWidth>
+        <InputLabel>数据分割方式</InputLabel>
+        <Select
+          value={formData.split_method}
+          label="数据分割方式"
+          onChange={e => onFormDataChange('split_method', e.target.value)}
+        >
+          <MenuItem value="ratio">比例分割（默认8:1:1）</MenuItem>
+          <MenuItem value="hardcut">按日期分割</MenuItem>
+        </Select>
+        <FormHelperText>比例分割自动划分训练/验证/测试集，按日期分割需手动指定截止日期</FormHelperText>
+      </FormControl>
+
+      {/* 按日期分割时的日期选择器 */}
+      {formData.split_method === 'hardcut' && (
+        <Box
+          sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}
+        >
+          <TextField
+            type="date"
+            label="训练截止日期"
+            value={formData.train_end_date}
+            onChange={e => onFormDataChange('train_end_date', e.target.value)}
+            helperText="训练集的结束日期"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            type="date"
+            label="验证截止日期"
+            value={formData.val_end_date}
+            onChange={e => onFormDataChange('val_end_date', e.target.value)}
+            helperText="验证集的结束日期，之后为测试集"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+        </Box>
+      )}
 
       {/* 特征选择部分 */}
       <FeatureSelector

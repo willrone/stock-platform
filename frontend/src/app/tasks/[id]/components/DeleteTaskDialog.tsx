@@ -11,6 +11,8 @@ import {
   Button,
   Typography,
   Box,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { AlertTriangle } from 'lucide-react';
 import { Task } from '@/stores/useTaskStore';
@@ -32,8 +34,11 @@ export function DeleteTaskDialog({
   onConfirm,
   onForceChange,
 }: DeleteTaskDialogProps) {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+
   return (
-    <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="sm" fullScreen={fullScreen}>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AlertTriangle size={20} color="#d32f2f" />

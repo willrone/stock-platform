@@ -454,6 +454,58 @@ async def get_available_strategies():
                     },
                 },
             },
+            "ml_ensemble_lgb_xgb_riskctl": {
+                "name": "ML集成策略(LGB+XGB+风控)",
+                "description": "双模型集成（LightGBM 50% + XGBoost 50%）+ 三重风控。支持通过 model_id 加载 Qlib 训练的模型。",
+                "category": "other",
+                "parameters": {
+                    "lgb_model_id": {
+                        "type": "string",
+                        "default": "",
+                        "description": "LightGBM 模型ID（Qlib格式，留空则使用默认 lgb_model.pkl）",
+                    },
+                    "xgb_model_id": {
+                        "type": "string",
+                        "default": "",
+                        "description": "XGBoost 模型ID（Qlib格式，留空则使用默认 xgb_model.pkl）",
+                    },
+                    "lgb_weight": {
+                        "type": "float",
+                        "default": 0.5,
+                        "description": "LightGBM 权重",
+                        "min": 0.0,
+                        "max": 1.0,
+                    },
+                    "xgb_weight": {
+                        "type": "float",
+                        "default": 0.5,
+                        "description": "XGBoost 权重",
+                        "min": 0.0,
+                        "max": 1.0,
+                    },
+                    "buy_threshold": {
+                        "type": "float",
+                        "default": 0.02,
+                        "description": "买入阈值（预测收益率）",
+                        "min": 0.0,
+                        "max": 0.1,
+                    },
+                    "sell_threshold": {
+                        "type": "float",
+                        "default": -0.02,
+                        "description": "卖出阈值（预测收益率）",
+                        "min": -0.1,
+                        "max": 0.0,
+                    },
+                    "max_drawdown_threshold": {
+                        "type": "float",
+                        "default": 0.15,
+                        "description": "最大回撤阈值（触发风控）",
+                        "min": 0.05,
+                        "max": 0.5,
+                    },
+                },
+            },
         }
 
         result = []

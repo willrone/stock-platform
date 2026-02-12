@@ -1,892 +1,456 @@
 """
-ML 集成策略��LightGBM + XGBoost 双模型集成 + 风控
+ML 集成策略：LightGBM + XGBoost 双模型集成 + 风控
 
 特点：
-- 双模型回归集成（LightGBM 50% + XGBoost 50%）
-- 选股逻辑：按预测收益率排序（回归模式）
-- 三重风控：止损 2% + 波动率缩放 + 市场过滤
+- 双模型回归/二分类集成（LightGBM + XGBoost）
+- 支持统一训练引擎的多种特征集（alpha158 / technical_62）
+- 支持回归和二分类两种标签类型
+- 三重风控：止损 + 波动率缩放 + 市场过滤
 
 命名：ml_ensemble_lgb_xgb_riskctl
 """
 
-import pickle
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.core.error_handler import ErrorSeverity, TaskError
 import numpy as np
 import pandas as pd
 
+from app.core.error_handler import ErrorSeverity, TaskError
+
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
+from .ml_feature_adapter import build_feature_matrix, build_feature_matrix_batch
+from .ml_model_loader import LoadedModelPair, load_model_pair
+
+_logger = logging.getLogger(__name__)
+
+# 回归模式阈值
+BUY_RETURN_THRESHOLD = 0.0
+SELL_RETURN_THRESHOLD = -0.002
+# 二分类模式阈值
+BINARY_BUY_THRESHOLD = 0.5
+BINARY_SELL_THRESHOLD = 0.3
+# 风控默认值
+DEFAULT_STOP_LOSS = -0.02
+DEFAULT_TARGET_VOL = 0.02
+VOL_SCALE_RANGE = (0.5, 2.0)
+MARKET_FILTER_WINDOW = 5
+DAILY_RETURNS_WINDOW = 60
+MIN_DATA_LENGTH = 60
 
 
 class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
-    """
-    ML 集成策略：LightGBM + XGBoost + 风控
+    """ML 集成策略：LightGBM + XGBoost + 风控
 
-    特点：
-    - 双模型等权重回归集成（LGB 50% + XGB 50%）
-    - 选股逻辑：按预测收益率排序（回归模式，非概率阈值）
-    - 止损 2%：单日亏损超 2% 截断
-    - 波动率缩放：高波动减仓，低波动加仓
-    - 市场过滤：大盘 5 日均线下跌时仓位减半
+    支持统一训练引擎的模型（alpha158/technical_62 特征集，
+    regression/binary 标签类型），同时向后兼容 legacy 模型。
     """
-
-    # 回归模式阈值常量
-    BUY_RETURN_THRESHOLD = 0.0     # 预测收益 > 0 视为买入信号
-    SELL_RETURN_THRESHOLD = -0.002  # 预测收益 < -0.2% 视为卖出信号
-    FALLBACK_BASE_SCORE = 0.0      # fallback 规则基础分（回归模式为 0）
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("ml_ensemble_lgb_xgb_riskctl", config)
+        self._init_model_config(config)
+        self._init_risk_config(config)
+        self._init_runtime_state()
+        self._load_models()
 
-        # 模型配置
+    def _init_model_config(self, config: Dict[str, Any]) -> None:
+        """初始化模型相关配置"""
         self.lgb_weight = config.get("lgb_weight", 0.5)
         self.xgb_weight = config.get("xgb_weight", 0.5)
-        self.top_n = config.get("top_n", 5)  # 每日选股数量
-        self.buy_threshold = config.get("buy_threshold", self.BUY_RETURN_THRESHOLD)
-        # 向后兼容：保留 prob_threshold 但不再用于主逻辑
-        self.prob_threshold = config.get("prob_threshold", 0.5)
-        
-        # 风控配置
-        self.stop_loss = config.get("stop_loss", -0.02)  # 止损阈值
-        self.enable_vol_scaling = config.get("vol_scaling", True)  # 波动率缩放
-        self.enable_market_filter = config.get("market_filter", True)  # 市场过滤
-        self.target_vol = config.get("target_vol", 0.02)  # 目标日波动率
-        self.vol_scale_min = config.get("vol_scale_min", 0.5)
-        self.vol_scale_max = config.get("vol_scale_max", 2.0)
-        
-        # 模型路径（可选，如果提供则加载预训练模型）
-        # 默认使用项目根目录下的 data/models 目录
-        # __file__ 是 backend/app/services/backtest/strategies/ml_ensemble_strategy.py
-        # 需要向上 6 层到 willrone/，然后进入 data/models
-        default_model_path = Path(__file__).parent.parent.parent.parent.parent.parent / "data" / "models"
-        self.model_path = config.get("model_path", str(default_model_path))
-        self.lgb_model = None
-        self.xgb_model = None
-        
-        # 运行时状态
-        self._daily_returns = []
-        self._cumulative_return = 1.0
-        self._peak = 1.0
-        self._market_returns = []
-        
-        # 加载预训练模型
-        self._load_models()
-        
-    def _load_models(self):
+        self.top_n = config.get("top_n", 5)
+        default_path = Path(__file__).parents[4] / "data" / "models"
+        self.model_path = config.get("model_path", str(default_path))
+        self._lgb_model_id = config.get("lgb_model_id")
+        self._xgb_model_id = config.get("xgb_model_id")
+        # 模型对象和元数据（加载后填充）
+        self._model_pair: Optional[LoadedModelPair] = None
+
+    def _init_risk_config(self, config: Dict[str, Any]) -> None:
+        """初始化风控配置"""
+        self.stop_loss = config.get("stop_loss", DEFAULT_STOP_LOSS)
+        self.enable_vol_scaling = config.get("vol_scaling", True)
+        self.enable_market_filter = config.get("market_filter", True)
+        self.target_vol = config.get("target_vol", DEFAULT_TARGET_VOL)
+
+    def _init_runtime_state(self) -> None:
+        """初始化运行时状态"""
+        self._daily_returns: List[float] = []
+        self._market_returns: List[float] = []
+
+    # ── 模型加载 ─────────────────────────────────────────
+
+    def _load_models(self) -> None:
         """加载预训练模型"""
-        if self.model_path and Path(self.model_path).exists():
-            model_dir = Path(self.model_path)
-            lgb_path = model_dir / "lgb_model.pkl"
-            xgb_path = model_dir / "xgb_model.pkl"
-            
-            if lgb_path.exists():
-                with open(lgb_path, "rb") as f:
-                    self.lgb_model = pickle.load(f)
-            if xgb_path.exists():
-                with open(xgb_path, "rb") as f:
-                    self.xgb_model = pickle.load(f)
-    
+        model_dir = Path(self.model_path)
+        self._model_pair = load_model_pair(
+            model_dir, self._lgb_model_id, self._xgb_model_id,
+        )
+
+    @property
+    def _has_models(self) -> bool:
+        return self._model_pair is not None
+
+    @property
+    def _feature_set(self) -> str:
+        if self._model_pair:
+            return self._model_pair.feature_set
+        return "technical_62"
+
+    @property
+    def _label_type(self) -> str:
+        if self._model_pair:
+            return self._model_pair.label_type
+        return "regression"
+
+    # ── 信号生成 ─────────────────────────────────────────
+
+    def generate_signals(
+        self, data: pd.DataFrame, current_date: datetime,
+        stock_code: str = "",
+    ) -> List[TradingSignal]:
+        """生成交易信号"""
+        if data is None or len(data) < MIN_DATA_LENGTH:
+            return []
+
+        idx = self._get_current_idx(data, current_date)
+        if idx < MIN_DATA_LENGTH:
+            return []
+
+        if not stock_code:
+            stock_code = data.attrs.get("stock_code", "UNKNOWN")
+
+        indicators = self.get_cached_indicators(data)
+        pred = self._predict_at_index(data, indicators, idx)
+        if pred is None:
+            return []
+
+        self._update_market_state(indicators, idx)
+        last_ret = self._get_indicator_value(indicators, "return_1d", idx)
+        scale = self._calculate_position_scale(last_ret)
+        self._record_daily_return(last_ret)
+
+        return self._pred_to_signals(
+            pred, scale, stock_code, data["close"].iloc[idx], current_date,
+        )
+
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算技术指标特征"""
+        """计算技术指标（用于 fallback 和风控）"""
         if data is None or len(data) == 0:
             return {}
-        
-        indicators = {}
-        close = data["close"]
-        high = data["high"]
-        low = data["low"]
-        volume = data["volume"]
-        open_ = data["open"]
-        
-        # 收益率
-        for period in [1, 2, 3, 5, 10, 20]:
-            indicators[f"return_{period}d"] = close.pct_change(period)
-        
-        # 动量
-        indicators["momentum_short"] = indicators["return_5d"] - indicators["return_10d"]
-        indicators["momentum_long"] = indicators["return_10d"] - indicators["return_20d"]
-        indicators["momentum_reversal"] = -indicators["return_1d"]
-        
-        returns = close.pct_change()
-        for period in [5, 10, 20]:
-            up_days = (returns > 0).rolling(period).sum()
-            indicators[f"momentum_strength_{period}"] = up_days / period
-        
-        # 移动平均
-        for window in [5, 10, 20, 60]:
-            ma = close.rolling(window).mean()
-            indicators[f"ma_ratio_{window}"] = close / ma - 1
-            indicators[f"ma_slope_{window}"] = ma.pct_change(5)
-        
-        ma_5 = close.rolling(5).mean()
-        ma_10 = close.rolling(10).mean()
-        ma_20 = close.rolling(20).mean()
-        indicators["ma_alignment"] = ((ma_5 > ma_10).astype(int) + (ma_10 > ma_20).astype(int))
-        
-        # 波动率
-        for window in [5, 20, 60]:
-            indicators[f"volatility_{window}"] = returns.rolling(window).std()
-        indicators["vol_regime"] = indicators["volatility_5"] / (indicators["volatility_20"] + 1e-10)
-        indicators["volatility_skew"] = returns.rolling(20).skew()
-        
-        # 成交量
-        vol_ma20 = volume.rolling(20).mean()
-        vol_ma5 = volume.rolling(5).mean()
-        indicators["vol_ratio"] = volume / (vol_ma20 + 1)
-        indicators["vol_ma_ratio"] = vol_ma5 / (vol_ma20 + 1)
-        indicators["vol_std"] = volume.rolling(20).std() / (vol_ma20 + 1)
-        price_up = (close > close.shift(1)).astype(int)
-        vol_up = (volume > volume.shift(1)).astype(int)
-        indicators["vol_price_diverge"] = (price_up != vol_up).astype(int)
-        
-        # RSI
-        delta = close.diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        for period in [6, 14]:
-            avg_gain = gain.ewm(span=period, adjust=False).mean()
-            avg_loss = loss.ewm(span=period, adjust=False).mean()
-            rs = avg_gain / (avg_loss + 1e-10)
-            indicators[f"rsi_{period}"] = 100 - (100 / (1 + rs))
-        indicators["rsi_diff"] = indicators["rsi_6"] - indicators["rsi_14"]
-        
-        # MACD
-        ema12 = close.ewm(span=12, adjust=False).mean()
-        ema26 = close.ewm(span=26, adjust=False).mean()
-        indicators["macd"] = ema12 - ema26
-        indicators["macd_signal"] = indicators["macd"].ewm(span=9, adjust=False).mean()
-        indicators["macd_hist"] = indicators["macd"] - indicators["macd_signal"]
-        indicators["macd_hist_slope"] = indicators["macd_hist"].diff(3)
-        
-        # 布林带
-        bb_mid = close.rolling(20).mean()
-        bb_std = close.rolling(20).std()
-        indicators["bb_position"] = (close - bb_mid) / (2 * bb_std + 1e-10)
-        indicators["bb_width"] = 4 * bb_std / (bb_mid + 1e-10)
-        
-        # 价格形态
-        indicators["body"] = (close - open_) / (open_ + 1e-10)
-        indicators["wick_upper"] = (high - np.maximum(close, open_)) / (high - low + 1e-10)
-        indicators["wick_lower"] = (np.minimum(close, open_) - low) / (high - low + 1e-10)
-        indicators["range_pct"] = (high - low) / (close + 1e-10)
-        indicators["consecutive_up"] = (close > close.shift(1)).rolling(5).sum()
-        indicators["consecutive_down"] = (close < close.shift(1)).rolling(5).sum()
-        
-        # 价格位置
-        for window in [20, 60]:
-            high_n = high.rolling(window).max()
-            low_n = low.rolling(window).min()
-            indicators[f"price_pos_{window}"] = (close - low_n) / (high_n - low_n + 1e-10)
-            indicators[f"dist_high_{window}"] = (high_n - close) / (close + 1e-10)
-            indicators[f"dist_low_{window}"] = (close - low_n) / (close + 1e-10)
-        
-        # ATR
-        tr = pd.Series(
-            np.maximum.reduce([
-                high - low,
-                (high - close.shift()).abs(),
-                (low - close.shift()).abs()
-            ]),
-            index=close.index
-        )
-        indicators["atr"] = tr.rolling(14).mean()
-        indicators["atr_pct"] = indicators["atr"] / (close + 1e-10)
-        
-        # ADX
-        plus_dm = high.diff()
-        minus_dm = -low.diff()
-        plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-        minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
-        atr14 = tr.rolling(14).mean()
-        plus_di = 100 * plus_dm.rolling(14).mean() / (atr14 + 1e-10)
-        minus_di = 100 * minus_dm.rolling(14).mean() / (atr14 + 1e-10)
-        indicators["di_diff"] = plus_di - minus_di
-        indicators["adx"] = (plus_di - minus_di).abs().rolling(14).mean()
-        
-        return indicators
-    
-    def _get_feature_vector(self, indicators: Dict[str, pd.Series], idx: int) -> Optional[np.ndarray]:
-        """获取特征向量"""
-        feature_names = [
-            'return_1d', 'return_2d', 'return_3d', 'return_5d', 'return_10d', 'return_20d',
-            'momentum_short', 'momentum_long', 'momentum_reversal',
-            'momentum_strength_5', 'momentum_strength_10', 'momentum_strength_20',
-            'ma_ratio_5', 'ma_ratio_10', 'ma_ratio_20', 'ma_ratio_60',
-            'ma_slope_5', 'ma_slope_10', 'ma_slope_20', 'ma_alignment',
-            'volatility_5', 'volatility_20', 'volatility_60', 'vol_regime', 'volatility_skew',
-            'vol_ratio', 'vol_ma_ratio', 'vol_std', 'vol_price_diverge',
-            'rsi_6', 'rsi_14', 'rsi_diff',
-            'macd', 'macd_signal', 'macd_hist', 'macd_hist_slope',
-            'bb_position', 'bb_width',
-            'body', 'wick_upper', 'wick_lower', 'range_pct',
-            'consecutive_up', 'consecutive_down',
-            'price_pos_20', 'price_pos_60',
-            'dist_high_20', 'dist_low_20', 'dist_high_60', 'dist_low_60',
-            'atr_pct', 'di_diff', 'adx',
-        ]
-        
-        try:
-            features = []
-            for name in feature_names:
-                if name in indicators:
-                    val = indicators[name].iloc[idx]
-                    features.append(val if not pd.isna(val) else 0.0)
-                else:
-                    features.append(0.0)
-            return np.array(features)
-        except Exception:
+        from .ml_indicators import compute_strategy_indicators
+        return compute_strategy_indicators(data)
+
+    # ── 预计算（单股票） ─────────────────────────────────
+
+    def precompute_all_signals(
+        self, data: pd.DataFrame,
+    ) -> Optional[pd.Series]:
+        """预计算所有信号"""
+        if data is None or len(data) < MIN_DATA_LENGTH:
             return None
-    
+
+        if not self._has_models:
+            _logger.warning("ML模型未加载，使用 fallback 规则")
+            return self._precompute_fallback(data)
+
+        try:
+            X = build_feature_matrix(data, self._feature_set)
+            if X is None:
+                return self._precompute_fallback(data)
+
+            pred = self._ensemble_predict(X)
+            return self._pred_array_to_signals(pred, data.index)
+        except Exception as e:
+            _logger.error(f"ML策略预计算失败: {e}", exc_info=True)
+            return self._precompute_fallback(data)
+
+    # ── 预计算（批量多股票） ─────────────────────────────
+
+    def precompute_all_signals_batch(
+        self, combined_df: pd.DataFrame,
+    ) -> Optional[pd.DataFrame]:
+        """批量预计算所有股票的信号"""
+        if combined_df is None or len(combined_df) == 0:
+            return None
+        if not self._has_models:
+            _logger.warning("ML模型未加载，无法批量预计算")
+            return None
+
+        try:
+            df = self._normalize_batch_index(combined_df)
+            if "stock_code" not in df.columns:
+                _logger.error("数据缺少 stock_code 列")
+                return None
+
+            X = build_feature_matrix_batch(df, self._feature_set)
+            if X is None:
+                return None
+
+            pred = self._ensemble_predict(X)
+            return self._build_batch_result(df, pred)
+        except Exception as e:
+            _logger.error(f"ML策略批量预计算失败: {e}", exc_info=True)
+            return None
+
+    # ── 预测核心 ─────────────────────────────────────────
+
+    def _ensemble_predict(self, X: np.ndarray) -> np.ndarray:
+        """双模型集成预测"""
+        mp = self._model_pair
+        lgb_pred = mp.lgb_model.predict(X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X)
+        xgb_pred = self._predict_xgb(X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X)
+        return self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
+
+    def _predict_xgb(self, X: np.ndarray) -> np.ndarray:
+        """XGBoost 预测，兼容 sklearn 和 native API"""
+        model = self._model_pair.xgb_model
+        if hasattr(model, "get_booster"):
+            return model.predict(X)
+        import xgboost as xgb
+        return model.predict(xgb.DMatrix(X))
+
+    def _predict_at_index(
+        self, data: pd.DataFrame,
+        indicators: Dict[str, pd.Series], idx: int,
+    ) -> Optional[float]:
+        """在指定索引处预测"""
+        if self._has_models:
+            try:
+                X = build_feature_matrix(
+                    data.iloc[max(0, idx - MIN_DATA_LENGTH):idx + 1],
+                    self._feature_set,
+                )
+                if X is not None and len(X) > 0:
+                    pred = self._ensemble_predict(X[-1:])
+                    return float(pred[0])
+            except Exception:
+                pass
+        return self._fallback_prediction(indicators, idx)
+
+    # ── 预测结果解读 ─────────────────────────────────────
+
+    def _interpret_prediction(self, raw_pred: float) -> tuple:
+        """根据标签类型解读预测值
+
+        Returns:
+            (signal_type_or_none, strength)
+        """
+        if self._label_type == "binary":
+            return self._interpret_binary(raw_pred)
+        return self._interpret_regression(raw_pred)
+
+    @staticmethod
+    def _interpret_regression(pred_return: float) -> tuple:
+        """回归模式：预测值是收益率"""
+        if pred_return > BUY_RETURN_THRESHOLD:
+            strength = min(abs(pred_return) * 100, 1.0)
+            return SignalType.BUY, strength
+        if pred_return < SELL_RETURN_THRESHOLD:
+            strength = min(abs(pred_return) * 100, 1.0)
+            return SignalType.SELL, strength
+        return None, 0.0
+
+    @staticmethod
+    def _interpret_binary(prob: float) -> tuple:
+        """二分类模式：预测值是上涨概率"""
+        if prob > BINARY_BUY_THRESHOLD:
+            strength = min((prob - BINARY_BUY_THRESHOLD) * 2, 1.0)
+            return SignalType.BUY, strength
+        if prob < BINARY_SELL_THRESHOLD:
+            strength = min((BINARY_SELL_THRESHOLD - prob) * 2, 1.0)
+            return SignalType.SELL, strength
+        return None, 0.0
+
+    # ── 信号转换 ─────────────────────────────────────────
+
+    def _pred_to_signals(
+        self, pred: float, scale: float,
+        stock_code: str, price: float, timestamp: datetime,
+    ) -> List[TradingSignal]:
+        """将单个预测值转换为交易信号"""
+        # 风控触发清仓
+        if scale == 0:
+            return [TradingSignal(
+                stock_code=stock_code, signal_type=SignalType.SELL,
+                strength=0.8, price=price, timestamp=timestamp,
+                reason=f"触发风控, pred={pred:.4f}",
+            )]
+
+        signal_type, strength = self._interpret_prediction(pred)
+        if signal_type is None:
+            return []
+
+        strength = min(strength * scale, 1.0)
+        label_desc = "概率" if self._label_type == "binary" else "收益"
+        return [TradingSignal(
+            stock_code=stock_code, signal_type=signal_type,
+            strength=strength, price=price, timestamp=timestamp,
+            reason=f"ML{label_desc}={pred:.4f}, 缩放={scale:.2f}",
+        )]
+
+    def _pred_array_to_signals(
+        self, pred: np.ndarray, index,
+    ) -> pd.Series:
+        """将预测数组转换为 SignalType 序列"""
+        signals = pd.Series([None] * len(index), index=index, dtype=object)
+
+        for i, p in enumerate(pred):
+            sig_type, _ = self._interpret_prediction(float(p))
+            if sig_type is not None:
+                signals.iloc[i] = sig_type
+
+        buy_n = (signals == SignalType.BUY).sum()
+        sell_n = (signals == SignalType.SELL).sum()
+        _logger.info(
+            f"ML预计算完成: BUY={buy_n}, SELL={sell_n}, "
+            f"label_type={self._label_type}, 均值={pred.mean():.6f}"
+        )
+        return signals
+
+    def _build_batch_result(
+        self, df: pd.DataFrame, pred: np.ndarray,
+    ) -> Optional[pd.DataFrame]:
+        """构建批量预测结果 DataFrame"""
+        signals = []
+        for i, p in enumerate(pred):
+            sig_type, strength = self._interpret_prediction(float(p))
+            if sig_type is None:
+                continue
+            signals.append({
+                "stock_code": df.iloc[i]["stock_code"],
+                "date": df.iloc[i]["date"],
+                "signal_type": sig_type,
+                "strength": min(strength, 1.0),
+                "price": df.iloc[i].get("close", 0),
+            })
+
+        if not signals:
+            return None
+
+        result = pd.DataFrame(signals)
+        result.set_index(["stock_code", "date"], inplace=True)
+        return result
+
+    # ── 风控 ─────────────────────────────────────────────
+
     def _calculate_position_scale(self, daily_return: float) -> float:
         """计算仓位缩放因子"""
-        scale = 1.0
-        
-        # 止损
         if daily_return < self.stop_loss:
-            return 0.0  # 触发止损，清仓
-        
-        # 波动率缩放
+            return 0.0
+
+        scale = 1.0
         if self.enable_vol_scaling and len(self._daily_returns) >= 20:
             recent_vol = np.std(self._daily_returns[-20:])
             if recent_vol > 0:
                 vol_scale = self.target_vol / recent_vol
-                scale *= np.clip(vol_scale, self.vol_scale_min, self.vol_scale_max)
-        
-        # 市场过滤
-        if self.enable_market_filter and len(self._market_returns) >= 5:
-            market_ma5 = np.mean(self._market_returns[-5:])
-            if market_ma5 < 0:
-                scale *= 0.5  # 大盘下跌，仓位减半
-        
+                scale *= np.clip(vol_scale, *VOL_SCALE_RANGE)
+
+        if self.enable_market_filter:
+            if len(self._market_returns) >= MARKET_FILTER_WINDOW:
+                if np.mean(self._market_returns[-MARKET_FILTER_WINDOW:]) < 0:
+                    scale *= 0.5
+
         return scale
-    
-    def generate_signals(
-        self, data: pd.DataFrame, current_date: datetime, stock_code: str = ""
-    ) -> List[TradingSignal]:
-        """生成交易信号"""
-        signals = []
-        
-        if data is None or len(data) < 60:
-            return signals
-        
-        idx = self._get_current_idx(data, current_date)
-        if idx < 60:
-            return signals
-        
-        # 尝试从 data.attrs 获取 stock_code
-        if not stock_code:
-            stock_code = data.attrs.get("stock_code", "UNKNOWN")
-        
-        indicators = self.get_cached_indicators(data)
-        
-        # 计算预测概率（简化版：基于技术指标组合）
-        # 实际使用时应加载预训练的 LGB/XGB 模型
-        prob = self._calculate_ensemble_prob(indicators, idx)
-        
-        if prob is None:
-            return signals
-        
-        # 更新市场收益（用于市场过滤）
-        if "return_1d" in indicators:
-            market_ret = self._safe_scalar(indicators["return_1d"].iloc[idx], default=float('nan'))
-            if not pd.isna(market_ret):
-                self._market_returns.append(market_ret)
-                if len(self._market_returns) > 20:
-                    self._market_returns = self._market_returns[-20:]
-        
-        # 计算仓位缩放
-        last_return = self._safe_scalar(indicators["return_1d"].iloc[idx]) if "return_1d" in indicators else 0.0
-        position_scale = self._calculate_position_scale(last_return)
-        
-        # 更新日收益记录
-        if not pd.isna(last_return):
-            self._daily_returns.append(last_return)
-            if len(self._daily_returns) > 60:
-                self._daily_returns = self._daily_returns[-60:]
-        
-        # 生成信号（回归模式：基于预测收益率）
-        # 确保 prob 和 position_scale 是标量
-        pred_return = float(prob) if prob is not None else 0.0
-        position_scale = float(position_scale) if position_scale is not None else 0.0
-        
-        if pred_return > self.buy_threshold and position_scale > 0:
-            # 买入信号：预测收益率为正
-            strength = min(abs(pred_return) * 100, 1.0)  # 收益率映射到 0-1 强度
-            strength *= position_scale  # 应用仓位缩放
-            
-            signals.append(TradingSignal(
-                stock_code=stock_code,
-                signal_type=SignalType.BUY,
-                strength=min(strength, 1.0),
-                price=data["close"].iloc[idx],
-                timestamp=current_date,
-                reason=f"ML回归预测收益={pred_return:.4f}, 仓位缩放={position_scale:.2f}"
-            ))
-        elif pred_return < self.SELL_RETURN_THRESHOLD or position_scale == 0:
-            # 卖出信号：预测收益率为负或触发风控
-            signals.append(TradingSignal(
-                stock_code=stock_code,
-                signal_type=SignalType.SELL,
-                strength=0.8 if position_scale == 0 else 0.5,
-                price=data["close"].iloc[idx],
-                timestamp=current_date,
-                reason=f"ML回归预测收益={pred_return:.4f}, 触发风控" if position_scale == 0 else f"ML回归预测收益低={pred_return:.4f}"
-            ))
-        
-        return signals
-    
-    def _predict_xgb(self, X):
-        """XGBoost 预测，兼容 sklearn API (XGBRegressor) 和 native API (Booster)"""
-        if hasattr(self.xgb_model, 'get_booster'):
-            return self.xgb_model.predict(X)
-        else:
-            import xgboost as xgb
-            return self.xgb_model.predict(xgb.DMatrix(X))
 
-    @staticmethod
-    def _safe_scalar(value, default=0.0) -> float:
-        """将 pandas/numpy 标量安全转为 Python float，避免 Series truth value 歧义"""
+    def _update_market_state(
+        self, indicators: Dict[str, pd.Series], idx: int,
+    ) -> None:
+        """更新市场状态（用于市场过滤）"""
+        ret = self._get_indicator_value(indicators, "return_1d", idx)
+        if not pd.isna(ret):
+            self._market_returns.append(ret)
+            if len(self._market_returns) > 20:
+                self._market_returns = self._market_returns[-20:]
+
+    def _record_daily_return(self, ret: float) -> None:
+        """记录日收益"""
+        if not pd.isna(ret):
+            self._daily_returns.append(ret)
+            if len(self._daily_returns) > DAILY_RETURNS_WINDOW:
+                self._daily_returns = self._daily_returns[-DAILY_RETURNS_WINDOW:]
+
+    # ── Fallback ─────────────────────────────────────────
+
+    def _fallback_prediction(
+        self, indicators: Dict[str, pd.Series], idx: int,
+    ) -> Optional[float]:
+        """基于技术指标的 fallback 预测（回归模式）"""
         try:
-            if isinstance(value, pd.Series):
-                return float(value.iloc[0]) if len(value) == 1 else default
-            if pd.isna(value):
-                return float(default)
-            return float(value)
-        except (TypeError, ValueError, IndexError):
-            return float(default)
-
-    def _calculate_ensemble_prob(self, indicators: Dict[str, pd.Series], idx: int) -> Optional[float]:
-        """
-        计算集成预测值
-
-        回归模式：返回预测收益率（正值=看涨，负值=看跌）
-        如果有预训练模型则使用模型预测，否则使用简化的规则组合
-        """
-        # 如果有预训练模型
-        if self.lgb_model is not None and self.xgb_model is not None:
-            features = self._get_feature_vector(indicators, idx)
-            if features is not None:
-                try:
-                    lgb_pred = float(self.lgb_model.predict(features.reshape(1, -1))[0])
-                    xgb_pred = float(self._predict_xgb(features.reshape(1, -1))[0])
-                    return float(self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred)
-                except Exception:
-                    pass
-
-        # 简化版 fallback：基于技术指标组合（回归模式，输出预测收益率）
-        return self._fallback_prediction(indicators, idx)
-
-    def _fallback_prediction(self, indicators: Dict[str, pd.Series], idx: int) -> Optional[float]:
-        """Fallback: 基于技术指标组合预测收益率（回归模式）"""
-        try:
-            score = self.FALLBACK_BASE_SCORE
-
-            rsi = self._safe_scalar(indicators.get("rsi_14", pd.Series()).iloc[idx] if "rsi_14" in indicators else 50, 50)
-            score += 0.003 if rsi < 30 else (-0.003 if rsi > 70 else 0.0)
-
-            macd_hist = self._safe_scalar(indicators["macd_hist"].iloc[idx]) if "macd_hist" in indicators else 0.0
-            macd_slope = self._safe_scalar(indicators["macd_hist_slope"].iloc[idx]) if "macd_hist_slope" in indicators else 0.0
-            if macd_hist > 0 and macd_slope > 0:
-                score += 0.002
-            elif macd_hist < 0 and macd_slope < 0:
-                score -= 0.002
-
-            mom = self._safe_scalar(indicators["momentum_short"].iloc[idx]) if "momentum_short" in indicators else 0.0
-            score += max(-0.002, min(mom, 0.002))
-
-            bb_pos = self._safe_scalar(indicators["bb_position"].iloc[idx]) if "bb_position" in indicators else 0.0
-            score += 0.002 if bb_pos < -1 else (-0.002 if bb_pos > 1 else 0.0)
-
-            ma_align = self._safe_scalar(indicators["ma_alignment"].iloc[idx], 1) if "ma_alignment" in indicators else 1.0
-            score += 0.001 if ma_align == 2 else (-0.001 if ma_align == 0 else 0.0)
-
+            score = 0.0
+            score += self._rsi_score(indicators, idx)
+            score += self._macd_score(indicators, idx)
+            score += self._momentum_score(indicators, idx)
             return float(score)
         except Exception:
             return None
-    
-    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """预计算所有信号（使用 ML 模型）
-        
-        返回 SignalType 序列，与其他策���保持一致。
-        """
-        import logging
-        import xgboost as xgb
-        logger = logging.getLogger(__name__)
-        
-        if data is None or len(data) < 60:
-            logger.warning(f"ML策略预计算跳过: data is None={data is None}, len={len(data) if data is not None else 0}")
-            return None
-        
-        # 检查模型是否加载
-        if self.lgb_model is None or self.xgb_model is None:
-            logger.warning("ML模型未加载，使用 fallback 规则")
-            return self._precompute_fallback(data)
-        
-        try:
-            logger.info(f"ML策略开始预计算信号（使用ML模型）: {len(data)} 行数据")
-            indicators = self.calculate_indicators(data)
-            
-            # 获取训练时使用的特征名
-            feature_names = self._get_feature_names()
-            
-            # 构建特征矩阵
-            features_df = pd.DataFrame(index=data.index)
-            missing_features = []
-            for name in feature_names:
-                if name in indicators:
-                    features_df[name] = indicators[name]
-                else:
-                    features_df[name] = 0.0  # 缺失特征填0
-                    missing_features.append(name)
-            
-            if missing_features:
-                logger.debug(f"缺失特征（已填0）: {missing_features[:5]}... 共{len(missing_features)}个")
-            
-            features_df = features_df.fillna(0)
-            X = features_df.values
-            
-            # 模型预测（回归模式：输出预测收益率）
-            lgb_pred = self.lgb_model.predict(X)
-            xgb_pred = self._predict_xgb(X)
-            pred_return = self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
-            
-            # 转换为 pandas Series
-            score = pd.Series(pred_return, index=data.index)
-            
-            # 将预测收益率转换为 SignalType（回归模式）
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
-            
-            # 买入信号：预测收益率 > 0
-            buy_mask = score > self.BUY_RETURN_THRESHOLD
-            signals[buy_mask] = SignalType.BUY
-            
-            # 卖出信号：预测收益率 < 卖出阈值
-            sell_mask = score < self.SELL_RETURN_THRESHOLD
-            signals[sell_mask] = SignalType.SELL
-            
-            buy_count = (signals == SignalType.BUY).sum()
-            sell_count = (signals == SignalType.SELL).sum()
-            none_count = signals.isna().sum()
-            avg_pred = score.mean()
-            logger.info(f"ML策略预计算完成: BUY={buy_count}, SELL={sell_count}, None={none_count}, 平均预测收益={avg_pred:.6f}")
-            
-            return signals
-            
-        except Exception as e:
-            import traceback
-            logger.error(f"ML策略预计算信号失败: {e}\n{traceback.format_exc()}")
-            return self._precompute_fallback(data)
-    
-    def _precompute_fallback(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """Fallback: 使用简化规则计算信号（回归模式）"""
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info("使用 fallback 规则计算信号（回归模式）")
-        
+
+    def _precompute_fallback(
+        self, data: pd.DataFrame,
+    ) -> Optional[pd.Series]:
+        """Fallback: 使用简化规则计算信号"""
         indicators = self.calculate_indicators(data)
-        score = pd.Series(self.FALLBACK_BASE_SCORE, index=data.index)
-        
-        # RSI（回归模式：输出预测收益率量级）
+        score = pd.Series(0.0, index=data.index)
+
         if "rsi_14" in indicators:
             rsi = indicators["rsi_14"]
-            score = score + ((rsi < 30).astype(float) * 0.003)
-            score = score - ((rsi > 70).astype(float) * 0.003)
-        
-        # MACD
+            score += ((rsi < 30).astype(float) * 0.003)
+            score -= ((rsi > 70).astype(float) * 0.003)
+
         if "macd_hist" in indicators and "macd_hist_slope" in indicators:
-            macd_hist = indicators["macd_hist"]
-            macd_slope = indicators["macd_hist_slope"]
-            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.002
-            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.002
-        
-        # 动量
-        if "momentum_short" in indicators:
-            mom = indicators["momentum_short"]
-            score = score + (mom).clip(-0.002, 0.002)
-        
-        signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
-        signals[score > self.BUY_RETURN_THRESHOLD] = SignalType.BUY
-        signals[score < self.SELL_RETURN_THRESHOLD] = SignalType.SELL
-        
+            mh = indicators["macd_hist"]
+            ms = indicators["macd_hist_slope"]
+            score += ((mh > 0) & (ms > 0)).astype(float) * 0.002
+            score -= ((mh < 0) & (ms < 0)).astype(float) * 0.002
+
+        signals = pd.Series([None] * len(data), index=data.index, dtype=object)
+        signals[score > BUY_RETURN_THRESHOLD] = SignalType.BUY
+        signals[score < SELL_RETURN_THRESHOLD] = SignalType.SELL
         return signals
-    
-    def _calculate_score_fallback(self, indicators: Dict[str, pd.Series], index) -> pd.Series:
-        """使用简化规则计算预测收益率（fallback，回归模式）"""
-        score = pd.Series(self.FALLBACK_BASE_SCORE, index=index)
-        
-        # RSI
-        if "rsi_14" in indicators:
-            rsi = indicators["rsi_14"]
-            score = score + ((rsi < 30).astype(float) * 0.003)
-            score = score - ((rsi > 70).astype(float) * 0.003)
-        
-        # MACD
-        if "macd_hist" in indicators and "macd_hist_slope" in indicators:
-            macd_hist = indicators["macd_hist"]
-            macd_slope = indicators["macd_hist_slope"]
-            score = score + ((macd_hist > 0) & (macd_slope > 0)).astype(float) * 0.002
-            score = score - ((macd_hist < 0) & (macd_slope < 0)).astype(float) * 0.002
-        
-        # 动量
-        if "momentum_short" in indicators:
-            mom = indicators["momentum_short"]
-            score = score + (mom).clip(-0.002, 0.002)
-        
-        # 布林带
-        if "bb_position" in indicators:
-            bb = indicators["bb_position"]
-            score = score + ((bb < -1).astype(float) * 0.002)
-            score = score - ((bb > 1).astype(float) * 0.002)
-        
-        # MA 排列
-        if "ma_alignment" in indicators:
-            ma = indicators["ma_alignment"]
-            score = score + ((ma == 2).astype(float) * 0.001)
-            score = score - ((ma == 0).astype(float) * 0.001)
-        
-        return score
-    
-    def _get_feature_names(self) -> List[str]:
-        """获取特征名列表（与训练时保持一致，共 62 个特征）"""
-        return [
-            # 收益率特征 (6)
-            'return_1d', 'return_2d', 'return_3d', 'return_5d', 'return_10d', 'return_20d',
-            # 动量特征 (6)
-            'momentum_short', 'momentum_long', 'momentum_reversal',
-            'momentum_strength_5', 'momentum_strength_10', 'momentum_strength_20',
-            # 截面特征 - 相对强度 (3)
-            'relative_strength_5d', 'relative_strength_20d', 'relative_momentum',
-            # 截面特征 - 排名 (5)
-            'return_1d_rank', 'return_5d_rank', 'return_20d_rank', 'volume_rank', 'volatility_20_rank',
-            # 截面特征 - 市场状态 (1)
-            'market_up_ratio',
-            # 移动平均特征 (9)
-            'ma_ratio_5', 'ma_ratio_10', 'ma_ratio_20', 'ma_ratio_60',
-            'ma_slope_5', 'ma_slope_10', 'ma_slope_20', 'ma_alignment',
-            # 波动率特征 (5)
-            'volatility_5', 'volatility_20', 'volatility_60', 'vol_regime', 'volatility_skew',
-            # 成交量特征 (4)
-            'vol_ratio', 'vol_ma_ratio', 'vol_std', 'vol_price_diverge',
-            # RSI 特征 (3)
-            'rsi_6', 'rsi_14', 'rsi_diff',
-            # MACD 特征 (4)
-            'macd', 'macd_signal', 'macd_hist', 'macd_hist_slope',
-            # 布林带特征 (2)
-            'bb_position', 'bb_width',
-            # 价格形态特征 (6)
-            'body', 'wick_upper', 'wick_lower', 'range_pct',
-            'consecutive_up', 'consecutive_down',
-            # 价格位置特征 (6)
-            'price_pos_20', 'price_pos_60',
-            'dist_high_20', 'dist_low_20', 'dist_high_60', 'dist_low_60',
-            # ATR 和趋势特征 (3)
-            'atr_pct', 'di_diff', 'adx',
-        ]
-    
-    def precompute_all_signals_batch(self, combined_df: pd.DataFrame) -> Optional[pd.DataFrame]:
-        """批量预计算所有股票的信号（支持截面特征）
-        
-        这个方法接收合并后的多股票数据，可以计算截面特征（排名、相对强度等）。
-        
-        Args:
-            combined_df: MultiIndex DataFrame，index=(stock_code, date)
-                        包含所有股票的历史数据
-        
-        Returns:
-            DataFrame with columns: signal_type, strength, price
-            index: (stock_code, date)
-        """
-        import logging
-        import xgboost as xgb
-        logger = logging.getLogger(__name__)
-        
-        if combined_df is None or len(combined_df) == 0:
-            logger.warning("批量预计算跳过: 数据为空")
-            return None
-        
-        # 检查模型是否加载
-        if self.lgb_model is None or self.xgb_model is None:
-            logger.warning("ML模型未加载，无法进行批量预计算")
-            return None
-        
+
+    # ── 工具方法 ───────────��─────────────────────────────
+
+    @staticmethod
+    def _get_indicator_value(
+        indicators: Dict[str, pd.Series], name: str, idx: int,
+        default: float = 0.0,
+    ) -> float:
+        """安全获取指标值"""
+        if name not in indicators:
+            return default
         try:
-            logger.info(f"ML策略批量预计算开始: {len(combined_df)} 行数据")
-            
-            # 重置索引以便处理
-            df = combined_df.reset_index()
-            if 'level_0' in df.columns:
-                df = df.rename(columns={'level_0': 'stock_code', 'level_1': 'date'})
-            
-            # 确保有 stock_code 和 date 列
-            if 'stock_code' not in df.columns:
-                logger.error("数据缺少 stock_code 列")
-                return None
-            
-            # 1. 逐股票计算时序特征
-            logger.info("计算时序特征...")
-            all_features = []
-            
-            for stock_code, stock_df in df.groupby('stock_code'):
-                stock_df = stock_df.sort_values('date').reset_index(drop=True)
-                
-                if len(stock_df) < 60:
-                    continue
-                
-                # 计算时序指标
-                indicators = self._calculate_time_series_features(stock_df)
-                
-                # 构建特征 DataFrame
-                feat_df = pd.DataFrame(index=stock_df.index)
-                feat_df['stock_code'] = stock_code
-                feat_df['date'] = stock_df['date']
-                feat_df['close'] = stock_df['close']
-                
-                # 添加用于截面特征计算的原始数据
-                feat_df['volume'] = stock_df['volume']
-                
-                # 添加时序特征
-                for name, series in indicators.items():
-                    feat_df[name] = series.values
-                
-                all_features.append(feat_df)
-            
-            if not all_features:
-                logger.warning("没有足够数据计算特征")
-                return None
-            
-            features_df = pd.concat(all_features, ignore_index=True)
-            logger.info(f"时序特征计算完成: {len(features_df)} 行")
-            
-            # 2. 计算截面特征（需要当日所有股票数据）
-            logger.info("计算截面特征...")
-            features_df = self._calculate_cross_sectional_features(features_df)
-            
-            # 3. 准备模型输入
-            feature_names = self._get_feature_names()
-            
-            # 构建特征矩阵
-            X_df = pd.DataFrame(index=features_df.index)
-            missing_features = []
-            for name in feature_names:
-                if name in features_df.columns:
-                    X_df[name] = features_df[name]
-                else:
-                    X_df[name] = 0.0
-                    missing_features.append(name)
-            
-            if missing_features:
-                logger.debug(f"缺失特征（已填0）: {missing_features}")
-            
-            X_df = X_df.fillna(0)
-            X = X_df.values
-            
-            # 4. 模型预测（回归模式：输出预测收益率）
-            logger.info("执行模型预测（回归模式）...")
-            lgb_pred = self.lgb_model.predict(X)
-            xgb_pred = self._predict_xgb(X)
-            pred_return = self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
-            
-            features_df['pred'] = pred_return
-            
-            # 5. 生成信号（基于预测收益率排序）
-            logger.info("生成交易信号（回归模式）...")
-            signals = []
-            
-            for _, row in features_df.iterrows():
-                p = row['pred']
-                
-                if p > self.BUY_RETURN_THRESHOLD:
-                    signal_type = SignalType.BUY
-                    strength = min(abs(p) * 100, 1.0)
-                elif p < self.SELL_RETURN_THRESHOLD:
-                    signal_type = SignalType.SELL
-                    strength = min(abs(p) * 100, 1.0)
-                else:
-                    continue  # 无信号
-                
-                signals.append({
-                    'stock_code': row['stock_code'],
-                    'date': row['date'],
-                    'signal_type': signal_type,
-                    'strength': min(strength, 1.0),
-                    'price': row['close'],
-                })
-            
-            if signals.isna().all():
-                logger.warning("未生成任何信号")
-                return None
-            
-            result_df = pd.DataFrame(signals)
-            result_df.set_index(['stock_code', 'date'], inplace=True)
-            
-            buy_count = (result_df['signal_type'] == SignalType.BUY).sum()
-            sell_count = (result_df['signal_type'] == SignalType.SELL).sum()
-            avg_pred = pred_return.mean()
-            
-            logger.info(f"ML策略批量预计算完成: BUY={buy_count}, SELL={sell_count}, 平均预测收益={avg_pred:.6f}")
-            
-            return result_df
-            
-        except Exception as e:
-            import traceback
-            logger.error(f"ML策略批量预计算失败: {e}\n{traceback.format_exc()}")
-            return None
-    
-    def _calculate_time_series_features(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算单只股票的时序特征（与 calculate_indicators 类似但返回 dict）"""
-        indicators = {}
-        
-        close = df['close']
-        high = df['high']
-        low = df['low']
-        volume = df['volume']
-        open_ = df['open']
-        
-        # 收益率
-        for period in [1, 2, 3, 5, 10, 20]:
-            indicators[f'return_{period}d'] = close.pct_change(period)
-        
-        # 动量
-        indicators['momentum_short'] = indicators['return_5d'] - indicators['return_10d']
-        indicators['momentum_long'] = indicators['return_10d'] - indicators['return_20d']
-        indicators['momentum_reversal'] = -indicators['return_1d']
-        
-        returns = close.pct_change()
-        for period in [5, 10, 20]:
-            up_days = (returns > 0).rolling(period).sum()
-            indicators[f'momentum_strength_{period}'] = up_days / period
-        
-        # 移动平均
-        for window in [5, 10, 20, 60]:
-            ma = close.rolling(window).mean()
-            indicators[f'ma_ratio_{window}'] = close / ma - 1
-            indicators[f'ma_slope_{window}'] = ma.pct_change(5)
-        
-        ma_5 = close.rolling(5).mean()
-        ma_10 = close.rolling(10).mean()
-        ma_20 = close.rolling(20).mean()
-        indicators['ma_alignment'] = ((ma_5 > ma_10).astype(int) + (ma_10 > ma_20).astype(int))
-        
-        # 波动率
-        for window in [5, 20, 60]:
-            indicators[f'volatility_{window}'] = returns.rolling(window).std()
-        indicators['vol_regime'] = indicators['volatility_5'] / (indicators['volatility_20'] + 1e-10)
-        indicators['volatility_skew'] = returns.rolling(20).skew()
-        
-        # 成交量
-        vol_ma20 = volume.rolling(20).mean()
-        vol_ma5 = volume.rolling(5).mean()
-        indicators['vol_ratio'] = volume / (vol_ma20 + 1)
-        indicators['vol_ma_ratio'] = vol_ma5 / (vol_ma20 + 1)
-        indicators['vol_std'] = volume.rolling(20).std() / (vol_ma20 + 1)
-        price_up = (close > close.shift(1)).astype(int)
-        vol_up = (volume > volume.shift(1)).astype(int)
-        indicators['vol_price_diverge'] = (price_up != vol_up).astype(int)
-        
-        # RSI
-        delta = close.diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        for period in [6, 14]:
-            avg_gain = gain.ewm(span=period, adjust=False).mean()
-            avg_loss = loss.ewm(span=period, adjust=False).mean()
-            rs = avg_gain / (avg_loss + 1e-10)
-            indicators[f'rsi_{period}'] = 100 - (100 / (1 + rs))
-        indicators['rsi_diff'] = indicators['rsi_6'] - indicators['rsi_14']
-        
-        # MACD
-        ema12 = close.ewm(span=12, adjust=False).mean()
-        ema26 = close.ewm(span=26, adjust=False).mean()
-        indicators['macd'] = ema12 - ema26
-        indicators['macd_signal'] = indicators['macd'].ewm(span=9, adjust=False).mean()
-        indicators['macd_hist'] = indicators['macd'] - indicators['macd_signal']
-        indicators['macd_hist_slope'] = indicators['macd_hist'].diff(3)
-        
-        # 布林带
-        bb_mid = close.rolling(20).mean()
-        bb_std = close.rolling(20).std()
-        indicators['bb_position'] = (close - bb_mid) / (2 * bb_std + 1e-10)
-        indicators['bb_width'] = 4 * bb_std / (bb_mid + 1e-10)
-        
-        # 价格形态
-        indicators['body'] = (close - open_) / (open_ + 1e-10)
-        indicators['wick_upper'] = (high - np.maximum(close, open_)) / (high - low + 1e-10)
-        indicators['wick_lower'] = (np.minimum(close, open_) - low) / (high - low + 1e-10)
-        indicators['range_pct'] = (high - low) / (close + 1e-10)
-        indicators['consecutive_up'] = (close > close.shift(1)).rolling(5).sum()
-        indicators['consecutive_down'] = (close < close.shift(1)).rolling(5).sum()
-        
-        # 价格位置
-        for window in [20, 60]:
-            high_n = high.rolling(window).max()
-            low_n = low.rolling(window).min()
-            indicators[f'price_pos_{window}'] = (close - low_n) / (high_n - low_n + 1e-10)
-            indicators[f'dist_high_{window}'] = (high_n - close) / (close + 1e-10)
-            indicators[f'dist_low_{window}'] = (close - low_n) / (close + 1e-10)
-        
-        # ATR
-        tr = pd.Series(
-            np.maximum.reduce([
-                high - low,
-                (high - close.shift()).abs(),
-                (low - close.shift()).abs()
-            ]),
-            index=close.index
-        )
-        indicators['atr'] = tr.rolling(14).mean()
-        indicators['atr_pct'] = indicators['atr'] / (close + 1e-10)
-        
-        # ADX
-        plus_dm = high.diff()
-        minus_dm = -low.diff()
-        plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-        minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
-        atr14 = tr.rolling(14).mean()
-        plus_di = 100 * plus_dm.rolling(14).mean() / (atr14 + 1e-10)
-        minus_di = 100 * minus_dm.rolling(14).mean() / (atr14 + 1e-10)
-        indicators['di_diff'] = plus_di - minus_di
-        indicators['adx'] = (plus_di - minus_di).abs().rolling(14).mean()
-        
-        return indicators
-    
-    def _calculate_cross_sectional_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """计算截面特征（每日排名、相对强度等）
-        
-        这些特征需要��日所有股票数据才能计算。
-        """
-        result = df.copy()
-        
-        # 排名特征（每日截面排名，百分位）
-        for col in ['return_1d', 'return_5d', 'return_20d']:
-            if col in result.columns:
-                result[f'{col}_rank'] = result.groupby('date')[col].rank(pct=True)
-        
-        if 'volume' in result.columns:
-            result['volume_rank'] = result.groupby('date')['volume'].rank(pct=True)
-        
-        if 'volatility_20' in result.columns:
-            result['volatility_20_rank'] = result.groupby('date')['volatility_20'].rank(pct=True)
-        
-        # 市场状态特征
-        if 'return_1d' in result.columns:
-            result['market_up_ratio'] = result.groupby('date')['return_1d'].transform(
-                lambda x: (x > 0).sum() / len(x) if len(x) > 0 else 0.5
-            )
-        
-        # 相对强度特征
-        if 'return_5d' in result.columns:
-            market_return_5d = result.groupby('date')['return_5d'].transform('mean')
-            result['relative_strength_5d'] = result['return_5d'] - market_return_5d
-        
-        if 'return_20d' in result.columns:
-            market_return_20d = result.groupby('date')['return_20d'].transform('mean')
-            result['relative_strength_20d'] = result['return_20d'] - market_return_20d
-        
-        if 'relative_strength_5d' in result.columns and 'relative_strength_20d' in result.columns:
-            result['relative_momentum'] = result['relative_strength_5d'] - result['relative_strength_20d']
-        
-        return result
+            val = indicators[name].iloc[idx]
+            return default if pd.isna(val) else float(val)
+        except (IndexError, TypeError):
+            return default
+
+    def _rsi_score(self, ind: Dict[str, pd.Series], idx: int) -> float:
+        rsi = self._get_indicator_value(ind, "rsi_14", idx, 50)
+        if rsi < 30:
+            return 0.003
+        if rsi > 70:
+            return -0.003
+        return 0.0
+
+    def _macd_score(self, ind: Dict[str, pd.Series], idx: int) -> float:
+        mh = self._get_indicator_value(ind, "macd_hist", idx)
+        ms = self._get_indicator_value(ind, "macd_hist_slope", idx)
+        if mh > 0 and ms > 0:
+            return 0.002
+        if mh < 0 and ms < 0:
+            return -0.002
+        return 0.0
+
+    def _momentum_score(self, ind: Dict[str, pd.Series], idx: int) -> float:
+        mom = self._get_indicator_value(ind, "momentum_short", idx)
+        return max(-0.002, min(mom, 0.002))
+
+    @staticmethod
+    def _normalize_batch_index(combined_df: pd.DataFrame) -> pd.DataFrame:
+        """规范化批量数据的索引"""
+        df = combined_df.reset_index()
+        if "level_0" in df.columns:
+            df = df.rename(columns={"level_0": "stock_code", "level_1": "date"})
+        return df

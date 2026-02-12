@@ -20,6 +20,27 @@ if QLIB_AVAILABLE:
     from qlib.utils import init_instance_by_config
 
 
+def _build_fit_kwargs(model: Any, config: "QlibTrainingConfig") -> Dict[str, Any]:
+    """为不同模型构建额外的 fit 参数。
+
+    XGBoost 的 XGBModel.fit() 接受 num_boost_round 参数，
+    需要从超参数中提取并传入。
+    """
+    extra = {}
+    # 检测 XGBModel（Qlib 的 xgboost 包装）
+    model_cls = type(model).__name__
+    if model_cls == "XGBModel":
+        num_boost_round = (
+            config.hyperparameters.get("n_estimators")
+            or config.hyperparameters.get("num_iterations")
+            or config.hyperparameters.get("epochs")
+            or 1000
+        )
+        extra["num_boost_round"] = int(num_boost_round)
+        logger.info(f"XGBoost num_boost_round={extra['num_boost_round']}")
+    return extra
+
+
 def _extract_training_history(
     model: Any, config: Any, training_history: list
 ) -> None:
@@ -313,7 +334,9 @@ async def _train_qlib_model(
                     else:
                         logger.warning(f"dataset不包含验证集segment，仅使用训练集")
 
-                    model.fit(dataset_to_fit)
+                    # 构建额外的 fit 参数（如 XGBoost 的 num_boost_round）
+                    fit_extra_kwargs = _build_fit_kwargs(model, config)
+                    model.fit(dataset_to_fit, **fit_extra_kwargs)
 
                     # 训练完成后，尝试从模型获取真实训练历史
                     _extract_training_history(model, config, training_history)
@@ -340,13 +363,15 @@ async def _train_qlib_model(
                     else:
                         logger.warning(f"dataset不包含验证集segment，仅使用训练集")
 
-                    model.fit(dataset_to_fit)
+                    fit_extra_kwargs = _build_fit_kwargs(model, config)
+                    model.fit(dataset_to_fit, **fit_extra_kwargs)
 
                     # 训练完成后，尝试从模型获取真实训练历史
                     _extract_training_history(model, config, training_history)
             else:
                 # 对于不支持验证集的模型，正常训练
-                model.fit(train_dataset)
+                fit_extra_kwargs = _build_fit_kwargs(model, config)
+                model.fit(train_dataset, **fit_extra_kwargs)
 
                 # 尝试从模型获取真实训练历史
                 _extract_training_history(model, config, training_history)

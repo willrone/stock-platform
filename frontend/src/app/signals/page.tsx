@@ -444,11 +444,11 @@ export default function SignalsPage() {
   return (
     <Stack spacing={2}>
       <Box>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
           策略信号
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          选择一个或多个策略后，生成全市场（分页）最近N个交易日窗口内的“最新信号”，点击某只股票可查看多策略近N日信号事件历史与价格走势。
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+          选择一个或多个策略后，生成全市场最近N个交易日窗口内的"最新信号"，点击某只股票可查看信号事件历史与价格走势。
         </Typography>
       </Box>
 
@@ -664,8 +664,8 @@ export default function SignalsPage() {
 
       <Card>
         <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
+            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
               最新信号（第 {page} 页，{filteredRows.length} / {rows.length} / {total}，已选策略：
               {selectedStrategyNames.map(name => getStrategyLabel(name)).join('，') || '无'}）
             </Typography>
@@ -719,9 +719,9 @@ export default function SignalsPage() {
                 // 合并所有策略的信号（移动端简化显示）
                 const signals = selectedStrategyNames.map(name => row[name]).filter(Boolean);
                 if (signals.length === 0) return null;
-                
+
                 return signals.map((sig, sidx) => (
-                  <MobileSignalCard 
+                  <MobileSignalCard
                     key={`${idx}-${sidx}`}
                     signal={{
                       stock_code: row.stock_code,
@@ -766,7 +766,7 @@ export default function SignalsPage() {
                   <TableRow>
                     <TableCell colSpan={6}>
                       <Typography variant="body2" color="text.secondary">
-                        暂无数据（先点击“生成信号”）
+                        暂无数据（先点击"生成信号"）
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -825,7 +825,9 @@ export default function SignalsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth
+        sx={{ '& .MuiDialog-paper': { m: { xs: 1, sm: 2 } } }}
+      >
         <DialogTitle>
           {historyStock} ·{' '}
           {selectedStrategyNames.map(name => getStrategyLabel(name)).join('，') || '策略'} · 近

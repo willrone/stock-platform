@@ -1,7 +1,8 @@
 """
 Qlib训练配置类
 
-包含模型类型、训练配置和训练结果的数据类定义
+包含模型类型、训练配置和训练结果的数据类定义。
+支持多种特征集（Alpha158 / 手工62特征）和标签类型（回归 / 二分类）。
 """
 
 from dataclasses import dataclass
@@ -25,6 +26,28 @@ class QlibModelType(Enum):
     PATCHTST = "patchtst"
 
 
+class LabelType(Enum):
+    """标签类型"""
+
+    REGRESSION = "regression"      # 回归：预测未来N天收益率
+    BINARY = "binary"              # 二分类：涨>阈值=1
+
+
+class FeatureSetChoice(Enum):
+    """特征集选择"""
+
+    ALPHA158 = "alpha158"          # Qlib Alpha158因子（158个）
+    TECHNICAL_62 = "technical_62"  # 手工技术指标（62个）
+    CUSTOM = "custom"              # 自定义特征列表
+
+
+class DataSplitMethod(Enum):
+    """数据分割方式"""
+
+    RATIO = "ratio"      # 按比例分割（默认80/20）
+    HARDCUT = "hardcut"  # 按固定日期硬切
+
+
 @dataclass
 class QlibTrainingConfig:
     """Qlib训练配置"""
@@ -38,7 +61,7 @@ class QlibTrainingConfig:
     use_alpha_factors: bool = True
     cache_features: bool = True
     # 特征选择配置
-    selected_features: Optional[List[str]] = None  # 用户选择的特征列表，None表示使用所有特征
+    selected_features: Optional[List[str]] = None
     # 早停策略配置
     enable_early_stopping: bool = True
     early_stopping_monitor: str = "val_loss"
@@ -49,6 +72,18 @@ class QlibTrainingConfig:
     embargo_days: int = 20
     # 市场中性化配置
     enable_neutralization: bool = True
+    # === 统一训练体系新增配置 ===
+    # 特征集选择（默认 alpha158 保持向后兼容）
+    feature_set: str = "alpha158"
+    # 标签类型（默认 regression 保持向后兼容）
+    label_type: str = "regression"
+    # 二分类阈值（仅 label_type=binary 时生效）
+    binary_threshold: float = 0.003
+    # 数据分割方式（默认 ratio 保持向后兼容）
+    split_method: str = "ratio"
+    # 硬切日期（仅 split_method=hardcut 时生效）
+    train_end_date: Optional[str] = None
+    val_end_date: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -69,6 +104,12 @@ class QlibTrainingConfig:
             "enable_adaptive_patience": self.enable_adaptive_patience,
             "embargo_days": self.embargo_days,
             "enable_neutralization": self.enable_neutralization,
+            "feature_set": self.feature_set,
+            "label_type": self.label_type,
+            "binary_threshold": self.binary_threshold,
+            "split_method": self.split_method,
+            "train_end_date": self.train_end_date,
+            "val_end_date": self.val_end_date,
         }
 
 
