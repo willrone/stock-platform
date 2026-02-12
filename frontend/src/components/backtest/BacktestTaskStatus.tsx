@@ -217,7 +217,7 @@ export default function BacktestTaskStatus({
           )}
 
           {/* 操作按钮 */}
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {task.status === 'failed' && onRetry && (
               <Button
                 variant="outlined"
@@ -226,6 +226,7 @@ export default function BacktestTaskStatus({
                 onClick={onRetry}
                 disabled={loading}
                 size="small"
+                sx={{ minHeight: 44 }}
               >
                 重新运行
               </Button>
@@ -239,6 +240,7 @@ export default function BacktestTaskStatus({
                 onClick={onStop}
                 disabled={loading}
                 size="small"
+                sx={{ minHeight: 44 }}
               >
                 停止任务
               </Button>
@@ -254,24 +256,40 @@ export default function BacktestTaskStatus({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              gap: 2,
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)' },
+              gap: 1.5,
             }}
           >
-            <Box>
+            <Box sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
               <Typography variant="caption" color="text.secondary">
                 任务名称
               </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {task.task_name}
               </Typography>
             </Box>
 
-            <Box>
+            <Box sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
               <Typography variant="caption" color="text.secondary">
                 任务ID
               </Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontFamily: 'monospace',
+                  wordBreak: 'break-all',
+                  fontSize: { xs: '0.65rem', sm: '0.875rem' },
+                  lineHeight: 1.4,
+                }}
+              >
                 {task.task_id}
               </Typography>
             </Box>
@@ -284,7 +302,7 @@ export default function BacktestTaskStatus({
                 label={backtestConfig.strategyName}
                 color="secondary"
                 size="small"
-                sx={{ mt: 0.5 }}
+                sx={{ mt: 0.5, maxWidth: '100%' }}
               />
             </Box>
 
@@ -303,18 +321,18 @@ export default function BacktestTaskStatus({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              gap: 2,
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)' },
+              gap: 1.5,
             }}
           >
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <Calendar size={16} />
+                <Calendar size={14} />
                 <Typography variant="caption" color="text.secondary">
                   创建时间
                 </Typography>
               </Box>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
                 {formatDateTime(task.created_at)}
               </Typography>
             </Box>
@@ -322,12 +340,12 @@ export default function BacktestTaskStatus({
             {task.completed_at && (
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                  <CheckCircle size={16} />
+                  <CheckCircle size={14} />
                   <Typography variant="caption" color="text.secondary">
                     完成时间
                   </Typography>
                 </Box>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
                   {formatDateTime(task.completed_at)}
                 </Typography>
               </Box>
@@ -336,7 +354,7 @@ export default function BacktestTaskStatus({
             {duration && (
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                  <Clock size={16} />
+                  <Clock size={14} />
                   <Typography variant="caption" color="text.secondary">
                     执行时长
                   </Typography>
@@ -356,14 +374,14 @@ export default function BacktestTaskStatus({
             </Typography>
             <Box
               sx={{
-                height: 200,
+                height: { xs: 160, sm: 200 },
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 1,
-                p: 1.5,
+                p: { xs: 1, sm: 1.5 },
               }}
             >
               {task.stock_codes && task.stock_codes.length > 0 ? (
@@ -477,8 +495,8 @@ export default function BacktestTaskStatus({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              gap: 2,
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)' },
+              gap: 1.5,
             }}
           >
             <Box>

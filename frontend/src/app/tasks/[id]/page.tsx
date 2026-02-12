@@ -161,7 +161,7 @@ export default function TaskDetailPage() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
       {/* 页面标题 */}
       <TaskHeader
         task={currentTask}
@@ -174,9 +174,15 @@ export default function TaskDetailPage() {
         onDelete={() => setIsDeleteOpen(true)}
       />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' },
+          gap: { xs: 2, lg: 3 },
+        }}
+      >
         {/* 主要内容区域 */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, lg: 3 }, minWidth: 0 }}>
           {/* 任务进度 */}
           {currentTask.task_type === 'backtest' &&
           (currentTask.status === 'running' || currentTask.status === 'created') ? (
@@ -253,7 +259,7 @@ export default function TaskDetailPage() {
         </Box>
 
         {/* 侧边栏 */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, lg: 3 }, minWidth: 0 }}>
           <TaskSidebar
             task={currentTask}
             refreshing={refreshing}

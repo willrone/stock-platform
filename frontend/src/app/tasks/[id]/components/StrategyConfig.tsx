@@ -197,13 +197,15 @@ export function StrategyConfig({ task, onSaveConfig }: StrategyConfigProps) {
           <Box
             sx={{
               display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
               justifyContent: 'space-between',
-              alignItems: 'center',
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              gap: 1,
               width: '100%',
             }}
           >
             <Box>
-              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, fontSize: { xs: '0.9rem', sm: '1.25rem' } }}>
                 策略配置
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -214,13 +216,14 @@ export function StrategyConfig({ task, onSaveConfig }: StrategyConfigProps) {
               variant="outlined"
               color="primary"
               size="small"
-              startIcon={<Save size={16} />}
+              startIcon={<Save size={14} />}
               onClick={onSaveConfig}
               disabled={
                 !configInfo.strategyName ||
                 configInfo.strategyName === '未知策略' ||
                 Object.keys(configInfo.parameters).length === 0
               }
+              sx={{ flexShrink: 0, minHeight: 36 }}
             >
               保存配置
             </Button>

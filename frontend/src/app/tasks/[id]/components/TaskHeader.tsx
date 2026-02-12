@@ -41,29 +41,65 @@ export function TaskHeader({
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between', gap: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, minWidth: 0 }}>
-        <IconButton onClick={onBack} size="small">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
+      {/* 标题行 */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+        <IconButton onClick={onBack} size="small" sx={{ flexShrink: 0, minWidth: 44, minHeight: 44 }}>
           <ArrowLeft size={20} />
         </IconButton>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.125rem', sm: '1.5rem', md: '2.125rem' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {task.task_name}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.625rem', sm: '0.75rem' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1rem', sm: '1.5rem', md: '2.125rem' },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {task.task_name}
+            </Typography>
+            {getStatusChip(task.status)}
+          </Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              fontSize: { xs: '0.625rem', sm: '0.75rem' },
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+            }}
+          >
             任务ID: {task.task_id}
           </Typography>
         </Box>
-        {getStatusChip(task.status)}
       </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, ml: { xs: 0, md: 0 } }}>
+      {/* 操作按钮 - 移动端横向滚动 */}
+      <Box
+        sx={{
+          display: 'flex',
+          gap: { xs: 0.5, sm: 1 },
+          overflowX: { xs: 'auto', md: 'visible' },
+          pb: { xs: 0.5, md: 0 },
+          ml: { xs: 0, md: 5 },
+          WebkitOverflowScrolling: 'touch',
+          '&::-webkit-scrollbar': { height: 0 },
+        }}
+      >
         <Button
           variant="outlined"
           startIcon={<RefreshCw size={16} />}
           onClick={onRefresh}
           disabled={refreshing}
           size="small"
+          sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
         >
           刷新
         </Button>
@@ -74,8 +110,9 @@ export function TaskHeader({
           startIcon={<Copy size={16} />}
           onClick={onRebuild}
           size="small"
+          sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
         >
-          重建任务
+          重建
         </Button>
 
         {task.status === 'failed' && (
@@ -85,8 +122,9 @@ export function TaskHeader({
             startIcon={<Play size={16} />}
             onClick={onRetry}
             size="small"
+            sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
           >
-            重新运行
+            重试
           </Button>
         )}
 
@@ -97,8 +135,9 @@ export function TaskHeader({
             startIcon={<Download size={16} />}
             onClick={onExport}
             size="small"
+            sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
           >
-            导出结果
+            导出
           </Button>
         )}
 
@@ -108,6 +147,7 @@ export function TaskHeader({
           startIcon={<Trash2 size={16} />}
           onClick={onDelete}
           size="small"
+          sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
         >
           删除
         </Button>

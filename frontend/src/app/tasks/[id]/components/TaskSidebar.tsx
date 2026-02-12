@@ -88,6 +88,7 @@ export function TaskSidebar({
               onClick={onRefresh}
               disabled={refreshing}
               fullWidth
+              sx={{ minHeight: 44 }}
             >
               刷新状态
             </Button>
@@ -99,6 +100,7 @@ export function TaskSidebar({
                 startIcon={<Play size={16} />}
                 onClick={onRetry}
                 fullWidth
+                sx={{ minHeight: 44 }}
               >
                 重新运行
               </Button>
@@ -111,6 +113,7 @@ export function TaskSidebar({
                 startIcon={<Download size={16} />}
                 onClick={onExport}
                 fullWidth
+                sx={{ minHeight: 44 }}
               >
                 导出结果
               </Button>
@@ -122,6 +125,7 @@ export function TaskSidebar({
               startIcon={<Trash2 size={16} />}
               onClick={onDelete}
               fullWidth
+              sx={{ minHeight: 44 }}
             >
               删除任务
             </Button>

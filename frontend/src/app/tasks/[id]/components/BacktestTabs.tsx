@@ -83,7 +83,7 @@ export function BacktestTabs({
 
   return (
     <Card>
-      <CardContent>
+      <CardContent sx={{ px: { xs: 1, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
         <Box>
           <Tabs
             value={selectedTab}
@@ -91,11 +91,21 @@ export function BacktestTabs({
             aria-label="回测结果展示"
             variant="scrollable"
             scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{
+              minHeight: { xs: 40, sm: 48 },
+              '& .MuiTab-root': {
+                minHeight: { xs: 40, sm: 48 },
+                minWidth: { xs: 'auto', sm: 90 },
+                px: { xs: 1, sm: 2 },
+                fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              },
+            }}
           >
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <BarChart3 size={16} />
+                  <BarChart3 size={14} />
                   <span>概览</span>
                 </Box>
               }
@@ -104,8 +114,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <LineChart size={16} />
-                  <span>交互式图表</span>
+                  <LineChart size={14} />
+                  <span>图表</span>
                 </Box>
               }
               value="charts"
@@ -113,8 +123,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <FileText size={16} />
-                  <span>交易记录</span>
+                  <FileText size={14} />
+                  <span>交易</span>
                 </Box>
               }
               value="trades"
@@ -122,8 +132,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <AlertTriangle size={16} />
-                  <span>信号记录</span>
+                  <AlertTriangle size={14} />
+                  <span>信号</span>
                 </Box>
               }
               value="signals"
@@ -131,8 +141,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <PieChart size={16} />
-                  <span>持仓分析</span>
+                  <PieChart size={14} />
+                  <span>持仓</span>
                 </Box>
               }
               value="positions"
@@ -140,8 +150,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Calendar size={16} />
-                  <span>月度分析</span>
+                  <Calendar size={14} />
+                  <span>月度</span>
                 </Box>
               }
               value="monthly"
@@ -149,8 +159,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Activity size={16} />
-                  <span>风险分析</span>
+                  <Activity size={14} />
+                  <span>风险</span>
                 </Box>
               }
               value="risk"
@@ -158,8 +168,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <TrendingUp size={16} />
-                  <span>绩效分解</span>
+                  <TrendingUp size={14} />
+                  <span>绩效</span>
                 </Box>
               }
               value="performance"
@@ -167,8 +177,8 @@ export function BacktestTabs({
             <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Activity size={16} />
-                  <span>性能分析</span>
+                  <Activity size={14} />
+                  <span>性能</span>
                 </Box>
               }
               value="perf_monitor"

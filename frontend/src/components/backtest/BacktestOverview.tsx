@@ -165,8 +165,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: { xs: 1, sm: 2 },
         }}
       >
         {Array.from({ length: 8 }).map((_, index) => (
@@ -211,8 +211,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: { xs: 1, sm: 2 },
         }}
       >
         {/* 总收益率 */}
@@ -351,8 +351,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: { xs: 1, sm: 2 },
         }}
       >
         {/* 波动率 */}
@@ -495,8 +495,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-                gap: 2,
+                gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                gap: { xs: 1, sm: 2 },
               }}
             >
               <Box sx={{ textAlign: 'center', overflow: 'hidden', p: { xs: 0.5, sm: 1 } }}>
@@ -570,8 +570,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-              gap: 2,
+              gridTemplateColumns: { xs: 'repeat(3, 1fr)', md: 'repeat(3, 1fr)' },
+              gap: { xs: 1, sm: 2 },
             }}
           >
             <Box sx={{ textAlign: 'center' }}>

@@ -99,8 +99,8 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: { xs: 1, sm: 2 },
         }}
       >
         {/* 含成本年化收益 */}
@@ -252,7 +252,7 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                 gap: 2,
               }}
             >
@@ -364,16 +364,16 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               sx={{
                 mt: 3,
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-                gap: 2,
+                gridTemplateColumns: { xs: 'repeat(3, 1fr)', md: 'repeat(3, 1fr)' },
+                gap: { xs: 1, sm: 2 },
               }}
             >
               <Card>
-                <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                     总手续费
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     ¥
                     {(costComparison.costStats.total_commission || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
@@ -384,11 +384,11 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               </Card>
 
               <Card>
-                <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                     总滑点成本
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     ¥
                     {(costComparison.costStats.total_slippage || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
@@ -399,11 +399,11 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               </Card>
 
               <Card>
-                <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                     总交易成本
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word', color: 'warning.main' }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word', color: 'warning.main' }}>
                     ¥
                     {(costComparison.costStats.total_cost || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
