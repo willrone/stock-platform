@@ -12,10 +12,53 @@ from loguru import logger
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
+from ..core.risk_manager import PositionPriceInfo, RiskManager
 from ..models import SignalType, TradingSignal
 from app.core.error_handler import ErrorSeverity, TaskError
 # 延迟导入以避免循环依赖
 # from .backtest_progress_monitor import backtest_progress_monitor
+
+
+def _check_and_execute_stop_loss_take_profit(
+    risk_manager: RiskManager,
+    portfolio_manager: PortfolioManager,
+    current_prices: Dict[str, float],
+    current_date: datetime,
+) -> int:
+    """
+    检查并执行止损止盈信号（优先级高于策略信号）
+
+    Returns:
+        执行的交易数量
+    """
+    # 构建持仓价格信息
+    positions = portfolio_manager.positions
+    if not positions:
+        return 0
+
+    positions_info: Dict[str, PositionPriceInfo] = {}
+    for code, pos in positions.items():
+        price = current_prices.get(code)
+        if price is not None and price > 0:
+            positions_info[code] = PositionPriceInfo(
+                stock_code=code,
+                quantity=pos.quantity,
+                avg_cost=pos.avg_cost,
+                current_price=price,
+                timestamp=current_date,
+            )
+
+    sl_tp_signals = risk_manager.check_stop_loss_take_profit(positions_info)
+    if not sl_tp_signals:
+        return 0
+
+    trades_count = 0
+    for signal in sl_tp_signals:
+        trade, _ = portfolio_manager.execute_signal(signal, current_prices)
+        if trade:
+            trades_count += 1
+
+    return trades_count
 
 
 class BacktestLoopExecutor:
@@ -44,6 +87,9 @@ class BacktestLoopExecutor:
         
         total_signals = 0
         executed_trades = 0
+
+        # P0: 初始化风险管理器（止损止盈 + 最大回撤熔断）
+        risk_manager = RiskManager(portfolio_manager.config)
 
         # 性能统计：信号生成时间
         signal_generation_times = []
@@ -245,6 +291,20 @@ class BacktestLoopExecutor:
                 # 可以直接使用向量化计算，避免重复的字典查找
                 if hasattr(portfolio_manager, 'set_current_prices'):
                     portfolio_manager.set_current_prices(current_prices)
+
+                # ===== P0: 止损止盈检查（优先级高于策略信号） =====
+                sl_tp_signals = _check_and_execute_stop_loss_take_profit(
+                    risk_manager, portfolio_manager, current_prices, current_date,
+                )
+                executed_trades += sl_tp_signals
+
+                # ===== P0: 最大回撤熔断更新 =====
+                portfolio_value_for_cb = portfolio_manager.get_portfolio_value(
+                    current_prices
+                )
+                risk_manager.update_circuit_breaker(
+                    portfolio_value_for_cb, current_date,
+                )
 
                 # 生成交易信号（Phase1：优先用 ndarray signal matrix）
                 all_signals: List[TradingSignal] = []
@@ -728,6 +788,11 @@ class BacktestLoopExecutor:
                 executed_trade_signals = []  # 记录已执行的交易对应的信号
                 unexecuted_signals = []  # 记录未执行的信号及原因
 
+                # ===== P0: 熔断过滤（阻止 BUY 信号，保留 SELL） =====
+                all_signals = risk_manager.filter_signals_by_circuit_breaker(
+                    all_signals
+                )
+
                 # ===== trade execution mode =====
                 trade_mode = None
                 topk_limit: int | None = None  # for post-trade sanity checks
@@ -1083,6 +1148,7 @@ class BacktestLoopExecutor:
             "total_signals": total_signals,
             "executed_trades": executed_trades,
             "trading_days": len(trading_dates),
+            "circuit_breaker_summary": risk_manager.get_circuit_breaker_summary(),
         }
 
     def _rebalance_topk_buffer(

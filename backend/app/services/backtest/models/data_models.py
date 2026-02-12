@@ -65,6 +65,9 @@ class BacktestConfig:
     take_profit_pct: float = 0.15  # 止盈比例
     rebalance_frequency: str = "daily"  # 调仓频率
 
+    # P0-2: 最大回撤熔断（None 或 0 表示不启用）
+    max_drawdown_pct: Optional[float] = None
+
     # 性能：大规模回测默认不需要每天的完整组合快照；
     # equity 曲线单独记录，不受该开关影响。
     record_portfolio_history: bool = True

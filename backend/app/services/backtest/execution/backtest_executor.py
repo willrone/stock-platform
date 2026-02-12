@@ -382,6 +382,11 @@ class BacktestExecutor:
             backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
             backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
 
+            # P0: 添加熔断统计到报告
+            cb_summary = backtest_results.get("circuit_breaker_summary")
+            if cb_summary:
+                backtest_report["circuit_breaker"] = cb_summary
+
             self.performance_tracker.end_stage(
                 "report_generation", {"report_size": len(str(backtest_report))}
             )
