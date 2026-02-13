@@ -29,8 +29,8 @@ def _configure_sqlite_connection(dbapi_conn, connection_record):
     if "sqlite" in settings.DATABASE_URL.lower():
         # 启用 WAL 模式（Write-Ahead Logging），提高并发性能
         dbapi_conn.execute("PRAGMA journal_mode=WAL")
-        # 设置超时时间（毫秒），默认 5 秒
-        dbapi_conn.execute("PRAGMA busy_timeout=5000")
+        # 设置超时时间（毫秒），默认 30 秒
+        dbapi_conn.execute("PRAGMA busy_timeout=30000")
         # 启用外键约束
         dbapi_conn.execute("PRAGMA foreign_keys=ON")
         # 优化同步设置（NORMAL 模式在 WAL 模式下性能更好）
@@ -51,7 +51,7 @@ async_engine = create_async_engine(
     # SQLite 特定配置
     connect_args={
         "check_same_thread": False,  # 允许多线程访问
-        "timeout": 5.0,  # 连接超时时间（秒）
+        "timeout": 30.0,  # 连接超时时间（秒）
     }
     if "sqlite" in settings.DATABASE_URL.lower()
     else {},
@@ -82,7 +82,7 @@ sync_engine = create_engine(
     # SQLite 特定配置
     connect_args={
         "check_same_thread": False,  # 允许多线程访问
-        "timeout": 5.0,  # 连接超时时间（秒）
+        "timeout": 30.0,  # 连接超时时间（秒）
     }
     if "sqlite" in settings.database_url_sync.lower()
     else {},
@@ -134,8 +134,8 @@ T = TypeVar("T")
 
 async def retry_db_operation(
     operation: Callable[[], Any],
-    max_retries: int = 3,
-    retry_delay: float = 0.1,
+    max_retries: int = 5,
+    retry_delay: float = 0.5,
     backoff_factor: float = 2.0,
     operation_name: str = "数据库操作",
 ) -> Any:
@@ -193,10 +193,11 @@ async def retry_db_operation(
 
 def retry_db_operation_sync(
     operation: Callable[[], Any],
-    max_retries: int = 3,
-    retry_delay: float = 0.1,
+    max_retries: int = 5,
+    retry_delay: float = 0.5,
     backoff_factor: float = 2.0,
     operation_name: str = "数据库操作",
+    session: Any = None,
 ) -> Any:
     """
     重试同步数据库操作，处理 database is locked 错误
@@ -205,8 +206,9 @@ def retry_db_operation_sync(
         operation: 要执行的操作函数
         max_retries: 最大重试次数
         retry_delay: 初始重试延迟（秒）
-        backoff_factor: 退避因子，每次重试延迟时间乘以该因子
+        backoff_factor: 退避因子
         operation_name: 操作名称，用于日志记录
+        session: SQLAlchemy session，用于在重试前 rollback
 
     Returns:
         操作的结果
@@ -227,6 +229,12 @@ def retry_db_operation_sync(
             error_msg = str(e).lower()
             if "database is locked" in error_msg or "database locked" in error_msg:
                 last_exception = e
+                # rollback session 以清除 PendingRollbackError 状态
+                if session is not None:
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
                 if attempt < max_retries:
                     logger.warning(
                         f"{operation_name} 遇到数据库锁定，"
@@ -236,15 +244,14 @@ def retry_db_operation_sync(
                     time.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
+                    logger.error(
+                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
+                    )
             else:
-                # 非锁定错误，直接抛出
                 raise
-        except Exception as e:
-            # 其他异常，直接抛出
+        except Exception:
             raise
 
-    # 如果所有重试都失败，抛出最后一次的异常
     if last_exception:
         raise last_exception
 
@@ -273,6 +280,6 @@ async def init_db() -> None:
         if "sqlite" in settings.DATABASE_URL.lower():
             # 使用 text() 包装 SQL 语句以便在异步引擎中执行
             await conn.execute(text("PRAGMA journal_mode=WAL"))
-            await conn.execute(text("PRAGMA busy_timeout=5000"))
+            await conn.execute(text("PRAGMA busy_timeout=30000"))
             await conn.execute(text("PRAGMA foreign_keys=ON"))
             await conn.execute(text("PRAGMA synchronous=NORMAL"))

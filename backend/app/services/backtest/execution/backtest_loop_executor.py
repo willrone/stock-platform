@@ -135,86 +135,8 @@ class BacktestLoopExecutor:
 
         # ========== PERF优化：批量收集数据库操作，循环结束后一次性写入 ==========
         # 避免在730天循环内每天都做数据库操作（原来是72秒的主要瓶颈）
-        _batch_signals_data: List[dict] = []  # 收集所有信号记录
-        _batch_executed_signals: List[dict] = []  # 收集已执行的信号
-        _batch_unexecuted_signals: List[dict] = []  # 收集未执行的信号
+        _batch_signals_data: List[dict] = []  # 收集所有信号记录（含 executed/execution_reason）
         _current_backtest_id: str | None = None  # 缓存 backtest_id
-        _BATCH_FLUSH_THRESHOLD = 1000  # 流式写入阈值
-
-        # 流式写入辅助函数：当积累足够数据时写入数据库
-        async def _flush_batch_to_db(
-            signals_data: List[dict],
-            executed_signals: List[dict],
-            unexecuted_signals: List[dict],
-            backtest_id: str | None,
-            clear_after: bool = True,
-        ) -> None:
-            """流式写入批量数据到数据库"""
-            if not task_id:
-                return
-            total_count = len(signals_data) + len(executed_signals) + len(unexecuted_signals)
-            if total_count == 0:
-                return
-
-            logger.info(f"🔄 流式写入数据库: 信号={len(signals_data)}, 已执行={len(executed_signals)}, 未执行={len(unexecuted_signals)}")
-
-            try:
-                from app.core.database import get_async_session_context
-                from app.repositories.backtest_detailed_repository import (
-                    BacktestDetailedRepository,
-                )
-
-                async with get_async_session_context() as session:
-                    try:
-                        repository = BacktestDetailedRepository(session)
-
-                        # 1. 批量保存所有信号记录
-                        if signals_data:
-                            await repository.batch_save_signal_records(
-                                task_id=task_id,
-                                backtest_id=backtest_id,
-                                signals_data=list(signals_data),  # 复制列表避免清空后问题
-                            )
-
-                        # 2. 批量更新未执行信号的原因
-                        if unexecuted_signals:
-                            signal_reasons = [
-                                (
-                                    sig["stock_code"],
-                                    sig["timestamp"],
-                                    sig["signal_type"],
-                                    sig["execution_reason"]
-                                )
-                                for sig in unexecuted_signals
-                            ]
-                            await repository.batch_update_signal_execution_reasons(
-                                task_id=task_id,
-                                signal_reasons=signal_reasons
-                            )
-
-                        # 3. 批量标记已执行的信号
-                        if executed_signals:
-                            signal_keys = [
-                                (
-                                    sig["stock_code"],
-                                    sig["timestamp"],
-                                    sig["signal_type"]
-                                )
-                                for sig in executed_signals
-                            ]
-                            await repository.batch_mark_signals_as_executed(
-                                task_id=task_id,
-                                signal_keys=signal_keys
-                            )
-
-                        await session.commit()
-                        logger.info(f"✅ 流式写入完成: {total_count} 条记录")
-
-                    except Exception as e:
-                        await session.rollback()
-                        logger.warning(f"流式写入数据库失败: {e}")
-            except Exception as e:
-                logger.warning(f"流式写入数据库时出错: {e}")
         # ========== END PERF优化 ==========
 
         for i, current_date in enumerate(trading_dates):
@@ -762,7 +684,7 @@ class BacktestLoopExecutor:
                                 else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                             )
 
-                        # 收集信号记录到内存列表（不再每天写数据库）
+                        # 构建信号 lookup key → index 映射，用于后续标记 executed/execution_reason
                         for signal in all_signals:
                             signal_data = {
                                 "signal_id": f"sig_{uuid.uuid4().hex[:12]}",
@@ -775,6 +697,7 @@ class BacktestLoopExecutor:
                                 "reason": signal.reason,
                                 "metadata": signal.metadata,
                                 "executed": False,
+                                "execution_reason": None,
                             }
                             _batch_signals_data.append(signal_data)
                     except Exception as e:
@@ -921,25 +844,35 @@ class BacktestLoopExecutor:
                         "execute_trades_batch", trade_duration
                     )
 
-                # PERF优化：收集未执行和已执行信号到内存，循环结束后批量写入
-                if task_id and unexecuted_signals:
-                    _batch_unexecuted_signals.extend(unexecuted_signals)
+                # PERF优化：直接在 _batch_signals_data 中更新 executed/execution_reason
+                # 避免后续 UPDATE 操作，所有状态在内存中一次性确定
+                if task_id and (executed_trade_signals or unexecuted_signals):
+                    # 构建当天信号的快速查找索引（从 _batch_signals_data 尾部回溯）
+                    # 当天新增的信号数量 = len(all_signals)（刚刚 append 的）
+                    _today_start_idx = len(_batch_signals_data) - len(all_signals)
+                    _today_lookup: Dict[tuple, int] = {}
+                    for _si in range(_today_start_idx, len(_batch_signals_data)):
+                        _sd = _batch_signals_data[_si]
+                        _key = (_sd["stock_code"], _sd["signal_type"])
+                        _today_lookup[_key] = _si
 
-                if task_id and executed_trade_signals:
-                    _batch_executed_signals.extend(executed_trade_signals)
+                    # 标记已执行的信号
+                    for _exec_sig in executed_trade_signals:
+                        _key = (_exec_sig["stock_code"], _exec_sig["signal_type"])
+                        _idx = _today_lookup.get(_key)
+                        if _idx is not None:
+                            _batch_signals_data[_idx]["executed"] = True
+                            _batch_signals_data[_idx]["execution_reason"] = None
 
-                # PERF优化A：流式增量写入 - 每积累1000条记录就写入一次数据库
-                if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) >= _BATCH_FLUSH_THRESHOLD:
-                    await _flush_batch_to_db(
-                        signals_data=_batch_signals_data,
-                        executed_signals=_batch_executed_signals,
-                        unexecuted_signals=_batch_unexecuted_signals,
-                        backtest_id=_current_backtest_id,
-                    )
-                    # 写入后清空列表
-                    _batch_signals_data.clear()
-                    _batch_executed_signals.clear()
-                    _batch_unexecuted_signals.clear()
+                    # 标记未执行的信号及原因
+                    for _unexec_sig in unexecuted_signals:
+                        _key = (_unexec_sig["stock_code"], _unexec_sig["signal_type"])
+                        _idx = _today_lookup.get(_key)
+                        if _idx is not None:
+                            _batch_signals_data[_idx]["executed"] = False
+                            _batch_signals_data[_idx]["execution_reason"] = _unexec_sig.get("execution_reason", "未知原因")
+
+                # NOTE: 中间 flush 已移除，所有信号在回测结束后一次性写入
 
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(
@@ -968,106 +901,102 @@ class BacktestLoopExecutor:
                 except Exception as e:
                     logger.warning(f"[topk_buffer][sanity] check failed: {e}")
 
-                # 更新进度监控（同时更新数据库）
-                # 性能优化: 降低数据库更新频率，从每5天改为每100天，减少I/O开销
-                if task_id and i % 100 == 0:
-                    portfolio_value = portfolio_manager.get_portfolio_value(
-                        current_prices
-                    )
-                    logger.debug(
-                        f"准备更新进度: task_id={task_id}, i={i}, total_days={len(trading_dates)}, signals={len(all_signals)}, trades={trades_this_day}, total_signals={total_signals}, total_trades={executed_trades}"
-                    )
-
+                # 更新进度监控（使用内存缓存，只在关键节点写入数据库）
+                # 性能优化: 每个交易日更新内存缓存，缓存判断是否需要写 DB（每 10% 进度）
+                if task_id:
                     # 计算进度百分比（回测执行阶段占30-90%，即60%的进度范围）
                     execution_progress = (i + 1) / len(trading_dates) * 100
                     overall_progress = 30 + (execution_progress / 100) * 60  # 30%到90%
 
-                    # 更新数据库中的任务进度（包含详细数据）
-                    try:
-                        # 注意：datetime 已在文件顶部导入，不要在此重复导入
-                        # 否则会导致 "cannot access local variable 'datetime'" 错误
-                        from app.core.database import SessionLocal
-                        from app.models.task_models import TaskStatus
-                        from app.repositories.task_repository import TaskRepository
+                    # 构建进度数据（内存中始终保持最新）
+                    portfolio_value = portfolio_manager.get_portfolio_value(
+                        current_prices
+                    )
+                    progress_update_data = {
+                        "processed_days": i + 1,
+                        "total_days": len(trading_dates),
+                        "current_date": current_date.strftime("%Y-%m-%d"),
+                        "signals_generated": len(all_signals),
+                        "trades_executed": trades_this_day,
+                        "total_signals": total_signals,
+                        "total_trades": executed_trades,
+                        "portfolio_value": portfolio_value,
+                        "last_updated": datetime.utcnow().isoformat(),
+                    }
 
-                        session = SessionLocal()
+                    # 更新内存缓存，由缓存判断是否需要写 DB
+                    from app.utils.task_progress_cache import task_progress_cache
+
+                    should_flush = task_progress_cache.update_progress(
+                        task_id=task_id,
+                        progress=overall_progress,
+                        result_data={"progress_data": progress_update_data},
+                    )
+
+                    if should_flush:
+                        logger.debug(
+                            f"准备写入进度到DB: task_id={task_id}, i={i}, "
+                            f"total_days={len(trading_dates)}, progress={overall_progress:.1f}%"
+                        )
                         try:
-                            task_repo = TaskRepository(session)
+                            from app.core.database import SessionLocal
+                            from app.models.task_models import TaskStatus
+                            from app.repositories.task_repository import TaskRepository
 
-                            # 读取现有的 result 数据
-                            existing_task = task_repo.get_task_by_id(task_id)
-                            if not existing_task:
-                                logger.warning(f"任务不存在，无法更新进度: {task_id}")
-                                # 任务已被删除，停止回测执行
-                                raise TaskError(
-                                    message=f"任务 {task_id} 已被删除，停止回测执行",
-                                    severity=ErrorSeverity.LOW,
-                                )
-                            # 检查任务状态，如果不是运行中，则停止执行
-                            elif not _is_task_running(existing_task.status):
-                                logger.warning(
-                                    f"任务状态为 {existing_task.status}，停止回测执行: {task_id}"
-                                )
-                                raise TaskError(
-                                    message=f"任务 {task_id} 状态为 {existing_task.status}，停止回测执行",
-                                    severity=ErrorSeverity.LOW,
-                                )
-                            else:
-                                result_data = existing_task.result or {}
-                                if not isinstance(result_data, dict):
-                                    result_data = {}
-                                progress_data = result_data.get("progress_data", {})
-                                if not isinstance(progress_data, dict):
-                                    progress_data = {}
+                            session = SessionLocal()
+                            try:
+                                task_repo = TaskRepository(session)
+                                existing_task = task_repo.get_task_by_id(task_id)
+                                if not existing_task:
+                                    logger.warning(f"任务不存在，无法更新进度: {task_id}")
+                                    raise TaskError(
+                                        message=f"任务 {task_id} 已被删除，停止回测执行",
+                                        severity=ErrorSeverity.LOW,
+                                    )
+                                elif not _is_task_running(existing_task.status):
+                                    logger.warning(
+                                        f"任务状态为 {existing_task.status}，停止回测执行: {task_id}"
+                                    )
+                                    raise TaskError(
+                                        message=f"任务 {task_id} 状态为 {existing_task.status}，停止回测执行",
+                                        severity=ErrorSeverity.LOW,
+                                    )
+                                else:
+                                    result_data = existing_task.result or {}
+                                    if not isinstance(result_data, dict):
+                                        result_data = {}
+                                    result_data["progress_data"] = progress_update_data
 
-                                # 更新进度数据
-                                progress_data.update(
-                                    {
-                                        "processed_days": i + 1,
-                                        "total_days": len(trading_dates),
-                                        "current_date": current_date.strftime(
-                                            "%Y-%m-%d"
-                                        ),
-                                        "signals_generated": len(all_signals),
-                                        "trades_executed": trades_this_day,
-                                        "total_signals": total_signals,
-                                        "total_trades": executed_trades,
-                                        "portfolio_value": portfolio_value,
-                                        "last_updated": datetime.utcnow().isoformat(),
-                                    }
+                                    task_repo.update_task_status(
+                                        task_id=task_id,
+                                        status=TaskStatus.RUNNING,
+                                        progress=overall_progress,
+                                        result=result_data,
+                                    )
+                                    session.commit()
+                                    task_progress_cache.mark_flushed(task_id)
+                                    logger.info(
+                                        f"进度已写入DB: task_id={task_id}, "
+                                        f"progress={overall_progress:.1f}%, "
+                                        f"days={i+1}/{len(trading_dates)}"
+                                    )
+                            except Exception as inner_error:
+                                session.rollback()
+                                logger.error(
+                                    f"更新任务进度到数据库失败: {inner_error}",
+                                    exc_info=True,
                                 )
-
-                                result_data["progress_data"] = progress_data
-
-                                # 记录日志以便调试
-                                logger.info(
-                                    f"更新回测进度数据: task_id={task_id}, processed_days={i+1}, total_days={len(trading_dates)}, signals={total_signals}, trades={executed_trades}, portfolio={portfolio_value:.2f}, progress_data_keys={list(progress_data.keys())}"
-                                )
-
-                                task_repo.update_task_status(
-                                    task_id=task_id,
-                                    status=TaskStatus.RUNNING,
-                                    progress=overall_progress,
-                                    result=result_data,  # 包含详细进度数据
-                                )
-
-                                # 确保 result 字段被标记为已修改并提交
-                                session.commit()
-                                logger.info(
-                                    f"进度数据已提交到数据库: task_id={task_id}, result_data_keys={list(result_data.keys())}, progress_data={progress_data}"
-                                )
-                        except Exception as inner_error:
-                            session.rollback()
-                            logger.error(
-                                f"更新任务进度到数据库失败（内部错误）: {inner_error}", exc_info=True
-                            )
+                                raise
+                            finally:
+                                session.close()
+                        except TaskError:
                             raise
-                        finally:
-                            session.close()
-                    except Exception as db_error:
-                        logger.error(f"更新任务进度到数据库失败: {db_error}", exc_info=True)
+                        except Exception as db_error:
+                            logger.error(
+                                f"更新任务进度到数据库失败: {db_error}", exc_info=True
+                            )
 
-                    # 更新进程内的进度监控（虽然主进程看不到，但保持一致性）
+                    # 更新进程内的进度监控（轻量，不涉及 DB）
                     await backtest_progress_monitor.update_execution_progress(
                         task_id=task_id,
                         processed_days=i + 1,
@@ -1095,20 +1024,119 @@ class BacktestLoopExecutor:
 
                 continue
 
-        # ========== PERF优化：循环结束后写入剩余数据 ==========
-        # 写入流式写入未处理完的剩余数据
-        if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) > 0:
-            logger.info(f"🔄 写入剩余数据: 信号={len(_batch_signals_data)}, 已执行={len(_batch_executed_signals)}, 未执行={len(_batch_unexecuted_signals)}")
-            await _flush_batch_to_db(
-                signals_data=_batch_signals_data,
-                executed_signals=_batch_executed_signals,
-                unexecuted_signals=_batch_unexecuted_signals,
-                backtest_id=_current_backtest_id,
-            )
+        # ========== PERF优化：循环结束后一次性写入所有信号数据 ==========
+        # 使用 Raw SQL executemany 替代 ORM add_all，跳过 UPDATE 操作
+        # 因为 executed/execution_reason 已在内存中确定
+        if task_id and _batch_signals_data:
+            _total_signals_to_write = len(_batch_signals_data)
+            logger.info(f"🔄 最终一次性写入: {_total_signals_to_write} 条信号记录（Raw SQL）")
+
+            try:
+                import asyncio as _asyncio
+                import json as _json
+                from sqlalchemy import text as _text
+                from sqlalchemy.exc import OperationalError as _OpError
+                from app.core.database import get_async_session_context
+
+                _max_retries = 5
+                _retry_delay = 0.5
+                _backoff_factor = 2.0
+
+                # 预处理数据：将 Python 对象转为 DB 兼容格式
+                _insert_rows = []
+                for _sd in _batch_signals_data:
+                    _ts = _sd["timestamp"]
+                    if hasattr(_ts, "isoformat"):
+                        _ts_str = _ts.isoformat()
+                    else:
+                        _ts_str = str(_ts)
+
+                    _meta = _sd.get("metadata")
+                    if _meta is not None:
+                        try:
+                            _meta_str = _json.dumps(_meta, ensure_ascii=False, default=str)
+                        except Exception:
+                            _meta_str = None
+                    else:
+                        _meta_str = None
+
+                    _insert_rows.append({
+                        "task_id": task_id,
+                        "backtest_id": _current_backtest_id,
+                        "signal_id": _sd["signal_id"],
+                        "stock_code": _sd["stock_code"],
+                        "stock_name": _sd.get("stock_name"),
+                        "signal_type": _sd["signal_type"],
+                        "timestamp": _ts_str,
+                        "price": float(_sd["price"]),
+                        "strength": float(_sd.get("strength", 0.0)),
+                        "reason": _sd.get("reason"),
+                        "signal_metadata": _meta_str,
+                        "executed": 1 if _sd.get("executed") else 0,
+                        "execution_reason": _sd.get("execution_reason"),
+                        "created_at": datetime.utcnow().isoformat(),
+                    })
+
+                _insert_sql = _text("""
+                    INSERT INTO signal_records
+                        (task_id, backtest_id, signal_id, stock_code, stock_name,
+                         signal_type, timestamp, price, strength, reason,
+                         signal_metadata, executed, execution_reason, created_at)
+                    VALUES
+                        (:task_id, :backtest_id, :signal_id, :stock_code, :stock_name,
+                         :signal_type, :timestamp, :price, :strength, :reason,
+                         :signal_metadata, :executed, :execution_reason, :created_at)
+                """)
+
+                # 分批写入，每批 5000 条，避免单次事务过大
+                _WRITE_BATCH_SIZE = 5000
+                _write_start = time.perf_counter()
+
+                for _attempt in range(_max_retries + 1):
+                    try:
+                        async with get_async_session_context() as session:
+                            for _bi in range(0, len(_insert_rows), _WRITE_BATCH_SIZE):
+                                _batch = _insert_rows[_bi:_bi + _WRITE_BATCH_SIZE]
+                                await session.execute(_insert_sql, _batch)
+                            await session.commit()
+
+                        _write_duration = time.perf_counter() - _write_start
+                        logger.info(
+                            f"✅ 最终写入完成: {_total_signals_to_write} 条记录, "
+                            f"耗时 {_write_duration:.2f}s "
+                            f"({_total_signals_to_write / max(_write_duration, 0.001):.0f} 条/秒)"
+                        )
+                        break  # 成功
+
+                    except _OpError as e:
+                        _err_msg = str(e).lower()
+                        if "database is locked" in _err_msg or "database locked" in _err_msg:
+                            if _attempt < _max_retries:
+                                _wait = _retry_delay * (_backoff_factor ** _attempt)
+                                logger.warning(
+                                    f"最终写入遇到数据库锁定，"
+                                    f"第 {_attempt + 1}/{_max_retries} 次重试，"
+                                    f"等待 {_wait:.2f}s"
+                                )
+                                await _asyncio.sleep(_wait)
+                            else:
+                                logger.error(f"最终写入重试 {_max_retries} 次后仍然失败: {e}")
+                        else:
+                            logger.error(f"最终写入数据库失败（非锁定错误）: {e}")
+                            break
+                    except Exception as e:
+                        logger.error(f"最终写入数据库失败: {e}")
+                        break
+
+            except Exception as e:
+                logger.error(f"最终写入数据库时出错: {e}")
         # ========== END PERF优化 ==========
 
-        # 最终进度更新
+        # 最终进度更新 + 清理内存缓存
         if task_id:
+            from app.utils.task_progress_cache import task_progress_cache
+            task_progress_cache.remove(task_id)
+
             final_portfolio_value = portfolio_manager.get_portfolio_value({})
             await backtest_progress_monitor.update_execution_progress(
                 task_id=task_id,

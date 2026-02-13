@@ -11,6 +11,7 @@ from loguru import logger
 from sqlalchemy import and_, asc, desc, func, or_
 from sqlalchemy.orm import Session
 
+from app.core.database import retry_db_operation_sync
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import AuditLogger
 from app.models.task_models import (
@@ -93,7 +94,11 @@ class TaskRepository:
             )
 
             self.db.add(task)
-            self.db.commit()
+            retry_db_operation_sync(
+                lambda: self.db.commit(),
+                operation_name=f"create_task({task_name})",
+                session=self.db,
+            )
             self.db.refresh(task)
 
             # 记录审计日志
@@ -263,7 +268,11 @@ class TaskRepository:
             ]:
                 task.completed_at = datetime.utcnow()
 
-            self.db.commit()
+            retry_db_operation_sync(
+                lambda: self.db.commit(),
+                operation_name=f"update_task_status({task_id})",
+                session=self.db,
+            )
             self.db.refresh(task)
 
             # 记录审计日志
@@ -304,7 +313,11 @@ class TaskRepository:
             old_progress = task.progress
             task.progress = progress
 
-            self.db.commit()
+            retry_db_operation_sync(
+                lambda: self.db.commit(),
+                operation_name=f"update_task_progress({task_id})",
+                session=self.db,
+            )
             self.db.refresh(task)
 
             logger.debug(f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%")
@@ -425,7 +438,11 @@ class TaskRepository:
 
             # 删除主任务
             self.db.delete(task)
-            self.db.commit()
+            retry_db_operation_sync(
+                lambda: self.db.commit(),
+                operation_name=f"delete_task({task_id})",
+                session=self.db,
+            )
 
             # 记录审计日志
             AuditLogger.log_user_action(
