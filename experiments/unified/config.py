@@ -55,20 +55,20 @@ class TrainingConfig:
 
 @dataclass
 class LGBConfig:
-    """LightGBM 回归参数"""
+    """LightGBM 回归参数（对齐 Qlib 默认值）"""
 
-    objective: str = "huber"
-    metric: str = "mae"
+    objective: str = "mse"
+    metric: str = "mse"
     boosting_type: str = "gbdt"
-    num_leaves: int = 45
-    max_depth: int = 6
-    learning_rate: float = 0.015
-    feature_fraction: float = 0.65
-    bagging_fraction: float = 0.65
+    num_leaves: int = 128
+    max_depth: int = 8
+    learning_rate: float = 0.05
+    feature_fraction: float = 0.8
+    bagging_fraction: float = 0.8
     bagging_freq: int = 5
-    min_child_samples: int = 100
-    reg_alpha: float = 0.6
-    reg_lambda: float = 0.6
+    min_child_samples: int = 200
+    reg_alpha: float = 200.0
+    reg_lambda: float = 200.0
     verbose: int = -1
     seed: int = RANDOM_SEED
 
@@ -94,17 +94,17 @@ class LGBConfig:
 
 @dataclass
 class XGBConfig:
-    """XGBoost 回归参数"""
+    """XGBoost 回归参数（对齐 Qlib 默认值）"""
 
     objective: str = "reg:squarederror"
-    eval_metric: str = "mae"
-    max_depth: int = 5
-    learning_rate: float = 0.015
-    subsample: float = 0.65
-    colsample_bytree: float = 0.65
-    min_child_weight: int = 100
-    reg_alpha: float = 0.6
-    reg_lambda: float = 0.6
+    eval_metric: str = "rmse"
+    max_depth: int = 8
+    learning_rate: float = 0.05
+    subsample: float = 0.8
+    colsample_bytree: float = 0.8
+    min_child_weight: int = 200
+    reg_alpha: float = 200.0
+    reg_lambda: float = 200.0
     seed: int = RANDOM_SEED
 
     def to_dict(self) -> Dict[str, Any]:
