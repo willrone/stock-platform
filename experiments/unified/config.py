@@ -5,7 +5,7 @@
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from .constants import (
     DATA_DIR,
@@ -49,7 +49,7 @@ class TrainingConfig:
     enable_neutralization: bool = True
 
     # 标签变换：None | "csranknorm"
-    label_transform: str = None
+    label_transform: Optional[str] = None
 
     # 回测配置
     top_n: int = DEFAULT_TOP_N
