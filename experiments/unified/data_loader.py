@@ -21,6 +21,7 @@ from .features import (
     compute_regression_label,
     neutralize_features,
 )
+from .label_transform import cs_rank_norm
 
 
 def load_stock_files(config: TrainingConfig) -> pd.DataFrame:
@@ -97,6 +98,10 @@ def prepare_dataset(config: TrainingConfig) -> pd.DataFrame:
     if config.enable_neutralization:
         logger.info("执行市场中性化处理...")
         data = neutralize_features(data)
+
+    if config.label_transform == "csranknorm":
+        logger.info("执行 CSRankNorm 标签变换...")
+        data = cs_rank_norm(data, label_col="future_return")
 
     data = data.dropna(subset=["future_return"])
     data = data.dropna()

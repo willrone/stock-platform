@@ -48,6 +48,9 @@ class TrainingConfig:
     # 市场中性化
     enable_neutralization: bool = True
 
+    # 标签变换：None | "csranknorm"
+    label_transform: str = None
+
     # 回测配置
     top_n: int = DEFAULT_TOP_N
     transaction_cost: float = DEFAULT_TRANSACTION_COST
