@@ -58,7 +58,11 @@ class TrainingConfig:
 
 @dataclass
 class LGBConfig:
-    """LightGBM 回归参数（对齐 Qlib 默认值）"""
+    """LightGBM 回归参数（对齐 Qlib 默认值）
+
+    注意：reg_alpha/reg_lambda=200 适配 CSRankNorm 标签（N(0,1) 尺度）。
+    ���使用原始收益率标签（~0.01 尺度），需降低到 ~5.0。
+    """
 
     objective: str = "mse"
     metric: str = "mse"
@@ -97,7 +101,11 @@ class LGBConfig:
 
 @dataclass
 class XGBConfig:
-    """XGBoost 回归参数（对齐 Qlib 默认值）"""
+    """XGBoost 回归参数（对齐 Qlib 默认值）
+
+    注意：reg_alpha/reg_lambda=200 适配 CSRankNorm 标签（N(0,1) 尺度）。
+    若使用原始收益率标签（~0.01 尺度），需降低到 ~5.0。
+    """
 
     objective: str = "reg:squarederror"
     eval_metric: str = "rmse"
