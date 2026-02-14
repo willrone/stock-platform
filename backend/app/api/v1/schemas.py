@@ -136,6 +136,40 @@ class ModelTrainingRequest(BaseModel):
         default=None,
         description="验证集截止日期（仅 split_method=hardcut 时生效）",
     )
+    # === 滚动训练配置（P2） ===
+    enable_rolling: bool = Field(
+        default=False,
+        description="是否启用滚动训练",
+    )
+    # === CSRankNorm 标签变换 ===
+    enable_cs_rank_norm: bool = Field(
+        default=False,
+        description="是否启用 CSRankNorm 标签变换（截面排名标准化）",
+    )
+    rolling_window_type: str = Field(
+        default="sliding",
+        description="滚动窗口类型: sliding / expanding",
+    )
+    rolling_step: int = Field(
+        default=60,
+        description="滚动步长（交易日）",
+    )
+    rolling_train_window: int = Field(
+        default=480,
+        description="训练窗口大小（交易日）",
+    )
+    rolling_valid_window: int = Field(
+        default=60,
+        description="验证窗口大小（交易日）",
+    )
+    enable_sample_decay: bool = Field(
+        default=True,
+        description="是否启用样本时间衰减权重",
+    )
+    sample_decay_rate: float = Field(
+        default=0.999,
+        description="样本衰减率（每天）",
+    )
 
 
 class RemoteDataSyncRequest(BaseModel):

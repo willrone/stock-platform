@@ -58,14 +58,24 @@ export default function ModelsPage() {
     description: '',
     hyperparameters: {} as Record<string, any>,
     enable_hyperparameter_tuning: false,
-    num_iterations: 100,
+    num_iterations: 1000,
     selected_features: [] as string[],
     feature_set: 'alpha158',
     label_type: 'regression',
     binary_threshold: 0.0,
-    split_method: 'ratio',
+    split_method: 'purged_cv',
     train_end_date: '',
     val_end_date: '',
+    // 滚动训练（P2）
+    enable_rolling: false,
+    rolling_window_type: 'sliding',
+    rolling_step: 60,
+    rolling_train_window: 480,
+    rolling_valid_window: 60,
+    enable_sample_decay: true,
+    sample_decay_rate: 0.999,
+    // CSRankNorm 标签变换
+    enable_cs_rank_norm: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [useAllFeatures, setUseAllFeatures] = useState(true); // 是否使用所有特征
@@ -290,7 +300,7 @@ export default function ModelsPage() {
         ...formData,
         hyperparameters: {
           ...formData.hyperparameters,
-          num_iterations: formData.num_iterations || 100,
+          num_iterations: formData.num_iterations || 1000,
         },
         // 如果使用所有特征，不传递selected_features（或传递null）
         selected_features: useAllFeatures
@@ -307,6 +317,16 @@ export default function ModelsPage() {
           ? formData.train_end_date : undefined,
         val_end_date: formData.split_method === 'hardcut' && formData.val_end_date
           ? formData.val_end_date : undefined,
+        // 滚动训练（P2）
+        enable_rolling: formData.enable_rolling,
+        rolling_window_type: formData.enable_rolling ? formData.rolling_window_type : undefined,
+        rolling_step: formData.enable_rolling ? formData.rolling_step : undefined,
+        rolling_train_window: formData.enable_rolling ? formData.rolling_train_window : undefined,
+        rolling_valid_window: formData.enable_rolling ? formData.rolling_valid_window : undefined,
+        enable_sample_decay: formData.enable_rolling ? formData.enable_sample_decay : undefined,
+        sample_decay_rate: formData.enable_rolling ? formData.sample_decay_rate : undefined,
+        // CSRankNorm 标签变换
+        enable_cs_rank_norm: formData.enable_cs_rank_norm,
       };
       const result = await DataService.createModel(submitData);
       console.log('模型创建成功:', result);
@@ -321,14 +341,24 @@ export default function ModelsPage() {
         description: '',
         hyperparameters: {},
         enable_hyperparameter_tuning: false,
-        num_iterations: 100,
+        num_iterations: 1000,
         selected_features: [],
         feature_set: 'alpha158',
         label_type: 'regression',
         binary_threshold: 0.0,
-        split_method: 'ratio',
+        split_method: 'purged_cv',
         train_end_date: '',
         val_end_date: '',
+        // 滚动训练（P2）
+        enable_rolling: false,
+        rolling_window_type: 'sliding',
+        rolling_step: 60,
+        rolling_train_window: 480,
+        rolling_valid_window: 60,
+        enable_sample_decay: true,
+        sample_decay_rate: 0.999,
+        // CSRankNorm 标签变换
+        enable_cs_rank_norm: false,
       });
       setErrors({});
       setUseAllFeatures(true);

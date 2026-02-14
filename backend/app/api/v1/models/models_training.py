@@ -58,6 +58,16 @@ def _run_train_model_task_sync(
     split_method: str = "ratio",
     train_end_date: Optional[str] = None,
     val_end_date: Optional[str] = None,
+    # 滚动训练参数（P2）
+    enable_rolling: bool = False,
+    rolling_window_type: str = "sliding",
+    rolling_step: int = 60,
+    rolling_train_window: int = 480,
+    rolling_valid_window: int = 60,
+    enable_sample_decay: bool = True,
+    sample_decay_rate: float = 0.999,
+    # CSRankNorm 标签变换
+    enable_cs_rank_norm: bool = False,
 ):
     """
     同步包装函数，用于在线程池中执行异步训练任务
@@ -88,6 +98,14 @@ def _run_train_model_task_sync(
                     split_method=split_method,
                     train_end_date=train_end_date,
                     val_end_date=val_end_date,
+                    enable_rolling=enable_rolling,
+                    rolling_window_type=rolling_window_type,
+                    rolling_step=rolling_step,
+                    rolling_train_window=rolling_train_window,
+                    rolling_valid_window=rolling_valid_window,
+                    enable_sample_decay=enable_sample_decay,
+                    sample_decay_rate=sample_decay_rate,
+                    enable_cs_rank_norm=enable_cs_rank_norm,
                 )
             )
         finally:
@@ -130,6 +148,16 @@ async def train_model_task(
     split_method: str = "ratio",
     train_end_date: Optional[str] = None,
     val_end_date: Optional[str] = None,
+    # 滚动训练参数（P2）
+    enable_rolling: bool = False,
+    rolling_window_type: str = "sliding",
+    rolling_step: int = 60,
+    rolling_train_window: int = 480,
+    rolling_valid_window: int = 60,
+    enable_sample_decay: bool = True,
+    sample_decay_rate: float = 0.999,
+    # CSRankNorm 标签变换
+    enable_cs_rank_norm: bool = False,
 ):
     """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
@@ -266,6 +294,7 @@ async def train_model_task(
                         split_method=split_method,
                         train_end_date=train_end_date,
                         val_end_date=val_end_date,
+                        enable_cs_rank_norm=enable_cs_rank_norm,
                     )
 
                     try:
@@ -413,14 +442,14 @@ async def train_model_task(
                     )
 
             # 创建Qlib训练配置
-            # 从超参数中获取num_iterations或n_estimators，用于设置early_stopping_patience
+            # 从超参数中获取num_iterations，Qlib官方基准默认1000
             num_iterations = (
                 final_hyperparameters.get("num_iterations")
                 or final_hyperparameters.get("n_estimators")
                 or final_hyperparameters.get("epochs")
-                or 100
+                or 1000
             )
-            early_stopping_patience = max(num_iterations, 10)  # 至少10，但应该使用实际的迭代次数
+            early_stopping_patience = max(num_iterations, 50)  # Qlib官方基准=50
 
             config = QlibTrainingConfig(
                 model_type=qlib_model_type,
@@ -436,6 +465,15 @@ async def train_model_task(
                 split_method=split_method,
                 train_end_date=train_end_date,
                 val_end_date=val_end_date,
+                # 滚动训练配置（P2）
+                enable_rolling=enable_rolling,
+                rolling_window_type=rolling_window_type,
+                rolling_step=rolling_step,
+                rolling_train_window=rolling_train_window,
+                rolling_valid_window=rolling_valid_window,
+                enable_sample_decay=enable_sample_decay,
+                sample_decay_rate=sample_decay_rate,
+                enable_cs_rank_norm=enable_cs_rank_norm,
             )
 
             # 使用统一Qlib训练引擎训练模型
@@ -656,6 +694,15 @@ async def create_training_task(request: ModelTrainingRequest):
             split_method=request.split_method,
             train_end_date=request.train_end_date,
             val_end_date=request.val_end_date,
+            # 滚动训练参数（P2）
+            enable_rolling=request.enable_rolling,
+            rolling_window_type=request.rolling_window_type,
+            rolling_step=request.rolling_step,
+            rolling_train_window=request.rolling_train_window,
+            rolling_valid_window=request.rolling_valid_window,
+            enable_sample_decay=request.enable_sample_decay,
+            sample_decay_rate=request.sample_decay_rate,
+            enable_cs_rank_norm=request.enable_cs_rank_norm,
         )
 
         return StandardResponse(

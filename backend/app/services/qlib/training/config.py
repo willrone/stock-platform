@@ -44,8 +44,9 @@ class FeatureSetChoice(Enum):
 class DataSplitMethod(Enum):
     """数据分割方式"""
 
-    RATIO = "ratio"      # 按比例分割（默认80/20）
-    HARDCUT = "hardcut"  # 按固定日期硬切
+    RATIO = "ratio"          # 按比例分割（默认80/20）
+    HARDCUT = "hardcut"      # 按固定日期硬切
+    PURGED_CV = "purged_cv"  # Purged K-Fold（防信息泄漏，推荐）
 
 
 @dataclass
@@ -57,7 +58,7 @@ class QlibTrainingConfig:
     sequence_length: int = 60
     prediction_horizon: int = 5
     validation_split: float = 0.2
-    early_stopping_patience: int = 10
+    early_stopping_patience: int = 50
     use_alpha_factors: bool = True
     cache_features: bool = True
     # 特征选择配置
@@ -79,11 +80,27 @@ class QlibTrainingConfig:
     label_type: str = "regression"
     # 二分类阈值（仅 label_type=binary 时生效）
     binary_threshold: float = 0.003
-    # 数据分割方式（默认 ratio 保持向后兼容）
-    split_method: str = "ratio"
+    # 数据分割方式（默认 purged_cv，防信息泄漏）
+    split_method: str = "purged_cv"
     # 硬切日期（仅 split_method=hardcut 时生效）
     train_end_date: Optional[str] = None
     val_end_date: Optional[str] = None
+    # Purged K-Fold 配置（仅 split_method=purged_cv 时生效）
+    purged_cv_splits: int = 5
+    purged_cv_purge_days: int = 20
+    # 标签 CSRankNorm 配置（截面排名标准化）
+    enable_cs_rank_norm: bool = False
+    # Stacking 集成配置
+    enable_stacking: bool = False
+    stacking_ridge_alpha: float = 1.0
+    # === 滚动训练配置（P2） ===
+    enable_rolling: bool = False
+    rolling_window_type: str = "sliding"
+    rolling_step: int = 60
+    rolling_train_window: int = 480
+    rolling_valid_window: int = 60
+    enable_sample_decay: bool = True
+    sample_decay_rate: float = 0.999
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -110,6 +127,18 @@ class QlibTrainingConfig:
             "split_method": self.split_method,
             "train_end_date": self.train_end_date,
             "val_end_date": self.val_end_date,
+            "purged_cv_splits": self.purged_cv_splits,
+            "purged_cv_purge_days": self.purged_cv_purge_days,
+            "enable_cs_rank_norm": self.enable_cs_rank_norm,
+            "enable_stacking": self.enable_stacking,
+            "stacking_ridge_alpha": self.stacking_ridge_alpha,
+            "enable_rolling": self.enable_rolling,
+            "rolling_window_type": self.rolling_window_type,
+            "rolling_step": self.rolling_step,
+            "rolling_train_window": self.rolling_train_window,
+            "rolling_valid_window": self.rolling_valid_window,
+            "enable_sample_decay": self.enable_sample_decay,
+            "sample_decay_rate": self.sample_decay_rate,
         }
 
 

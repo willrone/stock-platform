@@ -1,7 +1,7 @@
 """
 数据预处理模块
 
-包含异常值处理和特征标准化功能
+包含异常值处理、CSRankNorm 标签变换和特征标准化功能
 """
 
 from typing import List
@@ -9,6 +9,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 from loguru import logger
+from scipy.stats import norm
 
 
 class OutlierHandler:
@@ -101,6 +102,86 @@ class OutlierHandler:
             )
         
         return data_processed
+
+
+# CSRankNorm 常量
+CS_RANK_MIN_STOCKS = 10
+CS_RANK_CLIP_LOWER = 0.001
+CS_RANK_CLIP_UPPER = 0.999
+
+
+class CSRankNormTransformer:
+    """截面排名标准化（Cross-Sectional Rank Normalization）
+
+    每个交易日截面内：rank → percentile → clip → ppf(inverse normal)
+    等价于 experiments/unified/label_transform.py 的实现。
+    """
+
+    def transform(self, data: pd.DataFrame, label_col: str = "label") -> pd.DataFrame:
+        """
+        对标签列做截面排名标准化
+
+        Args:
+            data: MultiIndex (instrument, datetime) 的 DataFrame
+            label_col: 标签列名
+
+        Returns:
+            标签列已替换为 CSRankNorm 值的 DataFrame
+        """
+        if label_col not in data.columns:
+            return data
+
+        df = data.copy()
+        date_level = self._resolve_date_level(df)
+        if date_level is None:
+            logger.warning("CSRankNorm: 无法确定日期层级，跳过")
+            return df
+
+        if isinstance(df.index, pd.MultiIndex):
+            df[label_col] = df.groupby(level=date_level)[label_col].transform(
+                self._rank_norm_single_day,
+            )
+        else:
+            df[label_col] = df.groupby(date_level)[label_col].transform(
+                self._rank_norm_single_day,
+            )
+
+        valid = df[label_col].notna().sum()
+        logger.info(
+            f"CSRankNorm 完成: {valid}/{len(df)} 有效, "
+            f"均值={df[label_col].mean():.4f}, 标准差={df[label_col].std():.4f}",
+        )
+        return df
+
+    @staticmethod
+    def _rank_norm_single_day(series: pd.Series) -> pd.Series:
+        """单日截面: rank → percentile → clip → inverse normal"""
+        valid = series.dropna()
+        if len(valid) < CS_RANK_MIN_STOCKS:
+            return pd.Series(np.nan, index=series.index)
+
+        # 全重复值无法产生有意义的排名
+        if valid.nunique() <= 1:
+            return pd.Series(0.0, index=series.index)
+
+        ranked = series.rank(method="average", na_option="keep")
+        n_valid = valid.count()
+        percentile = (ranked - 0.5) / n_valid
+        percentile = percentile.clip(CS_RANK_CLIP_LOWER, CS_RANK_CLIP_UPPER)
+        return pd.Series(norm.ppf(percentile), index=series.index)
+
+    @staticmethod
+    def _resolve_date_level(df: pd.DataFrame):
+        """确定日期层级名称"""
+        if isinstance(df.index, pd.MultiIndex):
+            for name in ("datetime", "date"):
+                if name in df.index.names:
+                    return name
+            return df.index.names[1] if df.index.nlevels >= 2 else None
+        for name in ("date", "datetime"):
+            if name in df.columns:
+                return name
+        return None
 
 
 class RobustFeatureScaler:

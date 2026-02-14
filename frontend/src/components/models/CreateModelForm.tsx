@@ -37,6 +37,16 @@ interface CreateModelFormProps {
     split_method: string;
     train_end_date: string;
     val_end_date: string;
+    // 滚动训练（P2）
+    enable_rolling: boolean;
+    rolling_window_type: string;
+    rolling_step: number;
+    rolling_train_window: number;
+    rolling_valid_window: number;
+    enable_sample_decay: boolean;
+    sample_decay_rate: number;
+    // CSRankNorm 标签变换
+    enable_cs_rank_norm: boolean;
   };
   errors: Record<string, string>;
   useAllFeatures: boolean;
@@ -164,15 +174,15 @@ export function CreateModelForm({
         placeholder="请输入训练迭代次数"
         value={formData.num_iterations}
         onChange={e => {
-          const num = parseInt(e.target.value) || 100;
+          const num = parseInt(e.target.value) || 1000;
           onFormDataChange('num_iterations', num);
           onFormDataChange('hyperparameters', {
             ...formData.hyperparameters,
             num_iterations: num,
           });
         }}
-        helperText="控制模型训练的迭代次数，LightGBM/XGBoost使用此参数。建议范围：50-1000，默认100"
-        inputProps={{ min: 10, max: 1000 }}
+        helperText="控制模型训练的迭代次数。Qlib官方基准=1000，建议范围：100-5000"
+        inputProps={{ min: 10, max: 5000 }}
         required
         fullWidth
       />
@@ -227,6 +237,22 @@ export function CreateModelForm({
         />
       )}
 
+      {/* CSRankNorm 标签变换 */}
+      {formData.label_type === 'regression' && (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Checkbox
+            checked={formData.enable_cs_rank_norm}
+            onChange={e => onFormDataChange('enable_cs_rank_norm', e.target.checked)}
+          />
+          <Box>
+            <Typography variant="body2">启用 CSRankNorm 标签变换</Typography>
+            <Typography variant="caption" color="text.secondary">
+              截面排名标准化：将收益率标签映射为正态分布，提升 RankIC 稳定性
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       {/* 数据分割方式 */}
       <FormControl fullWidth>
         <InputLabel>数据分割方式</InputLabel>
@@ -235,7 +261,8 @@ export function CreateModelForm({
           label="数据分割方式"
           onChange={e => onFormDataChange('split_method', e.target.value)}
         >
-          <MenuItem value="ratio">比例分割（默认8:1:1）</MenuItem>
+          <MenuItem value="purged_cv">Purged K-Fold（防信息泄漏，推荐）</MenuItem>
+          <MenuItem value="ratio">比例分割（默认8:2）</MenuItem>
           <MenuItem value="hardcut">按日期分割</MenuItem>
         </Select>
         <FormHelperText>比例分割自动划分训练/验证/测试集，按日期分割需手动指定截止日期</FormHelperText>
@@ -267,9 +294,84 @@ export function CreateModelForm({
         </Box>
       )}
 
+      {/* 滚动训练配置（P2） */}
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Checkbox
+          checked={formData.enable_rolling}
+          onChange={e => onFormDataChange('enable_rolling', e.target.checked)}
+        />
+        <Typography variant="body2">启用滚动训练（适应市场变化）</Typography>
+      </Box>
+
+      {formData.enable_rolling && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pl: 2, borderLeft: '2px solid #1976d2' }}>
+          <FormControl fullWidth>
+            <InputLabel>窗口类型</InputLabel>
+            <Select
+              value={formData.rolling_window_type}
+              label="窗口类型"
+              onChange={e => onFormDataChange('rolling_window_type', e.target.value)}
+            >
+              <MenuItem value="sliding">固定窗口滑动（Sliding）</MenuItem>
+              <MenuItem value="expanding">扩展窗口（Expanding）</MenuItem>
+            </Select>
+            <FormHelperText>Sliding: 固定大小窗口向前滑动；Expanding: 训练窗口不断扩大</FormHelperText>
+          </FormControl>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+            <TextField
+              type="number"
+              label="滚动步长（交易日）"
+              value={formData.rolling_step}
+              onChange={e => onFormDataChange('rolling_step', parseInt(e.target.value) || 60)}
+              helperText="每隔多少天重新训练，默认60"
+              inputProps={{ min: 20, max: 240 }}
+              fullWidth
+            />
+            <TextField
+              type="number"
+              label="训练窗口（交易日）"
+              value={formData.rolling_train_window}
+              onChange={e => onFormDataChange('rolling_train_window', parseInt(e.target.value) || 480)}
+              helperText="训练数据天数，默认480"
+              inputProps={{ min: 120, max: 1200 }}
+              fullWidth
+            />
+            <TextField
+              type="number"
+              label="验证窗口（交易日）"
+              value={formData.rolling_valid_window}
+              onChange={e => onFormDataChange('rolling_valid_window', parseInt(e.target.value) || 60)}
+              helperText="验证数据天数，默认60"
+              inputProps={{ min: 20, max: 240 }}
+              fullWidth
+            />
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Checkbox
+              checked={formData.enable_sample_decay}
+              onChange={e => onFormDataChange('enable_sample_decay', e.target.checked)}
+            />
+            <Typography variant="body2">样本时间衰减权重</Typography>
+          </Box>
+
+          {formData.enable_sample_decay && (
+            <TextField
+              type="number"
+              label="衰减率（每天）"
+              value={formData.sample_decay_rate}
+              onChange={e => onFormDataChange('sample_decay_rate', parseFloat(e.target.value) || 0.999)}
+              helperText="近期样本权重更高，默认0.999（每天衰减0.1%）"
+              inputProps={{ min: 0.99, max: 1.0, step: 0.001 }}
+              fullWidth
+            />
+          )}
+        </Box>
+      )}
+
       {/* 特征选择部分 */}
       <FeatureSelector
-        stockCodes={formData.stock_codes}
         startDate={formData.start_date}
         endDate={formData.end_date}
         selectedFeatures={formData.selected_features}

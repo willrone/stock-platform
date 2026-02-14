@@ -16,6 +16,7 @@ from loguru import logger
 
 from .config import QlibTrainingConfig
 from .data_preprocessing import (
+    CSRankNormTransformer,
     CrossSectionalNeutralizer,
     OutlierHandler,
     RobustFeatureScaler,
@@ -239,6 +240,32 @@ def _split_by_hardcut(
     return _select_by_dates(dataset, train_dates, val_dates)
 
 
+def _split_by_purged_cv(
+    dataset: pd.DataFrame,
+    config: QlibTrainingConfig,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """使用 Purged K-Fold 的最后一折作为训练/验证分割
+
+    最后一折训练集最大、验证集是最近的数据，
+    同时通过 purge + embargo 防止信息泄漏。
+
+    Args:
+        dataset: 完整数据集
+        config: 训练配置（含 purged_cv_splits 等）
+
+    Returns:
+        (train_data, val_data)
+    """
+    from .purged_cv import PurgedCVConfig, select_best_fold_split
+
+    cv_config = PurgedCVConfig(
+        n_splits=config.purged_cv_splits,
+        purge_days=config.purged_cv_purge_days,
+        embargo_days=config.embargo_days,
+    )
+    return select_best_fold_split(dataset, cv_config)
+
+
 def _extract_sorted_dates(
     dataset: pd.DataFrame,
 ) -> pd.DatetimeIndex:
@@ -272,12 +299,21 @@ def _postprocess_data(
     val_data: pd.DataFrame,
     config: QlibTrainingConfig,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """异常值处理 + 中性化 + 标准化
+    """异常值处理 + CSRankNorm（可选） + 中性化 + 标准化
+
+    当 enable_cs_rank_norm=True 时：
+      1. 先 winsorize 原始标签（去极端值）
+      2. 再做 CSRankNorm（rank→percentile→ppf）
+      3. 跳过 CSRankNorm 后的 winsorize（输出已有界）
+    当 enable_cs_rank_norm=False 时：
+      保持原有 winsorize 行为。
 
     Returns:
         (processed_train, processed_val)
     """
-    # 异常值处理
+    enable_csrn = config.enable_cs_rank_norm if config else False
+
+    # === 异常值处理（winsorize） ===
     outlier_handler = OutlierHandler(
         method="winsorize",
         lower_percentile=0.01,
@@ -292,6 +328,14 @@ def _postprocess_data(
             val_data = outlier_handler.handle_label_outliers(
                 val_data, label_col="label",
             )
+
+    # === CSRankNorm（可选） ===
+    if enable_csrn and "label" in train_data.columns:
+        logger.info("启用 CSRankNorm 标签变换")
+        csrn = CSRankNormTransformer()
+        train_data = csrn.transform(train_data, label_col="label")
+        if val_data is not None and "label" in val_data.columns:
+            val_data = csrn.transform(val_data, label_col="label")
 
     feature_cols = [c for c in train_data.columns if c != "label"]
 
@@ -411,6 +455,10 @@ async def prepare_training_datasets(
     if split_method == "hardcut" and config and config.train_end_date:
         train_data, val_data = _split_by_hardcut(
             dataset, config.train_end_date, config.val_end_date,
+        )
+    elif split_method == "purged_cv":
+        train_data, val_data = _split_by_purged_cv(
+            dataset, config,
         )
     else:
         train_data, val_data = _split_by_ratio(
