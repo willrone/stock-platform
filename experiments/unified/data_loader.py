@@ -21,6 +21,7 @@ from .features import (
     compute_regression_label,
     neutralize_features,
 )
+from .label_transform import cs_rank_norm
 
 
 def load_stock_files(config: TrainingConfig) -> pd.DataFrame:
@@ -98,6 +99,12 @@ def prepare_dataset(config: TrainingConfig) -> pd.DataFrame:
         logger.info("执行市场中性化处理...")
         data = neutralize_features(data)
 
+    if config.label_transform == "csranknorm":
+        # Winsorize 原始标签 *先于* CSRankNorm，截断极端值再做排名
+        logger.info("CSRankNorm 模式: 先 Winsorize 原始标签再做排名变换...")
+        data = winsorize_labels(data.copy())
+        data = cs_rank_norm(data, label_col="future_return")
+
     data = data.dropna(subset=["future_return"])
     data = data.dropna()
     logger.info(f"清洗后数据量: {len(data)} 条")
@@ -107,6 +114,7 @@ def prepare_dataset(config: TrainingConfig) -> pd.DataFrame:
 
 def winsorize_labels(df: pd.DataFrame) -> pd.DataFrame:
     """对回归标签做 Winsorize 处理，截断极端值"""
+    df = df.copy()
     label = df["future_return"]
     lower = label.quantile(LABEL_WINSORIZE_LOWER)
     upper = label.quantile(LABEL_WINSORIZE_UPPER)
@@ -139,18 +147,20 @@ def split_with_embargo(
     embargo = pd.Timedelta(days=config.embargo_days)
 
     # 训练集：date < train_end
-    train = data[data["date"] < train_end]
+    train = data[data["date"] < train_end].copy()
 
     # 验证集：date >= train_end + embargo 且 date < val_end
     val_start = train_end + embargo
-    val = data[(data["date"] >= val_start) & (data["date"] < val_end)]
+    val = data[(data["date"] >= val_start) & (data["date"] < val_end)].copy()
 
     # 测试集：date >= val_end + embargo
     test_start = val_end + embargo
-    test = data[data["date"] >= test_start]
+    test = data[data["date"] >= test_start].copy()
 
-    # Winsorize 训练集标签
-    train = winsorize_labels(train)
+    # CSRankNorm 模式下标签已是 N(0,1)，不再 winsorize；
+    # 非 CSRankNorm 模式下对训练集标签做 winsorize
+    if config.label_transform != "csranknorm":
+        train = winsorize_labels(train)
 
     _log_split_info(train, val, test, config.embargo_days)
     return train, val, test
