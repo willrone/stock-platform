@@ -190,11 +190,14 @@ def main():
         "Baseline(旧参数)", baseline_config, baseline_lgb,
     ))
 
-    # B1: 新参数 + 无 CSRankNorm
-    b1_config = TrainingConfig(label_transform=None)
+    # B1: 新参数(适配原始标签) + 无 CSRankNorm
+    # reg=200 对 raw return 太强，用 Qlib 结构但降低正则化
     b1_lgb = LGBConfig(seed=RANDOM_SEED)
+    b1_lgb.reg_alpha = 5.0
+    b1_lgb.reg_lambda = 5.0
+    b1_config = TrainingConfig(label_transform=None)
     results.append(run_single_experiment(
-        "B1(新参数)", b1_config, b1_lgb,
+        "B1(新参数/reg=5)", b1_config, b1_lgb,
     ))
 
     # B2: 新参数 + CSRankNorm
