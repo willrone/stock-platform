@@ -67,7 +67,10 @@ def _find_close_column(data: pd.DataFrame) -> str:
 def _create_return_label(
     data: pd.DataFrame, close_col: str, horizon: int,
 ) -> None:
-    """计算未来N天收益率标签（原地修改）"""
+    """计算未来N天收益率标签（原地修改）
+
+    不做 fillna(0)，保留 NaN，训练前通过 dropna 过滤。
+    """
     current_price = data[close_col]
     if isinstance(data.index, pd.MultiIndex):
         future_price = data.groupby(level=0)[close_col].shift(-horizon)
@@ -76,14 +79,14 @@ def _create_return_label(
 
     label_values = (future_price - current_price) / current_price
     if isinstance(label_values, pd.Series):
-        data["label"] = label_values.fillna(0)
+        data["label"] = label_values  # 不做 fillna(0)
     else:
         data["label"] = pd.Series(
             label_values.iloc[:, 0].values
             if hasattr(label_values, "iloc")
             else label_values,
             index=data.index,
-        ).fillna(0)
+        )  # 不做 fillna(0)
 
 
 def _create_fallback_label(
@@ -233,8 +236,20 @@ class DataFrameDatasetAdapter:
                 return getattr(self._series, name)
 
         # 分离特征和标签
+        # 过滤掉以下列，防止数据泄漏：
+        # 1. label 列和 Qlib 自动生成的 LABEL* 列（如 LABEL0）
+        # 2. process_stock_data 添加的收益率/成交量变化特征（RET*/VOL*），与标签高度相关
+        # 3. 原始 OHLCV 列（$open/$high/$low/$close/$volume/$vwap），
+        #    绝对价格水平在截面上完美区分股票，导致 RankIC≈1.0
         # 如果配置中指定了selected_features，则只使用选定的特征
-        all_feature_cols = [col for col in data.columns if col != "label"]
+        _LEAKY_FEATURES = {"RET1", "RET5", "RET20", "VOL1", "VOL5"}
+        all_feature_cols = [
+            col for col in data.columns
+            if col != "label"
+            and not (isinstance(col, str) and col.upper().startswith("LABEL"))
+            and col not in _LEAKY_FEATURES
+            and not (isinstance(col, str) and col.startswith("$"))
+        ]
         if hasattr(self, 'config') and self.config and self.config.selected_features:
             # 特征名称映射：将前端友好的名称转换为Qlib实际使用的名称
             def map_feature_name(feature_name: str) -> List[str]:
@@ -594,6 +609,32 @@ class DataFrameDatasetAdapter:
                 label_series_obj=label_obj_final,
                 feature_series_obj=feature_obj_final,
             )
+            # === 诊断：检查传给 LGBModel 的实际数据 ===
+            if feature_obj_final is not None:
+                fv = feature_obj_final.values
+                nan_count = int(np.isnan(fv).sum()) if fv.size > 0 else 0
+                nan_pct = nan_count / fv.size * 100 if fv.size > 0 else 0
+                all_same_cols = 0
+                for ci in range(fv.shape[1]):
+                    col_vals = fv[:, ci]
+                    valid = col_vals[~np.isnan(col_vals)]
+                    if len(valid) > 0 and np.all(valid == valid[0]):
+                        all_same_cols += 1
+                logger.info(
+                    f"[DIAG-PREPARE] key={key} feature: shape={fv.shape}, "
+                    f"dtype={fv.dtype}, nan={nan_count}({nan_pct:.1f}%), "
+                    f"all_same_cols={all_same_cols}/{fv.shape[1]}, "
+                    f"sample_row0={fv[0, :5].tolist() if fv.shape[0] > 0 else []}"
+                )
+            if label_obj_final is not None:
+                lv = label_obj_final.values
+                logger.info(
+                    f"[DIAG-PREPARE] key={key} label: shape={lv.shape}, "
+                    f"dtype={lv.dtype}, "
+                    f"nonzero={int(np.count_nonzero(lv))}, "
+                    f"range=[{np.nanmin(lv):.6f}, {np.nanmax(lv):.6f}], "
+                    f"sample[:5]={lv.flatten()[:5].tolist()}"
+                )
             return custom_result
         else:
             return result_base

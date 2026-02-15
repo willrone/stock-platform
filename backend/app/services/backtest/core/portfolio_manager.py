@@ -41,6 +41,14 @@ class PortfolioManager:
         self.total_commission = 0.0
         self.total_slippage = 0.0
 
+        # 开仓日期跟踪（用于最小持仓期检查）
+        self._entry_dates: Dict[str, datetime] = {}
+
+    @property
+    def entry_dates(self) -> Dict[str, datetime]:
+        """返回开仓日期字典 {stock_code: entry_date}"""
+        return {code: dt for code, dt in self._entry_dates.items() if code in self.positions}
+
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
         """计算组合总价值（含成本）"""
         total_value = self.cash
@@ -209,6 +217,8 @@ class PortfolioManager:
                 unrealized_pnl=0,
                 realized_pnl=0,
             )
+            # 新开仓：记录开仓日期
+            self._entry_dates[stock_code] = signal.timestamp
 
         # 执行交易（无成本）- 使用原始价格，不扣除手续费和滑点
         cost_without_fees = quantity * original_price
@@ -305,6 +315,9 @@ class PortfolioManager:
         # 更新持仓（含成本）
         position.realized_pnl += pnl
         del self.positions[stock_code]
+
+        # 清除开仓日期
+        self._entry_dates.pop(stock_code, None)
 
         # 执行交易（无成本）- 使用原始价格，不扣除手续费和滑点
         proceeds_without_fees = quantity * original_price

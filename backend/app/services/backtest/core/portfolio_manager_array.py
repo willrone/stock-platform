@@ -72,9 +72,22 @@ class PortfolioManagerArray:
         self._positions_cache: Optional[Dict[str, Position]] = None
         self._positions_cache_valid = False
 
+        # 开仓日期跟踪（用于最小持仓期检查）
+        # entry_dates[idx] 记录股票 idx 最近一次开仓的日期
+        self._entry_dates: Dict[int, datetime] = {}
+
     def _invalidate_positions_cache(self) -> None:
         """[P0 优化] 使 positions 缓存失效，在持仓变化时调用"""
         self._positions_cache_valid = False
+
+    @property
+    def entry_dates(self) -> Dict[str, datetime]:
+        """返回开仓日期字典 {stock_code: entry_date}，用于最小持仓期检查"""
+        return {
+            self.stock_codes[idx]: dt
+            for idx, dt in self._entry_dates.items()
+            if self.quantities[idx] > 0
+        }
 
     def set_current_prices(self, current_prices: Dict[str, float]) -> None:
         """[P2 优化] 批量设置当前价格到数组，供后续向量化计算使用
@@ -286,6 +299,8 @@ class PortfolioManagerArray:
             self.avg_costs[idx] = (old_quantity * self.avg_costs[idx] + total_cost) / new_quantity
         else:
             self.avg_costs[idx] = price
+            # 新开仓：记录开仓日期
+            self._entry_dates[idx] = signal.timestamp
         
         self.quantities[idx] = new_quantity
 
@@ -371,6 +386,9 @@ class PortfolioManagerArray:
         self.realized_pnl[idx] += pnl
         self.quantities[idx] = 0
         self.avg_costs[idx] = 0.0
+
+        # 清除开仓日期
+        self._entry_dates.pop(idx, None)
 
         # [P0 优化] 持仓变化，使缓存失效
         self._invalidate_positions_cache()

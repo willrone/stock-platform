@@ -42,7 +42,13 @@ def process_stock_data(
         _generate_regression_label(
             processed_data, stock_code, prediction_horizon,
         )
-        processed_data = processed_data.fillna(0)
+        # 只对特征列 fillna(0)，保留 label 列的 NaN
+        feature_cols = [
+            c for c in processed_data.columns if c != "label"
+        ]
+        processed_data[feature_cols] = (
+            processed_data[feature_cols].fillna(0)
+        )
         return processed_data
     except Exception as e:
         logger.error(f"处理股票 {stock_code} 数据时发生错误: {e}")
@@ -77,7 +83,12 @@ def _generate_regression_label(
     stock_code: str,
     prediction_horizon: int,
 ) -> None:
-    """生成回归标签：未来N天收益率（原地修改）"""
+    """生成回归标签：未来N天收益率（原地修改）
+
+    注意：不对标签做 fillna(0)，保留 NaN。
+    训练前通过 dropna 过滤无标签行，避免模型学到
+    "有标签 vs 无标签"的虚假模式。
+    """
     if "$close" not in data.columns:
         return
 
@@ -95,10 +106,13 @@ def _generate_regression_label(
         if hasattr(label_values, "iloc") and label_values.ndim > 1
         else label_values
     )
-    data["label"] = data["label"].fillna(0)
+    # 不做 fillna(0)，保留 NaN，训练前 dropna
 
+    valid_count = data["label"].notna().sum()
+    total_count = len(data)
     logger.debug(
         f"股票 {stock_code} 标签创建完成，预测周期={prediction_horizon}天，"
+        f"有效标签={valid_count}/{total_count}，"
         f"标签范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]",
     )
 
@@ -120,6 +134,52 @@ def _apply_binary_label(
     logger.info(
         f"二分类标签转换完成: 阈值={threshold}, "
         f"原始均值={original_mean:.6f}, 正样本比例={positive_ratio:.4f}",
+    )
+
+
+# 标签质量检查阈值
+_MIN_CROSS_SECTIONAL_STD = 0.001
+_MAX_ZERO_LABEL_RATIO = 0.30
+
+
+def _check_label_quality(dataset: pd.DataFrame) -> None:
+    """检查标签质量，发现异常时发出警告
+
+    检查项：
+    1. 截面标签 std 过小（跨股票几乎无差异）
+    2. label=0 占比过高（fillna(0) 残留）
+    3. 标签分布是否合理
+    """
+    label = dataset["label"]
+    total = len(label)
+
+    # 检查 0 值占比
+    zero_ratio = (label == 0).sum() / total
+    if zero_ratio > _MAX_ZERO_LABEL_RATIO:
+        logger.warning(
+            f"⚠️ 标签质量: label=0 占比 {zero_ratio:.1%} "
+            f"超过阈值 {_MAX_ZERO_LABEL_RATIO:.0%}，"
+            f"可能存在 fillna(0) 残留",
+        )
+
+    # 检查截面标签 std（按日期分组）
+    if isinstance(dataset.index, pd.MultiIndex):
+        date_level = 1
+        cross_std = label.groupby(level=date_level).std()
+        mean_cross_std = cross_std.mean()
+        if mean_cross_std < _MIN_CROSS_SECTIONAL_STD:
+            logger.warning(
+                f"⚠️ 标签质量: 截面标签 std={mean_cross_std:.6f} "
+                f"低于阈值 {_MIN_CROSS_SECTIONAL_STD}，"
+                f"跨股票标签几乎无差异，RankIC 可能虚高",
+            )
+
+    # 整体分布摘要
+    logger.info(
+        f"标签质量检查: count={total}, "
+        f"mean={label.mean():.6f}, std={label.std():.6f}, "
+        f"zero_ratio={zero_ratio:.1%}, "
+        f"range=[{label.min():.6f}, {label.max():.6f}]",
     )
 
 
@@ -320,9 +380,20 @@ def _postprocess_data(
         upper_percentile=0.99,
     )
     if "label" in train_data.columns:
+        logger.info(
+            f"[DIAG] 原始标签分布 - train: min={train_data['label'].min():.6f}, "
+            f"max={train_data['label'].max():.6f}, mean={train_data['label'].mean():.6f}, "
+            f"std={train_data['label'].std():.6f}, nunique={train_data['label'].nunique()}, "
+            f"NaN={train_data['label'].isna().sum()}"
+        )
         logger.info("开始处理标签异常值")
         train_data = outlier_handler.handle_label_outliers(
             train_data, label_col="label",
+        )
+        logger.info(
+            f"[DIAG] winsorize 后标签分布 - train: min={train_data['label'].min():.6f}, "
+            f"max={train_data['label'].max():.6f}, mean={train_data['label'].mean():.6f}, "
+            f"std={train_data['label'].std():.6f}, nunique={train_data['label'].nunique()}"
         )
         if val_data is not None and "label" in val_data.columns:
             val_data = outlier_handler.handle_label_outliers(
@@ -331,7 +402,13 @@ def _postprocess_data(
 
     # === CSRankNorm（可选） ===
     if enable_csrn and "label" in train_data.columns:
-        logger.info("启用 CSRankNorm 标签变换")
+        logger.info(
+            f"启用 CSRankNorm 标签变换, "
+            f"train index type={type(train_data.index).__name__}, "
+            f"names={getattr(train_data.index, 'names', None)}, "
+            f"shape={train_data.shape}, "
+            f"label NaN={train_data['label'].isna().sum()}/{len(train_data)}"
+        )
         csrn = CSRankNormTransformer()
         train_data = csrn.transform(train_data, label_col="label")
         if val_data is not None and "label" in val_data.columns:
@@ -406,6 +483,8 @@ async def prepare_training_datasets(
     根据 config 中的 feature_set / label_type / split_method
     选择不同的特征计算、标签生成和数据分割方式。
     """
+    logger.info(f"[CANARY] prepare_training_datasets 入口: dataset.shape={dataset.shape}, index_type={type(dataset.index).__name__}")
+
     if not QLIB_AVAILABLE:
         raise RuntimeError(
             "Qlib不可用，无法准备数据集。\n"
@@ -420,6 +499,34 @@ async def prepare_training_datasets(
         f"数据集准备: feature_set={feature_set}, "
         f"label_type={label_type}, split_method={split_method}",
     )
+
+    # === 0. 规范化 MultiIndex 顺序为 (instrument, datetime) ===
+    if (
+        isinstance(dataset.index, pd.MultiIndex)
+        and dataset.index.nlevels == 2
+    ):
+        level0_dtype = dataset.index.get_level_values(0).dtype
+        level1_dtype = dataset.index.get_level_values(1).dtype
+        logger.info(
+            f"[DIAG] MultiIndex 检测: level0_dtype={level0_dtype}, "
+            f"level1_dtype={level1_dtype}, "
+            f"level0_is_dt={pd.api.types.is_datetime64_any_dtype(level0_dtype)}, "
+            f"level1_is_dt={pd.api.types.is_datetime64_any_dtype(level1_dtype)}, "
+            f"first_3={list(dataset.index[:3])}",
+        )
+        # 如果 level0 是日期、level1 是字符串/object → 需要交换
+        if (
+            pd.api.types.is_datetime64_any_dtype(level0_dtype)
+            and not pd.api.types.is_datetime64_any_dtype(level1_dtype)
+        ):
+            logger.info(
+                f"检测到 MultiIndex 顺序为 (datetime, instrument)，"
+                f"交换为 (instrument, datetime)",
+            )
+            dataset = dataset.swaplevel().sort_index()
+            logger.info(
+                f"[DIAG] swaplevel 后: first_3={list(dataset.index[:3])}",
+            )
 
     # === 1. 特征计算 ===
     if feature_set == "technical_62":
@@ -450,6 +557,22 @@ async def prepare_training_datasets(
         )
         _apply_binary_label(dataset, threshold)
 
+    # === 4.1 过滤 label 为 NaN 的行 ===
+    if "label" in dataset.columns:
+        before_count = len(dataset)
+        dataset = dataset.dropna(subset=["label"])
+        dropped_count = before_count - len(dataset)
+        if dropped_count > 0:
+            logger.info(
+                f"过滤 label=NaN 的行: {dropped_count}/{before_count} "
+                f"({dropped_count / before_count * 100:.1f}%)，"
+                f"剩余 {len(dataset)} 行",
+            )
+
+    # === 4.2 标签质量检查 ===
+    if "label" in dataset.columns:
+        _check_label_quality(dataset)
+
     # === 5. 数据分割 ===
     embargo_days = config.embargo_days if config else DEFAULT_EMBARGO_DAYS
     if split_method == "hardcut" and config and config.train_end_date:
@@ -463,6 +586,24 @@ async def prepare_training_datasets(
     else:
         train_data, val_data = _split_by_ratio(
             dataset, validation_split, embargo_days,
+        )
+
+    # === 5.1 分割后诊断 ===
+    if "label" in train_data.columns:
+        t_lbl = train_data["label"]
+        logger.info(
+            f"[DIAG] 分割后 train label: shape={train_data.shape}, "
+            f"nonzero={t_lbl.ne(0).sum()}, zero={t_lbl.eq(0).sum()}, "
+            f"range=[{t_lbl.min():.6f}, {t_lbl.max():.6f}], "
+            f"index_sample={list(train_data.index[:3])}"
+        )
+    if val_data is not None and "label" in val_data.columns:
+        v_lbl = val_data["label"]
+        logger.info(
+            f"[DIAG] 分割后 val label: shape={val_data.shape}, "
+            f"nonzero={v_lbl.ne(0).sum()}, zero={v_lbl.eq(0).sum()}, "
+            f"range=[{v_lbl.min():.6f}, {v_lbl.max():.6f}], "
+            f"index_sample={list(val_data.index[:3])}"
         )
 
     # === 6. 后处理（异常值 + 中性化 + 标准化） ===
@@ -506,8 +647,11 @@ def _generate_labels_for_dataset(
     else:
         future = dataset[close_col].shift(-horizon)
 
-    dataset["label"] = ((future - current) / current).fillna(0)
+    dataset["label"] = (future - current) / current
+    # 不做 fillna(0)，保留 NaN，训练前 dropna
+    valid_count = dataset["label"].notna().sum()
     logger.info(
         f"数据集标签生成完成，预测周期={horizon}天，"
+        f"有效标签={valid_count}/{len(dataset)}，"
         f"范围=[{dataset['label'].min():.6f}, {dataset['label'].max():.6f}]",
     )

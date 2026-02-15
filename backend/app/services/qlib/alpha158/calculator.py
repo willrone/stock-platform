@@ -240,6 +240,15 @@ class Alpha158Calculator:
                 except Exception as map_error:
                     logger.debug(f"映射 instrument 名称失败: {map_error}")
 
+                # 过滤掉 Qlib Alpha158 handler 自动附带的 LABEL 列，
+                # 防止未来收益率（如 LABEL0）作为特征泄漏到训练数据中
+                label_cols = [c for c in alpha_factors.columns if c.upper().startswith("LABEL")]
+                if label_cols:
+                    logger.warning(
+                        f"Alpha158 handler 返回了 {len(label_cols)} 个标签列，已过滤: {label_cols}"
+                    )
+                    alpha_factors = alpha_factors.drop(columns=label_cols)
+
                 logger.info(f"Alpha158 handler 计算完成: {alpha_factors.shape}")
                 return alpha_factors
             else:

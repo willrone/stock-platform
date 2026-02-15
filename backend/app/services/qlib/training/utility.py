@@ -20,8 +20,10 @@ def get_model_config_template(model_type: str) -> Dict[str, Any]:
     templates = {
         "lightgbm": {
             "learning_rate": 0.05,
-            "num_leaves": 31,
-            "n_estimators": 100,
+            "num_leaves": 210,
+            "n_estimators": 1000,
+            "lambda_l1": 0.1,
+            "lambda_l2": 0.1,
         },
         "xgboost": {
             "learning_rate": 0.1,

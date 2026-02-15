@@ -22,6 +22,9 @@ class BaseStrategy(ABC):
         # NOTE: Prefer per-DataFrame caching via data.attrs to avoid cross-stock pollution.
         # self.indicators kept for backward compatibility / ad-hoc usage.
         self.indicators = {}
+        # 最小持仓期（天数）：开仓后至少持有 N 天才允许平仓
+        # 0 表示不限制（保持原有行为）
+        self.min_holding_period = config.get("min_holding_period", 0)
 
     def _get_current_idx(self, data: pd.DataFrame, current_date: datetime) -> int:
         """Fast path for locating current_date index.
@@ -134,9 +137,16 @@ class BaseStrategy(ABC):
         signal: TradingSignal,
         portfolio_value: float,
         current_positions: Dict[str, Position],
+        entry_dates: Optional[Dict[str, "datetime"]] = None,
     ) -> Tuple[bool, Optional[str]]:
         """
         验证信号有效性
+
+        Args:
+            signal: 交易信号
+            portfolio_value: 组合总价值
+            current_positions: 当前持仓
+            entry_dates: 各股票的开仓日期（用于最小持仓期检查）
 
         Returns:
             tuple[bool, str | None]: (是否有效, 未执行原因)
@@ -146,6 +156,21 @@ class BaseStrategy(ABC):
         # 基础验证
         if signal.strength < 0.1:  # 信号强度太低
             return False, f"信号强度过低: {signal.strength:.2%} < 10%"
+
+        # 最小持仓期检查：卖出信号需要检查持仓天数
+        if (
+            signal.signal_type == SignalType.SELL
+            and self.min_holding_period > 0
+            and entry_dates is not None
+        ):
+            entry_date = entry_dates.get(signal.stock_code)
+            if entry_date is not None:
+                holding_days = (signal.timestamp - entry_date).days
+                if holding_days < self.min_holding_period:
+                    return False, (
+                        f"最小持仓期未满: 已持有{holding_days}天 < "
+                        f"最小{self.min_holding_period}天"
+                    )
 
         # 检查持仓限制
         if signal.signal_type == SignalType.BUY:

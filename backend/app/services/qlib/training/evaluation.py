@@ -335,6 +335,9 @@ def _calculate_metrics(
             else:
                 calmar_ratio = 0.0
 
+            # === RankIC / RankICIR 计算 ===
+            rank_ic, rank_ic_ir = _compute_rank_ic(dataset, predictions, dataset_name, segment)
+
             metrics = {
                 "accuracy": max(0.0, min(1.0, accuracy)),
                 "mse": max(0.0, mse),
@@ -350,6 +353,8 @@ def _calculate_metrics(
                 "win_rate": max(0.0, min(1.0, win_rate)),
                 "information_ratio": information_ratio,
                 "calmar_ratio": calmar_ratio,
+                "rank_ic": rank_ic,
+                "rank_ic_ir": rank_ic_ir,
             }
 
             logger.info(
@@ -378,5 +383,180 @@ def _get_default_metrics() -> Dict[str, float]:
             "win_rate": 0.5,
             "information_ratio": 0.0,
             "calmar_ratio": 0.0,
+            "rank_ic": 0.0,
+            "rank_ic_ir": 0.0,
         }
+
+
+def _compute_rank_ic(
+    dataset,
+    predictions,
+    dataset_name: str,
+    segment: str,
+) -> tuple:
+    """计算 RankIC（Spearman 秩相关）和 RankICIR（RankIC 均值 / 标准差）
+
+    按日期分组计算每日截面 Spearman 相关系数，然后取均值和 IR。
+
+    Args:
+        dataset: 数据集（DataFrameDatasetAdapter 或 DataFrame）
+        predictions: 模型预测值
+        dataset_name: 数据集名称（用于日志）
+        segment: 数据段名称（train / valid）
+
+    Returns:
+        (rank_ic_mean, rank_ic_ir) 两个 float
+    """
+    from scipy.stats import spearmanr
+
+    try:
+        # --- 获取带索引的标签 ---
+        label_series = None
+
+        if hasattr(dataset, "segments") and segment in dataset.segments:
+            seg_data = dataset.segments[segment]
+            if isinstance(seg_data, pd.DataFrame) and "label" in seg_data.columns:
+                label_series = seg_data["label"]
+                if hasattr(label_series, "_series"):
+                    label_series = label_series._series
+        elif hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
+            if "label" in dataset.data.columns:
+                label_series = dataset.data["label"]
+        elif isinstance(dataset, pd.DataFrame) and "label" in dataset.columns:
+            label_series = dataset["label"]
+
+        if label_series is None:
+            logger.debug(f"{dataset_name} RankIC: 无法获取标签序列")
+            return 0.0, 0.0
+
+        # --- 对齐预测值 ---
+        if isinstance(predictions, pd.Series):
+            pred_values = predictions.values
+        elif isinstance(predictions, np.ndarray):
+            pred_values = predictions.flatten()
+        else:
+            pred_values = np.array(predictions).flatten()
+
+        y_true = label_series.values if hasattr(label_series, "values") else np.array(label_series)
+        min_len = min(len(y_true), len(pred_values))
+        if min_len == 0:
+            return 0.0, 0.0
+        y_true = y_true[:min_len]
+        pred_values = pred_values[:min_len]
+
+        # --- 尝试按日期分组 ---
+        date_index = None
+        if hasattr(label_series, "index"):
+            idx = label_series.index
+            logger.info(
+                f"{dataset_name} RankIC debug: index type={type(idx).__name__}, "
+                f"nlevels={getattr(idx, 'nlevels', 1)}, "
+                f"names={getattr(idx, 'names', None)}, "
+                f"dtype={idx.dtype if not isinstance(idx, pd.MultiIndex) else [idx.get_level_values(i).dtype for i in range(idx.nlevels)]}, "
+                f"len={len(idx)}, first_5={idx[:5].tolist() if len(idx) > 0 else 'empty'}"
+            )
+            if isinstance(idx, pd.MultiIndex):
+                # 找到日期层
+                for lvl in range(idx.nlevels):
+                    vals = idx.get_level_values(lvl)
+                    logger.info(
+                        f"{dataset_name} RankIC debug: level {lvl} name={idx.names[lvl]}, "
+                        f"dtype={vals.dtype}, is_datetime={pd.api.types.is_datetime64_any_dtype(vals)}, "
+                        f"sample={vals[:3].tolist()}"
+                    )
+                    if pd.api.types.is_datetime64_any_dtype(vals):
+                        date_index = vals[:min_len]
+                        break
+                    # 也尝试将字符串日期转换为datetime
+                    if vals.dtype == object:
+                        try:
+                            converted = pd.to_datetime(vals[:3])
+                            if not converted.isna().any():
+                                logger.info(f"{dataset_name} RankIC: 将 level {lvl} 字符串日期转换为 datetime")
+                                date_index = pd.to_datetime(vals[:min_len])
+                                break
+                        except Exception:
+                            pass
+            elif pd.api.types.is_datetime64_any_dtype(idx):
+                date_index = idx[:min_len]
+            elif idx.dtype == object:
+                # 尝试将字符串索引转换为日期
+                try:
+                    converted = pd.to_datetime(idx[:3])
+                    if not converted.isna().any():
+                        logger.info(f"{dataset_name} RankIC: 将字符串索引转换为 datetime")
+                        date_index = pd.to_datetime(idx[:min_len])
+                except Exception:
+                    pass
+        
+        logger.info(f"{dataset_name} RankIC: date_index found={date_index is not None}, min_len={min_len}")
+
+        if date_index is not None and len(date_index) == min_len:
+            # 按日期分组计算每日 RankIC
+            df_ic = pd.DataFrame({
+                "y_true": y_true,
+                "y_pred": pred_values,
+                "date": date_index,
+            })
+            daily_ics = []
+            min_stocks_per_day = 2  # Spearman 至少需要 2 个样本
+            total_groups = 0
+            skipped_small = 0
+            skipped_nan = 0
+            nan_corr_count = 0
+            for dt, grp in df_ic.groupby("date"):
+                total_groups += 1
+                if len(grp) < min_stocks_per_day:
+                    skipped_small += 1
+                    continue
+                valid_mask = ~(np.isnan(grp["y_true"].values) | np.isnan(grp["y_pred"].values))
+                if valid_mask.sum() < min_stocks_per_day:
+                    skipped_nan += 1
+                    continue
+                yt = grp["y_true"].values[valid_mask]
+                yp = grp["y_pred"].values[valid_mask]
+                corr, _ = spearmanr(yt, yp)
+                if total_groups <= 3:
+                    logger.info(
+                        f"{dataset_name} RankIC sample day={dt}: n={len(yt)}, "
+                        f"y_true_unique={len(np.unique(yt))}, y_pred_unique={len(np.unique(yp))}, "
+                        f"y_true[:5]={yt[:5].tolist()}, y_pred[:5]={yp[:5].tolist()}, corr={corr}"
+                    )
+                if not np.isnan(corr):
+                    daily_ics.append(corr)
+                else:
+                    nan_corr_count += 1
+
+            logger.info(
+                f"{dataset_name} RankIC groupby stats: total_groups={total_groups}, "
+                f"skipped_small={skipped_small}, skipped_nan={skipped_nan}, "
+                f"nan_corr={nan_corr_count}, valid_days={len(daily_ics)}"
+            )
+
+            if len(daily_ics) >= 2:
+                ic_mean = float(np.mean(daily_ics))
+                ic_std = float(np.std(daily_ics))
+                ic_ir = float(ic_mean / ic_std) if ic_std > 1e-8 else 0.0
+                logger.info(
+                    f"{dataset_name} RankIC: mean={ic_mean:.4f}, std={ic_std:.4f}, "
+                    f"IR={ic_ir:.4f}, days={len(daily_ics)}"
+                )
+                return round(ic_mean, 4), round(ic_ir, 4)
+            elif len(daily_ics) == 1:
+                logger.info(f"{dataset_name} RankIC: 仅1天, IC={daily_ics[0]:.4f}")
+                return round(daily_ics[0], 4), 0.0
+
+        # 兜底：整体计算 Spearman
+        valid_mask = ~(np.isnan(y_true) | np.isnan(pred_values))
+        if valid_mask.sum() < 5:
+            return 0.0, 0.0
+        corr, _ = spearmanr(y_true[valid_mask], pred_values[valid_mask])
+        if np.isnan(corr):
+            return 0.0, 0.0
+        logger.info(f"{dataset_name} RankIC (整体): {corr:.4f}")
+        return round(float(corr), 4), 0.0
+
+    except Exception as e:
+        logger.warning(f"{dataset_name} RankIC 计算失败: {e}")
+        return 0.0, 0.0
 

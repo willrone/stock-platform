@@ -785,6 +785,7 @@ class BacktestLoopExecutor:
                             signal,
                             daily_portfolio_value,
                             daily_positions,
+                            entry_dates=getattr(portfolio_manager, 'entry_dates', None),
                         )
 
                         if not is_valid:
@@ -1261,6 +1262,7 @@ class BacktestLoopExecutor:
                     sig,
                     portfolio_manager.get_portfolio_value(current_prices),
                     portfolio_manager.positions,
+                    entry_dates=getattr(portfolio_manager, 'entry_dates', None),
                 )
                 if not is_valid:
                     unexecuted_signals.append(
@@ -1305,6 +1307,7 @@ class BacktestLoopExecutor:
                     sig,
                     portfolio_manager.get_portfolio_value(current_prices),
                     portfolio_manager.positions,
+                    entry_dates=getattr(portfolio_manager, 'entry_dates', None),
                 )
                 if not is_valid:
                     unexecuted_signals.append(

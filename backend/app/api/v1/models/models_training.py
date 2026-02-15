@@ -555,6 +555,8 @@ async def train_model_task(
                 "mse": result.validation_metrics.get("mse", 0.0),
                 "mae": result.validation_metrics.get("mae", 0.0),
                 "r2": result.validation_metrics.get("r2", 0.0),
+                "rank_ic": result.validation_metrics.get("rank_ic", 0.0),
+                "rank_ic_ir": result.validation_metrics.get("rank_ic_ir", 0.0),
             }
             model_info.evaluation_report = report_generator.to_dict(report)
             model_info.hyperparameters = final_hyperparameters
@@ -575,10 +577,18 @@ async def train_model_task(
             logger.info(f"统一Qlib模型训练完成: {model_id}")
 
         except Exception as e:
-            logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
+            import traceback as _tb
+            full_tb = _tb.format_exc()
+            logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}\n{full_tb}")
+            # 写入文件以确保 traceback 不丢失
+            try:
+                with open(f"backend/data/train_error_{model_id}.log", "w") as _f:
+                    _f.write(full_tb)
+            except Exception:
+                pass
             model_info.status = "failed"
             model_info.training_stage = "failed"
-            model_info.performance_metrics = {"error": str(e), "status": "failed"}
+            model_info.performance_metrics = {"error": str(e), "status": "failed", "traceback": full_tb}
             session.commit()
             if main_loop:
                 asyncio.run_coroutine_threadsafe(
