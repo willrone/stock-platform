@@ -27,7 +27,7 @@ class QlibModelConfigBuilder:
     DEFAULT_LGB_PARAMS = {
         "loss": "mse",
         "colsample_bytree": 0.8879,
-        "learning_rate": 0.2,
+        "learning_rate": 0.0421,
         "subsample": 0.8789,
         "lambda_l1": 205.6999,
         "lambda_l2": 580.9768,

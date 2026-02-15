@@ -205,7 +205,7 @@ class LightGBMAdapter(BaseModelAdapter):
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
                 "loss": "mse",
-                "learning_rate": hyperparameters.get("learning_rate", 0.2),
+                "learning_rate": hyperparameters.get("learning_rate", 0.0421),
                 "num_leaves": hyperparameters.get("num_leaves", 210),
                 "max_depth": hyperparameters.get("max_depth", 8),
                 "min_data_in_leaf": hyperparameters.get("min_data_in_leaf", 20),
@@ -238,7 +238,7 @@ class LightGBMAdapter(BaseModelAdapter):
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
         try:
-            lr = hyperparameters.get("learning_rate", 0.2)
+            lr = hyperparameters.get("learning_rate", 0.0421)
             if not (0.001 <= lr <= 1.0):
                 return False
 

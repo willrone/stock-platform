@@ -291,7 +291,7 @@ def _lgb_params(seed: int) -> Dict[str, Any]:
     return {
         "objective": "regression",
         "metric": "mse",
-        "learning_rate": 0.2,
+        "learning_rate": 0.0421,
         "num_leaves": 210,
         "max_depth": 8,
         "feature_fraction": 0.8879,
