@@ -297,17 +297,114 @@ class EnhancedQlibDataProvider:
         end_date: datetime,
         use_cache: bool,
     ) -> pd.DataFrame:
-        """添加 Alpha158 因子"""
+        """添加 Alpha158 因子
+
+        Alpha158 handler 返回的 instrument 格式（如 000001_SZ）
+        可能与 qlib_data 的格式（如 SH600036）不一致。
+        在 concat 前统一 instrument 命名，避免行数翻倍。
+        """
         try:
             alpha_factors = await self.alpha_calculator.calculate_alpha_factors(
                 qlib_data, stock_codes, (start_date, end_date), use_cache
             )
-            if not alpha_factors.empty:
-                qlib_data = pd.concat([qlib_data, alpha_factors], axis=1)
-                logger.info(f"成功添加 {len(alpha_factors.columns)} 个 Alpha 因子")
+            if alpha_factors.empty:
+                return qlib_data
+
+            alpha_factors = self._align_alpha_index(
+                qlib_data, alpha_factors,
+            )
+            if alpha_factors.empty:
+                logger.warning("Alpha 因子索引对齐后为空，跳过")
+                return qlib_data
+
+            before_rows = len(qlib_data)
+            qlib_data = pd.concat(
+                [qlib_data, alpha_factors], axis=1,
+            )
+            after_rows = len(qlib_data)
+
+            if after_rows > before_rows * 1.1:
+                logger.warning(
+                    f"⚠️ Alpha concat 后行数异常增长: "
+                    f"{before_rows} → {after_rows} "
+                    f"(+{after_rows - before_rows})，"
+                    f"可能存在 instrument 命名不一致",
+                )
+
+            logger.info(
+                f"成功添加 {len(alpha_factors.columns)} 个 Alpha 因子",
+            )
         except Exception as e:
             logger.error(f"Alpha 因子计算失败: {e}")
         return qlib_data
+
+    def _align_alpha_index(
+        self,
+        qlib_data: pd.DataFrame,
+        alpha_factors: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """对齐 Alpha158 因子的索引到 qlib_data 的索引格式
+
+        解决 instrument 命名不一致问题：
+        - qlib_data: (SH600036, 2024-01-01)
+        - alpha_factors: (600036_SH, 2024-01-01) 或 (000001_SZ, ...)
+
+        通过将两边的 instrument 都归一化为相同格式来对齐。
+        """
+        if not isinstance(qlib_data.index, pd.MultiIndex):
+            return alpha_factors
+        if not isinstance(alpha_factors.index, pd.MultiIndex):
+            return alpha_factors
+
+        qlib_instruments = set(
+            qlib_data.index.get_level_values(0).unique(),
+        )
+        alpha_instruments = set(
+            alpha_factors.index.get_level_values(0).unique(),
+        )
+
+        # 如果已经有交集，不需要对齐
+        overlap = qlib_instruments & alpha_instruments
+        if len(overlap) >= min(
+            len(qlib_instruments), len(alpha_instruments),
+        ):
+            return alpha_factors
+
+        logger.info(
+            f"instrument 命名不一致，尝试对齐: "
+            f"qlib={list(qlib_instruments)[:3]}, "
+            f"alpha={list(alpha_instruments)[:3]}",
+        )
+
+        # 构建映射: alpha_instrument → qlib_instrument
+        mapping = _build_instrument_mapping(
+            qlib_instruments, alpha_instruments,
+        )
+        if not mapping:
+            logger.warning("无法建立 instrument 映射，跳过 Alpha 因子")
+            return pd.DataFrame()
+
+        # 重命名 alpha_factors 的 instrument level
+        inst_level = alpha_factors.index.get_level_values(0)
+        date_level = alpha_factors.index.get_level_values(1)
+        mapped_inst = inst_level.map(lambda x: mapping.get(x, x))
+
+        alpha_factors.index = pd.MultiIndex.from_arrays(
+            [mapped_inst, date_level],
+            names=alpha_factors.index.names,
+        )
+
+        # 只保留映射成功的行
+        valid_mask = alpha_factors.index.get_level_values(0).isin(
+            qlib_instruments,
+        )
+        alpha_factors = alpha_factors[valid_mask]
+
+        logger.info(
+            f"instrument 对齐完成: 映射 {len(mapping)} 只股票，"
+            f"保留 {len(alpha_factors)} 行",
+        )
+        return alpha_factors
 
     def _log_dataset_info(self, df: pd.DataFrame):
         """记录数据集信息"""
@@ -483,3 +580,70 @@ class EnhancedQlibDataProvider:
             模型类型及其描述
         """
         return self.model_config_builder.get_supported_models()
+
+
+def _normalize_to_canonical(code: str) -> str:
+    """将各种 instrument 格式归一化为统一的 (数字, 交易所) 元组字符串
+
+    支持的格式：
+    - SH600036 / SZ000001（QlibFormatConverter 输出）
+    - 600036_SH / 000001_SZ（Qlib 文件名格式）
+    - 600036.SH / 000001.SZ（Tushare 格式）
+
+    Returns:
+        归一化后的 "数字_交易所" 格式，如 "600036_SH"
+    """
+    code = str(code).strip().upper()
+
+    # SH600036 / SZ000001 格式
+    if len(code) >= 8 and code[:2] in ("SH", "SZ"):
+        return f"{code[2:]}_{code[:2]}"
+
+    # 600036_SH / 000001_SZ 格式
+    if "_" in code:
+        parts = code.split("_")
+        if len(parts) == 2 and parts[1] in ("SH", "SZ", "SS"):
+            exchange = "SH" if parts[1] == "SS" else parts[1]
+            return f"{parts[0]}_{exchange}"
+
+    # 600036.SH / 000001.SZ 格式
+    if "." in code:
+        parts = code.split(".")
+        if len(parts) == 2 and parts[1] in ("SH", "SZ", "SS"):
+            exchange = "SH" if parts[1] == "SS" else parts[1]
+            return f"{parts[0]}_{exchange}"
+
+    return code
+
+
+def _build_instrument_mapping(
+    qlib_instruments: set, alpha_instruments: set,
+) -> Dict[str, str]:
+    """构建 alpha instrument → qlib instrument 的映射
+
+    通过将两���都归一化为 canonical 格式来匹配。
+
+    Args:
+        qlib_instruments: qlib_data 中的 instrument 集合
+        alpha_instruments: alpha_factors 中的 instrument 集合
+
+    Returns:
+        映射字典 {alpha_instrument: qlib_instrument}
+    """
+    # 构建 canonical → qlib_instrument 的反向索引
+    canonical_to_qlib: Dict[str, str] = {}
+    for inst in qlib_instruments:
+        canonical = _normalize_to_canonical(inst)
+        canonical_to_qlib[canonical] = inst
+
+    # 对每个 alpha instrument，找到对应的 qlib instrument
+    mapping: Dict[str, str] = {}
+    for alpha_inst in alpha_instruments:
+        canonical = _normalize_to_canonical(alpha_inst)
+        if canonical in canonical_to_qlib:
+            mapping[alpha_inst] = canonical_to_qlib[canonical]
+
+    logger.info(
+        f"instrument 映射: {len(mapping)}/{len(alpha_instruments)} 匹配成功",
+    )
+    return mapping
