@@ -317,6 +317,21 @@ class EnhancedQlibDataProvider:
                 logger.warning("Alpha 因子索引对齐后为空，跳过")
                 return qlib_data
 
+            # 确保 MultiIndex level 顺序一致，避免 concat 行数膨胀
+            if (
+                isinstance(qlib_data.index, pd.MultiIndex)
+                and isinstance(alpha_factors.index, pd.MultiIndex)
+                and qlib_data.index.names != alpha_factors.index.names
+            ):
+                logger.info(
+                    f"对齐 index level 顺序: "
+                    f"qlib={qlib_data.index.names} → "
+                    f"alpha={alpha_factors.index.names}",
+                )
+                alpha_factors = alpha_factors.reorder_levels(
+                    qlib_data.index.names,
+                ).sort_index()
+
             before_rows = len(qlib_data)
             qlib_data = pd.concat(
                 [qlib_data, alpha_factors], axis=1,
@@ -328,7 +343,14 @@ class EnhancedQlibDataProvider:
                     f"⚠️ Alpha concat 后行数异常增长: "
                     f"{before_rows} → {after_rows} "
                     f"(+{after_rows - before_rows})，"
-                    f"可能存在 instrument 命名不一致",
+                    f"执行索引去重修复",
+                )
+                # 安全网：去除因索引不对齐产生的重复行
+                qlib_data = qlib_data[
+                    ~qlib_data.index.duplicated(keep="first")
+                ]
+                logger.info(
+                    f"去重后行数: {len(qlib_data)}",
                 )
 
             logger.info(
