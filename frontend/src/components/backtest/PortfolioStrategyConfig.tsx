@@ -250,6 +250,10 @@ export function PortfolioStrategyConfig({
           onChange={e => setIntegrationMethod(e.target.value)}
         >
           <MenuItem value="weighted_voting">加权投票</MenuItem>
+          <MenuItem value="regime_aware_voting">市场状态感知投票</MenuItem>
+          <MenuItem value="rank_sum">排名求和</MenuItem>
+          <MenuItem value="borda">Borda 计数</MenuItem>
+          <MenuItem value="consensus_topk">共识 Top-K</MenuItem>
         </Select>
         <FormHelperText>选择如何整合多个策略的信号</FormHelperText>
       </FormControl>
