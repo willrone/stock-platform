@@ -297,8 +297,8 @@ def _lgb_params(seed: int) -> Dict[str, Any]:
         "feature_fraction": 0.8879,
         "bagging_fraction": 0.8789,
         "bagging_freq": 1,
-        "lambda_l1": 0.1,
-        "lambda_l2": 0.1,
+        "lambda_l1": 205.6999,
+        "lambda_l2": 580.9768,
         "verbose": -1,
         "seed": seed,
     }
