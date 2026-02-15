@@ -28,6 +28,7 @@ from .utility import (
     get_training_recommendations,
     recommend_models,
 )
+from .rolling_integration import run_rolling_training
 
 # LightGBM / XGBoost 二分类目标函数映射
 _BINARY_OBJECTIVE_MAP = {
@@ -178,24 +179,23 @@ class UnifiedQlibTrainingEngine:
             if dataset.empty:
                 raise ValueError("无法获取训练数据")
 
-            # 详细记录数据集维度信息
-            logger.info(f"========== 数据集维度信息 ==========")
-            logger.info(f"数据集形状: {dataset.shape}")
-            logger.info(f"样本数: {dataset.shape[0]}")
-            logger.info(f"特征数: {dataset.shape[1] if len(dataset.shape) > 1 else 0}")
-            logger.info(f"数据维度数: {dataset.ndim}")
-            if len(dataset.columns) > 0:
-                logger.info(f"特征列数: {len(dataset.columns)}")
-                logger.info(f"前20个特征列名: {list(dataset.columns[:20])}")
-                if len(dataset.columns) > 20:
-                    logger.info(f"... 还有 {len(dataset.columns) - 20} 个特征列")
-            logger.info(f"索引类型: {type(dataset.index).__name__}")
-            if isinstance(dataset.index, pd.MultiIndex):
-                logger.info(f"MultiIndex级别数: {dataset.index.nlevels}")
-                logger.info(f"MultiIndex级别名称: {dataset.index.names}")
-            logger.info(f"缺失值总数: {dataset.isnull().sum().sum()}")
-            logger.info(f"数据类型统计: {dataset.dtypes.value_counts().to_dict()}")
-            logger.info(f"=====================================")
+            # 记录数据集维度信息
+            n_samples, n_features = dataset.shape[0], dataset.shape[1] if dataset.ndim > 1 else 0
+            logger.info(
+                f"数据集: {n_samples} 样本, {n_features} 特征, "
+                f"索引={type(dataset.index).__name__}, "
+                f"缺失值={dataset.isnull().sum().sum()}"
+            )
+
+            # === 滚动训练分支（P2） ===
+            if config.enable_rolling:
+                return await self._run_rolling_training(
+                    dataset=dataset,
+                    config=config,
+                    model_id=model_id,
+                    start_time=start_time,
+                    progress_callback=progress_callback,
+                )
 
             # 3. 创建Qlib模型配置
             if progress_callback:
@@ -424,6 +424,25 @@ class UnifiedQlibTrainingEngine:
             self.performance_monitor.end_stage("total_training")
             self.performance_monitor.print_summary()
             raise
+
+    async def _run_rolling_training(
+        self,
+        dataset: pd.DataFrame,
+        config: QlibTrainingConfig,
+        model_id: str,
+        start_time: datetime,
+        progress_callback=None,
+    ) -> QlibTrainingResult:
+        """执行滚动训练流程（委托给 rolling_integration 模块）"""
+        return await run_rolling_training(
+            dataset=dataset,
+            config=config,
+            model_id=model_id,
+            start_time=start_time,
+            model_manager=self.model_manager,
+            performance_monitor=self.performance_monitor,
+            progress_callback=progress_callback,
+        )
 
     # 代理方法 - 保持向后兼容
     async def load_qlib_model(self, model_path: str):

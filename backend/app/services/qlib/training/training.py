@@ -336,6 +336,35 @@ async def _train_qlib_model(
 
                     # 构建额外的 fit 参数（如 XGBoost 的 num_boost_round）
                     fit_extra_kwargs = _build_fit_kwargs(model, config)
+
+                    # === 诊断：检查 LGBModel._prepare_data 的输出 ===
+                    if hasattr(model, '_prepare_data'):
+                        try:
+                            ds_l = model._prepare_data(dataset_to_fit)
+                            for lgb_ds, ds_name in ds_l:
+                                x_data = lgb_ds.data
+                                y_data = lgb_ds.label
+                                import numpy as _np
+                                if x_data is not None:
+                                    x_arr = _np.array(x_data) if not isinstance(x_data, _np.ndarray) else x_data
+                                    nan_pct = _np.isnan(x_arr).sum() / x_arr.size * 100 if x_arr.size > 0 else 0
+                                    nonzero_cols = sum(1 for c in range(x_arr.shape[1]) if len(_np.unique(x_arr[~_np.isnan(x_arr[:, c]), c])) > 1) if x_arr.ndim == 2 else 'N/A'
+                                    logger.info(
+                                        f"[DIAG-LGB] {ds_name}: X.shape={x_arr.shape}, X.dtype={x_arr.dtype}, "
+                                        f"nan_pct={nan_pct:.1f}%, nonzero_cols={nonzero_cols}, "
+                                        f"X_sample={x_arr[0, :3].tolist() if x_arr.ndim == 2 and x_arr.shape[0] > 0 else 'empty'}"
+                                    )
+                                if y_data is not None:
+                                    y_arr = _np.array(y_data)
+                                    logger.info(
+                                        f"[DIAG-LGB] {ds_name}: y.shape={y_arr.shape}, y.dtype={y_arr.dtype}, "
+                                        f"nonzero={_np.count_nonzero(y_arr)}, "
+                                        f"range=[{_np.nanmin(y_arr):.6f}, {_np.nanmax(y_arr):.6f}], "
+                                        f"unique={len(_np.unique(y_arr))}"
+                                    )
+                        except Exception as diag_e:
+                            logger.warning(f"[DIAG-LGB] _prepare_data 诊断失败: {diag_e}")
+
                     model.fit(dataset_to_fit, **fit_extra_kwargs)
 
                     # 训练完成后，尝试从模型获取真实训练历史
@@ -371,6 +400,35 @@ async def _train_qlib_model(
             else:
                 # 对于不支持验证集的模型，正常训练
                 fit_extra_kwargs = _build_fit_kwargs(model, config)
+
+                # === 诊断：检查 LGBModel._prepare_data 的输出 ===
+                if hasattr(model, '_prepare_data'):
+                    try:
+                        import numpy as _np
+                        ds_l = model._prepare_data(train_dataset)
+                        for lgb_ds, ds_name in ds_l:
+                            x_data = lgb_ds.data
+                            y_data = lgb_ds.label
+                            if x_data is not None:
+                                x_arr = _np.array(x_data) if not isinstance(x_data, _np.ndarray) else x_data
+                                nan_pct = _np.isnan(x_arr).sum() / x_arr.size * 100 if x_arr.size > 0 else 0
+                                var_cols = sum(1 for c in range(x_arr.shape[1]) if len(_np.unique(x_arr[~_np.isnan(x_arr[:, c]), c])) > 1) if x_arr.ndim == 2 else 'N/A'
+                                logger.info(
+                                    f"[DIAG-LGB] {ds_name}: X.shape={x_arr.shape}, X.dtype={x_arr.dtype}, "
+                                    f"nan_pct={nan_pct:.1f}%, var_cols={var_cols}/{x_arr.shape[1] if x_arr.ndim==2 else '?'}, "
+                                    f"X[:3,:3]={x_arr[:3, :3].tolist() if x_arr.ndim == 2 and x_arr.shape[0] >= 3 else 'small'}"
+                                )
+                            if y_data is not None:
+                                y_arr = _np.array(y_data)
+                                logger.info(
+                                    f"[DIAG-LGB] {ds_name}: y.shape={y_arr.shape}, y.dtype={y_arr.dtype}, "
+                                    f"nonzero={_np.count_nonzero(y_arr)}, unique={len(_np.unique(y_arr))}, "
+                                    f"range=[{_np.nanmin(y_arr):.6f}, {_np.nanmax(y_arr):.6f}], "
+                                    f"mean={_np.nanmean(y_arr):.6f}, std={_np.nanstd(y_arr):.6f}"
+                                )
+                    except Exception as diag_e:
+                        logger.warning(f"[DIAG-LGB] _prepare_data 诊断失败: {diag_e}")
+
                 model.fit(train_dataset, **fit_extra_kwargs)
 
                 # 尝试从模型获取真实训练历史

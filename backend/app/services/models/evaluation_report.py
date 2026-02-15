@@ -251,7 +251,7 @@ class EvaluationReportGenerator:
             recommendations.append("模型准确率中等，可以通过超参数调优或集成学习提升性能")
 
         # 基于过拟合的建议
-        if metrics.precision > 0.9 and metrics.recall < 0.5:
+        if (metrics.precision or 0) > 0.9 and (metrics.recall or 0) < 0.5:
             recommendations.append("模型可能存在过拟合，建议增加正则化或使用更多训练数据")
 
         # 基于特征重要性的建议
@@ -261,7 +261,7 @@ class EvaluationReportGenerator:
                 recommendations.append("重要特征较少，建议进行特征工程或特征选择")
 
         # 基于夏普比率的建议
-        if metrics.sharpe_ratio and metrics.sharpe_ratio < 1.0:
+        if metrics.sharpe_ratio is not None and metrics.sharpe_ratio < 1.0:
             recommendations.append("夏普比率较低，建议优化风险控制策略或调整预测阈值")
 
         if not recommendations:

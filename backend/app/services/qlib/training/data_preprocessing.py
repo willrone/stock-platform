@@ -137,7 +137,29 @@ class CSRankNormTransformer:
             logger.warning("CSRankNorm: 无法确定日期层级，跳过")
             return df
 
+        # Reset debug stats
+        CSRankNormTransformer._debug_stats = {"total": 0, "too_few": 0, "all_same": 0, "ok": 0}
+
         if isinstance(df.index, pd.MultiIndex):
+            # Debug: log index structure
+            level0_sample = df.index.get_level_values(0)[:3].tolist()
+            level1_sample = df.index.get_level_values(1)[:3].tolist()
+            n_unique_0 = df.index.get_level_values(0).nunique()
+            n_unique_1 = df.index.get_level_values(1).nunique()
+            logger.info(
+                f"CSRankNorm index debug: level0_sample={level0_sample}, level1_sample={level1_sample}, "
+                f"n_unique_level0={n_unique_0}, n_unique_level1={n_unique_1}, date_level={date_level}"
+            )
+            # Debug: sample a few days' label distributions
+            grouped = df.groupby(level=date_level)[label_col]
+            sample_days = list(grouped.groups.keys())[:3]
+            for day in sample_days:
+                day_labels = grouped.get_group(day)
+                logger.info(
+                    f"CSRankNorm day={day}: n={len(day_labels)}, nunique={day_labels.nunique()}, "
+                    f"min={day_labels.min():.6f}, max={day_labels.max():.6f}, "
+                    f"values_sample={day_labels.head(5).tolist()}"
+                )
             df[label_col] = df.groupby(level=date_level)[label_col].transform(
                 self._rank_norm_single_day,
             )
@@ -146,6 +168,12 @@ class CSRankNormTransformer:
                 self._rank_norm_single_day,
             )
 
+        stats = CSRankNormTransformer._debug_stats
+        logger.info(
+            f"CSRankNorm debug: total_days={stats['total']}, "
+            f"too_few={stats['too_few']}, all_same={stats['all_same']}, ok={stats['ok']}"
+        )
+
         valid = df[label_col].notna().sum()
         logger.info(
             f"CSRankNorm 完成: {valid}/{len(df)} 有效, "
@@ -153,17 +181,23 @@ class CSRankNormTransformer:
         )
         return df
 
-    @staticmethod
-    def _rank_norm_single_day(series: pd.Series) -> pd.Series:
+    _debug_stats = {"total": 0, "too_few": 0, "all_same": 0, "ok": 0}
+
+    @classmethod
+    def _rank_norm_single_day(cls, series: pd.Series) -> pd.Series:
         """单日截面: rank → percentile → clip → inverse normal"""
+        cls._debug_stats["total"] += 1
         valid = series.dropna()
         if len(valid) < CS_RANK_MIN_STOCKS:
+            cls._debug_stats["too_few"] += 1
             return pd.Series(np.nan, index=series.index)
 
         # 全重复值无法产生有意义的排名
         if valid.nunique() <= 1:
+            cls._debug_stats["all_same"] += 1
             return pd.Series(0.0, index=series.index)
 
+        cls._debug_stats["ok"] += 1
         ranked = series.rank(method="average", na_option="keep")
         n_valid = valid.count()
         percentile = (ranked - 0.5) / n_valid
@@ -172,12 +206,24 @@ class CSRankNormTransformer:
 
     @staticmethod
     def _resolve_date_level(df: pd.DataFrame):
-        """确定日期层级名称"""
+        """确定日期层级名称或位置索引
+
+        自动检测 MultiIndex 中哪一层是日期：
+        - 优先按 index.names 匹配 'datetime' / 'date'
+        - 若 names 为 None，按 dtype 检测（datetime64 类型的层即为日期层）
+        """
         if isinstance(df.index, pd.MultiIndex):
+            # 1. 按名称匹配
             for name in ("datetime", "date"):
                 if name in df.index.names:
                     return name
-            return df.index.names[1] if df.index.nlevels >= 2 else None
+            # 2. 按 dtype 检测日期层
+            for i in range(df.index.nlevels):
+                level_values = df.index.get_level_values(i)
+                if pd.api.types.is_datetime64_any_dtype(level_values):
+                    return df.index.names[i] if df.index.names[i] is not None else i
+            # 3. 兜底：无法确定
+            return None
         for name in ("date", "datetime"):
             if name in df.columns:
                 return name
@@ -300,23 +346,10 @@ class CrossSectionalNeutralizer:
 
         df = data.copy()
         
-        # 确定日期列
-        date_level = None
-        if isinstance(df.index, pd.MultiIndex):
-            # 假设 MultiIndex 为 (instrument, datetime)
-            if 'datetime' in df.index.names:
-                date_level = 'datetime'
-            elif 'date' in df.index.names:
-                date_level = 'date'
-            else:
-                # 尝试猜测，通常是 level 1
-                date_level = df.index.names[1]
-        elif 'date' in df.columns:
-            date_level = 'date'
-        elif 'datetime' in df.columns:
-            date_level = 'datetime'
+        # 确定日期列 —— 复用 CSRankNormTransformer 的检测逻辑
+        date_level = CSRankNormTransformer._resolve_date_level(df)
         
-        if not date_level:
+        if date_level is None:
             logger.warning("无法确定日期列，跳过截面中性化")
             return df
             

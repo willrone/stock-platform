@@ -23,14 +23,14 @@ class QlibModelConfigBuilder:
         default_mlp_params: MLP 默认参数
     """
 
-    # LightGBM 默认参数（经过优化）
+    # LightGBM 默认参数（适用于中小数据集，正则化已从CSI300基准值降低）
     DEFAULT_LGB_PARAMS = {
         "loss": "mse",
         "colsample_bytree": 0.8879,
         "learning_rate": 0.05,
         "subsample": 0.8789,
-        "lambda_l1": 205.6999,
-        "lambda_l2": 580.9768,
+        "lambda_l1": 0.1,
+        "lambda_l2": 0.1,
         "max_depth": 8,
         "num_leaves": 210,
         "num_threads": 20,

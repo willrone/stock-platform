@@ -138,21 +138,31 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
 
     normalized_accuracy = _normalize_accuracy(metrics)
 
-    # 保留所有传入的指标，不丢弃任何指标
-    # 注意：保留None值，让评估报告生成器决定如何处理
+    # 保留所有传入的指标，数值类指标 None→0.0 防止下游比较报错
+    def _safe_float(val, default=0.0):
+        """安全转换为 float，None/NaN 返回 default"""
+        if val is None:
+            return default
+        try:
+            f = float(val)
+            import math
+            return f if math.isfinite(f) else default
+        except (TypeError, ValueError):
+            return default
+
     normalized_metrics = {
         "accuracy": normalized_accuracy,
-        "rmse": metrics.get(
-            "rmse", metrics.get("mse", 0.0) ** 0.5 if metrics.get("mse") else 0.0
+        "rmse": _safe_float(metrics.get("rmse")) or (
+            _safe_float(metrics.get("mse")) ** 0.5 if metrics.get("mse") else 0.0
         ),
-        "mae": metrics.get("mae", 0.0),
-        "r2": metrics.get("r2", 0.0),
-        "mse": metrics.get("mse", 0.0),
-        # 分类指标 - 如果不存在，保持None
-        "precision": metrics.get("precision"),
-        "recall": metrics.get("recall"),
-        "f1_score": metrics.get("f1_score"),
-        # 金融指标 - 如果不存在，保持None
+        "mae": _safe_float(metrics.get("mae")),
+        "r2": _safe_float(metrics.get("r2")),
+        "mse": _safe_float(metrics.get("mse")),
+        # 分类指标 - None→0.0
+        "precision": _safe_float(metrics.get("precision")),
+        "recall": _safe_float(metrics.get("recall")),
+        "f1_score": _safe_float(metrics.get("f1_score")),
+        # 金融指标 - 保留 None（下游已做 None ���查）
         "sharpe_ratio": metrics.get("sharpe_ratio"),
         "total_return": metrics.get("total_return"),
         "max_drawdown": metrics.get("max_drawdown"),
@@ -163,9 +173,11 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
         "calmar_ratio": metrics.get("calmar_ratio"),
         "profit_factor": metrics.get("profit_factor"),
         "volatility": metrics.get("volatility"),
+        # RankIC 指标
+        "rank_ic": _safe_float(metrics.get("rank_ic")),
+        "rank_ic_ir": _safe_float(metrics.get("rank_ic_ir")),
     }
 
-    # 保留所有字段，包括None值，让评估报告生成器处理
     return normalized_metrics
 
 

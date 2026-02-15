@@ -161,6 +161,13 @@ async def get_available_strategies():
                         "min": 3,
                         "max": 20,
                     },
+                    "min_holding_period": {
+                        "type": "int",
+                        "default": 0,
+                        "description": "最小持仓期（天数），开仓后至少持有N天才允许平仓，0表示不限制",
+                        "min": 0,
+                        "max": 60,
+                    },
                 },
             },
             # 新增技术分析策略
