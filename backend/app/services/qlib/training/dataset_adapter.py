@@ -156,6 +156,13 @@ class DataFrameDatasetAdapter:
     def __len__(self):
         return len(self.data)
 
+    @property
+    def validation_size(self) -> int:
+        """返回验证集的实际行数"""
+        if self.val_data is not None:
+            return len(self.val_data)
+        return 0
+
     def __getitem__(self, key):
         if key == "train":
             return self.train_data
@@ -642,3 +649,26 @@ class DataFrameDatasetAdapter:
     def __getattr__(self, name):
         # 转发其他属性到DataFrame
         return getattr(self.data, name)
+
+
+class ValidationDatasetView:
+    """验证集视图，委托给 DataFrameDatasetAdapter 但 len() 返回验证集大小
+
+    解决 train_dataset 和 val_dataset 指向同一对象时
+    len() 都返回训练集大小的问题。
+    """
+
+    def __init__(self, adapter: DataFrameDatasetAdapter):
+        self._adapter = adapter
+
+    def __len__(self):
+        return self._adapter.validation_size
+
+    def __getitem__(self, key):
+        return self._adapter[key]
+
+    def prepare(self, *args, **kwargs):
+        return self._adapter.prepare(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._adapter, name)

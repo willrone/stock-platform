@@ -259,7 +259,7 @@ def _split_by_ratio(
     train_dates = dates[:split_idx]
     val_dates = dates[split_idx:]
 
-    if len(train_dates) > embargo_days:
+    if embargo_days > 0 and len(train_dates) > embargo_days:
         train_dates = train_dates[:-embargo_days]
         logger.info(
             f"Embargo 期: 移除训练集末尾 {embargo_days} 天",
@@ -612,7 +612,7 @@ async def prepare_training_datasets(
     )
 
     # === 7. 创建 DatasetH 适配器 ===
-    from .dataset_adapter import DataFrameDatasetAdapter
+    from .dataset_adapter import DataFrameDatasetAdapter, ValidationDatasetView
 
     prediction_horizon = (
         config.prediction_horizon if config else DEFAULT_PREDICTION_HORIZON
@@ -620,7 +620,14 @@ async def prepare_training_datasets(
     train_dataset = DataFrameDatasetAdapter(
         train_data, val_data, prediction_horizon, config,
     )
-    val_dataset = train_dataset
+    val_dataset = ValidationDatasetView(train_dataset)
+
+    logger.info(
+        f"数据集准备完成: 训练集={len(train_dataset)} 行, "
+        f"验证集={len(val_dataset)} 行, "
+        f"比例={len(train_dataset)/(len(train_dataset)+len(val_dataset)):.1%}:"
+        f"{len(val_dataset)/(len(train_dataset)+len(val_dataset)):.1%}",
+    )
 
     return train_dataset, val_dataset
 
