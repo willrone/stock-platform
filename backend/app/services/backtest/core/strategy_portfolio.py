@@ -289,8 +289,15 @@ class StrategyPortfolio(BaseStrategy):
 
         # 使用信号整合器整合信号
         t_int = time.perf_counter()
+        
+        # regime_aware_voting 需要传入市场数据用于 regime 检测
+        integrate_kwargs: Dict[str, Any] = {}
+        if self.integrator.method == "regime_aware_voting":
+            integrate_kwargs["market_data"] = data
+        
         integrated_signals = self.integrator.integrate(
-            all_signals, self.weights, consistency_threshold=0.6
+            all_signals, self.weights, consistency_threshold=0.6,
+            **integrate_kwargs,
         )
         integrate_time = time.perf_counter() - t_int
 
