@@ -6,21 +6,21 @@ import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 
 export const useECharts = (
-  data: any,
-  options: echarts.EChartsOption | ((data: any) => echarts.EChartsOption),
-  dependencies: any[] = [],
+  data: unknown,
+  options: echarts.EChartsOption | ((data: unknown) => echarts.EChartsOption),
+  dependencies: unknown[] = [],
   isActive: boolean = true
 ) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
   useEffect(() => {
-    if (!chartRef.current || !data || data.length === 0 || !isActive) {
+    if (!chartRef.current || !data || (Array.isArray(data) && data.length === 0) || !isActive) {
       return;
     }
 
     const initChart = () => {
-      if (!chartRef.current || !data || data.length === 0) {
+      if (!chartRef.current || !data || (Array.isArray(data) && data.length === 0)) {
         return;
       }
 

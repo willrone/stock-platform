@@ -17,12 +17,14 @@ import {
   generateTreemapData,
   generateWeightChartData,
   generateCapitalChartData,
+  PortfolioSnapshot,
+  PositionWeights,
 } from '@/utils/backtest/chartDataUtils';
 
 export const usePositionAnalysisData = (
   positionAnalysis: PositionData[] | EnhancedPositionAnalysis | null,
   sortConfig: SortConfig,
-  portfolioSnapshots: any[]
+  portfolioSnapshots: PortfolioSnapshot[]
 ) => {
   // 数据格式转换
   const normalizedData = useMemo(() => {
@@ -56,7 +58,7 @@ export const usePositionAnalysisData = (
 
   // 持仓权重数据
   const weightChartData = useMemo(() => {
-    return generateWeightChartData(normalizedData?.position_weights);
+    return generateWeightChartData((normalizedData?.position_weights as PositionWeights) ?? null);
   }, [normalizedData]);
 
   // 资金分配图表数据

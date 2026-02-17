@@ -152,13 +152,15 @@ export class IntegrationTestManager {
         }, 3000);
 
         // 监听pong消息
-        const handlePong = (data: any) => {
+        const handlePong = (data: unknown) => {
           clearTimeout(timeout);
-          wsService.off('pong' as any, handlePong);
+          // 'pong' is not a standard WebSocketEvents key, cast needed for dynamic event
+          (wsService as unknown as { off: (event: string, handler: (data: unknown) => void) => void }).off('pong', handlePong);
           resolve({ messageReceived: true, data });
         };
 
-        wsService.on('pong' as any, handlePong);
+        // 'pong' is not a standard WebSocketEvents key, cast needed for dynamic event
+        (wsService as unknown as { on: (event: string, handler: (data: unknown) => void) => void }).on('pong', handlePong);
 
         // 发送ping消息
         wsService.send('ping');

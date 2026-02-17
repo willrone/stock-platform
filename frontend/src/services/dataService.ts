@@ -426,7 +426,7 @@ export class DataService {
     source?: 'local' | 'remote';
     limit?: number;
     offset?: number;
-    strategy_configs?: Record<string, any>;
+    strategy_configs?: Record<string, unknown>;
   }): Promise<MultiLatestSignalsResponse> {
     const { strategy_configs, ...rest } = params;
     return apiRequest.get<MultiLatestSignalsResponse>('/signals/latest-multi', {
@@ -442,7 +442,7 @@ export class DataService {
     stock_code: string;
     strategy_name: string;
     days?: number;
-    strategy_config?: Record<string, any>;
+    strategy_config?: Record<string, unknown>;
   }): Promise<SignalHistoryResponse> {
     const { strategy_config, ...rest } = params;
     return apiRequest.get<SignalHistoryResponse>('/signals/history', {
@@ -458,7 +458,7 @@ export class DataService {
     stock_code: string;
     strategy_names: string[];
     days?: number;
-    strategy_configs?: Record<string, any>;
+    strategy_configs?: Record<string, unknown>;
   }): Promise<MultiSignalHistoryResponse> {
     const { strategy_configs, ...rest } = params;
     return apiRequest.get<MultiSignalHistoryResponse>('/signals/history-multi', {
@@ -547,9 +547,19 @@ export class DataService {
     // 处理响应格式：可能是 { data: {...} } 或直接是 { success, data, ... }
     if (response.data) {
       return response.data;
-    } else if ((response as any).features) {
+    } else if ((response as Record<string, unknown>).features) {
       // 如果响应直接包含features字段
-      return response as any;
+      return response as unknown as {
+        features: string[];
+        feature_count: number;
+        feature_categories: {
+          base_features: string[];
+          indicator_features: string[];
+          fundamental_features: string[];
+          alpha_features: string[];
+        };
+        source: string;
+      };
     } else {
       // 如果都没有，返回空数据
       return {
@@ -575,7 +585,7 @@ export class DataService {
     stock_codes: string[];
     start_date: string;
     end_date: string;
-    hyperparameters?: Record<string, any>;
+    hyperparameters?: Record<string, unknown>;
     selected_features?: string[];
     description?: string;
     parent_model_id?: string;
@@ -881,7 +891,7 @@ export class DataService {
    * 获取性能指标
    */
   static async getPerformanceMetrics(serviceName?: string): Promise<{
-    services?: Record<string, any>;
+    services?: Record<string, unknown>;
     summary?: {
       total_services: number;
       avg_response_time: number;
@@ -896,7 +906,7 @@ export class DataService {
   /**
    * 获取系统概览
    */
-  static async getSystemOverview(): Promise<any> {
+  static async getSystemOverview(): Promise<unknown> {
     return apiRequest.get('/monitoring/overview');
   }
 
@@ -920,7 +930,7 @@ export class DataService {
   /**
    * 获取数据质量检查结果
    */
-  static async getDataQuality(): Promise<any> {
+  static async getDataQuality(): Promise<unknown> {
     return apiRequest.get('/monitoring/quality');
   }
 
@@ -934,7 +944,7 @@ export class DataService {
       medium: number;
       low: number;
     };
-    anomalies: Array<any>;
+    anomalies: Array<Record<string, unknown>>;
     detection_time: string;
   }> {
     return apiRequest.get('/monitoring/anomalies');
@@ -975,13 +985,13 @@ export class DataService {
     task_type: string;
     status: string;
     progress: number;
-    config: any;
+    config: Record<string, unknown>;
     created_at: string;
     completed_at?: string;
     error_message?: string;
   }> {
     // 构建请求参数，即使params为空也传递一个对象（使用默认值）
-    const requestParams: any = {
+    const requestParams: Record<string, unknown> = {
       batch_size: params?.batch_size || 50,
     };
 
@@ -1005,7 +1015,7 @@ export class DataService {
       task_type: string;
       status: string;
       progress: number;
-      config: any;
+      config: Record<string, unknown>;
       created_at: string;
       completed_at?: string;
       error_message?: string;
