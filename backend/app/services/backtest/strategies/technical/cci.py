@@ -19,8 +19,8 @@ class CCIStrategy(BaseStrategy):
     def __init__(self, config: Dict[str, Any]):
         super().__init__("CCI", config)
         self.period = config.get("period", 20)
-        self.oversold = config.get("oversold", -100)
-        self.overbought = config.get("overbought", 100)
+        self.oversold = config.get("oversold", -150)
+        self.overbought = config.get("overbought", 150)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算CCI指标"""

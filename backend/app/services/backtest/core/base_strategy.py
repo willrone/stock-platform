@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 from ..models import Position, SignalType, TradingSignal
@@ -154,8 +155,11 @@ class BaseStrategy(ABC):
             如果验证失败返回 (False, 失败原因)
         """
         # 基础验证
-        if signal.strength < 0.1:  # 信号强度太低
-            return False, f"信号强度过低: {signal.strength:.2%} < 10%"
+        if signal.price is not None and (signal.price <= 0 or np.isnan(signal.price)):
+            return False, f"价格无效: {signal.price}"
+
+        if signal.strength < 0.3:  # 信号强度太低
+            return False, f"信号强度过低: {signal.strength:.2%} < 30%"
 
         # 最小持仓期检查：卖出信号需要检查持仓天数
         if (

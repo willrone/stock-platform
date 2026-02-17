@@ -383,4 +383,9 @@ class DataLoader:
         if not stock_data:
             raise TaskError(message="所有股票数据加载失败", severity=ErrorSeverity.HIGH)
 
+        # 按股票代码排序，确保回测结果可复现
+        # 并行加载时 as_completed() 返回顺序不确定，会导致信号执行顺序不同
+        # 当同一天有多个买入信号且资金有限时，处理顺序影响哪些股票能成交
+        stock_data = dict(sorted(stock_data.items(), key=lambda x: x[0]))
+
         return stock_data

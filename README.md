@@ -71,89 +71,116 @@ stock-prediction-platform/
 - **Python**: 3.9+
 - **Node.js**: 18+ (可选，仅前端需要)
 - **Git**: 最新版本
+- **Docker**: 29+ (仅生产环境需要)
 
-### 🎯 超简单启动（推荐）⭐
+> 开发环境和生产环境使用不同端口，可以同时运行，互不干扰。
+
+---
+
+### 🛠️ 开发环境（start.sh）
+
+适合日常开发调试，支持热重载。
 
 ```bash
-# 1. 克隆项目
-git clone <repository-url>
-cd stock-prediction-platform
-
-# 2. 一键启动（自动安装依赖并启动服务）
+# 一键启动（自动创建虚拟环境、安装依赖、启动前后端）
 ./start.sh
 
-# 3. 停止服务
-./stop.sh
-```
-
-**就这么简单！** 脚本会自动：
-- ✅ 创建Python虚拟环境
-- ✅ 安装最小化依赖（快速启动）
-- ✅ 配置环境变量
-- ✅ 启动后端和前端服务
-- ✅ 使用国内镜像源加速下载
-
-### 🔧 启动选项
-
-```bash
-# 仅启动后端服务（如果没有Node.js）
+# 仅启动后端
 ./start.sh backend-only
 
-# 查看帮助
-./start.sh help
+# 停止服务
+./scripts/stop-simple.sh
 ```
 
-### 📱 访问应用
+脚本会自动完成：虚拟环境创建、依赖安装（国内镜像源）、环境变量配置、前后端启动。
 
-启动成功后访问：
-- **前端界面**: http://localhost:3000
-- **API文档**: http://localhost:8000/api/v1/docs
-- **API管理**: http://localhost:8000/api/v1/redoc
+访问地址：
 
-### 🐳 Docker启动（完整功能）
+| 服务 | 地址 |
+|------|------|
+| 前端界面 | http://localhost:3000 |
+| 后端 API | http://localhost:8000 |
+| API 文档 | http://localhost:8000/api/v1/docs |
 
-如果需要完整功能（包括机器学习模型），可以使用Docker：
+---
+
+### 🐳 生产环境（Docker Compose）
+
+适合部署运行，包含 Nginx 反代、Prometheus 监控、Grafana 仪表板。
 
 ```bash
-# 快速启动（最小化依赖）
-./scripts/quick-start.sh
+# 启动全部容器（后台运行）
+sudo docker compose up -d
 
-# 完整启动
-./scripts/start.sh
+# 查看容器状态
+sudo docker ps
 
-# 开发模式
-./scripts/start.sh dev
+# 查看日志
+sudo docker compose logs -f backend
+sudo docker compose logs -f frontend
+
+# 停止全部容器
+sudo docker compose down
+
+# 重新构建镜像（代码更新后）
+sudo docker compose up -d --build
 ```
 
-### 🛠️ 手动启动（高级用户）
+访问地址：
 
-#### 后端设置
+| 服务 | 地址 |
+|------|------|
+| Nginx 入口 | http://localhost:80 |
+| 前端界面 | http://localhost:3001 |
+| 后端 API | http://localhost:8001 |
+| Grafana | http://localhost:3002 |
+| Prometheus | http://localhost:9091 |
+
+生产端口可通过 `.env` 文件自定义：
+
+```env
+PROD_BACKEND_PORT=8001
+PROD_FRONTEND_PORT=3001
+PROD_GRAFANA_PORT=3002
+```
+
+---
+
+### 🔀 两套环境并行运行
+
+开发和生产可以同时启动，端口完全隔离：
+
+```bash
+# 1. 启动开发环境 → :8000 / :3000
+./start.sh
+
+# 2. 启动生产环境 → :8001 / :3001 / :80
+sudo docker compose up -d
+```
+
+---
+
+### 手动启动（高级用户）
+
+#### 后端
 
 ```bash
 cd backend
-
-# 创建虚拟环境
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
+source venv/bin/activate
 
-# 安装依赖（选择一种）
+# 安装依赖（二选一）
 pip install -r requirements-minimal.txt  # 快速启动
 pip install -r requirements.txt          # 完整功能
 
-# 运行后端服务
 python run.py
 ```
 
-#### 前端设置
+#### 前端
 
 ```bash
 cd frontend
-
-# 安装依赖
 npm install
-
-# 启动开发服务器
 npm run dev
 ```
 

@@ -67,7 +67,8 @@ def extract_signals_vectorized(
     signal_mat: np.ndarray,  # int8[N,T] - 信号矩阵 (1=BUY, -1=SELL, 0=NONE)
     date_idx: int,  # 当前日期索引
     valid_mat: np.ndarray,  # bool[N,T] - 有效性矩阵
-) -> Tuple[np.ndarray, np.ndarray]:
+    strength_mat: np.ndarray,  # float32[N,T] - 信号强度矩阵
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     向量化信号提取（Numba 加速）
     
@@ -75,9 +76,10 @@ def extract_signals_vectorized(
         signal_mat: 信号矩阵 [股票数, 交易日数]
         date_idx: 当前日期索引
         valid_mat: 有效性矩阵
+        strength_mat: 信号强度矩阵
     
     Returns:
-        (stock_indices, signal_types): 有信号的股票索引和信号类型
+        (stock_indices, signal_types, signal_strengths): 有信号的股票索引、信号类型和强度
     """
     N = signal_mat.shape[0]
     
@@ -90,15 +92,17 @@ def extract_signals_vectorized(
     # 第二遍：提取信号
     stock_indices = np.empty(count, dtype=np.int32)
     signal_types = np.empty(count, dtype=np.int8)
+    signal_strengths = np.empty(count, dtype=np.float32)
     
     idx = 0
     for i in range(N):
         if valid_mat[i, date_idx] and signal_mat[i, date_idx] != 0:
             stock_indices[idx] = i
             signal_types[idx] = signal_mat[i, date_idx]
+            signal_strengths[idx] = strength_mat[i, date_idx]
             idx += 1
     
-    return stock_indices, signal_types
+    return stock_indices, signal_types, signal_strengths
 
 
 @njit(cache=True, fastmath=True)
@@ -289,6 +293,7 @@ def extract_signals_from_matrix(
     stock_codes: List[str],
     close_mat: np.ndarray,
     current_date: datetime,
+    strength_mat: np.ndarray = None,
 ) -> List:
     """
     从信号矩阵提取当前日期的信号
@@ -300,6 +305,7 @@ def extract_signals_from_matrix(
         stock_codes: 股票代码列表
         close_mat: 收盘价矩阵
         current_date: 当前日期
+        strength_mat: 信号强度矩阵（可选，None 时默认 1.0）
     
     Returns:
         信号列表
@@ -307,20 +313,29 @@ def extract_signals_from_matrix(
     from ..models import TradingSignal, SignalType
     
     # 使用 Numba 加速提取
-    if NUMBA_AVAILABLE:
-        stock_indices, signal_types = extract_signals_vectorized(
-            signal_mat, date_idx, valid_mat
+    if NUMBA_AVAILABLE and strength_mat is not None:
+        stock_indices, signal_types, signal_strengths = extract_signals_vectorized(
+            signal_mat, date_idx, valid_mat, strength_mat
+        )
+    elif NUMBA_AVAILABLE:
+        # 向后兼容：无 strength_mat 时构造全 1.0 的临时矩阵
+        dummy_strength = np.ones(signal_mat.shape, dtype=np.float32)
+        stock_indices, signal_types, signal_strengths = extract_signals_vectorized(
+            signal_mat, date_idx, valid_mat, dummy_strength
         )
     else:
         # Fallback: 非 Numba 版本
         indices = []
         types = []
+        strengths = []
         for i in range(signal_mat.shape[0]):
             if valid_mat[i, date_idx] and signal_mat[i, date_idx] != 0:
                 indices.append(i)
                 types.append(signal_mat[i, date_idx])
+                strengths.append(float(strength_mat[i, date_idx]) if strength_mat is not None else 1.0)
         stock_indices = np.array(indices, dtype=np.int32)
         signal_types = np.array(types, dtype=np.int8)
+        signal_strengths = np.array(strengths, dtype=np.float32)
     
     # 转换为 TradingSignal 对象
     signals = []
@@ -330,6 +345,7 @@ def extract_signals_from_matrix(
         
         stock_code = stock_codes[stock_idx]
         price = float(close_mat[stock_idx, date_idx])
+        sig_strength = float(signal_strengths[i]) if signal_strengths[i] > 0 else 1.0
         
         if signal_type_int == 1:
             signal_type = SignalType.BUY
@@ -342,7 +358,7 @@ def extract_signals_from_matrix(
             timestamp=current_date,
             stock_code=stock_code,
             signal_type=signal_type,
-            strength=1.0,
+            strength=sig_strength,
             price=price,
             reason="[vectorized] precomputed",
             metadata=None,

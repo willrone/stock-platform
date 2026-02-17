@@ -65,6 +65,7 @@ export default function CreateOptimizationTaskForm({
     n_trials: 50,
     optimization_method: 'tpe',
     timeout: undefined as number | undefined,
+    enable_unlimited_buy: false,
   });
   const [paramSpace, setParamSpace] = useState<Record<string, ParamSpaceConfig>>({});
   const [objectiveWeights, setObjectiveWeights] = useState<Record<string, number>>({
@@ -120,6 +121,11 @@ export default function CreateOptimizationTaskForm({
     const nTrials = searchParams.get('n_trials');
     const optimizationMethod = searchParams.get('optimization_method');
     const timeout = searchParams.get('timeout');
+
+    const enableUnlimitedBuy = searchParams.get('enable_unlimited_buy');
+    if (enableUnlimitedBuy === 'true') {
+      setFormData(prev => ({ ...prev, enable_unlimited_buy: true }));
+    }
 
     if (objectiveMetric) {
       setFormData(prev => ({ 
@@ -298,12 +304,21 @@ export default function CreateOptimizationTaskForm({
         topk: 10,
         buffer: 20,
         max_changes_per_day: 2,
+        enable_unlimited_buy: formData.enable_unlimited_buy,
       };
 
       const filteredParamSpace: Record<string, ParamSpaceConfig> = { ...paramSpace };
       delete filteredParamSpace.topk;
       delete filteredParamSpace.buffer;
       delete filteredParamSpace.max_changes_per_day;
+
+      // 单策略模式也传递 backtest_config，以便 enable_unlimited_buy 生效
+      const backtestConfigToSend =
+        formData.optimization_mode === 'portfolio'
+          ? fixedTradeConfig
+          : formData.enable_unlimited_buy
+            ? { enable_unlimited_buy: true }
+            : undefined;
 
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
@@ -321,7 +336,7 @@ export default function CreateOptimizationTaskForm({
         n_trials: formData.n_trials,
         optimization_method: formData.optimization_method,
         timeout: formData.timeout,
-        backtest_config: formData.optimization_mode === 'portfolio' ? fixedTradeConfig : undefined,
+        backtest_config: backtestConfigToSend,
       };
 
       console.log('创建优化任务请求:', request);
@@ -342,6 +357,7 @@ export default function CreateOptimizationTaskForm({
         n_trials: 50,
         optimization_method: 'tpe',
         timeout: undefined,
+        enable_unlimited_buy: false,
       });
       setSelectedStocks([]);
       setParamSpace({});
@@ -867,6 +883,23 @@ export default function CreateOptimizationTaskForm({
               <MenuItem value="motpe">MOTPE (多目标)</MenuItem>
             </Select>
           </FormControl>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                不限制买入
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                启用后忽略仓位限制和现金保留，资金不足时自动补充
+              </Typography>
+            </Box>
+            <Switch
+              checked={formData.enable_unlimited_buy}
+              onChange={e =>
+                setFormData(prev => ({ ...prev, enable_unlimited_buy: e.target.checked }))
+              }
+            />
+          </Box>
 
           <TextField
             type="number"

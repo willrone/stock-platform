@@ -15,6 +15,30 @@ from ..core.portfolio_manager import PortfolioManager
 from ..core.base_strategy import BaseStrategy
 
 
+def _build_portfolio_history_with_returns(
+    portfolio_history: list,
+    initial_cash: float,
+    total_capital_injection: float,
+) -> list:
+    """构建组合历史，total_return 考虑补充资金（总投入 = 初始 + 补充）"""
+    total_invested = initial_cash + total_capital_injection
+    result = []
+    for snapshot in portfolio_history:
+        pv = snapshot["portfolio_value"]
+        pv_nc = snapshot.get("portfolio_value_without_cost", pv)
+        result.append({
+            "date": snapshot["date"].isoformat(),
+            "portfolio_value": pv,
+            "portfolio_value_without_cost": pv_nc,
+            "cash": snapshot["cash"],
+            "positions_count": len(snapshot.get("positions", {})),
+            "positions": snapshot.get("positions", {}),
+            "total_return": (pv - total_invested) / total_invested if total_invested > 0 else 0,
+            "total_return_without_cost": (pv_nc - total_invested) / total_invested if total_invested > 0 else 0,
+        })
+    return result
+
+
 class BacktestReportGenerator:
     """回测报告生成器"""
 
@@ -84,6 +108,7 @@ class BacktestReportGenerator:
                 "commission_rate": config.commission_rate,
                 "slippage_rate": config.slippage_rate,
                 "max_position_size": config.max_position_size,
+                "enable_unlimited_buy": getattr(config, "enable_unlimited_buy", False),
                 **(
                     {"strategy_config": strategy_config}
                     if strategy_config
@@ -108,44 +133,29 @@ class BacktestReportGenerator:
                 for trade in portfolio_manager.trades
             ],
             # 组合历史（包含完整的positions信息）
-            "portfolio_history": [
-                {
-                    "date": snapshot["date"].isoformat(),
-                    "portfolio_value": snapshot["portfolio_value"],
-                    "portfolio_value_without_cost": snapshot.get(
-                        "portfolio_value_without_cost", snapshot["portfolio_value"]
-                    ),
-                    "cash": snapshot["cash"],
-                    "positions_count": len(snapshot.get("positions", {})),
-                    "positions": snapshot.get("positions", {}),  # 包含完整的持仓信息
-                    "total_return": (snapshot["portfolio_value"] - config.initial_cash)
-                    / config.initial_cash
-                    if config.initial_cash > 0
-                    else 0,
-                    "total_return_without_cost": (
-                        snapshot.get(
-                            "portfolio_value_without_cost", snapshot["portfolio_value"]
-                        )
-                        - config.initial_cash
-                    )
-                    / config.initial_cash
-                    if config.initial_cash > 0
-                    else 0,
-                }
-                for snapshot in portfolio_manager.portfolio_history
-            ],
-            # 交易成本统计
+            "portfolio_history": _build_portfolio_history_with_returns(
+                portfolio_manager.portfolio_history,
+                config.initial_cash,
+                getattr(portfolio_manager, "total_capital_injection", 0.0),
+            ),
+            # 交易成本统计（含补充资金时，cost_ratio 分母用总投入）
             "cost_statistics": {
                 "total_commission": portfolio_manager.total_commission,
                 "total_slippage": portfolio_manager.total_slippage,
+                "total_capital_injection": getattr(
+                    portfolio_manager, "total_capital_injection", 0.0
+                ),
                 "total_cost": portfolio_manager.total_commission
                 + portfolio_manager.total_slippage,
                 "cost_ratio": (
                     portfolio_manager.total_commission
                     + portfolio_manager.total_slippage
                 )
-                / config.initial_cash
-                if config.initial_cash > 0
+                / (
+                    config.initial_cash
+                    + getattr(portfolio_manager, "total_capital_injection", 0.0)
+                )
+                if (config.initial_cash + getattr(portfolio_manager, "total_capital_injection", 0.0)) > 0
                 else 0,
             },
         }

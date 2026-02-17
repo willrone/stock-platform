@@ -32,7 +32,10 @@ class MomentumFactorStrategy(FactorStrategy):
         for period, weight in zip(self.momentum_periods, self.momentum_weights):
             if len(close_prices) >= period:
                 returns = close_prices / close_prices.shift(period) - 1
-                normalized_returns = (returns - returns.mean()) / returns.std()
+                # 用 rolling window 标准化，避免未来信息泄露
+                rolling_mean = returns.rolling(window=126, min_periods=60).mean()
+                rolling_std = returns.rolling(window=126, min_periods=60).std() + 1e-8
+                normalized_returns = (returns - rolling_mean) / rolling_std
                 momentum_scores += normalized_returns * weight
 
         return {"momentum": momentum_scores, "price": close_prices}

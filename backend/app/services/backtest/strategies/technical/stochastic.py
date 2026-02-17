@@ -38,7 +38,7 @@ class StochasticStrategy(BaseStrategy):
         return {"k_percent": k_percent, "d_percent": d_percent, "price": close}
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """[性能优化] 向量化计算全量随机指标信号"""
+        """[性能优化] 向量化计算全量随��指标信号"""
         try:
             indicators = self.get_cached_indicators(data)
             k = indicators["k_percent"]
@@ -46,23 +46,21 @@ class StochasticStrategy(BaseStrategy):
             prev_k = k.shift(1)
             prev_d = d.shift(1)
 
-            # 向量化逻辑判断
-            # 买入：超卖区金叉 (K < oversold 且 K 上穿 D)
+            # 买入：深度超卖区金叉 (K < oversold 且 K 上穿 D，且 D 也在超卖区)
             buy_mask = (
                 (k < self.oversold) &
-                (prev_k < self.oversold) &
+                (d < self.oversold + 10) &
                 (k > d) &
                 (prev_k <= prev_d)
             )
-            # 卖出：超买区死叉 (K > overbought 且 K 下穿 D)
+            # 卖出：深度超买区死叉 (K > overbought 且 K 下穿 D，且 D 也在超买区)
             sell_mask = (
                 (k > self.overbought) &
-                (prev_k > self.overbought) &
+                (d > self.overbought - 10) &
                 (k < d) &
                 (prev_k >= prev_d)
             )
 
-            # 构造全量信号 Series
             signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL

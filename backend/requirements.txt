@@ -11,9 +11,9 @@ aiosqlite==0.19.0
 
 # 数据处理和存储
 pandas>=2.2.0
-numpy>=1.26.0
+numpy>=1.26.0,<2.0.0
 orjson>=3.9.0  # 高性能 JSON（回测报告/缓存哈希，见 docs/backtest-optimization.md）
-pyarrow==14.0.1
+pyarrow>=14.0.1
 polars==0.19.19
 scipy>=1.11.0  # 科学计算库，用于统计分析和风险计算
 openpyxl>=3.1.0  # Excel文件处理
@@ -66,7 +66,7 @@ isort==5.12.0
 flake8==6.1.0
 mypy==1.7.1
 bandit==1.7.5  # 安全扫描
-safety==2.3.5  # 依赖安全扫描
+safety>=3.0.0  # 依赖安全扫描
 radon==6.0.1  # 代码复杂度分析（可选）
 
 # 日志和监控

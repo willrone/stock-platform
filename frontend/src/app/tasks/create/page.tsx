@@ -97,6 +97,7 @@ function CreateTaskPageInner() {
     commission_rate: 0.0003,
     slippage_rate: 0.0001,
     enable_performance_profiling: false,
+    enable_unlimited_buy: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -139,6 +140,7 @@ function CreateTaskPageInner() {
         const slippageRate = searchParams.get('slippage_rate');
         const enableProfiling = searchParams.get('enable_performance_profiling');
         const strategyConfigStr = searchParams.get('strategy_config');
+        const enableUnlimitedBuy = searchParams.get('enable_unlimited_buy');
 
         if (strategyNameParam) {
           setStrategyName(strategyNameParam);
@@ -153,6 +155,7 @@ function CreateTaskPageInner() {
           commission_rate: commissionRate ? parseFloat(commissionRate) : prev.commission_rate,
           slippage_rate: slippageRate ? parseFloat(slippageRate) : prev.slippage_rate,
           enable_performance_profiling: enableProfiling === 'true',
+          enable_unlimited_buy: enableUnlimitedBuy === 'true',
         }));
 
         if (strategyConfigStr) {
@@ -360,9 +363,10 @@ function CreateTaskPageInner() {
                       ? {
                           strategies: portfolioConfig.strategies,
                           integration_method: portfolioConfig.integration_method,
+                          enable_unlimited_buy: formData.enable_unlimited_buy,
                         }
-                      : {}
-                    : strategyConfig,
+                      : { enable_unlimited_buy: formData.enable_unlimited_buy }
+                    : { ...strategyConfig, enable_unlimited_buy: formData.enable_unlimited_buy },
                 enable_performance_profiling: formData.enable_performance_profiling,
               },
             }),
@@ -791,6 +795,26 @@ function CreateTaskPageInner() {
                   <Switch
                     checked={formData.enable_performance_profiling}
                     onChange={e => updateFormData('enable_performance_profiling', e.target.checked)}
+                  />
+                </Box>
+
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Activity size={20} color="#1976d2" />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        不限制买入
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        启用后忽略仓位限制和现金保留，资金不足时自动补充，确保信号执行
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Switch
+                    checked={formData.enable_unlimited_buy}
+                    onChange={e => updateFormData('enable_unlimited_buy', e.target.checked)}
                   />
                 </Box>
               </CardContent>

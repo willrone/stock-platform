@@ -243,10 +243,19 @@ class SignalIntegrator:
             enhancement_factor = 1.0 + (consistency - consistency_threshold) * 0.5
             final_strength = min(1.0, final_strength * enhancement_factor)
 
-        # 解决冲突：如果买入和卖出信号都存在且强度接近，降低最终信号强度
+        # 解决冲突：如果买入和卖出信号都存在
         if buy_count > 0 and sell_count > 0:
             conflict_ratio = min(buy_count, sell_count) / total_count
-            final_strength *= 1.0 - conflict_ratio * 0.3  # 冲突时降低30%强度
+            if conflict_ratio > 0.4:
+                # 高冲突：策略之间严重分歧，直接放弃该信号
+                logger.debug(
+                    f"股票 {stock_code} 信号冲突过高 (conflict_ratio={conflict_ratio:.2f}), "
+                    f"buy={buy_count}, sell={sell_count}, 放弃信号"
+                )
+                return None
+            else:
+                # 低冲突：降低信号强度
+                final_strength *= 1.0 - conflict_ratio * 0.3
 
         # 生成最终信号
         reasons = [s.reason for s in signals]

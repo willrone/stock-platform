@@ -14,7 +14,9 @@ RUN npm config set registry https://registry.npmmirror.com && \
 # 复制源代码
 COPY . .
 
-# 构建应用
+# 构建应用（需要代理访问 Google Fonts）
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
 RUN npm run build
 
 # 生产阶段

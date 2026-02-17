@@ -39,59 +39,55 @@ class ValueFactorStrategy(FactorStrategy):
         self.roe_min = config.get("roe_min", None)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算价值因子指标"""
+        """计算价值因子指标
+        
+        由于缺少真实财务数据，使用价格行为构建相对价值指标：
+        - 价格相对长期均线的偏离度（替代 PE）
+        - 价格波动率的倒数（替代 PB，低波动=稳定=高质量）
+        - 短期收益率均值（替代 PS）
+        - 长期趋势强度（替代 EV/EBITDA）
+        """
         close_prices = data["close"]
-
         returns = close_prices.pct_change().dropna()
-        volatility = returns.rolling(window=21).std()
 
-        pe_estimate = pd.Series(
-            1 / (returns.rolling(window=252).mean() + 0.001), index=close_prices.index
-        )
-        pe_estimate = pe_estimate.clip(-100, 100).fillna(15)
+        # 价格相对 252 日均线的偏离度（负值=低估）
+        ma252 = close_prices.rolling(window=252, min_periods=126).mean()
+        price_deviation = (close_prices - ma252) / (ma252 + 1e-8)
 
-        pb_estimate = pd.Series(
-            1 / (volatility + 0.01) * 0.5 + 1, index=close_prices.index
-        )
-        pb_estimate = pb_estimate.clip(0.1, 10).fillna(2)
+        # 波动率（低波动 = 高质量）
+        volatility = returns.rolling(window=63, min_periods=30).std()
 
-        ps_estimate = pd.Series(
-            1 / (volatility + 0.01) * 0.3 + 1.5, index=close_prices.index
-        )
-        ps_estimate = ps_estimate.clip(0.5, 15).fillna(3)
+        # 短期收益率均值
+        short_return = returns.rolling(window=21, min_periods=10).mean()
 
-        ev_ebitda_estimate = pd.Series(
-            1 / (volatility + 0.01) * 0.4 + 5, index=close_prices.index
-        )
-        ev_ebitda_estimate = ev_ebitda_estimate.clip(2, 30).fillna(10)
+        # 长期趋势（126日收益率）
+        long_return = close_prices / close_prices.shift(126) - 1
 
-        value_score = pd.Series(0.0, index=close_prices.index)
+        # 价值评分：低偏离 + 低波动 + 正收益趋势
+        # 用 rolling z-score 标准化每个因子
+        def rolling_zscore(s, window=252):
+            m = s.rolling(window=window, min_periods=60).mean()
+            sd = s.rolling(window=window, min_periods=60).std() + 1e-8
+            return (s - m) / sd
 
-        pe_normalized = (pe_estimate - pe_estimate.rolling(window=252).mean()) / (
-            pe_estimate.rolling(window=252).std() + 0.01
-        )
-        pb_normalized = (pb_estimate - pb_estimate.rolling(window=252).mean()) / (
-            pb_estimate.rolling(window=252).std() + 0.01
-        )
-        ps_normalized = (ps_estimate - ps_estimate.rolling(window=252).mean()) / (
-            ps_estimate.rolling(window=252).std() + 0.01
-        )
-        ev_normalized = (
-            ev_ebitda_estimate - ev_ebitda_estimate.rolling(window=252).mean()
-        ) / (ev_ebitda_estimate.rolling(window=252).std() + 0.01)
+        dev_z = rolling_zscore(price_deviation)
+        vol_z = rolling_zscore(volatility)
+        ret_z = rolling_zscore(short_return)
+        trend_z = rolling_zscore(long_return)
 
+        # 价值评分 = 低偏离(-dev) + 低波动(-vol) + 正收益(+ret) + 正趋势(+trend)
         value_score = (
-            -pe_normalized * self.pe_weight
-            + -pb_normalized * self.pb_weight
-            + -ps_normalized * self.ps_weight
-            + -ev_normalized * self.ev_ebitda_weight
+            -dev_z * self.pe_weight
+            + -vol_z * self.pb_weight
+            + ret_z * self.ps_weight
+            + trend_z * self.ev_ebitda_weight
         )
 
         return {
-            "pe_ratio": pe_estimate,
-            "pb_ratio": pb_estimate,
-            "ps_ratio": ps_estimate,
-            "ev_ebitda": ev_ebitda_estimate,
+            "pe_ratio": price_deviation,
+            "pb_ratio": volatility,
+            "ps_ratio": short_return,
+            "ev_ebitda": long_return,
             "value_score": value_score,
             "price": close_prices,
         }

@@ -7,13 +7,12 @@ from datetime import datetime
 from loguru import logger
 
 from ..strategies.factory import AdvancedStrategyFactory
-from ....core.error_handler import TaskError
+from ....core.error_handler import ErrorSeverity, TaskError
 from ..models.data_models import TradingSignal
 from ..core.portfolio_manager import PortfolioManager
 
 
 def validate_backtest_parameters(
-    self,
     strategy_name: str,
     stock_codes: List[str],
     start_date: datetime,
@@ -24,9 +23,14 @@ def validate_backtest_parameters(
     try:
         # 验证策略名称
         available_strategies = AdvancedStrategyFactory.get_available_strategies()
-        if strategy_name.lower() not in available_strategies:
+        # available_strategies 可能是分类字典 {'technical': ['bollinger', ...]} 或扁平列表
+        if isinstance(available_strategies, dict):
+            all_strategy_names = [s for names in available_strategies.values() for s in names]
+        else:
+            all_strategy_names = list(available_strategies)
+        if strategy_name.lower() not in all_strategy_names:
             raise TaskError(
-                message=f"不支持的策略: {strategy_name}，可用策略: {available_strategies}",
+                message=f"不支持的策略: {strategy_name}，可用策略: {all_strategy_names}",
                 severity=ErrorSeverity.MEDIUM,
             )
 

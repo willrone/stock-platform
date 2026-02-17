@@ -236,6 +236,7 @@ class BacktestLoopExecutor:
                     codes = aligned_arrays.get("stock_codes")
                     close_mat = aligned_arrays.get("close")
                     valid_mat = aligned_arrays.get("valid")
+                    strength_mat = aligned_arrays.get("strength")
                     if isinstance(sig_mat, np.ndarray):
                         sig_idx = np.nonzero(sig_mat[:, i])[0]
                         if sig_idx.size > 0:
@@ -251,12 +252,13 @@ class BacktestLoopExecutor:
                                     continue
                                 code = codes[j]
                                 price = float(close_mat[j, i])
+                                sig_strength = float(strength_mat[j, i]) if strength_mat is not None and strength_mat[j, i] > 0 else 1.0
                                 all_signals.append(
                                     TradingSignal(
                                         timestamp=current_date,
                                         stock_code=code,
                                         signal_type=stype,
-                                        strength=1.0,
+                                        strength=sig_strength,
                                         price=price,
                                         reason="[aligned] precomputed",
                                         metadata=None,
@@ -293,6 +295,7 @@ class BacktestLoopExecutor:
                             if isinstance(signal, SignalType):
                                 # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
                                 current_price = 0.0
+                                sig_strength = 1.0
                                 
                                 try:
                                     # 方法 1: 优先使用 aligned_arrays（最快，O(1) 查找）
@@ -300,6 +303,7 @@ class BacktestLoopExecutor:
                                         code_to_i = aligned_arrays.get("code_to_i")
                                         close_mat = aligned_arrays.get("close")
                                         dates = aligned_arrays.get("dates")
+                                        _strength_mat = aligned_arrays.get("strength")
                                         
                                         if code_to_i is not None and close_mat is not None and dates is not None:
                                             stock_idx = code_to_i.get(stock_code)
@@ -313,6 +317,9 @@ class BacktestLoopExecutor:
                                                     price_val = close_mat[stock_idx, date_idx]
                                                     if not np.isnan(price_val):
                                                         current_price = float(price_val)
+                                                    # 读取信号强度
+                                                    if _strength_mat is not None and _strength_mat[stock_idx, date_idx] > 0:
+                                                        sig_strength = float(_strength_mat[stock_idx, date_idx])
                                     
                                     # 方法 2: 如果 aligned_arrays 不可用，使用优化的 DataFrame 访问
                                     if current_price == 0.0:
@@ -339,7 +346,7 @@ class BacktestLoopExecutor:
                                     stock_code=stock_code,
                                     timestamp=date,
                                     price=current_price,
-                                    strength=1.0,
+                                    strength=sig_strength,
                                     reason=f"Precomputed signal"
                                 )]
                             return [signal] if not isinstance(signal, list) else signal

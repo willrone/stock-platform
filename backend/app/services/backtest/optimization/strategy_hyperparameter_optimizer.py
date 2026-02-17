@@ -380,6 +380,7 @@ class StrategyHyperparameterOptimizer:
             initial_cash=backtest_config.get("initial_cash", 100000.0),
             commission_rate=backtest_config.get("commission_rate", 0.0003),
             slippage_rate=backtest_config.get("slippage_rate", 0.0001),
+            enable_unlimited_buy=backtest_config.get("enable_unlimited_buy", False),
         )
 
         # 定义目标函数

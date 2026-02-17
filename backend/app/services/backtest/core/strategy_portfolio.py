@@ -8,6 +8,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 
 from ..models import SignalType, TradingSignal
@@ -96,25 +97,25 @@ class StrategyPortfolio(BaseStrategy):
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
         """
         [性能优化] 向量化预计算组合策略的整合信号
-        
+
         对于组合策略，需要：
-        1. 收集所有子策略的预计算信号
+        1. 收集所有子策略的预计算信号（浮点强度：正=买，负=卖，0=无）
         2. 按日期进行向量化的加权投票整合
-        3. 返回整合后的信号序列
-        
+        3. 返回整合后的浮点强度信号序列
+
         Args:
             data: 股票数据 DataFrame
-            
+
         Returns:
-            整合后的信号 Series，index 为日期，值为 SignalType 或 None
+            整合后的信号 Series，index 为日期，值为浮点强度（正=买，负=卖，0=无信号）
         """
         import logging
         logger = logging.getLogger(__name__)
-        
+
         try:
             # 1. 收集所有子策略的预计算信号
             sub_signals_map: Dict[str, pd.Series] = {}
-            
+
             for strategy in self.strategies:
                 try:
                     sig_series = strategy.precompute_all_signals(data)
@@ -123,54 +124,60 @@ class StrategyPortfolio(BaseStrategy):
                 except Exception as e:
                     logger.warning(f"子策略 {strategy.name} 预计算失败: {e}")
                     continue
-            
+
             if not sub_signals_map:
                 logger.warning("组合策略: 所有子策略预计算均失败，返回 None")
                 return None
-            
+
             # 2. 向量化整合信号（按日期加权投票）
-            # 获取所有日期的并集
             all_dates = data.index
-            
-            # 初始化结果
-            result = pd.Series([None] * len(all_dates), index=all_dates, dtype=object)
-            
+
+            # 初始化结果（浮点强度）
+            result = pd.Series(0.0, index=all_dates, dtype=np.float64)
+
             # 归一化权重
             total_weight = sum(self.weights.get(name, 1.0) for name in sub_signals_map.keys())
             if total_weight == 0:
                 total_weight = len(sub_signals_map)
-            
-            # 对每个日期进行加权投票
+
+            # 对每个日期进行加权投票（支持浮点和枚举两种信号格式）
             for date in all_dates:
                 buy_score = 0.0
                 sell_score = 0.0
-                
+
                 for strategy_name, sig_series in sub_signals_map.items():
                     weight = self.weights.get(strategy_name, 1.0) / total_weight
-                    
+
                     try:
                         if date in sig_series.index:
                             sig = sig_series.loc[date]
-                            if sig == SignalType.BUY:
+                            # 兼容浮点信号和枚举信号
+                            if isinstance(sig, (int, float)) and sig != 0 and not pd.isna(sig):
+                                if sig > 0:
+                                    buy_score += abs(float(sig)) * weight
+                                else:
+                                    sell_score += abs(float(sig)) * weight
+                            elif sig == SignalType.BUY:
                                 buy_score += weight
                             elif sig == SignalType.SELL:
                                 sell_score += weight
                     except Exception:
                         continue
-                
-                # 根据加权投票结果确定最终信号
-                # 使用一致性阈值 0.3（至少30%的权重同意）
-                consistency_threshold = 0.3
+
+                # 一致性阈值 0.5：至少50%的权重同意才出信号
+                consistency_threshold = 0.5
                 if buy_score > sell_score and buy_score >= consistency_threshold:
-                    result.loc[date] = SignalType.BUY
+                    # 输出正浮点值（买入强度）
+                    result.loc[date] = min(1.0, buy_score)
                 elif sell_score > buy_score and sell_score >= consistency_threshold:
-                    result.loc[date] = SignalType.SELL
-            
+                    # 输出负浮点值（卖出强度）
+                    result.loc[date] = -min(1.0, sell_score)
+
             # 统计信号数量
-            buy_count = (result == SignalType.BUY).sum()
-            sell_count = (result == SignalType.SELL).sum()
+            buy_count = (result > 0).sum()
+            sell_count = (result < 0).sum()
             logger.info(f"✅ 组合策略向量化预计算完成: BUY={buy_count}, SELL={sell_count}, 子策略数={len(sub_signals_map)}")
-            
+
             return result
             
         except Exception as e:

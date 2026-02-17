@@ -68,6 +68,9 @@ class BacktestConfig:
     # P0-2: 最大回撤熔断（None 或 0 表示不启用）
     max_drawdown_pct: Optional[float] = None
 
+    # 不限制买入模式：启用时忽略单股仓位限制、5%现金保留，资金不足时自动补充
+    enable_unlimited_buy: bool = False
+
     # 性能：大规模回测默认不需要每天的完整组合快照；
     # equity 曲线单独记录，不受该开关影响。
     record_portfolio_history: bool = True

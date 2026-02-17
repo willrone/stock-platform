@@ -87,14 +87,14 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
 
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            relative_strength = momentum_20d - momentum_5d
-
+            # 买入：Z-score 跌破 -threshold（价格极端偏低），动量确认
             if (
                 prev_zscore <= -self.zscore_threshold
                 and current_zscore > -self.zscore_threshold
             ):
-                if relative_strength < -0.02:
-                    strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
+                strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
+                # 动量确认：短期动量开始回升（放宽条件）
+                if momentum_5d > momentum_20d or momentum_5d > -0.05:
                     signal = TradingSignal(
                         timestamp=current_date,
                         stock_code=stock_code,
@@ -106,17 +106,18 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
                             "zscore": current_zscore,
                             "momentum_5d": momentum_5d,
                             "momentum_20d": momentum_20d,
-                            "relative_strength": relative_strength,
                         },
                     )
                     signals.append(signal)
 
+            # 卖出：Z-score 突破 +threshold（价格极端偏高），动量确认
             elif (
                 prev_zscore >= self.zscore_threshold
                 and current_zscore < self.zscore_threshold
             ):
-                if relative_strength > 0.02:
-                    strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
+                strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
+                # 动量确认：短期动量开始回落
+                if momentum_5d < momentum_20d or momentum_5d < 0.05:
                     signal = TradingSignal(
                         timestamp=current_date,
                         stock_code=stock_code,
@@ -128,7 +129,6 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
                             "zscore": current_zscore,
                             "momentum_5d": momentum_5d,
                             "momentum_20d": momentum_20d,
-                            "relative_strength": relative_strength,
                         },
                     )
                     signals.append(signal)

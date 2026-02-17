@@ -61,13 +61,13 @@ class BollingerBandStrategy(BaseStrategy):
             indicators = self.get_cached_indicators(data)
             pb = indicators["percent_b"]
             prev_pb = pb.shift(1)
+            bw = indicators["bandwidth"]
 
-            # 向量化逻辑：价格突破下轨 (prev <= 0 and current > 0)
-            buy_mask = (prev_pb <= 0) & (pb > 0)
-            # 价格突破上轨 (prev >= 1 and current < 1)
-            sell_mask = (prev_pb >= 1) & (pb < 1)
+            # 买入：价格跌破下轨（%B < 0）且前一天还在轨内（prev >= 0），带宽足够（避免窄幅震荡）
+            buy_mask = (pb < 0) & (prev_pb >= 0) & (bw > 0.02)
+            # 卖出：价格突破上轨（%B > 1）且前一天还在轨内（prev <= 1）
+            sell_mask = (pb > 1) & (prev_pb <= 1) & (bw > 0.02)
 
-            # 用 None 初始化，避免未赋值位置默认为 NaN(float)，导致下游误判为 truthy
             signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
@@ -120,28 +120,36 @@ class BollingerBandStrategy(BaseStrategy):
             lower_band = indicators["lower_band"].iloc[current_idx]
             percent_b = indicators["percent_b"].iloc[current_idx]
             prev_percent_b = indicators["percent_b"].iloc[current_idx - 1]
+            bandwidth = indicators["bandwidth"].iloc[current_idx]
 
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            if prev_percent_b <= 0 and percent_b > 0:
-                strength = min(1.0, percent_b)
+            # 带宽过窄时不交易（窄幅震荡，信号不可靠）
+            if bandwidth <= 0.02:
+                return signals
+
+            # 买入：价格跌破下轨（抄底）
+            if percent_b < 0 and prev_percent_b >= 0:
+                strength = min(1.0, abs(percent_b))
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.BUY,
                     strength=strength,
                     price=current_price,
-                    reason=f"价格突破下轨，PercentB: {percent_b:.3f}",
+                    reason=f"价格跌破下轨，PercentB: {percent_b:.3f}",
                     metadata={
                         "upper_band": upper_band,
                         "lower_band": lower_band,
                         "percent_b": percent_b,
+                        "bandwidth": bandwidth,
                     },
                 )
                 signals.append(signal)
 
-            elif prev_percent_b >= 1 and percent_b < 1:
-                strength = min(1.0, 1 - percent_b)
+            # 卖出：价格突破上轨
+            elif percent_b > 1 and prev_percent_b <= 1:
+                strength = min(1.0, percent_b - 1)
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
@@ -153,6 +161,7 @@ class BollingerBandStrategy(BaseStrategy):
                         "upper_band": upper_band,
                         "lower_band": lower_band,
                         "percent_b": percent_b,
+                        "bandwidth": bandwidth,
                     },
                 )
                 signals.append(signal)

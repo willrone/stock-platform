@@ -351,6 +351,7 @@ class BacktestTaskExecutor:
                     initial_cash=initial_cash,
                     commission_rate=strategy_config.get("commission_rate", 0.0003),
                     slippage_rate=strategy_config.get("slippage_rate", 0.0001),
+                    enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
                 )
 
                 # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）

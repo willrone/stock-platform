@@ -362,10 +362,21 @@ class DataPreprocessor:
                 from collections import defaultdict
                 signals_by_date: Dict[datetime, List[TradingSignal]] = defaultdict(list)
                 
-                for (stock_code, date), signal_type in all_sub_signals.items():
-                    # 构造 TradingSignal 对象
+                for (stock_code, date), signal_value in all_sub_signals.items():
+                    # 构造 TradingSignal 对象（兼容浮点和枚举信号）
                     from ..models import SignalType
-                    if signal_type == SignalType.BUY or signal_type == SignalType.SELL:
+                    # 判断信号类型和强度
+                    sig_type = None
+                    sig_strength = 1.0
+                    if isinstance(signal_value, (int, float)) and signal_value != 0 and not pd.isna(signal_value):
+                        sig_type = SignalType.BUY if signal_value > 0 else SignalType.SELL
+                        sig_strength = min(1.0, abs(float(signal_value)))
+                    elif signal_value == SignalType.BUY:
+                        sig_type = SignalType.BUY
+                    elif signal_value == SignalType.SELL:
+                        sig_type = SignalType.SELL
+
+                    if sig_type is not None:
                         # 获取价格
                         try:
                             df = stock_data.get(stock_code)
@@ -374,8 +385,8 @@ class DataPreprocessor:
                                 signal = TradingSignal(
                                     timestamp=date,
                                     stock_code=stock_code,
-                                    signal_type=signal_type,
-                                    strength=1.0,
+                                    signal_type=sig_type,
+                                    strength=sig_strength,
                                     price=price,
                                     reason="precomputed",
                                     metadata={}
@@ -417,17 +428,18 @@ class DataPreprocessor:
             try:
                 precomputed = data.attrs.get("_precomputed_signals", {})
                 signals = precomputed.get(strategy_key)
-                
+
                 if signals is not None:
                     # signals 可能是 pd.Series 或 dict
+                    # 浮点信号：0.0 表示无信号，需要过滤
                     if isinstance(signals, pd.Series):
                         for date, signal in signals.items():
-                            if signal is not None:
+                            if signal is not None and signal != 0 and not (isinstance(signal, float) and signal == 0.0):
                                 signal_dict[(stock_code, date)] = signal
                                 extracted_count += 1
                     elif isinstance(signals, dict):
                         for date, signal in signals.items():
-                            if signal is not None:
+                            if signal is not None and signal != 0 and not (isinstance(signal, float) and signal == 0.0):
                                 signal_dict[(stock_code, date)] = signal
                                 extracted_count += 1
             except Exception as e:
@@ -461,7 +473,8 @@ class DataPreprocessor:
               'close': float64[N,T] (nan=missing),
               'open':  float64[N,T] (nan=missing),
               'valid': bool[N,T],
-              'signal': int8[N,T] (1=BUY, -1=SELL, 0=NONE)
+              'signal': int8[N,T] (1=BUY, -1=SELL, 0=NONE),
+              'strength': float32[N,T] (0.0~1.0, 信号强度)
             }
         """
         stock_codes = list(stock_data.keys())
@@ -475,6 +488,7 @@ class DataPreprocessor:
         open_ = np.full((N, T), np.nan, dtype=np.float64, order='C')
         valid = np.zeros((N, T), dtype=bool, order='C')
         signal = np.zeros((N, T), dtype=np.int8, order='C')
+        strength = np.zeros((N, T), dtype=np.float32, order='C')
 
         # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
         strategy_key = strategy.name  # 使用 strategy.name 作为稳定的 key
@@ -527,7 +541,7 @@ class DataPreprocessor:
                     except Exception:
                         pass
 
-            # 信号对齐（Phase 3 优化：使用 numpy searchsorted 替代 pandas reindex）
+            # 信号对齐（Phase 3 优化：支持浮点和枚举两种信号格式）
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
                 sig_ser = pre.get(strategy_key)
@@ -537,31 +551,68 @@ class DataPreprocessor:
                     sig_indices = np.searchsorted(sig_dates, trading_dates)
                     sig_indices = np.clip(sig_indices, 0, len(sig_dates) - 1)
                     sig_matches = sig_dates[sig_indices] == trading_dates
-                    
+
                     # 获取信号值
-                    vals = sig_ser.values[sig_indices]
+                    vals = sig_ser.values[sig_indices].copy()
                     vals[~sig_matches] = None  # 不匹配的设为 None
-                    
-                    # 向量化映射 SignalType to int8
-                    buy_mask = vals == SignalType.BUY
-                    sell_mask = vals == SignalType.SELL
-                    signal[i, buy_mask] = 1
-                    signal[i, sell_mask] = -1
+
+                    # 判断信号类型是浮点还是枚举
+                    is_float_series = sig_ser.dtype in (np.float64, np.float32, np.int64, np.int32, float, int)
+
+                    if is_float_series:
+                        # 浮点信号：正数=BUY，负数=SELL，0=无信号
+                        for t_idx in np.where(sig_matches)[0]:
+                            v = vals[t_idx]
+                            try:
+                                fv = float(v)
+                            except (TypeError, ValueError):
+                                continue
+                            if fv > 0:
+                                signal[i, t_idx] = 1
+                                strength[i, t_idx] = min(1.0, abs(fv))
+                            elif fv < 0:
+                                signal[i, t_idx] = -1
+                                strength[i, t_idx] = min(1.0, abs(fv))
+                    else:
+                        # 枚举信号：SignalType.BUY / SignalType.SELL
+                        buy_mask = vals == SignalType.BUY
+                        sell_mask = vals == SignalType.SELL
+                        signal[i, buy_mask] = 1
+                        signal[i, sell_mask] = -1
+
+                        for t_idx in np.where(sig_matches & (buy_mask | sell_mask))[0]:
+                            strength[i, t_idx] = 1.0
+
                 elif isinstance(sig_ser, dict):
-                    # dict 路径：转换为数组后使用向量化操作
+                    # dict 路径：转换为 Series 后复用相同逻辑
                     sig_series = pd.Series(sig_ser)
                     sig_dates = sig_series.index.values
                     sig_indices = np.searchsorted(sig_dates, trading_dates)
                     sig_indices = np.clip(sig_indices, 0, len(sig_dates) - 1)
                     sig_matches = sig_dates[sig_indices] == trading_dates
-                    
-                    vals = sig_series.values[sig_indices]
+
+                    vals = sig_series.values[sig_indices].copy()
                     vals[~sig_matches] = None
-                    
-                    buy_mask = vals == SignalType.BUY
-                    sell_mask = vals == SignalType.SELL
-                    signal[i, buy_mask] = 1
-                    signal[i, sell_mask] = -1
+
+                    for t_idx in np.where(sig_matches)[0]:
+                        v = vals[t_idx]
+                        if v is None:
+                            continue
+                        # 尝试浮点解析
+                        if isinstance(v, (int, float)):
+                            fv = float(v)
+                            if fv > 0:
+                                signal[i, t_idx] = 1
+                                strength[i, t_idx] = min(1.0, abs(fv))
+                            elif fv < 0:
+                                signal[i, t_idx] = -1
+                                strength[i, t_idx] = min(1.0, abs(fv))
+                        elif v == SignalType.BUY:
+                            signal[i, t_idx] = 1
+                            strength[i, t_idx] = 1.0
+                        elif v == SignalType.SELL:
+                            signal[i, t_idx] = -1
+                            strength[i, t_idx] = 1.0
             except Exception as e:
                 logger.warning(f"股票 {code} 信号对齐失败: {e}")
 
@@ -574,6 +625,7 @@ class DataPreprocessor:
             'open': open_,
             'valid': valid,
             'signal': signal,
+            'strength': strength,
         }
 
 

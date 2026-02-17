@@ -60,18 +60,39 @@ class LowVolatilityStrategy(FactorStrategy):
 
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            if current_rar > 0:
-                strength = min(1.0, current_rar / 5)
+            # 买入：低波动且风险调整收益为正，且波动率低于历史中位数
+            vol_median = indicators["volatility"].iloc[max(0, current_idx-252):current_idx+1].median()
+            if current_rar > 0 and current_vol < vol_median:
+                strength = min(1.0, current_rar / 3)
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.BUY,
                     strength=strength,
                     price=current_price,
-                    reason=f"低波动高收益，波动率: {current_vol:.2%}",
+                    reason=f"低波动高收益，波动率: {current_vol:.2%}, RAR: {current_rar:.3f}",
                     metadata={
                         "volatility": current_vol,
                         "risk_adjusted_return": current_rar,
+                        "vol_median": vol_median,
+                    },
+                )
+                signals.append(signal)
+
+            # 卖出：风险调整收益转负，或波动率飙升超过历史中位数的1.5倍
+            elif current_rar < -0.5 or current_vol > vol_median * 1.5:
+                strength = min(1.0, max(abs(current_rar) / 3, current_vol / vol_median - 1) if vol_median > 0 else abs(current_rar) / 3)
+                signal = TradingSignal(
+                    timestamp=current_date,
+                    stock_code=stock_code,
+                    signal_type=SignalType.SELL,
+                    strength=strength,
+                    price=current_price,
+                    reason=f"波动率飙升或收益恶化，波动率: {current_vol:.2%}, RAR: {current_rar:.3f}",
+                    metadata={
+                        "volatility": current_vol,
+                        "risk_adjusted_return": current_rar,
+                        "vol_median": vol_median,
                     },
                 )
                 signals.append(signal)

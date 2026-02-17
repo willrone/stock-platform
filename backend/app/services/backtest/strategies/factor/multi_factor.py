@@ -125,7 +125,11 @@ class MultiFactorStrategy(FactorStrategy):
 
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            if prev_score <= 0 and current_score > 0:
+            # 阈值触发（替代穿越0逻辑，避免平滑后信号消失）
+            buy_threshold = 0.3
+            sell_threshold = -0.3
+
+            if current_score > buy_threshold and prev_score <= buy_threshold:
                 strength = min(1.0, abs(current_score))
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -133,7 +137,7 @@ class MultiFactorStrategy(FactorStrategy):
                     signal_type=SignalType.BUY,
                     strength=strength,
                     price=current_price,
-                    reason=f"多因子综合评分转正: {current_score:.3f}",
+                    reason=f"多因子综合评分突破阈值: {current_score:.3f}",
                     metadata={
                         "combined_score": current_score,
                         "value_score": float(
@@ -150,7 +154,7 @@ class MultiFactorStrategy(FactorStrategy):
                 )
                 signals.append(signal)
 
-            elif prev_score >= 0 and current_score < 0:
+            elif current_score < sell_threshold and prev_score >= sell_threshold:
                 strength = min(1.0, abs(current_score))
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -158,7 +162,7 @@ class MultiFactorStrategy(FactorStrategy):
                     signal_type=SignalType.SELL,
                     strength=strength,
                     price=current_price,
-                    reason=f"多因子综合评分转负: {current_score:.3f}",
+                    reason=f"多因子综合评分跌破阈值: {current_score:.3f}",
                     metadata={
                         "combined_score": current_score,
                         "value_score": float(

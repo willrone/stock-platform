@@ -51,10 +51,8 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
 
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            if (
-                prev_zscore <= -self.zscore_threshold
-                and current_zscore > -self.zscore_threshold
-            ):
+            # 买入：Z-score 跌破 -threshold（价格处于极端低位）
+            if current_zscore < -self.zscore_threshold and prev_zscore >= -self.zscore_threshold:
                 strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -62,7 +60,7 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
                     signal_type=SignalType.BUY,
                     strength=strength,
                     price=current_price,
-                    reason=f"价格回归均值，Z-score: {current_zscore:.2f}",
+                    reason=f"价格极端偏低，Z-score: {current_zscore:.2f}",
                     metadata={
                         "zscore": current_zscore,
                         "sma": indicators["sma"].iloc[current_idx],
@@ -70,10 +68,8 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
                 )
                 signals.append(signal)
 
-            elif (
-                prev_zscore >= self.zscore_threshold
-                and current_zscore < self.zscore_threshold
-            ):
+            # 卖出：Z-score 突破 +threshold（价格处于极端高位）
+            elif current_zscore > self.zscore_threshold and prev_zscore <= self.zscore_threshold:
                 strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -81,7 +77,7 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
                     signal_type=SignalType.SELL,
                     strength=strength,
                     price=current_price,
-                    reason=f"价格偏离均值，Z-score: {current_zscore:.2f}",
+                    reason=f"价格极端偏高，Z-score: {current_zscore:.2f}",
                     metadata={
                         "zscore": current_zscore,
                         "sma": indicators["sma"].iloc[current_idx],

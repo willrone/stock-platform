@@ -59,7 +59,8 @@ class PortfolioManagerArray:
         # 成本统计
         self.total_commission = 0.0
         self.total_slippage = 0.0
-        
+        self.total_capital_injection = 0.0
+
         # 可选：完整快照历史（默认关闭以节省内存）
         self.portfolio_history: List[Dict[str, Any]] = []
         self.portfolio_history_without_cost: List[Dict[str, Any]] = []
@@ -259,24 +260,29 @@ class PortfolioManagerArray:
         signal: TradingSignal,
     ) -> tuple[Optional[Trade], Optional[str]]:
         """执行买入 - 数组优化版本"""
-        # 计算可买数量
-        portfolio_value = self.get_portfolio_value({stock_code: price})
-        max_position_value = portfolio_value * self.config.max_position_size
+        unlimited_buy = getattr(self.config, "enable_unlimited_buy", False)
 
-        current_position_value = self.quantities[idx] * price if self.quantities[idx] > 0 else 0
-        available_cash_for_stock = max_position_value - current_position_value
-        available_cash_for_stock = min(available_cash_for_stock, self.cash * 0.95)
+        if unlimited_buy:
+            available_cash_for_stock = self.cash
+        else:
+            portfolio_value = self.get_portfolio_value({stock_code: price})
+            max_position_value = portfolio_value * self.config.max_position_size
+            current_position_value = self.quantities[idx] * price if self.quantities[idx] > 0 else 0
+            available_cash_for_stock = max_position_value - current_position_value
+            available_cash_for_stock = min(available_cash_for_stock, self.cash * 0.95)
 
-        if available_cash_for_stock <= 0:
-            if current_position_value > 0 and current_position_value >= max_position_value:
-                return None, f"已达到最大持仓限制"
-            else:
-                return None, f"可用资金不足"
+            if available_cash_for_stock <= 0:
+                if current_position_value > 0 and current_position_value >= max_position_value:
+                    return None, f"已达到最大持仓限制"
+                else:
+                    return None, f"可用资金不足"
 
         # 计算购买数量（100股为单位）
         quantity = int(available_cash_for_stock / price / 100) * 100
-        if quantity <= 0:
+        if not unlimited_buy and quantity <= 0:
             return None, f"可买数量不足"
+        if unlimited_buy and quantity <= 0:
+            quantity = 100
 
         # 计算成本
         total_cost = quantity * price
@@ -285,7 +291,14 @@ class PortfolioManagerArray:
         total_cost_with_commission = total_cost + commission
 
         if total_cost_with_commission > self.cash:
-            return None, f"资金不足"
+            if unlimited_buy:
+                needed = total_cost_with_commission - self.cash
+                self.cash += needed
+                self.total_capital_injection += needed
+                self.cash_without_cost += needed  # 无成本账本同步
+                logger.debug(f"不限制买入: 补充资金 {needed:.2f} 用于买入 {stock_code}")
+            else:
+                return None, f"资金不足"
 
         # 执行交易（含成本）
         self.cash -= total_cost_with_commission
@@ -480,8 +493,11 @@ class PortfolioManagerArray:
         if len(returns) == 0:
             return {}
 
-        # 基础指标
-        total_return = (values[-1] - self.config.initial_cash) / self.config.initial_cash
+        # 基础指标（不限制买入时，收益基准含补充资金）
+        total_invested = self.config.initial_cash + getattr(
+            self, "total_capital_injection", 0.0
+        )
+        total_return = (values[-1] - total_invested) / total_invested
 
         # 年化收益率
         days = (self.equity_curve[-1][0] - self.equity_curve[0][0]).days
@@ -510,6 +526,7 @@ class PortfolioManagerArray:
         avg_loss = float(np.mean([t['pnl'] for t in losing_trades])) if losing_trades else 0.0
         profit_factor = float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
 
+        total_cap_inj = getattr(self, "total_capital_injection", 0.0)
         metrics = {
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),
@@ -523,6 +540,7 @@ class PortfolioManagerArray:
             "losing_trades": len(losing_trades),
             "total_commission": float(self.total_commission),
             "total_slippage": float(self.total_slippage),
+            "total_capital_injection": float(total_cap_inj),
             "total_cost": float(self.total_commission + self.total_slippage),
         }
 

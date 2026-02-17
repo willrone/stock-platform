@@ -436,10 +436,12 @@ def execute_backtest_task_simple(task_id: str):
         )
 
         # 创建回测配置
+        strategy_config = config.get("strategy_config", {})
         backtest_config = BacktestConfig(
             initial_cash=initial_cash,
             commission_rate=config.get("commission_rate", 0.0003),
             slippage_rate=config.get("slippage_rate", 0.0001),
+            enable_unlimited_buy=config.get("enable_unlimited_buy", False) or strategy_config.get("enable_unlimited_buy", False),
         )
 
         # 执行回测

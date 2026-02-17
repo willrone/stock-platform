@@ -1,19 +1,22 @@
 version: '3.8'
 
 services:
-  # 后端API服务
+  # 后端API服务（生产端口 8001，避免与开发环境 8000 冲突）
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: stock-prediction-backend
     ports:
-      - "8000:8000"
+      - "${PROD_BACKEND_PORT:-8001}:8000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=sqlite:///app/data/stock_prediction.db
-      - DATA_SERVICE_URL=http://192.168.3.62:8080
-      - LOG_LEVEL=INFO
-      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+      - DATABASE_URL=${DATABASE_URL}
+      - DATA_SERVICE_URL=${DATA_SERVICE_URL}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - CORS_ORIGINS=${CORS_ORIGINS},http://frontend:3000,http://localhost:${PROD_FRONTEND_PORT:-3001}
+      - WORKERS=${WORKERS}
     volumes:
       - ./data:/app/data
       - ./backend/logs:/app/logs
@@ -27,17 +30,19 @@ services:
       retries: 3
       start_period: 40s
 
-  # 前端Web服务
+  # 前端Web服务（生产端口 3001，避免与开发环境 3000 冲突）
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: stock-prediction-frontend
     ports:
-      - "3000:3000"
+      - "${PROD_FRONTEND_PORT:-3001}:3000"
+    env_file:
+      - .env
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
+      - NEXT_PUBLIC_WS_URL=ws://backend:8000/ws
       - NODE_ENV=production
     depends_on:
       - backend
@@ -73,7 +78,7 @@ services:
     image: prom/prometheus:latest
     container_name: stock-prediction-prometheus
     ports:
-      - "9090:9090"
+      - "9091:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -88,14 +93,14 @@ services:
       - stock-prediction-network
     restart: unless-stopped
 
-  # Grafana仪表板（可选）
+  # Grafana仪表板（可选，端口 3002 避免与生产前端 3001 冲突）
   grafana:
     image: grafana/grafana:latest
     container_name: stock-prediction-grafana
     ports:
-      - "3001:3000"
+      - "${PROD_GRAFANA_PORT:-3002}:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro

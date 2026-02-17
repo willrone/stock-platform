@@ -616,6 +616,7 @@ async def run_backtest(request: BacktestRequest):
             initial_cash=request.initial_cash,
             commission_rate=strategy_config.get("commission_rate", 0.0003),
             slippage_rate=strategy_config.get("slippage_rate", 0.0001),
+            enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）
@@ -727,8 +728,8 @@ async def run_backtest(request: BacktestRequest):
         return StandardResponse(success=True, message="回测执行成功", data=result)
 
     except Exception as e:
-        logger.error(f"回测执行失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"回测执行失败: {str(e)}")
+        logger.error("回测执行失败: " + str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="回测执行失败: " + str(e))
 
 
 @router.get("/portfolio-templates", response_model=StandardResponse)
