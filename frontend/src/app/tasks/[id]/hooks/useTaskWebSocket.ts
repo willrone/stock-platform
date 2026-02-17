@@ -34,7 +34,7 @@ export function useTaskWebSocket({ taskId, currentTask, onTaskCompleted }: UseTa
       }
     };
 
-    const handleTaskCompleted = async (data: { task_id: string; results: any }) => {
+    const handleTaskCompleted = async (data: { task_id: string; results: Record<string, unknown> }) => {
       if (data.task_id === taskId) {
         // 重新加载任务详情以获取完整数据
         try {

@@ -29,7 +29,7 @@ export interface CreateTaskRequest {
     initial_cash?: number;
     commission_rate?: number;
     slippage_rate?: number;
-    strategy_config?: Record<string, any>;
+    strategy_config?: Record<string, unknown>;
     enable_performance_profiling?: boolean;
   };
 }
@@ -80,7 +80,7 @@ export class TaskService {
     limit: number = 20,
     offset: number = 0
   ): Promise<TaskListResponse> {
-    const params: any = { limit, offset };
+    const params: Record<string, unknown> = { limit, offset };
     if (status) {
       params.status = status;
     }
@@ -135,8 +135,8 @@ export class TaskService {
         risk_assessment: {
           value_at_risk: pred.risk_assessment?.value_at_risk || 0,
           volatility: pred.risk_assessment?.volatility || 0,
-          max_drawdown: (pred.risk_assessment as any)?.max_drawdown || 0,
-          sharpe_ratio: (pred.risk_assessment as any)?.sharpe_ratio || 0,
+          max_drawdown: (pred.risk_assessment as Record<string, unknown>)?.max_drawdown as number || 0,
+          sharpe_ratio: (pred.risk_assessment as Record<string, unknown>)?.sharpe_ratio as number || 0,
         },
       })) || []
     );

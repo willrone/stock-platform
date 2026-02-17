@@ -41,12 +41,13 @@ export function useTaskActions(
       await TaskService.deleteTask(taskId, deleteForce);
       console.log(`任务删除成功${deleteForce ? '（强制删除）' : ''}`);
       router.push('/tasks');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('删除任务失败:', error);
       // 如果任务正在运行或可能是僵尸任务，显示强制删除选项
+      const errorMessage = error instanceof Error ? error.message : '';
       if (
-        error.message?.includes('正在运行中') ||
-        error.message?.includes('运行中') ||
+        errorMessage.includes('正在运行中') ||
+        errorMessage.includes('运行中') ||
         currentTask?.status === 'running'
       ) {
         setDeleteForce(true);
@@ -93,7 +94,7 @@ export function useTaskActions(
     if (currentTask.task_type === 'backtest') {
       // 回测任务配置
       const cfg = currentTask.config;
-      const bc = cfg?.backtest_config || cfg;
+      const bc = cfg?.backtest_config;
 
       if (bc) {
         if (bc.strategy_name) {
@@ -114,8 +115,9 @@ export function useTaskActions(
         if (bc.slippage_rate !== undefined) {
           params.set('slippage_rate', bc.slippage_rate.toString());
         }
-        if (bc.enable_performance_profiling !== undefined) {
-          params.set('enable_performance_profiling', bc.enable_performance_profiling.toString());
+        const enableProfiling = cfg?.['enable_performance_profiling'];
+        if (enableProfiling !== undefined) {
+          params.set('enable_performance_profiling', String(enableProfiling));
         }
 
         // 策略配置
@@ -129,16 +131,16 @@ export function useTaskActions(
         params.set('model_id', currentTask.model_id);
       }
 
-      const predConfig = currentTask.config?.prediction_config;
+      const predConfig = currentTask.config?.prediction_config as Record<string, unknown> | undefined;
       if (predConfig) {
         if (predConfig.horizon) {
-          params.set('horizon', predConfig.horizon.toString());
+          params.set('horizon', String(predConfig.horizon));
         }
         if (predConfig.confidence_level !== undefined) {
-          params.set('confidence_level', (predConfig.confidence_level * 100).toString());
+          params.set('confidence_level', (Number(predConfig.confidence_level) * 100).toString());
         }
         if (predConfig.risk_assessment !== undefined) {
-          params.set('risk_assessment', predConfig.risk_assessment.toString());
+          params.set('risk_assessment', String(predConfig.risk_assessment));
         }
       }
     }

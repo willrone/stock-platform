@@ -3,7 +3,7 @@
  */
 
 // StandardResponse 类型定义
-interface StandardResponse<T = any> {
+interface StandardResponse<T = unknown> {
   success: boolean;
   message: string;
   data: T;
@@ -15,8 +15,8 @@ export interface ParamSpaceConfig {
   low?: number;
   high?: number;
   step?: number;
-  choices?: any[];
-  default?: any;
+  choices?: (string | number | boolean)[];
+  default?: string | number | boolean;
   enabled?: boolean;
   log?: boolean;
 }
@@ -38,7 +38,7 @@ export interface CreateOptimizationTaskRequest {
   n_trials: number;
   optimization_method: string;
   timeout?: number;
-  backtest_config?: Record<string, any>;
+  backtest_config?: Record<string, unknown>;
 }
 
 export interface OptimizationTask {
@@ -67,13 +67,13 @@ export interface OptimizationStatus {
   failed_trials: number;
   best_score?: number;
   best_trial_number?: number;
-  best_params?: Record<string, any>;
+  best_params?: Record<string, unknown>;
 }
 
 export interface OptimizationResult {
   success: boolean;
   strategy_name: string;
-  best_params?: Record<string, any>;
+  best_params?: Record<string, unknown>;
   best_score?: number;
   best_trial_number?: number;
   objective_metric: string | string[];
@@ -84,8 +84,7 @@ export interface OptimizationResult {
   failed_trials: number;
   optimization_history: Array<{
     trial_number: number;
-    params: Record<string, any>;
-    state: string;
+    params: Record<string, unknown>;
     score?: number;
     objectives?: number[];
     duration_seconds?: number;
@@ -94,7 +93,7 @@ export interface OptimizationResult {
   param_importance?: Record<string, number>;
   pareto_front?: Array<{
     trial_number: number;
-    params: Record<string, any>;
+    params: Record<string, unknown>;
     objectives: number[];
   }>;
   optimization_metadata?: {
@@ -160,7 +159,7 @@ export class OptimizationService {
 
       if (!response.ok) {
         let errorMessage = '创建优化任务失败';
-        let errorData: any = null;
+        let errorData: Record<string, unknown> | null = null;
 
         try {
           const contentType = response.headers.get('content-type');
@@ -172,9 +171,9 @@ export class OptimizationService {
               // 处理 Pydantic 验证错误
               if (Array.isArray(errorData.detail)) {
                 errorMessage = errorData.detail
-                  .map((e: any) => {
-                    const loc = e.loc ? e.loc.join('.') : '';
-                    return `${loc}: ${e.msg || e.message}`;
+                  .map((e: Record<string, unknown>) => {
+                    const loc = Array.isArray(e.loc) ? e.loc.join('.') : '';
+                    return `${loc}: ${(e.msg as string) || (e.message as string)}`;
                   })
                   .join(', ');
               } else if (typeof errorData.detail === 'string') {
@@ -299,7 +298,7 @@ export class OptimizationService {
   static async getParetoFront(taskId: string): Promise<
     Array<{
       trial_number: number;
-      params: Record<string, any>;
+      params: Record<string, unknown>;
       objectives: number[];
     }>
   > {
@@ -312,7 +311,7 @@ export class OptimizationService {
     const result: StandardResponse<
       Array<{
         trial_number: number;
-        params: Record<string, any>;
+        params: Record<string, unknown>;
         objectives: number[];
       }>
     > = await response.json();

@@ -15,7 +15,7 @@ export interface StrategyConfig {
   config_id: string;
   config_name: string;
   strategy_name: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   description?: string;
   user_id?: string;
   created_at: string;
@@ -26,7 +26,7 @@ export interface StrategyConfig {
 export interface CreateStrategyConfigRequest {
   config_name: string;
   strategy_name: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   description?: string;
   user_id?: string;
 }
@@ -34,7 +34,7 @@ export interface CreateStrategyConfigRequest {
 // 更新配置请求
 export interface UpdateStrategyConfigRequest {
   config_name?: string;
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
   description?: string;
 }
 
@@ -53,7 +53,7 @@ export class StrategyConfigService {
     strategyName?: string,
     userId?: string
   ): Promise<StrategyConfigListResponse> {
-    const params: any = {};
+    const params: Record<string, string> = {};
     if (strategyName) {
       params.strategy_name = strategyName;
     }

@@ -7,10 +7,23 @@ import { Task } from '@/stores/useTaskStore';
 import { BacktestService } from '@/services/backtestService';
 import { BacktestDataAdapter } from '@/services/backtestDataAdapter';
 
+export interface AdaptedRiskData {
+  riskMetrics: Record<string, unknown>;
+  returnDistribution: Record<string, unknown>;
+  rollingMetrics: Record<string, unknown>;
+}
+
+export interface AdaptedPerformanceData {
+  monthlyPerformance: Record<string, unknown>;
+  yearlyPerformance: Record<string, unknown>;
+  seasonalAnalysis: Record<string, unknown>;
+  benchmarkComparison: Record<string, unknown>;
+}
+
 export function useBacktestData(taskId: string, currentTask: Task | null) {
-  const [backtestDetailedData, setBacktestDetailedData] = useState<any>(null);
-  const [adaptedRiskData, setAdaptedRiskData] = useState<any>(null);
-  const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<any>(null);
+  const [backtestDetailedData, setBacktestDetailedData] = useState<Record<string, unknown> | null>(null);
+  const [adaptedRiskData, setAdaptedRiskData] = useState<AdaptedRiskData | null>(null);
+  const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<AdaptedPerformanceData | null>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const hasTriggeredLoadRef = useRef(false);
 

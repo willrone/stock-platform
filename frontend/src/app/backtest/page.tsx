@@ -113,7 +113,7 @@ export default function BacktestPage() {
       });
     };
 
-    const handleTaskCompleted = (data: { task_id: string; results: any }) => {
+    const handleTaskCompleted = (data: { task_id: string; results: Record<string, unknown> }) => {
       updateTask(data.task_id, {
         status: 'completed',
         progress: 100,
