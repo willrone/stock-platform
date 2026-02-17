@@ -19,7 +19,7 @@ export interface TestResult {
   success: boolean;
   message: string;
   duration: number;
-  details?: any;
+  details?: unknown;
 }
 
 // 测试套件结果
@@ -42,7 +42,7 @@ export class IntegrationTestManager {
   /**
    * 运行单个测试
    */
-  private async runTest(name: string, testFn: () => Promise<any>): Promise<TestResult> {
+  private async runTest(name: string, testFn: () => Promise<unknown>): Promise<TestResult> {
     const startTime = Date.now();
 
     try {
@@ -117,11 +117,13 @@ export class IntegrationTestManager {
         // 监听连接成功事件
         const handleConnect = () => {
           clearTimeout(timeout);
-          wsService.off('connect' as any, handleConnect);
+          // 'connect' is not a standard WebSocketEvents key, cast needed for dynamic event
+          (wsService as unknown as { off: (event: string, handler: () => void) => void }).off('connect', handleConnect);
           resolve({ connected: true });
         };
 
-        wsService.on('connect' as any, handleConnect);
+        // 'connect' is not a standard WebSocketEvents key, cast needed for dynamic event
+        (wsService as unknown as { on: (event: string, handler: () => void) => void }).on('connect', handleConnect);
 
         // 如果已经连接，直接返回成功
         if (wsService.isConnected()) {

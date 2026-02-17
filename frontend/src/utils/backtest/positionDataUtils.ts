@@ -31,10 +31,10 @@ export interface PositionData {
 
 export interface EnhancedPositionAnalysis {
   stock_performance: PositionData[];
-  position_weights?: any;
-  trading_patterns?: any;
-  holding_periods?: any;
-  concentration_risk?: any;
+  position_weights?: Record<string, unknown>;
+  trading_patterns?: Record<string, unknown>;
+  holding_periods?: Record<string, unknown>;
+  concentration_risk?: Record<string, unknown>;
 }
 
 export interface SortConfig {

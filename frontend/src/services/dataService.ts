@@ -204,7 +204,8 @@ export class DataService {
       // 转换为标准格式
       // response 是后端返回的 response_data: { stock_code, start_date, end_date, data_points, data: [...] }
       // 如果 response 为 null（后端返回 success=False 但 data 不为 null），则尝试从其他地方获取
-      let dataArray: unknown[] = [];
+      type StockDataItem = StockData['data'][number];
+      let dataArray: StockDataItem[] = [];
 
       if (response) {
         if (Array.isArray(response.data)) {
@@ -490,8 +491,8 @@ export class DataService {
   /**
    * 获取模型训练报告
    */
-  static async getTrainingReport(modelId: string): Promise<any> {
-    const response = await apiRequest.get(`/models/${modelId}/evaluation-report`);
+  static async getTrainingReport(modelId: string): Promise<unknown> {
+    const response = await apiRequest.get<Record<string, unknown>>(`/models/${modelId}/evaluation-report`);
     return response.data || response;
   }
 

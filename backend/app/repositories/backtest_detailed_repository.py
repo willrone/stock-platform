@@ -898,7 +898,7 @@ class BacktestDetailedRepository:
                         SignalRecord.signal_type == signal_type,
                         SignalRecord.timestamp >= timestamp_start,
                         SignalRecord.timestamp < timestamp_end,
-                        SignalRecord.executed == False,  # 只更新未执行的信号
+                        SignalRecord.executed == False,  # noqa: E712  只更新未执行的信号
                     )
                 )
                 .order_by(SignalRecord.timestamp)
