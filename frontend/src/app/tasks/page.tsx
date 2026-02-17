@@ -280,7 +280,11 @@ export default function TasksPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题和统计 */}
       <Box>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+        >
           任务管理
         </Typography>
         <Box
@@ -295,10 +299,17 @@ export default function TasksPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                 <BarChart3 size={24} color="#1976d2" />
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+              <Typography
+                variant="h4"
+                sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+              >
                 {stats.total}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+              >
                 总任务数
               </Typography>
             </CardContent>
@@ -306,10 +317,21 @@ export default function TasksPage() {
 
           <Card>
             <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 600,
+                  color: 'primary.main',
+                  fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                }}
+              >
                 {stats.running}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+              >
                 运行中
               </Typography>
             </CardContent>
@@ -317,10 +339,21 @@ export default function TasksPage() {
 
           <Card>
             <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 600,
+                  color: 'success.main',
+                  fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                }}
+              >
                 {stats.completed}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+              >
                 已完成
               </Typography>
             </CardContent>
@@ -328,10 +361,21 @@ export default function TasksPage() {
 
           <Card>
             <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-              <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 600,
+                  color: 'error.main',
+                  fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                }}
+              >
                 {stats.failed}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+              >
                 失败
               </Typography>
             </CardContent>
@@ -431,11 +475,11 @@ export default function TasksPage() {
                 <MobileTaskCard
                   key={task.task_id}
                   task={task}
-                  onDelete={(id) => {
+                  onDelete={id => {
                     setTaskToDelete(id);
                     setIsDeleteOpen(true);
                   }}
-                  onToggle={(id) => {
+                  onToggle={id => {
                     console.log('暂停功能开发中', id);
                   }}
                 />
@@ -489,8 +533,11 @@ export default function TasksPage() {
                         <Chip label={task.model_id} size="small" />
                       ) : (
                         <Typography variant="body2" color="text.secondary">
-                          {task.task_type === 'backtest' ? '回测任务' : 
-                           task.task_type === 'hyperparameter_optimization' ? '超参优化' : '-'}
+                          {task.task_type === 'backtest'
+                            ? '回测任务'
+                            : task.task_type === 'hyperparameter_optimization'
+                              ? '超参优化'
+                              : '-'}
                         </Typography>
                       )}
                     </TableCell>

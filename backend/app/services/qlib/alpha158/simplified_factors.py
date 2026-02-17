@@ -4,7 +4,6 @@
 当 Qlib Alpha158 不可用时，提供基础因子计算功能。
 """
 
-from typing import List
 
 import numpy as np
 import pandas as pd

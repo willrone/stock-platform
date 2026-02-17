@@ -5,7 +5,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -48,20 +47,22 @@ class StochasticStrategy(BaseStrategy):
 
             # 买入：深度超卖区金叉 (K < oversold 且 K 上穿 D，且 D 也在超卖区)
             buy_mask = (
-                (k < self.oversold) &
-                (d < self.oversold + 10) &
-                (k > d) &
-                (prev_k <= prev_d)
+                (k < self.oversold)
+                & (d < self.oversold + 10)
+                & (k > d)
+                & (prev_k <= prev_d)
             )
             # 卖出：深度超买区死叉 (K > overbought 且 K 下穿 D，且 D 也在超买区)
             sell_mask = (
-                (k > self.overbought) &
-                (d > self.overbought - 10) &
-                (k < d) &
-                (prev_k >= prev_d)
+                (k > self.overbought)
+                & (d > self.overbought - 10)
+                & (k < d)
+                & (prev_k >= prev_d)
             )
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -86,15 +87,17 @@ class StochasticStrategy(BaseStrategy):
                     current_price = indicators["price"].iloc[current_idx]
                     current_k = indicators["k_percent"].iloc[current_idx]
                     current_d = indicators["d_percent"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=0.8,
-                        price=current_price,
-                        reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
-                        metadata={"k_percent": current_k, "d_percent": current_d},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=0.8,
+                            price=current_price,
+                            reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
+                            metadata={"k_percent": current_k, "d_percent": current_d},
+                        )
+                    ]
                 return []
         except Exception:
             pass

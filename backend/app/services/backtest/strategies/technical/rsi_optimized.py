@@ -10,7 +10,6 @@ RSI策略 - 性能优化版本
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -20,6 +19,7 @@ from ...models import SignalType, TradingSignal
 # 尝试导入talib
 try:
     import talib
+
     TALIB_AVAILABLE = True
 except ImportError:
     TALIB_AVAILABLE = False
@@ -28,7 +28,7 @@ except ImportError:
 class RSIOptimizedStrategy(BaseStrategy):
     """
     简化的RSI策略 - 专注性能
-    
+
     只保留核心逻辑：
     - RSI < 30: 超卖，买入信号
     - RSI > 70: 超买，卖出信号
@@ -71,10 +71,16 @@ class RSIOptimizedStrategy(BaseStrategy):
             prev_rsi = rsi.shift(1)
 
             # 简化逻辑：从超卖区回升 -> 买入；从超买区���调 -> 卖出
-            buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
-            sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
+            buy_mask = (prev_rsi <= self.oversold_threshold) & (
+                rsi > self.oversold_threshold
+            )
+            sell_mask = (prev_rsi >= self.overbought_threshold) & (
+                rsi < self.overbought_threshold
+            )
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -97,15 +103,17 @@ class RSIOptimizedStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=0.8,
-                        price=current_price,
-                        reason=f"RSI信号, RSI: {current_rsi:.2f}",
-                        metadata={"rsi": current_rsi},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=0.8,
+                            price=current_price,
+                            reason=f"RSI信号, RSI: {current_rsi:.2f}",
+                            metadata={"rsi": current_rsi},
+                        )
+                    ]
                 return []
         except Exception:
             pass
@@ -115,7 +123,7 @@ class RSIOptimizedStrategy(BaseStrategy):
         try:
             indicators = self.get_cached_indicators(data)
             current_idx = self._get_current_idx(data, current_date)
-            
+
             if current_idx < self.rsi_period:
                 return signals
 
@@ -128,7 +136,10 @@ class RSIOptimizedStrategy(BaseStrategy):
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
             # 买入信号：RSI从超卖区域向上穿越
-            if prev_rsi <= self.oversold_threshold and current_rsi > self.oversold_threshold:
+            if (
+                prev_rsi <= self.oversold_threshold
+                and current_rsi > self.oversold_threshold
+            ):
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
@@ -141,7 +152,10 @@ class RSIOptimizedStrategy(BaseStrategy):
                 signals.append(signal)
 
             # 卖出信号：RSI从超买区域向下穿越
-            elif prev_rsi >= self.overbought_threshold and current_rsi <= self.overbought_threshold:
+            elif (
+                prev_rsi >= self.overbought_threshold
+                and current_rsi <= self.overbought_threshold
+            ):
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,

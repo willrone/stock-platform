@@ -9,7 +9,7 @@ __all__ = []
 
 # 单策略优化器
 try:
-    from .strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer
+    from .strategy_hyperparameter_optimizer import StrategyHyperparameterOptimizer  # noqa: F401
 
     __all__.append("StrategyHyperparameterOptimizer")
 except ImportError:
@@ -17,7 +17,7 @@ except ImportError:
 
 # 组合策略优化器
 try:
-    from .portfolio_hyperparameter_optimizer import PortfolioHyperparameterOptimizer
+    from .portfolio_hyperparameter_optimizer import PortfolioHyperparameterOptimizer  # noqa: F401
 
     __all__.append("PortfolioHyperparameterOptimizer")
 except ImportError:

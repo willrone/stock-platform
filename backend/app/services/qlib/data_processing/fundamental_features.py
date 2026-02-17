@@ -66,9 +66,7 @@ class FundamentalFeatureCalculator:
         logger.debug(f"基本面特征计算完成，新增 {len(df.columns) - len(df.columns)} 列")
         return df
 
-    def _find_column(
-        self, df: pd.DataFrame, candidates: List[str]
-    ) -> Optional[str]:
+    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
         """查找列名
 
         Args:
@@ -101,9 +99,7 @@ class FundamentalFeatureCalculator:
 
         return df
 
-    def _add_volume_features(
-        self, df: pd.DataFrame, volume_col: str
-    ) -> pd.DataFrame:
+    def _add_volume_features(self, df: pd.DataFrame, volume_col: str) -> pd.DataFrame:
         """添加成交量特征
 
         Args:
@@ -184,12 +180,14 @@ class FundamentalFeatureCalculator:
             if period > 1:
                 features.append(f"price_change_{period}d")
 
-        features.extend([
-            "volume_change",
-            "volume_ma_ratio",
-            "volatility_5d",
-            "volatility_20d",
-            "price_position",
-        ])
+        features.extend(
+            [
+                "volume_change",
+                "volume_ma_ratio",
+                "volatility_5d",
+                "volatility_20d",
+                "price_position",
+            ]
+        )
 
         return features

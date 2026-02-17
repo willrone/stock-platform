@@ -4,7 +4,7 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -161,7 +161,7 @@ class CacheCleanupService:
 
             # 获取数据库统计
             async for session in get_async_session():
-                repository = BacktestDetailedRepository(session)
+                BacktestDetailedRepository(session)
 
                 # 这里可以添加更多统计查询
                 # 暂时返回基本信息

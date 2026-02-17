@@ -254,9 +254,8 @@ export function RiskAnalysis({
         axisPointer: {
           type: 'shadow',
         },
-        formatter: function (params: any) {
+        formatter: function (params: { name: string; value: number }[]) {
           const param = params[0];
-          return `收益率区间: ${(param.name * 100).toFixed(2)}%<br/>频次: ${param.value}`;
         },
       },
       grid: {
@@ -365,14 +364,13 @@ export function RiskAnalysis({
       },
       tooltip: {
         trigger: 'axis',
-        formatter: function (params: any) {
+        formatter: function (params: { axisValue: string; value: number }[]) {
           const param = params[0];
-          const value = param.value;
 
           if (selectedMetric === 'rolling_volatility' || selectedMetric === 'rolling_drawdown') {
-            return `${param.axisValue}<br/>${getMetricName()}: ${(value * 100).toFixed(2)}%`;
+            return `${param.axisValue}<br/>${getMetricName()}: ${(param.value * 100).toFixed(2)}%`;
           }
-          return `${param.axisValue}<br/>${getMetricName()}: ${value.toFixed(3)}`;
+          return `${param.axisValue}<br/>${getMetricName()}: ${param.value.toFixed(3)}`;
         },
       },
       grid: {
@@ -527,7 +525,10 @@ export function RiskAnalysis({
                 title={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <IconComponent size={20} />
-                    <Typography component="h3" sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600 }}>
+                    <Typography
+                      component="h3"
+                      sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600 }}
+                    >
                       {category.title}
                     </Typography>
                   </Box>
@@ -537,7 +538,12 @@ export function RiskAnalysis({
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: 'repeat(2, 1fr)',
+                      md: 'repeat(2, 1fr)',
+                      lg: 'repeat(4, 1fr)',
+                    },
                     gap: { xs: 1.5, md: 2 },
                   }}
                 >
@@ -573,14 +579,21 @@ export function RiskAnalysis({
                             <Typography variant="caption" color="text.secondary">
                               {metric.name}
                             </Typography>
-                            <Typography sx={{ fontSize: { xs: '1.1rem', md: '1.5rem' }, fontWeight: 600, overflow: 'hidden', wordBreak: 'break-word' }}>
+                            <Typography
+                              sx={{
+                                fontSize: { xs: '1.1rem', md: '1.5rem' },
+                                fontWeight: 600,
+                                overflow: 'hidden',
+                                wordBreak: 'break-word',
+                              }}
+                            >
                               {formatValue(value, metric.format)}
                             </Typography>
                           </Box>
                           <Chip
                             label={riskLevel.level}
                             size="small"
-                            color={riskLevel.color as any}
+                            color={riskLevel.color as 'success' | 'primary' | 'warning' | 'error' | 'default'}
                           />
                         </Box>
                         <Tooltip title={metric.description}>
@@ -615,7 +628,11 @@ export function RiskAnalysis({
               <AlertTriangle size={20} color="#ed6c02" />
               <Typography
                 component="h3"
-                sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600, color: 'warning.main' }}
+                sx={{
+                  fontSize: { xs: '1rem', md: '1.25rem' },
+                  fontWeight: 600,
+                  color: 'warning.main',
+                }}
               >
                 风险价值 (VaR) 分析
               </Typography>
@@ -631,7 +648,10 @@ export function RiskAnalysis({
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', md: '0.875rem' } }}
+              >
                 风险价值 (VaR)
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -643,7 +663,13 @@ export function RiskAnalysis({
                   </Typography>
                   <Typography
                     variant="body2"
-                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main', overflow: 'hidden', wordBreak: 'break-word' }}
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 500,
+                      color: 'error.main',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
                   >
                     {formatValue(riskMetrics.var_95, 'percent')}
                   </Typography>
@@ -656,7 +682,13 @@ export function RiskAnalysis({
                   </Typography>
                   <Typography
                     variant="body2"
-                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main', overflow: 'hidden', wordBreak: 'break-word' }}
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 500,
+                      color: 'error.main',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
                   >
                     {formatValue(riskMetrics.var_99, 'percent')}
                   </Typography>
@@ -665,7 +697,10 @@ export function RiskAnalysis({
             </Box>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', md: '0.875rem' } }}
+              >
                 条件风险价值 (CVaR)
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -677,7 +712,13 @@ export function RiskAnalysis({
                   </Typography>
                   <Typography
                     variant="body2"
-                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main', overflow: 'hidden', wordBreak: 'break-word' }}
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 500,
+                      color: 'error.main',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
                   >
                     {formatValue(riskMetrics.cvar_95, 'percent')}
                   </Typography>
@@ -690,7 +731,13 @@ export function RiskAnalysis({
                   </Typography>
                   <Typography
                     variant="body2"
-                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'error.main', overflow: 'hidden', wordBreak: 'break-word' }}
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 500,
+                      color: 'error.main',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
                   >
                     {formatValue(riskMetrics.cvar_99, 'percent')}
                   </Typography>
@@ -715,7 +762,10 @@ export function RiskAnalysis({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <BarChart3 size={20} />
-                <Typography component="h3" sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600 }}>
+                <Typography
+                  component="h3"
+                  sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600 }}
+                >
                   收益分布分析
                 </Typography>
               </Box>
@@ -737,13 +787,23 @@ export function RiskAnalysis({
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr' }, gap: { xs: 2, md: 3 } }}>
             {/* 分布图表 */}
             <Box sx={{ overflowX: 'auto' }}>
-              <Box ref={distributionChartRef} sx={{ height: { xs: 240, md: 300 }, width: '100%', minWidth: { xs: 280, md: 'auto' } }} />
+              <Box
+                ref={distributionChartRef}
+                sx={{
+                  height: { xs: 240, md: 300 },
+                  width: '100%',
+                  minWidth: { xs: 280, md: 'auto' },
+                }}
+              />
             </Box>
 
             {/* 统计信息 */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}
+                >
                   分布特征
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -767,7 +827,10 @@ export function RiskAnalysis({
               </Box>
 
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}
+                >
                   分位数
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -790,7 +853,10 @@ export function RiskAnalysis({
               </Box>
 
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}
+                >
                   正态性检验
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -847,7 +913,10 @@ export function RiskAnalysis({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Activity size={20} />
-                <Typography component="h3" sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600 }}>
+                <Typography
+                  component="h3"
+                  sx={{ fontSize: { xs: '1rem', md: '1.25rem' }, fontWeight: 600 }}
+                >
                   滚动风险指标
                 </Typography>
               </Box>
@@ -869,7 +938,14 @@ export function RiskAnalysis({
         />
         <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
           <Box sx={{ overflowX: 'auto' }}>
-            <Box ref={rollingChartRef} sx={{ height: { xs: 280, md: 400 }, width: '100%', minWidth: { xs: 280, md: 'auto' } }} />
+            <Box
+              ref={rollingChartRef}
+              sx={{
+                height: { xs: 280, md: 400 },
+                width: '100%',
+                minWidth: { xs: 280, md: 'auto' },
+              }}
+            />
           </Box>
         </CardContent>
       </Card>
@@ -887,8 +963,18 @@ export function RiskAnalysis({
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Typography variant="body2">{selectedRiskMetric}</Typography>
 
-              <Box sx={{ bgcolor: 'grey.50', p: { xs: 1.5, md: 2 }, borderRadius: 1, overflow: 'hidden' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+              <Box
+                sx={{
+                  bgcolor: 'grey.50',
+                  p: { xs: 1.5, md: 2 },
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 500, mb: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}
+                >
                   计算说���
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -897,8 +983,23 @@ export function RiskAnalysis({
                 </Typography>
               </Box>
 
-              <Box sx={{ bgcolor: 'primary.light', p: { xs: 1.5, md: 2 }, borderRadius: 1, overflow: 'hidden' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: 'primary.dark', fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+              <Box
+                sx={{
+                  bgcolor: 'primary.light',
+                  p: { xs: 1.5, md: 2 },
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                    mb: 1,
+                    color: 'primary.dark',
+                    fontSize: { xs: '0.8rem', md: '0.875rem' },
+                  }}
+                >
                   使用建议
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'primary.dark' }}>

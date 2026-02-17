@@ -60,8 +60,7 @@ export function StrategyConfig({ task, onSaveConfig }: StrategyConfigProps) {
 
   const renderStrategyParameters = (parameters: Record<string, any>) => {
     const raw = Array.isArray(parameters.strategies) ? parameters.strategies : null;
-    const strategies =
-      raw === null ? null : raw.length > 0 ? raw : DEFAULT_PORTFOLIO_STRATEGIES;
+    const strategies = raw === null ? null : raw.length > 0 ? raw : DEFAULT_PORTFOLIO_STRATEGIES;
 
     if (strategies && strategies.length > 0) {
       return (
@@ -205,7 +204,11 @@ export function StrategyConfig({ task, onSaveConfig }: StrategyConfigProps) {
             }}
           >
             <Box>
-              <Typography variant="h6" component="h4" sx={{ fontWeight: 600, fontSize: { xs: '0.9rem', sm: '1.25rem' } }}>
+              <Typography
+                variant="h6"
+                component="h4"
+                sx={{ fontWeight: 600, fontSize: { xs: '0.9rem', sm: '1.25rem' } }}
+              >
                 策略配置
               </Typography>
               <Typography variant="caption" color="text.secondary">

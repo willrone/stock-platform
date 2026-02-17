@@ -5,13 +5,12 @@
 供统一训练引擎和回测策略共同使用。
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import pandas as pd
 from loguru import logger
 
 from .feature_sets import (
-    TECHNICAL_62_FEATURES,
     compute_bollinger_features,
     compute_ma_features,
     compute_macd_features,
@@ -52,21 +51,15 @@ def compute_stock_technical_features(
     all_features: Dict[str, pd.Series] = {}
 
     # 收益率 + 动量
-    ret_feats = compute_return_features(
-        _wrap_ohlcv(close, high, low, open_, volume)
-    )
+    ret_feats = compute_return_features(_wrap_ohlcv(close, high, low, open_, volume))
     all_features.update(ret_feats)
-    all_features.update(
-        compute_momentum_features(ret_feats, close)
-    )
+    all_features.update(compute_momentum_features(ret_feats, close))
 
     # MA / 波动率 / 成交量
     all_features.update(compute_ma_features(close))
     all_features.update(compute_volatility_features(close))
     if volume is not None:
-        all_features.update(
-            compute_volume_features(close, volume)
-        )
+        all_features.update(compute_volume_features(close, volume))
 
     # RSI / MACD / 布林带
     all_features.update(compute_rsi_features(close))
@@ -75,12 +68,8 @@ def compute_stock_technical_features(
 
     # 价格形态 / 位置 / ATR+ADX
     if all(s is not None for s in [high, low, open_]):
-        all_features.update(
-            compute_pattern_features(close, high, low, open_)
-        )
-        all_features.update(
-            compute_position_features(close, high, low)
-        )
+        all_features.update(compute_pattern_features(close, high, low, open_))
+        all_features.update(compute_position_features(close, high, low))
 
     for name, series in all_features.items():
         result[name] = series
@@ -117,15 +106,13 @@ def compute_cross_sectional_features(
     ]
     for src, dst in rank_cols:
         if src in result.columns:
-            result[dst] = result.groupby(date_col)[src].rank(
-                pct=True
-            )
+            result[dst] = result.groupby(date_col)[src].rank(pct=True)
 
     # 市场上涨比例
     if "return_1d" in result.columns:
-        result["market_up_ratio"] = result.groupby(date_col)[
-            "return_1d"
-        ].transform(lambda x: (x > 0).sum() / max(len(x), 1))
+        result["market_up_ratio"] = result.groupby(date_col)["return_1d"].transform(
+            lambda x: (x > 0).sum() / max(len(x), 1)
+        )
 
     # 相对强度
     _add_relative_strength(result, date_col)
@@ -134,7 +121,8 @@ def compute_cross_sectional_features(
 
 
 def _add_relative_strength(
-    df: pd.DataFrame, date_col: str,
+    df: pd.DataFrame,
+    date_col: str,
 ) -> None:
     """添加相对强度特征（原地修改）"""
     for period, col_name in [
@@ -142,23 +130,18 @@ def _add_relative_strength(
         ("return_20d", "relative_strength_20d"),
     ]:
         if period in df.columns:
-            market_mean = df.groupby(date_col)[period].transform(
-                "mean"
-            )
+            market_mean = df.groupby(date_col)[period].transform("mean")
             df[col_name] = df[period] - market_mean
 
-    if (
-        "relative_strength_5d" in df.columns
-        and "relative_strength_20d" in df.columns
-    ):
+    if "relative_strength_5d" in df.columns and "relative_strength_20d" in df.columns:
         df["relative_momentum"] = (
-            df["relative_strength_5d"]
-            - df["relative_strength_20d"]
+            df["relative_strength_5d"] - df["relative_strength_20d"]
         )
 
 
 def _get_col(
-    df: pd.DataFrame, name: str,
+    df: pd.DataFrame,
+    name: str,
 ) -> Optional[pd.Series]:
     """获取列，支持 $close 和 close 两种命名"""
     for candidate in [f"${name}", name, name.capitalize()]:

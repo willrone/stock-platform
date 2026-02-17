@@ -321,9 +321,7 @@ class ColumnStandardizer:
             return False
         return True
 
-    def add_source_mapping(
-        self, source_type: str, mapping: Dict[str, str]
-    ) -> None:
+    def add_source_mapping(self, source_type: str, mapping: Dict[str, str]) -> None:
         """添加新的数据源映射
 
         Args:

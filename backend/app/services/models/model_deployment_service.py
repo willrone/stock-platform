@@ -8,16 +8,16 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, ModelError
-from app.core.logging_config import AuditLogger, PerformanceLogger
+from app.core.logging_config import AuditLogger
 
-from .model_storage import ModelMetadata, ModelStatus, ModelStorage, ModelType
+from .model_storage import ModelMetadata, ModelStatus, ModelStorage
 
 
 class DeploymentStatus(Enum):

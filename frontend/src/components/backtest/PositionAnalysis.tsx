@@ -5,13 +5,12 @@
 
 import React, { useState } from 'react';
 import { Box, Card, CardContent, Tabs, Tab, Typography } from '@mui/material';
+import { Target, PieChart as PieChartIcon, BarChart3, DollarSign } from 'lucide-react';
 import {
-  Target,
-  PieChart as PieChartIcon,
-  BarChart3,
-  DollarSign,
-} from 'lucide-react';
-import { PositionData, EnhancedPositionAnalysis, SortConfig } from '@/utils/backtest/positionDataUtils';
+  PositionData,
+  EnhancedPositionAnalysis,
+  SortConfig,
+} from '@/utils/backtest/positionDataUtils';
 import { usePositionAnalysisData } from '@/hooks/backtest/usePositionAnalysisData';
 import { usePortfolioSnapshots } from '@/hooks/backtest/usePortfolioSnapshots';
 import { StatisticsCards } from './position-analysis/StatisticsCards';

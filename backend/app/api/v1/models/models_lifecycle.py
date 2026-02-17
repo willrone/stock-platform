@@ -14,6 +14,7 @@ from app.services.models.model_lifecycle_manager import model_lifecycle_manager
 
 router = APIRouter()
 
+
 @router.get("/{model_id}/lifecycle", response_model=StandardResponse)
 async def get_model_lifecycle(model_id: str):
     """获取模型生命周期信息"""
@@ -34,7 +35,6 @@ async def get_model_lifecycle(model_id: str):
         raise HTTPException(status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}")
 
 
-
 @router.get("/{model_id}/lineage", response_model=StandardResponse)
 async def get_model_lineage(model_id: str):
     """获取模型血缘信息"""
@@ -53,7 +53,6 @@ async def get_model_lineage(model_id: str):
     except Exception as e:
         logger.error(f"获取模型血缘信息失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取模型血缘信息失败: {str(e)}")
-
 
 
 @router.get("/{model_id}/dependencies", response_model=StandardResponse)
@@ -81,7 +80,6 @@ async def get_model_dependencies(model_id: str):
     except Exception as e:
         logger.error(f"获取模型依赖关系失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取模型依赖关系失败: {str(e)}")
-
 
 
 @router.post("/{model_id}/lifecycle/transition", response_model=StandardResponse)
@@ -129,4 +127,3 @@ async def transition_model_lifecycle(
     except Exception as e:
         logger.error(f"转换模型生命周期失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"转换模型生命周期失败: {str(e)}")
-

@@ -3,18 +3,21 @@
 负责核心回测循环的执行
 """
 
-from typing import Any, Dict, List, Optional, Tuple
-import pandas as pd
-import numpy as np
 import time
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 from loguru import logger
+
+from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..core.risk_manager import PositionPriceInfo, RiskManager
 from ..models import SignalType, TradingSignal
-from app.core.error_handler import ErrorSeverity, TaskError
+
 # 延迟导入以避免循环依赖
 # from .backtest_progress_monitor import backtest_progress_monitor
 
@@ -84,7 +87,7 @@ class BacktestLoopExecutor:
         """执行回测主循环"""
         # 延迟导入以避免循环依赖
         from .backtest_progress_monitor import backtest_progress_monitor
-        
+
         total_signals = 0
         executed_trades = 0
 
@@ -113,7 +116,6 @@ class BacktestLoopExecutor:
                 return True
             try:
                 from app.core.database import SessionLocal
-                from app.models.task_models import TaskStatus
                 from app.repositories.task_repository import TaskRepository
 
                 session = SessionLocal()
@@ -159,8 +161,8 @@ class BacktestLoopExecutor:
 
                 if aligned_arrays is not None:
                     # Phase 3 优化：使用向量化价格查找
-                    from .vectorized_loop import vectorized_price_lookup, get_portfolio_stocks
-                    
+                    from .vectorized_loop import get_portfolio_stocks
+
                     codes = aligned_arrays.get("stock_codes")
                     code_to_i = aligned_arrays.get("code_to_i")
                     close_mat = aligned_arrays.get("close")
@@ -170,7 +172,7 @@ class BacktestLoopExecutor:
                     # 优化 #5：缓存 portfolio stocks set，避免重复调用
                     portfolio_stocks = set(get_portfolio_stocks(portfolio_manager))
                     need_codes = portfolio_stocks.copy()
-                    
+
                     if isinstance(sig_mat, np.ndarray):
                         # 优化 #5：使用向量化操作获取有信号的股票
                         sig_idx = np.nonzero(sig_mat[:, i])[0]
@@ -185,7 +187,11 @@ class BacktestLoopExecutor:
                     if need_codes:
                         # 批量查找价格（向量化）
                         for c in need_codes:
-                            j = code_to_i.get(c) if isinstance(code_to_i, dict) else None
+                            j = (
+                                code_to_i.get(c)
+                                if isinstance(code_to_i, dict)
+                                else None
+                            )
                             if j is not None and bool(valid_mat[j, i]):
                                 current_prices[c] = float(close_mat[j, i])
 
@@ -198,11 +204,15 @@ class BacktestLoopExecutor:
                             if date_to_idx is not None and current_date in date_to_idx:
                                 idx = date_to_idx[current_date]
                                 # 使用 .values 直接访问底层数组
-                                current_prices[stock_code] = float(data['close'].values[idx])
+                                current_prices[stock_code] = float(
+                                    data["close"].values[idx]
+                                )
                             elif current_date in data.index:
                                 # Fallback: 使用 iloc（比 loc 快）
                                 idx = data.index.get_loc(current_date)
-                                current_prices[stock_code] = float(data['close'].values[idx])
+                                current_prices[stock_code] = float(
+                                    data["close"].values[idx]
+                                )
                         except Exception:
                             pass
 
@@ -211,12 +221,15 @@ class BacktestLoopExecutor:
 
                 # [P2 优化] 批量设置当前价格到数组，后续的 get_portfolio_value 等方法
                 # 可以直接使用向量化计算，避免重复的字典查找
-                if hasattr(portfolio_manager, 'set_current_prices'):
+                if hasattr(portfolio_manager, "set_current_prices"):
                     portfolio_manager.set_current_prices(current_prices)
 
                 # ===== P0: 止损止盈检查（优先级高于策略信号） =====
                 sl_tp_signals = _check_and_execute_stop_loss_take_profit(
-                    risk_manager, portfolio_manager, current_prices, current_date,
+                    risk_manager,
+                    portfolio_manager,
+                    current_prices,
+                    current_date,
                 )
                 executed_trades += sl_tp_signals
 
@@ -225,7 +238,8 @@ class BacktestLoopExecutor:
                     current_prices
                 )
                 risk_manager.update_circuit_breaker(
-                    portfolio_value_for_cb, current_date,
+                    portfolio_value_for_cb,
+                    current_date,
                 )
 
                 # 生成交易信号（Phase1：优先用 ndarray signal matrix）
@@ -252,7 +266,12 @@ class BacktestLoopExecutor:
                                     continue
                                 code = codes[j]
                                 price = float(close_mat[j, i])
-                                sig_strength = float(strength_mat[j, i]) if strength_mat is not None and strength_mat[j, i] > 0 else 1.0
+                                sig_strength = (
+                                    float(strength_mat[j, i])
+                                    if strength_mat is not None
+                                    and strength_mat[j, i] > 0
+                                    else 1.0
+                                )
                                 all_signals.append(
                                     TradingSignal(
                                         timestamp=current_date,
@@ -277,12 +296,11 @@ class BacktestLoopExecutor:
 
                 # ��分 profiling：把"切片"和"生成信号"拆开计时（变量已在循环开头初始化）
 
-                
                 # 辅助函数：快速查找预计算信号
                 def get_precomputed_signal_fast(stock_code: str, date: datetime):
                     """
                     [优化 1] 从预计算字典中快速查找信号，避免 DataFrame 拷贝
-                    
+
                     优化点：
                     1. 优先使用 aligned_arrays 的 numpy 数组（O(1) 查找）
                     2. 使用 .values 直接访问底层数组，避免创建 Series 对象
@@ -296,7 +314,7 @@ class BacktestLoopExecutor:
                                 # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
                                 current_price = 0.0
                                 sig_strength = 1.0
-                                
+
                                 try:
                                     # 方法 1: 优先使用 aligned_arrays（最快，O(1) 查找）
                                     if aligned_arrays is not None:
@@ -304,51 +322,77 @@ class BacktestLoopExecutor:
                                         close_mat = aligned_arrays.get("close")
                                         dates = aligned_arrays.get("dates")
                                         _strength_mat = aligned_arrays.get("strength")
-                                        
-                                        if code_to_i is not None and close_mat is not None and dates is not None:
+
+                                        if (
+                                            code_to_i is not None
+                                            and close_mat is not None
+                                            and dates is not None
+                                        ):
                                             stock_idx = code_to_i.get(stock_code)
                                             if stock_idx is not None:
                                                 # [P1 优化] 使用 O(1) 字典查找替代 O(n) 的 np.where
-                                                date_to_i = aligned_arrays.get("date_to_i")
-                                                date_idx = date_to_i.get(date) if date_to_i else None
-                                                
+                                                date_to_i = aligned_arrays.get(
+                                                    "date_to_i"
+                                                )
+                                                date_idx = (
+                                                    date_to_i.get(date)
+                                                    if date_to_i
+                                                    else None
+                                                )
+
                                                 if date_idx is not None:
                                                     # 直接从 numpy 数组读取，无 pandas 开销
-                                                    price_val = close_mat[stock_idx, date_idx]
+                                                    price_val = close_mat[
+                                                        stock_idx, date_idx
+                                                    ]
                                                     if not np.isnan(price_val):
                                                         current_price = float(price_val)
                                                     # 读取信号强度
-                                                    if _strength_mat is not None and _strength_mat[stock_idx, date_idx] > 0:
-                                                        sig_strength = float(_strength_mat[stock_idx, date_idx])
-                                    
+                                                    if (
+                                                        _strength_mat is not None
+                                                        and _strength_mat[
+                                                            stock_idx, date_idx
+                                                        ]
+                                                        > 0
+                                                    ):
+                                                        sig_strength = float(
+                                                            _strength_mat[
+                                                                stock_idx, date_idx
+                                                            ]
+                                                        )
+
                                     # 方法 2: 如果 aligned_arrays 不可用，使用优化的 DataFrame 访问
                                     if current_price == 0.0:
                                         data = stock_data.get(stock_code)
                                         if data is not None:
                                             # 使用缓存的 date_to_idx 映射（避免重复 get_loc）
                                             date_to_idx = data.attrs.get("_date_to_idx")
-                                            if date_to_idx is not None and date in date_to_idx:
+                                            if (
+                                                date_to_idx is not None
+                                                and date in date_to_idx
+                                            ):
                                                 idx = date_to_idx[date]
                                                 # 使用 .values 直接访问底层数组，避免创建 Series
-                                                close_values = data['close'].values
+                                                close_values = data["close"].values
                                                 current_price = float(close_values[idx])
                                             elif date in data.index:
                                                 # Fallback: 使用 iloc（比 loc 快，但仍会触发一些开销）
                                                 idx = data.index.get_loc(date)
-                                                current_price = float(data['close'].values[idx])
-                                
-                                except Exception as e:
+                                                current_price = float(
+                                                    data["close"].values[idx]
+                                                )
+
+                                except Exception:
                                     # 静默失败，使用默认价格 0.0
                                     pass
-                                
-                                return [TradingSignal(
-                                    signal_type=signal,
-                                    stock_code=stock_code,
-                                    timestamp=date,
-                                    price=current_price,
-                                    strength=sig_strength,
-                                    reason=f"Precomputed signal"
-                                )]
+                                        signal_type=signal,
+                                        stock_code=stock_code,
+                                        timestamp=date,
+                                        price=current_price,
+                                        strength=sig_strength,
+                                        reason="Precomputed signal",
+                                    )
+                                ]
                             return [signal] if not isinstance(signal, list) else signal
                     return None
 
@@ -363,7 +407,10 @@ class BacktestLoopExecutor:
                     import threading
 
                     # Initialize worker context once (first trading day)
-                    if not hasattr(self, "_signal_worker_ctx") or self._signal_worker_ctx is None:
+                    if (
+                        not hasattr(self, "_signal_worker_ctx")
+                        or self._signal_worker_ctx is None
+                    ):
                         items = list(stock_data.items())
 
                         # Greedy balance chunks by estimated per-stock compute cost.
@@ -388,7 +435,9 @@ class BacktestLoopExecutor:
                                 )
                                 # warmup skip (executor only calls strategy when idx>=20)
                                 effective_days = max(0, avail_days - 20)
-                                cost = float(effective_days) * (1.0 + 0.10 * missing_ratio)
+                                cost = float(effective_days) * (
+                                    1.0 + 0.10 * missing_ratio
+                                )
                                 scored.append((cost, code, df))
                             except Exception:
                                 scored.append((0.0, code, df))
@@ -396,19 +445,23 @@ class BacktestLoopExecutor:
                         scored.sort(reverse=True)
 
                         worker_n = max(1, int(self.max_workers or 1))
-                        buckets = [([], 0.0) for _ in range(worker_n)]  # ([(code,df)], total_cost)
+                        buckets = [
+                            ([], 0.0) for _ in range(worker_n)
+                        ]  # ([(code,df)], total_cost)
                         for cost, code, df in scored:
                             # pick bucket with smallest total_cost
                             bi = min(range(worker_n), key=lambda x: buckets[x][1])
                             buckets[bi][0].append((code, df))
                             buckets[bi] = (buckets[bi][0], buckets[bi][1] + float(cost))
 
-                        chunks: List[List[Tuple[str, pd.DataFrame]]] = [b[0] for b in buckets]
+                        chunks: List[List[Tuple[str, pd.DataFrame]]] = [
+                            b[0] for b in buckets
+                        ]
 
                         shared = {"date": None, "error": None}
-                        results: List[Tuple[List[TradingSignal], float, float, float]] = [
-                            ([], 0.0, 0.0, 0.0) for _ in range(worker_n)
-                        ]
+                        results: List[
+                            Tuple[List[TradingSignal], float, float, float]
+                        ] = [([], 0.0, 0.0, 0.0) for _ in range(worker_n)]
 
                         barrier_start = threading.Barrier(worker_n + 1)
                         barrier_end = threading.Barrier(worker_n + 1)
@@ -448,7 +501,8 @@ class BacktestLoopExecutor:
                                             idx_map = None
                                         current_idx = (
                                             int(idx_map.get(cd))
-                                            if isinstance(idx_map, dict) and cd in idx_map
+                                            if isinstance(idx_map, dict)
+                                            and cd in idx_map
                                             else int(data.index.get_loc(cd))
                                         )
                                         try:
@@ -464,7 +518,9 @@ class BacktestLoopExecutor:
 
                                         t1 = time.perf_counter()
                                         # 优先使用预计算信号
-                                        sigs = get_precomputed_signal_fast(stock_code, cd)
+                                        sigs = get_precomputed_signal_fast(
+                                            stock_code, cd
+                                        )
                                         if sigs is None:
                                             # Fallback: 调用策略生成
                                             sigs = strategy.generate_signals(data, cd)
@@ -489,7 +545,12 @@ class BacktestLoopExecutor:
 
                                         batch_signals.extend(sigs)
 
-                                    results[idx] = (batch_signals, slice_sum, gen_sum, gen_max)
+                                    results[idx] = (
+                                        batch_signals,
+                                        slice_sum,
+                                        gen_sum,
+                                        gen_max,
+                                    )
                                 except Exception as e:
                                     shared["error"] = e
                                     results[idx] = ([], slice_sum, gen_sum, gen_max)
@@ -501,7 +562,9 @@ class BacktestLoopExecutor:
 
                         threads = []
                         for wi in range(worker_n):
-                            t = threading.Thread(target=_worker, args=(wi,), daemon=True)
+                            t = threading.Thread(
+                                target=_worker, args=(wi,), daemon=True
+                            )
                             t.start()
                             threads.append(t)
 
@@ -517,7 +580,9 @@ class BacktestLoopExecutor:
                     ctx = self._signal_worker_ctx
 
                     sequential_start = (
-                        time.perf_counter() if self.enable_performance_profiling else None
+                        time.perf_counter()
+                        if self.enable_performance_profiling
+                        else None
                     )
 
                     gen_time_max = 0.0
@@ -536,7 +601,7 @@ class BacktestLoopExecutor:
                     if err is not None:
                         raise err
 
-                    for (signals, slice_sum, gen_sum, gen_max) in ctx["results"]:
+                    for signals, slice_sum, gen_sum, gen_max in ctx["results"]:
                         all_signals.extend(signals)
                         slice_time_total += float(slice_sum)
                         gen_time_total += float(gen_sum)
@@ -546,7 +611,9 @@ class BacktestLoopExecutor:
                     # 记录并行化效率（估算顺序执行时间）
                     if self.enable_performance_profiling and sequential_start:
                         parallel_time = time.perf_counter() - sequential_start
-                        estimated_sequential_time = parallel_time * len(stock_data) / max(1, self.max_workers)
+                        estimated_sequential_time = (
+                            parallel_time * len(stock_data) / max(1, self.max_workers)
+                        )
                         if i == 0:
                             self.performance_profiler.record_parallel_efficiency(
                                 operation_name="signal_generation",
@@ -586,20 +653,26 @@ class BacktestLoopExecutor:
                                 try:
                                     t1 = time.perf_counter()
                                     # 优先使用预计算信号
-                                    signals = get_precomputed_signal_fast(stock_code, current_date)
-                                    
+                                    signals = get_precomputed_signal_fast(
+                                        stock_code, current_date
+                                    )
+
                                     # 调试日志
                                     if current_idx == 20:  # 只在第一次打印
-                                        logger.info(f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals is not None else '无'}")
-                                    
+                                        logger.info(
+                                            f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals is not None else '无'}"
+                                        )
+
                                     if signals is None:
                                         # Fallback: 调用策略生成
-                                        signals = strategy.generate_signals(data, current_date)
-                                    
+                                        signals = strategy.generate_signals(
+                                            data, current_date
+                                        )
+
                                     # 调试日志：记录信号内容
                                     if signals is not None and current_idx == 20:
                                         logger.info(f"🔍 信号内容: {signals}")
-                                    
+
                                     _dur = time.perf_counter() - t1
                                     gen_time_total += _dur
                                     if _dur > gen_time_max:
@@ -607,11 +680,18 @@ class BacktestLoopExecutor:
                                     all_signals.extend(signals)
                                 except Exception as e:
                                     import traceback as _tb
-                                    logger.warning(f"生成信号失败 {stock_code}: {e}\n{_tb.format_exc()}")
+
+                                    logger.warning(
+                                        f"生成信号失败 {stock_code}: {e}\n{_tb.format_exc()}"
+                                    )
                                     continue
 
                 # 记录信号生成时间
-                if self.enable_performance_profiling and signal_start_time and self.performance_profiler:
+                if (
+                    self.enable_performance_profiling
+                    and signal_start_time
+                    and self.performance_profiler
+                ):
                     signal_duration = time.perf_counter() - signal_start_time
                     signal_generation_times.append(signal_duration)
 
@@ -660,7 +740,11 @@ class BacktestLoopExecutor:
                                 break
                         if perf_sig is not None:
                             md = perf_sig.metadata or {}
-                            pp = md.get("portfolio_perf") if isinstance(md, dict) else None
+                            pp = (
+                                md.get("portfolio_perf")
+                                if isinstance(md, dict)
+                                else None
+                            )
                             if isinstance(pp, dict):
                                 sub = pp.get("sub_strategy_times")
                                 if isinstance(sub, dict):
@@ -725,7 +809,7 @@ class BacktestLoopExecutor:
 
                 # ===== trade execution mode =====
                 trade_mode = None
-                topk_limit: int | None = None  # for post-trade sanity checks
+                _topk_limit: int | None = None  # for post-trade sanity checks
                 try:
                     trade_mode = (strategy_config or {}).get("trade_mode")
                 except Exception:
@@ -733,7 +817,11 @@ class BacktestLoopExecutor:
 
                 # --- debug aid: log which trade path is used (only when needed) ---
                 try:
-                    if current_date.strftime("%Y-%m-%d") in ("2023-05-19", "2023-05-22", "2023-05-23"):
+                    if current_date.strftime("%Y-%m-%d") in (
+                        "2023-05-19",
+                        "2023-05-22",
+                        "2023-05-23",
+                    ):
                         logger.info(
                             f"[trade_path] date={current_date.strftime('%Y-%m-%d')} trade_mode={trade_mode} "
                             f"signals={len(all_signals)} strategy_config_keys={list((strategy_config or {}).keys())}"
@@ -744,9 +832,11 @@ class BacktestLoopExecutor:
                 if trade_mode == "topk_buffer":
                     # Daily TopK selection + buffer zone + max changes/day
                     k = int((strategy_config or {}).get("topk", 10))
-                    topk_limit = k
+                    _topk_limit = k
                     buffer_n = int((strategy_config or {}).get("buffer", 20))
-                    max_changes = int((strategy_config or {}).get("max_changes_per_day", 2))
+                    max_changes = int(
+                        (strategy_config or {}).get("max_changes_per_day", 2)
+                    )
                     trades_limit = max_changes
 
                     # Build ranking scores from signals (BUY strength positive, SELL negative)
@@ -754,12 +844,20 @@ class BacktestLoopExecutor:
                     for sig in all_signals:
                         s = float(sig.strength or 0.0)
                         if sig.signal_type == SignalType.BUY:
-                            scores[sig.stock_code] = max(scores.get(sig.stock_code, 0.0), s)
+                            scores[sig.stock_code] = max(
+                                scores.get(sig.stock_code, 0.0), s
+                            )
                         elif sig.signal_type == SignalType.SELL:
-                            scores[sig.stock_code] = min(scores.get(sig.stock_code, 0.0), -s)
+                            scores[sig.stock_code] = min(
+                                scores.get(sig.stock_code, 0.0), -s
+                            )
 
                     # Rebalance according to TopK+buffer rules
-                    executed_trade_signals, unexecuted_signals, trades_this_day = self._rebalance_topk_buffer(
+                    (
+                        executed_trade_signals,
+                        unexecuted_signals,
+                        trades_this_day,
+                    ) = self._rebalance_topk_buffer(
                         portfolio_manager=portfolio_manager,
                         current_prices=current_prices,
                         current_date=current_date,
@@ -768,12 +866,16 @@ class BacktestLoopExecutor:
                         buffer_n=buffer_n,
                         max_changes=trades_limit,
                         strategy=strategy,
-                        debug=bool((strategy_config or {}).get("debug_topk_buffer", False)),
+                        debug=bool(
+                            (strategy_config or {}).get("debug_topk_buffer", False)
+                        ),
                     )
 
                     # Debug: show what was executed on key dates / when trades happen
                     try:
-                        if trades_this_day > 0 or current_date.strftime("%Y-%m-%d") in ("2023-05-22",):
+                        if trades_this_day > 0 or current_date.strftime("%Y-%m-%d") in (
+                            "2023-05-22",
+                        ):
                             logger.info(
                                 f"[trade_exec][topk_buffer] date={current_date.strftime('%Y-%m-%d')} trades_this_day={trades_this_day} "
                                 f"executed={len(executed_trade_signals)} unexecuted={len(unexecuted_signals)} holdings_after={len(portfolio_manager.positions)}"
@@ -783,7 +885,9 @@ class BacktestLoopExecutor:
 
                 else:
                     # P1优化：每日缓存 portfolio_value 和 positions，避免循环内重复计算
-                    daily_portfolio_value = portfolio_manager.get_portfolio_value(current_prices)
+                    daily_portfolio_value = portfolio_manager.get_portfolio_value(
+                        current_prices
+                    )
                     daily_positions = portfolio_manager.positions
 
                     for signal in all_signals:
@@ -792,7 +896,7 @@ class BacktestLoopExecutor:
                             signal,
                             daily_portfolio_value,
                             daily_positions,
-                            entry_dates=getattr(portfolio_manager, 'entry_dates', None),
+                            entry_dates=getattr(portfolio_manager, "entry_dates", None),
                         )
 
                         if not is_valid:
@@ -878,7 +982,9 @@ class BacktestLoopExecutor:
                         _idx = _today_lookup.get(_key)
                         if _idx is not None:
                             _batch_signals_data[_idx]["executed"] = False
-                            _batch_signals_data[_idx]["execution_reason"] = _unexec_sig.get("execution_reason", "未知原因")
+                            _batch_signals_data[_idx][
+                                "execution_reason"
+                            ] = _unexec_sig.get("execution_reason", "未知原因")
 
                 # NOTE: 中间 flush 已移除，所有信号在回测结束后一次性写入
 
@@ -986,7 +1092,7 @@ class BacktestLoopExecutor:
                                     logger.info(
                                         f"进度已写入DB: task_id={task_id}, "
                                         f"progress={overall_progress:.1f}%, "
-                                        f"days={i+1}/{len(trading_dates)}"
+                                        f"days={i + 1}/{len(trading_dates)}"
                                     )
                             except Exception as inner_error:
                                 session.rollback()
@@ -1000,9 +1106,7 @@ class BacktestLoopExecutor:
                         except TaskError:
                             raise
                         except Exception as db_error:
-                            logger.error(
-                                f"更新任务进度到数据库失败: {db_error}", exc_info=True
-                            )
+                            logger.error(f"更新任务进度到数据库失败: {db_error}", exc_info=True)
 
                     # 更新进程内的进度监控（轻量，不涉及 DB）
                     await backtest_progress_monitor.update_execution_progress(
@@ -1042,8 +1146,10 @@ class BacktestLoopExecutor:
             try:
                 import asyncio as _asyncio
                 import json as _json
+
                 from sqlalchemy import text as _text
                 from sqlalchemy.exc import OperationalError as _OpError
+
                 from app.core.database import get_async_session_context
 
                 _max_retries = 5
@@ -1062,30 +1168,35 @@ class BacktestLoopExecutor:
                     _meta = _sd.get("metadata")
                     if _meta is not None:
                         try:
-                            _meta_str = _json.dumps(_meta, ensure_ascii=False, default=str)
+                            _meta_str = _json.dumps(
+                                _meta, ensure_ascii=False, default=str
+                            )
                         except Exception:
                             _meta_str = None
                     else:
                         _meta_str = None
 
-                    _insert_rows.append({
-                        "task_id": task_id,
-                        "backtest_id": _current_backtest_id,
-                        "signal_id": _sd["signal_id"],
-                        "stock_code": _sd["stock_code"],
-                        "stock_name": _sd.get("stock_name"),
-                        "signal_type": _sd["signal_type"],
-                        "timestamp": _ts_str,
-                        "price": float(_sd["price"]),
-                        "strength": float(_sd.get("strength", 0.0)),
-                        "reason": _sd.get("reason"),
-                        "signal_metadata": _meta_str,
-                        "executed": 1 if _sd.get("executed") else 0,
-                        "execution_reason": _sd.get("execution_reason"),
-                        "created_at": datetime.utcnow().isoformat(),
-                    })
+                    _insert_rows.append(
+                        {
+                            "task_id": task_id,
+                            "backtest_id": _current_backtest_id,
+                            "signal_id": _sd["signal_id"],
+                            "stock_code": _sd["stock_code"],
+                            "stock_name": _sd.get("stock_name"),
+                            "signal_type": _sd["signal_type"],
+                            "timestamp": _ts_str,
+                            "price": float(_sd["price"]),
+                            "strength": float(_sd.get("strength", 0.0)),
+                            "reason": _sd.get("reason"),
+                            "signal_metadata": _meta_str,
+                            "executed": 1 if _sd.get("executed") else 0,
+                            "execution_reason": _sd.get("execution_reason"),
+                            "created_at": datetime.utcnow().isoformat(),
+                        }
+                    )
 
-                _insert_sql = _text("""
+                _insert_sql = _text(
+                    """
                     INSERT INTO signal_records
                         (task_id, backtest_id, signal_id, stock_code, stock_name,
                          signal_type, timestamp, price, strength, reason,
@@ -1094,7 +1205,8 @@ class BacktestLoopExecutor:
                         (:task_id, :backtest_id, :signal_id, :stock_code, :stock_name,
                          :signal_type, :timestamp, :price, :strength, :reason,
                          :signal_metadata, :executed, :execution_reason, :created_at)
-                """)
+                """
+                )
 
                 # 分批写入，每批 5000 条，避免单次事务过大
                 _WRITE_BATCH_SIZE = 5000
@@ -1104,7 +1216,7 @@ class BacktestLoopExecutor:
                     try:
                         async with get_async_session_context() as session:
                             for _bi in range(0, len(_insert_rows), _WRITE_BATCH_SIZE):
-                                _batch = _insert_rows[_bi:_bi + _WRITE_BATCH_SIZE]
+                                _batch = _insert_rows[_bi : _bi + _WRITE_BATCH_SIZE]
                                 await session.execute(_insert_sql, _batch)
                             await session.commit()
 
@@ -1118,9 +1230,12 @@ class BacktestLoopExecutor:
 
                     except _OpError as e:
                         _err_msg = str(e).lower()
-                        if "database is locked" in _err_msg or "database locked" in _err_msg:
+                        if (
+                            "database is locked" in _err_msg
+                            or "database locked" in _err_msg
+                        ):
                             if _attempt < _max_retries:
-                                _wait = _retry_delay * (_backoff_factor ** _attempt)
+                                _wait = _retry_delay * (_backoff_factor**_attempt)
                                 logger.warning(
                                     f"最终写入遇到数据库锁定，"
                                     f"第 {_attempt + 1}/{_max_retries} 次重试，"
@@ -1143,6 +1258,7 @@ class BacktestLoopExecutor:
         # 最终进度更新 + 清理内存缓存
         if task_id:
             from app.utils.task_progress_cache import task_progress_cache
+
             task_progress_cache.remove(task_id)
 
             final_portfolio_value = portfolio_manager.get_portfolio_value({})
@@ -1223,7 +1339,6 @@ class BacktestLoopExecutor:
         buffer_set = set(buffer_list)
 
         holdings = list(portfolio_manager.positions.keys())
-        holdings_set = set(holdings)
 
         # Keep holdings inside buffer zone
         kept = [c for c in holdings if c in buffer_set]
@@ -1261,7 +1376,7 @@ class BacktestLoopExecutor:
                 signal_type=SignalType.SELL,
                 strength=1.0,
                 price=float(current_prices.get(code, 0.0) or 0.0),
-                reason=f"topk_buffer rebalance sell (out of buffer/topk)",
+                reason="topk_buffer rebalance sell (out of buffer/topk)",
                 metadata={"trade_mode": "topk_buffer"},
             )
             if strategy is not None:
@@ -1269,7 +1384,7 @@ class BacktestLoopExecutor:
                     sig,
                     portfolio_manager.get_portfolio_value(current_prices),
                     portfolio_manager.positions,
-                    entry_dates=getattr(portfolio_manager, 'entry_dates', None),
+                    entry_dates=getattr(portfolio_manager, "entry_dates", None),
                 )
                 if not is_valid:
                     unexecuted_signals.append(
@@ -1282,11 +1397,17 @@ class BacktestLoopExecutor:
                     )
                     continue
 
-            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            trade, failure_reason = portfolio_manager.execute_signal(
+                sig, current_prices
+            )
             if trade:
                 trades_this_day += 1
                 executed_trade_signals.append(
-                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                    }
                 )
             else:
                 unexecuted_signals.append(
@@ -1314,7 +1435,7 @@ class BacktestLoopExecutor:
                     sig,
                     portfolio_manager.get_portfolio_value(current_prices),
                     portfolio_manager.positions,
-                    entry_dates=getattr(portfolio_manager, 'entry_dates', None),
+                    entry_dates=getattr(portfolio_manager, "entry_dates", None),
                 )
                 if not is_valid:
                     unexecuted_signals.append(
@@ -1327,11 +1448,17 @@ class BacktestLoopExecutor:
                     )
                     continue
 
-            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            trade, failure_reason = portfolio_manager.execute_signal(
+                sig, current_prices
+            )
             if trade:
                 trades_this_day += 1
                 executed_trade_signals.append(
-                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                    }
                 )
             else:
                 unexecuted_signals.append(
@@ -1344,5 +1471,3 @@ class BacktestLoopExecutor:
                 )
 
         return executed_trade_signals, unexecuted_signals, trades_this_day
-
-

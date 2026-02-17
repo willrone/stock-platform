@@ -4,12 +4,11 @@
 基于多进程的并行超参数搜索，突破GIL限制，显著提升搜索速度
 """
 
-import logging
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 

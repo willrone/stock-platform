@@ -2,15 +2,12 @@
 任务状态通知服务 - 集成WebSocket实现任务状态的实时推送
 """
 
-import asyncio
-import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
-from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.models.task_models import TaskStatus, TaskType
 from app.services.infrastructure import WebSocketMessage, websocket_manager
 

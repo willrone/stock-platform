@@ -6,16 +6,12 @@
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 import pandas as pd
 from loguru import logger
 
-from .rolling_config import (
-    MIN_TRAIN_SAMPLES,
-    RollingTrainingConfig,
-    RollingWindowType,
-)
+from .rolling_config import MIN_TRAIN_SAMPLES, RollingTrainingConfig, RollingWindowType
 
 
 @dataclass
@@ -56,8 +52,7 @@ def generate_rolling_windows(
     min_required = config.train_window + config.valid_window
     if total_days < min_required:
         logger.warning(
-            f"数据天数({total_days})不足最小要求({min_required})，"
-            f"无法生成滚动窗口",
+            f"数据天数({total_days})不足最小要求({min_required})，" f"无法生成滚动窗口",
         )
         return []
 
@@ -66,11 +61,15 @@ def generate_rolling_windows(
 
     if window_type == RollingWindowType.SLIDING:
         windows = _generate_sliding_windows(
-            sorted_dates, config, window_id,
+            sorted_dates,
+            config,
+            window_id,
         )
     else:
         windows = _generate_expanding_windows(
-            sorted_dates, config, window_id,
+            sorted_dates,
+            config,
+            window_id,
         )
 
     logger.info(
@@ -102,13 +101,15 @@ def _generate_sliding_windows(
         if valid_end_idx >= total:
             break
 
-        windows.append(RollingWindow(
-            window_id=window_id,
-            train_start=dates[train_start_idx],
-            train_end=dates[train_end_idx],
-            valid_start=dates[valid_start_idx],
-            valid_end=dates[valid_end_idx],
-        ))
+        windows.append(
+            RollingWindow(
+                window_id=window_id,
+                train_start=dates[train_start_idx],
+                train_end=dates[train_end_idx],
+                valid_start=dates[valid_start_idx],
+                valid_end=dates[valid_end_idx],
+            )
+        )
         window_id += 1
         cursor += config.rolling_step
 
@@ -142,13 +143,15 @@ def _generate_expanding_windows(
             cursor += config.rolling_step
             continue
 
-        windows.append(RollingWindow(
-            window_id=window_id,
-            train_start=dates[train_start_idx],
-            train_end=dates[train_end_idx],
-            valid_start=dates[valid_start_idx],
-            valid_end=dates[valid_end_idx],
-        ))
+        windows.append(
+            RollingWindow(
+                window_id=window_id,
+                train_start=dates[train_start_idx],
+                train_end=dates[train_end_idx],
+                valid_start=dates[valid_start_idx],
+                valid_end=dates[valid_end_idx],
+            )
+        )
         window_id += 1
         cursor += config.rolling_step
 

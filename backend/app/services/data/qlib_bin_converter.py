@@ -4,7 +4,6 @@ Qlib Bin格式转换工具
 """
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -12,15 +11,12 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from app.core.config import settings
-
 
 class QlibBinConverter:
     """Qlib Bin格式转换器"""
 
     def __init__(self):
         """初始化转换器"""
-        pass
 
     def convert_parquet_to_bin(
         self,

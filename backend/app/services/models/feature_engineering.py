@@ -5,10 +5,9 @@
 支持多模态特征工程和时间序列数据处理。
 """
 
-import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -41,11 +40,7 @@ except ImportError:
 # 导入Qlib相关模块
 try:
     import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    from qlib.config import REG_CN
 
     QLIB_AVAILABLE = True
 except ImportError:

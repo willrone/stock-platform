@@ -3,8 +3,7 @@
 负责模型评估报告和性能历史查询
 """
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -14,6 +13,7 @@ from app.core.database import SessionLocal
 from app.models.task_models import ModelInfo
 
 router = APIRouter()
+
 
 @router.get("/{model_id}/evaluation-report", response_model=StandardResponse)
 async def get_model_evaluation_report(model_id: str):
@@ -77,7 +77,6 @@ async def get_model_evaluation_report(model_id: str):
         session.close()
 
 
-
 @router.get("/{model_id}/performance-history", response_model=StandardResponse)
 async def get_model_performance_history(model_id: str, time_range: str = "30d"):
     """获取模型性能历史"""
@@ -129,4 +128,3 @@ async def get_model_performance_history(model_id: str, time_range: str = "30d"):
     except Exception as e:
         logger.error(f"获取模型性能历史失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取模型性能历史失败: {str(e)}")
-

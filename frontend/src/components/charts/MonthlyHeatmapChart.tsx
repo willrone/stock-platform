@@ -138,7 +138,7 @@ export default function MonthlyHeatmapChart({
     const filteredData = getFilteredData();
 
     // 准备热力图数据
-    const heatmapData: any[] = [];
+    const heatmapData: [number, number, number, string][] = [];
     const years = selectedYear === 'all' ? data.years : [parseInt(selectedYear)];
 
     years.forEach((year, yearIndex) => {
@@ -173,7 +173,7 @@ export default function MonthlyHeatmapChart({
       },
       tooltip: {
         position: 'top',
-        formatter: function (params: any) {
+        formatter: function (params: { data: [number, number, number, string] }) {
           const [monthIndex, yearIndex, returnValue, date] = params.data;
           const month = MONTH_NAMES[monthIndex];
           const year = years[yearIndex];
@@ -228,7 +228,7 @@ export default function MonthlyHeatmapChart({
           data: heatmapData,
           label: {
             show: true,
-            formatter: function (params: any) {
+            formatter: function (params: { data: [number, number, number, string] }) {
               return `${params.data[2].toFixed(1)}%`;
             },
             fontSize: 10,
@@ -315,7 +315,11 @@ export default function MonthlyHeatmapChart({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Calendar size={20} color="#1976d2" />
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography
+                  variant="h6"
+                  component="h3"
+                  sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
                   月度收益热力图
                 </Typography>
                 <Tooltip title="显示每月收益率的分布，帮助识别季节性模式">
@@ -398,7 +402,14 @@ export default function MonthlyHeatmapChart({
                       表现最佳月份
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 600,
+                          color: 'success.main',
+                          fontSize: { xs: '1rem', sm: '1.25rem' },
+                        }}
+                      >
                         {MONTH_NAMES[bestMonth.month - 1]}
                       </Typography>
                       <Chip
@@ -426,7 +437,14 @@ export default function MonthlyHeatmapChart({
                       表现最差月份
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 600,
+                          color: 'error.main',
+                          fontSize: { xs: '1rem', sm: '1.25rem' },
+                        }}
+                      >
                         {MONTH_NAMES[worstMonth.month - 1]}
                       </Typography>
                       <Chip
@@ -446,13 +464,20 @@ export default function MonthlyHeatmapChart({
 
       <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
         <Box sx={{ overflowX: 'auto' }}>
-          <Box ref={chartRef} sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 500 }} />
+          <Box
+            ref={chartRef}
+            sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 500 }}
+          />
         </Box>
 
         {/* 月度详细统计表格 */}
         {showStatistics && (
           <Box sx={{ mt: 3 }}>
-            <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+            <Typography
+              variant="h6"
+              component="h4"
+              sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+            >
               月度统计详情
             </Typography>
             <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>

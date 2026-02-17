@@ -352,7 +352,14 @@ export function FeatureSelector({
             特征配置
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'flex-end' }, gap: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'flex-end' },
+            gap: 1,
+          }}
+        >
           <FormControl size="small" sx={{ flex: 1 }}>
             <InputLabel>选择预设配置</InputLabel>
             <Select

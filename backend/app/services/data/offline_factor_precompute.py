@@ -8,12 +8,10 @@ from __future__ import annotations  # 延迟评估类型注解，避免在独立
 
 import asyncio
 import os
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -261,7 +259,7 @@ class OfflineFactorPrecomputeService:
             # 使用pandas计算基础统计指标（Qlib表达式引擎需要完整的数据集，这里先用pandas实现）
             # 注意：避免与后续技术指标计算重复，这里只计算基础统计指标，不计算MA、STD等（这些会在技术指标中计算）
             close = stock_data["$close"]
-            volume = stock_data["$volume"]
+            stock_data["$volume"]
 
             # 价格变化率（这些是基础指标，不会与技术指标重复）
             indicators["RET1"] = close.pct_change(1)

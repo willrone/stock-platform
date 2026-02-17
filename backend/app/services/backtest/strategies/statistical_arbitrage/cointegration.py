@@ -5,13 +5,12 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.core.error_handler import ErrorSeverity, TaskError
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..base.statistical_arbitrage_base import StatisticalArbitrageStrategy
 from ...models import SignalType, TradingSignal
+from ..base.statistical_arbitrage_base import StatisticalArbitrageStrategy
 
 
 class CointegrationStrategy(StatisticalArbitrageStrategy):
@@ -42,12 +41,16 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             # 与日线版本保持一致：
             # prev_z <= -entry 且 z > -entry -> BUY
             # prev_z >=  entry 且 z <  entry -> SELL
-            buy_mask = (prev_z <= -self.entry_threshold) & (zscore > -self.entry_threshold)
-            sell_mask = (prev_z >= self.entry_threshold) & (zscore < self.entry_threshold)
+            buy_mask = (prev_z <= -self.entry_threshold) & (
+                zscore > -self.entry_threshold
+            )
+            sell_mask = (prev_z >= self.entry_threshold) & (
+                zscore < self.entry_threshold
+            )
 
             # 只有在均值回归为负（beta[1]<0）时启用（当前 mean_rev 为负常数/0）
-            buy_mask &= (mean_rev < 0)
-            sell_mask &= (mean_rev < 0)
+            buy_mask &= mean_rev < 0
+            sell_mask &= mean_rev < 0
 
             # 数据不足：前 lookback_period 天不产生信号
             if len(data.index) > 0:
@@ -58,7 +61,9 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                 buy_mask &= enough_data
                 sell_mask &= enough_data
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -150,19 +155,27 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                     current_price = indicators["price"].iloc[current_idx]
                     current_zscore = indicators["zscore"].iloc[current_idx]
                     half_life = indicators.get("half_life")
-                    mean_reversion = indicators["mean_reversion_strength"].iloc[current_idx]
+                    mean_reversion = indicators["mean_reversion_strength"].iloc[
+                        current_idx
+                    ]
 
                     return [
                         TradingSignal(
                             timestamp=current_date,
                             stock_code=stock_code,
                             signal_type=sig_type,
-                            strength=min(1.0, abs(current_zscore) / self.entry_threshold) if self.entry_threshold else 0.8,
+                            strength=min(
+                                1.0, abs(current_zscore) / self.entry_threshold
+                            )
+                            if self.entry_threshold
+                            else 0.8,
                             price=current_price,
                             reason=f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, 半衰期: {float(half_life):.1f}",
                             metadata={
                                 "zscore": float(current_zscore),
-                                "half_life": float(half_life) if half_life is not None else None,
+                                "half_life": float(half_life)
+                                if half_life is not None
+                                else None,
                                 "mean_reversion_strength": float(mean_reversion),
                             },
                         )

@@ -16,7 +16,7 @@ from loguru import logger
 
 from app.core.config import settings
 
-from ..events.data_sync_events import DataSyncEventType, get_data_sync_event_manager
+from ..events.data_sync_events import get_data_sync_event_manager
 
 # 绑定日志类型为数据同步
 logger = logger.bind(log_type="data_sync")
@@ -126,7 +126,7 @@ class SFTPSyncService:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
-            logger.debug(f"正在建立SSH连接...")
+            logger.debug("正在建立SSH连接...")
             ssh.connect(
                 hostname=self.host,
                 port=self.port,
@@ -134,7 +134,7 @@ class SFTPSyncService:
                 password=self.password,
                 timeout=30,
             )
-            logger.debug(f"SSH连接成功，正在打开SFTP通道...")
+            logger.debug("SSH连接成功，正在打开SFTP通道...")
             sftp = ssh.open_sftp()
             logger.info(f"成功连接到SFTP服务器: {self.host}")
             return ssh, sftp
@@ -182,14 +182,14 @@ class SFTPSyncService:
             logger.debug(f"临时文件路径: {temp_file}")
 
             # 下载股票列表文件
-            logger.info(f"正在下载股票列表文件...")
+            logger.info("正在下载股票列表文件...")
             start_time = datetime.now()
             sftp.get(self.remote_list_path, str(temp_file))
             download_time = (datetime.now() - start_time).total_seconds()
             logger.info(f"股票列表文件下载完成，耗时: {download_time:.2f}秒")
 
             # 读取parquet文件获取股票列表
-            logger.debug(f"正在读取parquet文件...")
+            logger.debug("正在读取parquet文件...")
             # 尝试使用 pyarrow 引擎，如果失败则使用 fastparquet
             try:
                 df = pd.read_parquet(temp_file, engine="pyarrow")
@@ -207,7 +207,7 @@ class SFTPSyncService:
                 stock_codes = df["ts_code"].unique().tolist()
             else:
                 # 如果没有ts_code列，尝试第一列
-                logger.warning(f"未找到ts_code列，使用第一列作为股票代码")
+                logger.warning("未找到ts_code列，使用第一列作为股票代码")
                 stock_codes = df.iloc[:, 0].unique().tolist()
 
             logger.info(f"成功获取股票列表: {len(stock_codes)} 只股票")
@@ -398,7 +398,7 @@ class SFTPSyncService:
                 remote_file = self._find_remote_file(stock_code, sftp)
 
                 if remote_file is None:
-                    error_msg = f"远端文件不存在，已尝试多种格式和模糊匹配"
+                    error_msg = "远端文件不存在，已尝试多种格式和模糊匹配"
                     logger.warning(f"[{stock_code}] {error_msg}")
                     return False, 0, error_msg
 

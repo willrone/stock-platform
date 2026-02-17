@@ -50,7 +50,9 @@ class PortfolioManager:
     @property
     def entry_dates(self) -> Dict[str, datetime]:
         """返回开仓日期字典 {stock_code: entry_date}"""
-        return {code: dt for code, dt in self._entry_dates.items() if code in self.positions}
+        return {
+            code: dt for code, dt in self._entry_dates.items() if code in self.positions
+        }
 
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
         """计算组合总价值（含成本）"""
@@ -202,9 +204,7 @@ class PortfolioManager:
                 self.cash += needed
                 self.total_capital_injection += needed
                 self.cash_without_cost += needed  # 无成本账本同步，避免后续扣款异常
-                logger.debug(
-                    f"不限制买入: 补充资金 {needed:.2f} 用于买入 {stock_code}"
-                )
+                logger.debug(f"不限制买入: 补充资金 {needed:.2f} 用于买入 {stock_code}")
             else:
                 return (
                     None,
@@ -394,7 +394,9 @@ class PortfolioManager:
         # 性能注意：大规模回测会极其频繁调用该函数；默认关闭该日志，避免刷屏/IO 成为瓶颈。
         try:
             if getattr(settings, "ENABLE_PORTFOLIO_SNAPSHOT_SANITY_LOG", False):
-                if len(self.positions) > 10:  # default topk is 10; for topk_buffer strategy
+                if (
+                    len(self.positions) > 10
+                ):  # default topk is 10; for topk_buffer strategy
                     logger.warning(
                         f"[portfolio_snapshot][sanity] positions_count={len(self.positions)} date={date.strftime('%Y-%m-%d')} "
                         f"holdings={sorted(list(self.positions.keys()))}"
@@ -468,7 +470,9 @@ class PortfolioManager:
         if self.equity_curve:
             values = [v for _, v in self.equity_curve]
         elif self.portfolio_history:
-            values = [snapshot["portfolio_value"] for snapshot in self.portfolio_history]
+            values = [
+                snapshot["portfolio_value"] for snapshot in self.portfolio_history
+            ]
         else:
             return {}
 
@@ -488,7 +492,9 @@ class PortfolioManager:
         if self.equity_curve:
             days = (self.equity_curve[-1][0] - self.equity_curve[0][0]).days
         else:
-            days = (self.portfolio_history[-1]["date"] - self.portfolio_history[0]["date"]).days
+            days = (
+                self.portfolio_history[-1]["date"] - self.portfolio_history[0]["date"]
+            ).days
         annualized_return = (
             (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
         )

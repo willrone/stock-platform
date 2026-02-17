@@ -2,14 +2,16 @@
 参数验证和统计模块
 """
 
-from typing import Any, Dict, List
 from datetime import datetime
+from typing import Any, Dict, List
+
 from loguru import logger
 
-from ..strategies.factory import AdvancedStrategyFactory
 from ....core.error_handler import ErrorSeverity, TaskError
-from ..models.data_models import TradingSignal
 from ..core.portfolio_manager import PortfolioManager
+from ..models.data_models import TradingSignal
+from ..models.enums import SignalType
+from ..strategies.factory import AdvancedStrategyFactory
 
 
 def validate_backtest_parameters(
@@ -25,7 +27,9 @@ def validate_backtest_parameters(
         available_strategies = AdvancedStrategyFactory.get_available_strategies()
         # available_strategies 可能是分类字典 {'technical': ['bollinger', ...]} 或扁平列表
         if isinstance(available_strategies, dict):
-            all_strategy_names = [s for names in available_strategies.values() for s in names]
+            all_strategy_names = [
+                s for names in available_strategies.values() for s in names
+            ]
         else:
             all_strategy_names = list(available_strategies)
         if strategy_name.lower() not in all_strategy_names:
@@ -169,6 +173,7 @@ def _get_execution_failure_reason(
     except Exception as e:
         logger.warning(f"获取执行失败原因时出错: {e}")
         return f"执行异常: {str(e)}"
+
 
 def get_execution_statistics(execution_stats: dict) -> dict:
     """获取执行统计信息"""

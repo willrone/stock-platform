@@ -19,7 +19,7 @@ interface TreemapChartProps {
 export const TreemapChart: React.FC<TreemapChartProps> = ({ data, isActive }) => {
   const chartRef = useECharts(
     data,
-    (chartData) => ({
+    chartData => ({
       title: {
         text: '持仓权重树状图',
         left: 'center',
@@ -77,7 +77,11 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ data, isActive }) =>
       <CardHeader
         title={
           <Box>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}
+            >
               持仓权重树状图
             </Typography>
             <Typography variant="caption" color="text.secondary">

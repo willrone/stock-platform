@@ -37,7 +37,7 @@ import { StrategyConfigForm, StrategyParameter } from './StrategyConfigForm';
 export interface PortfolioStrategyItem {
   name: string;
   weight: number;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 export interface PortfolioStrategyConfigProps {
@@ -100,7 +100,7 @@ export function PortfolioStrategyConfig({
     if (!strategyInfo?.parameters) {
       return {};
     }
-    const defaults: Record<string, any> = {};
+    const defaults: Record<string, unknown> = {};
     Object.entries(strategyInfo.parameters).forEach(([key, param]) => {
       defaults[key] = param.default;
     });
@@ -184,7 +184,7 @@ export function PortfolioStrategyConfig({
   };
 
   // 更新策略配置
-  const handleStrategyConfigChange = (index: number, config: Record<string, any>) => {
+  const handleStrategyConfigChange = (index: number, config: Record<string, unknown>) => {
     const newStrategies = [...strategies];
     newStrategies[index].config = config;
     setStrategies(newStrategies);
@@ -276,7 +276,10 @@ export function PortfolioStrategyConfig({
                 title={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <TrendingUp size={18} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}
+                    >
                       {strategyInfo?.name || strategy.name}
                     </Typography>
                     <Chip
@@ -336,11 +339,23 @@ export function PortfolioStrategyConfig({
 
                   {/* 权重配置 */}
                   <Box>
-                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', mb: 1, gap: 0.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        justifyContent: 'space-between',
+                        mb: 1,
+                        gap: 0.5,
+                      }}
+                    >
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         权重
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                      >
                         原始: {strategy.weight.toFixed(2)} | 归一化:{' '}
                         {(normalizedWeight * 100).toFixed(1)}%
                       </Typography>

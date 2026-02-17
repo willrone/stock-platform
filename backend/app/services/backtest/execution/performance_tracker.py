@@ -3,9 +3,7 @@
 负责性能分析、计时、内存快照等
 """
 
-import time
-from typing import Optional, Dict, Any
-from loguru import logger
+from typing import Any, Dict, Optional
 
 # 性能监控（可选导入）
 try:
@@ -13,11 +11,13 @@ try:
         BacktestPerformanceProfiler,
         PerformanceContext,
     )
+
     PERFORMANCE_PROFILING_AVAILABLE = True
 except ImportError:
     PERFORMANCE_PROFILING_AVAILABLE = False
     BacktestPerformanceProfiler = None
     PerformanceContext = None
+
 
 class PerformanceTracker:
     """性能追踪器"""

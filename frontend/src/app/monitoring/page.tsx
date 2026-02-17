@@ -11,7 +11,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -76,7 +76,7 @@ export default function MonitoringPage() {
   const [selectedTab, setSelectedTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('24');
 
-  const loadMonitoringData = async () => {
+  const loadMonitoringData = useCallback(async () => {
     try {
       setLoading(true);
       const [errorsData, anomaliesData, qualityData] = await Promise.all([
@@ -93,7 +93,7 @@ export default function MonitoringPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
 
   useEffect(() => {
     loadMonitoringData();
@@ -101,7 +101,7 @@ export default function MonitoringPage() {
     // 每分钟自动刷新
     const interval = setInterval(loadMonitoringData, 60000);
     return () => clearInterval(interval);
-  }, [timeRange]);
+  }, [loadMonitoringData]);
 
   const getSeverityColor = (severity: string): 'error' | 'warning' | 'primary' | 'default' => {
     switch (severity) {
@@ -147,7 +147,15 @@ export default function MonitoringPage() {
         }}
       >
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 600,
+              mb: 1,
+              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+            }}
+          >
             系统监控
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -235,10 +243,21 @@ export default function MonitoringPage() {
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <AlertTriangle size={24} color="#d32f2f" />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'error.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {errorStats?.total_errors || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     总错误数
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -252,10 +271,21 @@ export default function MonitoringPage() {
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <Shield size={24} color="#ed6c02" />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'warning.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {anomalies?.total_anomalies || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     异常检测
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -269,10 +299,21 @@ export default function MonitoringPage() {
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <Database size={24} color="#2e7d32" />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'success.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {dataQuality?.overall_score || '--'}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     数据质量
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -286,10 +327,21 @@ export default function MonitoringPage() {
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
                     <Server size={24} color="#1976d2" />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'primary.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     99.9%
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     系统可用性
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -313,30 +365,63 @@ export default function MonitoringPage() {
             >
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'error.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {errorStats?.total_errors || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     总错误数
                   </Typography>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'warning.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {errorStats?.total_error_types || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     错误类型
                   </Typography>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'primary.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {errorStats?.time_range_hours || 0}h
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     统计时间范围
                   </Typography>
                 </CardContent>
@@ -438,40 +523,83 @@ export default function MonitoringPage() {
             >
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {anomalies?.total_anomalies || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     总异常数
                   </Typography>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'error.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {anomalies?.by_severity.high || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     高危异常
                   </Typography>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'warning.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {anomalies?.by_severity.medium || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     中危异常
                   </Typography>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
-                  <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'primary.main',
+                      fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                    }}
+                  >
                     {anomalies?.by_severity.low || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                  >
                     低危异常
                   </Typography>
                 </CardContent>

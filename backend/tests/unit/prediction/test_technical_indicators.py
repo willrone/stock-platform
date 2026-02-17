@@ -49,10 +49,10 @@ class TestTechnicalIndicatorCalculator:
     def test_validate_data(self):
         """测试数据验证"""
         # 有效数据
-        assert self.calculator.validate_data(self.test_data) == True
+        assert self.calculator.validate_data(self.test_data) is True
         
         # 空数据
-        assert self.calculator.validate_data([]) == False
+        assert self.calculator.validate_data([]) is False
         
         # 无效价格数据
         invalid_data = [StockData(
@@ -64,7 +64,7 @@ class TestTechnicalIndicatorCalculator:
             close=95,
             volume=1000000
         )]
-        assert self.calculator.validate_data(invalid_data) == False
+        assert self.calculator.validate_data(invalid_data) is False
         
         # 高低价逻辑错误
         invalid_data2 = [StockData(

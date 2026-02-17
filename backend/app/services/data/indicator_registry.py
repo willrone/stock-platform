@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
@@ -180,10 +180,6 @@ class IndicatorRegistry:
 # 初始化默认指标注册
 def _initialize_default_indicators():
     """初始化默认指标注册"""
-    from app.services.models.feature_engineering import FeatureCalculator
-    from app.services.prediction.technical_indicators import (
-        TechnicalIndicatorCalculator,
-    )
 
     # 注册技术指标
     IndicatorRegistry.register_indicator(

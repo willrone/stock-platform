@@ -14,9 +14,6 @@ Qlib 集成服务模块
 - 自定义模型实现（CustomModels）
 """
 
-# 主入口
-from .enhanced_qlib_provider import EnhancedQlibDataProvider
-
 # Alpha158 因子计算
 from .alpha158 import Alpha158Calculator
 
@@ -33,11 +30,11 @@ from .data_processing import (
     MissingValueHandler,
 )
 
+# 主入口
+from .enhanced_qlib_provider import EnhancedQlibDataProvider
+
 # 模型配置和预测
 from .model import QlibModelConfigBuilder, QlibModelPredictor
-
-# 数据验证
-from .validators import DataQualityValidator, ValidationReport
 from .qlib_model_manager import (
     HyperparameterSpec,
     ModelCategory,
@@ -51,6 +48,9 @@ from .unified_qlib_training_engine import (
     QlibTrainingResult,
     UnifiedQlibTrainingEngine,
 )
+
+# 数据验证
+from .validators import DataQualityValidator, ValidationReport
 
 # 尝试导入自定义模型（可能因为依赖问题失败）
 try:

@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Box, 
-  Typography, 
-  Chip, 
-  LinearProgress, 
+import {
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Chip,
+  LinearProgress,
   IconButton,
   Button,
 } from '@mui/material';
@@ -32,7 +32,9 @@ interface MobileBacktestCardProps {
 export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, onDelete }) => {
   const router = useRouter();
 
-  const getStatusColor = (status: string): 'primary' | 'success' | 'error' | 'warning' | 'default' => {
+  const getStatusColor = (
+    status: string
+  ): 'primary' | 'success' | 'error' | 'warning' | 'default' => {
     switch (status) {
       case 'running':
         return 'primary';
@@ -85,10 +87,12 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
   };
 
   const getStrategyName = () => {
-    return task.config?.strategy_name || 
-           task.config?.strategy_type || 
-           task.config?.backtest_config?.strategy_name || 
-           '未知策略';
+    return (
+      task.config?.strategy_name ||
+      task.config?.strategy_type ||
+      task.config?.backtest_config?.strategy_name ||
+      '未知策略'
+    );
   };
 
   const getBacktestPeriod = () => {
@@ -102,9 +106,9 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
   };
 
   return (
-    <Card 
-      sx={{ 
-        mb: 2, 
+    <Card
+      sx={{
+        mb: 2,
         borderRadius: 3,
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'all 0.2s',
@@ -115,17 +119,17 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         {/* 标题行 */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'flex-start', 
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
             mb: 1.5,
           }}
         >
-          <Typography 
-            variant="h6" 
-            sx={{ 
+          <Typography
+            variant="h6"
+            sx={{
               fontWeight: 600,
               fontSize: '1.1rem',
               flex: 1,
@@ -135,11 +139,11 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
           >
             {task.task_name}
           </Typography>
-          <Chip 
-            label={getStatusText(task.status)} 
-            color={getStatusColor(task.status)} 
+          <Chip
+            label={getStatusText(task.status)}
+            color={getStatusColor(task.status)}
             size="small"
-            sx={{ 
+            sx={{
               fontWeight: 600,
               fontSize: '0.75rem',
             }}
@@ -189,11 +193,11 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
                 {task.progress}%
               </Typography>
             </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={task.progress} 
-              sx={{ 
-                height: 6, 
+            <LinearProgress
+              variant="determinate"
+              value={task.progress}
+              sx={{
+                height: 6,
                 borderRadius: 3,
                 bgcolor: 'action.hover',
               }}
@@ -208,7 +212,7 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
             size="medium"
             startIcon={<Eye size={18} />}
             onClick={() => router.push(`/backtest/${task.task_id}`)}
-            sx={{ 
+            sx={{
               flex: 1,
               borderRadius: 2,
               minHeight: 44,
@@ -221,11 +225,11 @@ export const MobileBacktestCard: React.FC<MobileBacktestCardProps> = ({ task, on
 
           <IconButton
             size="medium"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               onDelete(task.task_id);
             }}
-            sx={{ 
+            sx={{
               border: 1,
               borderColor: 'error.main',
               color: 'error.main',

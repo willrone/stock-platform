@@ -3,9 +3,7 @@
 用于存储可视化所需的扩展数据
 """
 
-import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
 
 from sqlalchemy import (
     JSON,
@@ -13,13 +11,11 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
-    ForeignKey,
     Index,
     Integer,
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 

@@ -23,7 +23,7 @@ async def list_models():
     """获取模型列表"""
     session = SessionLocal()
     try:
-        model_repository = ModelInfoRepository(session)
+        ModelInfoRepository(session)
 
         # 获取所有模型（包括training、failed等状态）
         models = session.query(ModelInfo).order_by(ModelInfo.created_at.desc()).all()
@@ -38,7 +38,7 @@ async def list_models():
                     import json
 
                     performance_metrics = json.loads(performance_metrics)
-                except:
+                except Exception:
                     performance_metrics = {}
             if not isinstance(performance_metrics, dict):
                 performance_metrics = {}
@@ -93,7 +93,7 @@ async def get_model_detail(model_id: str):
                 import json
 
                 performance_metrics = json.loads(performance_metrics)
-            except:
+            except Exception:
                 performance_metrics = {}
         if not isinstance(performance_metrics, dict):
             performance_metrics = {}
@@ -239,7 +239,7 @@ async def search_models(
                         import json
 
                         performance_metrics = json.loads(performance_metrics)
-                    except:
+                    except Exception:
                         performance_metrics = {}
 
                 accuracy = performance_metrics.get("accuracy", 0.0)
@@ -262,7 +262,7 @@ async def search_models(
                     import json
 
                     performance_metrics = json.loads(performance_metrics)
-                except:
+                except Exception:
                     performance_metrics = {}
 
             accuracy = performance_metrics.get("accuracy", 0.0)

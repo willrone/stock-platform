@@ -49,7 +49,14 @@ export function TaskSidebar({
           <CardContent>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    color: 'primary.main',
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {task.results.total_stocks}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -57,7 +64,14 @@ export function TaskSidebar({
                 </Typography>
               </Box>
               <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    color: 'success.main',
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {task.results.successful_predictions}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -65,7 +79,14 @@ export function TaskSidebar({
                 </Typography>
               </Box>
               <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    color: 'secondary.main',
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {((task.results.average_confidence || 0) * 100).toFixed(1)}%
                 </Typography>
                 <Typography variant="caption" color="text.secondary">

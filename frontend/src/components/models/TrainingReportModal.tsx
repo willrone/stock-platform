@@ -246,7 +246,12 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
   const highCorrelationPairs = report?.feature_correlation?.high_correlation_pairs || [];
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth scroll="paper"
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      maxWidth="xl"
+      fullWidth
+      scroll="paper"
       sx={{ '& .MuiDialog-paper': { m: { xs: 1, sm: 2 } } }}
     >
       <DialogTitle>
@@ -260,7 +265,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* 训练概览 */}
             <Box>
-              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+              <Typography
+                variant="h6"
+                component="h3"
+                sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+              >
                 训练概览
               </Typography>
               <Box
@@ -278,7 +287,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                         训练时长
                       </Typography>
                     </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                    <Typography
+                      variant="h6"
+                      sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                    >
                       {formatDuration(
                         report.training_summary?.training_duration || report.training_duration || 0
                       )}
@@ -294,7 +306,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                         最终准确率
                       </Typography>
                     </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                    <Typography
+                      variant="h6"
+                      sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                    >
                       {(
                         (report.performance_metrics?.accuracy ||
                           report.final_metrics?.accuracy ||
@@ -314,7 +329,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                           总轮次
                         </Typography>
                       </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                      >
                         {report.training_summary?.epochs || report.total_epochs}
                       </Typography>
                     </CardContent>
@@ -330,7 +348,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                           训练样本
                         </Typography>
                       </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                      >
                         {report.training_summary.total_samples.toLocaleString()}
                       </Typography>
                     </CardContent>
@@ -341,7 +362,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
 
             {/* 性能指标 */}
             <Box>
-              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+              <Typography
+                variant="h6"
+                component="h3"
+                sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+              >
                 性能指标
               </Typography>
               <Box
@@ -408,7 +433,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
             {/* 训练曲线 */}
             {report.training_history && report.training_history.length > 0 && (
               <Box>
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography
+                  variant="h6"
+                  component="h3"
+                  sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
                   训练曲线
                 </Typography>
                 <Box sx={{ height: 320, bgcolor: 'grey.50', borderRadius: 1, p: 2 }}>
@@ -544,7 +573,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                 ? report.feature_importance.length > 0
                 : Object.keys(report.feature_importance).length > 0) && (
                 <Box>
-                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                  <Typography
+                    variant="h6"
+                    component="h3"
+                    sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                  >
                     特征重要性
                   </Typography>
 
@@ -688,7 +721,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
               !report.feature_correlation.error &&
               correlationEntries.length > 0 && (
                 <Box>
-                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                  <Typography
+                    variant="h6"
+                    component="h3"
+                    sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                  >
                     特征相关性
                   </Typography>
                   <Box
@@ -708,7 +745,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                         >
                           平均相关性
                         </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                        <Typography
+                          variant="h6"
+                          sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                        >
                           {(report.feature_correlation.avg_target_correlation || 0).toFixed(4)}
                         </Typography>
                       </CardContent>
@@ -722,7 +762,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                         >
                           最大相关性
                         </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                        <Typography
+                          variant="h6"
+                          sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                        >
                           {(report.feature_correlation.max_target_correlation || 0).toFixed(4)}
                         </Typography>
                       </CardContent>
@@ -736,7 +779,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                         >
                           高相关特征对
                         </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                        <Typography
+                          variant="h6"
+                          sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                        >
                           {highCorrelationPairs.length}
                         </Typography>
                       </CardContent>
@@ -818,7 +864,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
             {/* 超参数调优 */}
             {report.hyperparameter_tuning && (
               <Box>
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography
+                  variant="h6"
+                  component="h3"
+                  sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
                   超参数调优
                 </Typography>
                 <Box
@@ -838,7 +888,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       >
                         搜索策略
                       </Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                      >
                         {report.hyperparameter_tuning.strategy || 'unknown'}
                       </Typography>
                     </CardContent>
@@ -852,7 +905,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       >
                         试验次数
                       </Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                      >
                         {report.hyperparameter_tuning.trials ?? 0}
                       </Typography>
                     </CardContent>
@@ -866,7 +922,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       >
                         最佳得分
                       </Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                      >
                         {report.hyperparameter_tuning.best_score !== undefined &&
                         report.hyperparameter_tuning.best_score !== null
                           ? report.hyperparameter_tuning.best_score.toFixed(4)
@@ -900,7 +959,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
             {/* 建议和改进 */}
             {report.recommendations && report.recommendations.length > 0 && (
               <Box>
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography
+                  variant="h6"
+                  component="h3"
+                  sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
                   建议和改进
                 </Typography>
                 <Card>

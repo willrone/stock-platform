@@ -156,9 +156,7 @@ describe('PositionAnalysis', () => {
 
   describe('基础渲染', () => {
     it('应该渲染持仓分析组件（数组格式数据）', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 验证统计概览
       expect(screen.getByText('持仓股票')).toBeInTheDocument();
@@ -172,18 +170,14 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该渲染持仓分析组件（对象格式数据）', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />);
 
       expect(screen.getByText('持仓股票')).toBeInTheDocument();
       expect(screen.getAllByText('3').length).toBeGreaterThan(0);
     });
 
     it('应该显示最佳和最差表现者', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       expect(screen.getByText('最佳表现')).toBeInTheDocument();
       expect(screen.getByText('最差表现')).toBeInTheDocument();
@@ -192,9 +186,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示所有统计卡片', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       expect(screen.getByText('持仓股票')).toBeInTheDocument();
       expect(screen.getByText('盈利股票')).toBeInTheDocument();
@@ -211,17 +203,14 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该处理 null 数据', () => {
-      render(<PositionAnalysis positionAnalysis={null as any} stockCodes={[]} />);
+      render(<PositionAnalysis positionAnalysis={null as unknown as never} stockCodes={[]} />);
 
       expect(screen.getByText('暂无持仓分析数据')).toBeInTheDocument();
     });
 
     it('应该处理无效的对象格式数据', () => {
       render(
-        <PositionAnalysis
-          positionAnalysis={{ stock_performance: null } as any}
-          stockCodes={[]}
-        />
+        <PositionAnalysis positionAnalysis={{ stock_performance: null } as any} stockCodes={[]} />
       );
 
       expect(screen.getByText('暂无持仓分析数据')).toBeInTheDocument();
@@ -230,17 +219,13 @@ describe('PositionAnalysis', () => {
 
   describe('统计信息计算', () => {
     it('应该正确计算总股票数', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       expect(screen.getAllByText('3').length).toBeGreaterThan(0); // 总股票数
     });
 
     it('应该正确计算盈利股票数', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 盈利股票数：000001.SZ 和 600000.SH
       expect(screen.getAllByText('2').length).toBeGreaterThan(0);
@@ -248,18 +233,14 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该正确计算总收益', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 总收益：1500.5 + (-800.25) + 2300.75 = 3001.0
       expect(screen.getByText(/¥3,001.00/)).toBeInTheDocument();
     });
 
     it('应该正确计算平均胜率', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 平均胜率：(0.8 + 0.33 + 0.75) / 3 = 0.6267 ≈ 62.67%
       const avgWinRate = screen.getByText(/62\.\d+%/);
@@ -269,9 +250,7 @@ describe('PositionAnalysis', () => {
 
   describe('表格视图', () => {
     it('应该显示表格视图', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 默认显示表格视图
       expect(screen.getByText('股票代码')).toBeInTheDocument();
@@ -282,9 +261,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示所有股票数据行', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       expect(screen.getAllByText('000001.SZ')[0]).toBeInTheDocument();
       expect(screen.getAllByText('000002.SZ')[0]).toBeInTheDocument();
@@ -292,9 +269,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示详情按钮', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const detailButtons = screen.getAllByText('详情');
       expect(detailButtons.length).toBe(3); // 每个股票一行
@@ -303,9 +278,7 @@ describe('PositionAnalysis', () => {
 
   describe('排序功能', () => {
     it('应该支持按总收益排序', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const totalReturnHeaders = screen.getAllByText('总收益');
       fireEvent.click(totalReturnHeaders[0]);
@@ -317,9 +290,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该支持按交易次数排序', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const tradeCountHeader = screen.getByText('交易次数');
       fireEvent.click(tradeCountHeader);
@@ -332,9 +303,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该支持按胜率排序', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const winRateHeader = screen.getByText('胜率');
       fireEvent.click(winRateHeader);
@@ -347,9 +316,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该支持切换排序方向', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const totalReturnHeaders = screen.getAllByText('总收益');
       fireEvent.click(totalReturnHeaders[0]); // 第一次点击：降序
@@ -365,9 +332,7 @@ describe('PositionAnalysis', () => {
 
   describe('Tab 切换', () => {
     it('应该支持切换到饼图视图', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const pieTab = screen.getByText('饼图');
       fireEvent.click(pieTab);
@@ -376,9 +341,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该支持切换到柱状图视图', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const barTab = screen.getByText('柱状图');
       fireEvent.click(barTab);
@@ -387,9 +350,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该支持切换到树状图视图', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const treemapTab = screen.getByText('树状图');
       fireEvent.click(treemapTab);
@@ -398,9 +359,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该在增强数据时显示额外 Tab', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />);
 
       expect(screen.getByText('权重分析')).toBeInTheDocument();
       expect(screen.getByText('交易模式')).toBeInTheDocument();
@@ -422,9 +381,7 @@ describe('PositionAnalysis', () => {
 
   describe('柱状图指标切换', () => {
     it('应该支持切换柱状图指标', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 切换到柱状图
       const barTab = screen.getByText('柱状图');
@@ -445,9 +402,7 @@ describe('PositionAnalysis', () => {
 
   describe('详情对话框', () => {
     it('应该打开详情对话框', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const detailButtons = screen.getAllByText('详情');
       fireEvent.click(detailButtons[0]);
@@ -458,9 +413,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示股票详细信息', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const detailButtons = screen.getAllByText('详情');
       fireEvent.click(detailButtons[0]);
@@ -473,9 +426,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示扩展信息（如果存在）', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const detailButtons = screen.getAllByText('详情');
       fireEvent.click(detailButtons[0]);
@@ -483,25 +434,23 @@ describe('PositionAnalysis', () => {
       // 验证扩展信息（使用更灵活的查询，检查是否包含相关关键词）
       const dialogContent = screen.getByText('股票详细分析').closest('div');
       const dialogText = dialogContent?.textContent || '';
-      
+
       // 检查是否包含扩展信息的文本（可能以不同形式存在）
-      const hasExtendedInfo = 
-        dialogText.includes('盈亏') || 
-        dialogText.includes('价格') || 
+      const hasExtendedInfo =
+        dialogText.includes('盈亏') ||
+        dialogText.includes('价格') ||
         dialogText.includes('持仓期') ||
         dialogText.includes('平均盈利') ||
         dialogText.includes('平均亏损') ||
         dialogText.includes('最大盈利') ||
         dialogText.includes('最大亏损');
-      
+
       // 由于 mockPositionData[0] 包含扩展字段，应该显示扩展信息
       expect(hasExtendedInfo).toBeTruthy();
     });
 
     it('应该关闭详情对话框', async () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const detailButtons = screen.getAllByText('详情');
       fireEvent.click(detailButtons[0]);
@@ -519,9 +468,7 @@ describe('PositionAnalysis', () => {
 
   describe('增强数据功能', () => {
     it('应该显示持仓权重分析', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />);
 
       const weightTab = screen.getByText('权重分析');
       fireEvent.click(weightTab);
@@ -532,9 +479,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示交易模式分析', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />);
 
       const tradingTab = screen.getByText('交易模式');
       fireEvent.click(tradingTab);
@@ -545,9 +490,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该显示持仓期分析', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockEnhancedData} stockCodes={mockStockCodes} />);
 
       const holdingTab = screen.getByText('持仓期分析');
       fireEvent.click(holdingTab);
@@ -622,9 +565,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该处理快照数据加载失败', async () => {
-      (BacktestService.getPortfolioSnapshots as jest.Mock).mockRejectedValue(
-        new Error('加载失败')
-      );
+      (BacktestService.getPortfolioSnapshots as jest.Mock).mockRejectedValue(new Error('加载失败'));
 
       render(
         <PositionAnalysis
@@ -667,18 +608,14 @@ describe('PositionAnalysis', () => {
 
   describe('数据格式化', () => {
     it('应该正确格式化货币', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 验证货币格式（包含 ¥ 符号）
       expect(screen.getByText(/¥1,500.50/)).toBeInTheDocument();
     });
 
     it('应该正确格式化百分比', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 验证百分比格式
       const winRateElements = screen.getAllByText(/80\.00%/);
@@ -689,9 +626,7 @@ describe('PositionAnalysis', () => {
   describe('边界情况', () => {
     it('应该处理单个股票数据', () => {
       const singleStock = [mockPositionData[0]];
-      render(
-        <PositionAnalysis positionAnalysis={singleStock} stockCodes={['000001.SZ']} />
-      );
+      render(<PositionAnalysis positionAnalysis={singleStock} stockCodes={['000001.SZ']} />);
 
       expect(screen.getByText('持仓股票')).toBeInTheDocument();
       expect(screen.getAllByText('1').length).toBeGreaterThan(0);
@@ -705,7 +640,10 @@ describe('PositionAnalysis', () => {
       }));
 
       render(
-        <PositionAnalysis positionAnalysis={manyStocks} stockCodes={manyStocks.map(s => s.stock_code)} />
+        <PositionAnalysis
+          positionAnalysis={manyStocks}
+          stockCodes={manyStocks.map(s => s.stock_code)}
+        />
       );
 
       expect(screen.getByText('持仓股票')).toBeInTheDocument();
@@ -720,9 +658,7 @@ describe('PositionAnalysis', () => {
         },
       ];
 
-      render(
-        <PositionAnalysis positionAnalysis={zeroReturnStock} stockCodes={['000001.SZ']} />
-      );
+      render(<PositionAnalysis positionAnalysis={zeroReturnStock} stockCodes={['000001.SZ']} />);
 
       expect(screen.getAllByText('000001.SZ')[0]).toBeInTheDocument();
     });
@@ -737,9 +673,7 @@ describe('PositionAnalysis', () => {
         },
       ];
 
-      render(
-        <PositionAnalysis positionAnalysis={extremeData} stockCodes={['000001.SZ']} />
-      );
+      render(<PositionAnalysis positionAnalysis={extremeData} stockCodes={['000001.SZ']} />);
 
       expect(screen.getAllByText('000001.SZ')[0]).toBeInTheDocument();
     });
@@ -747,9 +681,7 @@ describe('PositionAnalysis', () => {
 
   describe('交互功能', () => {
     it('应该支持点击股票行查看详情', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       const detailButtons = screen.getAllByText('详情');
       expect(detailButtons.length).toBeGreaterThan(0);
@@ -759,9 +691,7 @@ describe('PositionAnalysis', () => {
     });
 
     it('应该支持在不同 Tab 间切换', () => {
-      render(
-        <PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />
-      );
+      render(<PositionAnalysis positionAnalysis={mockPositionData} stockCodes={mockStockCodes} />);
 
       // 切换到饼图
       fireEvent.click(screen.getByText('饼图'));

@@ -2,11 +2,10 @@
 监控和告警API路由
 添加监控指标查询接口，支持告警配置和历史查询
 """
-import json
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse

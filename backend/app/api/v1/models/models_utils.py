@@ -3,33 +3,10 @@
 包含所有模块共享的导入、全局变量和辅助函数
 """
 
-import asyncio
-import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
 from loguru import logger
-from sqlalchemy import or_
-
-from app.api.v1.schemas import ModelTrainingRequest, StandardResponse
-from app.core.database import SessionLocal
-from app.models.task_models import ModelInfo
-from app.repositories.task_repository import ModelInfoRepository
-from app.services.models.evaluation_report import EvaluationReportGenerator
-from app.services.models.hyperparameter_tuning import (
-    HyperparameterSpace,
-    SearchStrategy,
-)
-from app.services.models.lineage_tracker import lineage_tracker
-from app.services.models.model_lifecycle_manager import model_lifecycle_manager
-from app.websocket import (
-    notify_model_training_completed,
-    notify_model_training_failed,
-    notify_model_training_progress,
-)
 
 # 导入模型训练服务
 DEEP_TRAINING_AVAILABLE = False
@@ -46,8 +23,6 @@ try:
     from app.services.models.model_training import (
         ModelTrainingService as DeepModelTrainingService,
     )
-    from app.services.models.model_training import ModelType as DeepModelType
-    from app.services.models.model_training import TrainingConfig as DeepTrainingConfig
 
     DEEP_TRAINING_AVAILABLE = True
 except ImportError as e:
@@ -57,10 +32,6 @@ try:
     from app.services.models.model_storage import ModelStorage
     from app.services.models.model_training_service import (
         ModelTrainingService as MLModelTrainingService,
-    )
-    from app.services.models.model_training_service import ModelType as MLModelType
-    from app.services.models.model_training_service import (
-        TrainingConfig as MLTrainingConfig,
     )
 
     ML_TRAINING_AVAILABLE = True
@@ -146,15 +117,15 @@ def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
         try:
             f = float(val)
             import math
+
             return f if math.isfinite(f) else default
         except (TypeError, ValueError):
             return default
 
     normalized_metrics = {
         "accuracy": normalized_accuracy,
-        "rmse": _safe_float(metrics.get("rmse")) or (
-            _safe_float(metrics.get("mse")) ** 0.5 if metrics.get("mse") else 0.0
-        ),
+        "rmse": _safe_float(metrics.get("rmse"))
+        or (_safe_float(metrics.get("mse")) ** 0.5 if metrics.get("mse") else 0.0),
         "mae": _safe_float(metrics.get("mae")),
         "r2": _safe_float(metrics.get("r2")),
         "mse": _safe_float(metrics.get("mse")),

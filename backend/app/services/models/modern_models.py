@@ -6,9 +6,7 @@
 """
 
 import math
-from typing import Optional, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -402,9 +400,15 @@ class ProbAttention(nn.Module):
         # top_indices: (batch, nhead, seq_len, top_k) -> 取最后一维的索引对应 V 的 seq 维度
         v_indices = top_indices[:, :, :, :top_k]  # (batch, nhead, seq_len, top_k)
         v_indices_expanded = v_indices.unsqueeze(-1).expand(-1, -1, -1, -1, self.d_k)
-        V_expanded = V.unsqueeze(2).expand(-1, -1, seq_len, -1, -1)  # (batch, nhead, seq_len, seq_len, d_k)
-        V_selected = torch.gather(V_expanded, 3, v_indices_expanded)  # (batch, nhead, seq_len, top_k, d_k)
-        attn_output = torch.matmul(attn_weights.unsqueeze(-2), V_selected).squeeze(-2)  # (batch, nhead, seq_len, d_k)
+        V_expanded = V.unsqueeze(2).expand(
+            -1, -1, seq_len, -1, -1
+        )  # (batch, nhead, seq_len, seq_len, d_k)
+        V_selected = torch.gather(
+            V_expanded, 3, v_indices_expanded
+        )  # (batch, nhead, seq_len, top_k, d_k)
+        attn_output = torch.matmul(attn_weights.unsqueeze(-2), V_selected).squeeze(
+            -2
+        )  # (batch, nhead, seq_len, d_k)
 
         # 重塑和输出投影
         attn_output = (

@@ -4,7 +4,6 @@
 """
 import asyncio
 import hashlib
-import json
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta

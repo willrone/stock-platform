@@ -5,8 +5,7 @@
 """
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from ..core.backtest_engine import BacktestConfig
 from ..execution.backtest_executor import BacktestExecutor
@@ -139,13 +138,13 @@ async def example_parallel_efficiency_analysis():
 
     # 顺序执行
     start = time.perf_counter()
-    results_sequential = [process_stock(code) for code in stock_codes]
+    [process_stock(code) for code in stock_codes]
     sequential_time = time.perf_counter() - start
 
     # 并行执行
     start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=4) as executor:
-        results_parallel = list(executor.map(process_stock, stock_codes))
+        list(executor.map(process_stock, stock_codes))
     parallel_time = time.perf_counter() - start
 
     # 记录并行化效率

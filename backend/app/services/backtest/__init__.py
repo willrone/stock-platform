@@ -61,7 +61,7 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 
 # 分析模块（可选导入，避免循环依赖）
 try:
-    from .analysis import (
+    from .analysis import (  # noqa: F401
         BacktestComparisonAnalyzer,
         EnhancedMetricsCalculator,
         MonthlyAnalyzer,
@@ -74,7 +74,7 @@ except ImportError:
 
 # 报告模块（可选导入）
 try:
-    from .reporting import BacktestReportGenerator, ChartDataGenerator
+    from .reporting import BacktestReportGenerator, ChartDataGenerator  # noqa: F401
 
     _REPORTING_AVAILABLE = True
 except ImportError:
@@ -82,7 +82,7 @@ except ImportError:
 
 # 工具模块（可选导入）
 try:
-    from .utils import BacktestDataAdapter, ExtendedRiskMetrics, MonthlyReturnsAnalysis
+    from .utils import BacktestDataAdapter, ExtendedRiskMetrics, MonthlyReturnsAnalysis  # noqa: F401
 
     _UTILS_AVAILABLE = True
 except ImportError:

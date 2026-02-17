@@ -68,7 +68,9 @@ class BollingerBandStrategy(BaseStrategy):
             # 卖出：价格突破上轨（%B > 1）且前一天还在轨内（prev <= 1）
             sell_mask = (pb > 1) & (prev_pb <= 1) & (bw > 0.02)
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -89,19 +91,25 @@ class BollingerBandStrategy(BaseStrategy):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     current_price = indicators["price"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=data.attrs.get("stock_code", "UNKNOWN"),
-                        signal_type=sig_type,
-                        strength=0.8, # 预计算模式下简化强度
-                        price=current_price,
-                        reason=f"[向量化] 价格突破轨道, %B: {indicators['percent_b'].iloc[current_idx]:.3f}",
-                        metadata={
-                            "upper_band": indicators["upper_band"].iloc[current_idx],
-                            "lower_band": indicators["lower_band"].iloc[current_idx],
-                            "percent_b": indicators["percent_b"].iloc[current_idx],
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=data.attrs.get("stock_code", "UNKNOWN"),
+                            signal_type=sig_type,
+                            strength=0.8,  # 预计算模式下简化强度
+                            price=current_price,
+                            reason=f"[向量化] 价格突破轨道, %B: {indicators['percent_b'].iloc[current_idx]:.3f}",
+                            metadata={
+                                "upper_band": indicators["upper_band"].iloc[
+                                    current_idx
+                                ],
+                                "lower_band": indicators["lower_band"].iloc[
+                                    current_idx
+                                ],
+                                "percent_b": indicators["percent_b"].iloc[current_idx],
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass

@@ -7,11 +7,11 @@ import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
 from app.core.error_handler import ErrorSeverity, TaskError
+
 from ..core.portfolio_manager import PortfolioManager
 
 
@@ -39,7 +39,7 @@ class BacktestReportGenerator:
 
             # 使用reportlab生成PDF
             from reportlab.lib import colors
-            from reportlab.lib.pagesizes import A4, letter
+            from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
             from reportlab.lib.units import inch
             from reportlab.platypus import (
@@ -412,9 +412,9 @@ class BacktestReportGenerator:
                     return getattr(trade, attr, None)
 
                 for trade in portfolio_manager.trades:
-                    stock_code = get_trade_attr(trade, 'stock_code')
-                    action = get_trade_attr(trade, 'action')
-                    pnl = get_trade_attr(trade, 'pnl') or 0.0
+                    stock_code = get_trade_attr(trade, "stock_code")
+                    action = get_trade_attr(trade, "action")
+                    pnl = get_trade_attr(trade, "pnl") or 0.0
 
                     stock_stats = stock_performance.setdefault(
                         stock_code,
@@ -454,7 +454,10 @@ class BacktestReportGenerator:
                 )
 
                 # 单笔交易分布的整体特征（便于前端画直方图/统计）
-                pnls = [float(get_trade_attr(t, 'pnl') or 0.0) for t in portfolio_manager.trades]
+                pnls = [
+                    float(get_trade_attr(t, "pnl") or 0.0)
+                    for t in portfolio_manager.trades
+                ]
                 if pnls:
                     pnl_series = pd.Series(pnls)
                     additional_metrics.update(

@@ -4,12 +4,10 @@
 基于现有QlibDataProvider，添加Alpha158因子计算和缓存机制
 """
 
-import asyncio
 import hashlib
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -24,10 +22,7 @@ try:
     # 导入Qlib内置的Alpha158
     from qlib.contrib.data.loader import Alpha158DL
     from qlib.data import D
-    from qlib.data.dataset import DatasetH
     from qlib.data.dataset.loader import QlibDataLoader
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
 
     QLIB_AVAILABLE = True
     ALPHA158_AVAILABLE = True
@@ -122,7 +117,7 @@ try:
                                             C.dpm.__dict__[
                                                 "data_path"
                                             ] = fixed_data_path
-                                            logger.info(f"通过 __dict__ 修复 data_path")
+                                            logger.info("通过 __dict__ 修复 data_path")
                                     except Exception:
                                         logger.warning(f"无法修复 data_path: {set_error}")
                 except Exception as fix_error:
@@ -482,7 +477,7 @@ class Alpha158Calculator:
             self.alpha_fields = []
             self.alpha_names = []
             logger.warning("Qlib内置Alpha158不可用，将使用简化版本")
-            logger.info(f"Alpha158计算器初始化，支持 0 个因子（需要Qlib支持）")
+            logger.info("Alpha158计算器初始化，支持 0 个因子（需要Qlib支持）")
 
     def _calculate_factors_for_stock(
         self, stock_data: pd.DataFrame, stock_code: str
@@ -742,7 +737,7 @@ class Alpha158Calculator:
                 logger.debug(f"[Alpha158] 绝对路径: {qlib_features_dir_abs}")
 
                 # 使用 glob 获取文件列表
-                logger.debug(f"[Alpha158] 开始使用glob查找*.parquet文件...")
+                logger.debug("[Alpha158] 开始使用glob查找*.parquet文件...")
                 glob_pattern = qlib_features_dir_abs / "*.parquet"
                 logger.debug(f"[Alpha158] glob模式: {glob_pattern}")
 
@@ -772,7 +767,6 @@ class Alpha158Calculator:
                     except (OSError, FileNotFoundError) as e:
                         logger.debug(f"[Alpha158] 无法访问文件 {f.name}: {e}")
                         # 忽略无法访问的文件
-                        pass
 
                 available_files = {f.stem for f in parquet_files}
 
@@ -866,7 +860,6 @@ class Alpha158Calculator:
                         candidates.append(f"{sym}_{exch}")  # 000001.SZ -> 000001_SZ
                     except ValueError as e:
                         logger.debug(f"[Alpha158] 分割股票代码失败: {norm_code}, 错误: {e}")
-                        pass
 
                 if len(norm_code) >= 8 and norm_code[:2] in ("SZ", "SH"):
                     sym = norm_code[2:]
@@ -907,7 +900,7 @@ class Alpha158Calculator:
 
                 # 如果预先获取的列表中没有找到，直接检查文件系统（处理时序问题）
                 if selected is None:
-                    logger.warning(f"[Alpha158] 在集合中未找到，开始直接文件系统检查...")
+                    logger.warning("[Alpha158] 在集合中未找到，开始直接文件系统检查...")
                     # 确保使用绝对路径
                     qlib_features_dir_abs = qlib_features_dir.resolve()
                     logger.debug(f"[Alpha158] 使用绝对路径进行文件检查: {qlib_features_dir_abs}")
@@ -964,7 +957,7 @@ class Alpha158Calculator:
                                         )
                                         break
                                     else:
-                                        logger.warning(f"[Alpha158]     文件大小为0，等待重试...")
+                                        logger.warning("[Alpha158]     文件大小为0，等待重试...")
                                 except (OSError, FileNotFoundError) as e:
                                     logger.debug(f"[Alpha158]     无法获取文件状态: {e}")
                                     # 即使获取状态失败，如果文件存在，也尝试使用
@@ -1016,7 +1009,7 @@ class Alpha158Calculator:
                     qlib_features_dir_abs = qlib_features_dir.resolve()
                     direct_check_results = {}
 
-                    logger.error(f"[Alpha158] 详细诊断信息:")
+                    logger.error("[Alpha158] 详细诊断信息:")
                     logger.error(f"[Alpha158]   候选文件名: {candidates}")
                     logger.error(f"[Alpha158]   可用文件数: {len(available_files)}")
                     logger.error(f"[Alpha158]   匹配的候选: {matching_candidates}")
@@ -1118,7 +1111,7 @@ class Alpha158Calculator:
                     )
                     if test_data.empty:
                         logger.warning(
-                            f"[Alpha158] D.features()返回空数据，可能的原因：数据格式不对或Qlib无法识别文件"
+                            "[Alpha158] D.features()返回空数据，可能的原因：数据格式不对或Qlib无法识别文件"
                         )
                     else:
                         logger.info(f"[Alpha158] D.features()成功加载数据: {test_data.shape}")
@@ -1419,7 +1412,7 @@ class Alpha158Calculator:
                 )
             else:
                 # 回退到简化版本（47个核心因子）
-                logger.warning(f"Alpha158配置不可用，使用简化版本（47个核心因子）")
+                logger.warning("Alpha158配置不可用，使用简化版本（47个核心因子）")
                 close = stock_data["$close"]
                 high = stock_data["$high"]
                 low = stock_data["$low"]
@@ -2309,7 +2302,7 @@ class Alpha158Calculator:
                                     )
                                     replaced_any = True
                                     break
-                            except (ValueError, Exception) as e:
+                            except (ValueError, Exception):
                                 # 如果解析失败，尝试强制替换
                                 try:
                                     n = int(n_str)
@@ -2386,7 +2379,7 @@ class Alpha158Calculator:
                                     )
                                     replaced_any = True
                                     break
-                            except (ValueError, Exception) as e:
+                            except (ValueError, Exception):
                                 # 如果解析失败，尝试强制替换
                                 try:
                                     n = int(n_str)
@@ -2693,11 +2686,11 @@ class EnhancedQlibDataProvider:
                                 try:
                                     if hasattr(C.dpm, "__dict__"):
                                         C.dpm.__dict__["data_path"] = fixed_data_path
-                                        logger.info(f"✓ 通过 __dict__ 修复 data_path")
+                                        logger.info("通过 __dict__ 修复 data_path")
                                     else:
                                         # 方法3: 通过 setattr
                                         setattr(C.dpm, "data_path", fixed_data_path)
-                                        logger.info(f"✓ 通过 setattr 修复 data_path")
+                                        logger.info("通过 setattr 修复 data_path")
                                 except Exception as set_error2:
                                     logger.warning(
                                         f"✗ 无法修复 data_path: {set_error}, {set_error2}"
@@ -2789,7 +2782,7 @@ class EnhancedQlibDataProvider:
             except Exception as e:
                 logger.error(f"Alpha因子计算失败: {e}")
 
-        logger.info(f"========== Qlib数据集准备完成 ==========")
+        logger.info("========== Qlib数据集准备完成 ==========")
         logger.info(f"记录数: {len(qlib_data)}")
         logger.info(f"特征数: {len(qlib_data.columns)}")
         logger.info(f"数据集形状: {qlib_data.shape}")
@@ -2803,7 +2796,7 @@ class EnhancedQlibDataProvider:
         )
         logger.info(f"缺失值总数: {qlib_data.isnull().sum().sum()}")
         logger.info(f"数据类型统计: {qlib_data.dtypes.value_counts().to_dict()}")
-        logger.info(f"==========================================")
+        logger.info("==========================================")
         if not qlib_data.empty:
             logger.info(
                 f"数据统计: 缺失值={qlib_data.isnull().sum().sum()}, 数据类型={qlib_data.dtypes.value_counts().to_dict()}"
@@ -3081,27 +3074,27 @@ class EnhancedQlibDataProvider:
         indicator_cols = [
             col for col in df_filled.columns if col not in price_cols + ["label"]
         ]
-        
+
         for col in indicator_cols:
             if col not in df_filled.columns:
                 continue
-                
+
             col_data = df_filled[col]
             missing_mask = col_data.isna()
-            
+
             if not missing_mask.any():
                 continue
-            
+
             missing_count = missing_mask.sum()
             total_count = len(col_data)
             missing_ratio = missing_count / total_count if total_count > 0 else 0
-            
+
             # 判断缺失原因：
             # 1. 如果缺失比例很高（>50%），可能是计算窗口不足，使用中位数填充
             # 2. 如果缺失比例较低，可能是数据缺失，使用前向填充
             # 3. 对于技术指标，如果开头缺失（计算窗口不足），使用NaN或中位数
             # 4. 对于中间缺失（数据缺失），使用前向填充
-            
+
             if missing_ratio > 0.5:
                 # 高缺失率：可能是计算窗口不足，使用中位数填充
                 median_value = col_data.median()
@@ -3110,14 +3103,12 @@ class EnhancedQlibDataProvider:
                 else:
                     # 如果中位数也是NaN，使用0（作为最后手段）
                     df_filled[col] = col_data.fillna(0)
-                logger.debug(
-                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用中位数填充"
-                )
+                logger.debug(f"列 {col} 缺失率 {missing_ratio:.2%}，使用中位数填充")
             else:
                 # 低缺失率：可能是数据缺失，使用前向填充
                 # 先前向填充，然后后向填充（处理开头缺失）
                 df_filled[col] = col_data.ffill().bfill()
-                
+
                 # 如果仍有缺失（开头），使用中位数
                 if df_filled[col].isna().any():
                     median_value = df_filled[col].median()
@@ -3125,15 +3116,13 @@ class EnhancedQlibDataProvider:
                         df_filled[col] = df_filled[col].fillna(median_value)
                     else:
                         df_filled[col] = df_filled[col].fillna(0)
-                
-                logger.debug(
-                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数"
-                )
+
+                logger.debug(f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数")
 
         # 记录缺失值处理情况
         missing_counts_before = df.isnull().sum()
         missing_counts_after = df_filled.isnull().sum()
-        
+
         if missing_counts_before.sum() > 0:
             logger.debug(
                 f"缺失值处理完成 - 处理前: {missing_counts_before[missing_counts_before > 0].to_dict()}, "
@@ -3189,7 +3178,9 @@ class EnhancedQlibDataProvider:
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
                 "loss": "huber",  # 使用Huber损失，对异常值更鲁棒
-                "huber_delta": hyperparameters.get("huber_delta", 0.1) if hyperparameters else 0.1,  # Huber损失的delta参数
+                "huber_delta": hyperparameters.get("huber_delta", 0.1)
+                if hyperparameters
+                else 0.1,  # Huber损失的delta参数
                 "colsample_bytree": 0.8879,
                 "learning_rate": 0.0421,
                 "subsample": 0.8789,

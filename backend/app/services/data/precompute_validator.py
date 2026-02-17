@@ -7,7 +7,6 @@ from __future__ import annotations  # 延迟评估类型注解
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -52,7 +51,6 @@ class PrecomputeValidator:
 
     def __init__(self):
         """初始化验证器"""
-        pass
 
     def validate_precomputed_data(
         self,

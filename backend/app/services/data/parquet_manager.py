@@ -698,7 +698,6 @@ class ParquetManager:
                     last_sync_time = datetime.fromtimestamp(latest_file.stat().st_mtime)
             except Exception as e:
                 self.logger.warning(f"获取最新文件时间失败: {e}")
-                pass
 
             return ComprehensiveStats(
                 total_files=total_files,
@@ -880,7 +879,7 @@ class ParquetManager:
             return DeletionResult(
                 success=False,
                 deleted_files=deleted_files,
-                failed_files=failed_files + [(f"批量操作", str(e))],
+                failed_files=failed_files + [("批量操作", str(e))],
                 total_deleted=len(deleted_files),
                 freed_space_bytes=freed_space,
                 message=f"批量删除失败: {str(e)}",

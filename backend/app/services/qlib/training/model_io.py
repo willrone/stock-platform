@@ -16,11 +16,13 @@ from loguru import logger
 from .qlib_check import QLIB_AVAILABLE
 
 if QLIB_AVAILABLE:
-    import qlib
+    pass
 
 
 async def save_qlib_model(
-    model: Any, model_id: str, model_config: Dict[str, Any],
+    model: Any,
+    model_id: str,
+    model_config: Dict[str, Any],
     training_meta: Optional[Dict[str, Any]] = None,
 ) -> str:
     """保存Qlib模型
@@ -83,9 +85,7 @@ async def load_qlib_model(model_path: str) -> Tuple[Any, Dict[str, Any]]:
         raise
 
 
-def _align_prediction_features(
-    model: Any, dataset: pd.DataFrame
-) -> pd.DataFrame:
+def _align_prediction_features(model: Any, dataset: pd.DataFrame) -> pd.DataFrame:
     """对齐预测数据特征列以匹配训练特征"""
     try:
         base_model = model.model if hasattr(model, "model") else model

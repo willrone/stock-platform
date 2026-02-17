@@ -5,9 +5,7 @@ Prometheus指标收集模块
 """
 
 import time
-from typing import Any, Dict
 
-from fastapi import Request, Response
 from fastapi.responses import Response as FastAPIResponse
 from loguru import logger
 from prometheus_client import (
@@ -231,7 +229,7 @@ class MetricsMiddleware:
 
         try:
             await self.app(scope, receive, send_wrapper)
-        except Exception as e:
+        except Exception:
             status_code = 500
             metrics_collector.record_error("internal_error", path)
             raise

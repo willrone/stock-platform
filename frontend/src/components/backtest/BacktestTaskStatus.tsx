@@ -251,7 +251,10 @@ export default function BacktestTaskStatus({
 
       {/* 任务基础信息 */}
       <Card>
-        <CardHeader title="基础信息" titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }} />
+        <CardHeader
+          title="基础信息"
+          titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }}
+        />
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box
             sx={{
@@ -332,7 +335,10 @@ export default function BacktestTaskStatus({
                   创建时间
                 </Typography>
               </Box>
-              <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+              >
                 {formatDateTime(task.created_at)}
               </Typography>
             </Box>
@@ -345,7 +351,10 @@ export default function BacktestTaskStatus({
                     完成时间
                   </Typography>
                 </Box>
-                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 500, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+                >
                   {formatDateTime(task.completed_at)}
                 </Typography>
               </Box>
@@ -490,7 +499,11 @@ export default function BacktestTaskStatus({
 
       {/* 回测配置信息 */}
       <Card>
-        <CardHeader avatar={<Settings size={24} />} title="回测配置" titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }} />
+        <CardHeader
+          avatar={<Settings size={24} />}
+          title="回测配置"
+          titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }}
+        />
         <CardContent>
           <Box
             sx={{

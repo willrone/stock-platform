@@ -6,10 +6,9 @@ API依赖注入和共享函数
 """
 
 import os
-from datetime import datetime
 from typing import Optional
 
-from fastapi import Header, Request
+from fastapi import Header
 from loguru import logger
 
 from app.core.database import SessionLocal
@@ -79,7 +78,7 @@ def get_task_repository():
     session = SessionLocal()
     try:
         return TaskRepository(session), session
-    except:
+    except Exception:
         session.close()
         raise
 
@@ -89,7 +88,7 @@ def get_prediction_result_repository():
     session = SessionLocal()
     try:
         return PredictionResultRepository(session), session
-    except:
+    except Exception:
         session.close()
         raise
 
@@ -99,7 +98,7 @@ def get_model_info_repository():
     session = SessionLocal()
     try:
         return ModelInfoRepository(session), session
-    except:
+    except Exception:
         session.close()
         raise
 
@@ -332,18 +331,26 @@ def execute_backtest_task_simple(task_id: str):
         if stock_pool_type == "fixed_500" and len(stock_codes) <= 1:
             try:
                 from pathlib import Path
+
                 data_root = Path(settings.DATA_ROOT_PATH).resolve()
                 parquet_dir = data_root / "parquet" / "stock_data"
                 if not parquet_dir.exists():
                     # 尝试从项目根目录查找
-                    alt_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "parquet" / "stock_data"
+                    alt_dir = (
+                        Path(__file__).resolve().parent.parent.parent.parent
+                        / "data"
+                        / "parquet"
+                        / "stock_data"
+                    )
                     if alt_dir.exists():
                         parquet_dir = alt_dir
                 if parquet_dir.exists():
-                    all_codes = sorted([
-                        f.stem.replace("_", ".")
-                        for f in parquet_dir.glob("*.parquet")
-                    ])
+                    all_codes = sorted(
+                        [
+                            f.stem.replace("_", ".")
+                            for f in parquet_dir.glob("*.parquet")
+                        ]
+                    )
                     if len(all_codes) >= 500:
                         stock_codes = all_codes[:500]
                     elif all_codes:
@@ -441,7 +448,8 @@ def execute_backtest_task_simple(task_id: str):
             initial_cash=initial_cash,
             commission_rate=config.get("commission_rate", 0.0003),
             slippage_rate=config.get("slippage_rate", 0.0001),
-            enable_unlimited_buy=config.get("enable_unlimited_buy", False) or strategy_config.get("enable_unlimited_buy", False),
+            enable_unlimited_buy=config.get("enable_unlimited_buy", False)
+            or strategy_config.get("enable_unlimited_buy", False),
         )
 
         # 执行回测
@@ -531,14 +539,15 @@ def execute_backtest_task_simple(task_id: str):
                                 # 辅助函数：将numpy类型转换为Python原生类型
                                 def to_python_type(value):
                                     """将numpy/pandas类型转换为Python原生类型"""
-                                    import numpy as np
                                     from datetime import datetime
-                                    
+
+                                    import numpy as np
+
                                     if isinstance(value, (np.integer, np.floating)):
                                         return value.item()
                                     elif isinstance(value, np.ndarray):
                                         return value.tolist()
-                                    elif hasattr(value, 'to_pydatetime'):
+                                    elif hasattr(value, "to_pydatetime"):
                                         # pandas Timestamp 转换为 Python datetime，然后转为 ISO 字符串
                                         return value.to_pydatetime().isoformat()
                                     elif isinstance(value, datetime):
@@ -546,7 +555,10 @@ def execute_backtest_task_simple(task_id: str):
                                         return value.isoformat()
                                     elif isinstance(value, dict):
                                         # 处理字典的 key 和 value（key 也可能是 Timestamp）
-                                        return {to_python_type(k): to_python_type(v) for k, v in value.items()}
+                                        return {
+                                            to_python_type(k): to_python_type(v)
+                                            for k, v in value.items()
+                                        }
                                     elif isinstance(value, (list, tuple)):
                                         return [to_python_type(v) for v in value]
                                     return value
@@ -555,11 +567,21 @@ def execute_backtest_task_simple(task_id: str):
                                 extended_metrics = {}
                                 if enhanced_result.extended_risk_metrics:
                                     extended_metrics = {
-                                        "sortino_ratio": to_python_type(enhanced_result.extended_risk_metrics.sortino_ratio),
-                                        "calmar_ratio": to_python_type(enhanced_result.extended_risk_metrics.calmar_ratio),
-                                        "max_drawdown_duration": to_python_type(enhanced_result.extended_risk_metrics.max_drawdown_duration),
-                                        "var_95": to_python_type(enhanced_result.extended_risk_metrics.var_95),
-                                        "downside_deviation": to_python_type(enhanced_result.extended_risk_metrics.downside_deviation),
+                                        "sortino_ratio": to_python_type(
+                                            enhanced_result.extended_risk_metrics.sortino_ratio
+                                        ),
+                                        "calmar_ratio": to_python_type(
+                                            enhanced_result.extended_risk_metrics.calmar_ratio
+                                        ),
+                                        "max_drawdown_duration": to_python_type(
+                                            enhanced_result.extended_risk_metrics.max_drawdown_duration
+                                        ),
+                                        "var_95": to_python_type(
+                                            enhanced_result.extended_risk_metrics.var_95
+                                        ),
+                                        "downside_deviation": to_python_type(
+                                            enhanced_result.extended_risk_metrics.downside_deviation
+                                        ),
                                     }
 
                                 # 准备分析数据
@@ -601,21 +623,31 @@ def execute_backtest_task_simple(task_id: str):
                                         )
                                 else:
                                     task_logger.warning(
-                                        f"enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据"
+                                        "enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据"
                                     )
 
                                 analysis_data = {
-                                    "drawdown_analysis": to_python_type(enhanced_result.drawdown_analysis.to_dict())
+                                    "drawdown_analysis": to_python_type(
+                                        enhanced_result.drawdown_analysis.to_dict()
+                                    )
                                     if enhanced_result.drawdown_analysis
                                     else {},
-                                    "monthly_returns": to_python_type([
-                                        mr.to_dict()
-                                        for mr in enhanced_result.monthly_returns
-                                    ])
+                                    "monthly_returns": to_python_type(
+                                        [
+                                            mr.to_dict()
+                                            for mr in enhanced_result.monthly_returns
+                                        ]
+                                    )
                                     if enhanced_result.monthly_returns
                                     else [],
-                                    "position_analysis": to_python_type(position_analysis_data) if position_analysis_data else None,
-                                    "benchmark_comparison": to_python_type(enhanced_result.benchmark_data)
+                                    "position_analysis": to_python_type(
+                                        position_analysis_data
+                                    )
+                                    if position_analysis_data
+                                    else None,
+                                    "benchmark_comparison": to_python_type(
+                                        enhanced_result.benchmark_data
+                                    )
                                     if enhanced_result.benchmark_data
                                     else {},
                                     "rolling_metrics": {},
@@ -649,7 +681,7 @@ def execute_backtest_task_simple(task_id: str):
                                                 date_value = datetime.fromisoformat(
                                                     date_value.replace("Z", "+00:00")
                                                 )
-                                            except:
+                                            except Exception:
                                                 task_logger.warning(
                                                     f"无法解析日期: {date_value}"
                                                 )
@@ -658,20 +690,22 @@ def execute_backtest_task_simple(task_id: str):
                                         snapshots_data.append(
                                             {
                                                 "date": date_value,
-                                                "portfolio_value": to_python_type(snapshot.get(
-                                                    "portfolio_value", 0
-                                                )),
-                                                "cash": to_python_type(snapshot.get("cash", 0)),
-                                                "positions_count": to_python_type(snapshot.get(
-                                                    "positions_count", 0
-                                                )),
-                                                "total_return": to_python_type(snapshot.get(
-                                                    "total_return", 0
-                                                )),
+                                                "portfolio_value": to_python_type(
+                                                    snapshot.get("portfolio_value", 0)
+                                                ),
+                                                "cash": to_python_type(
+                                                    snapshot.get("cash", 0)
+                                                ),
+                                                "positions_count": to_python_type(
+                                                    snapshot.get("positions_count", 0)
+                                                ),
+                                                "total_return": to_python_type(
+                                                    snapshot.get("total_return", 0)
+                                                ),
                                                 "drawdown": 0,
-                                                "positions": to_python_type(snapshot.get(
-                                                    "positions", {}
-                                                )),
+                                                "positions": to_python_type(
+                                                    snapshot.get("positions", {})
+                                                ),
                                             }
                                         )
 
@@ -718,7 +752,7 @@ def execute_backtest_task_simple(task_id: str):
                                                         )
                                                     )
                                                 )
-                                            except:
+                                            except Exception:
                                                 task_logger.warning(
                                                     f"无法解析时间戳: {timestamp_value}"
                                                 )
@@ -734,16 +768,22 @@ def execute_backtest_task_simple(task_id: str):
                                                     "stock_code", ""
                                                 ),
                                                 "action": trade.get("action", ""),
-                                                "quantity": to_python_type(trade.get("quantity", 0)),
-                                                "price": to_python_type(trade.get("price", 0)),
+                                                "quantity": to_python_type(
+                                                    trade.get("quantity", 0)
+                                                ),
+                                                "price": to_python_type(
+                                                    trade.get("price", 0)
+                                                ),
                                                 "timestamp": timestamp_value,
-                                                "commission": to_python_type(trade.get(
-                                                    "commission", 0
-                                                )),
-                                                "pnl": to_python_type(trade.get("pnl", 0)),
-                                                "holding_days": to_python_type(trade.get(
-                                                    "holding_days", 0
-                                                )),
+                                                "commission": to_python_type(
+                                                    trade.get("commission", 0)
+                                                ),
+                                                "pnl": to_python_type(
+                                                    trade.get("pnl", 0)
+                                                ),
+                                                "holding_days": to_python_type(
+                                                    trade.get("holding_days", 0)
+                                                ),
                                                 "technical_indicators": {},
                                             }
                                         )
@@ -930,7 +970,6 @@ def execute_qlib_precompute_task_simple(task_id: str):
     3. 独立创建所需服务实例
     4. 添加进程ID到日志上下文
     """
-    import asyncio
 
     # 绑定进程ID到日志上下文
     process_id = os.getpid()
@@ -945,7 +984,6 @@ def execute_qlib_precompute_task_simple(task_id: str):
         # 在独立进程中，确保所有类型都正确导入
         import threading
         from datetime import datetime
-        from typing import Any, Dict, List, Optional
 
         from app.services.tasks.task_execution_engine import QlibPrecomputeTaskExecutor
         from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext

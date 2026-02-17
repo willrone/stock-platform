@@ -19,8 +19,10 @@ from .evaluation import _evaluate_model
 from .feature_analysis import analyze_feature_correlations, extract_feature_importance
 from .model_config import create_qlib_model_config
 from .model_io import load_qlib_model, save_qlib_model
+
 # prediction 功能已集成到类方法中
 from .qlib_check import QLIB_AVAILABLE
+from .rolling_integration import run_rolling_training
 from .training import _train_qlib_model
 from .utility import (
     get_model_config_template,
@@ -28,7 +30,6 @@ from .utility import (
     get_training_recommendations,
     recommend_models,
 )
-from .rolling_integration import run_rolling_training
 
 # LightGBM / XGBoost 二分类目标函数映射
 _BINARY_OBJECTIVE_MAP = {
@@ -38,7 +39,8 @@ _BINARY_OBJECTIVE_MAP = {
 
 
 def _apply_binary_objective(
-    model_config: dict, config: QlibTrainingConfig,
+    model_config: dict,
+    config: QlibTrainingConfig,
 ) -> dict:
     """当 label_type=binary 时，自动将模型 objective 切换为二分类
 
@@ -180,7 +182,10 @@ class UnifiedQlibTrainingEngine:
                 raise ValueError("无法获取训练数据")
 
             # 记录数据集维度信息
-            n_samples, n_features = dataset.shape[0], dataset.shape[1] if dataset.ndim > 1 else 0
+            n_samples, n_features = (
+                dataset.shape[0],
+                dataset.shape[1] if dataset.ndim > 1 else 0,
+            )
             logger.info(
                 f"数据集: {n_samples} 样本, {n_features} 特征, "
                 f"索引={type(dataset.index).__name__}, "
@@ -360,7 +365,10 @@ class UnifiedQlibTrainingEngine:
                 "prediction_horizon": config.prediction_horizon,
             }
             model_path = await save_qlib_model(
-                model, model_id, model_config, training_meta,
+                model,
+                model_id,
+                model_config,
+                training_meta,
             )
             self.performance_monitor.end_stage("save_model")
 
@@ -417,6 +425,7 @@ class UnifiedQlibTrainingEngine:
 
         except Exception as e:
             import traceback
+
             logger.error(f"Qlib模型训练失败: {model_id}, 错误: {e}\n{traceback.format_exc()}")
             if progress_callback:
                 await progress_callback(model_id, 0.0, "failed", f"训练失败: {str(e)}")
@@ -468,6 +477,7 @@ class UnifiedQlibTrainingEngine:
 
             # 对齐特征
             from .model_io import _align_prediction_features
+
             if isinstance(dataset, pd.DataFrame):
                 dataset = _align_prediction_features(model, dataset)
 

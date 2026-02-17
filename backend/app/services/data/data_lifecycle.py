@@ -9,9 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from loguru import logger
-
-from app.models.database import DatabaseManager, TaskStatus
+from app.models.database import DatabaseManager
 
 from .parquet_manager import ParquetManager
 

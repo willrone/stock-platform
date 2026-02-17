@@ -100,7 +100,11 @@ export function PredictionTabs({
               width: '100%',
             }}
           >
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+            >
               预测结果
             </Typography>
             <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 192 } }}>
@@ -186,12 +190,36 @@ export function PredictionTabs({
                 <Table aria-label="预测结果表格" sx={{ minWidth: 600 }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>股票代码</TableCell>
-                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>预测方向</TableCell>
-                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>预测收益率</TableCell>
-                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>置信度</TableCell>
-                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>置信区间</TableCell>
-                      <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}>VaR</TableCell>
+                      <TableCell
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}
+                      >
+                        股票代码
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}
+                      >
+                        预测方向
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}
+                      >
+                        预测收益率
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}
+                      >
+                        置信度
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}
+                      >
+                        置信区间
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' }, p: { xs: 0.75, sm: 1 } }}
+                      >
+                        VaR
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>

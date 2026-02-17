@@ -14,14 +14,14 @@ import asyncio
 import concurrent.futures
 import os
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
 try:
     import optuna
-    from optuna.pruners import MedianPruner, HyperbandPruner
-    from optuna.samplers import NSGAIISampler, TPESampler, GridSampler
+    from optuna.pruners import HyperbandPruner
+    from optuna.samplers import GridSampler, NSGAIISampler, TPESampler
     from optuna.storages import RDBStorage
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
@@ -41,7 +41,7 @@ class StrategyHyperparameterOptimizer:
     def __init__(self, n_jobs: int = 4, use_persistent_storage: bool = True):
         """
         初始化优化器
-        
+
         Args:
             n_jobs: 并行进程数（默认 4）
             use_persistent_storage: 是否使用 SQLite 持久化存储（支持断点续跑）
@@ -50,12 +50,14 @@ class StrategyHyperparameterOptimizer:
         self.n_jobs = n_jobs
         self.use_persistent_storage = use_persistent_storage
         self._data_cache = get_data_cache()
-        
+
         # 确保 optuna 存储目录存在
         self._storage_dir = os.path.join(settings.DATA_ROOT_PATH, "optuna_studies")
         os.makedirs(self._storage_dir, exist_ok=True)
-        
-        logger.info(f"StrategyHyperparameterOptimizer 初始化: n_jobs={n_jobs}, persistent={use_persistent_storage}")
+
+        logger.info(
+            f"StrategyHyperparameterOptimizer 初始化: n_jobs={n_jobs}, persistent={use_persistent_storage}"
+        )
 
     @staticmethod
     def _build_grid_search_space(
@@ -173,14 +175,19 @@ class StrategyHyperparameterOptimizer:
         # 预加载数据到缓存（避免每个 trial 重复加载）
         # perf: 创建临时 DataLoader 用于预加载，确保缓存真正生效
         # 之前未传 data_loader 导致 preload_async 直接返回 0，缓存完全失效
-        from app.services.backtest.execution.data_loader import DataLoader as _DataLoader
+        from app.services.backtest.execution.data_loader import (
+            DataLoader as _DataLoader,
+        )
+
         _temp_loader = _DataLoader(
             data_dir=str(settings.DATA_ROOT_PATH),
             max_workers=4,
         )
         logger.info(f"预加载股票数据: {len(stock_codes)} 只股票")
         preloaded_count = await self._data_cache.preload_async(
-            stock_codes, start_date, end_date,
+            stock_codes,
+            start_date,
+            end_date,
             data_loader=_temp_loader.load_stock_data,
         )
         logger.info(f"数据预加载完成: {preloaded_count} 只股票已缓存")
@@ -196,7 +203,9 @@ class StrategyHyperparameterOptimizer:
 
         base_study_name = f"{strategy_name}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
         try:
-            sig_src = json.dumps(param_space, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+            sig_src = json.dumps(
+                param_space, sort_keys=True, ensure_ascii=False, default=str
+            ).encode("utf-8")
             param_sig = hashlib.sha1(sig_src).hexdigest()[:8]
         except Exception:
             param_sig = "nosig"
@@ -207,16 +216,16 @@ class StrategyHyperparameterOptimizer:
             storage_path = os.path.join(self._storage_dir, f"{study_name}.db")
             storage = RDBStorage(
                 url=f"sqlite:///{storage_path}",
-                engine_kwargs={"connect_args": {"timeout": 30}}
+                engine_kwargs={"connect_args": {"timeout": 30}},
             )
             logger.info(f"使用 SQLite 存储: {storage_path}")
-            logger.info(f"Optuna study_name: {study_name} (base={base_study_name}, sig={param_sig})")
+            logger.info(
+                f"Optuna study_name: {study_name} (base={base_study_name}, sig={param_sig})"
+            )
 
         # 创建激进剪枝器（比 MedianPruner 更早终止差的 trial）
         pruner = HyperbandPruner(
-            min_resource=1,
-            max_resource=n_trials,
-            reduction_factor=3
+            min_resource=1, max_resource=n_trials, reduction_factor=3
         )
 
         # 创建 Optuna study
@@ -240,13 +249,13 @@ class StrategyHyperparameterOptimizer:
                 directions=directions,
                 sampler=sampler,
                 storage=storage,
-                load_if_exists=True  # 支持断点续跑
+                load_if_exists=True,  # 支持断点续跑
             )
         else:
             # 单目标优化
             direction = objective_config.get("direction", "maximize")
             if optimization_method == "tpe":
-# 启用 multivariate 模式，学习参数间相关性，提升收敛速度
+                # 启用 multivariate 模式，学习参数间相关性，提升收敛速度
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
             elif optimization_method == "random":
                 sampler = optuna.samplers.RandomSampler(seed=42)
@@ -254,14 +263,15 @@ class StrategyHyperparameterOptimizer:
                 grid_search_space = self._build_grid_search_space(param_space)
                 if not grid_search_space:
                     logger.warning("网格搜索空间为空，回退到 TPE")
-                    sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
+                    sampler = TPESampler(
+                        seed=42, multivariate=True, n_startup_trials=10
+                    )
                 else:
                     grid_total = 1
                     for vals in grid_search_space.values():
                         grid_total *= len(vals)
                     logger.info(
-                        f"网格搜索空间: {len(grid_search_space)} 个参数, "
-                        f"共 {grid_total} 个组合"
+                        f"网格搜索空间: {len(grid_search_space)} 个参数, " f"共 {grid_total} 个组合"
                     )
                     sampler = GridSampler(grid_search_space)
             else:
@@ -273,7 +283,7 @@ class StrategyHyperparameterOptimizer:
                 sampler=sampler,
                 pruner=pruner if optimization_method != "grid" else None,
                 storage=storage,
-                load_if_exists=True  # 支持断点续跑
+                load_if_exists=True,  # 支持断点续跑
             )
 
         # 注入先验知识：将默认参数作为第一个 trial，加速收敛
@@ -291,10 +301,9 @@ class StrategyHyperparameterOptimizer:
                 logger.warning(f"注入默认参数失败: {e}")
 
         # 断点续跑：扣除已完成的 trials，避免重复执行
-        existing_completed = len([
-            t for t in study.trials
-            if t.state == optuna.trial.TrialState.COMPLETE
-        ])
+        existing_completed = len(
+            [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+        )
         if existing_completed > 0:
             remaining = max(0, n_trials - existing_completed)
             logger.info(
@@ -306,10 +315,15 @@ class StrategyHyperparameterOptimizer:
                 logger.info("所有 trials 已完成，无需继续优化")
                 # 直接返回已有结果，避免 n_trials=0 导致后续除零错误
                 completed_trials = [
-                    t for t in study.trials
+                    t
+                    for t in study.trials
                     if t.state == optuna.trial.TrialState.COMPLETE
                 ]
-                best_trial = study.best_trial if not is_multi_objective and completed_trials else None
+                best_trial = (
+                    study.best_trial
+                    if not is_multi_objective and completed_trials
+                    else None
+                )
                 return {
                     "success": True,
                     "strategy_name": strategy_name,
@@ -320,14 +334,20 @@ class StrategyHyperparameterOptimizer:
                     "n_trials": existing_completed,
                     "completed_trials": existing_completed,
                     "running_trials": 0,
-                    "pruned_trials": len([
-                        t for t in study.trials
-                        if t.state == optuna.trial.TrialState.PRUNED
-                    ]),
-                    "failed_trials": len([
-                        t for t in study.trials
-                        if t.state == optuna.trial.TrialState.FAIL
-                    ]),
+                    "pruned_trials": len(
+                        [
+                            t
+                            for t in study.trials
+                            if t.state == optuna.trial.TrialState.PRUNED
+                        ]
+                    ),
+                    "failed_trials": len(
+                        [
+                            t
+                            for t in study.trials
+                            if t.state == optuna.trial.TrialState.FAIL
+                        ]
+                    ),
                     "message": f"断点续跑: 所有 {existing_completed} 个 trials 已完成，无需继续",
                 }
 
@@ -359,6 +379,7 @@ class StrategyHyperparameterOptimizer:
         # perf: P0-2 预计算 trading_dates，所有 trial 共享同一份
         # trading_dates 只取决于股票数据和日期范围，与策略参数无关
         from app.services.backtest.execution.data_preprocessor import DataPreprocessor
+
         _preprocessor = DataPreprocessor()
         _precomputed_trading_dates = _preprocessor.get_trading_calendar(
             _preloaded_stock_data, start_date, end_date
@@ -414,15 +435,27 @@ class StrategyHyperparameterOptimizer:
                 logger.info(f"Trial {trial.number}: 采样参数 = {strategy_params}")
 
                 # 防御：如果采样失败（并发竞争导致空参数），直接返回最差分数
-                if not strategy_params or all(v is None for v in strategy_params.values()):
+                if not strategy_params or all(
+                    v is None for v in strategy_params.values()
+                ):
                     logger.warning(f"Trial {trial.number}: 采样参数为空，跳过本轮")
                     if is_multi_objective:
                         return tuple(
-                            [float("-inf") if objective_config.get("direction", "maximize") == "maximize" else float("inf")]
+                            [
+                                float("-inf")
+                                if objective_config.get("direction", "maximize")
+                                == "maximize"
+                                else float("inf")
+                            ]
                             * len(objective_metric)
                         )
                     else:
-                        return float("-inf") if objective_config.get("direction", "maximize") == "maximize" else float("inf")
+                        return (
+                            float("-inf")
+                            if objective_config.get("direction", "maximize")
+                            == "maximize"
+                            else float("inf")
+                        )
 
                 # Build strategy_config for backtest.
                 # - single strategy: use sampled params directly
@@ -433,8 +466,12 @@ class StrategyHyperparameterOptimizer:
                     # Plan A: trade_mode/topk/buffer/max_changes_per_day 固定，不进入 param_space。
                     topk = int((backtest_config or {}).get("topk", 10) or 10)
                     buffer_n = int((backtest_config or {}).get("buffer", 20) or 20)
-                    max_changes = int((backtest_config or {}).get("max_changes_per_day", 2) or 2)
-                    integration_method = strategy_params.get("integration_method") or "weighted_voting"
+                    max_changes = int(
+                        (backtest_config or {}).get("max_changes_per_day", 2) or 2
+                    )
+                    integration_method = (
+                        strategy_params.get("integration_method") or "weighted_voting"
+                    )
 
                     # gather enabled sub-strategies
                     strategies_list = []
@@ -463,7 +500,9 @@ class StrategyHyperparameterOptimizer:
                             if str(pk).startswith(prefix):
                                 sub_cfg[str(pk)[len(prefix) :]] = pv
 
-                        strategies_list.append({"name": sk, "weight": w, "config": sub_cfg})
+                        strategies_list.append(
+                            {"name": sk, "weight": w, "config": sub_cfg}
+                        )
 
                     # fallback: ensure at least 1
                     if not strategies_list:
@@ -478,7 +517,13 @@ class StrategyHyperparameterOptimizer:
                             for pk, pv in strategy_params.items():
                                 if str(pk).startswith(prefix):
                                     sub_cfg[str(pk)[len(prefix) :]] = pv
-                            strategies_list.append({"name": sk, "weight": 1.0 / max(1, len(inferred)), "config": sub_cfg})
+                            strategies_list.append(
+                                {
+                                    "name": sk,
+                                    "weight": 1.0 / max(1, len(inferred)),
+                                    "config": sub_cfg,
+                                }
+                            )
 
                     strategy_config_payload = {
                         "integration_method": integration_method,
@@ -498,8 +543,12 @@ class StrategyHyperparameterOptimizer:
                     commission_rate=_bc.get("commission_rate", 0.0003),
                     slippage_rate=_bc.get("slippage_rate", 0.0001),
                     enable_unlimited_buy=_bc.get("enable_unlimited_buy", False),
-                    stop_loss_pct=strategy_params.get("stop_loss", _bc.get("stop_loss_pct", 0.05)),
-                    take_profit_pct=strategy_params.get("take_profit", _bc.get("take_profit_pct", 0.15)),
+                    stop_loss_pct=strategy_params.get(
+                        "stop_loss", _bc.get("stop_loss_pct", 0.05)
+                    ),
+                    take_profit_pct=strategy_params.get(
+                        "take_profit", _bc.get("take_profit_pct", 0.15)
+                    ),
                 )
 
                 # 运行回测（在同步函数中运行异步代码）
@@ -507,7 +556,7 @@ class StrategyHyperparameterOptimizer:
                 # 使用新的事件循环，避免与外部事件循环冲突
                 try:
                     # 尝试获取当前运行中的事件循环
-                    loop = asyncio.get_running_loop()
+                    asyncio.get_running_loop()
                     # 如果已经有运行中的循环，在新线程中运行
                     with concurrent.futures.ThreadPoolExecutor() as executor_pool:
 
@@ -632,25 +681,34 @@ class StrategyHyperparameterOptimizer:
 
                     # 记录 stability 的分解细节到 trial.user_attrs，便于前端/接口展示。
                     # 同时确保 score 永远是可比较数值（避免 NaN -> null）。
-                    direction = str(objective_config.get("direction", "maximize")).lower()
+                    direction = str(
+                        objective_config.get("direction", "maximize")
+                    ).lower()
                     if objective_metric == "stability":
                         try:
                             import math
 
                             # 复用 stability 计算逻辑（从 backtest_report 里提取 OOS 分量）
-                            history = backtest_report.get("portfolio_history") or backtest_report.get(
-                                "portfolioHistory"
-                            )
+                            history = backtest_report.get(
+                                "portfolio_history"
+                            ) or backtest_report.get("portfolioHistory")
                             oos_ratio = float(
-                                (backtest_report.get("stability_config") or {}).get("oos_ratio", 0.3)
+                                (backtest_report.get("stability_config") or {}).get(
+                                    "oos_ratio", 0.3
+                                )
                             )
                             oos_ratio = max(0.05, min(0.5, oos_ratio))
 
                             raw_dates = [
-                                str(h.get("date") or h.get("snapshot_date") or "") for h in (history or [])
+                                str(h.get("date") or h.get("snapshot_date") or "")
+                                for h in (history or [])
                             ]
                             raw_values = [
-                                float(h.get("portfolio_value") or h.get("portfolioValue") or 0.0)
+                                float(
+                                    h.get("portfolio_value")
+                                    or h.get("portfolioValue")
+                                    or 0.0
+                                )
                                 for h in (history or [])
                             ]
                             dates = []
@@ -681,7 +739,9 @@ class StrategyHyperparameterOptimizer:
 
                                 # total return
                                 total_ret_oos = (
-                                    (oos_values[-1] / oos_values[0] - 1.0) if oos_values and oos_values[0] else 0.0
+                                    (oos_values[-1] / oos_values[0] - 1.0)
+                                    if oos_values and oos_values[0]
+                                    else 0.0
                                 )
 
                                 # max drawdown
@@ -699,7 +759,9 @@ class StrategyHyperparameterOptimizer:
                                 first = {}
                                 last = {}
                                 for d, v in zip(oos_dates, oos_values):
-                                    if not (isinstance(v, (int, float)) and math.isfinite(v)):
+                                    if not (
+                                        isinstance(v, (int, float)) and math.isfinite(v)
+                                    ):
                                         continue
                                     m = str(d)[:7]
                                     if m not in first:
@@ -708,24 +770,40 @@ class StrategyHyperparameterOptimizer:
                                 mrets = []
                                 for m in sorted(last.keys()):
                                     f = first.get(m)
-                                    l = last.get(m)
-                                    if f and f != 0 and math.isfinite(f) and math.isfinite(l):
+                                    last_val = last.get(m)
+                                    if (
+                                        f
+                                        and f != 0
+                                        and math.isfinite(f)
+                                        and math.isfinite(last_val)
+                                    ):
                                         mrets.append(l / f - 1.0)
 
                                 if mrets:
-                                    pos_month_ratio = sum(1 for r in mrets if r > 0) / len(mrets)
+                                    pos_month_ratio = sum(
+                                        1 for r in mrets if r > 0
+                                    ) / len(mrets)
                                     mean = sum(mrets) / len(mrets)
-                                    var = sum((r - mean) ** 2 for r in mrets) / len(mrets)
-                                    mstd = var ** 0.5
+                                    var = sum((r - mean) ** 2 for r in mrets) / len(
+                                        mrets
+                                    )
+                                    mstd = var**0.5
                                 else:
                                     pos_month_ratio = 0.0
                                     mstd = 0.0
 
-                                ret_score = max(0.0, min(1.0, (total_ret_oos + 0.3) / 0.9))
+                                ret_score = max(
+                                    0.0, min(1.0, (total_ret_oos + 0.3) / 0.9)
+                                )
                                 dd_score = 1.0 - min(1.0, mdd_oos / 0.6)
                                 std_score = 1.0 - min(1.0, mstd / 0.10)
                                 pm_score = max(0.0, min(1.0, pos_month_ratio))
-                                blend = 0.45 * ret_score + 0.30 * dd_score + 0.15 * pm_score + 0.10 * std_score
+                                blend = (
+                                    0.45 * ret_score
+                                    + 0.30 * dd_score
+                                    + 0.15 * pm_score
+                                    + 0.10 * std_score
+                                )
 
                                 details.update(
                                     {
@@ -750,10 +828,18 @@ class StrategyHyperparameterOptimizer:
                     try:
                         import math
 
-                        if score is None or not (isinstance(score, (int, float)) and math.isfinite(score)):
-                            score = float("-inf") if direction == "maximize" else float("inf")
+                        if score is None or not (
+                            isinstance(score, (int, float)) and math.isfinite(score)
+                        ):
+                            score = (
+                                float("-inf")
+                                if direction == "maximize"
+                                else float("inf")
+                            )
                     except Exception:
-                        score = float("-inf") if direction == "maximize" else float("inf")
+                        score = (
+                            float("-inf") if direction == "maximize" else float("inf")
+                        )
 
                     logger.info(
                         f"Trial {trial.number}: 目标得分 = {score:.6f} (原始指标: {objective_metric})"
@@ -874,14 +960,18 @@ class StrategyHyperparameterOptimizer:
 
             # GridSampler 在 SQLite 存储 + 多线程下存在竞争条件（同一 trial 被多个 worker 领取），
             # 强制串行执行以避免 "Cannot tell a COMPLETE trial" 错误。
-            effective_n_jobs = 1 if isinstance(sampler, optuna.samplers.GridSampler) else self.n_jobs
-            logger.info(f"开始优化: n_trials={n_trials}, n_jobs={effective_n_jobs} (原始={self.n_jobs}), timeout={timeout}")
+            effective_n_jobs = (
+                1 if isinstance(sampler, optuna.samplers.GridSampler) else self.n_jobs
+            )
+            logger.info(
+                f"开始优化: n_trials={n_trials}, n_jobs={effective_n_jobs} (原始={self.n_jobs}), timeout={timeout}"
+            )
             study.optimize(
-                objective, 
-                n_trials=n_trials, 
-                timeout=timeout, 
+                objective,
+                n_trials=n_trials,
+                timeout=timeout,
                 n_jobs=effective_n_jobs,
-                show_progress_bar=False
+                show_progress_bar=False,
             )
 
             end_time = datetime.utcnow()
@@ -1157,7 +1247,9 @@ class StrategyHyperparameterOptimizer:
             )
             try:
                 oos_ratio = float(
-                    (backtest_report.get("stability_config") or {}).get("oos_ratio", 0.3)
+                    (backtest_report.get("stability_config") or {}).get(
+                        "oos_ratio", 0.3
+                    )
                 )
             except Exception:
                 oos_ratio = 0.3
@@ -1235,7 +1327,7 @@ class StrategyHyperparameterOptimizer:
                         pos_month_ratio = sum(1 for r in mrets if r > 0) / len(mrets)
                         mean = sum(mrets) / len(mrets)
                         var = sum((r - mean) ** 2 for r in mrets) / len(mrets)
-                        mstd = var ** 0.5
+                        mstd = var**0.5
                     else:
                         pos_month_ratio = 0.0
                         mstd = 0.0

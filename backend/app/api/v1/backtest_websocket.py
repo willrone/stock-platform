@@ -4,10 +4,9 @@
 提供回测进度的实时WebSocket通信
 """
 
-import asyncio
 import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import websockets
 from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -20,7 +19,6 @@ from app.repositories.task_repository import TaskRepository
 from app.services.backtest.execution.backtest_progress_monitor import (
     backtest_progress_monitor,
 )
-from app.services.infrastructure.websocket_manager import websocket_manager
 
 router = APIRouter(prefix="/backtest", tags=["backtest-websocket"])
 

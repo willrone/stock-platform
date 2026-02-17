@@ -7,22 +7,17 @@
 3. 因子投资策略：价值因子策略、动量因子策略、低波动因子策略、多因子组合策略
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from loguru import logger
-from scipy import stats
-from scipy.optimize import minimize
 
 from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
-from ..models import BacktestConfig, Position, SignalType, TradingSignal
+from ..models import SignalType, TradingSignal
 
 
 class BollingerBandStrategy(BaseStrategy):
@@ -81,7 +76,9 @@ class BollingerBandStrategy(BaseStrategy):
             sell_mask = (prev_pb >= 1) & (pb < 1)
 
             # 用 None 初始化，避免未赋值位置默认为 NaN(float)，导致下游误判为 truthy
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -102,19 +99,25 @@ class BollingerBandStrategy(BaseStrategy):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     current_price = indicators["price"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=data.attrs.get("stock_code", "UNKNOWN"),
-                        signal_type=sig_type,
-                        strength=0.8, # 预计算模式下简化强度
-                        price=current_price,
-                        reason=f"[向量化] 价格突破轨道, %B: {indicators['percent_b'].iloc[current_idx]:.3f}",
-                        metadata={
-                            "upper_band": indicators["upper_band"].iloc[current_idx],
-                            "lower_band": indicators["lower_band"].iloc[current_idx],
-                            "percent_b": indicators["percent_b"].iloc[current_idx],
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=data.attrs.get("stock_code", "UNKNOWN"),
+                            signal_type=sig_type,
+                            strength=0.8,  # 预计算模式下简化强度
+                            price=current_price,
+                            reason=f"[向量化] 价格突破轨道, %B: {indicators['percent_b'].iloc[current_idx]:.3f}",
+                            metadata={
+                                "upper_band": indicators["upper_band"].iloc[
+                                    current_idx
+                                ],
+                                "lower_band": indicators["lower_band"].iloc[
+                                    current_idx
+                                ],
+                                "percent_b": indicators["percent_b"].iloc[current_idx],
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass
@@ -213,21 +216,23 @@ class StochasticStrategy(BaseStrategy):
             # 向量化逻辑判断
             # 买入：超卖区金叉 (K < oversold 且 K 上穿 D)
             buy_mask = (
-                (k < self.oversold) &
-                (prev_k < self.oversold) &
-                (k > d) &
-                (prev_k <= prev_d)
+                (k < self.oversold)
+                & (prev_k < self.oversold)
+                & (k > d)
+                & (prev_k <= prev_d)
             )
             # 卖出：超买区死叉 (K > overbought 且 K 下穿 D)
             sell_mask = (
-                (k > self.overbought) &
-                (prev_k > self.overbought) &
-                (k < d) &
-                (prev_k >= prev_d)
+                (k > self.overbought)
+                & (prev_k > self.overbought)
+                & (k < d)
+                & (prev_k >= prev_d)
             )
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -252,15 +257,17 @@ class StochasticStrategy(BaseStrategy):
                     current_price = indicators["price"].iloc[current_idx]
                     current_k = indicators["k_percent"].iloc[current_idx]
                     current_d = indicators["d_percent"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=0.8,
-                        price=current_price,
-                        reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
-                        metadata={"k_percent": current_k, "d_percent": current_d},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=0.8,
+                            price=current_price,
+                            reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
+                            metadata={"k_percent": current_k, "d_percent": current_d},
+                        )
+                    ]
                 return []
         except Exception:
             pass
@@ -356,7 +363,9 @@ class CCIStrategy(BaseStrategy):
             sell_mask = (cci > self.overbought) & (prev_cci <= self.overbought)
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -380,15 +389,17 @@ class CCIStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_cci = indicators["cci"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=0.8,
-                        price=current_price,
-                        reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
-                        metadata={"cci": current_cci},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=0.8,
+                            price=current_price,
+                            reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
+                            metadata={"cci": current_cci},
+                        )
+                    ]
                 return []
         except Exception:
             pass
@@ -711,12 +722,16 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             # 与日线版本保持一致：
             # prev_z <= -entry 且 z > -entry -> BUY
             # prev_z >=  entry 且 z <  entry -> SELL
-            buy_mask = (prev_z <= -self.entry_threshold) & (zscore > -self.entry_threshold)
-            sell_mask = (prev_z >= self.entry_threshold) & (zscore < self.entry_threshold)
+            buy_mask = (prev_z <= -self.entry_threshold) & (
+                zscore > -self.entry_threshold
+            )
+            sell_mask = (prev_z >= self.entry_threshold) & (
+                zscore < self.entry_threshold
+            )
 
             # 只有在均值回归为负（beta[1]<0）时启用（当前 mean_rev 为负常数/0）
-            buy_mask &= (mean_rev < 0)
-            sell_mask &= (mean_rev < 0)
+            buy_mask &= mean_rev < 0
+            sell_mask &= mean_rev < 0
 
             # 数据不足：前 lookback_period 天不产生信号
             if len(data.index) > 0:
@@ -727,7 +742,9 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                 buy_mask &= enough_data
                 sell_mask &= enough_data
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -819,19 +836,27 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                     current_price = indicators["price"].iloc[current_idx]
                     current_zscore = indicators["zscore"].iloc[current_idx]
                     half_life = indicators.get("half_life")
-                    mean_reversion = indicators["mean_reversion_strength"].iloc[current_idx]
+                    mean_reversion = indicators["mean_reversion_strength"].iloc[
+                        current_idx
+                    ]
 
                     return [
                         TradingSignal(
                             timestamp=current_date,
                             stock_code=stock_code,
                             signal_type=sig_type,
-                            strength=min(1.0, abs(current_zscore) / self.entry_threshold) if self.entry_threshold else 0.8,
+                            strength=min(
+                                1.0, abs(current_zscore) / self.entry_threshold
+                            )
+                            if self.entry_threshold
+                            else 0.8,
                             price=current_price,
                             reason=f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, 半衰期: {float(half_life):.1f}",
                             metadata={
                                 "zscore": float(current_zscore),
-                                "half_life": float(half_life) if half_life is not None else None,
+                                "half_life": float(half_life)
+                                if half_life is not None
+                                else None,
                                 "mean_reversion_strength": float(mean_reversion),
                             },
                         )
@@ -955,7 +980,7 @@ class FactorStrategy(BaseStrategy):
                 try:
                     beta = np.linalg.lstsq(X, y, rcond=None)[0]
                     neutralized.loc[valid_idx] = y - X @ beta
-                except:
+                except Exception:
                     pass
 
         if industries is not None and self.industry_neutral:

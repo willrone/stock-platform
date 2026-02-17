@@ -5,22 +5,21 @@
 支持多模型组合、动态模型更新和增量数据训练。
 """
 
-import asyncio
-import json
+from __future__ import annotations
+
 import pickle
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import Enum
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+
+if TYPE_CHECKING:
+    from .model_training import ModelTrainingService
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import xgboost as xgb
 from loguru import logger
-from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 # 从shared_types.py导入共享类型
@@ -187,7 +186,9 @@ class EnsembleModelManager:
                         model.load_model(str(model_path))
                     else:
                         # PyTorch模型
-                        model = torch.load(model_path, map_location="cpu", weights_only=True)
+                        model = torch.load(
+                            model_path, map_location="cpu", weights_only=True
+                        )
 
                     models.append(
                         {

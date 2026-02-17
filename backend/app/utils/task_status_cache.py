@@ -1,10 +1,13 @@
 from typing import Optional
+
 import redis.asyncio as redis
+
 from app.core.config import settings
+
 
 class TaskStatusCache:
     _redis: Optional[redis.Redis] = None
-    
+
     @classmethod
     async def get_redis(cls) -> redis.Redis:
         if cls._redis is None:
@@ -34,6 +37,7 @@ class TaskStatusCache:
             await r.delete(f"task:status:{task_id}")
         except Exception:
             pass
+
 
 # 导出单例实例
 task_status_cache = TaskStatusCache()

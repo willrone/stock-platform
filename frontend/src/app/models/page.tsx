@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -81,7 +81,7 @@ export default function ModelsPage() {
   const [useAllFeatures, setUseAllFeatures] = useState(true); // 是否使用所有特征
 
   // 加载模型列表
-  const loadModels = async () => {
+  const loadModels = useCallback(async () => {
     try {
       setLoading(true);
       const data = await DataService.getModels();
@@ -91,34 +91,10 @@ export default function ModelsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // 设置WebSocket连接
-  const setupWebSocketConnection = async () => {
-    try {
-      const wsClient = getTrainingProgressWebSocket();
-
-      // 连接WebSocket
-      await wsClient.connect();
-      setWsConnected(true);
-
-      // 订阅所有训练进度更新
-      const unsubscribe = wsClient.subscribeToAll(data => {
-        handleWebSocketMessage(data);
-      });
-
-      // 保存取消订阅函数以便清理
-      if (typeof window !== 'undefined') {
-        (window as any).unsubscribeTrainingProgress = unsubscribe;
-      }
-    } catch (error) {
-      console.error('设置WebSocket连接失败:', error);
-      setWsConnected(false);
-    }
-  };
+  }, [setModels]);
 
   // 处理WebSocket消息
-  const handleWebSocketMessage = (data: any) => {
+  const handleWebSocketMessage = useCallback((data: any) => {
     if (data.type === 'model:training:progress') {
       setTrainingProgress(prev => ({
         ...prev,
@@ -167,7 +143,7 @@ export default function ModelsPage() {
         return updated;
       });
     }
-  };
+  }, [models, setModels, loadModels]);
 
   // 获取状态颜色
   const getStatusColor = (
@@ -313,10 +289,14 @@ export default function ModelsPage() {
         label_type: formData.label_type,
         binary_threshold: formData.label_type === 'binary' ? formData.binary_threshold : undefined,
         split_method: formData.split_method,
-        train_end_date: formData.split_method === 'hardcut' && formData.train_end_date
-          ? formData.train_end_date : undefined,
-        val_end_date: formData.split_method === 'hardcut' && formData.val_end_date
-          ? formData.val_end_date : undefined,
+        train_end_date:
+          formData.split_method === 'hardcut' && formData.train_end_date
+            ? formData.train_end_date
+            : undefined,
+        val_end_date:
+          formData.split_method === 'hardcut' && formData.val_end_date
+            ? formData.val_end_date
+            : undefined,
         // 滚动训练（P2）
         enable_rolling: formData.enable_rolling,
         rolling_window_type: formData.enable_rolling ? formData.rolling_window_type : undefined,
@@ -328,8 +308,7 @@ export default function ModelsPage() {
         // CSRankNorm 标签变换
         enable_cs_rank_norm: formData.enable_cs_rank_norm,
       };
-      const result = await DataService.createModel(submitData);
-      console.log('模型创建成功:', result);
+      await DataService.createModel(submitData);
 
       // 重置表单
       setFormData({
@@ -383,13 +362,37 @@ export default function ModelsPage() {
 
   useEffect(() => {
     loadModels();
+
+    // 设置WebSocket连接
+    const setupWebSocketConnection = async () => {
+      try {
+        const wsClient = getTrainingProgressWebSocket();
+
+        // 连接WebSocket
+        await wsClient.connect();
+        setWsConnected(true);
+
+        // 订阅所有训练进度更新
+        const unsubscribe = wsClient.subscribeToAll(data => {
+          handleWebSocketMessage(data);
+        });
+
+        // 保存取消订阅函数以便清理
+        if (typeof window !== 'undefined') {
+          (window as any).unsubscribeTrainingProgress = unsubscribe;
+        }
+      } catch (error) {
+        console.error('设置WebSocket连接失败:', error);
+        setWsConnected(false);
+      }
+    };
     setupWebSocketConnection();
 
     return () => {
       // 清理WebSocket连接
       cleanupTrainingProgressWebSocket();
     };
-  }, []);
+  }, [loadModels, handleWebSocketMessage]);
 
   if (loading && models.length === 0) {
     return <LoadingSpinner text="加载模型列表..." />;
@@ -398,12 +401,27 @@ export default function ModelsPage() {
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
       {/* 页面标题 */}
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
         <Box>
           <Typography
             variant="h4"
             component="h1"
-            sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+            sx={{
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+            }}
           >
             <Brain size={32} />
             模型管理
@@ -471,7 +489,11 @@ export default function ModelsPage() {
       </Card>
 
       {/* 创建模型对话框 */}
-      <Dialog open={isOpen} onClose={() => setIsOpen(false)} maxWidth="lg" fullWidth
+      <Dialog
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        maxWidth="lg"
+        fullWidth
         sx={{ '& .MuiDialog-paper': { m: { xs: 1, sm: 2 } } }}
       >
         <DialogTitle>

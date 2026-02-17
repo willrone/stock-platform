@@ -38,14 +38,8 @@ async def rolling_train_single_window(
     Returns:
         (model, metrics) 元组
     """
-    from .dataset_adapter import (
-        DataFrameDatasetAdapter,
-        _create_label_for_data,
-    )
-    from .data_preprocessing import (
-        OutlierHandler,
-        RobustFeatureScaler,
-    )
+    from .data_preprocessing import OutlierHandler, RobustFeatureScaler
+    from .dataset_adapter import DataFrameDatasetAdapter, _create_label_for_data
 
     if not QLIB_AVAILABLE:
         raise RuntimeError("Qlib 不可用")
@@ -55,22 +49,25 @@ async def rolling_train_single_window(
     # Bug 3 修复：在缩放前先从原始 $close 创建 label，
     # 避免 scaler 污染 $close 后再生成 label（数据泄漏）
     _create_label_for_data(
-        train_data, "训练集", config.prediction_horizon,
-        config.label_type, config.binary_threshold,
+        train_data,
+        "训练集",
+        config.prediction_horizon,
+        config.label_type,
+        config.binary_threshold,
     )
     if valid_data is not None:
         _create_label_for_data(
-            valid_data, "验证集", config.prediction_horizon,
-            config.label_type, config.binary_threshold,
+            valid_data,
+            "验证集",
+            config.prediction_horizon,
+            config.label_type,
+            config.binary_threshold,
         )
 
     # Bug 3 修复：排除 label 列和 $close 列，
     # $close 是 label 的计算基础，不应作为特征输入模型
     label_source_cols = {"label", "$close", "close", "Close", "CLOSE"}
-    feature_cols = [
-        c for c in train_data.columns
-        if c not in label_source_cols
-    ]
+    feature_cols = [c for c in train_data.columns if c not in label_source_cols]
 
     # 异常值处理
     outlier_handler = OutlierHandler(
@@ -80,7 +77,8 @@ async def rolling_train_single_window(
     )
     if "label" in train_data.columns:
         train_data = outlier_handler.handle_label_outliers(
-            train_data, label_col="label",
+            train_data,
+            label_col="label",
         )
 
     # 标准化（仅缩放特征列，label 和 $close 不受影响）
@@ -91,8 +89,10 @@ async def rolling_train_single_window(
             valid_data = scaler.transform(valid_data, feature_cols)
 
     adapter = DataFrameDatasetAdapter(
-        train_data, valid_data,
-        config.prediction_horizon, config,
+        train_data,
+        valid_data,
+        config.prediction_horizon,
+        config,
     )
 
     model = init_instance_by_config(model_config)
@@ -142,8 +142,10 @@ def _predict_on_data(
         预测值数组
     """
     from .dataset_adapter import DataFrameDatasetAdapter
+
     adapter = DataFrameDatasetAdapter(
-        data, None,
+        data,
+        None,
         prediction_horizon=0,
     )
     preds = model.predict(adapter)
@@ -188,7 +190,8 @@ def _evaluate_window(
             metrics["ic"] = ic if np.isfinite(ic) else 0.0
             metrics["mse"] = float(np.mean((val_preds - val_actuals) ** 2))
             metrics["val_accuracy"] = _compute_direction_accuracy(
-                val_preds, val_actuals,
+                val_preds,
+                val_actuals,
             )
         except Exception as e:
             logger.warning(f"滚动窗口验证集评估失败: {e}")
@@ -203,7 +206,8 @@ def _evaluate_window(
             train_actuals = train_data["label"].values
             min_len = min(len(train_preds), len(train_actuals))
             metrics["train_accuracy"] = _compute_direction_accuracy(
-                train_preds[:min_len], train_actuals[:min_len],
+                train_preds[:min_len],
+                train_actuals[:min_len],
             )
         except Exception as e:
             logger.warning(f"滚动窗口训练集评估失败: {e}")
@@ -235,6 +239,7 @@ async def run_rolling_training(
         QlibTrainingResult
     """
     from app.core.config import settings
+
     from .model_config import create_qlib_model_config
 
     logger.info(f"进入滚动训练模式: {model_id}")
@@ -269,7 +274,9 @@ async def run_rolling_training(
 
     if progress_callback:
         await progress_callback(
-            model_id, 100.0, "completed",
+            model_id,
+            100.0,
+            "completed",
             f"滚动训练完成: {rolling_result['total_windows']} 个窗口",
             {"rolling_result": rolling_result},
         )
@@ -279,12 +286,24 @@ async def run_rolling_training(
 
     # 从 per_window_metrics 提取平均方向准确率
     per_win = rolling_result["per_window_metrics"]
-    avg_train_acc = float(np.mean(
-        [m.get("train_accuracy", 0.0) for m in per_win],
-    )) if per_win else 0.0
-    avg_val_acc = float(np.mean(
-        [m.get("val_accuracy", 0.0) for m in per_win],
-    )) if per_win else 0.0
+    avg_train_acc = (
+        float(
+            np.mean(
+                [m.get("train_accuracy", 0.0) for m in per_win],
+            )
+        )
+        if per_win
+        else 0.0
+    )
+    avg_val_acc = (
+        float(
+            np.mean(
+                [m.get("val_accuracy", 0.0) for m in per_win],
+            )
+        )
+        if per_win
+        else 0.0
+    )
 
     return QlibTrainingResult(
         model_path=rolling_result["latest_model_path"],

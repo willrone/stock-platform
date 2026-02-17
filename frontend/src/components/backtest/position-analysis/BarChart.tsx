@@ -68,7 +68,7 @@ export const BarChart: React.FC<BarChartProps> = ({
 
   const chartRef = useECharts(
     data,
-    (chartData) => ({
+    chartData => ({
       title: {
         text: '股票表现对比',
         left: 'center',
@@ -152,7 +152,11 @@ export const BarChart: React.FC<BarChartProps> = ({
               width: '100%',
             }}
           >
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}
+            >
               股票表现对比
             </Typography>
             <FormControl size="small" sx={{ minWidth: 128 }}>

@@ -3,7 +3,6 @@ SHAP解释性库集成
 实现模型预测解释功能，支持全局和局部解释性分析
 """
 import json
-import pickle
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime

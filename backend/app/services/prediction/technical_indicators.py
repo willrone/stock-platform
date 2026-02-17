@@ -7,7 +7,7 @@ import asyncio
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -502,21 +502,6 @@ class TechnicalIndicatorCalculator:
                     result_dict[indicator].append(None)
 
         return result_dict
-        """计算移动平均线"""
-        if len(data) < period:
-            return [None] * len(data)
-
-        ma_values = []
-
-        for i in range(len(data)):
-            if i < period - 1:
-                ma_values.append(None)
-            else:
-                # 计算过去period天的平均收盘价
-                sum_close = sum(data[j].close for j in range(i - period + 1, i + 1))
-                ma_values.append(round(sum_close / period, 4))
-
-        return ma_values
 
     def calculate_rsi(
         self, data: List[StockData], period: int = 14

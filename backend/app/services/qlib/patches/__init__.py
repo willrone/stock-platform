@@ -5,8 +5,8 @@ Qlib兼容性补丁模块
 """
 
 from .qlib_compatibility import (
-    QLIB_AVAILABLE,
     ALPHA158_AVAILABLE,
+    QLIB_AVAILABLE,
     Alpha158DL,
     Alpha158Handler,
     QlibDataLoader,

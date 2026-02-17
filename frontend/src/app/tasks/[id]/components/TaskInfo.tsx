@@ -29,7 +29,13 @@ export function TaskInfo({ task }: TaskInfoProps) {
       <CardHeader title="任务信息" />
       <CardContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gap: 2,
+            }}
+          >
             {task.task_type === 'hyperparameter_optimization' ? (
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -81,11 +87,7 @@ export function TaskInfo({ task }: TaskInfoProps) {
           <Divider />
 
           <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mb: 1, display: 'block' }}
-            >
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
               选择的股票
             </Typography>
             <Box
@@ -118,7 +120,9 @@ export function TaskInfo({ task }: TaskInfoProps) {
                       const endIndex = startIndex + STOCKS_PER_PAGE;
                       const currentStocks = task.stock_codes.slice(startIndex, endIndex);
 
-                      return currentStocks.map(code => <Chip key={code} label={code} size="small" />);
+                      return currentStocks.map(code => (
+                        <Chip key={code} label={code} size="small" />
+                      ));
                     })()}
                   </Box>
 

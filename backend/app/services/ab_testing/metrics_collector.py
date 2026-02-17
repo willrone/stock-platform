@@ -3,15 +3,14 @@
 收集关键业务指标数据，支持实时指标计算
 """
 import asyncio
-import json
 import statistics
 import threading
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from loguru import logger

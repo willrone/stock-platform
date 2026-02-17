@@ -27,8 +27,8 @@ def compute_strategy_indicators(
         return {}
 
     close = data["close"]
-    high = data["high"]
-    low = data["low"]
+    data["high"]
+    data["low"]
     volume = data["volume"]
     returns = close.pct_change()
 
@@ -45,7 +45,9 @@ def compute_strategy_indicators(
 
 
 def _add_return_features(
-    ind: Dict[str, pd.Series], close: pd.Series, returns: pd.Series,
+    ind: Dict[str, pd.Series],
+    close: pd.Series,
+    returns: pd.Series,
 ) -> None:
     """收益率特征"""
     for p in [1, 2, 3, 5, 10, 20]:
@@ -53,14 +55,18 @@ def _add_return_features(
 
 
 def _add_momentum_features(
-    ind: Dict[str, pd.Series], returns: pd.Series,
+    ind: Dict[str, pd.Series],
+    returns: pd.Series,
 ) -> None:
     """动量特征"""
-    ind["momentum_short"] = ind.get("return_5d", returns) - ind.get("return_10d", returns)
+    ind["momentum_short"] = ind.get("return_5d", returns) - ind.get(
+        "return_10d", returns
+    )
 
 
 def _add_rsi_features(
-    ind: Dict[str, pd.Series], close: pd.Series,
+    ind: Dict[str, pd.Series],
+    close: pd.Series,
 ) -> None:
     """RSI 特征"""
     delta = close.diff()
@@ -75,7 +81,8 @@ def _add_rsi_features(
 
 
 def _add_macd_features(
-    ind: Dict[str, pd.Series], close: pd.Series,
+    ind: Dict[str, pd.Series],
+    close: pd.Series,
 ) -> None:
     """MACD 特征"""
     ema12 = close.ewm(span=12, adjust=False).mean()
@@ -87,7 +94,8 @@ def _add_macd_features(
 
 
 def _add_volatility_features(
-    ind: Dict[str, pd.Series], returns: pd.Series,
+    ind: Dict[str, pd.Series],
+    returns: pd.Series,
 ) -> None:
     """波动率特征"""
     for w in [5, 20, 60]:
@@ -95,7 +103,9 @@ def _add_volatility_features(
 
 
 def _add_volume_features(
-    ind: Dict[str, pd.Series], close: pd.Series, volume: pd.Series,
+    ind: Dict[str, pd.Series],
+    close: pd.Series,
+    volume: pd.Series,
 ) -> None:
     """成交量特征"""
     vol_ma20 = volume.rolling(20).mean()
@@ -103,7 +113,8 @@ def _add_volume_features(
 
 
 def _add_bollinger_features(
-    ind: Dict[str, pd.Series], close: pd.Series,
+    ind: Dict[str, pd.Series],
+    close: pd.Series,
 ) -> None:
     """布林带特征"""
     bb_mid = close.rolling(20).mean()
@@ -114,12 +125,13 @@ def _add_bollinger_features(
 
 
 def _add_ma_features(
-    ind: Dict[str, pd.Series], close: pd.Series,
+    ind: Dict[str, pd.Series],
+    close: pd.Series,
 ) -> None:
     """移动平均特征"""
     mas = {}
     for w in [5, 10, 20]:
         mas[w] = close.rolling(w).mean()
-    ind["ma_alignment"] = (
-        (mas[5] > mas[10]).astype(int) + (mas[10] > mas[20]).astype(int)
+    ind["ma_alignment"] = (mas[5] > mas[10]).astype(int) + (mas[10] > mas[20]).astype(
+        int
     )

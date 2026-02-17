@@ -26,7 +26,7 @@ import { TrendingUp, TrendingDown, DollarSign, BarChart3, AlertCircle } from 'lu
 
 interface BacktestChartProps {
   stockCode: string;
-  backtestData?: any;
+  backtestData?: Record<string, unknown>;
 }
 
 interface TradeRecord {
@@ -96,7 +96,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
       const dates = backtestData.dates || [];
 
       // 转换交易记录格式
-      const trades: TradeRecord[] = tradeHistory.map((trade: any) => ({
+      const trades: TradeRecord[] = tradeHistory.map((trade: Record<string, unknown>) => ({
         date: trade.date || trade.trade_date,
         action: trade.action || (trade.side === 'buy' ? 'buy' : 'sell'),
         price: trade.price || trade.execution_price || 0,
@@ -117,7 +117,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         dates:
           dates.length > 0
             ? dates
-            : equityCurve.map((_: any, i: number) => {
+            : equityCurve.map((_: unknown, i: number) => {
                 const date = new Date();
                 date.setDate(date.getDate() - (equityCurve.length - i));
                 return date.toISOString().split('T')[0];
@@ -268,7 +268,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         },
         tooltip: {
           trigger: 'axis',
-          formatter: function (params: any) {
+          formatter: function (params: { value: number; axisValue: string }[]) {
             const value = params[0].value;
             const date = params[0].axisValue;
             return `${date}<br/>权益: ¥${value.toLocaleString()}`;
@@ -349,7 +349,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         },
         tooltip: {
           trigger: 'axis',
-          formatter: function (params: any) {
+          formatter: function (params: { value: number; axisValue: string }[]) {
             const value = params[0].value;
             const date = params[0].axisValue;
             return `${date}<br/>回撤: ${value.toFixed(2)}%`;
@@ -380,7 +380,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
             formatter: '{value}%',
           },
           max: 0,
-          min: function (value: any) {
+          min: function (value: { min: number }) {
             return Math.floor(value.min * 1.1);
           },
         },
@@ -468,7 +468,11 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, overflow: 'hidden' }}>
             <DollarSign size={24} color="#1976d2" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+            >
               总收益率
             </Typography>
             <Typography
@@ -487,10 +491,20 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, overflow: 'hidden' }}>
             <TrendingUp size={24} color="#9c27b0" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+            >
               夏���比率
             </Typography>
-            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                wordBreak: 'break-word',
+              }}
+            >
               {data.metrics.sharpe_ratio.toFixed(3)}
             </Typography>
           </CardContent>
@@ -499,10 +513,21 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, overflow: 'hidden' }}>
             <TrendingDown size={24} color="#d32f2f" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+            >
               最大回撤
             </Typography>
-            <Typography sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                color: 'error.main',
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                wordBreak: 'break-word',
+              }}
+            >
               {data.metrics.max_drawdown.toFixed(2)}%
             </Typography>
           </CardContent>
@@ -511,10 +536,20 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, overflow: 'hidden' }}>
             <BarChart3 size={24} color="#ed6c02" style={{ margin: '0 auto 8px' }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+            >
               胜率
             </Typography>
-            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                wordBreak: 'break-word',
+              }}
+            >
               {data.metrics.win_rate.toFixed(1)}%
             </Typography>
           </CardContent>
@@ -522,10 +557,22 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
 
         <Card>
           <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, overflow: 'hidden' }}>
-            <Typography sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, mb: 0.5, wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                color: 'primary.main',
+                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' },
+                mb: 0.5,
+                wordBreak: 'break-word',
+              }}
+            >
               {data.metrics.total_trades}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+            >
               总交易次数
             </Typography>
           </CardContent>
@@ -533,10 +580,22 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
 
         <Card>
           <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, overflow: 'hidden' }}>
-            <Typography sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '1rem', sm: '1.25rem' }, mb: 0.5, wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                color: 'secondary.main',
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                mb: 0.5,
+                wordBreak: 'break-word',
+              }}
+            >
               {data.metrics.profit_factor.toFixed(2)}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+            >
               盈亏比
             </Typography>
           </CardContent>
@@ -545,12 +604,19 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
 
       {/* 图表区域 */}
       <Box
-        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: { xs: 2, sm: 3 } }}
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+          gap: { xs: 2, sm: 3 },
+        }}
       >
         <Card>
           <CardContent sx={{ p: { xs: 1, sm: 2 }, overflow: 'hidden' }}>
             <Box sx={{ overflowX: 'auto' }}>
-              <Box ref={equityChartRef} sx={{ height: { xs: 250, sm: 300 }, width: '100%', minWidth: 350 }} />
+              <Box
+                ref={equityChartRef}
+                sx={{ height: { xs: 250, sm: 300 }, width: '100%', minWidth: 350 }}
+              />
             </Box>
           </CardContent>
         </Card>
@@ -558,7 +624,10 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         <Card>
           <CardContent sx={{ p: { xs: 1, sm: 2 }, overflow: 'hidden' }}>
             <Box sx={{ overflowX: 'auto' }}>
-              <Box ref={drawdownChartRef} sx={{ height: { xs: 250, sm: 300 }, width: '100%', minWidth: 350 }} />
+              <Box
+                ref={drawdownChartRef}
+                sx={{ height: { xs: 250, sm: 300 }, width: '100%', minWidth: 350 }}
+              />
             </Box>
           </CardContent>
         </Card>
@@ -566,7 +635,10 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
 
       {/* 交易记录 */}
       <Card>
-        <CardHeader title="最近交易记录" titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }} />
+        <CardHeader
+          title="最近交易记录"
+          titleTypographyProps={{ sx: { fontSize: { xs: '1rem', sm: '1.25rem' } } }}
+        />
         <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
             <Table size="small" sx={{ minWidth: 450 }}>

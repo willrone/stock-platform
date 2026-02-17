@@ -3,12 +3,12 @@
 实现系统恢复和重试机制
 """
 import asyncio
-import json
+import logging
 import time
 import traceback
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from loguru import logger
 

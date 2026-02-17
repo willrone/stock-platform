@@ -3,7 +3,6 @@
 """
 
 import asyncio
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, TypeVar
@@ -19,8 +18,6 @@ from app.core.config import settings
 
 class Base(DeclarativeBase):
     """SQLAlchemy 基础模型类"""
-
-    pass
 
 
 # SQLite 连接配置，启用 WAL 模式以提高并发性能
@@ -182,7 +179,7 @@ async def retry_db_operation(
             else:
                 # 非锁定错误，直接抛出
                 raise
-        except Exception as e:
+        except Exception:
             # 其他异常，直接抛出
             raise
 
@@ -244,9 +241,7 @@ def retry_db_operation_sync(
                     time.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(
-                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
-                    )
+                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
             else:
                 raise
         except Exception:

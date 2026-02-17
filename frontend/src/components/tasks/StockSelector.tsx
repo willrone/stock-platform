@@ -239,7 +239,11 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
       {/* 已选股票 */}
       <Card>
         <CardHeader
-          title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>已选股票</Typography>}
+          title={
+            <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+              已选股票
+            </Typography>
+          }
           action={
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
               {/* 随机选择 */}
@@ -409,7 +413,11 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
         <CardHeader
           title={
             <Box>
-              <Typography variant="h6" component="span" sx={{ fontSize: { xs: '0.9rem', sm: '1.25rem' } }}>
+              <Typography
+                variant="h6"
+                component="span"
+                sx={{ fontSize: { xs: '0.9rem', sm: '1.25rem' } }}
+              >
                 本地股票列表
               </Typography>
               {searchValue ? (
@@ -444,7 +452,11 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                  gridTemplateColumns: {
+                    xs: 'repeat(2, 1fr)',
+                    sm: 'repeat(2, 1fr)',
+                    md: 'repeat(3, 1fr)',
+                  },
                   gap: 1,
                 }}
               >

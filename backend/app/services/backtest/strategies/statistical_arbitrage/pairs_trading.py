@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..base.statistical_arbitrage_base import StatisticalArbitrageStrategy
 from ...models import SignalType, TradingSignal
+from ..base.statistical_arbitrage_base import StatisticalArbitrageStrategy
 
 
 class PairsTradingStrategy(StatisticalArbitrageStrategy):

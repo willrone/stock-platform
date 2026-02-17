@@ -25,7 +25,7 @@ from ..strategies.technical.basic_strategies import (
 # 从各个模块导入
 from .base_strategy import BaseStrategy
 from .portfolio_manager import PortfolioManager
-from .risk_manager import RiskManager, PositionPriceInfo
+from .risk_manager import PositionPriceInfo, RiskManager
 from .strategy_portfolio import StrategyPortfolio
 
 __all__ = [

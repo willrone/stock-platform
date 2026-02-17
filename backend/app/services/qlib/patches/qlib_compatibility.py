@@ -8,7 +8,7 @@ Qlib兼容性补丁
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Union
 
 import pandas as pd
 from loguru import logger
@@ -139,6 +139,7 @@ def _create_patched_load_calendar(original_func):
 
             # 尝试修复路径
             import re
+
             match = re.search(r"calendar not exists:\s*(.+)", error_msg, re.IGNORECASE)
 
             if not match:
@@ -210,7 +211,9 @@ def apply_qlib_patches():
 
             if hasattr(CalendarProvider, "load_calendar"):
                 original_load = CalendarProvider.load_calendar
-                CalendarProvider.load_calendar = _create_patched_load_calendar(original_load)
+                CalendarProvider.load_calendar = _create_patched_load_calendar(
+                    original_load
+                )
                 logger.debug("已 patch CalendarProvider.load_calendar")
         except Exception as cal_patch_error:
             logger.debug(f"无法 patch CalendarProvider: {cal_patch_error}")
@@ -241,13 +244,15 @@ init_instance_by_config = None
 
 try:
     import qlib as _qlib
-    from qlib.config import REG_CN as _REG_CN, C as _C
+    from qlib.config import REG_CN as _REG_CN
+    from qlib.config import C as _C
     from qlib.contrib.data.handler import Alpha158 as _Alpha158Handler
     from qlib.contrib.data.loader import Alpha158DL as _Alpha158DL
     from qlib.data import D as _D
     from qlib.data.dataset import DatasetH as _DatasetH
     from qlib.data.dataset.loader import QlibDataLoader as _QlibDataLoader
-    from qlib.data.filter import ExpressionDFilter as _ExpressionDFilter, NameDFilter as _NameDFilter
+    from qlib.data.filter import ExpressionDFilter as _ExpressionDFilter
+    from qlib.data.filter import NameDFilter as _NameDFilter
     from qlib.utils import init_instance_by_config as _init_instance_by_config
 
     # 导出

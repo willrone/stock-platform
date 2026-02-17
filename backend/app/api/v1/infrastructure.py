@@ -2,9 +2,9 @@
 基础设施监控和调度API
 """
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
 from app.services.infrastructure.compatibility_validator import compatibility_validator
@@ -14,15 +14,8 @@ from app.services.infrastructure.deployment_manager import (
     deployment_manager,
 )
 from app.services.infrastructure.health_monitor import health_monitor
-from app.services.infrastructure.resource_monitor import (
-    ResourceThresholds,
-    resource_monitor,
-)
-from app.services.infrastructure.task_scheduler import (
-    ResourceRequirement,
-    TaskPriority,
-    task_scheduler,
-)
+from app.services.infrastructure.resource_monitor import resource_monitor
+from app.services.infrastructure.task_scheduler import task_scheduler
 
 router = APIRouter(prefix="/infrastructure", tags=["基础设施"])
 

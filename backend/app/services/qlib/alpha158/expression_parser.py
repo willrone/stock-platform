@@ -23,9 +23,7 @@ class QlibExpressionParser:
     def __init__(self):
         self._detailed_error_count = 0
 
-    def evaluate(
-        self, data: pd.DataFrame, expression: str
-    ) -> Optional[pd.Series]:
+    def evaluate(self, data: pd.DataFrame, expression: str) -> Optional[pd.Series]:
         """
         评估 Qlib 表达式
 
@@ -100,7 +98,9 @@ class QlibExpressionParser:
             runtime_funcs = self._get_runtime_functions(calc_data)
 
             # 评估表达式
-            result = eval(expr, {"np": np, "pd": pd, "calc_data": calc_data, **runtime_funcs})
+            result = eval(
+                expr, {"np": np, "pd": pd, "calc_data": calc_data, **runtime_funcs}
+            )
 
             # 处理返回值
             if isinstance(result, pd.DataFrame):
@@ -121,6 +121,7 @@ class QlibExpressionParser:
 
     def _process_ref_functions(self, expr: str) -> str:
         """处理 Ref 函数"""
+
         def replace_ref(match):
             var = match.group(1)
             n = int(match.group(2))
@@ -128,7 +129,9 @@ class QlibExpressionParser:
 
         max_iterations = 50
         iteration = 0
-        while re.search(r"Ref\(\$(\w+),\s*(\d+)\)", expr) and iteration < max_iterations:
+        while (
+            re.search(r"Ref\(\$(\w+),\s*(\d+)\)", expr) and iteration < max_iterations
+        ):
             expr = re.sub(r"Ref\(\$(\w+),\s*(\d+)\)", replace_ref, expr)
             iteration += 1
         return expr
@@ -137,9 +140,13 @@ class QlibExpressionParser:
         """修复嵌套的 calc_data"""
         var_names = ["close", "open", "high", "low", "volume", "vwap"]
         for var_name in var_names:
-            nested_pattern = rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+            nested_pattern = (
+                rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+            )
             if re.search(nested_pattern, expr):
-                expr = re.sub(nested_pattern, rf"calc_data['\${var_name}'].shift(\1)", expr)
+                expr = re.sub(
+                    nested_pattern, rf"calc_data['\${var_name}'].shift(\1)", expr
+                )
             nested_patterns = [
                 f"calc_data['calc_data['${var_name}']']",
                 f"calc_data['calc_data['${var_name}']'].shift",
@@ -151,13 +158,16 @@ class QlibExpressionParser:
 
     def _process_log_functions(self, expr: str) -> str:
         """处理 Log 函数"""
+
         def replace_log(match):
             inner = match.group(1)
             if "+" in inner or "-" in inner:
                 var_match = re.search(r"\$(\w+)", inner)
                 if var_match:
                     var = var_match.group(1)
-                    const_match = re.search(r"([+-]\s*(?:\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))", inner)
+                    const_match = re.search(
+                        r"([+-]\s*(?:\d+(?:\.\d+)?(?:[eE][+-]?\d+)?))", inner
+                    )
                     if const_match:
                         const = const_match.group(1).replace(" ", "")
                         return f"np.log(calc_data['${var}']{const})"
@@ -176,6 +186,7 @@ class QlibExpressionParser:
 
     def _process_abs_functions(self, expr: str) -> str:
         """处理 Abs 函数"""
+
         def replace_abs(match):
             inner = match.group(1)
             return f"np.abs({inner})"
@@ -189,6 +200,7 @@ class QlibExpressionParser:
 
     def _process_idx_functions(self, expr: str) -> str:
         """处理 IdxMax 和 IdxMin 函数"""
+
         def replace_idxmax(match):
             var = match.group(1)
             n = int(match.group(2))
@@ -201,18 +213,25 @@ class QlibExpressionParser:
 
         max_iterations = 50
         iteration = 0
-        while re.search(r"IdxMax\(\$(\w+),\s*(\d+)\)", expr) and iteration < max_iterations:
+        while (
+            re.search(r"IdxMax\(\$(\w+),\s*(\d+)\)", expr)
+            and iteration < max_iterations
+        ):
             expr = re.sub(r"IdxMax\(\$(\w+),\s*(\d+)\)", replace_idxmax, expr)
             iteration += 1
 
         iteration = 0
-        while re.search(r"IdxMin\(\$(\w+),\s*(\d+)\)", expr) and iteration < max_iterations:
+        while (
+            re.search(r"IdxMin\(\$(\w+),\s*(\d+)\)", expr)
+            and iteration < max_iterations
+        ):
             expr = re.sub(r"IdxMin\(\$(\w+),\s*(\d+)\)", replace_idxmin, expr)
             iteration += 1
         return expr
 
     def _process_rolling_functions(self, expr: str) -> str:
         """处理单变量滚动函数"""
+
         def replace_max(match):
             var = match.group(1)
             n = int(match.group(2))
@@ -248,6 +267,7 @@ class QlibExpressionParser:
 
     def _process_corr_functions(self, expr: str) -> str:
         """处理 Corr 函数"""
+
         def replace_corr(match):
             var1_expr = match.group(1)
             var2_expr = match.group(2)
@@ -262,13 +282,17 @@ class QlibExpressionParser:
 
         max_iterations = 50
         iteration = 0
-        while re.search(r"Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)", expr) and iteration < max_iterations:
+        while (
+            re.search(r"Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)", expr)
+            and iteration < max_iterations
+        ):
             expr = re.sub(r"Corr\(([^,]+),\s*([^,]+),\s*(\d+)\)", replace_corr, expr)
             iteration += 1
         return expr
 
     def _process_nested_std(self, expr: str) -> str:
         """处理嵌套的 Std 函数"""
+
         def find_matching_paren(s, start_pos):
             count = 0
             i = start_pos
@@ -300,14 +324,14 @@ class QlibExpressionParser:
                 if end_pos > 0:
                     comma_pos = expr.rfind(",", pos + 4, end_pos)
                     if comma_pos > 0:
-                        inner_expr = expr[pos + 4:comma_pos].strip()
-                        n_str = expr[comma_pos + 1:end_pos].strip()
+                        inner_expr = expr[pos + 4 : comma_pos].strip()
+                        n_str = expr[comma_pos + 1 : end_pos].strip()
                         try:
                             n = int(n_str)
                             if re.match(r"calc_data\[\'\$\w+\'\]", inner_expr.strip()):
                                 continue
                             replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
-                            expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                            expr = expr[:pos] + replacement + expr[end_pos + 1 :]
                             replaced = True
                             break
                         except ValueError:
@@ -320,6 +344,7 @@ class QlibExpressionParser:
 
     def _process_quantile_functions(self, expr: str) -> str:
         """处理 Quantile 函数"""
+
         def replace_quantile(match):
             var = match.group(1)
             n = int(match.group(2))
@@ -328,13 +353,19 @@ class QlibExpressionParser:
 
         max_iterations = 50
         iteration = 0
-        while re.search(r"Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)", expr) and iteration < max_iterations:
-            expr = re.sub(r"Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)", replace_quantile, expr)
+        while (
+            re.search(r"Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)", expr)
+            and iteration < max_iterations
+        ):
+            expr = re.sub(
+                r"Quantile\(\$(\w+),\s*(\d+),\s*([\d.]+)\)", replace_quantile, expr
+            )
             iteration += 1
         return expr
 
     def _process_rank_functions(self, expr: str) -> str:
         """处理 Rank 函数"""
+
         def replace_rank(match):
             var = match.group(1)
             n = int(match.group(2))
@@ -342,13 +373,16 @@ class QlibExpressionParser:
 
         max_iterations = 50
         iteration = 0
-        while re.search(r"Rank\(\$(\w+),\s*(\d+)\)", expr) and iteration < max_iterations:
+        while (
+            re.search(r"Rank\(\$(\w+),\s*(\d+)\)", expr) and iteration < max_iterations
+        ):
             expr = re.sub(r"Rank\(\$(\w+),\s*(\d+)\)", replace_rank, expr)
             iteration += 1
         return expr
 
     def _process_regression_functions(self, expr: str) -> str:
         """处理 Slope, Rsquare, Resi 函数"""
+
         def replace_slope(match):
             var = match.group(1)
             n = int(match.group(2))
@@ -384,11 +418,17 @@ class QlibExpressionParser:
             if f"${var_name}" in expr:
                 # 修复嵌套
                 if f"calc_data['calc_data['${var_name}']']" in expr:
-                    expr = expr.replace(f"calc_data['calc_data['${var_name}']']", replacement)
+                    expr = expr.replace(
+                        f"calc_data['calc_data['${var_name}']']", replacement
+                    )
 
-                nested_shift_pattern = rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+                nested_shift_pattern = (
+                    rf"calc_data\['calc_data\['\${var_name}'\]'\]\.shift\(([^)]+)\)"
+                )
                 if re.search(nested_shift_pattern, expr):
-                    expr = re.sub(nested_shift_pattern, rf"{replacement}.shift(\1)", expr)
+                    expr = re.sub(
+                        nested_shift_pattern, rf"{replacement}.shift(\1)", expr
+                    )
 
                 # 替换未处理的变量
                 pattern = rf"(?<!calc_data\[\')\${var_name}(?!\'\])"
@@ -400,11 +440,14 @@ class QlibExpressionParser:
                     expr = new_expr
                     # 修复可能产生的嵌套
                     if f"calc_data['calc_data['${var_name}']']" in expr:
-                        expr = expr.replace(f"calc_data['calc_data['${var_name}']']", replacement)
+                        expr = expr.replace(
+                            f"calc_data['calc_data['${var_name}']']", replacement
+                        )
         return expr
 
     def _process_mean_std_functions(self, expr: str, calc_data: pd.DataFrame) -> str:
         """处理 Mean 和 Std 函数"""
+
         def find_matching_paren(s, start_pos):
             count = 0
             i = start_pos
@@ -443,15 +486,20 @@ class QlibExpressionParser:
                 if end_pos > 0:
                     comma_pos = expr.rfind(",", pos + 5, end_pos)
                     if comma_pos > 0:
-                        inner_expr = expr[pos + 5:comma_pos].strip()
-                        n_str = expr[comma_pos + 1:end_pos].strip()
+                        inner_expr = expr[pos + 5 : comma_pos].strip()
+                        n_str = expr[comma_pos + 1 : end_pos].strip()
                         try:
                             n = int(n_str)
-                            is_simple = re.match(r"^calc_data\[\'\$\w+\'\]$", inner_expr.strip())
-                            has_comparison = any(op in inner_expr for op in [">", "<", ">=", "<=", "==", "!="])
+                            is_simple = re.match(
+                                r"^calc_data\[\'\$\w+\'\]$", inner_expr.strip()
+                            )
+                            has_comparison = any(
+                                op in inner_expr
+                                for op in [">", "<", ">=", "<=", "==", "!="]
+                            )
                             if not is_simple or has_comparison:
                                 replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).mean()"
-                                expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                expr = expr[:pos] + replacement + expr[end_pos + 1 :]
                                 replaced = True
                                 break
                         except ValueError:
@@ -474,15 +522,20 @@ class QlibExpressionParser:
                 if end_pos > 0:
                     comma_pos = expr.rfind(",", pos + 4, end_pos)
                     if comma_pos > 0:
-                        inner_expr = expr[pos + 4:comma_pos].strip()
-                        n_str = expr[comma_pos + 1:end_pos].strip()
+                        inner_expr = expr[pos + 4 : comma_pos].strip()
+                        n_str = expr[comma_pos + 1 : end_pos].strip()
                         try:
                             n = int(n_str)
-                            is_simple = re.match(r"^calc_data\[\'\$\w+\'\]$", inner_expr.strip())
-                            has_comparison = any(op in inner_expr for op in [">", "<", ">=", "<=", "==", "!="])
+                            is_simple = re.match(
+                                r"^calc_data\[\'\$\w+\'\]$", inner_expr.strip()
+                            )
+                            has_comparison = any(
+                                op in inner_expr
+                                for op in [">", "<", ">=", "<=", "==", "!="]
+                            )
                             if not is_simple or has_comparison:
                                 replacement = f"pd.Series({inner_expr}, index=calc_data.index).rolling({n}).std()"
-                                expr = expr[:pos] + replacement + expr[end_pos + 1:]
+                                expr = expr[:pos] + replacement + expr[end_pos + 1 :]
                                 replaced = True
                                 break
                         except ValueError:
@@ -496,6 +549,7 @@ class QlibExpressionParser:
 
     def _get_runtime_functions(self, calc_data: pd.DataFrame) -> dict:
         """获取运行时辅助函数"""
+
         def _as_series(x, ref):
             if isinstance(x, pd.Series):
                 return x
@@ -511,7 +565,9 @@ class QlibExpressionParser:
                 a_s = _as_series(a, ref)
                 b_s = _as_series(b, ref)
                 return (a_s > b_s).astype(float)
-            return float(a > b) if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
+            return (
+                float(a > b) if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
+            )
 
         def Less(a, b=0):
             if isinstance(a, pd.Series) or isinstance(b, pd.Series):
@@ -519,7 +575,9 @@ class QlibExpressionParser:
                 a_s = _as_series(a, ref)
                 b_s = _as_series(b, ref)
                 return (a_s < b_s).astype(float)
-            return float(a < b) if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
+            return (
+                float(a < b) if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
+            )
 
         def Sum(x, n):
             if not isinstance(x, pd.Series):

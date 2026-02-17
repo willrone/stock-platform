@@ -28,8 +28,30 @@ import {
   Info,
 } from 'lucide-react';
 
+interface BacktestOverviewData {
+  total_return?: number;
+  annualized_return?: number;
+  sharpe_ratio?: number;
+  max_drawdown?: number;
+  volatility?: number;
+  win_rate?: number;
+  total_trades?: number;
+  profit_factor?: number;
+  trade_history?: Array<{ action?: string; pnl?: number }>;
+  winning_trades?: number;
+  losing_trades?: number;
+  trade_pnl_mean?: number;
+  trade_pnl_median?: number;
+  trade_pnl_std?: number;
+  monthly_return_mean?: number;
+  monthly_return_std?: number;
+  positive_months?: number;
+  negative_months?: number;
+  stocks_traded?: number;
+}
+
 interface BacktestOverviewProps {
-  backtestData: any;
+  backtestData: BacktestOverviewData | null;
   loading?: boolean;
 }
 
@@ -91,9 +113,9 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
         return winningTrades / (winningTrades + losingTrades);
       }
       if (tradeHistory.length > 0) {
-        const sellTrades = tradeHistory.filter((trade: any) => trade?.action === 'SELL');
-        const wins = sellTrades.filter((trade: any) => (trade?.pnl ?? 0) > 0).length;
-        const losses = sellTrades.filter((trade: any) => (trade?.pnl ?? 0) < 0).length;
+        const sellTrades = tradeHistory.filter((trade: { action?: string; pnl?: number }) => trade?.action === 'SELL');
+        const wins = sellTrades.filter((trade: { action?: string; pnl?: number }) => (trade?.pnl ?? 0) > 0).length;
+        const losses = sellTrades.filter((trade: { action?: string; pnl?: number }) => (trade?.pnl ?? 0) < 0).length;
         const total = wins + losses;
         if (total > 0) {
           return wins / total;
@@ -231,7 +253,11 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   总收益率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
@@ -267,7 +293,11 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   年化收益率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
@@ -303,14 +333,28 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   夏普比率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 0.5,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Typography
+                sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' } }}
+              >
                 {metrics.sharpeRatio.toFixed(3)}
               </Typography>
               <Chip label={sharpeRating.text} color={sharpeRating.color} size="small" />
@@ -334,13 +378,24 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   最大回撤
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                color: 'error.main',
+                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' },
+                wordBreak: 'break-word',
+              }}
+            >
               -{Math.abs(metrics.maxDrawdown).toFixed(2)}%
             </Typography>
           </CardContent>
@@ -371,13 +426,24 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   波动率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.125rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1.125rem', md: '1.5rem' },
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+              }}
+            >
               {metrics.volatility.toFixed(2)}%
             </Typography>
           </CardContent>
@@ -399,14 +465,24 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   胜率
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflow: 'hidden' }}>
-              <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.125rem', md: '1.5rem' }, wordBreak: 'break-word' }}>
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: { xs: '1.125rem', md: '1.5rem' },
+                  wordBreak: 'break-word',
+                }}
+              >
                 {metrics.winRate.toFixed(1)}%
               </Typography>
               <LinearProgress
@@ -435,13 +511,24 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   交易次数
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.125rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1.125rem', md: '1.5rem' },
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+              }}
+            >
               {metrics.totalTrades}
             </Typography>
           </CardContent>
@@ -463,7 +550,11 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                   cursor: 'help',
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   盈亏比
                 </Typography>
                 <Info size={12} style={{ marginLeft: 4 }} />
@@ -495,12 +586,20 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                gridTemplateColumns: {
+                  xs: 'repeat(2, 1fr)',
+                  md: 'repeat(2, 1fr)',
+                  lg: 'repeat(4, 1fr)',
+                },
                 gap: { xs: 1, sm: 2 },
               }}
             >
               <Box sx={{ textAlign: 'center', overflow: 'hidden', p: { xs: 0.5, sm: 1 } }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   平均单笔盈亏
                 </Typography>
                 <Typography
@@ -517,7 +616,11 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               </Box>
 
               <Box sx={{ textAlign: 'center', overflow: 'hidden', p: { xs: 0.5, sm: 1 } }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   单笔盈亏中位数
                 </Typography>
                 <Typography
@@ -534,19 +637,39 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
               </Box>
 
               <Box sx={{ textAlign: 'center', overflow: 'hidden', p: { xs: 0.5, sm: 1 } }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   月度平均收益 / 波动
                 </Typography>
-                <Typography sx={{ fontWeight: 600, fontSize: { xs: '1rem', md: '1.25rem' }, wordBreak: 'break-word' }}>
+                <Typography
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: { xs: '1rem', md: '1.25rem' },
+                    wordBreak: 'break-word',
+                  }}
+                >
                   {metrics.monthlyReturnMean.toFixed(2)}% ± {metrics.monthlyReturnStd.toFixed(2)}%
                 </Typography>
               </Box>
 
               <Box sx={{ textAlign: 'center', overflow: 'hidden', p: { xs: 0.5, sm: 1 } }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
                   交易股票数 / 正负月份
                 </Typography>
-                <Typography sx={{ fontWeight: 600, fontSize: { xs: '1rem', md: '1.25rem' }, wordBreak: 'break-word' }}>
+                <Typography
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: { xs: '1rem', md: '1.25rem' },
+                    wordBreak: 'break-word',
+                  }}
+                >
                   {metrics.stocksTraded}
                   <Typography
                     component="span"

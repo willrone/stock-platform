@@ -106,7 +106,7 @@ export default function DrawdownChart({
     const { startIndex, endIndex } = getMaxDrawdownPeriod();
 
     // 准备图表数据
-    const series: any[] = [
+    const series: Record<string, unknown>[] = [
       {
         name: '回撤',
         type: 'line',
@@ -127,8 +127,8 @@ export default function DrawdownChart({
     ];
 
     // 添加最大回撤期间的标注
-    const markAreas: any[] = [];
-    const markLines: any[] = [];
+    const markAreas: Record<string, unknown>[] = [];
+    const markLines: Record<string, unknown>[] = [];
 
     if (showMaxDrawdownPeriod && startIndex !== -1 && endIndex !== -1) {
       // 标注最大回撤期间
@@ -181,7 +181,7 @@ export default function DrawdownChart({
             backgroundColor: '#6a7985',
           },
         },
-        formatter: function (params: any) {
+        formatter: function (params: { axisValue: string; value: number }[]) {
           const date = params[0].axisValue;
           const drawdown = params[0].value;
 
@@ -231,7 +231,7 @@ export default function DrawdownChart({
       yAxis: {
         type: 'value',
         max: 0,
-        min: function (value: any) {
+        min: function (value: { min: number }) {
           return Math.floor(value.min * 1.1);
         },
         axisLabel: {
@@ -350,7 +350,11 @@ export default function DrawdownChart({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingDown size={20} color="#d32f2f" />
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography
+                  variant="h6"
+                  component="h3"
+                  sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
                   回撤分析
                 </Typography>
                 <Tooltip title="显示组合价值从峰值下跌的幅度">
@@ -397,7 +401,15 @@ export default function DrawdownChart({
                     最大回撤
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '0.875rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'error.main',
+                        fontSize: { xs: '0.875rem', sm: '1.25rem' },
+                        wordBreak: 'break-word',
+                      }}
+                    >
                       {Math.abs(data.maxDrawdown).toFixed(2)}%
                     </Typography>
                     <Chip label={drawdownRating.text} color={drawdownRating.color} size="small" />
@@ -420,7 +432,15 @@ export default function DrawdownChart({
                   <Typography variant="caption" color="text.secondary">
                     最大回撤日期
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '0.875rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'warning.main',
+                      fontSize: { xs: '0.875rem', sm: '1.25rem' },
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {data.maxDrawdownDate
                       ? new Date(data.maxDrawdownDate).toLocaleDateString('zh-CN')
                       : '未知'}
@@ -443,7 +463,14 @@ export default function DrawdownChart({
                   <Typography variant="caption" color="text.secondary">
                     回撤持续天数
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'secondary.main',
+                      fontSize: { xs: '0.875rem', sm: '1.25rem' },
+                    }}
+                  >
                     {data.maxDrawdownDuration || 0} 天
                   </Typography>
                 </Box>
@@ -470,7 +497,10 @@ export default function DrawdownChart({
 
       <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
         <Box sx={{ overflowX: 'auto' }}>
-          <Box ref={chartRef} sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 400 }} />
+          <Box
+            ref={chartRef}
+            sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 400 }}
+          />
         </Box>
       </CardContent>
     </Card>

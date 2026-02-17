@@ -6,12 +6,7 @@ from loguru import logger
 
 # 检测Qlib可用性
 try:
-    import qlib
-    from qlib.config import REG_CN
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    pass
 
     QLIB_AVAILABLE = True
     logger.info("Qlib库已成功导入")

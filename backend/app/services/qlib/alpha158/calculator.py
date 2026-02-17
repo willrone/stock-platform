@@ -23,7 +23,6 @@ from .simplified_factors import calculate_basic_factors_for_stock
 
 # 检测 Qlib 可用性
 try:
-    import qlib
     from qlib.contrib.data.handler import Alpha158 as Alpha158Handler
     from qlib.contrib.data.loader import Alpha158DL
     from qlib.data import D
@@ -74,11 +73,16 @@ class Alpha158Calculator:
             config_result = Alpha158DL.get_feature_config(default_config)
             if isinstance(config_result, tuple):
                 if len(config_result) >= 2:
-                    self.alpha_fields, self.alpha_names = config_result[0], config_result[1]
+                    self.alpha_fields, self.alpha_names = (
+                        config_result[0],
+                        config_result[1],
+                    )
                 else:
                     self.alpha_fields, self.alpha_names = config_result
             else:
-                logger.warning(f"Alpha158DL.get_feature_config 返回非预期类型: {type(config_result)}")
+                logger.warning(
+                    f"Alpha158DL.get_feature_config 返回非预期类型: {type(config_result)}"
+                )
                 self.alpha_fields, self.alpha_names = [], []
             logger.info(f"Alpha158 计算器初始化，支持 {len(self.alpha_fields)} 个因子")
         except Exception as e:
@@ -141,14 +145,22 @@ class Alpha158Calculator:
                         stock_codes, date_range
                     )
                     if not alpha_factors.empty and len(alpha_factors.columns) >= 158:
-                        logger.info(f"使用 Alpha158 handler 计算完成: {len(alpha_factors.columns)} 个因子")
+                        logger.info(
+                            f"使用 Alpha158 handler 计算完成: {len(alpha_factors.columns)} 个因子"
+                        )
                         if use_cache:
-                            cache_key = self.factor_cache.get_cache_key(stock_codes, date_range)
+                            cache_key = self.factor_cache.get_cache_key(
+                                stock_codes, date_range
+                            )
                             self.factor_cache.save_factors(cache_key, alpha_factors)
                         return alpha_factors
                     else:
-                        factor_count = len(alpha_factors.columns) if not alpha_factors.empty else 0
-                        logger.warning(f"Alpha158 handler 计算因子数不足: {factor_count}，尝试表达式引擎")
+                        factor_count = (
+                            len(alpha_factors.columns) if not alpha_factors.empty else 0
+                        )
+                        logger.warning(
+                            f"Alpha158 handler 计算因子数不足: {factor_count}，尝试表达式引擎"
+                        )
                 except Exception as e:
                     logger.debug(f"使用 Alpha158 handler 失败: {e}，尝试表达式引擎")
 
@@ -160,7 +172,9 @@ class Alpha158Calculator:
 
             if not alpha_factors.empty:
                 factor_count = len(alpha_factors.columns)
-                logger.info(f"Alpha158 因子计算完成: {len(alpha_factors)} 条记录, {factor_count} 个因子")
+                logger.info(
+                    f"Alpha158 因子计算完成: {len(alpha_factors)} 条记录, {factor_count} 个因子"
+                )
                 if factor_count < 158:
                     logger.warning(f"表达式引擎计算的因子数不足: {factor_count} < 158")
                 if use_cache:
@@ -198,7 +212,11 @@ class Alpha158Calculator:
                 raise ValueError(f"Qlib 数据目录不存在: {qlib_features_dir}")
 
             # 获取可用文件列表
-            available_files = {f.stem for f in qlib_features_dir.glob("*.parquet") if f.stat().st_size > 0}
+            available_files = {
+                f.stem
+                for f in qlib_features_dir.glob("*.parquet")
+                if f.stat().st_size > 0
+            }
 
             # 解析股票代码到文件名
             resolved_instruments = []
@@ -242,7 +260,9 @@ class Alpha158Calculator:
 
                 # 过滤掉 Qlib Alpha158 handler 自动附带的 LABEL 列，
                 # 防止未来收益率（如 LABEL0）作为特征泄漏到训练数据中
-                label_cols = [c for c in alpha_factors.columns if c.upper().startswith("LABEL")]
+                label_cols = [
+                    c for c in alpha_factors.columns if c.upper().startswith("LABEL")
+                ]
                 if label_cols:
                     logger.warning(
                         f"Alpha158 handler 返回了 {len(label_cols)} 个标签列，已过滤: {label_cols}"
@@ -258,7 +278,9 @@ class Alpha158Calculator:
             logger.warning(f"使用 Alpha158 handler 计算失败: {e}")
             raise
 
-    def _resolve_instrument_name(self, code: str, available_files: set) -> Optional[str]:
+    def _resolve_instrument_name(
+        self, code: str, available_files: set
+    ) -> Optional[str]:
         """解析股票代码到文件名"""
         raw_code = str(code).strip()
         norm_code = raw_code.upper()
@@ -297,7 +319,10 @@ class Alpha158Calculator:
     ) -> pd.DataFrame:
         """使用表达式引擎计算 Alpha158 因子"""
         try:
-            if not (isinstance(qlib_data.index, pd.MultiIndex) and qlib_data.index.nlevels == 2):
+            if not (
+                isinstance(qlib_data.index, pd.MultiIndex)
+                and qlib_data.index.nlevels == 2
+            ):
                 logger.warning("数据格式不支持，无法使用表达式引擎计算")
                 return pd.DataFrame()
 
@@ -337,7 +362,9 @@ class Alpha158Calculator:
             else:
                 logger.info("使用单进程计算因子")
                 for stock_code, stock_data in stock_groups.items():
-                    stock_factors = self._calculate_alpha_factors_from_expressions(stock_data, stock_code)
+                    stock_factors = self._calculate_alpha_factors_from_expressions(
+                        stock_data, stock_code
+                    )
                     if not stock_factors.empty:
                         factors_list.append(stock_factors)
 
@@ -356,7 +383,9 @@ class Alpha158Calculator:
         """从 Alpha158 表达式计算因子"""
         try:
             required_cols = ["$close", "$high", "$low", "$volume", "$open"]
-            missing_cols = [col for col in required_cols if col not in stock_data.columns]
+            missing_cols = [
+                col for col in required_cols if col not in stock_data.columns
+            ]
             if missing_cols:
                 logger.warning(f"股票 {stock_code} 缺少必要列: {missing_cols}")
                 return pd.DataFrame(index=stock_data.index)
@@ -374,12 +403,16 @@ class Alpha158Calculator:
                 fail_count = 0
                 total_factors = len(self.alpha_fields)
 
-                for idx, (field_expr, factor_name) in enumerate(zip(self.alpha_fields, self.alpha_names)):
+                for idx, (field_expr, factor_name) in enumerate(
+                    zip(self.alpha_fields, self.alpha_names)
+                ):
                     if idx % 10 == 0:
                         logger.info(f"股票 {stock_code} 计算进度: {idx+1}/{total_factors}")
 
                     try:
-                        factor_series = self.expression_parser.evaluate(stock_data, field_expr)
+                        factor_series = self.expression_parser.evaluate(
+                            stock_data, field_expr
+                        )
                         if factor_series is not None and len(factor_series) > 0:
                             valid_count = factor_series.notna().sum()
                             if valid_count > 0:
@@ -396,10 +429,12 @@ class Alpha158Calculator:
                         factors[factor_name] = 0
                         fail_count += 1
 
-                logger.info(f"股票 {stock_code} 表达式解析完成: 成功 {success_count}, 失败 {fail_count}")
+                logger.info(
+                    f"股票 {stock_code} 表达式解析完成: 成功 {success_count}, 失败 {fail_count}"
+                )
             else:
                 # 回退到简化版本
-                logger.warning(f"Alpha158 配置不可用，使用简化版本")
+                logger.warning("Alpha158 配置不可用，使用简化版本")
                 factors = calculate_basic_factors_for_stock(stock_data, stock_code)
 
             factors = factors.bfill().fillna(0)
@@ -409,7 +444,9 @@ class Alpha158Calculator:
             logger.error(f"计算股票 {stock_code} 的因子失败: {e}", exc_info=True)
             return pd.DataFrame(index=stock_data.index)
 
-    async def _calculate_simplified_alpha_factors(self, data: pd.DataFrame) -> pd.DataFrame:
+    async def _calculate_simplified_alpha_factors(
+        self, data: pd.DataFrame
+    ) -> pd.DataFrame:
         """计算简化版 Alpha 因子"""
         if data.empty:
             return pd.DataFrame()
@@ -428,7 +465,9 @@ class Alpha158Calculator:
                 factors[f"MA{period}"] = data["$close"].rolling(period).mean()
                 factors[f"STD{period}"] = data["$close"].rolling(period).std()
                 factors[f"VSTD{period}"] = data["$volume"].rolling(period).std()
-                factors[f"CORR{period}"] = data["$close"].rolling(period).corr(data["$volume"])
+                factors[f"CORR{period}"] = (
+                    data["$close"].rolling(period).corr(data["$volume"])
+                )
                 factors[f"MAX{period}"] = data["$high"].rolling(period).max()
                 factors[f"MIN{period}"] = data["$low"].rolling(period).min()
                 q80 = data["$close"].rolling(period).quantile(0.8)

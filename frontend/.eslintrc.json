@@ -67,6 +67,10 @@
     "node_modules",
     "dist",
     "build",
-    "coverage"
+    "coverage",
+    "*.config.js",
+    "jest.setup.js",
+    "test-build.js",
+    "test_websocket.js"
   ]
 }

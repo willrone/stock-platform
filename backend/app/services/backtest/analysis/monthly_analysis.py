@@ -3,9 +3,7 @@
 提供详细的月度、季度、年度绩效分析功能
 """
 
-from calendar import monthrange
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -473,5 +471,5 @@ class MonthlyAnalyzer:
             running_max = cumulative.expanding().max()
             drawdown = (cumulative - running_max) / running_max
             return drawdown.min()
-        except:
+        except Exception:
             return 0

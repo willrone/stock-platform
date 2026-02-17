@@ -25,7 +25,7 @@ export interface SaveStrategyConfigDialogProps {
   isOpen: boolean;
   onClose: () => void;
   strategyName: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   onSave: (configName: string, description: string) => Promise<void>;
   loading?: boolean;
 }
@@ -70,8 +70,8 @@ export function SaveStrategyConfigDialog({
       onClose();
       setConfigName('');
       setDescription('');
-    } catch (err: any) {
-      setError(err.message || '保存配置失败');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '保存配置失败');
     } finally {
       setSaving(false);
     }
@@ -90,9 +90,7 @@ export function SaveStrategyConfigDialog({
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth
-      fullScreen={isMobile}
-    >
+    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Save size={20} />

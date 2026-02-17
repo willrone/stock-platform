@@ -2,10 +2,8 @@
 超参优化任务 API
 """
 
-import asyncio
-import os
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -17,10 +15,6 @@ from app.core.database import get_async_session
 from app.models.task_models import TaskStatus, TaskType
 from app.repositories.async_task_repository import AsyncTaskRepository
 from app.services.tasks.process_executor import get_process_executor
-from app.services.tasks.task_execution_engine import (
-    HyperparameterOptimizationTaskExecutor,
-)
-from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext, TaskPriority
 
 router = APIRouter(prefix="/optimization", tags=["超参优化"])
 
@@ -176,7 +170,9 @@ async def list_optimization_tasks(
 
 
 @router.get("/tasks/{task_id}", response_model=StandardResponse)
-async def get_optimization_task(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_optimization_task(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+):
     """获取超参优化任务详情"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -224,7 +220,9 @@ async def get_optimization_task(task_id: str, db: AsyncSession = Depends(get_asy
 
 
 @router.get("/tasks/{task_id}/status", response_model=StandardResponse)
-async def get_optimization_status(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_optimization_status(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+):
     """获取优化任务实时状态"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -270,7 +268,9 @@ async def get_optimization_status(task_id: str, db: AsyncSession = Depends(get_a
 
 
 @router.get("/tasks/{task_id}/param-importance", response_model=StandardResponse)
-async def get_param_importance(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_param_importance(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+):
     """获取参数重要性"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -328,7 +328,6 @@ def execute_optimization_task_simple(task_id: str):
     """
     简化的超参优化任务执行函数（进程池执行）
     """
-    import asyncio
     import os
     from datetime import datetime
 

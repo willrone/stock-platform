@@ -39,7 +39,7 @@ import TradingViewChart from './TradingViewChart';
 
 interface InteractiveChartsContainerProps {
   taskId: string;
-  backtestData?: any;
+  backtestData?: Record<string, unknown>;
   stockCode?: string;
   stockCodes?: string[];
 }
@@ -145,9 +145,9 @@ export default function InteractiveChartsContainer({
         const benchmark = await BacktestService.getBenchmarkData(taskId);
         if (benchmark && benchmark.benchmark_returns) {
           benchmarkData = {
-            dates: benchmark.benchmark_returns.map((r: any) => r.date),
-            values: benchmark.benchmark_returns.map((r: any) => r.cumulative_return * 100000), // 假设初始值
-            returns: benchmark.benchmark_returns.map((r: any) => r.return),
+            dates: benchmark.benchmark_returns.map((r: { date: string; cumulative_return: number; return: number }) => r.date),
+            values: benchmark.benchmark_returns.map((r: { date: string; cumulative_return: number; return: number }) => r.cumulative_return * 100000), // 假设初始值
+            returns: benchmark.benchmark_returns.map((r: { date: string; cumulative_return: number; return: number }) => r.return),
           };
           console.log('[InteractiveChartsContainer] 基准数据加载成功');
         } else {
@@ -166,13 +166,13 @@ export default function InteractiveChartsContainer({
 
       console.log('[InteractiveChartsContainer] 所有图表数据设置完成:', finalChartData);
       setChartData(finalChartData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[InteractiveChartsContainer] 加载图表数据失败:', err);
       // 如果API加载失败，尝试从现有回测数据生成
       console.log('[InteractiveChartsContainer] 尝试从现有回测数据生成图表...');
       generateChartDataFromBacktest();
       if (!chartData || Object.keys(chartData).length === 0) {
-        setError(err.message || '加载图表数据失败');
+        setError(err instanceof Error ? err.message : '加载图表数据失败');
       }
     } finally {
       setLoading(false);
@@ -190,17 +190,17 @@ export default function InteractiveChartsContainer({
       const portfolioHistory = backtestData.portfolio_history || [];
       if (portfolioHistory.length > 0) {
         // 按日期排序，确保数据顺序正确
-        const sortedHistory = [...portfolioHistory].sort((a: any, b: any) => {
-          const dateA = new Date(a.date || a.snapshot_date).getTime();
-          const dateB = new Date(b.date || b.snapshot_date).getTime();
+        const sortedHistory = [...portfolioHistory].sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+          const dateA = new Date((a.date || a.snapshot_date) as string).getTime();
+          const dateB = new Date((b.date || b.snapshot_date) as string).getTime();
           return dateA - dateB;
         });
 
         const equityCurveData = {
-          dates: sortedHistory.map((h: any) => h.date || h.snapshot_date),
-          portfolioValues: sortedHistory.map((h: any) => h.portfolio_value),
-          returns: sortedHistory.map((h: any) => h.total_return || 0),
-          dailyReturns: sortedHistory.map((h: any) => h.daily_return || 0),
+          dates: sortedHistory.map((h: Record<string, unknown>) => (h.date || h.snapshot_date) as string),
+          portfolioValues: sortedHistory.map((h: Record<string, unknown>) => h.portfolio_value as number),
+          returns: sortedHistory.map((h: Record<string, unknown>) => (h.total_return || 0) as number),
+          dailyReturns: sortedHistory.map((h: Record<string, unknown>) => (h.daily_return || 0) as number),
         };
 
         console.log(
@@ -404,13 +404,24 @@ export default function InteractiveChartsContainer({
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <BarChart3 size={20} color="#1976d2" />
-              <Typography variant="h5" component="h2" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' } }}>
+              <Typography
+                variant="h5"
+                component="h2"
+                sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' } }}
+              >
                 交互式图表分析
               </Typography>
             </Box>
           }
           action={
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-end', sm: 'center' }, gap: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-end', sm: 'center' },
+                gap: 1,
+              }}
+            >
               {stockCodes && stockCodes.length > 0 && (
                 <FormControl size="small" sx={{ minWidth: 160 }}>
                   <InputLabel>选择股票</InputLabel>

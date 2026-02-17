@@ -2,11 +2,9 @@
 早停策略实现
 防止模型过拟合，提高训练效率
 """
-import json
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from loguru import logger

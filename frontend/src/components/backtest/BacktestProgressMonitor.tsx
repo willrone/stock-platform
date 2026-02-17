@@ -38,7 +38,7 @@ import {
 
 interface BacktestProgressMonitorProps {
   taskId: string;
-  onComplete?: (results: any) => void;
+  onComplete?: (results: Record<string, unknown>) => void;
   onError?: (error: string) => void;
   onCancel?: () => void;
   className?: string;
@@ -257,7 +257,7 @@ export default function BacktestProgressMonitor({
             <Chip
               label={getStatusText(stage.status)}
               size="small"
-              color={getStatusColor(stage.status) as any}
+              color={getStatusColor(stage.status) as 'success' | 'primary' | 'error' | 'warning' | 'default'}
             />
           </Box>
 
@@ -320,7 +320,11 @@ export default function BacktestProgressMonitor({
         <CardHeader
           title={
             <Box>
-              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+              <Typography
+                variant="h6"
+                component="h3"
+                sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}
+              >
                 回测进度监控
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -407,7 +411,14 @@ export default function BacktestProgressMonitor({
                   }}
                 >
                   <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'primary.main',
+                        fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
+                      }}
+                    >
                       {progressData.processed_days}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -416,7 +427,14 @@ export default function BacktestProgressMonitor({
                   </Box>
 
                   <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'success.main',
+                        fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
+                      }}
+                    >
                       {progressData.trades_executed}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -425,7 +443,14 @@ export default function BacktestProgressMonitor({
                   </Box>
 
                   <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'warning.main',
+                        fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
+                      }}
+                    >
                       {progressData.signals_generated}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -434,7 +459,14 @@ export default function BacktestProgressMonitor({
                   </Box>
 
                   <Box sx={{ textAlign: 'center', overflow: 'hidden', wordBreak: 'break-word' }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'secondary.main',
+                        fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' },
+                      }}
+                    >
                       {formatNumber(progressData.portfolio_value, 0)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">

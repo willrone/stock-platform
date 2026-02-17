@@ -4,7 +4,7 @@
 将DataFrame适配为Qlib DatasetH格式
 """
 
-from typing import Any, List, Union
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -43,7 +43,7 @@ def _create_label_for_data(
 
     # 二分类转换
     if label_type == "binary":
-        positive_before = data["label"].mean()
+        data["label"].mean()
         data["label"] = (data["label"] > binary_threshold).astype(int)
         logger.info(
             f"{data_name}二分类标签: 阈值={binary_threshold}, "
@@ -65,7 +65,9 @@ def _find_close_column(data: pd.DataFrame) -> str:
 
 
 def _create_return_label(
-    data: pd.DataFrame, close_col: str, horizon: int,
+    data: pd.DataFrame,
+    close_col: str,
+    horizon: int,
 ) -> None:
     """计算未来N天收益率标签（原地修改）
 
@@ -90,7 +92,8 @@ def _create_return_label(
 
 
 def _create_fallback_label(
-    data: pd.DataFrame, data_name: str,
+    data: pd.DataFrame,
+    data_name: str,
 ) -> None:
     """使用最后一列作为标签（原地修改）"""
     last_col = data.iloc[:, -1]
@@ -98,9 +101,7 @@ def _create_fallback_label(
         data["label"] = last_col
     else:
         data["label"] = pd.Series(
-            last_col.iloc[:, 0].values
-            if hasattr(last_col, "iloc")
-            else last_col,
+            last_col.iloc[:, 0].values if hasattr(last_col, "iloc") else last_col,
             index=data.index,
         )
     logger.warning(
@@ -134,12 +135,18 @@ class DataFrameDatasetAdapter:
         binary_threshold = config.binary_threshold if config else 0.003
 
         _create_label_for_data(
-            self.train_data, "训练集", prediction_horizon,
-            label_type, binary_threshold,
+            self.train_data,
+            "训练集",
+            prediction_horizon,
+            label_type,
+            binary_threshold,
         )
         _create_label_for_data(
-            self.val_data, "验证集", prediction_horizon,
-            label_type, binary_threshold,
+            self.val_data,
+            "验证集",
+            prediction_horizon,
+            label_type,
+            binary_threshold,
         )
 
         # 记录数据维度信息
@@ -233,9 +240,7 @@ class DataFrameDatasetAdapter:
             def __array__(self, dtype=None):
                 # 支持numpy数组转换
                 return (
-                    self._values_2d
-                    if dtype is None
-                    else self._values_2d.astype(dtype)
+                    self._values_2d if dtype is None else self._values_2d.astype(dtype)
                 )
 
             def __getattr__(self, name):
@@ -251,13 +256,14 @@ class DataFrameDatasetAdapter:
         # 如果配置中指定了selected_features，则只使用选定的特征
         _LEAKY_FEATURES = {"RET1", "RET5", "RET20", "VOL1", "VOL5"}
         all_feature_cols = [
-            col for col in data.columns
+            col
+            for col in data.columns
             if col != "label"
             and not (isinstance(col, str) and col.upper().startswith("LABEL"))
             and col not in _LEAKY_FEATURES
             and not (isinstance(col, str) and col.startswith("$"))
         ]
-        if hasattr(self, 'config') and self.config and self.config.selected_features:
+        if hasattr(self, "config") and self.config and self.config.selected_features:
             # 特征名称映射：将前端友好的名称转换为Qlib实际使用的名称
             def map_feature_name(feature_name: str) -> List[str]:
                 """将前端特征名称映射到可能的Qlib特征名称"""
@@ -367,7 +373,9 @@ class DataFrameDatasetAdapter:
 
             # 将前端特征名称映射到实际特征名称
             mapped_features = []
-            selected_features = getattr(self, 'config', None) and self.config.selected_features or []
+            selected_features = (
+                getattr(self, "config", None) and self.config.selected_features or []
+            )
             for user_feature in selected_features:
                 possible_names = map_feature_name(user_feature)
                 # 查找第一个在数据中存在的特征名称
@@ -378,14 +386,10 @@ class DataFrameDatasetAdapter:
                         found = True
                         break
                 if not found:
-                    logger.debug(
-                        f"特征 '{user_feature}' 未找到匹配项，尝试的变体: {possible_names}"
-                    )
+                    logger.debug(f"特征 '{user_feature}' 未找到匹配项，尝试的变体: {possible_names}")
 
             # 只选择用户指定的特征，且这些特征在数据中存在
-            feature_cols = [
-                col for col in mapped_features if col in all_feature_cols
-            ]
+            feature_cols = [col for col in mapped_features if col in all_feature_cols]
             if len(feature_cols) == 0:
                 logger.warning(
                     f"用户指定的特征都不存在，使用所有可用特征。指定特征: {selected_features}, 可用特征: {all_feature_cols[:20]}"
@@ -395,14 +399,11 @@ class DataFrameDatasetAdapter:
                 missing_features = [
                     col
                     for col in selected_features
-                    if col
-                    not in [f for f in mapped_features if f in all_feature_cols]
+                    if col not in [f for f in mapped_features if f in all_feature_cols]
                 ]
                 if missing_features:
                     logger.warning(f"以下特征不存在，将被忽略: {missing_features[:10]}")
-                logger.info(
-                    f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}"
-                )
+                logger.info(f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}")
         else:
             feature_cols = all_feature_cols
 
@@ -534,9 +535,7 @@ class DataFrameDatasetAdapter:
 
             # 保存label对象，不直接赋值给DataFrame
             label_obj_final = label_obj
-            result_base["label"] = pd.Series(
-                [None] * len(data.index), index=data.index
-            )
+            result_base["label"] = pd.Series([None] * len(data.index), index=data.index)
         else:
             # 创建默认标签
             default_values_1d = np.zeros(len(data))
@@ -544,9 +543,7 @@ class DataFrameDatasetAdapter:
             label_obj_final = LabelSeries(
                 default_values_1d, default_values_2d, data.index
             )
-            result_base["label"] = pd.Series(
-                [None] * len(data.index), index=data.index
-            )
+            result_base["label"] = pd.Series([None] * len(data.index), index=data.index)
 
         if "label" not in col_set:
             # 如果没有请求label，创建默认的
@@ -555,9 +552,7 @@ class DataFrameDatasetAdapter:
             label_obj_final = LabelSeries(
                 default_values_1d, default_values_2d, data.index
             )
-            result_base["label"] = pd.Series(
-                [None] * len(data.index), index=data.index
-            )
+            result_base["label"] = pd.Series([None] * len(data.index), index=data.index)
 
         # 创建一个自定义的DataFrame类，重写__getitem__以返回自定义Series对象
         class CustomDataFrame(pd.DataFrame):
@@ -596,18 +591,14 @@ class DataFrameDatasetAdapter:
                 return FeatureSeries(empty_array, data.index)
 
         # 如果只请求label，直接返回LabelSeries
-        if col_set == ["label"] or (
-            isinstance(col_set, str) and col_set == "label"
-        ):
+        if col_set == ["label"] or (isinstance(col_set, str) and col_set == "label"):
             if label_obj_final is not None:
                 return label_obj_final
             else:
                 # 如果没有标签，返回空的LabelSeries
                 default_values_1d = np.zeros(len(data))
                 default_values_2d = default_values_1d.reshape(-1, 1)
-                return LabelSeries(
-                    default_values_1d, default_values_2d, data.index
-                )
+                return LabelSeries(default_values_1d, default_values_2d, data.index)
 
         # 如果请求多个列（feature和label），返回CustomDataFrame
         if label_obj_final is not None or feature_obj_final is not None:

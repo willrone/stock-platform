@@ -3,18 +3,14 @@
 检查模型依赖、环境兼容性和接口一致性
 """
 import hashlib
-import importlib
-import json
 import pickle
 import platform
-import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-
 from importlib import metadata
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
 from packaging import version
 
@@ -536,10 +532,10 @@ class ModelFormatValidator:
 
             if model_path.is_dir():
                 # SavedModel格式
-                model = tf.saved_model.load(str(model_path))
+                tf.saved_model.load(str(model_path))
             else:
                 # H5格式
-                model = tf.keras.models.load_model(str(model_path))
+                tf.keras.models.load_model(str(model_path))
 
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,

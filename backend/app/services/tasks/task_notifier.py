@@ -8,7 +8,7 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Set
+from typing import Dict, Optional
 
 from loguru import logger
 

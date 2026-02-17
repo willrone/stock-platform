@@ -13,9 +13,7 @@
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional
-
-from loguru import logger
+from typing import Any, Dict, Optional
 
 # 进度写入间隔：每 10% 写一次 DB
 PROGRESS_FLUSH_INTERVAL_PERCENT = 10.0
@@ -107,9 +105,7 @@ class TaskProgressCache:
     def get_all_dirty(self) -> Dict[str, CachedProgress]:
         """获取所有需要写入的脏数据（用于异常退出前的紧急刷盘）"""
         with self._lock:
-            return {
-                tid: cp for tid, cp in self._cache.items() if cp.is_dirty
-            }
+            return {tid: cp for tid, cp in self._cache.items() if cp.is_dirty}
 
     def _should_flush(self, cached: CachedProgress) -> bool:
         """判断是否应该写入数据库"""

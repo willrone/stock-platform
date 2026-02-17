@@ -201,7 +201,7 @@ export interface PortfolioSnapshot {
   positions_count: number;
   total_return: number;
   daily_return: number;
-  positions: Record<string, any>;
+  positions: Record<string, unknown>;
 }
 
 // 交易记录接口
@@ -247,7 +247,7 @@ export interface SignalRecord {
   price: number;
   strength: number;
   reason?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   executed: boolean;
   execution_reason?: string; // 未执行原因
   created_at: string;
@@ -315,7 +315,7 @@ export class BacktestService {
     snapshots: PortfolioSnapshot[];
     total_count: number;
   }> {
-    const params: any = { limit };
+    const params: Record<string, unknown> = { limit };
     if (startDate) {
       params.start_date = startDate;
     }
@@ -349,7 +349,7 @@ export class BacktestService {
       count: number;
     };
   }> {
-    const params: any = {
+    const params: Record<string, unknown> = {
       offset: options.offset || 0,
       limit: options.limit || 50,
       order_by: options.orderBy || 'timestamp',
@@ -403,7 +403,7 @@ export class BacktestService {
       count: number;
     };
   }> {
-    const params: any = {
+    const params: Record<string, unknown> = {
       offset: options.offset || 0,
       limit: options.limit || 50,
       order_by: options.orderBy || 'timestamp',
@@ -454,7 +454,7 @@ export class BacktestService {
   static async cacheChartData(
     taskId: string,
     chartType: string,
-    chartData: Record<string, any>,
+    chartData: Record<string, unknown>,
     expiryHours: number = 24
   ): Promise<{ task_id: string; chart_type: string }> {
     return apiRequest.post(`/backtest-detailed/${taskId}/cache-chart`, {
@@ -470,15 +470,16 @@ export class BacktestService {
   static async getCachedChartData(
     taskId: string,
     chartType: string
-  ): Promise<Record<string, any> | null> {
+  ): Promise<Record<string, unknown> | null> {
     try {
       return await apiRequest.get(`/backtest-detailed/${taskId}/cached-chart/${chartType}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 检查是否是404错误（缓存不存在）
+      const err = error as { response?: { status?: number }; status?: number; message?: string };
       if (
-        error.response?.status === 404 ||
-        error.status === 404 ||
-        error.message?.includes('404')
+        err.response?.status === 404 ||
+        err.status === 404 ||
+        err.message?.includes('404')
       ) {
         console.log(`[BacktestService] 缓存不存在: taskId=${taskId}, chartType=${chartType}`);
         return null; // 缓存不存在
@@ -528,7 +529,7 @@ export class BacktestService {
     taskId: string,
     chartType: string,
     forceRefresh: boolean = false
-  ): Promise<Record<string, any>> {
+  ): Promise<Record<string, unknown>> {
     console.log(
       `[BacktestService] 开始获取图表数据: taskId=${taskId}, chartType=${chartType}, forceRefresh=${forceRefresh}`
     );
@@ -550,7 +551,7 @@ export class BacktestService {
     }
 
     // 根据图表类型生成数据
-    let chartData: Record<string, any>;
+    let chartData: Record<string, unknown>;
     console.log(`[BacktestService] 开始生成 ${chartType} 类型的图表数据...`);
 
     try {
@@ -602,7 +603,7 @@ export class BacktestService {
   /**
    * 生成权益曲线数据
    */
-  private static async generateEquityCurveData(taskId: string): Promise<Record<string, any>> {
+  private static async generateEquityCurveData(taskId: string): Promise<Record<string, unknown>> {
     try {
       // 获取所有数据，不限制数量（传入一个很大的数字，或者不传limit让后端返回所有）
       const snapshots = await this.getPortfolioSnapshots(taskId, undefined, undefined, 100000);
@@ -636,12 +637,13 @@ export class BacktestService {
         returns: sortedSnapshots.map(s => s.total_return),
         dailyReturns: sortedSnapshots.map(s => s.daily_return || 0),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[BacktestService] 生成权益曲线数据失败:', error);
+      const err = error as { response?: { status?: number }; status?: number; message?: string };
       if (
-        error.response?.status === 404 ||
-        error.status === 404 ||
-        error.message?.includes('404')
+        err.response?.status === 404 ||
+        err.status === 404 ||
+        err.message?.includes('404')
       ) {
         console.warn('[BacktestService] 组合快照数据不存在，返回空数据');
         return {
@@ -658,7 +660,7 @@ export class BacktestService {
   /**
    * 生成回撤曲线数据
    */
-  private static async generateDrawdownCurveData(taskId: string): Promise<Record<string, any>> {
+  private static async generateDrawdownCurveData(taskId: string): Promise<Record<string, unknown>> {
     try {
       const detailedResult = await this.getDetailedResult(taskId);
 
@@ -674,19 +676,20 @@ export class BacktestService {
       }
 
       return {
-        dates: detailedResult.drawdown_analysis.drawdown_curve?.map((d: any) => d.date) || [],
+        dates: detailedResult.drawdown_analysis.drawdown_curve?.map((d: { date: string; drawdown: number }) => d.date) || [],
         drawdowns:
-          detailedResult.drawdown_analysis.drawdown_curve?.map((d: any) => d.drawdown) || [],
+          detailedResult.drawdown_analysis.drawdown_curve?.map((d: { date: string; drawdown: number }) => d.drawdown) || [],
         maxDrawdown: detailedResult.drawdown_analysis.max_drawdown || 0,
         maxDrawdownDate: detailedResult.drawdown_analysis.max_drawdown_date || '',
         maxDrawdownDuration: detailedResult.drawdown_analysis.max_drawdown_duration || 0,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[BacktestService] 生成回撤曲线数据失败:', error);
+      const err = error as { response?: { status?: number }; status?: number; message?: string };
       if (
-        error.response?.status === 404 ||
-        error.status === 404 ||
-        error.message?.includes('404')
+        err.response?.status === 404 ||
+        err.status === 404 ||
+        err.message?.includes('404')
       ) {
         console.warn('[BacktestService] 详细结果数据不存在，返回空数据');
         return {
@@ -704,7 +707,7 @@ export class BacktestService {
   /**
    * 生成月度热力图数据
    */
-  private static async generateMonthlyHeatmapData(taskId: string): Promise<Record<string, any>> {
+  private static async generateMonthlyHeatmapData(taskId: string): Promise<Record<string, unknown>> {
     try {
       const detailedResult = await this.getDetailedResult(taskId);
 
@@ -721,7 +724,7 @@ export class BacktestService {
         };
       }
 
-      const uniqueYears = new Set(detailedResult.monthly_returns.map((m: any) => m.year));
+      const uniqueYears = new Set(detailedResult.monthly_returns.map((m) => m.year));
       const years = Array.from(uniqueYears).sort();
 
       return {
@@ -729,12 +732,13 @@ export class BacktestService {
         years: years,
         months: Array.from({ length: 12 }, (_, i) => i + 1),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[BacktestService] 生成月度热力图数据失败:', error);
+      const err = error as { response?: { status?: number }; status?: number; message?: string };
       if (
-        error.response?.status === 404 ||
-        error.status === 404 ||
-        error.message?.includes('404')
+        err.response?.status === 404 ||
+        err.status === 404 ||
+        err.message?.includes('404')
       ) {
         console.warn('[BacktestService] 详细结果数据不存在，返回空数据');
         return {
@@ -750,7 +754,7 @@ export class BacktestService {
   /**
    * 生成交易分布数据
    */
-  private static async generateTradeDistributionData(taskId: string): Promise<Record<string, any>> {
+  private static async generateTradeDistributionData(taskId: string): Promise<Record<string, unknown>> {
     const trades = await this.getTradeRecords(taskId, { limit: 1000 });
     const stats = await this.getTradeStatistics(taskId);
 
@@ -765,7 +769,7 @@ export class BacktestService {
   /**
    * 生成持仓权重数据
    */
-  private static async generatePositionWeightsData(taskId: string): Promise<Record<string, any>> {
+  private static async generatePositionWeightsData(taskId: string): Promise<Record<string, unknown>> {
     const detailedResult = await this.getDetailedResult(taskId);
 
     // 处理 position_analysis 可能是数组或对象的情况
@@ -783,7 +787,7 @@ export class BacktestService {
   /**
    * 计算盈亏分布
    */
-  private static calculateProfitDistribution(trades: TradeRecord[]): Record<string, any> {
+  private static calculateProfitDistribution(trades: TradeRecord[]): Record<string, unknown> {
     const sellTrades = trades.filter(t => t.action === 'SELL' && t.pnl !== 0);
     const profits = sellTrades.map(t => t.pnl);
 
@@ -813,7 +817,7 @@ export class BacktestService {
   /**
    * 计算时间分布
    */
-  private static calculateTimeDistribution(trades: TradeRecord[]): Record<string, any> {
+  private static calculateTimeDistribution(trades: TradeRecord[]): Record<string, unknown> {
     const tradesByHour = Array.from({ length: 24 }, () => 0);
     const tradesByDay = Array.from({ length: 7 }, () => 0);
     const tradesByMonth = Array.from({ length: 12 }, () => 0);

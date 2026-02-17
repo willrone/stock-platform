@@ -72,10 +72,10 @@ export default function EquityCurveChart({
 
   // Defensive: normalize possibly-empty data to avoid runtime errors in tests / partial API.
   const safeData = {
-    dates: (data as any)?.dates || [],
-    portfolioValues: (data as any)?.portfolioValues || [],
-    returns: (data as any)?.returns || [],
-    dailyReturns: (data as any)?.dailyReturns || [],
+    dates: (data as Partial<EquityCurveChartProps['data']>)?.dates || [],
+    portfolioValues: (data as Partial<EquityCurveChartProps['data']>)?.portfolioValues || [],
+    returns: (data as Partial<EquityCurveChartProps['data']>)?.returns || [],
+    dailyReturns: (data as Partial<EquityCurveChartProps['data']>)?.dailyReturns || [],
   };
 
   // 处理时间范围筛选
@@ -104,9 +104,9 @@ export default function EquityCurveChart({
   const getFilteredBenchmarkData = () => {
     const safeBenchmark = benchmarkData
       ? {
-          dates: (benchmarkData as any)?.dates || [],
-          values: (benchmarkData as any)?.values || [],
-          returns: (benchmarkData as any)?.returns || [],
+          dates: (benchmarkData as Partial<NonNullable<EquityCurveChartProps['benchmarkData']>>)?.dates || [],
+          values: (benchmarkData as Partial<NonNullable<EquityCurveChartProps['benchmarkData']>>)?.values || [],
+          returns: (benchmarkData as Partial<NonNullable<EquityCurveChartProps['benchmarkData']>>)?.returns || [],
         }
       : undefined;
 
@@ -147,7 +147,7 @@ export default function EquityCurveChart({
     const filteredBenchmarkData = getFilteredBenchmarkData();
 
     // 准备图表数据
-    const series: any[] = [];
+    const series: Record<string, unknown>[] = [];
 
     if (chartType === 'value') {
       // 权益曲线
@@ -238,11 +238,11 @@ export default function EquityCurveChart({
             backgroundColor: '#6a7985',
           },
         },
-        formatter: function (params: any) {
+        formatter: function (params: { axisValue: string; value: number; color: string; seriesName: string }[]) {
           const date = params[0].axisValue;
           let content = `<div style="margin-bottom: 4px;">${date}</div>`;
 
-          params.forEach((param: any) => {
+          params.forEach((param: { axisValue: string; value: number; color: string; seriesName: string }) => {
             const value = param.value;
             const color = param.color;
 
@@ -396,18 +396,18 @@ export default function EquityCurveChart({
         return;
       }
 
-      if (!(chartInstance.current as any)?.getOption) {
+      if (!(chartInstance.current as echarts.ECharts & { getOption?: () => Record<string, unknown> })?.getOption) {
         return;
       }
 
-      const option = (chartInstance.current as any).getOption();
-      const dataZoom = option.dataZoom as any[];
+      const option = (chartInstance.current as echarts.ECharts & { getOption: () => Record<string, unknown> }).getOption();
+      const dataZoom = option.dataZoom as { xAxisIndex?: number | number[]; start?: number; end?: number }[];
 
       if (!dataZoom || dataZoom.length === 0) {
         return;
       }
 
-      const xDataZoom = dataZoom.find((dz: any) => {
+      const xDataZoom = dataZoom.find((dz: { xAxisIndex?: number | number[]; start?: number; end?: number }) => {
         if (dz.xAxisIndex !== undefined) {
           return Array.isArray(dz.xAxisIndex) ? dz.xAxisIndex.includes(0) : dz.xAxisIndex === 0;
         }
@@ -467,8 +467,8 @@ export default function EquityCurveChart({
     };
 
     // ECharts instance in tests may be a partial mock.
-    if ((chartInstance.current as any)?.on) {
-      (chartInstance.current as any).on('dataZoom', handleDataZoom);
+    if ((chartInstance.current as echarts.ECharts & { on?: unknown })?.on) {
+      (chartInstance.current as echarts.ECharts & { on: (event: string, handler: () => void) => void }).on('dataZoom', handleDataZoom);
     }
 
     setTimeout(() => {
@@ -484,8 +484,8 @@ export default function EquityCurveChart({
     window.addEventListener('resize', handleResize);
 
     return () => {
-      if ((chartInstance.current as any)?.off) {
-        (chartInstance.current as any).off('dataZoom', handleDataZoom);
+      if ((chartInstance.current as echarts.ECharts & { off?: unknown })?.off) {
+        (chartInstance.current as echarts.ECharts & { off: (event: string, handler: () => void) => void }).off('dataZoom', handleDataZoom);
       }
       window.removeEventListener('resize', handleResize);
       if (chartInstance.current) {
@@ -566,7 +566,11 @@ export default function EquityCurveChart({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingUp size={20} color="#1976d2" />
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography
+                  variant="h6"
+                  component="h3"
+                  sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                >
                   收益曲线分析
                 </Typography>
                 <Tooltip title="显示组合价值或收益率随时间的变化">
@@ -658,7 +662,10 @@ export default function EquityCurveChart({
 
       <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
         <Box sx={{ overflowX: 'auto' }}>
-          <Box ref={chartRef} sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 400 }} />
+          <Box
+            ref={chartRef}
+            sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 400 }}
+          />
         </Box>
       </CardContent>
     </Card>

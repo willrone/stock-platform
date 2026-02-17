@@ -7,11 +7,10 @@ import gzip
 import json
 import logging
 import logging.handlers
-import os
 import threading
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional

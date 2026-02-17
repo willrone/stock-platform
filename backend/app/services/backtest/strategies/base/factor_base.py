@@ -6,7 +6,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-from loguru import logger
 
 from ...core.base_strategy import BaseStrategy
 
@@ -58,7 +57,7 @@ class FactorStrategy(BaseStrategy):
                 try:
                     beta = np.linalg.lstsq(X, y, rcond=None)[0]
                     neutralized.loc[valid_idx] = y - X @ beta
-                except:
+                except Exception:
                     pass
 
         if industries is not None and self.industry_neutral:

@@ -8,8 +8,8 @@ from typing import Any, Dict, List
 import pandas as pd
 from loguru import logger
 
-from ..base.statistical_arbitrage_base import StatisticalArbitrageStrategy
 from ...models import SignalType, TradingSignal
+from ..base.statistical_arbitrage_base import StatisticalArbitrageStrategy
 
 
 class MeanReversionStrategy(StatisticalArbitrageStrategy):
@@ -52,7 +52,10 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
             # 买入：Z-score 跌破 -threshold（价格处于极端低位）
-            if current_zscore < -self.zscore_threshold and prev_zscore >= -self.zscore_threshold:
+            if (
+                current_zscore < -self.zscore_threshold
+                and prev_zscore >= -self.zscore_threshold
+            ):
                 strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -69,7 +72,10 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
                 signals.append(signal)
 
             # 卖出：Z-score 突破 +threshold（价格处于极端高位）
-            elif current_zscore > self.zscore_threshold and prev_zscore <= self.zscore_threshold:
+            elif (
+                current_zscore > self.zscore_threshold
+                and prev_zscore <= self.zscore_threshold
+            ):
                 strength = min(1.0, abs(current_zscore) / self.zscore_threshold)
                 signal = TradingSignal(
                     timestamp=current_date,

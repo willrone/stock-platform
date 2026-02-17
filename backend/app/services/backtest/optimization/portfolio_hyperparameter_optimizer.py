@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import math
 import random
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,7 +29,7 @@ from loguru import logger
 try:
     import optuna
     from optuna.pruners import MedianPruner
-    from optuna.samplers import TPESampler, GridSampler
+    from optuna.samplers import TPESampler
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
     raise
@@ -91,7 +90,9 @@ class PortfolioHyperparameterOptimizer:
         cfg: PortfolioOptConfig,
     ) -> float:
         # max_drawdown 通常为负数（如 -0.2），用 abs 做惩罚
-        return float(annualized_return) - float(cfg.lambda_drawdown) * abs(float(max_drawdown))
+        return float(annualized_return) - float(cfg.lambda_drawdown) * abs(
+            float(max_drawdown)
+        )
 
     async def optimize(
         self,
@@ -108,7 +109,9 @@ class PortfolioHyperparameterOptimizer:
         cfg = cfg or PortfolioOptConfig()
 
         # 1) 随机抽样股票池（可复现）
-        stock_codes = self._sample_universe(all_stock_codes, universe_size, universe_seed)
+        stock_codes = self._sample_universe(
+            all_stock_codes, universe_size, universe_seed
+        )
         logger.info(
             f"组合优化：universe_size={len(stock_codes)} seed={universe_seed} "
             f"date={start_date.date()}~{end_date.date()} trials={n_trials}"
@@ -159,7 +162,11 @@ class PortfolioHyperparameterOptimizer:
                         chosen.append(s)
                 if not chosen:
                     # 至少选一个
-                    chosen.append(trial.suggest_categorical("fallback_strategy", candidate_strategies))
+                    chosen.append(
+                        trial.suggest_categorical(
+                            "fallback_strategy", candidate_strategies
+                        )
+                    )
                 # 裁剪到 max_strategies（保持确定性：按 trial 给的权重排序后取前 K）
                 if len(chosen) > cfg.max_strategies:
                     ranked = []
@@ -191,8 +198,12 @@ class PortfolioHyperparameterOptimizer:
                 elif s == "rsi":
                     params = {
                         "rsi_period": trial.suggest_int(f"{s}__rsi_period", 6, 30),
-                        "oversold_threshold": trial.suggest_int(f"{s}__oversold", 10, 40),
-                        "overbought_threshold": trial.suggest_int(f"{s}__overbought", 60, 90),
+                        "oversold_threshold": trial.suggest_int(
+                            f"{s}__oversold", 10, 40
+                        ),
+                        "overbought_threshold": trial.suggest_int(
+                            f"{s}__overbought", 60, 90
+                        ),
                     }
                 elif s == "macd":
                     fast = trial.suggest_int(f"{s}__fast", 5, 20)
@@ -200,12 +211,18 @@ class PortfolioHyperparameterOptimizer:
                     if slow <= fast:
                         slow = fast + 5
                     signal = trial.suggest_int(f"{s}__signal", 3, 20)
-                    params = {"fast_period": fast, "slow_period": slow, "signal_period": signal}
+                    params = {
+                        "fast_period": fast,
+                        "slow_period": slow,
+                        "signal_period": signal,
+                    }
                 elif s == "bollinger":
                     params = {
                         "period": trial.suggest_int(f"{s}__period", 10, 40),
                         "std_dev": trial.suggest_float(f"{s}__std_dev", 1.0, 3.0),
-                        "entry_threshold": trial.suggest_float(f"{s}__entry_threshold", 0.0, 0.08),
+                        "entry_threshold": trial.suggest_float(
+                            f"{s}__entry_threshold", 0.0, 0.08
+                        ),
                     }
                 elif s == "stochastic":
                     params = {
@@ -239,7 +256,6 @@ class PortfolioHyperparameterOptimizer:
             strategy_config: Dict[str, Any] = {
                 "strategies": strategies_payload,
                 "integration_method": integration_method,
-
                 # ===== 与实盘执行规则对齐 =====
                 # BacktestExecutor 会读取这些字段决定交易执行模式
                 "trade_mode": cfg.trade_mode,
@@ -275,8 +291,12 @@ class PortfolioHyperparameterOptimizer:
                             strategy_config=strategy_config,
                             backtest_config=BacktestConfig(
                                 initial_cash=backtest_cfg.initial_cash,
-                                commission_rate=strategy_config.get("commission_rate", backtest_cfg.commission_rate),
-                                slippage_rate=strategy_config.get("slippage_rate", backtest_cfg.slippage_rate),
+                                commission_rate=strategy_config.get(
+                                    "commission_rate", backtest_cfg.commission_rate
+                                ),
+                                slippage_rate=strategy_config.get(
+                                    "slippage_rate", backtest_cfg.slippage_rate
+                                ),
                             ),
                         )
                     )

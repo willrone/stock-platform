@@ -321,6 +321,7 @@ export class IntegrationTestManager {
     const startTime = Date.now();
     const results: TestResult[] = [];
 
+    // eslint-disable-next-line no-console
     console.log('开始运行集成测试...');
 
     // 运行所有测试
@@ -339,6 +340,7 @@ export class IntegrationTestManager {
       const result = await test();
       results.push(result);
 
+      // eslint-disable-next-line no-console
       console.log(
         `${result.success ? '✅' : '❌'} ${result.name}: ${result.message} (${result.duration}ms)`
       );
@@ -358,12 +360,14 @@ export class IntegrationTestManager {
       results,
     };
 
+    /* eslint-disable no-console */
     console.log('\n集成测试完成:');
     console.log(`总测试数: ${suiteResult.totalTests}`);
     console.log(`通过: ${suiteResult.passedTests}`);
     console.log(`失败: ${suiteResult.failedTests}`);
     console.log(`总耗时: ${suiteResult.duration}ms`);
     console.log(`结果: ${suiteResult.success ? '✅ 通过' : '❌ 失败'}`);
+    /* eslint-enable no-console */
 
     return suiteResult;
   }

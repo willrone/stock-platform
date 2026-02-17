@@ -6,7 +6,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -20,7 +20,6 @@ from app.api.v1.schemas import (
 from app.core.config import settings
 from app.core.container import get_data_service, get_sftp_sync_service
 from app.services.data import SimpleDataService
-from app.services.data.parquet_manager import ParquetManager
 from app.services.data.sftp_sync_service import SFTPSyncService
 from app.services.events.data_sync_events import (
     DataSyncEventType,
@@ -76,7 +75,7 @@ async def trigger_qlib_precompute(
 
         # 创建任务
         task = task_repository.create_task(
-            task_name=f"Qlib预计算任务",
+            task_name="Qlib预计算任务",
             task_type=TaskType.QLIB_PRECOMPUTE,
             user_id=user_id,
             config=config,
@@ -87,7 +86,7 @@ async def trigger_qlib_precompute(
             process_executor = get_process_executor()
 
             # 提交任务到进程池
-            future = process_executor.submit(
+            _future = process_executor.submit(
                 execute_qlib_precompute_task_simple, task.task_id
             )
 
@@ -101,7 +100,7 @@ async def trigger_qlib_precompute(
                     status=TaskStatus.FAILED,
                     error_message=f"任务提交失败: {str(submit_error)}",
                 )
-            except:
+            except Exception:
                 pass
 
         # 转换为前端期望的格式
@@ -359,13 +358,22 @@ async def get_local_stock_list():
 
                     # 收集日期 - 支持多种日期列名
                     date_col = None
-                    for col_name in ["date", "trade_date", "datetime", "time", "Date", "TradeDate"]:
+                    for col_name in [
+                        "date",
+                        "trade_date",
+                        "datetime",
+                        "time",
+                        "Date",
+                        "TradeDate",
+                    ]:
                         if col_name in stock_df.columns:
                             date_col = col_name
                             break
-                    
+
                     # 如果列中没有日期，尝试从索引获取
-                    if date_col is None and isinstance(stock_df.index, pd.DatetimeIndex):
+                    if date_col is None and isinstance(
+                        stock_df.index, pd.DatetimeIndex
+                    ):
                         dates = stock_df.index.tolist()
                         stock_data_map[stock_code]["dates"].extend(dates)
                     elif date_col:

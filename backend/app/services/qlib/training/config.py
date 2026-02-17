@@ -29,23 +29,23 @@ class QlibModelType(Enum):
 class LabelType(Enum):
     """标签类型"""
 
-    REGRESSION = "regression"      # 回归：预测未来N天收益率
-    BINARY = "binary"              # 二分类：涨>阈值=1
+    REGRESSION = "regression"  # 回归：预测未来N天收益率
+    BINARY = "binary"  # 二分类：涨>阈值=1
 
 
 class FeatureSetChoice(Enum):
     """特征集选择"""
 
-    ALPHA158 = "alpha158"          # Qlib Alpha158因子（158个）
+    ALPHA158 = "alpha158"  # Qlib Alpha158因子（158个）
     TECHNICAL_62 = "technical_62"  # 手工技术指标（62个）
-    CUSTOM = "custom"              # 自定义特征列表
+    CUSTOM = "custom"  # 自定义特征列表
 
 
 class DataSplitMethod(Enum):
     """数据分割方式"""
 
-    RATIO = "ratio"          # 按比例分割（默认80/20）
-    HARDCUT = "hardcut"      # 按固定日期硬切
+    RATIO = "ratio"  # 按比例分割（默认80/20）
+    HARDCUT = "hardcut"  # 按固定日期硬切
     PURGED_CV = "purged_cv"  # Purged K-Fold（防信息泄漏，推荐）
 
 

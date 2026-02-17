@@ -382,7 +382,15 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
           <Card>
             <CardContent>
               {result.optimization_history && result.optimization_history.length > 0 ? (
-                <Box ref={historyChartRef} sx={{ width: '100%', height: { xs: 280, sm: 350, md: 400 }, minWidth: 400, overflowX: 'auto' }} />
+                <Box
+                  ref={historyChartRef}
+                  sx={{
+                    width: '100%',
+                    height: { xs: 280, sm: 350, md: 400 },
+                    minWidth: 400,
+                    overflowX: 'auto',
+                  }}
+                />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -405,7 +413,15 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
           <Card>
             <CardContent>
               {result.param_importance && Object.keys(result.param_importance).length > 0 ? (
-                <Box ref={importanceChartRef} sx={{ width: '100%', height: { xs: 280, sm: 350, md: 400 }, minWidth: 400, overflowX: 'auto' }} />
+                <Box
+                  ref={importanceChartRef}
+                  sx={{
+                    width: '100%',
+                    height: { xs: 280, sm: 350, md: 400 },
+                    minWidth: 400,
+                    overflowX: 'auto',
+                  }}
+                />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -427,7 +443,15 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         {selectedTab === 'pareto' && result.pareto_front && result.pareto_front.length > 0 && (
           <Card>
             <CardContent>
-              <Box ref={paretoChartRef} sx={{ width: '100%', height: { xs: 280, sm: 350, md: 400 }, minWidth: 400, overflowX: 'auto' }} />
+              <Box
+                ref={paretoChartRef}
+                sx={{
+                  width: '100%',
+                  height: { xs: 280, sm: 350, md: 400 },
+                  minWidth: 400,
+                  overflowX: 'auto',
+                }}
+              />
             </CardContent>
           </Card>
         )}

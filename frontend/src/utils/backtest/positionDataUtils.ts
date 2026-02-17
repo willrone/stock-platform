@@ -48,18 +48,12 @@ export interface SortConfig {
 export const normalizePositionData = (
   positionAnalysis: PositionData[] | EnhancedPositionAnalysis | null
 ): EnhancedPositionAnalysis | null => {
-  console.log('[PositionAnalysis] 接收到的 positionAnalysis:', positionAnalysis);
-  console.log('[PositionAnalysis] positionAnalysis 类型:', typeof positionAnalysis);
-  console.log('[PositionAnalysis] 是否为数组:', Array.isArray(positionAnalysis));
-
   if (!positionAnalysis) {
-    console.log('[PositionAnalysis] positionAnalysis 为空');
     return null;
   }
 
   // 如果是数组格式（旧格式），直接使用
   if (Array.isArray(positionAnalysis)) {
-    console.log('[PositionAnalysis] 使用数组格式，长度:', positionAnalysis.length);
     return {
       stock_performance: positionAnalysis,
       position_weights: undefined,
@@ -71,19 +65,6 @@ export const normalizePositionData = (
 
   // 如果是对象格式（新格式），检查是否有 stock_performance
   if (typeof positionAnalysis === 'object' && positionAnalysis !== null) {
-    console.log('[PositionAnalysis] 使用对象格式');
-    console.log('[PositionAnalysis] 对象键:', Object.keys(positionAnalysis));
-    console.log('[PositionAnalysis] stock_performance:', positionAnalysis.stock_performance);
-    console.log(
-      '[PositionAnalysis] stock_performance 类型:',
-      typeof positionAnalysis.stock_performance
-    );
-    console.log(
-      '[PositionAnalysis] stock_performance 长度:',
-      Array.isArray(positionAnalysis.stock_performance)
-        ? positionAnalysis.stock_performance.length
-        : 'N/A'
-    );
 
     // 确保 stock_performance 存在且是数组
     if (positionAnalysis.stock_performance && Array.isArray(positionAnalysis.stock_performance)) {

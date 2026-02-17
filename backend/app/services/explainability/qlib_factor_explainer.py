@@ -5,10 +5,10 @@
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -130,7 +130,7 @@ class QlibFactorMapper:
         "MA": FactorCategory.MOMENTUM,
         "EMA": FactorCategory.MOMENTUM,
         "SLOPE": FactorCategory.MOMENTUM,
-        "RSQR": FactorCategory.MOMENTUM,
+        "CORR": FactorCategory.MOMENTUM,
         # 反转因子
         "RESI": FactorCategory.REVERSAL,
         "WVMA": FactorCategory.REVERSAL,

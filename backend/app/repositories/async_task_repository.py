@@ -8,19 +8,16 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from sqlalchemy import and_, asc, desc, func, or_, delete as sql_delete
+from sqlalchemy import and_, asc
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import AuditLogger
-from app.models.task_models import (
-    BacktestResult,
-    Task,
-    TaskStatus,
-    TaskType,
-)
+from app.models.task_models import Task, TaskStatus, TaskType
 
 
 class AsyncTaskRepository:
@@ -120,9 +117,7 @@ class AsyncTaskRepository:
     async def get_task_by_id(self, task_id: str) -> Optional[Task]:
         """根据ID获取任务"""
         try:
-            result = await self.db.execute(
-                select(Task).filter(Task.task_id == task_id)
-            )
+            result = await self.db.execute(select(Task).filter(Task.task_id == task_id))
             task = result.scalar_one_or_none()
             return task
         except Exception as e:
@@ -165,7 +160,9 @@ class AsyncTaskRepository:
                 original_exception=e,
             )
 
-    async def get_tasks_by_status(self, status: TaskStatus, limit: int = 100) -> List[Task]:
+    async def get_tasks_by_status(
+        self, status: TaskStatus, limit: int = 100
+    ) -> List[Task]:
         """根据状态获取任务列表"""
         try:
             query = (
@@ -286,7 +283,9 @@ class AsyncTaskRepository:
                 original_exception=e,
             )
 
-    async def delete_task(self, task_id: str, user_id: str, force: bool = False) -> bool:
+    async def delete_task(
+        self, task_id: str, user_id: str, force: bool = False
+    ) -> bool:
         """删除任务"""
         try:
             task = await self.get_task_by_id(task_id)

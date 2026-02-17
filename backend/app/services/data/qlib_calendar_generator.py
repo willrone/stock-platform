@@ -4,7 +4,7 @@ Qlib交易日历生成器
 """
 from datetime import datetime
 from pathlib import Path
-from typing import List, Set
+from typing import Set
 
 import pandas as pd
 from loguru import logger

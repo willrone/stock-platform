@@ -4,7 +4,6 @@
 实现特征元数据管理、缓存和版本控制功能
 """
 
-import asyncio
 import hashlib
 import json
 from dataclasses import asdict, dataclass
@@ -13,7 +12,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 

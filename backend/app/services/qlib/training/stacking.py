@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from .config import QlibTrainingConfig
 from .purged_cv import PurgedCVConfig, PurgedGroupTimeSeriesSplit
 
 # === 常量 ===
@@ -79,29 +80,45 @@ def train_stacking_ensemble(
     # Step 1: OOF 预测
     logger.info("=== Stacking Step 1: 生成 OOF 预测 ===")
     oof_preds, oof_labels = _generate_oof_predictions(
-        train_data, feature_cols, label_col, stacking_config,
+        train_data,
+        feature_cols,
+        label_col,
+        stacking_config,
     )
 
     # Step 2: Meta-Learner
     logger.info("=== Stacking Step 2: 训练 Ridge Meta-Learner ===")
     weights, intercept = _train_meta_learner(
-        oof_preds, oof_labels, stacking_config,
+        oof_preds,
+        oof_labels,
+        stacking_config,
     )
 
     # Step 3: 全量训练 base learners
     logger.info("=== Stacking Step 3: 全量训练 Base Learners ===")
     lgb_model, xgb_model = _train_base_learners(
-        train_data, val_data, feature_cols, label_col,
+        train_data,
+        val_data,
+        feature_cols,
+        label_col,
     )
 
     # Step 4: 评估
     logger.info("=== Stacking Step 4: 评估 ===")
     oof_metrics = _evaluate_oof(
-        oof_preds, oof_labels, weights, intercept,
+        oof_preds,
+        oof_labels,
+        weights,
+        intercept,
     )
     final_metrics = _evaluate_final(
-        lgb_model, xgb_model, weights, intercept,
-        val_data, feature_cols, label_col,
+        lgb_model,
+        xgb_model,
+        weights,
+        intercept,
+        val_data,
+        feature_cols,
+        label_col,
     )
 
     return StackingResult(
@@ -133,7 +150,8 @@ def predict_stacking(
 
 
 def _extract_dataframe(
-    dataset: Any, segment: str,
+    dataset: Any,
+    segment: str,
 ) -> pd.DataFrame:
     """从 DatasetAdapter 中提取 DataFrame"""
     if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
@@ -358,7 +376,8 @@ def _evaluate_final(
 
 
 def save_stacking_model(
-    result: StackingResult, model_dir: Path,
+    result: StackingResult,
+    model_dir: Path,
 ) -> None:
     """保存 Stacking 模型"""
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -396,7 +415,8 @@ def load_stacking_meta(
 
 
 def _compute_ic(
-    predictions: np.ndarray, actuals: np.ndarray,
+    predictions: np.ndarray,
+    actuals: np.ndarray,
 ) -> float:
     """计算信息系数（Pearson 相关系数）"""
     if len(predictions) < 2:

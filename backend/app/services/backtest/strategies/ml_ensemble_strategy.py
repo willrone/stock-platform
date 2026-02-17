@@ -18,8 +18,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from app.core.error_handler import ErrorSeverity, TaskError
-
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
 from .ml_feature_adapter import build_feature_matrix, build_feature_matrix_batch
@@ -86,7 +84,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         """加载预训练模型"""
         model_dir = Path(self.model_path)
         self._model_pair = load_model_pair(
-            model_dir, self._lgb_model_id, self._xgb_model_id,
+            model_dir,
+            self._lgb_model_id,
+            self._xgb_model_id,
         )
 
     @property
@@ -108,7 +108,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
     # ── 信号生成 ─────────────────────────────────────────
 
     def generate_signals(
-        self, data: pd.DataFrame, current_date: datetime,
+        self,
+        data: pd.DataFrame,
+        current_date: datetime,
         stock_code: str = "",
     ) -> List[TradingSignal]:
         """生成交易信号"""
@@ -133,7 +135,11 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         self._record_daily_return(last_ret)
 
         return self._pred_to_signals(
-            pred, scale, stock_code, data["close"].iloc[idx], current_date,
+            pred,
+            scale,
+            stock_code,
+            data["close"].iloc[idx],
+            current_date,
         )
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
@@ -141,12 +147,14 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         if data is None or len(data) == 0:
             return {}
         from .ml_indicators import compute_strategy_indicators
+
         return compute_strategy_indicators(data)
 
     # ── 预计算（单股票） ─────────────────────────────────
 
     def precompute_all_signals(
-        self, data: pd.DataFrame,
+        self,
+        data: pd.DataFrame,
     ) -> Optional[pd.Series]:
         """预计算所有信号"""
         if data is None or len(data) < MIN_DATA_LENGTH:
@@ -170,7 +178,8 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
     # ── 预计算（批量多股票） ─────────────────────────────
 
     def precompute_all_signals_batch(
-        self, combined_df: pd.DataFrame,
+        self,
+        combined_df: pd.DataFrame,
     ) -> Optional[pd.DataFrame]:
         """批量预计算所有股票的信号"""
         if combined_df is None or len(combined_df) == 0:
@@ -200,7 +209,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
     def _ensemble_predict(self, X: np.ndarray) -> np.ndarray:
         """双模型集成预测"""
         mp = self._model_pair
-        lgb_pred = mp.lgb_model.predict(X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X)
+        lgb_pred = mp.lgb_model.predict(
+            X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X
+        )
         xgb_pred = self._predict_xgb(X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X)
         return self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
 
@@ -210,17 +221,20 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         if hasattr(model, "get_booster"):
             return model.predict(X)
         import xgboost as xgb
+
         return model.predict(xgb.DMatrix(X))
 
     def _predict_at_index(
-        self, data: pd.DataFrame,
-        indicators: Dict[str, pd.Series], idx: int,
+        self,
+        data: pd.DataFrame,
+        indicators: Dict[str, pd.Series],
+        idx: int,
     ) -> Optional[float]:
         """在指定索引处预测"""
         if self._has_models:
             try:
                 X = build_feature_matrix(
-                    data.iloc[max(0, idx - MIN_DATA_LENGTH):idx + 1],
+                    data.iloc[max(0, idx - MIN_DATA_LENGTH) : idx + 1],
                     self._feature_set,
                 )
                 if X is not None and len(X) > 0:
@@ -267,17 +281,26 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
     # ── 信号转换 ─────────────────────────────────────────
 
     def _pred_to_signals(
-        self, pred: float, scale: float,
-        stock_code: str, price: float, timestamp: datetime,
+        self,
+        pred: float,
+        scale: float,
+        stock_code: str,
+        price: float,
+        timestamp: datetime,
     ) -> List[TradingSignal]:
         """将单个预测值转换为交易信号"""
         # 风控触发清仓
         if scale == 0:
-            return [TradingSignal(
-                stock_code=stock_code, signal_type=SignalType.SELL,
-                strength=0.8, price=price, timestamp=timestamp,
-                reason=f"触发风控, pred={pred:.4f}",
-            )]
+            return [
+                TradingSignal(
+                    stock_code=stock_code,
+                    signal_type=SignalType.SELL,
+                    strength=0.8,
+                    price=price,
+                    timestamp=timestamp,
+                    reason=f"触发风控, pred={pred:.4f}",
+                )
+            ]
 
         signal_type, strength = self._interpret_prediction(pred)
         if signal_type is None:
@@ -285,14 +308,21 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
         strength = min(strength * scale, 1.0)
         label_desc = "概率" if self._label_type == "binary" else "收益"
-        return [TradingSignal(
-            stock_code=stock_code, signal_type=signal_type,
-            strength=strength, price=price, timestamp=timestamp,
-            reason=f"ML{label_desc}={pred:.4f}, 缩放={scale:.2f}",
-        )]
+        return [
+            TradingSignal(
+                stock_code=stock_code,
+                signal_type=signal_type,
+                strength=strength,
+                price=price,
+                timestamp=timestamp,
+                reason=f"ML{label_desc}={pred:.4f}, 缩放={scale:.2f}",
+            )
+        ]
 
     def _pred_array_to_signals(
-        self, pred: np.ndarray, index,
+        self,
+        pred: np.ndarray,
+        index,
     ) -> pd.Series:
         """将预测数组转换为 SignalType 序列"""
         signals = pd.Series([None] * len(index), index=index, dtype=object)
@@ -311,7 +341,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         return signals
 
     def _build_batch_result(
-        self, df: pd.DataFrame, pred: np.ndarray,
+        self,
+        df: pd.DataFrame,
+        pred: np.ndarray,
     ) -> Optional[pd.DataFrame]:
         """构建批量预测结果 DataFrame"""
         signals = []
@@ -319,13 +351,15 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             sig_type, strength = self._interpret_prediction(float(p))
             if sig_type is None:
                 continue
-            signals.append({
-                "stock_code": df.iloc[i]["stock_code"],
-                "date": df.iloc[i]["date"],
-                "signal_type": sig_type,
-                "strength": min(strength, 1.0),
-                "price": df.iloc[i].get("close", 0),
-            })
+            signals.append(
+                {
+                    "stock_code": df.iloc[i]["stock_code"],
+                    "date": df.iloc[i]["date"],
+                    "signal_type": sig_type,
+                    "strength": min(strength, 1.0),
+                    "price": df.iloc[i].get("close", 0),
+                }
+            )
 
         if not signals:
             return None
@@ -356,7 +390,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         return scale
 
     def _update_market_state(
-        self, indicators: Dict[str, pd.Series], idx: int,
+        self,
+        indicators: Dict[str, pd.Series],
+        idx: int,
     ) -> None:
         """更新市场状态（用于市场过滤）"""
         ret = self._get_indicator_value(indicators, "return_1d", idx)
@@ -375,7 +411,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
     # ── Fallback ─────────────────────────────────────────
 
     def _fallback_prediction(
-        self, indicators: Dict[str, pd.Series], idx: int,
+        self,
+        indicators: Dict[str, pd.Series],
+        idx: int,
     ) -> Optional[float]:
         """基于技术指标的 fallback 预测（回归模式）"""
         try:
@@ -388,7 +426,8 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             return None
 
     def _precompute_fallback(
-        self, data: pd.DataFrame,
+        self,
+        data: pd.DataFrame,
     ) -> Optional[pd.Series]:
         """Fallback: 使用简化规则计算信号"""
         indicators = self.calculate_indicators(data)
@@ -396,8 +435,8 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
         if "rsi_14" in indicators:
             rsi = indicators["rsi_14"]
-            score += ((rsi < 30).astype(float) * 0.003)
-            score -= ((rsi > 70).astype(float) * 0.003)
+            score += (rsi < 30).astype(float) * 0.003
+            score -= (rsi > 70).astype(float) * 0.003
 
         if "macd_hist" in indicators and "macd_hist_slope" in indicators:
             mh = indicators["macd_hist"]
@@ -414,7 +453,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
     @staticmethod
     def _get_indicator_value(
-        indicators: Dict[str, pd.Series], name: str, idx: int,
+        indicators: Dict[str, pd.Series],
+        name: str,
+        idx: int,
         default: float = 0.0,
     ) -> float:
         """安全获取指标值"""

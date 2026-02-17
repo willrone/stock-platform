@@ -110,6 +110,7 @@ class StrategyPortfolio(BaseStrategy):
             整合后的信号 Series，index 为日期，值为浮点强度（正=买，负=卖，0=无信号）
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         try:
@@ -136,7 +137,9 @@ class StrategyPortfolio(BaseStrategy):
             result = pd.Series(0.0, index=all_dates, dtype=np.float64)
 
             # 归一化权重
-            total_weight = sum(self.weights.get(name, 1.0) for name in sub_signals_map.keys())
+            total_weight = sum(
+                self.weights.get(name, 1.0) for name in sub_signals_map.keys()
+            )
             if total_weight == 0:
                 total_weight = len(sub_signals_map)
 
@@ -152,7 +155,11 @@ class StrategyPortfolio(BaseStrategy):
                         if date in sig_series.index:
                             sig = sig_series.loc[date]
                             # 兼容浮点信号和枚举信号
-                            if isinstance(sig, (int, float)) and sig != 0 and not pd.isna(sig):
+                            if (
+                                isinstance(sig, (int, float))
+                                and sig != 0
+                                and not pd.isna(sig)
+                            ):
                                 if sig > 0:
                                     buy_score += abs(float(sig)) * weight
                                 else:
@@ -176,10 +183,12 @@ class StrategyPortfolio(BaseStrategy):
             # 统计信号数量
             buy_count = (result > 0).sum()
             sell_count = (result < 0).sum()
-            logger.info(f"✅ 组合策略向量化预计算完成: BUY={buy_count}, SELL={sell_count}, 子策略数={len(sub_signals_map)}")
+            logger.info(
+                f"✅ 组合策略向量化预计算完成: BUY={buy_count}, SELL={sell_count}, 子策略数={len(sub_signals_map)}"
+            )
 
             return result
-            
+
         except Exception as e:
             logger.error(f"组合策略向量化预计算失败: {e}")
             return None
@@ -204,8 +213,9 @@ class StrategyPortfolio(BaseStrategy):
         Returns:
             整合后的信号列表
         """
-        import time
         import logging
+        import time
+
         logger = logging.getLogger(__name__)
 
         # 性能优化：优先使用预计算信号
@@ -217,28 +227,30 @@ class StrategyPortfolio(BaseStrategy):
                     sig_type = precomputed.get(current_date)
                 elif isinstance(precomputed, dict):
                     sig_type = precomputed.get(current_date)
-                
+
                 if isinstance(sig_type, SignalType):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     # 获取当前价格
                     try:
-                        current_price = float(data.loc[current_date, 'close'])
+                        current_price = float(data.loc[current_date, "close"])
                     except Exception:
                         current_price = 0.0
-                    
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=0.8,  # 组合策略默认强度
-                        price=current_price,
-                        reason=f"[向量化] 组合策略信号 ({len(self.strategies)} 子策略)",
-                        metadata={
-                            "strategy_name": self.name,
-                            "source_strategy": self.name,
-                            "sub_strategies": [s.name for s in self.strategies],
-                        },
-                    )]
+
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=0.8,  # 组合策略默认强度
+                            price=current_price,
+                            reason=f"[向量化] 组合策略信号 ({len(self.strategies)} 子策略)",
+                            metadata={
+                                "strategy_name": self.name,
+                                "source_strategy": self.name,
+                                "sub_strategies": [s.name for s in self.strategies],
+                            },
+                        )
+                    ]
                 return []
         except Exception as e:
             logger.debug(f"组合策略预计算信号查找失败: {e}")

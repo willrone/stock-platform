@@ -12,7 +12,7 @@ import pickle
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from loguru import logger
@@ -92,8 +92,7 @@ def save_model_version(
     )
 
     logger.info(
-        f"模型版本已保存: {version_id} "
-        f"(训练期: {version.train_start}~{version.train_end})",
+        f"模型版本已保存: {version_id} " f"(训练期: {version.train_start}~{version.train_end})",
     )
     return version
 
@@ -168,16 +167,12 @@ def load_model_for_date(
         raise ValueError("版本清单为空")
 
     # 找到 valid_end <= target_date 的最新版本
-    candidates = [
-        v for v in versions
-        if v["valid_end"] <= target_date
-    ]
+    candidates = [v for v in versions if v["valid_end"] <= target_date]
 
     if not candidates:
         # 回退到最早的版本
         logger.warning(
-            f"未找到 valid_end <= {target_date} 的版本，"
-            f"使用最早版本",
+            f"未找到 valid_end <= {target_date} 的版本，" f"使用最早版本",
         )
         selected = versions[0]
     else:
@@ -189,8 +184,7 @@ def load_model_for_date(
         payload = pickle.load(f)
 
     logger.info(
-        f"加载模型版本: {selected['version_id']} "
-        f"(目标日期: {target_date})",
+        f"加载模型版本: {selected['version_id']} " f"(目标日期: {target_date})",
     )
     return payload["model"], selected
 
@@ -207,12 +201,9 @@ def compute_ic_decay_report(
         ICDecayReport
     """
     # 提取 IC 值，过滤 None 和 NaN
-    raw_ic_values = [
-        v.metrics.get("ic", 0.0) for v in versions
-    ]
+    raw_ic_values = [v.metrics.get("ic", 0.0) for v in versions]
     ic_values = [
-        float(ic) if ic is not None and np.isfinite(ic) else 0.0
-        for ic in raw_ic_values
+        float(ic) if ic is not None and np.isfinite(ic) else 0.0 for ic in raw_ic_values
     ]
     version_ids = [v.version_id for v in versions]
 
@@ -235,20 +226,17 @@ def compute_ic_decay_report(
     # 检测衰减：最近 IC 比平均低超过阈值
     recent_ic = float(np.mean(ic_values[-2:]))
     early_ic = float(np.mean(ic_values[:2]))
-    
+
     # 防护：确保两个值都是有效数字
     if not (np.isfinite(early_ic) and np.isfinite(recent_ic)):
-        logger.warning(
-            f"IC 衰减检测跳过: early_ic={early_ic}, recent_ic={recent_ic} 包含无效值"
-        )
+        logger.warning(f"IC 衰减检测跳过: early_ic={early_ic}, recent_ic={recent_ic} 包含无效值")
         decay_detected = False
     else:
         decay_detected = (early_ic - recent_ic) > IC_DECAY_WARN_THRESHOLD
 
     if decay_detected:
         logger.warning(
-            f"检测到 IC 衰减: 早期={early_ic:.4f} → "
-            f"近期={recent_ic:.4f}",
+            f"检测到 IC 衰减: 早期={early_ic:.4f} → " f"近期={recent_ic:.4f}",
         )
 
     return ICDecayReport(

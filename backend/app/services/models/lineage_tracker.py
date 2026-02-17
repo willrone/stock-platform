@@ -8,20 +8,17 @@
 - 模型继承关系
 """
 
-import asyncio
 import hashlib
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...core.config import settings
 from ...core.database import get_async_session as get_db
-from ...models.task_models import ModelInfo, Task
+from ...models.task_models import ModelInfo
 
 
 class LineageTracker:

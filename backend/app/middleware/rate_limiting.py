@@ -92,18 +92,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
         # 检查是否在测试环境中（通过请求头）
-        is_test_env = (
-            request.headers.get("X-Test-Environment") == "true"
-            or request.headers.get("User-Agent", "").startswith("testclient")
-        )
-        
+        is_test_env = request.headers.get(
+            "X-Test-Environment"
+        ) == "true" or request.headers.get("User-Agent", "").startswith("testclient")
+
         # 测试环境中跳过限流检查
         if is_test_env:
             response = await call_next(request)
             # 仍然添加限流相关的响应头（用于测试限流头部）
             self._add_rate_limit_headers(response, "test")
             return response
-        
+
         # 获取客户端标识
         client_id = self._get_client_id(request)
 

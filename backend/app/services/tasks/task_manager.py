@@ -3,16 +3,12 @@
 实现任务创建、状态管理、进度跟踪和结果保存功能
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from loguru import logger
-
 from app.models.database import DatabaseManager, Task, TaskResult, TaskStatus
-from app.models.stock_simple import StockData
 
 
 @dataclass

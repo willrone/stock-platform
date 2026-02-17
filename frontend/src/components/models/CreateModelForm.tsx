@@ -265,7 +265,9 @@ export function CreateModelForm({
           <MenuItem value="ratio">比例分割（默认8:2）</MenuItem>
           <MenuItem value="hardcut">按日期分割</MenuItem>
         </Select>
-        <FormHelperText>比例分割自动划分训练/验证/测试集，按日期分割需手动指定截止日期</FormHelperText>
+        <FormHelperText>
+          比例分割自动划分训练/验证/测试集，按日期分割需手动指定截止日期
+        </FormHelperText>
       </FormControl>
 
       {/* 按日期分割时的日期选择器 */}
@@ -304,7 +306,15 @@ export function CreateModelForm({
       </Box>
 
       {formData.enable_rolling && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pl: 2, borderLeft: '2px solid #1976d2' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            pl: 2,
+            borderLeft: '2px solid #1976d2',
+          }}
+        >
           <FormControl fullWidth>
             <InputLabel>窗口类型</InputLabel>
             <Select
@@ -315,10 +325,18 @@ export function CreateModelForm({
               <MenuItem value="sliding">固定窗口滑动（Sliding）</MenuItem>
               <MenuItem value="expanding">扩展窗口（Expanding）</MenuItem>
             </Select>
-            <FormHelperText>Sliding: 固定大小窗口向前滑动；Expanding: 训练窗口不断扩大</FormHelperText>
+            <FormHelperText>
+              Sliding: 固定大小窗口向前滑动；Expanding: 训练窗口不断扩大
+            </FormHelperText>
           </FormControl>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+              gap: 2,
+            }}
+          >
             <TextField
               type="number"
               label="滚动步长（交易日）"
@@ -332,7 +350,9 @@ export function CreateModelForm({
               type="number"
               label="训练窗口（交易日）"
               value={formData.rolling_train_window}
-              onChange={e => onFormDataChange('rolling_train_window', parseInt(e.target.value) || 480)}
+              onChange={e =>
+                onFormDataChange('rolling_train_window', parseInt(e.target.value) || 480)
+              }
               helperText="训练数据天数，默认480"
               inputProps={{ min: 120, max: 1200 }}
               fullWidth
@@ -341,7 +361,9 @@ export function CreateModelForm({
               type="number"
               label="验证窗口（交易日）"
               value={formData.rolling_valid_window}
-              onChange={e => onFormDataChange('rolling_valid_window', parseInt(e.target.value) || 60)}
+              onChange={e =>
+                onFormDataChange('rolling_valid_window', parseInt(e.target.value) || 60)
+              }
               helperText="验证数据天数，默认60"
               inputProps={{ min: 20, max: 240 }}
               fullWidth
@@ -361,7 +383,9 @@ export function CreateModelForm({
               type="number"
               label="衰减率（每天）"
               value={formData.sample_decay_rate}
-              onChange={e => onFormDataChange('sample_decay_rate', parseFloat(e.target.value) || 0.999)}
+              onChange={e =>
+                onFormDataChange('sample_decay_rate', parseFloat(e.target.value) || 0.999)
+              }
               helperText="近期样本权重更高，默认0.999（每天衰减0.1%）"
               inputProps={{ min: 0.99, max: 1.0, step: 0.001 }}
               fullWidth

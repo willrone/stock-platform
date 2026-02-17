@@ -147,8 +147,7 @@ async def execute_rolling_training(
         )
 
     logger.info(
-        f"开始滚动训练: {len(windows)} 个窗口, "
-        f"模型ID={model_id}",
+        f"开始滚动训练: {len(windows)} 个窗口, " f"模型ID={model_id}",
     )
 
     versions: List[ModelVersion] = []
@@ -180,14 +179,19 @@ async def execute_rolling_training(
 
     # 保存版本清单
     manifest_path = save_version_manifest(
-        versions, base_dir, model_id,
+        versions,
+        base_dir,
+        model_id,
     )
 
     # IC 衰减分析
     ic_report = compute_ic_decay_report(versions)
 
     result = _build_rolling_result(
-        versions, all_metrics, ic_report, manifest_path,
+        versions,
+        all_metrics,
+        ic_report,
+        manifest_path,
     )
 
     logger.info(
@@ -209,15 +213,18 @@ async def _train_single_window(
 ) -> Tuple[ModelVersion, Dict[str, float]]:
     """训练单个滚动窗口"""
     train_data = _slice_dataset_by_dates(
-        dataset, window.train_start, window.train_end,
+        dataset,
+        window.train_start,
+        window.train_end,
     )
     valid_data = _slice_dataset_by_dates(
-        dataset, window.valid_start, window.valid_end,
+        dataset,
+        window.valid_start,
+        window.valid_end,
     )
 
     logger.info(
-        f"窗口 {window.window_id}: "
-        f"训练集={len(train_data)}行, 验证集={len(valid_data)}行",
+        f"窗口 {window.window_id}: " f"训练集={len(train_data)}行, 验证集={len(valid_data)}行",
     )
 
     # 样本时间衰减权重
@@ -225,14 +232,18 @@ async def _train_single_window(
     if rolling_config.enable_sample_decay:
         train_dates = _extract_sample_dates(train_data)
         sample_weights = compute_sample_weights(
-            train_dates, rolling_config.decay_rate,
+            train_dates,
+            rolling_config.decay_rate,
         )
 
     # 创建模型配置并训练
     model_config = await model_config_factory(config)
     model, metrics = await train_single_fn(
-        model_config, train_data, valid_data,
-        config, sample_weights,
+        model_config,
+        train_data,
+        valid_data,
+        config,
+        sample_weights,
     )
 
     # 保存模型版本
@@ -245,7 +256,10 @@ async def _train_single_window(
         "metrics": metrics,
     }
     version = save_model_version(
-        model, model_config, version_info, base_dir,
+        model,
+        model_config,
+        version_info,
+        base_dir,
     )
 
     return version, metrics
@@ -279,11 +293,15 @@ def _build_rolling_result(
     """构建滚动训练结果"""
     # 过滤 None 和 NaN 值
     ic_values = [
-        float(m.get("ic", 0.0)) if m.get("ic") is not None and np.isfinite(m.get("ic", 0.0)) else 0.0
+        float(m.get("ic", 0.0))
+        if m.get("ic") is not None and np.isfinite(m.get("ic", 0.0))
+        else 0.0
         for m in all_metrics
     ]
     mse_values = [
-        float(m.get("mse", 0.0)) if m.get("mse") is not None and np.isfinite(m.get("mse", 0.0)) else 0.0
+        float(m.get("mse", 0.0))
+        if m.get("mse") is not None and np.isfinite(m.get("mse", 0.0))
+        else 0.0
         for m in all_metrics
     ]
 

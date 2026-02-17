@@ -14,7 +14,6 @@ from loguru import logger
 
 # 导入子模块
 from .alpha158 import Alpha158Calculator
-from .cache import FactorCache
 from .converters import QlibFormatConverter
 from .data_processing import (
     DataTypeOptimizer,
@@ -22,11 +21,7 @@ from .data_processing import (
     MissingValueHandler,
 )
 from .model import QlibModelConfigBuilder, QlibModelPredictor
-from .patches import (
-    ALPHA158_AVAILABLE,
-    QLIB_AVAILABLE,
-    apply_qlib_patches,
-)
+from .patches import QLIB_AVAILABLE, apply_qlib_patches
 from .validators import DataQualityValidator, ValidationReport
 
 # 应用 Qlib 兼容性补丁
@@ -311,7 +306,8 @@ class EnhancedQlibDataProvider:
                 return qlib_data
 
             alpha_factors = self._align_alpha_index(
-                qlib_data, alpha_factors,
+                qlib_data,
+                alpha_factors,
             )
             if alpha_factors.empty:
                 logger.warning("Alpha 因子索引对齐后为空，跳过")
@@ -334,7 +330,8 @@ class EnhancedQlibDataProvider:
 
             before_rows = len(qlib_data)
             qlib_data = pd.concat(
-                [qlib_data, alpha_factors], axis=1,
+                [qlib_data, alpha_factors],
+                axis=1,
             )
             after_rows = len(qlib_data)
 
@@ -346,9 +343,7 @@ class EnhancedQlibDataProvider:
                     f"执行索引去重修复",
                 )
                 # 安全网：去除因索引不对齐产生的重复行
-                qlib_data = qlib_data[
-                    ~qlib_data.index.duplicated(keep="first")
-                ]
+                qlib_data = qlib_data[~qlib_data.index.duplicated(keep="first")]
                 logger.info(
                     f"去重后行数: {len(qlib_data)}",
                 )
@@ -388,7 +383,8 @@ class EnhancedQlibDataProvider:
         # 如果已经有交集，不需要对齐
         overlap = qlib_instruments & alpha_instruments
         if len(overlap) >= min(
-            len(qlib_instruments), len(alpha_instruments),
+            len(qlib_instruments),
+            len(alpha_instruments),
         ):
             return alpha_factors
 
@@ -400,7 +396,8 @@ class EnhancedQlibDataProvider:
 
         # 构建映射: alpha_instrument → qlib_instrument
         mapping = _build_instrument_mapping(
-            qlib_instruments, alpha_instruments,
+            qlib_instruments,
+            alpha_instruments,
         )
         if not mapping:
             logger.warning("无法建立 instrument 映射，跳过 Alpha 因子")
@@ -423,8 +420,7 @@ class EnhancedQlibDataProvider:
         alpha_factors = alpha_factors[valid_mask]
 
         logger.info(
-            f"instrument 对齐完成: 映射 {len(mapping)} 只股票，"
-            f"保留 {len(alpha_factors)} 行",
+            f"instrument 对齐完成: 映射 {len(mapping)} 只股票，" f"保留 {len(alpha_factors)} 行",
         )
         return alpha_factors
 
@@ -639,7 +635,8 @@ def _normalize_to_canonical(code: str) -> str:
 
 
 def _build_instrument_mapping(
-    qlib_instruments: set, alpha_instruments: set,
+    qlib_instruments: set,
+    alpha_instruments: set,
 ) -> Dict[str, str]:
     """构建 alpha instrument → qlib instrument 的映射
 

@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Box, 
-  Typography, 
-  Chip, 
-  LinearProgress, 
+import {
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  Chip,
+  LinearProgress,
   IconButton,
   Button,
 } from '@mui/material';
@@ -27,11 +27,7 @@ interface MobileTaskCardProps {
   onToggle?: (id: string) => void;
 }
 
-export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({ 
-  task, 
-  onDelete, 
-  onToggle 
-}) => {
+export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({ task, onDelete, onToggle }) => {
   const router = useRouter();
 
   const getStatusColor = (status: string): 'primary' | 'success' | 'error' | 'default' => {
@@ -83,9 +79,9 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
   };
 
   return (
-    <Card 
-      sx={{ 
-        mb: 2, 
+    <Card
+      sx={{
+        mb: 2,
         borderRadius: 3,
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'all 0.2s',
@@ -96,17 +92,17 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         {/* 标题行 */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'flex-start', 
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
             mb: 1.5,
           }}
         >
-          <Typography 
-            variant="h6" 
-            sx={{ 
+          <Typography
+            variant="h6"
+            sx={{
               fontWeight: 600,
               fontSize: '1.1rem',
               flex: 1,
@@ -116,11 +112,11 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
           >
             {task.task_name}
           </Typography>
-          <Chip 
-            label={getStatusText(task.status)} 
-            color={getStatusColor(task.status)} 
+          <Chip
+            label={getStatusText(task.status)}
+            color={getStatusColor(task.status)}
             size="small"
-            sx={{ 
+            sx={{
               fontWeight: 600,
               fontSize: '0.75rem',
             }}
@@ -151,11 +147,11 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
                 {task.progress}%
               </Typography>
             </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={task.progress} 
-              sx={{ 
-                height: 6, 
+            <LinearProgress
+              variant="determinate"
+              value={task.progress}
+              sx={{
+                height: 6,
                 borderRadius: 3,
                 bgcolor: 'action.hover',
               }}
@@ -170,7 +166,7 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
             size="medium"
             startIcon={<Eye size={18} />}
             onClick={() => router.push(`/tasks/${task.task_id}`)}
-            sx={{ 
+            sx={{
               flex: 1,
               borderRadius: 2,
               minHeight: 44,
@@ -184,11 +180,11 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
           {task.status === 'running' && onToggle && (
             <IconButton
               size="medium"
-              onClick={(e) => {
+              onClick={e => {
                 e.stopPropagation();
                 onToggle(task.task_id);
               }}
-              sx={{ 
+              sx={{
                 border: 1,
                 borderColor: 'warning.main',
                 color: 'warning.main',
@@ -208,11 +204,11 @@ export const MobileTaskCard: React.FC<MobileTaskCardProps> = ({
           {onDelete && (
             <IconButton
               size="medium"
-              onClick={(e) => {
+              onClick={e => {
                 e.stopPropagation();
                 onDelete(task.task_id);
               }}
-              sx={{ 
+              sx={{
                 border: 1,
                 borderColor: 'error.main',
                 color: 'error.main',

@@ -2,7 +2,6 @@
 回测执行器 - 完整的回测流程执行和结果分析（重构版）
 """
 
-import asyncio
 import time
 from datetime import datetime
 from pathlib import Path
@@ -16,15 +15,16 @@ from ..core.portfolio_manager import PortfolioManager
 from ..core.portfolio_manager_array import PortfolioManagerArray
 from ..models import BacktestConfig
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
+from .backtest_loop_executor import BacktestLoopExecutor
+
 # from .backtest_progress_monitor import backtest_progress_monitor
 from .data_loader import DataLoader
 
 # 导入新模块
 from .data_preprocessor import DataPreprocessor
-from .backtest_loop_executor import BacktestLoopExecutor
-from .report_generator import BacktestReportGenerator
 from .performance_tracker import PerformanceTracker
-from .validators import validate_backtest_parameters, get_execution_statistics
+from .report_generator import BacktestReportGenerator
+from .validators import get_execution_statistics, validate_backtest_parameters
 
 
 class BacktestExecutor:
@@ -57,12 +57,12 @@ class BacktestExecutor:
         self.max_workers = max_workers
         self.use_multiprocessing = use_multiprocessing
         self.use_array_portfolio = True
-        
+
         # 数据加载器
         self.data_loader = DataLoader(
             data_dir, max_workers=max_workers if enable_parallel else None
         )
-        
+
         # 执行统计
         self.execution_stats = {
             "total_backtests": 0,
@@ -74,16 +74,17 @@ class BacktestExecutor:
         self.data_preprocessor = DataPreprocessor(
             enable_parallel=enable_parallel,
             max_workers=max_workers,
-            use_multiprocessing=use_multiprocessing
+            use_multiprocessing=use_multiprocessing,
         )
         self.loop_executor = BacktestLoopExecutor()
         self.report_generator = BacktestReportGenerator()
         self.performance_tracker = PerformanceTracker(
             enable_profiling=enable_performance_profiling
         )
-        
+
         # 显式导入进度监控器（避免潜在的循环导入或未定义问题）
         from .backtest_progress_monitor import backtest_progress_monitor
+
         self.progress_monitor = backtest_progress_monitor
 
         if enable_parallel:
@@ -225,7 +226,9 @@ class BacktestExecutor:
             # ========== 阶段 3: 创建组合管理器 ==========
             actual_stock_codes = list(stock_data.keys())
             if self.use_array_portfolio:
-                portfolio_manager = PortfolioManagerArray(backtest_config, actual_stock_codes)
+                portfolio_manager = PortfolioManagerArray(
+                    backtest_config, actual_stock_codes
+                )
                 logger.info(f"✅ 使用数组化持仓管理器 (stocks={len(actual_stock_codes)})")
             else:
                 portfolio_manager = PortfolioManager(backtest_config)
@@ -251,8 +254,10 @@ class BacktestExecutor:
             self.data_preprocessor.precompute_strategy_signals(strategy, stock_data)
 
             # 提取预计算信号
-            precomputed_signals = self.data_preprocessor.extract_precomputed_signals_to_dict(
-                strategy, stock_data
+            precomputed_signals = (
+                self.data_preprocessor.extract_precomputed_signals_to_dict(
+                    strategy, stock_data
+                )
             )
 
             logger.info(f"🔍 预计算信号字典大小: {len(precomputed_signals)}")
@@ -375,7 +380,11 @@ class BacktestExecutor:
                     task_id, "report_generation", status="running"
                 )
 
-            if strategy_config and isinstance(strategy_config, dict) and len(strategy_config) > 0:
+            if (
+                strategy_config
+                and isinstance(strategy_config, dict)
+                and len(strategy_config) > 0
+            ):
                 logger.info(f"生成回测报告，策略配置: {strategy_config}")
             else:
                 logger.warning(f"策略配置为空或无效: {strategy_config}")
@@ -441,7 +450,9 @@ class BacktestExecutor:
                     try:
                         performance_dir = Path("backend/data/performance_reports")
                         performance_dir.mkdir(parents=True, exist_ok=True)
-                        performance_file = performance_dir / f"backtest_{task_id}_performance.json"
+                        performance_file = (
+                            performance_dir / f"backtest_{task_id}_performance.json"
+                        )
                         self.performance_tracker.save_report(str(performance_file))
                         logger.info(f"性能报告已保存到: {performance_file}")
                     except Exception as e:

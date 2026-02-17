@@ -1,13 +1,7 @@
 'use client';
 
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Box, 
-  Typography, 
-  Chip,
-} from '@mui/material';
+import { Card, CardContent, Box, Typography, Chip } from '@mui/material';
 import { AlertTriangle, Clock } from 'lucide-react';
 
 interface ErrorStat {
@@ -49,9 +43,9 @@ export const MobileErrorCard: React.FC<MobileErrorCardProps> = ({ error }) => {
   };
 
   return (
-    <Card 
-      sx={{ 
-        mb: 1.5, 
+    <Card
+      sx={{
+        mb: 1.5,
         borderRadius: 2,
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
         borderLeft: 4,
@@ -60,25 +54,26 @@ export const MobileErrorCard: React.FC<MobileErrorCardProps> = ({ error }) => {
     >
       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
         {/* 标题行 */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}
+        >
           <Box sx={{ flex: 1, pr: 1 }}>
             <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.9rem', mb: 0.5 }}>
               {error.error_type}
             </Typography>
             {error.sample_message && (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {error.sample_message.length > 60 
+                {error.sample_message.length > 60
                   ? error.sample_message.substring(0, 60) + '...'
-                  : error.sample_message
-                }
+                  : error.sample_message}
               </Typography>
             )}
           </Box>
-          <Chip 
-            label={error.count} 
+          <Chip
+            label={error.count}
             color={getSeverityColor(error.error_type)}
             size="small"
-            sx={{ 
+            sx={{
               fontWeight: 600,
               minWidth: 40,
             }}

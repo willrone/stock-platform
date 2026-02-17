@@ -31,18 +31,33 @@ const InteractiveChartsContainer = dynamic(
 );
 
 const PositionAnalysis = dynamic(
-  () => import('@/components/backtest/PositionAnalysis').then(mod => ({ default: mod.PositionAnalysis })),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载持仓分析中...</div> }
+  () =>
+    import('@/components/backtest/PositionAnalysis').then(mod => ({
+      default: mod.PositionAnalysis,
+    })),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 flex items-center justify-center">加载持仓分析中...</div>,
+  }
 );
 
 const RiskAnalysis = dynamic(
   () => import('@/components/backtest/RiskAnalysis').then(mod => ({ default: mod.RiskAnalysis })),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载风险分析中...</div> }
+  {
+    ssr: false,
+    loading: () => <div className="h-64 flex items-center justify-center">加载风险分析中...</div>,
+  }
 );
 
 const PerformanceBreakdown = dynamic(
-  () => import('@/components/backtest/PerformanceBreakdown').then(mod => ({ default: mod.PerformanceBreakdown })),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载绩效分析中...</div> }
+  () =>
+    import('@/components/backtest/PerformanceBreakdown').then(mod => ({
+      default: mod.PerformanceBreakdown,
+    })),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 flex items-center justify-center">加载绩效分析中...</div>,
+  }
 );
 
 interface BacktestTabsProps {
@@ -209,8 +224,8 @@ export function BacktestTabs({
               <Box sx={{ mt: 2 }}>
                 <TradeHistoryTable
                   taskId={taskId}
-                  onTradeClick={trade => {
-                    console.log('查看交易详情:', trade);
+                  onTradeClick={_trade => {
+                    // TODO: implement trade detail view
                   }}
                 />
               </Box>
@@ -220,8 +235,8 @@ export function BacktestTabs({
               <Box sx={{ mt: 2 }}>
                 <SignalHistoryTable
                   taskId={taskId}
-                  onSignalClick={signal => {
-                    console.log('查看信号详情:', signal);
+                  onSignalClick={_signal => {
+                    // TODO: implement signal detail view
                   }}
                 />
               </Box>
@@ -253,7 +268,11 @@ export function BacktestTabs({
               <Box sx={{ mt: 2 }}>
                 {backtestDetailedData?.monthly_returns ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="h6" component="h4" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                    <Typography
+                      variant="h6"
+                      component="h4"
+                      sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                    >
                       月度收益热力图
                     </Typography>
                     <Box sx={{ overflowX: 'auto' }}>
@@ -265,28 +284,27 @@ export function BacktestTabs({
                           minWidth: 500,
                         }}
                       >
-                      {backtestDetailedData.monthly_returns.map((monthData: any) => (
-                        <Box
-                          key={`${monthData.year}-${monthData.month}`}
-                          sx={{
-                            p: 1,
-                            textAlign: 'center',
-                            fontSize: '0.75rem',
-                            borderRadius: 1,
-                            bgcolor:
-                              monthData.monthly_return >= 0 ? 'success.light' : 'error.light',
-                            color:
-                              monthData.monthly_return >= 0 ? 'success.dark' : 'error.dark',
-                          }}
-                          title={`${monthData.year}年${monthData.month}月: ${(
-                            monthData.monthly_return * 100
-                          ).toFixed(2)}%`}
-                        >
-                          {monthData.month}月
-                          <br />
-                          {(monthData.monthly_return * 100).toFixed(1)}%
-                        </Box>
-                      ))}
+                        {backtestDetailedData.monthly_returns.map((monthData: any) => (
+                          <Box
+                            key={`${monthData.year}-${monthData.month}`}
+                            sx={{
+                              p: 1,
+                              textAlign: 'center',
+                              fontSize: '0.75rem',
+                              borderRadius: 1,
+                              bgcolor:
+                                monthData.monthly_return >= 0 ? 'success.light' : 'error.light',
+                              color: monthData.monthly_return >= 0 ? 'success.dark' : 'error.dark',
+                            }}
+                            title={`${monthData.year}年${monthData.month}月: ${(
+                              monthData.monthly_return * 100
+                            ).toFixed(2)}%`}
+                          >
+                            {monthData.month}月
+                            <br />
+                            {(monthData.monthly_return * 100).toFixed(1)}%
+                          </Box>
+                        ))}
                       </Box>
                     </Box>
                   </Box>

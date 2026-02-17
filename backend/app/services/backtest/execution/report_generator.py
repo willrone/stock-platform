@@ -3,16 +3,17 @@
 负责生成回测报告、计算指标等
 """
 
-from typing import Any, Dict, List, Optional, Tuple
-import pandas as pd
-import numpy as np
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 from loguru import logger
 
+from ..core.base_strategy import BaseStrategy
+from ..core.portfolio_manager import PortfolioManager
 from ..models.data_models import BacktestConfig, TradingSignal
 from ..models.enums import SignalType
-from ..core.portfolio_manager import PortfolioManager
-from ..core.base_strategy import BaseStrategy
 
 
 def _build_portfolio_history_with_returns(
@@ -26,16 +27,22 @@ def _build_portfolio_history_with_returns(
     for snapshot in portfolio_history:
         pv = snapshot["portfolio_value"]
         pv_nc = snapshot.get("portfolio_value_without_cost", pv)
-        result.append({
-            "date": snapshot["date"].isoformat(),
-            "portfolio_value": pv,
-            "portfolio_value_without_cost": pv_nc,
-            "cash": snapshot["cash"],
-            "positions_count": len(snapshot.get("positions", {})),
-            "positions": snapshot.get("positions", {}),
-            "total_return": (pv - total_invested) / total_invested if total_invested > 0 else 0,
-            "total_return_without_cost": (pv_nc - total_invested) / total_invested if total_invested > 0 else 0,
-        })
+        result.append(
+            {
+                "date": snapshot["date"].isoformat(),
+                "portfolio_value": pv,
+                "portfolio_value_without_cost": pv_nc,
+                "cash": snapshot["cash"],
+                "positions_count": len(snapshot.get("positions", {})),
+                "positions": snapshot.get("positions", {}),
+                "total_return": (pv - total_invested) / total_invested
+                if total_invested > 0
+                else 0,
+                "total_return_without_cost": (pv_nc - total_invested) / total_invested
+                if total_invested > 0
+                else 0,
+            }
+        )
     return result
 
 
@@ -44,7 +51,6 @@ class BacktestReportGenerator:
 
     def __init__(self):
         """初始化报告生成器"""
-        pass
 
     def generate_backtest_report(
         self,
@@ -120,15 +126,31 @@ class BacktestReportGenerator:
             # 交易记录
             "trade_history": [
                 {
-                    "trade_id": trade.trade_id if hasattr(trade, 'trade_id') else trade['trade_id'],
-                    "stock_code": trade.stock_code if hasattr(trade, 'stock_code') else trade['stock_code'],
-                    "action": trade.action if hasattr(trade, 'action') else trade['action'],
-                    "quantity": trade.quantity if hasattr(trade, 'quantity') else trade['quantity'],
-                    "price": trade.price if hasattr(trade, 'price') else trade['price'],
-                    "timestamp": (trade.timestamp if hasattr(trade, 'timestamp') else trade['timestamp']).isoformat(),
-                    "commission": trade.commission if hasattr(trade, 'commission') else trade['commission'],
-                    "slippage_cost": getattr(trade, "slippage_cost", 0.0) if hasattr(trade, 'slippage_cost') else trade.get('slippage_cost', 0.0),
-                    "pnl": trade.pnl if hasattr(trade, 'pnl') else trade['pnl'],
+                    "trade_id": trade.trade_id
+                    if hasattr(trade, "trade_id")
+                    else trade["trade_id"],
+                    "stock_code": trade.stock_code
+                    if hasattr(trade, "stock_code")
+                    else trade["stock_code"],
+                    "action": trade.action
+                    if hasattr(trade, "action")
+                    else trade["action"],
+                    "quantity": trade.quantity
+                    if hasattr(trade, "quantity")
+                    else trade["quantity"],
+                    "price": trade.price if hasattr(trade, "price") else trade["price"],
+                    "timestamp": (
+                        trade.timestamp
+                        if hasattr(trade, "timestamp")
+                        else trade["timestamp"]
+                    ).isoformat(),
+                    "commission": trade.commission
+                    if hasattr(trade, "commission")
+                    else trade["commission"],
+                    "slippage_cost": getattr(trade, "slippage_cost", 0.0)
+                    if hasattr(trade, "slippage_cost")
+                    else trade.get("slippage_cost", 0.0),
+                    "pnl": trade.pnl if hasattr(trade, "pnl") else trade["pnl"],
                 }
                 for trade in portfolio_manager.trades
             ],
@@ -155,7 +177,11 @@ class BacktestReportGenerator:
                     config.initial_cash
                     + getattr(portfolio_manager, "total_capital_injection", 0.0)
                 )
-                if (config.initial_cash + getattr(portfolio_manager, "total_capital_injection", 0.0)) > 0
+                if (
+                    config.initial_cash
+                    + getattr(portfolio_manager, "total_capital_injection", 0.0)
+                )
+                > 0
                 else 0,
             },
         }
@@ -186,7 +212,6 @@ class BacktestReportGenerator:
         report.update(self._calculate_additional_metrics(portfolio_manager))
 
         return report
-
 
     def rebalance_topk_buffer(
         self,
@@ -221,17 +246,17 @@ class BacktestReportGenerator:
         # rank by score desc, tie-break by stock_code for determinism
         codes = list(scores.keys())
         score_values = np.array([scores[c] for c in codes])
-        
+
         # argsort 默认升序，用负号实现降序
         sorted_indices = np.argsort(-score_values)
         ranked_codes = [codes[i] for i in sorted_indices]
-        
+
         topk_list = ranked_codes[:topk]
         buffer_list = ranked_codes[: max(topk, topk + buffer_n)]
         buffer_set = set(buffer_list)
 
         holdings = list(portfolio_manager.positions.keys())
-        holdings_set = set(holdings)
+        set(holdings)
 
         # Keep holdings inside buffer zone
         kept = [c for c in holdings if c in buffer_set]
@@ -270,15 +295,19 @@ class BacktestReportGenerator:
 
         if debug:
             try:
-                nonzero = sum(1 for _, s in scores.items() if isinstance(s, (int, float)) and s != 0)
+                nonzero = sum(
+                    1
+                    for _, s in scores.items()
+                    if isinstance(s, (int, float)) and s != 0
+                )
                 logger.info(
                     f"[topk_buffer] {current_date.date()} holdings={len(holdings)} nonzero_scores={nonzero} "
                     f"topk={topk} buffer={buffer_n} max_changes={max_changes} "
                     f"to_sell={len(to_sell)} to_buy={len(to_buy)}"
                 )
                 logger.info(
-                    f"[topk_buffer] topk_list(head)={topk_list[:min(5,len(topk_list))]} "
-                    f"holdings(head)={holdings[:min(5,len(holdings))]}"
+                    f"[topk_buffer] topk_list(head)={topk_list[:min(5, len(topk_list))]} "
+                    f"holdings(head)={holdings[:min(5, len(holdings))]}"
                 )
             except Exception:
                 pass
@@ -292,7 +321,7 @@ class BacktestReportGenerator:
                 signal_type=SignalType.SELL,
                 strength=1.0,
                 price=float(current_prices.get(code, 0.0) or 0.0),
-                reason=f"topk_buffer rebalance sell (out of buffer/topk)",
+                reason="topk_buffer rebalance sell (out of buffer/topk)",
                 metadata={"trade_mode": "topk_buffer"},
             )
             if strategy is not None:
@@ -312,12 +341,18 @@ class BacktestReportGenerator:
                     )
                     continue
 
-            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            trade, failure_reason = portfolio_manager.execute_signal(
+                sig, current_prices
+            )
             if trade:
                 successful_sells += 1
                 trades_this_day += 1
                 executed_trade_signals.append(
-                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                    }
                 )
             else:
                 unexecuted_signals.append(
@@ -384,11 +419,17 @@ class BacktestReportGenerator:
                     )
                     continue
 
-            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            trade, failure_reason = portfolio_manager.execute_signal(
+                sig, current_prices
+            )
             if trade:
                 trades_this_day += 1
                 executed_trade_signals.append(
-                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                    }
                 )
             else:
                 unexecuted_signals.append(
@@ -401,7 +442,6 @@ class BacktestReportGenerator:
                 )
 
         return executed_trade_signals, unexecuted_signals, trades_this_day
-
 
     def _calculate_additional_metrics(
         self, portfolio_manager: PortfolioManager
@@ -472,9 +512,9 @@ class BacktestReportGenerator:
                     return getattr(trade, attr, None)
 
                 for trade in portfolio_manager.trades:
-                    stock_code = get_trade_attr(trade, 'stock_code')
-                    action = get_trade_attr(trade, 'action')
-                    pnl = get_trade_attr(trade, 'pnl') or 0.0
+                    stock_code = get_trade_attr(trade, "stock_code")
+                    action = get_trade_attr(trade, "action")
+                    pnl = get_trade_attr(trade, "pnl") or 0.0
 
                     stock_stats = stock_performance.setdefault(
                         stock_code,
@@ -514,7 +554,10 @@ class BacktestReportGenerator:
                 )
 
                 # 单笔交易分布的整体特征（便于前端画直方图/统计）
-                pnls = [float(get_trade_attr(t, 'pnl') or 0.0) for t in portfolio_manager.trades]
+                pnls = [
+                    float(get_trade_attr(t, "pnl") or 0.0)
+                    for t in portfolio_manager.trades
+                ]
                 if pnls:
                     pnl_series = pd.Series(pnls)
                     additional_metrics.update(
@@ -529,5 +572,3 @@ class BacktestReportGenerator:
             logger.error(f"计算额外指标失败: {exc}")
 
         return additional_metrics
-
-

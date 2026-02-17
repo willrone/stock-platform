@@ -6,18 +6,15 @@
 标签类型（回归 / 二分类）和数据分割方式（比例 / 硬切）。
 """
 
-import asyncio
-import multiprocessing as mp
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
 from .config import QlibTrainingConfig
 from .data_preprocessing import (
-    CSRankNormTransformer,
     CrossSectionalNeutralizer,
+    CSRankNormTransformer,
     OutlierHandler,
     RobustFeatureScaler,
 )
@@ -40,15 +37,13 @@ def process_stock_data(
         _compute_basic_features(processed_data)
         _compute_volume_features(processed_data)
         _generate_regression_label(
-            processed_data, stock_code, prediction_horizon,
+            processed_data,
+            stock_code,
+            prediction_horizon,
         )
         # 只对特征列 fillna(0)，保留 label 列的 NaN
-        feature_cols = [
-            c for c in processed_data.columns if c != "label"
-        ]
-        processed_data[feature_cols] = (
-            processed_data[feature_cols].fillna(0)
-        )
+        feature_cols = [c for c in processed_data.columns if c != "label"]
+        processed_data[feature_cols] = processed_data[feature_cols].fillna(0)
         return processed_data
     except Exception as e:
         logger.error(f"处理股票 {stock_code} 数据时发生错误: {e}")
@@ -118,7 +113,8 @@ def _generate_regression_label(
 
 
 def _apply_binary_label(
-    data: pd.DataFrame, threshold: float,
+    data: pd.DataFrame,
+    threshold: float,
 ) -> None:
     """将回归标签转换为二分类标签（原地修改）
 
@@ -342,12 +338,8 @@ def _select_by_dates(
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """根据日期集合筛选训练集和验证集"""
     if isinstance(dataset.index, pd.MultiIndex):
-        train = dataset[
-            dataset.index.get_level_values(1).isin(train_dates)
-        ]
-        val = dataset[
-            dataset.index.get_level_values(1).isin(val_dates)
-        ]
+        train = dataset[dataset.index.get_level_values(1).isin(train_dates)]
+        val = dataset[dataset.index.get_level_values(1).isin(val_dates)]
     else:
         train = dataset[dataset.index.isin(train_dates)]
         val = dataset[dataset.index.isin(val_dates)]
@@ -388,7 +380,8 @@ def _postprocess_data(
         )
         logger.info("开始处理标签异常值")
         train_data = outlier_handler.handle_label_outliers(
-            train_data, label_col="label",
+            train_data,
+            label_col="label",
         )
         logger.info(
             f"[DIAG] winsorize 后标签分布 - train: min={train_data['label'].min():.6f}, "
@@ -397,7 +390,8 @@ def _postprocess_data(
         )
         if val_data is not None and "label" in val_data.columns:
             val_data = outlier_handler.handle_label_outliers(
-                val_data, label_col="label",
+                val_data,
+                label_col="label",
             )
 
     # === CSRankNorm（可选） ===
@@ -417,9 +411,7 @@ def _postprocess_data(
     feature_cols = [c for c in train_data.columns if c != "label"]
 
     # 中性化
-    enable_neutralization = (
-        config.enable_neutralization if config else True
-    )
+    enable_neutralization = config.enable_neutralization if config else True
     if enable_neutralization and feature_cols:
         neutralizer = CrossSectionalNeutralizer()
         logger.info("开始截面中性化处理")
@@ -439,7 +431,8 @@ def _postprocess_data(
 
 
 def _process_multiindex_stocks(
-    dataset: pd.DataFrame, config: QlibTrainingConfig,
+    dataset: pd.DataFrame,
+    config: QlibTrainingConfig,
 ) -> pd.DataFrame:
     """按股票分组处理 MultiIndex 数据"""
     stock_codes = dataset.index.get_level_values(0).unique()
@@ -452,12 +445,16 @@ def _process_multiindex_stocks(
     for stock_code in stock_codes:
         try:
             stock_data = dataset.xs(
-                stock_code, level=0, drop_level=False,
+                stock_code,
+                level=0,
+                drop_level=False,
             )
             if stock_data.empty:
                 continue
             processed = process_stock_data(
-                stock_data, stock_code, prediction_horizon,
+                stock_data,
+                stock_code,
+                prediction_horizon,
             )
             if not processed.empty:
                 processed_stocks.append(processed)
@@ -483,7 +480,9 @@ async def prepare_training_datasets(
     根据 config 中的 feature_set / label_type / split_method
     选择不同的特征计算、标签生成和数据分割方式。
     """
-    logger.info(f"[CANARY] prepare_training_datasets 入口: dataset.shape={dataset.shape}, index_type={type(dataset.index).__name__}")
+    logger.info(
+        f"[CANARY] prepare_training_datasets 入口: dataset.shape={dataset.shape}, index_type={type(dataset.index).__name__}"
+    )
 
     if not QLIB_AVAILABLE:
         raise RuntimeError(
@@ -501,10 +500,7 @@ async def prepare_training_datasets(
     )
 
     # === 0. 规范化 MultiIndex 顺序为 (instrument, datetime) ===
-    if (
-        isinstance(dataset.index, pd.MultiIndex)
-        and dataset.index.nlevels == 2
-    ):
+    if isinstance(dataset.index, pd.MultiIndex) and dataset.index.nlevels == 2:
         level0_dtype = dataset.index.get_level_values(0).dtype
         level1_dtype = dataset.index.get_level_values(1).dtype
         logger.info(
@@ -515,13 +511,12 @@ async def prepare_training_datasets(
             f"first_3={list(dataset.index[:3])}",
         )
         # 如果 level0 是日期、level1 是字符串/object → 需要交换
-        if (
-            pd.api.types.is_datetime64_any_dtype(level0_dtype)
-            and not pd.api.types.is_datetime64_any_dtype(level1_dtype)
-        ):
+        if pd.api.types.is_datetime64_any_dtype(
+            level0_dtype
+        ) and not pd.api.types.is_datetime64_any_dtype(level1_dtype):
             logger.info(
-                f"检测到 MultiIndex 顺序为 (datetime, instrument)，"
-                f"交换为 (instrument, datetime)",
+                "检测到 MultiIndex 顺序为 (datetime, instrument)，"
+                "交换为 (instrument, datetime)",
             )
             dataset = dataset.swaplevel().sort_index()
             logger.info(
@@ -533,14 +528,12 @@ async def prepare_training_datasets(
         dataset = _compute_technical_62_features(dataset)
     elif feature_set == "custom" and config and config.selected_features:
         dataset = _filter_custom_features(
-            dataset, config.selected_features,
+            dataset,
+            config.selected_features,
         )
 
     # === 2. 按股票处理（alpha158 和默认路径） ===
-    is_multi = (
-        isinstance(dataset.index, pd.MultiIndex)
-        and dataset.index.nlevels == 2
-    )
+    is_multi = isinstance(dataset.index, pd.MultiIndex) and dataset.index.nlevels == 2
     if is_multi and feature_set == "alpha158":
         dataset = _process_multiindex_stocks(dataset, config)
 
@@ -550,11 +543,7 @@ async def prepare_training_datasets(
 
     # === 4. 二分类标签转换 ===
     if label_type == "binary" and "label" in dataset.columns:
-        threshold = (
-            config.binary_threshold
-            if config
-            else DEFAULT_BINARY_THRESHOLD
-        )
+        threshold = config.binary_threshold if config else DEFAULT_BINARY_THRESHOLD
         _apply_binary_label(dataset, threshold)
 
     # === 4.1 过滤 label 为 NaN 的行 ===
@@ -577,15 +566,20 @@ async def prepare_training_datasets(
     embargo_days = config.embargo_days if config else DEFAULT_EMBARGO_DAYS
     if split_method == "hardcut" and config and config.train_end_date:
         train_data, val_data = _split_by_hardcut(
-            dataset, config.train_end_date, config.val_end_date,
+            dataset,
+            config.train_end_date,
+            config.val_end_date,
         )
     elif split_method == "purged_cv":
         train_data, val_data = _split_by_purged_cv(
-            dataset, config,
+            dataset,
+            config,
         )
     else:
         train_data, val_data = _split_by_ratio(
-            dataset, validation_split, embargo_days,
+            dataset,
+            validation_split,
+            embargo_days,
         )
 
     # === 5.1 分割后诊断 ===
@@ -608,7 +602,9 @@ async def prepare_training_datasets(
 
     # === 6. 后处理（异常值 + 中性化 + 标准化） ===
     train_data, val_data = _postprocess_data(
-        train_data, val_data, config,
+        train_data,
+        val_data,
+        config,
     )
 
     # === 7. 创建 DatasetH 适配器 ===
@@ -618,7 +614,10 @@ async def prepare_training_datasets(
         config.prediction_horizon if config else DEFAULT_PREDICTION_HORIZON
     )
     train_dataset = DataFrameDatasetAdapter(
-        train_data, val_data, prediction_horizon, config,
+        train_data,
+        val_data,
+        prediction_horizon,
+        config,
     )
     val_dataset = ValidationDatasetView(train_dataset)
 
@@ -633,7 +632,8 @@ async def prepare_training_datasets(
 
 
 def _generate_labels_for_dataset(
-    dataset: pd.DataFrame, config: QlibTrainingConfig,
+    dataset: pd.DataFrame,
+    config: QlibTrainingConfig,
 ) -> None:
     """为整个数据集生成回归标签（原地修改）"""
     close_col = None
@@ -645,9 +645,7 @@ def _generate_labels_for_dataset(
         logger.warning("未找到收盘价列，无法生成标签")
         return
 
-    horizon = (
-        config.prediction_horizon if config else DEFAULT_PREDICTION_HORIZON
-    )
+    horizon = config.prediction_horizon if config else DEFAULT_PREDICTION_HORIZON
     current = dataset[close_col]
     if isinstance(dataset.index, pd.MultiIndex):
         future = dataset.groupby(level=0)[close_col].shift(-horizon)

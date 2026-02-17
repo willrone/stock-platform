@@ -2,10 +2,9 @@
 统计套利策略基类
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 import pandas as pd
-from loguru import logger
 
 from ...core.base_strategy import BaseStrategy
 

@@ -2,10 +2,10 @@
 特征管理API路由
 添加特征计算和查询接口，支持技术指标配置管理
 """
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse
@@ -367,7 +367,7 @@ async def configure_technical_indicator(config: TechnicalIndicatorConfig):
     try:
         # 验证指标类型
         try:
-            indicator_type = TechnicalIndicator(config.indicator_type)
+            TechnicalIndicator(config.indicator_type)
         except ValueError:
             raise HTTPException(
                 status_code=400, detail=f"无效的技术指标类型: {config.indicator_type}"

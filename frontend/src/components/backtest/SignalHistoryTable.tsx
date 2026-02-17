@@ -133,9 +133,9 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
       setTotalCount(signalsResponse.pagination.count);
       setTotalPages(Math.ceil(signalsResponse.pagination.count / itemsPerPage));
       setStatistics(statsResponse);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('获取信号记录失败:', err);
-      setError(err.message || '获取信号记录失败');
+      setError(err instanceof Error ? err.message : '获取信号记录失败');
     } finally {
       setLoading(false);
     }
@@ -242,7 +242,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
       link.href = URL.createObjectURL(blob);
       link.download = `信号记录_${taskId}_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('导出信号记录失败:', err);
     }
   };
@@ -328,7 +328,14 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     总信号数
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {statistics.total_signals}
                   </Typography>
                 </Box>
@@ -344,7 +351,15 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     执行率
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      color: 'success.main',
+                      fontSize: { xs: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {formatPercent(statistics.execution_rate)}
                   </Typography>
                 </Box>
@@ -360,7 +375,14 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     买入信号
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {statistics.buy_signals}
                   </Typography>
                 </Box>
@@ -376,7 +398,14 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                   <Typography variant="caption" color="text.secondary">
                     卖出信号
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {statistics.sell_signals}
                   </Typography>
                 </Box>
@@ -500,7 +529,10 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                     <TableRow key={signal.id} hover>
                       <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Tooltip title={formatDateTime(signal.timestamp)}>
-                          <Typography variant="body2" sx={{ overflow: 'hidden', wordBreak: 'break-word' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ overflow: 'hidden', wordBreak: 'break-word' }}
+                          >
                             {new Date(signal.timestamp).toLocaleDateString()}
                           </Typography>
                         </Tooltip>
@@ -508,7 +540,12 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                       <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
                         <Typography
                           variant="body2"
-                          sx={{ fontFamily: 'monospace', fontWeight: 500, overflow: 'hidden', wordBreak: 'break-word' }}
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            wordBreak: 'break-word',
+                          }}
                         >
                           {signal.stock_code}
                         </Typography>
@@ -521,12 +558,27 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
                         />
                       </TableCell>
                       <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', overflow: 'hidden', wordBreak: 'break-word' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontFamily: 'monospace',
+                            overflow: 'hidden',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           ¥{signal.price.toFixed(2)}
                         </Typography>
                       </TableCell>
                       <TableCell sx={{ padding: { xs: 1, md: 2 } }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, overflow: 'hidden', wordBreak: 'break-word' }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            overflow: 'hidden',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                             {(signal.strength * 100).toFixed(1)}%
                           </Typography>
@@ -652,7 +704,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
               <Select
                 value={filters.signalType}
                 label="信号类型"
-                onChange={e => handleFilterChange('signalType', e.target.value as any)}
+                onChange={e => handleFilterChange('signalType', e.target.value as string)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="BUY">买入</MenuItem>
@@ -665,7 +717,7 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
               <Select
                 value={filters.executed}
                 label="执行状态"
-                onChange={e => handleFilterChange('executed', e.target.value as any)}
+                onChange={e => handleFilterChange('executed', e.target.value as string)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="EXECUTED">已执行</MenuItem>

@@ -6,7 +6,7 @@ ML 特征适配器
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,7 @@ def _get_qlib_builder():
     global _qlib_builder
     if _qlib_builder is None:
         from .qlib_feature_builder import build_qlib_features
+
         _qlib_builder = build_qlib_features
     return _qlib_builder
 
@@ -32,12 +33,14 @@ def _get_tech_computer():
         from app.services.qlib.training.technical_feature_computer import (
             compute_stock_technical_features,
         )
+
         _tech_computer = compute_stock_technical_features
     return _tech_computer
 
 
 def build_feature_matrix(
-    data: pd.DataFrame, feature_set: str,
+    data: pd.DataFrame,
+    feature_set: str,
 ) -> Optional[np.ndarray]:
     """根据特征集类型构建特征矩阵
 
@@ -57,7 +60,8 @@ def build_feature_matrix(
 
 
 def build_feature_matrix_batch(
-    df: pd.DataFrame, feature_set: str,
+    df: pd.DataFrame,
+    feature_set: str,
 ) -> Optional[np.ndarray]:
     """批量构建特征矩阵（多股票）
 
@@ -91,9 +95,7 @@ def _build_technical62_matrix(
     data: pd.DataFrame,
 ) -> Optional[np.ndarray]:
     """构建 technical_62 特征矩阵（62 个手工特征）"""
-    from app.services.qlib.training.feature_sets import (
-        TECHNICAL_62_FEATURES,
-    )
+    from app.services.qlib.training.feature_sets import TECHNICAL_62_FEATURES
 
     computer = _get_tech_computer()
     # 列名适配：回测数据用 close，训练用 $close
@@ -132,9 +134,7 @@ def _build_technical62_batch(
     df: pd.DataFrame,
 ) -> Optional[np.ndarray]:
     """批量构建 technical_62 特征"""
-    from app.services.qlib.training.feature_sets import (
-        TECHNICAL_62_FEATURES,
-    )
+    from app.services.qlib.training.feature_sets import TECHNICAL_62_FEATURES
 
     computer = _get_tech_computer()
     all_parts: List[pd.DataFrame] = []
@@ -168,7 +168,8 @@ def _adapt_column_names(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def _extract_ordered_features(
-    df: pd.DataFrame, feature_names: List[str],
+    df: pd.DataFrame,
+    feature_names: List[str],
 ) -> np.ndarray:
     """按指定顺序提取特征列，缺失填 0"""
     result = pd.DataFrame(index=df.index)

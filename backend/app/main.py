@@ -76,9 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         logger = logging.getLogger(__name__)
         if result["recovered"] > 0:
-            logger.info(
-                f"任务恢复完成: 成功恢复 {result['recovered']}/{result['total']} 个任务"
-            )
+            logger.info(f"任务恢复完成: 成功恢复 {result['recovered']}/{result['total']} 个任务")
         else:
             logger.info("没有需要恢复的任务")
     except Exception as e:

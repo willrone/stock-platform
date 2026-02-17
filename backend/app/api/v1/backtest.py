@@ -3,7 +3,6 @@
 """
 
 import os
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -642,7 +641,10 @@ async def run_backtest(request: BacktestRequest):
 
         portfolio_history = backtest_report.get("portfolio_history", [])
         dates = [snapshot["date"] for snapshot in portfolio_history]
-        equity_curve = [_to_float(snapshot.get("portfolio_value", 0.0)) for snapshot in portfolio_history]
+        equity_curve = [
+            _to_float(snapshot.get("portfolio_value", 0.0))
+            for snapshot in portfolio_history
+        ]
 
         # 计算回撤曲线（百分比）
         drawdown_curve = []
@@ -702,7 +704,9 @@ async def run_backtest(request: BacktestRequest):
                     default=request.initial_cash,
                 ),
                 "total_return": _to_float(backtest_report.get("total_return", 0.0)),
-                "annualized_return": _to_float(backtest_report.get("annualized_return", 0.0)),
+                "annualized_return": _to_float(
+                    backtest_report.get("annualized_return", 0.0)
+                ),
             },
             "risk_metrics": {
                 "volatility": _to_float(backtest_report.get("volatility", 0.0)),

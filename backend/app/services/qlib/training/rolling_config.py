@@ -4,25 +4,24 @@
 定义滚动训练的配置类和常量。
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class RollingWindowType(Enum):
     """滚动窗口类型"""
 
-    SLIDING = "sliding"      # 固定窗口滑动
+    SLIDING = "sliding"  # 固定窗口滑动
     EXPANDING = "expanding"  # 扩展窗口
 
 
 # === 默认常量 ===
-DEFAULT_ROLLING_STEP = 60          # 每 60 个交易日滚动一次
-DEFAULT_TRAIN_WINDOW = 480         # 训练窗口 480 天
-DEFAULT_VALID_WINDOW = 60          # 验证窗口 60 天
-DEFAULT_DECAY_RATE = 0.999         # 样本时间衰减率
-MIN_TRAIN_SAMPLES = 1000           # 最小训练样本数
-IC_DECAY_WARN_THRESHOLD = 0.03    # IC 衰减警告阈值
+DEFAULT_ROLLING_STEP = 60  # 每 60 个交易日滚动一次
+DEFAULT_TRAIN_WINDOW = 480  # 训练窗口 480 天
+DEFAULT_VALID_WINDOW = 60  # 验证窗口 60 天
+DEFAULT_DECAY_RATE = 0.999  # 样本时间衰减率
+MIN_TRAIN_SAMPLES = 1000  # 最小训练样本数
+IC_DECAY_WARN_THRESHOLD = 0.03  # IC 衰减警告阈值
 
 
 @dataclass

@@ -5,22 +5,24 @@
 专门针对金融时间序列预测任务进行优化。
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import pickle
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .model_storage import ModelStorage
 
 import numpy as np
-import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from sklearn.model_selection import TimeSeriesSplit
 
-from app.core.database import SessionLocal
 from app.core.logging import logger as app_logger
 
 logger = app_logger

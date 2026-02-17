@@ -6,13 +6,12 @@
 以及LSTM、XGBoost等基线模型。
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -21,7 +20,6 @@ import torch.nn as nn
 import xgboost as xgb
 from loguru import logger
 from sklearn.metrics import accuracy_score, precision_score, recall_score
-from sklearn.model_selection import TimeSeriesSplit
 
 
 # 检测可用的计算设备
@@ -46,11 +44,7 @@ def get_device():
 
 try:
     import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    from qlib.config import REG_CN
 
     QLIB_AVAILABLE = True
 except ImportError as e:
@@ -97,6 +91,11 @@ except ImportError:
 # 导入其他依赖
 from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
+
+try:
+    from .feature_engineering import DataPreprocessor
+except ImportError:
+    DataPreprocessor = None
 
 try:
     from .modern_models import Informer, PatchTST, TimesNet
@@ -441,7 +440,6 @@ class ModelTrainingService:
         data_service = SimpleDataService()
 
         # 使用QlibDataProvider作为数据提供器
-        from app.core.config import settings
 
         self.data_provider = QlibDataProvider(data_service)
         await self.data_provider.initialize_qlib()
@@ -613,7 +611,11 @@ class ModelTrainingService:
 
         # 填充缺失值（使用更合理的策略）
         # 对于价格类特征使用前向填充，对于其他特征使用中位数填充
-        price_cols = [col for col in feature_cols if col in ['open', 'high', 'low', 'close', 'volume']]
+        price_cols = [
+            col
+            for col in feature_cols
+            if col in ["open", "high", "low", "close", "volume"]
+        ]
         other_cols = [col for col in feature_cols if col not in price_cols]
 
         if price_cols:
@@ -621,7 +623,11 @@ class ModelTrainingService:
         if other_cols:
             for col in other_cols:
                 median_val = features_df[col].median()
-                features_df[col] = features_df[col].ffill().fillna(median_val if pd.notna(median_val) else 0)
+                features_df[col] = (
+                    features_df[col]
+                    .ffill()
+                    .fillna(median_val if pd.notna(median_val) else 0)
+                )
 
         # 为每只股票创建序列数据
         X_list, y_list = [], []
@@ -872,27 +878,29 @@ class ModelTrainingService:
         # 计算金融指标
         # 只有当 y_true 代表真实收益率（回归任务）时，计算才有意义
         # 对于分类任务（y_true为0/1），由于缺乏真实价格变动幅度，无法准确计算夏普率等
-        
+
         # 简单启发式：唯一值多于10个认为是连续值（收益率）
         is_regression = len(np.unique(y_true)) > 10
-        
+
         if is_regression:
             # 假设 y_true 是真实收益率
             # 策略：如果预测上涨（分类预测为1 或 回归预测>0），则持有
-            
+
             # 判断预测信号
-            if len(np.unique(y_pred)) <= 2: # 预测值是分类
+            if len(np.unique(y_pred)) <= 2:  # 预测值是分类
                 signals = y_pred
-            else: # 预测值是回归
+            else:  # 预测值是回归
                 signals = (y_pred > 0).astype(int)
-                
+
             # 计算策略收益
             strategy_returns = signals * y_true
-            
+
             # 夏普比率 (假设无风险利率 2%)
             excess_returns = strategy_returns - 0.02 / 252
             if np.std(excess_returns) > 1e-8:
-                sharpe_ratio = float(np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252))
+                sharpe_ratio = float(
+                    np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252)
+                )
             else:
                 sharpe_ratio = 0.0
 
@@ -903,19 +911,25 @@ class ModelTrainingService:
             max_drawdown = float(np.min(drawdown)) if len(drawdown) > 0 else 0.0
 
             # 总收益
-            total_return = float(cumulative_returns[-1] - 1) if len(cumulative_returns) > 0 else 0.0
+            total_return = (
+                float(cumulative_returns[-1] - 1)
+                if len(cumulative_returns) > 0
+                else 0.0
+            )
 
             # 胜率 (正收益交易占比)
             active_trades = strategy_returns[strategy_returns != 0]
-            win_rate = float(np.mean(active_trades > 0)) if len(active_trades) > 0 else 0.0
-            
+            win_rate = (
+                float(np.mean(active_trades > 0)) if len(active_trades) > 0 else 0.0
+            )
+
         else:
             # 分类任务且无法获取真实收益率
             # 避免返回误导性的固定收益率
             sharpe_ratio = 0.0
             max_drawdown = 0.0
             total_return = 0.0
-            win_rate = float(accuracy) # 近似胜率
+            win_rate = float(accuracy)  # 近似胜率
 
         return ModelMetrics(
             accuracy=accuracy,
@@ -949,14 +963,21 @@ class ModelTrainingService:
             "name": model_filename,
             "type": config.model_type.value,
             "version": "1.0",
-            "parameters": {k: str(v) if isinstance(v, ModelType) else v for k, v in config.__dict__.items()},
-            "performance_metrics": metrics.to_dict() if hasattr(metrics, 'to_dict') else {},
+            "parameters": {
+                k: str(v) if isinstance(v, ModelType) else v
+                for k, v in config.__dict__.items()
+            },
+            "performance_metrics": metrics.to_dict()
+            if hasattr(metrics, "to_dict")
+            else {},
             "file_path": str(model_path),
             "created_at": datetime.now().isoformat(),
             "is_active": True,
         }
 
-        logger.info(f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}")
+        logger.info(
+            f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}"
+        )
 
         return str(model_path)
 

@@ -9,9 +9,9 @@
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -229,9 +229,7 @@ class DataQualityValidator:
                 )
             )
 
-    def _check_missing_values(
-        self, df: pd.DataFrame, report: ValidationReport
-    ) -> None:
+    def _check_missing_values(self, df: pd.DataFrame, report: ValidationReport) -> None:
         """检查缺失值"""
         missing_stats = df.isnull().sum()
         missing_ratio = missing_stats / len(df)
@@ -350,8 +348,12 @@ class DataQualityValidator:
                     curr_date = dates.iloc[dates.index.get_loc(idx)]
                     gap_details.append(
                         {
-                            "from": str(prev_date.date()) if hasattr(prev_date, 'date') else str(prev_date),
-                            "to": str(curr_date.date()) if hasattr(curr_date, 'date') else str(curr_date),
+                            "from": str(prev_date.date())
+                            if hasattr(prev_date, "date")
+                            else str(prev_date),
+                            "to": str(curr_date.date())
+                            if hasattr(curr_date, "date")
+                            else str(curr_date),
                             "days": large_gaps[idx].days,
                         }
                     )
@@ -475,9 +477,7 @@ class DataQualityValidator:
                     )
                 )
 
-    def _find_column(
-        self, df: pd.DataFrame, candidates: List[str]
-    ) -> Optional[str]:
+    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
         """查找列名"""
         for col in candidates:
             if col in df.columns:

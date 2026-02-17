@@ -5,13 +5,11 @@ Qlib数据格式转换工具
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 from loguru import logger
-
-from app.core.config import settings
 
 
 class QlibFormatConverter:
@@ -28,7 +26,6 @@ class QlibFormatConverter:
 
     def __init__(self):
         """初始化转换器"""
-        pass
 
     def convert_parquet_to_qlib(
         self, stock_data: pd.DataFrame, stock_code: str
@@ -198,7 +195,7 @@ class QlibFormatConverter:
                 if len(new_cols) > 0:
                     indicators = indicators[new_cols]
                 else:
-                    logger.warning(f"所有指标列都已存在，跳过添加")
+                    logger.warning("所有指标列都已存在，跳过添加")
                     return qlib_base
 
             # 合并指标到基础数据

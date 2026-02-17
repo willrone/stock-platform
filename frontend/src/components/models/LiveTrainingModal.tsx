@@ -39,7 +39,11 @@ export function LiveTrainingModal({
   getStageText,
 }: LiveTrainingModalProps) {
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      maxWidth="xl"
+      fullWidth
       sx={{ '& .MuiDialog-paper': { m: { xs: 1, sm: 2 } } }}
     >
       <DialogTitle>
@@ -79,7 +83,10 @@ export function LiveTrainingModal({
                           <Typography variant="caption" color="text.secondary">
                             {key}
                           </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
+                          <Typography
+                            variant="h6"
+                            sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1.25rem' } }}
+                          >
                             {typeof value === 'number' ? value.toFixed(4) : String(value)}
                           </Typography>
                         </CardContent>

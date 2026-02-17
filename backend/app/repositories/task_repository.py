@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from sqlalchemy import and_, asc, desc, func, or_
+from sqlalchemy import and_, asc, desc, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import retry_db_operation_sync
@@ -16,14 +16,11 @@ from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import AuditLogger
 from app.models.task_models import (
     BacktestResult,
-    BacktestTaskConfig,
     ModelInfo,
     PredictionResult,
-    PredictionTaskConfig,
     Task,
     TaskStatus,
     TaskType,
-    TrainingTaskConfig,
 )
 
 
@@ -228,7 +225,6 @@ class TaskRepository:
     ) -> "Task":
         """更新任务状态"""
         # 在方法内部确保 Any 可用（用于类型检查，但不影响运行时）
-        from typing import Any, Dict
 
         if result is not None and not isinstance(result, dict):
             raise TypeError(f"result must be a dict, got {type(result)}")

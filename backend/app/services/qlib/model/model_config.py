@@ -190,9 +190,7 @@ class QlibModelConfigBuilder:
             "mlp": "多层感知机神经网络",
         }
 
-    def update_default_params(
-        self, model_type: str, params: Dict[str, Any]
-    ) -> None:
+    def update_default_params(self, model_type: str, params: Dict[str, Any]) -> None:
         """更新默认参数
 
         Args:

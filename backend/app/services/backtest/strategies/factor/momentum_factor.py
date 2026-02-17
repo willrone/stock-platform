@@ -5,12 +5,11 @@
 from datetime import datetime
 from typing import Any, Dict, List
 
-from app.core.error_handler import ErrorSeverity, TaskError
 import pandas as pd
 from loguru import logger
 
-from ..base.factor_base import FactorStrategy
 from ...models import SignalType, TradingSignal
+from ..base.factor_base import FactorStrategy
 
 
 class MomentumFactorStrategy(FactorStrategy):

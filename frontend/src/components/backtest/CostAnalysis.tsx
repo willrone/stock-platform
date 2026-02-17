@@ -22,8 +22,32 @@ import {
 } from '@mui/material';
 import { DollarSign, TrendingUp, TrendingDown, Info, PieChart } from 'lucide-react';
 
+interface CostAnalysisData {
+  excess_return_with_cost?: {
+    annualized_return?: number;
+    mean?: number;
+    std?: number;
+    information_ratio?: number;
+    max_drawdown?: number;
+  };
+  excess_return_without_cost?: {
+    annualized_return?: number;
+    mean?: number;
+    std?: number;
+    information_ratio?: number;
+    max_drawdown?: number;
+  };
+  cost_statistics?: {
+    cost_ratio?: number;
+    total_commission?: number;
+    total_slippage?: number;
+    total_cost?: number;
+  };
+  portfolio_history?: unknown[];
+}
+
 interface CostAnalysisProps {
-  backtestData: any;
+  backtestData: CostAnalysisData | null;
   loading?: boolean;
 }
 
@@ -203,7 +227,15 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, overflow: 'hidden', wordBreak: 'break-word', color: 'warning.main' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' },
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+                color: 'warning.main',
+              }}
+            >
               {(costImpact?.impact || 0) * 100 >= 0 ? '-' : '+'}
               {Math.abs((costImpact?.impact || 0) * 100).toFixed(2)}%
             </Typography>
@@ -232,7 +264,14 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' },
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+              }}
+            >
               {((costImpact?.costRatio || 0) * 100).toFixed(2)}%
             </Typography>
           </CardContent>
@@ -370,10 +409,21 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
             >
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}
+                  >
                     总手续费
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     ¥
                     {(costComparison.costStats.total_commission || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
@@ -385,10 +435,21 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
 
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}
+                  >
                     总滑点成本
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     ¥
                     {(costComparison.costStats.total_slippage || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
@@ -400,10 +461,22 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
 
               <Card>
                 <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}
+                  >
                     总交易成本
                   </Typography>
-                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word', color: 'warning.main' }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' },
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                      color: 'warning.main',
+                    }}
+                  >
                     ¥
                     {(costComparison.costStats.total_cost || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,

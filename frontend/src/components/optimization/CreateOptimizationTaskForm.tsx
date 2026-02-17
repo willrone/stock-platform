@@ -83,7 +83,9 @@ export default function CreateOptimizationTaskForm({
   // 从 URL 参数加载重建配置
   useEffect(() => {
     const isRebuild = searchParams.get('rebuild') === 'true';
-    if (!isRebuild) return;
+    if (!isRebuild) {
+      return;
+    }
 
     console.log('[CreateOptimizationTaskForm] 检测到重建任务请求，开始加载配置...');
 
@@ -102,18 +104,22 @@ export default function CreateOptimizationTaskForm({
     // 策略名称
     const strategyName = searchParams.get('strategy_name');
     if (strategyName) {
-      setFormData(prev => ({ 
-        ...prev, 
+      setFormData(prev => ({
+        ...prev,
         strategy_name: strategyName,
-        optimization_mode: strategyName === 'portfolio' ? 'portfolio' : 'single'
+        optimization_mode: strategyName === 'portfolio' ? 'portfolio' : 'single',
       }));
     }
 
     // 日期范围
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
-    if (startDate) setFormData(prev => ({ ...prev, start_date: startDate }));
-    if (endDate) setFormData(prev => ({ ...prev, end_date: endDate }));
+    if (startDate) {
+      setFormData(prev => ({ ...prev, start_date: startDate }));
+    }
+    if (endDate) {
+      setFormData(prev => ({ ...prev, end_date: endDate }));
+    }
 
     // 优化配置
     const objectiveMetric = searchParams.get('objective_metric');
@@ -128,15 +134,25 @@ export default function CreateOptimizationTaskForm({
     }
 
     if (objectiveMetric) {
-      setFormData(prev => ({ 
-        ...prev, 
-        objective_metric: objectiveMetric.includes(',') ? objectiveMetric.split(',') : objectiveMetric 
+      setFormData(prev => ({
+        ...prev,
+        objective_metric: objectiveMetric.includes(',')
+          ? objectiveMetric.split(',')
+          : objectiveMetric,
       }));
     }
-    if (direction) setFormData(prev => ({ ...prev, direction: direction as 'maximize' | 'minimize' }));
-    if (nTrials) setFormData(prev => ({ ...prev, n_trials: parseInt(nTrials) }));
-    if (optimizationMethod) setFormData(prev => ({ ...prev, optimization_method: optimizationMethod }));
-    if (timeout) setFormData(prev => ({ ...prev, timeout: parseInt(timeout) }));
+    if (direction) {
+      setFormData(prev => ({ ...prev, direction: direction as 'maximize' | 'minimize' }));
+    }
+    if (nTrials) {
+      setFormData(prev => ({ ...prev, n_trials: parseInt(nTrials) }));
+    }
+    if (optimizationMethod) {
+      setFormData(prev => ({ ...prev, optimization_method: optimizationMethod }));
+    }
+    if (timeout) {
+      setFormData(prev => ({ ...prev, timeout: parseInt(timeout) }));
+    }
 
     // 参数空间配置
     const paramSpaceStr = searchParams.get('param_space');
@@ -260,7 +276,11 @@ export default function CreateOptimizationTaskForm({
               default: param.default,
               enabled: true,
             };
-          } else if (param.type === 'categorical' && param.options && Array.isArray(param.options)) {
+          } else if (
+            param.type === 'categorical' &&
+            param.options &&
+            Array.isArray(param.options)
+          ) {
             defaultSpace[key] = {
               type: 'categorical',
               choices: param.options,
@@ -278,7 +298,12 @@ export default function CreateOptimizationTaskForm({
 
     // 未选择策略时，清空参数空间
     setParamSpace({});
-  }, [formData.optimization_mode, formData.strategy_name, formData.portfolio_strategies, strategies]);
+  }, [
+    formData.optimization_mode,
+    formData.strategy_name,
+    formData.portfolio_strategies,
+    strategies,
+  ]);
 
   const handleSubmit = async () => {
     const strategyValid =
@@ -286,7 +311,13 @@ export default function CreateOptimizationTaskForm({
         ? Boolean(formData.strategy_name)
         : (formData.portfolio_strategies?.length || 0) > 0;
 
-    if (!formData.task_name || !strategyValid || selectedStocks.length === 0 || !formData.start_date || !formData.end_date) {
+    if (
+      !formData.task_name ||
+      !strategyValid ||
+      selectedStocks.length === 0 ||
+      !formData.start_date ||
+      !formData.end_date
+    ) {
       alert('请填写所有必填字段');
       return;
     }
@@ -323,7 +354,8 @@ export default function CreateOptimizationTaskForm({
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
         // backend will route portfolio optimization by strategy_name="portfolio"
-        strategy_name: formData.optimization_mode === 'portfolio' ? 'portfolio' : formData.strategy_name,
+        strategy_name:
+          formData.optimization_mode === 'portfolio' ? 'portfolio' : formData.strategy_name,
         stock_codes: selectedStocks,
         start_date: startDate,
         end_date: endDate,
@@ -382,10 +414,18 @@ export default function CreateOptimizationTaskForm({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box>
-        <Typography variant="h5" component="h2" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
+        <Typography
+          variant="h5"
+          component="h2"
+          sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.125rem', sm: '1.5rem' } }}
+        >
           创建超参优化任务
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+        >
           配置优化参数，寻找策略的最佳参数组合
         </Typography>
       </Box>
@@ -421,7 +461,8 @@ export default function CreateOptimizationTaskForm({
               <MenuItem value="portfolio">组合策略优化（自由搭配）</MenuItem>
             </Select>
             <FormHelperText>
-              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化权重与子策略参数（交易执行固定 topk_buffer）。
+              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化权重与子策略参数（交易执行固定
+              topk_buffer）。
             </FormHelperText>
           </FormControl>
 
@@ -522,7 +563,8 @@ export default function CreateOptimizationTaskForm({
             <Typography variant="body2" color="text.secondary">
               请先选择策略，系统将自动加载该策略的可优化参数
             </Typography>
-          ) : formData.optimization_mode === 'portfolio' && (formData.portfolio_strategies?.length || 0) === 0 ? (
+          ) : formData.optimization_mode === 'portfolio' &&
+            (formData.portfolio_strategies?.length || 0) === 0 ? (
             <Typography variant="body2" color="text.secondary">
               请先选择至少 1 个子策略，系统将自动展开组合策略的参数空间
             </Typography>
@@ -557,7 +599,13 @@ export default function CreateOptimizationTaskForm({
                   }}
                 >
                   <Box
-                    sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}
+                    sx={{
+                      display: 'flex',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      justifyContent: 'space-between',
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      gap: 1,
+                    }}
                   >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -614,7 +662,13 @@ export default function CreateOptimizationTaskForm({
                         <Box
                           sx={{
                             display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', md: formData.optimization_method === 'grid' ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)' },
+                            gridTemplateColumns: {
+                              xs: '1fr',
+                              md:
+                                formData.optimization_method === 'grid'
+                                  ? 'repeat(3, 1fr)'
+                                  : 'repeat(2, 1fr)',
+                            },
                             gap: 2,
                           }}
                         >
@@ -649,7 +703,9 @@ export default function CreateOptimizationTaskForm({
                               fullWidth
                               helperText={
                                 config.low !== undefined && config.high !== undefined && config.step
-                                  ? `${Math.floor((config.high - config.low) / config.step) + 1} 个值`
+                                  ? `${
+                                      Math.floor((config.high - config.low) / config.step) + 1
+                                    } 个值`
                                   : '网格搜索必填'
                               }
                             />
@@ -849,7 +905,11 @@ export default function CreateOptimizationTaskForm({
               setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))
             }
             inputProps={{ min: 10, max: 10000 }}
-            helperText={formData.optimization_method === 'grid' ? '网格搜索：应等于所有参数值的笛卡尔积数量' : '参数空间较大时建议 300–500+，上限 10000'}
+            helperText={
+              formData.optimization_method === 'grid'
+                ? '网格搜索：应等于所有参数值的笛卡尔积数量'
+                : '参数空间较大时建议 300–500+，上限 10000'
+            }
             fullWidth
           />
 

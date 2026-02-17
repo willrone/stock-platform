@@ -2,22 +2,20 @@
 任务队列和调度器 - 处理任务的排队、调度和执行管理
 """
 
-import asyncio
-import json
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from queue import Empty, PriorityQueue
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import PerformanceLogger
-from app.models.task_models import Task, TaskStatus, TaskType
+from app.models.task_models import TaskType
 
 
 class TaskPriority(Enum):

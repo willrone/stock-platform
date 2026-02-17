@@ -3,16 +3,12 @@
 实现LRU缓存机制和缓存失效策略
 """
 
-import asyncio
-import gc
 import threading
 import time
-import weakref
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 import psutil
 from loguru import logger

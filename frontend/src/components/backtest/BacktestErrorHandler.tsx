@@ -128,7 +128,11 @@ export default function BacktestErrorHandler({
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <BellIcon className="w-5 h-5" />
-              <Typography variant="h6" component="span" sx={{ fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+              <Typography
+                variant="h6"
+                component="span"
+                sx={{ fontSize: { xs: '0.95rem', md: '1.25rem' } }}
+              >
                 通知中心
               </Typography>
               <Chip label={stats.total} size="small" />

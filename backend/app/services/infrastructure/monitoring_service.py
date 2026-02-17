@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from loguru import logger
-
 # 使用TYPE_CHECKING避免循环导入
 if TYPE_CHECKING:
     from app.services.data import ParquetManager, SimpleDataService

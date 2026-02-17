@@ -64,7 +64,11 @@ export default function OptimizationPage() {
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
+        >
           超参优化
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

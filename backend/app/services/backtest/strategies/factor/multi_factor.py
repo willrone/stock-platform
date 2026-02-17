@@ -2,16 +2,16 @@
 多因子组合策略
 """
 
+import threading
 from datetime import datetime
 from typing import Any, Dict, List
-import threading
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..base.factor_base import FactorStrategy
 from ...models import SignalType, TradingSignal
+from ..base.factor_base import FactorStrategy
 
 
 class MultiFactorStrategy(FactorStrategy):

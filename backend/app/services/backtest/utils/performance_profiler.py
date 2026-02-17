@@ -471,6 +471,7 @@ class BacktestPerformanceProfiler:
         try:
             try:
                 import orjson
+
                 payload = orjson.dumps(
                     report,
                     option=orjson.OPT_INDENT_2,

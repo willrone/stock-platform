@@ -4,23 +4,12 @@
 """
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from loguru import logger
 
-from app.services.data.parquet_manager import ParquetManager
-from app.services.data_versioning.lineage_tracker import (
-    DataLineageTracker,
-    NodeType,
-    TransformationType,
-    data_lineage_tracker,
-)
-from app.services.data_versioning.version_manager import (
-    DataType,
-    DataVersionManager,
-    VersionStatus,
-    data_version_manager,
-)
+from app.services.data_versioning.lineage_tracker import NodeType, data_lineage_tracker
+from app.services.data_versioning.version_manager import DataType, data_version_manager
 from app.services.events.data_sync_events import (
     DataSyncEventType,
     get_data_sync_event_manager,

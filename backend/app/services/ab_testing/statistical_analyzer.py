@@ -2,9 +2,7 @@
 统计显著性分析器
 实现A/B测试结果分析，提供统计显著性检验
 """
-import json
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -360,7 +358,7 @@ class StatisticalTestEngine:
             # 功效计算
             power = 1 - nct.cdf(t_critical, df, delta) + nct.cdf(-t_critical, df, delta)
             return min(max(power, 0), 1)
-        except:
+        except Exception:
             return 0.5  # 默认值
 
     def _calculate_power_proportion_test(
@@ -383,7 +381,7 @@ class StatisticalTestEngine:
             power = stats.norm.cdf(z_beta)
 
             return min(max(power, 0), 1)
-        except:
+        except Exception:
             return 0.5  # 默认值
 
     def _interpret_t_test_result(

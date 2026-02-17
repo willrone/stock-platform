@@ -5,13 +5,12 @@
 from datetime import datetime
 from typing import Any, Dict, List
 
-from app.core.error_handler import ErrorSeverity, TaskError
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..base.factor_base import FactorStrategy
 from ...models import SignalType, TradingSignal
+from ..base.factor_base import FactorStrategy
 
 
 class LowVolatilityStrategy(FactorStrategy):
@@ -61,7 +60,11 @@ class LowVolatilityStrategy(FactorStrategy):
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
             # 买入：低波动且风险调整收益为正，且波动率低于历史中位数
-            vol_median = indicators["volatility"].iloc[max(0, current_idx-252):current_idx+1].median()
+            vol_median = (
+                indicators["volatility"]
+                .iloc[max(0, current_idx - 252) : current_idx + 1]
+                .median()
+            )
             if current_rar > 0 and current_vol < vol_median:
                 strength = min(1.0, current_rar / 3)
                 signal = TradingSignal(
@@ -81,7 +84,12 @@ class LowVolatilityStrategy(FactorStrategy):
 
             # 卖出：风险调整收益转负，或波动率飙升超过历史中位数的1.5倍
             elif current_rar < -0.5 or current_vol > vol_median * 1.5:
-                strength = min(1.0, max(abs(current_rar) / 3, current_vol / vol_median - 1) if vol_median > 0 else abs(current_rar) / 3)
+                strength = min(
+                    1.0,
+                    max(abs(current_rar) / 3, current_vol / vol_median - 1)
+                    if vol_median > 0
+                    else abs(current_rar) / 3,
+                )
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,

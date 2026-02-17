@@ -16,6 +16,7 @@ from app.repositories.task_repository import ModelInfoRepository
 
 router = APIRouter()
 
+
 @router.delete("/{model_id}", response_model=StandardResponse)
 async def delete_model(model_id: str):
     """删除模型"""
@@ -57,7 +58,6 @@ async def delete_model(model_id: str):
         session.close()
 
 
-
 @router.post("/{model_id}/tags", response_model=StandardResponse)
 async def add_model_tags(model_id: str, tags: List[str]):
     """为模型添加标签"""
@@ -96,7 +96,6 @@ async def add_model_tags(model_id: str, tags: List[str]):
         raise HTTPException(status_code=500, detail=f"添加模型标签失败: {str(e)}")
     finally:
         session.close()
-
 
 
 @router.delete("/{model_id}/tags", response_model=StandardResponse)

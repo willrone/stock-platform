@@ -5,7 +5,7 @@
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 获取 backend 目录的绝对路径（config.py 所在目录的父级的父级）

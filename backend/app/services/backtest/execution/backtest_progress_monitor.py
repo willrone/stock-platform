@@ -4,17 +4,13 @@
 提供详细的回测进度跟踪和WebSocket实时推送功能
 """
 
-import asyncio
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from app.services.infrastructure.websocket_manager import (
-    WebSocketMessage,
-    websocket_manager,
-)
+from app.services.infrastructure.websocket_manager import websocket_manager
 
 
 @dataclass

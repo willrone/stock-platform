@@ -10,7 +10,6 @@ from typing import Dict, List
 
 import numpy as np
 import pandas as pd
-from loguru import logger
 
 
 class FeatureSetType(Enum):
@@ -23,29 +22,68 @@ class FeatureSetType(Enum):
 
 # 62 个手工技术指标特征名（与体系A一致）
 TECHNICAL_62_FEATURES: List[str] = [
-    "return_1d", "return_2d", "return_3d", "return_5d",
-    "return_10d", "return_20d",
-    "momentum_short", "momentum_long", "momentum_reversal",
-    "momentum_strength_5", "momentum_strength_10",
+    "return_1d",
+    "return_2d",
+    "return_3d",
+    "return_5d",
+    "return_10d",
+    "return_20d",
+    "momentum_short",
+    "momentum_long",
+    "momentum_reversal",
+    "momentum_strength_5",
+    "momentum_strength_10",
     "momentum_strength_20",
-    "relative_strength_5d", "relative_strength_20d",
+    "relative_strength_5d",
+    "relative_strength_20d",
     "relative_momentum",
-    "return_1d_rank", "return_5d_rank", "return_20d_rank",
-    "volume_rank", "volatility_20_rank",
+    "return_1d_rank",
+    "return_5d_rank",
+    "return_20d_rank",
+    "volume_rank",
+    "volatility_20_rank",
     "market_up_ratio",
-    "ma_ratio_5", "ma_ratio_10", "ma_ratio_20", "ma_ratio_60",
-    "ma_slope_5", "ma_slope_10", "ma_slope_20", "ma_alignment",
-    "volatility_5", "volatility_20", "volatility_60",
-    "vol_regime", "volatility_skew",
-    "vol_ratio", "vol_ma_ratio", "vol_std", "vol_price_diverge",
-    "rsi_6", "rsi_14", "rsi_diff",
-    "macd", "macd_signal", "macd_hist", "macd_hist_slope",
-    "bb_position", "bb_width",
-    "body", "wick_upper", "wick_lower", "range_pct",
-    "consecutive_up", "consecutive_down",
-    "price_pos_20", "price_pos_60",
-    "dist_high_20", "dist_low_20", "dist_high_60", "dist_low_60",
-    "atr_pct", "di_diff", "adx",
+    "ma_ratio_5",
+    "ma_ratio_10",
+    "ma_ratio_20",
+    "ma_ratio_60",
+    "ma_slope_5",
+    "ma_slope_10",
+    "ma_slope_20",
+    "ma_alignment",
+    "volatility_5",
+    "volatility_20",
+    "volatility_60",
+    "vol_regime",
+    "volatility_skew",
+    "vol_ratio",
+    "vol_ma_ratio",
+    "vol_std",
+    "vol_price_diverge",
+    "rsi_6",
+    "rsi_14",
+    "rsi_diff",
+    "macd",
+    "macd_signal",
+    "macd_hist",
+    "macd_hist_slope",
+    "bb_position",
+    "bb_width",
+    "body",
+    "wick_upper",
+    "wick_lower",
+    "range_pct",
+    "consecutive_up",
+    "consecutive_down",
+    "price_pos_20",
+    "price_pos_60",
+    "dist_high_20",
+    "dist_low_20",
+    "dist_high_60",
+    "dist_low_60",
+    "atr_pct",
+    "di_diff",
+    "adx",
 ]
 
 EPSILON = 1e-10
@@ -75,12 +113,8 @@ def compute_momentum_features(
 ) -> Dict[str, pd.Series]:
     """计算动量特征（6个）"""
     result: Dict[str, pd.Series] = {}
-    result["momentum_short"] = (
-        returns_dict["return_5d"] - returns_dict["return_10d"]
-    )
-    result["momentum_long"] = (
-        returns_dict["return_10d"] - returns_dict["return_20d"]
-    )
+    result["momentum_short"] = returns_dict["return_5d"] - returns_dict["return_10d"]
+    result["momentum_long"] = returns_dict["return_10d"] - returns_dict["return_20d"]
     result["momentum_reversal"] = -returns_dict["return_1d"]
 
     daily_returns = close.pct_change()
@@ -99,10 +133,9 @@ def compute_ma_features(close: pd.Series) -> Dict[str, pd.Series]:
         mas[window] = ma
         result[f"ma_ratio_{window}"] = close / ma - 1
         result[f"ma_slope_{window}"] = ma.pct_change(5)
-    result["ma_alignment"] = (
-        (mas[5] > mas[10]).astype(int)
-        + (mas[10] > mas[20]).astype(int)
-    )
+    result["ma_alignment"] = (mas[5] > mas[10]).astype(int) + (
+        mas[10] > mas[20]
+    ).astype(int)
     return result
 
 
@@ -114,15 +147,14 @@ def compute_volatility_features(
     result: Dict[str, pd.Series] = {}
     for window in [5, 20, 60]:
         result[f"volatility_{window}"] = returns.rolling(window).std()
-    result["vol_regime"] = (
-        result["volatility_5"] / (result["volatility_20"] + EPSILON)
-    )
+    result["vol_regime"] = result["volatility_5"] / (result["volatility_20"] + EPSILON)
     result["volatility_skew"] = returns.rolling(20).skew()
     return result
 
 
 def compute_volume_features(
-    close: pd.Series, volume: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
 ) -> Dict[str, pd.Series]:
     """计算成交量特征（4个）"""
     result: Dict[str, pd.Series] = {}
@@ -158,85 +190,62 @@ def compute_macd_features(close: pd.Series) -> Dict[str, pd.Series]:
     ema26 = close.ewm(span=26, adjust=False).mean()
     result: Dict[str, pd.Series] = {}
     result["macd"] = ema12 - ema26
-    result["macd_signal"] = result["macd"].ewm(
-        span=9, adjust=False
-    ).mean()
+    result["macd_signal"] = result["macd"].ewm(span=9, adjust=False).mean()
     result["macd_hist"] = result["macd"] - result["macd_signal"]
     result["macd_hist_slope"] = result["macd_hist"].diff(3)
     return result
 
 
 def compute_pattern_features(
-    close: pd.Series, high: pd.Series,
-    low: pd.Series, open_: pd.Series,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    open_: pd.Series,
 ) -> Dict[str, pd.Series]:
     """计算价格形态特征（6个）"""
     result: Dict[str, pd.Series] = {}
     result["body"] = (close - open_) / (open_ + EPSILON)
-    result["wick_upper"] = (
-        (high - np.maximum(close, open_))
-        / (high - low + EPSILON)
-    )
-    result["wick_lower"] = (
-        (np.minimum(close, open_) - low)
-        / (high - low + EPSILON)
-    )
+    result["wick_upper"] = (high - np.maximum(close, open_)) / (high - low + EPSILON)
+    result["wick_lower"] = (np.minimum(close, open_) - low) / (high - low + EPSILON)
     result["range_pct"] = (high - low) / (close + EPSILON)
-    result["consecutive_up"] = (
-        (close > close.shift(1)).rolling(5).sum()
-    )
-    result["consecutive_down"] = (
-        (close < close.shift(1)).rolling(5).sum()
-    )
+    result["consecutive_up"] = (close > close.shift(1)).rolling(5).sum()
+    result["consecutive_down"] = (close < close.shift(1)).rolling(5).sum()
     return result
 
 
 def compute_position_features(
-    close: pd.Series, high: pd.Series, low: pd.Series,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
 ) -> Dict[str, pd.Series]:
     """计算价格位置 + ATR/ADX 特征（9个）"""
     result: Dict[str, pd.Series] = {}
     for window in [20, 60]:
         high_n = high.rolling(window).max()
         low_n = low.rolling(window).min()
-        result[f"price_pos_{window}"] = (
-            (close - low_n) / (high_n - low_n + EPSILON)
-        )
-        result[f"dist_high_{window}"] = (
-            (high_n - close) / (close + EPSILON)
-        )
-        result[f"dist_low_{window}"] = (
-            (close - low_n) / (close + EPSILON)
-        )
+        result[f"price_pos_{window}"] = (close - low_n) / (high_n - low_n + EPSILON)
+        result[f"dist_high_{window}"] = (high_n - close) / (close + EPSILON)
+        result[f"dist_low_{window}"] = (close - low_n) / (close + EPSILON)
     # ATR
-    tr = pd.concat([
-        high - low,
-        (high - close.shift()).abs(),
-        (low - close.shift()).abs(),
-    ], axis=1).max(axis=1)
-    result["atr_pct"] = (
-        tr.rolling(14).mean() / (close + EPSILON)
-    )
+    tr = pd.concat(
+        [
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    result["atr_pct"] = tr.rolling(14).mean() / (close + EPSILON)
     # ADX
     plus_dm = high.diff()
     minus_dm = -low.diff()
-    plus_dm = plus_dm.where(
-        (plus_dm > minus_dm) & (plus_dm > 0), 0
-    )
-    minus_dm = minus_dm.where(
-        (minus_dm > plus_dm) & (minus_dm > 0), 0
-    )
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
     atr14 = tr.rolling(14).mean()
-    plus_di = (
-        100 * plus_dm.rolling(14).mean() / (atr14 + EPSILON)
-    )
-    minus_di = (
-        100 * minus_dm.rolling(14).mean() / (atr14 + EPSILON)
-    )
+    plus_di = 100 * plus_dm.rolling(14).mean() / (atr14 + EPSILON)
+    minus_di = 100 * minus_dm.rolling(14).mean() / (atr14 + EPSILON)
     result["di_diff"] = plus_di - minus_di
-    result["adx"] = (
-        (plus_di - minus_di).abs().rolling(14).mean()
-    )
+    result["adx"] = (plus_di - minus_di).abs().rolling(14).mean()
     return result
 
 

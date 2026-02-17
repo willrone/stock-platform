@@ -10,12 +10,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional, Union
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
-import numpy as np
 import pandas as pd
 import psutil
-import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 

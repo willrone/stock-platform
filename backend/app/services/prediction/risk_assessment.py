@@ -3,8 +3,8 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,6 @@ from loguru import logger
 from scipy import stats
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, PredictionError
-from app.models.task_models import RiskMetrics
 
 
 @dataclass

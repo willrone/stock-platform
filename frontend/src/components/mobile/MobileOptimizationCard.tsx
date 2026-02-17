@@ -1,15 +1,7 @@
 'use client';
 
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Box, 
-  Typography, 
-  Chip, 
-  LinearProgress,
-  Button,
-} from '@mui/material';
+import { Card, CardContent, Box, Typography, Chip, LinearProgress, Button } from '@mui/material';
 import { Sparkles, TrendingUp, Calendar } from 'lucide-react';
 
 interface OptimizationTask {
@@ -28,11 +20,13 @@ interface MobileOptimizationCardProps {
   onViewDetails: (id: string) => void;
 }
 
-export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({ 
-  task, 
-  onViewDetails 
+export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
+  task,
+  onViewDetails,
 }) => {
-  const getStatusColor = (status: string): 'primary' | 'success' | 'error' | 'warning' | 'default' => {
+  const getStatusColor = (
+    status: string
+  ): 'primary' | 'success' | 'error' | 'warning' | 'default' => {
     switch (status) {
       case 'running':
         return 'primary';
@@ -73,9 +67,9 @@ export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
   };
 
   return (
-    <Card 
-      sx={{ 
-        mb: 2, 
+    <Card
+      sx={{
+        mb: 2,
         borderRadius: 3,
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'all 0.2s',
@@ -83,20 +77,20 @@ export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         {/* 标题行 */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'flex-start', 
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
             mb: 1.5,
           }}
         >
           <Box sx={{ flex: 1, pr: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
               <Sparkles size={16} color="#9c27b0" />
-              <Typography 
-                variant="h6" 
-                sx={{ 
+              <Typography
+                variant="h6"
+                sx={{
                   fontWeight: 600,
                   fontSize: '1.05rem',
                   lineHeight: 1.3,
@@ -111,11 +105,11 @@ export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
               </Typography>
             )}
           </Box>
-          <Chip 
-            label={getStatusText(task.status)} 
-            color={getStatusColor(task.status)} 
+          <Chip
+            label={getStatusText(task.status)}
+            color={getStatusColor(task.status)}
             size="small"
-            sx={{ 
+            sx={{
               fontWeight: 600,
               fontSize: '0.75rem',
             }}
@@ -154,11 +148,11 @@ export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
                 {task.progress}%
               </Typography>
             </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={task.progress} 
-              sx={{ 
-                height: 6, 
+            <LinearProgress
+              variant="determinate"
+              value={task.progress}
+              sx={{
+                height: 6,
                 borderRadius: 3,
                 bgcolor: 'action.hover',
               }}
@@ -172,7 +166,7 @@ export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
           size="medium"
           fullWidth
           onClick={() => onViewDetails(task.task_id)}
-          sx={{ 
+          sx={{
             borderRadius: 2,
             minHeight: 44,
             textTransform: 'none',

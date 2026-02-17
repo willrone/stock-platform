@@ -89,7 +89,8 @@ export default function TaskDetailPage() {
 
     const cfg = currentTask.config;
     const bc = cfg?.backtest_config || cfg;
-    const backtestData = currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results;
+    const backtestData =
+      currentTask.result || currentTask.results?.backtest_results || currentTask.backtest_results;
     const resultBc = backtestData?.backtest_config;
 
     let strategyName =
@@ -229,10 +230,7 @@ export default function TaskDetailPage() {
                 }
               }}
               renderStrategyConfig={() => (
-                <StrategyConfig
-                  task={currentTask}
-                  onSaveConfig={() => setIsSaveConfigOpen(true)}
-                />
+                <StrategyConfig task={currentTask} onSaveConfig={() => setIsSaveConfigOpen(true)} />
               )}
               renderPerformanceMonitor={() => <PerformanceMonitor task={currentTask} />}
             />

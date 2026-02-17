@@ -12,8 +12,8 @@ from typing import Any, Dict, List
 import pandas as pd
 from loguru import logger
 
-from ..base.factor_base import FactorStrategy
 from ...models import SignalType, TradingSignal
+from ..base.factor_base import FactorStrategy
 
 
 class ValueFactorStrategy(FactorStrategy):
@@ -40,7 +40,7 @@ class ValueFactorStrategy(FactorStrategy):
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算价值因子指标
-        
+
         由于缺少真实财务数据，使用价格行为构建相对价值指标：
         - 价格相对长期均线的偏离度（替代 PE）
         - 价格波动率的倒数（替代 PB，低波动=稳定=高质量）

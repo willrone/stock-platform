@@ -52,7 +52,9 @@ class CCIStrategy(BaseStrategy):
             sell_mask = (cci > self.overbought) & (prev_cci <= self.overbought)
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -76,15 +78,17 @@ class CCIStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_cci = indicators["cci"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=0.8,
-                        price=current_price,
-                        reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
-                        metadata={"cci": current_cci},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=0.8,
+                            price=current_price,
+                            reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
+                            metadata={"cci": current_cci},
+                        )
+                    ]
                 return []
         except Exception:
             pass

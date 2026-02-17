@@ -3,8 +3,7 @@
 提供更多专业的金融风险和绩效指标计算
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -470,7 +469,6 @@ class EnhancedMetricsCalculator:
             end_date = max(dates)
 
             # 尝试从本地加载基准数据
-            benchmark_data = None
             loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
             benchmark_df = loader.load_stock_data(
                 benchmark_symbol, start_date=start_date, end_date=end_date

@@ -6,11 +6,10 @@
 import hashlib
 import json
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
-from sqlalchemy import and_, delete, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, delete, select
 
 from app.core.database import get_async_session, retry_db_operation
 from app.models.backtest_detailed_models import BacktestChartCache
@@ -115,7 +114,11 @@ class ChartCacheService:
                     data_hash = self._calculate_data_hash(chart_data)
 
                     # 计算过期时间（避免闭包内同名赋值导致 UnboundLocalError）
-                    hours = expiry_hours if expiry_hours is not None else self.DEFAULT_CACHE_EXPIRY_HOURS
+                    hours = (
+                        expiry_hours
+                        if expiry_hours is not None
+                        else self.DEFAULT_CACHE_EXPIRY_HOURS
+                    )
                     expires_at = datetime.utcnow() + timedelta(hours=hours)
 
                     # 查找现有记录
@@ -338,6 +341,7 @@ class ChartCacheService:
         try:
             try:
                 import orjson
+
                 data_bytes = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
                 return hashlib.md5(data_bytes).hexdigest()
             except (ImportError, TypeError):

@@ -82,7 +82,6 @@ describe('配置文件测试', () => {
   });
 
   test('项目文件结构存在', () => {
-
     // 检查关键文件存在
     expect(fs.existsSync(path.join(process.cwd(), 'src/app/page.tsx'))).toBe(true);
     expect(fs.existsSync(path.join(process.cwd(), 'src/app/layout.tsx'))).toBe(true);

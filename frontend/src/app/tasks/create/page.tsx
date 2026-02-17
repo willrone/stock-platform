@@ -106,7 +106,9 @@ function CreateTaskPageInner() {
 
   // 从 URL 参数恢复任务配置（重建任务功能）— 只在挂载时执行一次
   useEffect(() => {
-    if (urlParamsProcessedRef.current) return;
+    if (urlParamsProcessedRef.current) {
+      return;
+    }
     urlParamsProcessedRef.current = true;
 
     const rebuild = searchParams.get('rebuild');
@@ -200,14 +202,20 @@ function CreateTaskPageInner() {
     }
 
     // 防止 Strict Mode 双重执行导致重复请求
-    if (strategiesLoadedRef.current) return;
+    if (strategiesLoadedRef.current) {
+      return;
+    }
 
     const loadStrategies = async () => {
       try {
         const response = await fetch('/api/v1/backtest/strategies');
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         const data = await response.json();
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         if (data.success && data.data) {
           strategiesLoadedRef.current = true;
@@ -240,8 +248,7 @@ function CreateTaskPageInner() {
   // 加载已保存的配置列表
   useEffect(() => {
     const loadSavedConfigs = async () => {
-      const targetStrategyName =
-        strategyType === 'portfolio' ? 'portfolio' : strategyName;
+      const targetStrategyName = strategyType === 'portfolio' ? 'portfolio' : strategyName;
       if (taskType === 'backtest' && targetStrategyName) {
         setLoadingConfigs(true);
         try {
@@ -405,10 +412,18 @@ function CreateTaskPageInner() {
           <ArrowLeft size={20} />
         </IconButton>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}
+          >
             创建任务
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+          >
             配置股票预测或回测任务参数
           </Typography>
         </Box>
@@ -833,7 +848,12 @@ function CreateTaskPageInner() {
             >
               {loading ? '创建中...' : '创建任务'}
             </Button>
-            <Button variant="outlined" size="large" onClick={handleBack} sx={{ minWidth: { sm: 100 } }}>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={handleBack}
+              sx={{ minWidth: { sm: 100 } }}
+            >
               取消
             </Button>
           </Box>
@@ -945,7 +965,13 @@ function CreateTaskPageInner() {
 // 用 Suspense 包裹，防止 useSearchParams 导致整个页面 suspend/remount
 export default function CreateTaskPage() {
   return (
-    <Suspense fallback={<Box sx={{ p: 4 }}><Typography>加载中...</Typography></Box>}>
+    <Suspense
+      fallback={
+        <Box sx={{ p: 4 }}>
+          <Typography>加载中...</Typography>
+        </Box>
+      }
+    >
       <CreateTaskPageInner />
     </Suspense>
   );

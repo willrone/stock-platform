@@ -69,13 +69,21 @@ class MovingAverageStrategy(BaseStrategy):
             close = indicators["price"]
 
             # 向量化逻辑判断
-            buy_mask = (prev_ma_diff <= 0) & (ma_diff > 0) & (abs(ma_diff) > self.signal_threshold)
-            sell_mask = (prev_ma_diff >= 0) & (ma_diff < 0) & (abs(ma_diff) > self.signal_threshold)
+            buy_mask = (
+                (prev_ma_diff <= 0)
+                & (ma_diff > 0)
+                & (abs(ma_diff) > self.signal_threshold)
+            )
+            sell_mask = (
+                (prev_ma_diff >= 0)
+                & (ma_diff < 0)
+                & (abs(ma_diff) > self.signal_threshold)
+            )
 
             # 趋势过滤：MA60 方向一致时才触发信号
             if self.enable_trend_filter:
                 trend_ma = close.rolling(window=self.trend_window).mean()
-                trend_up = trend_ma > trend_ma.shift(5)    # MA60 向上
+                trend_up = trend_ma > trend_ma.shift(5)  # MA60 向上
                 trend_down = trend_ma < trend_ma.shift(5)  # MA60 向下
                 buy_mask = buy_mask & trend_up.fillna(False)
                 sell_mask = sell_mask & trend_down.fillna(False)
@@ -83,9 +91,13 @@ class MovingAverageStrategy(BaseStrategy):
             # 构造浮点强度信号 Series：正=买入，负=卖出，0=无信号
             signals = pd.Series(0.0, index=data.index, dtype=np.float64)
             # 买入强度：ma_diff * 10，clamp 到 (0, 1]
-            signals[buy_mask.fillna(False)] = (ma_diff[buy_mask.fillna(False)] * 10).clip(0.3, 1.0)
+            signals[buy_mask.fillna(False)] = (
+                ma_diff[buy_mask.fillna(False)] * 10
+            ).clip(0.3, 1.0)
             # 卖出强度：ma_diff * 10（负值），clamp 到 [-1, -0.3)
-            signals[sell_mask.fillna(False)] = (ma_diff[sell_mask.fillna(False)] * 10).clip(-1.0, -0.3)
+            signals[sell_mask.fillna(False)] = (
+                ma_diff[sell_mask.fillna(False)] * 10
+            ).clip(-1.0, -0.3)
 
             return signals
         except Exception as e:
@@ -102,7 +114,10 @@ class MovingAverageStrategy(BaseStrategy):
             if precomputed is not None:
                 sig_val = precomputed.get(current_date)
                 # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
-                if isinstance(sig_val, (int, float, np.number)) and float(sig_val) != 0.0:
+                if (
+                    isinstance(sig_val, (int, float, np.number))
+                    and float(sig_val) != 0.0
+                ):
                     fv = float(sig_val)
                     sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
                     indicators = self.get_cached_indicators(data)
@@ -110,38 +125,42 @@ class MovingAverageStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_ma_diff = indicators["ma_diff"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=min(1.0, abs(fv)),
-                        price=current_price,
-                        reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
-                        metadata={
-                            "sma_short": indicators["sma_short"].iloc[current_idx],
-                            "sma_long": indicators["sma_long"].iloc[current_idx],
-                            "ma_diff": current_ma_diff,
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=min(1.0, abs(fv)),
+                            price=current_price,
+                            reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
+                            metadata={
+                                "sma_short": indicators["sma_short"].iloc[current_idx],
+                                "sma_long": indicators["sma_long"].iloc[current_idx],
+                                "ma_diff": current_ma_diff,
+                            },
+                        )
+                    ]
                 elif isinstance(sig_val, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_ma_diff = indicators["ma_diff"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_val,
-                        strength=min(1.0, abs(current_ma_diff) * 10),
-                        price=current_price,
-                        reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
-                        metadata={
-                            "sma_short": indicators["sma_short"].iloc[current_idx],
-                            "sma_long": indicators["sma_long"].iloc[current_idx],
-                            "ma_diff": current_ma_diff,
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_val,
+                            strength=min(1.0, abs(current_ma_diff) * 10),
+                            price=current_price,
+                            reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
+                            metadata={
+                                "sma_short": indicators["sma_short"].iloc[current_idx],
+                                "sma_long": indicators["sma_long"].iloc[current_idx],
+                                "ma_diff": current_ma_diff,
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass
@@ -250,7 +269,7 @@ class RSIStrategy(BaseStrategy):
         # 优先使用 Numba 加速版本（Phase 3 优化）
         try:
             from .numba_indicators import NUMBA_AVAILABLE, rsi_wilder
-            
+
             if NUMBA_AVAILABLE:
                 rsi_values = rsi_wilder(close_prices.values, self.rsi_period)
                 rsi = pd.Series(rsi_values, index=close_prices.index)
@@ -262,8 +281,12 @@ class RSIStrategy(BaseStrategy):
             else:
                 # Fallback: 使用pandas实现RSI（Wilder's smoothing method）
                 delta = close_prices.diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+                gain = (
+                    (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
+                )
+                loss = (
+                    (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+                )
                 rs = gain / loss
                 rsi = 100 - (100 / (1 + rs))
         except Exception as e:
@@ -294,8 +317,12 @@ class RSIStrategy(BaseStrategy):
             close = indicators["price"]
 
             # 基础穿越信号：从超卖区回升 -> 买入；从超买区回调 -> 卖出
-            buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
-            sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
+            buy_mask = (prev_rsi <= self.oversold_threshold) & (
+                rsi > self.oversold_threshold
+            )
+            sell_mask = (prev_rsi >= self.overbought_threshold) & (
+                rsi < self.overbought_threshold
+            )
 
             # 趋势对齐过滤：只在趋势方向一致时允许信号
             if self.enable_trend_alignment:
@@ -308,10 +335,15 @@ class RSIStrategy(BaseStrategy):
             # 构造浮点强度信号 Series
             signals = pd.Series(0.0, index=data.index, dtype=np.float64)
             # 买入强度：超卖越深强度越高
-            buy_strength = ((self.oversold_threshold - prev_rsi) / self.oversold_threshold).clip(0.3, 1.0)
+            buy_strength = (
+                (self.oversold_threshold - prev_rsi) / self.oversold_threshold
+            ).clip(0.3, 1.0)
             signals[buy_mask.fillna(False)] = buy_strength[buy_mask.fillna(False)]
             # 卖出强度：超买越高强度越高（负值）
-            sell_strength = -((prev_rsi - self.overbought_threshold) / (100 - self.overbought_threshold)).clip(0.3, 1.0)
+            sell_strength = -(
+                (prev_rsi - self.overbought_threshold)
+                / (100 - self.overbought_threshold)
+            ).clip(0.3, 1.0)
             signals[sell_mask.fillna(False)] = sell_strength[sell_mask.fillna(False)]
 
             return signals
@@ -329,7 +361,10 @@ class RSIStrategy(BaseStrategy):
             if precomputed is not None:
                 sig_val = precomputed.get(current_date)
                 # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
-                if isinstance(sig_val, (int, float, np.number)) and float(sig_val) != 0.0:
+                if (
+                    isinstance(sig_val, (int, float, np.number))
+                    and float(sig_val) != 0.0
+                ):
                     fv = float(sig_val)
                     sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
                     indicators = self.get_cached_indicators(data)
@@ -337,30 +372,34 @@ class RSIStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=min(1.0, abs(fv)),
-                        price=current_price,
-                        reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
-                        metadata={"rsi": current_rsi},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=min(1.0, abs(fv)),
+                            price=current_price,
+                            reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
+                            metadata={"rsi": current_rsi},
+                        )
+                    ]
                 elif isinstance(sig_val, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_val,
-                        strength=0.8,
-                        price=current_price,
-                        reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
-                        metadata={"rsi": current_rsi},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_val,
+                            strength=0.8,
+                            price=current_price,
+                            reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
+                            metadata={"rsi": current_rsi},
+                        )
+                    ]
                 return []
         except Exception:
             pass
@@ -386,7 +425,10 @@ class RSIStrategy(BaseStrategy):
 
             # 简化逻辑：只保留基本的RSI穿越信号
             # 买入信号：RSI从超卖区域向上穿越
-            if prev_rsi <= self.oversold_threshold and current_rsi > self.oversold_threshold:
+            if (
+                prev_rsi <= self.oversold_threshold
+                and current_rsi > self.oversold_threshold
+            ):
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
@@ -399,7 +441,10 @@ class RSIStrategy(BaseStrategy):
                 signals.append(signal)
 
             # 卖出信号：RSI从超买区域向下穿越
-            elif prev_rsi >= self.overbought_threshold and current_rsi <= self.overbought_threshold:
+            elif (
+                prev_rsi >= self.overbought_threshold
+                and current_rsi <= self.overbought_threshold
+            ):
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
@@ -416,8 +461,6 @@ class RSIStrategy(BaseStrategy):
         except Exception as e:
             logger.error(f"RSI策略信号生成失败: {e}")
             return []
-
-
 
 
 class MACDStrategy(BaseStrategy):
@@ -507,7 +550,10 @@ class MACDStrategy(BaseStrategy):
             if precomputed is not None:
                 sig_val = precomputed.get(current_date)
                 # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
-                if isinstance(sig_val, (int, float, np.number)) and float(sig_val) != 0.0:
+                if (
+                    isinstance(sig_val, (int, float, np.number))
+                    and float(sig_val) != 0.0
+                ):
                     fv = float(sig_val)
                     sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
                     indicators = self.get_cached_indicators(data)
@@ -515,38 +561,46 @@ class MACDStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_hist = indicators["macd_hist"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=min(1.0, abs(fv)),
-                        price=current_price,
-                        reason=f"[向量化] MACD{'金叉' if sig_type == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
-                        metadata={
-                            "macd": indicators["macd"].iloc[current_idx],
-                            "macd_signal": indicators["macd_signal"].iloc[current_idx],
-                            "macd_hist": current_hist,
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=min(1.0, abs(fv)),
+                            price=current_price,
+                            reason=f"[向量化] MACD{'金叉' if sig_type == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
+                            metadata={
+                                "macd": indicators["macd"].iloc[current_idx],
+                                "macd_signal": indicators["macd_signal"].iloc[
+                                    current_idx
+                                ],
+                                "macd_hist": current_hist,
+                            },
+                        )
+                    ]
                 elif isinstance(sig_val, SignalType):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_hist = indicators["macd_hist"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_val,
-                        strength=min(1.0, abs(current_hist) * 100),
-                        price=current_price,
-                        reason=f"[向量化] MACD{'金叉' if sig_val == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
-                        metadata={
-                            "macd": indicators["macd"].iloc[current_idx],
-                            "macd_signal": indicators["macd_signal"].iloc[current_idx],
-                            "macd_hist": current_hist,
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_val,
+                            strength=min(1.0, abs(current_hist) * 100),
+                            price=current_price,
+                            reason=f"[向量化] MACD{'金叉' if sig_val == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
+                            metadata={
+                                "macd": indicators["macd"].iloc[current_idx],
+                                "macd_signal": indicators["macd_signal"].iloc[
+                                    current_idx
+                                ],
+                                "macd_hist": current_hist,
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass

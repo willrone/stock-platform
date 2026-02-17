@@ -35,7 +35,9 @@ router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
 
 @router.post("", response_model=StandardResponse)
-async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_current_user)):
+async def create_task(
+    request: TaskCreateRequest, user_id: str = Depends(get_current_user)
+):
     """创建任务（支持预测和回测）"""
     session = SessionLocal()
     try:
@@ -70,9 +72,15 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             # - strategy_type -> strategy_name
             # - strategy_params -> strategy_config
             backtest_config = dict(request.backtest_config or {})
-            if "strategy_type" in backtest_config and "strategy_name" not in backtest_config:
+            if (
+                "strategy_type" in backtest_config
+                and "strategy_name" not in backtest_config
+            ):
                 backtest_config["strategy_name"] = backtest_config["strategy_type"]
-            if "strategy_params" in backtest_config and "strategy_config" not in backtest_config:
+            if (
+                "strategy_params" in backtest_config
+                and "strategy_config" not in backtest_config
+            ):
                 backtest_config["strategy_config"] = backtest_config["strategy_params"]
 
             config = {"stock_codes": request.stock_codes, **backtest_config}
@@ -88,16 +96,16 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
         # 将任务提交到进程池执行（异步，不阻塞）
         try:
             process_executor = get_process_executor()
-            loop = asyncio.get_event_loop()
+            asyncio.get_event_loop()
 
             # 使用run_in_executor将任务提交到进程池
             # 注意：这里只是提交任务，不等待结果，立即返回
             if task_type == TaskType.PREDICTION:
-                future = process_executor.submit(
+                _future = process_executor.submit(
                     execute_prediction_task_simple, task.task_id
                 )
             else:  # BACKTEST
-                future = process_executor.submit(
+                _future = process_executor.submit(
                     execute_backtest_task_simple, task.task_id
                 )
 
@@ -111,7 +119,7 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
                     status=TaskStatus.FAILED,
                     error_message=f"任务提交失败: {str(submit_error)}",
                 )
-            except:
+            except Exception:
                 pass
 
         # 转换为前端期望的格式
@@ -187,13 +195,13 @@ async def list_tasks(
             # 处理 task_type：可能是字符串或枚举对象
             task_type_value = None
             if task.task_type:
-                if hasattr(task.task_type, 'value'):
+                if hasattr(task.task_type, "value"):
                     # 如果是枚举对象，获取其值
                     task_type_value = task.task_type.value
                 else:
                     # 如果已经是字符串，直接使用
                     task_type_value = task.task_type
-            
+
             task_data = {
                 "task_id": task.task_id,
                 "task_name": task.task_name,
@@ -460,7 +468,7 @@ async def get_chart_data(task_id: str, chart_type: str):
         chart_generator = ChartDataGenerator()
         chart_data = await chart_generator.generate_chart_data(raw_result, chart_type)
 
-        print(f"DEBUG: 图表数据生成成功")
+        print("DEBUG: 图表数据生成成功")
 
         return StandardResponse(
             success=True,
@@ -869,7 +877,7 @@ async def delete_task(
         # 检查是否是数据库约束错误
         if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
             raise HTTPException(
-                status_code=409, detail=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。"
+                status_code=409, detail="删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。"
             )
         else:
             raise HTTPException(status_code=500, detail=f"删除任务失败: {error_msg}")
@@ -936,11 +944,11 @@ async def retry_task(task_id: str):
             process_executor = get_process_executor()
 
             if task.task_type == "prediction":
-                future = process_executor.submit(
+                _future = process_executor.submit(
                     execute_prediction_task_simple, task_id
                 )
             elif task.task_type == "backtest":
-                future = process_executor.submit(execute_backtest_task_simple, task_id)
+                process_executor.submit(execute_backtest_task_simple, task_id)
             else:
                 raise HTTPException(
                     status_code=400, detail=f"不支持的任务类型: {task.task_type}"

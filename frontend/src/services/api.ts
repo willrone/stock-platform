@@ -10,8 +10,14 @@
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
+// API错误类型（用于增强错误对象）
+interface ApiError extends Error {
+  status?: number;
+  response?: { status: number; data?: Record<string, unknown> };
+}
+
 // 标准响应格式
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T;
@@ -107,7 +113,7 @@ const createApiInstance = (): AxiosInstance => {
       // 处理不同类型的错误
       if (error.response) {
         const status = error.response.status;
-        const data = error.response.data as any;
+        const data = error.response.data as Record<string, unknown> | undefined;
 
         switch (status) {
           case 400:
@@ -152,7 +158,7 @@ export const api = createApiInstance();
 
 // 通用请求方法
 export const apiRequest = {
-  get: <T = any>(url: string, params?: any): Promise<T> => {
+  get: <T = unknown>(url: string, params?: Record<string, unknown>): Promise<T> => {
     return api
       .get<ApiResponse<T>>(url, { params })
       .then(res => {
@@ -167,19 +173,22 @@ export const apiRequest = {
         }
         return res.data.data;
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         // 确保错误对象包含状态码信息
-        if (error.response) {
-          const enhancedError = new Error(error.response.data?.message || error.message);
-          (enhancedError as any).status = error.response.status;
-          (enhancedError as any).response = error.response;
+        const axiosError = error as { response?: { status: number; data?: Record<string, unknown> }; message?: string };
+        if (axiosError.response) {
+          const enhancedError: ApiError = new Error(
+            (axiosError.response.data?.message as string) || axiosError.message || '请求失败'
+          );
+          enhancedError.status = axiosError.response.status;
+          enhancedError.response = axiosError.response;
           throw enhancedError;
         }
         throw error;
       });
   },
 
-  post: <T = any>(url: string, data?: any): Promise<T> => {
+  post: <T = unknown>(url: string, data?: unknown): Promise<T> => {
     return api.post<ApiResponse<T>>(url, data).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -188,7 +197,7 @@ export const apiRequest = {
     });
   },
 
-  put: <T = any>(url: string, data?: any): Promise<T> => {
+  put: <T = unknown>(url: string, data?: unknown): Promise<T> => {
     return api.put<ApiResponse<T>>(url, data).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -197,7 +206,7 @@ export const apiRequest = {
     });
   },
 
-  delete: <T = any>(url: string): Promise<T> => {
+  delete: <T = unknown>(url: string): Promise<T> => {
     return api.delete<ApiResponse<T>>(url).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -206,7 +215,7 @@ export const apiRequest = {
     });
   },
 
-  patch: <T = any>(url: string, data?: any): Promise<T> => {
+  patch: <T = unknown>(url: string, data?: unknown): Promise<T> => {
     return api.patch<ApiResponse<T>>(url, data).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -221,7 +230,7 @@ export const uploadFile = async (
   url: string,
   file: File,
   onProgress?: (progress: number) => void
-): Promise<any> => {
+): Promise<unknown> => {
   const formData = new FormData();
   formData.append('file', file);
 

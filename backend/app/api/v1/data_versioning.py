@@ -2,7 +2,6 @@
 数据版本控制API路由
 提供数据版本管理和血缘追踪的API接口
 """
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,7 +9,7 @@ from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse
 from app.services.data_versioning.integration_service import data_versioning_integration
-from app.services.data_versioning.lineage_tracker import NodeType, TransformationType
+from app.services.data_versioning.lineage_tracker import NodeType
 from app.services.data_versioning.version_manager import DataType, VersionStatus
 
 router = APIRouter(prefix="/data-versioning", tags=["数据版本控制"])

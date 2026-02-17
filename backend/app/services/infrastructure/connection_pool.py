@@ -7,10 +7,9 @@ import asyncio
 import threading
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 import httpx
 import psutil
@@ -202,7 +201,7 @@ class HTTPConnectionPool:
 
         # 更新连接池利用率
         if pool_name in self._clients:
-            client = self._clients[pool_name]
+            self._clients[pool_name]
             # 这里需要根据httpx的实际API来获取连接信息
             # 由于httpx没有直接暴露连接池信息，我们使用估算值
             stats.pool_utilization = min(

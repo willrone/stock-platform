@@ -156,7 +156,7 @@ export interface SignalEvent {
   strength: number;
   price: number;
   reason: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SignalHistoryResponse {
@@ -175,7 +175,7 @@ export interface MultiSignalHistoryResponse {
 
 // 数据服务类
 export class DataService {
-  private static serializeConfig(config?: Record<string, any>): string | undefined {
+  private static serializeConfig(config?: Record<string, unknown>): string | undefined {
     if (!config || Object.keys(config).length === 0) {
       return undefined;
     }
@@ -197,14 +197,14 @@ export class DataService {
     };
 
     try {
-      const response = await apiRequest.get<any>('/stocks/data', params);
+      const response = await apiRequest.get<Record<string, unknown>>('/stocks/data', params);
 
       console.log('[DataService] getStockData 响应:', response);
 
       // 转换为标准格式
       // response 是后端返回的 response_data: { stock_code, start_date, end_date, data_points, data: [...] }
       // 如果 response 为 null（后端返回 success=False 但 data 不为 null），则尝试从其他地方获取
-      let dataArray: any[] = [];
+      let dataArray: unknown[] = [];
 
       if (response) {
         if (Array.isArray(response.data)) {
@@ -226,12 +226,13 @@ export class DataService {
         data: dataArray,
         last_updated: new Date().toISOString(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DataService] getStockData 失败:', error);
+      const err = error as Record<string, unknown> | undefined;
       console.error('[DataService] 错误详情:', {
-        message: error?.message,
-        status: error?.status,
-        response: error?.response,
+        message: err?.message,
+        status: err?.status,
+        response: err?.response,
       });
       // 返回空数据而不是抛出错误，让组件可以处理
       return {
@@ -250,7 +251,7 @@ export class DataService {
     startDate?: string,
     endDate?: string
   ): Promise<TechnicalIndicators> {
-    const params: any = {};
+    const params: Record<string, unknown> = {};
     if (startDate) {
       params.start_date = startDate;
     }
@@ -389,10 +390,10 @@ export class DataService {
       name: string;
       description?: string;
       category?: string;
-      parameters?: Record<string, any>;
+      parameters?: Record<string, unknown>;
     }>
   > {
-    const resp = await apiRequest.get<any>('/backtest/strategies');
+    const resp = await apiRequest.get<unknown>('/backtest/strategies');
     // 后端返回的是 { key, name, ... } 数组
     return Array.isArray(resp) ? resp : resp ?? [];
   }

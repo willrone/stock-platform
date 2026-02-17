@@ -44,7 +44,11 @@ export function TaskHeader({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
       {/* 标题行 */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-        <IconButton onClick={onBack} size="small" sx={{ flexShrink: 0, minWidth: 44, minHeight: 44 }}>
+        <IconButton
+          onClick={onBack}
+          size="small"
+          sx={{ flexShrink: 0, minWidth: 44, minHeight: 44 }}
+        >
           <ArrowLeft size={20} />
         </IconButton>
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -99,7 +103,12 @@ export function TaskHeader({
           onClick={onRefresh}
           disabled={refreshing}
           size="small"
-          sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+          sx={{
+            flexShrink: 0,
+            minHeight: 44,
+            px: { xs: 1.5, sm: 2 },
+            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+          }}
         >
           刷新
         </Button>
@@ -110,7 +119,12 @@ export function TaskHeader({
           startIcon={<Copy size={16} />}
           onClick={onRebuild}
           size="small"
-          sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+          sx={{
+            flexShrink: 0,
+            minHeight: 44,
+            px: { xs: 1.5, sm: 2 },
+            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+          }}
         >
           重建
         </Button>
@@ -122,7 +136,12 @@ export function TaskHeader({
             startIcon={<Play size={16} />}
             onClick={onRetry}
             size="small"
-            sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+            sx={{
+              flexShrink: 0,
+              minHeight: 44,
+              px: { xs: 1.5, sm: 2 },
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+            }}
           >
             重试
           </Button>
@@ -135,7 +154,12 @@ export function TaskHeader({
             startIcon={<Download size={16} />}
             onClick={onExport}
             size="small"
-            sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+            sx={{
+              flexShrink: 0,
+              minHeight: 44,
+              px: { xs: 1.5, sm: 2 },
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+            }}
           >
             导出
           </Button>
@@ -147,7 +171,12 @@ export function TaskHeader({
           startIcon={<Trash2 size={16} />}
           onClick={onDelete}
           size="small"
-          sx={{ flexShrink: 0, minHeight: 44, px: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+          sx={{
+            flexShrink: 0,
+            minHeight: 44,
+            px: { xs: 1.5, sm: 2 },
+            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+          }}
         >
           删除
         </Button>

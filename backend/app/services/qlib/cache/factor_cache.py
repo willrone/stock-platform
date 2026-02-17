@@ -48,9 +48,7 @@ class FactorCache:
         self.max_memory_cache_size = 10  # 最大内存缓存项数
         self.memory_cache_stats = {"hits": 0, "misses": 0, "evictions": 0}
 
-        logger.info(
-            f"因子缓存初始化: {self.cache_dir}, 内存缓存大小: {self.max_memory_cache_size}"
-        )
+        logger.info(f"因子缓存初始化: {self.cache_dir}, 内存缓存大小: {self.max_memory_cache_size}")
 
     def get_cache_key(
         self, stock_codes: List[str], date_range: Tuple[datetime, datetime]

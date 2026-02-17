@@ -14,7 +14,7 @@ interface PieChartProps {
 export const PieChart: React.FC<PieChartProps> = ({ data, isActive }) => {
   const chartRef = useECharts(
     data,
-    (chartData) => ({
+    chartData => ({
       title: {
         text: '持仓权重分布',
         left: 'center',

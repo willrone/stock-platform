@@ -7,7 +7,7 @@ Qlib集成API接口
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 

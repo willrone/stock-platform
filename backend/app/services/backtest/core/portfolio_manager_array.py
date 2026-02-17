@@ -11,8 +11,6 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from app.core.config import settings
-
 from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
 
 
@@ -22,40 +20,40 @@ class PortfolioManagerArray:
     def __init__(self, config: BacktestConfig, stock_codes: List[str]):
         """
         初始化组合管理器
-        
+
         Args:
             config: 回测配置
             stock_codes: 股票代码列表（用于建立索引映射）
         """
         self.config = config
         self.cash = config.initial_cash
-        
+
         # 股票代码映射
         self.stock_codes = stock_codes
         self.code_to_idx = {code: i for i, code in enumerate(stock_codes)}
         self.n_stocks = len(stock_codes)
-        
+
         # 持仓数组化 (shape: [n_stocks])
         self.quantities = np.zeros(self.n_stocks, dtype=np.int32)  # 持仓数量
         self.avg_costs = np.zeros(self.n_stocks, dtype=np.float64)  # 平均成本
         self.realized_pnl = np.zeros(self.n_stocks, dtype=np.float64)  # 已实现盈亏
-        
+
         # Trade records 使用 list（延迟转换为 DataFrame）
         self.trades: List[Dict[str, Any]] = []
-        
+
         # 轻量 equity 曲线
         self.equity_curve: List[Tuple[datetime, float]] = []
         self.trade_counter = 0
-        
+
         # 内部计数
         self._snapshot_counter = 0
-        
+
         # 无成本组合跟踪
         self.cash_without_cost = config.initial_cash
         self.quantities_without_cost = np.zeros(self.n_stocks, dtype=np.int32)
         self.avg_costs_without_cost = np.zeros(self.n_stocks, dtype=np.float64)
         self.realized_pnl_without_cost = np.zeros(self.n_stocks, dtype=np.float64)
-        
+
         # 成本统计
         self.total_commission = 0.0
         self.total_slippage = 0.0
@@ -126,7 +124,9 @@ class PortfolioManagerArray:
         self.set_current_prices(current_prices)
         return self.cash + np.dot(self.quantities, self._price_array)
 
-    def get_portfolio_value_without_cost(self, current_prices: Dict[str, float] = None) -> float:
+    def get_portfolio_value_without_cost(
+        self, current_prices: Dict[str, float] = None
+    ) -> float:
         """计算组合总价值（无成本）- 向量化版本
 
         [P2 优化] 如果已调用 set_current_prices()，则使用缓存的价格数组进行向量化计算。
@@ -134,20 +134,24 @@ class PortfolioManagerArray:
         # 快速路径：使用缓存的价格数组（None 或空字典都走这条路径）
         if current_prices is None or len(current_prices) == 0:
             if self._price_array_valid:
-                return self.cash_without_cost + np.dot(self.quantities_without_cost, self._price_array)
+                return self.cash_without_cost + np.dot(
+                    self.quantities_without_cost, self._price_array
+                )
             else:
                 return self.cash_without_cost
 
         # 如果传入了非空 current_prices，更新缓存并使用向量化计算
         self.set_current_prices(current_prices)
-        return self.cash_without_cost + np.dot(self.quantities_without_cost, self._price_array)
+        return self.cash_without_cost + np.dot(
+            self.quantities_without_cost, self._price_array
+        )
 
     def get_position(self, stock_code: str) -> Optional[Position]:
         """获取持仓信息（兼容接口）"""
         idx = self.code_to_idx.get(stock_code)
         if idx is None or self.quantities[idx] <= 0:
             return None
-        
+
         return Position(
             stock_code=stock_code,
             quantity=int(self.quantities[idx]),
@@ -211,10 +215,10 @@ class PortfolioManagerArray:
         try:
             stock_code = signal.stock_code
             idx = self.code_to_idx.get(stock_code)
-            
+
             if idx is None:
                 return None, f"股票代码不在universe中: {stock_code}"
-            
+
             current_price = current_prices.get(stock_code, signal.price)
 
             # 应用滑点
@@ -267,20 +271,25 @@ class PortfolioManagerArray:
         else:
             portfolio_value = self.get_portfolio_value({stock_code: price})
             max_position_value = portfolio_value * self.config.max_position_size
-            current_position_value = self.quantities[idx] * price if self.quantities[idx] > 0 else 0
+            current_position_value = (
+                self.quantities[idx] * price if self.quantities[idx] > 0 else 0
+            )
             available_cash_for_stock = max_position_value - current_position_value
             available_cash_for_stock = min(available_cash_for_stock, self.cash * 0.95)
 
             if available_cash_for_stock <= 0:
-                if current_position_value > 0 and current_position_value >= max_position_value:
-                    return None, f"已达到最大持仓限制"
+                if (
+                    current_position_value > 0
+                    and current_position_value >= max_position_value
+                ):
+                    return None, "已达到最大持仓限制"
                 else:
-                    return None, f"可用资金不足"
+                    return None, "可用资金不足"
 
         # 计算购买数量（100股为单位）
         quantity = int(available_cash_for_stock / price / 100) * 100
         if not unlimited_buy and quantity <= 0:
-            return None, f"可买数量不足"
+            return None, "可买数量不足"
         if unlimited_buy and quantity <= 0:
             quantity = 100
 
@@ -298,7 +307,7 @@ class PortfolioManagerArray:
                 self.cash_without_cost += needed  # 无成本账本同步
                 logger.debug(f"不限制买入: 补充资金 {needed:.2f} 用于买入 {stock_code}")
             else:
-                return None, f"资金不足"
+                return None, "资金不足"
 
         # 执行交易（含成本）
         self.cash -= total_cost_with_commission
@@ -306,15 +315,17 @@ class PortfolioManagerArray:
         # 更新持仓数组
         old_quantity = self.quantities[idx]
         new_quantity = old_quantity + quantity
-        
+
         if old_quantity > 0:
             # 更新平均成本
-            self.avg_costs[idx] = (old_quantity * self.avg_costs[idx] + total_cost) / new_quantity
+            self.avg_costs[idx] = (
+                old_quantity * self.avg_costs[idx] + total_cost
+            ) / new_quantity
         else:
             self.avg_costs[idx] = price
             # 新开仓：记录开仓日期
             self._entry_dates[idx] = signal.timestamp
-        
+
         self.quantities[idx] = new_quantity
 
         # [P0 优化] 持仓变化，使缓存失效
@@ -326,14 +337,14 @@ class PortfolioManagerArray:
 
         old_quantity_nc = self.quantities_without_cost[idx]
         new_quantity_nc = old_quantity_nc + quantity
-        
+
         if old_quantity_nc > 0:
             self.avg_costs_without_cost[idx] = (
                 old_quantity_nc * self.avg_costs_without_cost[idx] + cost_without_fees
             ) / new_quantity_nc
         else:
             self.avg_costs_without_cost[idx] = original_price
-        
+
         self.quantities_without_cost[idx] = new_quantity_nc
 
         # 更新成本统计
@@ -343,23 +354,23 @@ class PortfolioManagerArray:
         # 记录交易（使用 dict，延迟转换）
         self.trade_counter += 1
         trade_dict = {
-            'trade_id': f"T{self.trade_counter:06d}",
-            'stock_code': stock_code,
-            'action': 'BUY',
-            'quantity': quantity,
-            'price': price,
-            'timestamp': signal.timestamp,
-            'commission': commission,
-            'slippage_cost': slippage_cost,
-            'pnl': 0.0,
+            "trade_id": f"T{self.trade_counter:06d}",
+            "stock_code": stock_code,
+            "action": "BUY",
+            "quantity": quantity,
+            "price": price,
+            "timestamp": signal.timestamp,
+            "commission": commission,
+            "slippage_cost": slippage_cost,
+            "pnl": 0.0,
         }
         self.trades.append(trade_dict)
 
         # 返回 Trade 对象（兼容接口）
         trade = Trade(
-            trade_id=trade_dict['trade_id'],
+            trade_id=trade_dict["trade_id"],
             stock_code=stock_code,
-            action='BUY',
+            action="BUY",
             quantity=quantity,
             price=price,
             timestamp=signal.timestamp,
@@ -423,22 +434,22 @@ class PortfolioManagerArray:
         # 记录交易
         self.trade_counter += 1
         trade_dict = {
-            'trade_id': f"T{self.trade_counter:06d}",
-            'stock_code': stock_code,
-            'action': 'SELL',
-            'quantity': quantity,
-            'price': price,
-            'timestamp': signal.timestamp,
-            'commission': commission,
-            'slippage_cost': slippage_cost,
-            'pnl': pnl,
+            "trade_id": f"T{self.trade_counter:06d}",
+            "stock_code": stock_code,
+            "action": "SELL",
+            "quantity": quantity,
+            "price": price,
+            "timestamp": signal.timestamp,
+            "commission": commission,
+            "slippage_cost": slippage_cost,
+            "pnl": pnl,
         }
         self.trades.append(trade_dict)
 
         trade = Trade(
-            trade_id=trade_dict['trade_id'],
+            trade_id=trade_dict["trade_id"],
             stock_code=stock_code,
-            action='SELL',
+            action="SELL",
             quantity=quantity,
             price=price,
             timestamp=signal.timestamp,
@@ -449,7 +460,9 @@ class PortfolioManagerArray:
 
         return trade, None
 
-    def record_portfolio_snapshot(self, date: datetime, current_prices: Dict[str, float] = None):
+    def record_portfolio_snapshot(
+        self, date: datetime, current_prices: Dict[str, float] = None
+    ):
         """记录组合快照
 
         [P2 优化] 如果已调用 set_current_prices()，可以传入 None 使用缓存的价格数组。
@@ -501,7 +514,9 @@ class PortfolioManagerArray:
 
         # 年化收益率
         days = (self.equity_curve[-1][0] - self.equity_curve[0][0]).days
-        annualized_return = (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
+        annualized_return = (
+            (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
+        )
 
         # 波动率
         volatility = returns.std() * np.sqrt(252)
@@ -516,15 +531,27 @@ class PortfolioManagerArray:
         max_drawdown = drawdown.min()
 
         # 交易统计
-        sell_trades = [t for t in self.trades if t['action'] == 'SELL']
-        winning_trades = [t for t in sell_trades if t['pnl'] > 0]
-        losing_trades = [t for t in sell_trades if t['pnl'] < 0]
+        sell_trades = [t for t in self.trades if t["action"] == "SELL"]
+        winning_trades = [t for t in sell_trades if t["pnl"] > 0]
+        losing_trades = [t for t in sell_trades if t["pnl"] < 0]
         win_rate_denominator = len(winning_trades) + len(losing_trades)
-        win_rate = len(winning_trades) / win_rate_denominator if win_rate_denominator > 0 else 0
+        win_rate = (
+            len(winning_trades) / win_rate_denominator
+            if win_rate_denominator > 0
+            else 0
+        )
 
-        avg_win = float(np.mean([t['pnl'] for t in winning_trades])) if winning_trades else 0.0
-        avg_loss = float(np.mean([t['pnl'] for t in losing_trades])) if losing_trades else 0.0
-        profit_factor = float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
+        avg_win = (
+            float(np.mean([t["pnl"] for t in winning_trades]))
+            if winning_trades
+            else 0.0
+        )
+        avg_loss = (
+            float(np.mean([t["pnl"] for t in losing_trades])) if losing_trades else 0.0
+        )
+        profit_factor = (
+            float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
+        )
 
         total_cap_inj = getattr(self, "total_capital_injection", 0.0)
         metrics = {

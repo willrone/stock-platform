@@ -2,8 +2,7 @@
 图表数据生成器 - 为回测结果生成各种图表所需的数据
 """
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd

@@ -30,9 +30,9 @@ from app.websocket import (
 
 from .models_utils import (
     TRAINING_AVAILABLE,
-    get_train_executor,
     _format_feature_importance_for_report,
     _normalize_performance_metrics_for_report,
+    get_train_executor,
 )
 
 router = APIRouter()
@@ -113,19 +113,6 @@ def _run_train_model_task_sync(
     except Exception as e:
         logger.error(f"训练任务执行失败: {e}", exc_info=True)
 
-
-# 创建线程池执行器（单例）
-_train_executor = None
-
-
-def get_train_executor():
-    """获取训练任务线程池执行器"""
-    global _train_executor
-    if _train_executor is None:
-        _train_executor = ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="train_task"
-        )
-    return _train_executor
 
 
 async def train_model_task(
@@ -578,6 +565,7 @@ async def train_model_task(
 
         except Exception as e:
             import traceback as _tb
+
             full_tb = _tb.format_exc()
             logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}\n{full_tb}")
             # 写入文件以确保 traceback 不丢失
@@ -588,7 +576,11 @@ async def train_model_task(
                 pass
             model_info.status = "failed"
             model_info.training_stage = "failed"
-            model_info.performance_metrics = {"error": str(e), "status": "failed", "traceback": full_tb}
+            model_info.performance_metrics = {
+                "error": str(e),
+                "status": "failed",
+                "traceback": full_tb,
+            }
             session.commit()
             if main_loop:
                 asyncio.run_coroutine_threadsafe(
@@ -608,8 +600,6 @@ async def train_model_task(
             await notify_model_training_failed(model_id, str(e))
     finally:
         session.close()
-
-
 
 
 @router.post("/train", response_model=StandardResponse)
@@ -736,7 +726,6 @@ async def create_training_task(request: ModelTrainingRequest):
         session.close()
 
 
-
 @router.get("/available-features", response_model=StandardResponse, summary="获取可用特征列表")
 async def get_available_features(
     stock_code: Optional[str] = None,
@@ -750,7 +739,7 @@ async def get_available_features(
     否则返回所有可能支持的特征列表。
     """
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         from app.services.prediction.technical_indicators import (
             TechnicalIndicatorCalculator,
@@ -758,8 +747,6 @@ async def get_available_features(
         from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
 
         # 基础价格特征
-        base_features = ["open", "high", "low", "close", "volume"]
-
         # 技术指标特征
         indicator_calculator = TechnicalIndicatorCalculator()
         supported_indicators = indicator_calculator.get_supported_indicators_info()
@@ -810,8 +797,8 @@ async def get_available_features(
                 else:
                     indicator_features.append(mapping)
 
-        # 基本面特征
-        fundamental_features = [
+        # 基本面特征（保留列表定义供参考，但当前未使用）
+        _fundamental_features = [
             "price_change",
             "price_change_5d",
             "price_change_20d",
@@ -981,4 +968,3 @@ async def get_available_features(
     except Exception as e:
         logger.error(f"获取可用特征列表失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取可用特征列表失败: {str(e)}")
-

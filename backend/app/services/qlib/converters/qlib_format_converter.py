@@ -5,7 +5,6 @@ Qlib 格式转换器
 支持多种输入格式，包括 CSV、DataFrame 等。
 """
 
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -237,9 +236,7 @@ class QlibFormatConverter:
                 df = df.rename(columns={df.columns[0]: date_col})
                 found_col = date_col
             else:
-                raise ValueError(
-                    f"找不到日期列，尝试过的列名: {possible_date_cols}"
-                )
+                raise ValueError(f"找不到日期列，尝试过的列名: {possible_date_cols}")
 
         # 重命名为标准日期列名
         if found_col != date_col:
@@ -281,9 +278,7 @@ class QlibFormatConverter:
                 break
 
         if found_col is None:
-            raise ValueError(
-                f"找不到股票代码列，尝试过的列名: {possible_instrument_cols}"
-            )
+            raise ValueError(f"找不到股票代码列，尝试过的列名: {possible_instrument_cols}")
 
         # 重命名为标准列名
         if found_col != instrument_col:

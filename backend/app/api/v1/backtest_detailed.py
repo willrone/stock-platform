@@ -4,9 +4,9 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,7 @@ async def get_detailed_backtest_result(
 
     try:
         repository = BacktestDetailedRepository(session)
-        logger.info(f"[API] 开始查询数据库中的详细结果...")
+        logger.info("[API] 开始查询数据库中的详细结果...")
 
         detailed_result = await repository.get_detailed_result_by_task_id(task_id)
 
@@ -63,7 +63,7 @@ async def get_detailed_backtest_result(
             elif isinstance(pos_analysis, list):
                 logger.info(f"[API] position_analysis 是数组，长度: {len(pos_analysis)}")
         else:
-            logger.warning(f"[API] position_analysis 为空或不存在")
+            logger.warning("[API] position_analysis 为空或不存在")
 
         return StandardResponse(success=True, message="获取回测详细结果成功", data=result_dict)
 
@@ -94,7 +94,7 @@ async def get_portfolio_snapshots(
         start_dt = datetime.fromisoformat(start_date) if start_date else None
         end_dt = datetime.fromisoformat(end_date) if end_date else None
 
-        logger.info(f"[API] 开始查询组合快照数据...")
+        logger.info("[API] 开始查询组合快照数据...")
         snapshots = await repository.get_portfolio_snapshots(
             task_id=task_id, start_date=start_dt, end_date=end_dt, limit=limit
         )
@@ -402,7 +402,7 @@ async def invalidate_cache(
         success = await cache_service.invalidate_cache(task_id, chart_type)
 
         if success:
-            message = f"缓存清理成功"
+            message = "缓存清理成功"
             if chart_type:
                 message += f" (图表类型: {chart_type})"
 

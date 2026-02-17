@@ -279,7 +279,15 @@ export default function DataManagementPage() {
         }}
       >
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 600,
+              mb: 1,
+              fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+            }}
+          >
             数据管理
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -556,74 +564,70 @@ export default function DataManagementPage() {
                     {/* 移动端：卡片列表 */}
                     <Box sx={{ display: { xs: 'block', md: 'none' } }}>
                       {remoteStocks.map(stock => (
-                        <MobileStockCard 
-                          key={stock.ts_code} 
-                          stock={stock} 
-                          type="remote" 
-                        />
+                        <MobileStockCard key={stock.ts_code} stock={stock} type="remote" />
                       ))}
                     </Box>
 
                     {/* 桌面端：表格 */}
                     <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>股票代码</TableCell>
-                          <TableCell>股票名称</TableCell>
-                          <TableCell>数据范围</TableCell>
-                          <TableCell>最后更新</TableCell>
-                          <TableCell>状态</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {remoteStocks.map(stock => (
-                          <TableRow key={stock.ts_code}>
-                            <TableCell>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontFamily: 'monospace', fontWeight: 500 }}
-                              >
-                                {stock.ts_code}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>{stock.name || '--'}</TableCell>
-                            <TableCell>
-                              {stock.data_range ? (
-                                <Box>
-                                  <Typography variant="body2">
-                                    {stock.data_range.start_date} 至 {stock.data_range.end_date}
-                                  </Typography>
-                                  {stock.data_range.total_days && (
-                                    <Typography variant="caption" color="text.secondary">
-                                      {stock.data_range.total_days} 天
-                                    </Typography>
-                                  )}
-                                </Box>
-                              ) : (
-                                '--'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {stock.last_update
-                                ? new Date(stock.last_update).toLocaleDateString()
-                                : '--'}
-                            </TableCell>
-                            <TableCell>
-                              {stock.status === 'complete' ? (
-                                <Chip label="完整" color="success" size="small" />
-                              ) : stock.status === 'incomplete' ? (
-                                <Chip label="不完整" color="warning" size="small" />
-                              ) : stock.status === 'missing' ? (
-                                <Chip label="缺失" color="error" size="small" />
-                              ) : (
-                                <Chip label="未知" size="small" />
-                              )}
-                            </TableCell>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>股票代码</TableCell>
+                            <TableCell>股票名称</TableCell>
+                            <TableCell>数据范围</TableCell>
+                            <TableCell>最后更新</TableCell>
+                            <TableCell>状态</TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHead>
+                        <TableBody>
+                          {remoteStocks.map(stock => (
+                            <TableRow key={stock.ts_code}>
+                              <TableCell>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                                >
+                                  {stock.ts_code}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{stock.name || '--'}</TableCell>
+                              <TableCell>
+                                {stock.data_range ? (
+                                  <Box>
+                                    <Typography variant="body2">
+                                      {stock.data_range.start_date} 至 {stock.data_range.end_date}
+                                    </Typography>
+                                    {stock.data_range.total_days && (
+                                      <Typography variant="caption" color="text.secondary">
+                                        {stock.data_range.total_days} 天
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                ) : (
+                                  '--'
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {stock.last_update
+                                  ? new Date(stock.last_update).toLocaleDateString()
+                                  : '--'}
+                              </TableCell>
+                              <TableCell>
+                                {stock.status === 'complete' ? (
+                                  <Chip label="完整" color="success" size="small" />
+                                ) : stock.status === 'incomplete' ? (
+                                  <Chip label="不完整" color="warning" size="small" />
+                                ) : stock.status === 'missing' ? (
+                                  <Chip label="缺失" color="error" size="small" />
+                                ) : (
+                                  <Chip label="未知" size="small" />
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </Box>
                   </Box>
                 )}
@@ -650,66 +654,62 @@ export default function DataManagementPage() {
                     {/* 移动端：卡片列表 */}
                     <Box sx={{ display: { xs: 'block', md: 'none' } }}>
                       {localStocks.map(stock => (
-                        <MobileStockCard 
-                          key={stock.ts_code} 
-                          stock={stock} 
-                          type="local" 
-                        />
+                        <MobileStockCard key={stock.ts_code} stock={stock} type="local" />
                       ))}
                     </Box>
 
                     {/* 桌面端：表格 */}
                     <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>股票代码</TableCell>
-                          <TableCell>股票名称</TableCell>
-                          <TableCell>数据范围</TableCell>
-                          <TableCell>文件数</TableCell>
-                          <TableCell>记录数</TableCell>
-                          <TableCell>文件大小</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {localStocks.map(stock => (
-                          <TableRow key={stock.ts_code}>
-                            <TableCell>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontFamily: 'monospace', fontWeight: 500 }}
-                              >
-                                {stock.ts_code}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>{stock.name || stock.ts_code}</TableCell>
-                            <TableCell>
-                              {stock.data_range ? (
-                                <Box>
-                                  <Typography variant="body2">
-                                    {stock.data_range.start_date} 至 {stock.data_range.end_date}
-                                  </Typography>
-                                  {stock.data_range.total_days && (
-                                    <Typography variant="caption" color="text.secondary">
-                                      {stock.data_range.total_days} 天
-                                    </Typography>
-                                  )}
-                                </Box>
-                              ) : (
-                                '--'
-                              )}
-                            </TableCell>
-                            <TableCell>{stock.file_count || 0}</TableCell>
-                            <TableCell>{stock.record_count?.toLocaleString() || '--'}</TableCell>
-                            <TableCell>
-                              {stock.total_size
-                                ? `${(stock.total_size / 1024 / 1024).toFixed(2)} MB`
-                                : '--'}
-                            </TableCell>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>股票代码</TableCell>
+                            <TableCell>股票名称</TableCell>
+                            <TableCell>数据范围</TableCell>
+                            <TableCell>文件数</TableCell>
+                            <TableCell>记录数</TableCell>
+                            <TableCell>文件大小</TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHead>
+                        <TableBody>
+                          {localStocks.map(stock => (
+                            <TableRow key={stock.ts_code}>
+                              <TableCell>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                                >
+                                  {stock.ts_code}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{stock.name || stock.ts_code}</TableCell>
+                              <TableCell>
+                                {stock.data_range ? (
+                                  <Box>
+                                    <Typography variant="body2">
+                                      {stock.data_range.start_date} 至 {stock.data_range.end_date}
+                                    </Typography>
+                                    {stock.data_range.total_days && (
+                                      <Typography variant="caption" color="text.secondary">
+                                        {stock.data_range.total_days} 天
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                ) : (
+                                  '--'
+                                )}
+                              </TableCell>
+                              <TableCell>{stock.file_count || 0}</TableCell>
+                              <TableCell>{stock.record_count?.toLocaleString() || '--'}</TableCell>
+                              <TableCell>
+                                {stock.total_size
+                                  ? `${(stock.total_size / 1024 / 1024).toFixed(2)} MB`
+                                  : '--'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </Box>
                   </Box>
                 )}

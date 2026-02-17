@@ -46,7 +46,9 @@ class BaseStrategy(ABC):
             pass
 
         # Fallback
-        return int(data.index.get_loc(current_date)) if current_date in data.index else -1
+        return (
+            int(data.index.get_loc(current_date)) if current_date in data.index else -1
+        )
 
     def get_cached_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """Calculate indicators once per (strategy instance, DataFrame).
@@ -76,17 +78,15 @@ class BaseStrategy(ABC):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成交易信号"""
-        pass
 
     @abstractmethod
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算技术指标"""
-        pass
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
         """
         [性能优化] 在回测开始前，利用向量化计算一次性生成全量信号序列。
-        
+
         返回一个 Series，索引与 data.index 一致，值为信号类型或强度。
         默认返回 None，由子类实现以开启极速模式。
         """

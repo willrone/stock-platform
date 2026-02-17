@@ -2,7 +2,6 @@
 告警和通知机制
 实现性能下降告警，支持邮件和WebSocket通知
 """
-import asyncio
 import json
 import smtplib
 import threading
@@ -13,16 +12,12 @@ from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
 from app.services.monitoring.drift_detector import DriftReport, DriftSeverity
-from app.services.monitoring.performance_monitor import (
-    Alert,
-    AlertLevel,
-    PerformanceMetrics,
-)
+from app.services.monitoring.performance_monitor import Alert
 
 
 class NotificationChannel(Enum):

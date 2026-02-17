@@ -19,6 +19,7 @@ from app.services.models.model_lifecycle_manager import model_lifecycle_manager
 def _get_task_manager():
     """延迟导入 task_manager，避免循环依赖"""
     from app.services.tasks.task_manager import task_manager
+
     return task_manager
 
 
@@ -41,7 +42,7 @@ class ConnectionManager:
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
             await websocket.send_text(message)
-        except:
+        except Exception:
             self.disconnect(websocket)
 
     async def broadcast(self, message: str):
@@ -49,7 +50,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
+            except Exception:
                 disconnected.append(connection)
 
         # 清理断开的连接
@@ -346,7 +347,9 @@ async def get_model_training_history(
     """获取模型的训练历史"""
     try:
         # 获取模型相关的训练任务
-        tasks = _get_task_manager().get_tasks_by_metadata("model_id", model_id, limit=limit)
+        tasks = _get_task_manager().get_tasks_by_metadata(
+            "model_id", model_id, limit=limit
+        )
 
         training_history = []
         for task in tasks:
@@ -579,7 +582,7 @@ async def websocket_training_progress(websocket: WebSocket, task_id: str):
         }
         try:
             await manager.send_personal_message(json.dumps(error_data), websocket)
-        except:
+        except Exception:
             pass
         manager.disconnect(websocket)
 
@@ -610,5 +613,5 @@ async def websocket_global_training_updates(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-    except Exception as e:
+    except Exception:
         manager.disconnect(websocket)

@@ -8,7 +8,6 @@
 - 自动状态更新
 """
 
-import asyncio
 import json
 from datetime import datetime, timedelta
 from enum import Enum
@@ -17,9 +16,7 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...core.config import settings
 from ...core.database import get_async_session as get_db
 from ...models.task_models import ModelInfo, ModelLifecycleEvent
 

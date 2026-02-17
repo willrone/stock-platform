@@ -30,7 +30,7 @@ import { Info, RotateCcw } from 'lucide-react';
 
 export interface StrategyParameter {
   type: 'int' | 'float' | 'boolean' | 'string' | 'json';
-  default: any;
+  default: unknown;
   description?: string;
   min?: number;
   max?: number;
@@ -40,8 +40,8 @@ export interface StrategyParameter {
 export interface StrategyConfigFormProps {
   strategyName: string;
   parameters: Record<string, StrategyParameter>;
-  values?: Record<string, any>;
-  onChange?: (values: Record<string, any>) => void;
+  values?: Record<string, unknown>;
+  onChange?: (values: Record<string, unknown>) => void;
   onLoadConfig?: (configId: string) => void;
   savedConfigs?: Array<{ config_id: string; config_name: string; created_at: string }>;
   loading?: boolean;
@@ -56,7 +56,7 @@ export function StrategyConfigForm({
   savedConfigs = [],
   loading = false,
 }: StrategyConfigFormProps) {
-  const [values, setValues] = useState<Record<string, any>>({});
+  const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const prevStrategyRef = React.useRef(strategyName);
   const onChangeRef = React.useRef(onChange);
@@ -76,7 +76,7 @@ export function StrategyConfigForm({
       isMountedRef.current = true;
 
       // 策略变化或首次挂载时，使用externalValues（如果提供）或默认值
-      let initialValues: Record<string, any> = {};
+      let initialValues: Record<string, unknown> = {};
       if (externalValues && Object.keys(externalValues).length > 0) {
         initialValues = externalValues;
         setValues(initialValues);
@@ -101,7 +101,7 @@ export function StrategyConfigForm({
 
   // 处理参数值变化
   const handleValueChange = React.useCallback(
-    (key: string, value: any) => {
+    (key: string, value: unknown) => {
       const param = parameters[key];
       if (!param) {
         return;
@@ -170,7 +170,7 @@ export function StrategyConfigForm({
 
   // 重置为默认值
   const handleReset = () => {
-    const defaults: Record<string, any> = {};
+    const defaults: Record<string, unknown> = {};
     Object.entries(parameters).forEach(([key, param]) => {
       defaults[key] = param.default;
     });
@@ -330,7 +330,11 @@ export function StrategyConfigForm({
       <CardHeader
         title={
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6" component="span" sx={{ fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
+            <Typography
+              variant="h6"
+              component="span"
+              sx={{ fontSize: { xs: '0.95rem', md: '1.25rem' } }}
+            >
               策略配置参数
             </Typography>
             <Chip label={strategyName} size="small" color="secondary" />

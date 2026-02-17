@@ -10,7 +10,7 @@ Qlib 模型特征构建器
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -19,15 +19,50 @@ logger = logging.getLogger(__name__)
 
 # 44 个特征的固定顺序（与训练时 Column_0~43 一一对应）
 QLIB_FEATURE_ORDER = [
-    "$open", "$high", "$low", "$close", "$volume", "$vwap",
-    "OBV", "MA5", "KDJ_K", "KDJ_D", "KDJ_J", "MA10",
-    "STOCH_K", "WILLIAMS_R", "RSI", "ATR", "STOCH_D", "MA20",
-    "SMA", "EMA", "WMA", "CCI", "BOLLINGER_UPPER", "BOLLINGER_MIDDLE",
-    "BOLLINGER_LOWER", "MACD", "MACD_SIGNAL", "MACD_HISTOGRAM", "MA60",
-    "price_change", "price_change_5d", "price_change_20d",
-    "volatility_5d", "volatility_20d", "volume_change",
-    "volume_ma_ratio", "price_position",
-    "RET1", "RET5", "RET20", "STD5", "STD20", "VOL1", "VOL5",
+    "$open",
+    "$high",
+    "$low",
+    "$close",
+    "$volume",
+    "$vwap",
+    "OBV",
+    "MA5",
+    "KDJ_K",
+    "KDJ_D",
+    "KDJ_J",
+    "MA10",
+    "STOCH_K",
+    "WILLIAMS_R",
+    "RSI",
+    "ATR",
+    "STOCH_D",
+    "MA20",
+    "SMA",
+    "EMA",
+    "WMA",
+    "CCI",
+    "BOLLINGER_UPPER",
+    "BOLLINGER_MIDDLE",
+    "BOLLINGER_LOWER",
+    "MACD",
+    "MACD_SIGNAL",
+    "MACD_HISTOGRAM",
+    "MA60",
+    "price_change",
+    "price_change_5d",
+    "price_change_20d",
+    "volatility_5d",
+    "volatility_20d",
+    "volume_change",
+    "volume_ma_ratio",
+    "price_position",
+    "RET1",
+    "RET5",
+    "RET20",
+    "STD5",
+    "STD20",
+    "VOL1",
+    "VOL5",
 ]
 
 QLIB_FEATURE_COUNT = len(QLIB_FEATURE_ORDER)
@@ -80,8 +115,11 @@ def build_qlib_features(data: pd.DataFrame) -> Optional[pd.DataFrame]:
 
 def _add_base_ohlcv(
     feat: pd.DataFrame,
-    open_: pd.Series, high: pd.Series,
-    low: pd.Series, close: pd.Series, volume: pd.Series,
+    open_: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
 ) -> None:
     """添加基础 OHLCV + VWAP（6 列）"""
     feat["$open"] = open_
@@ -95,8 +133,10 @@ def _add_base_ohlcv(
 
 def _add_technical_indicators(
     feat: pd.DataFrame,
-    close: pd.Series, high: pd.Series,
-    low: pd.Series, volume: pd.Series,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    volume: pd.Series,
 ) -> None:
     """添加技术指标（23 列）"""
     _calc_obv(feat, close, volume)
@@ -113,7 +153,9 @@ def _add_technical_indicators(
 
 
 def _add_fundamental_features(
-    feat: pd.DataFrame, close: pd.Series, volume: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    volume: pd.Series,
 ) -> None:
     """添加基本面特征（8 列）"""
     feat["price_change"] = close.pct_change()
@@ -129,7 +171,9 @@ def _add_fundamental_features(
 
 
 def _add_dataset_prep_features(
-    feat: pd.DataFrame, close: pd.Series, volume: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    volume: pd.Series,
 ) -> None:
     """添加数据集准备阶段追加的特征（7 列）"""
     feat["RET1"] = close.pct_change(1)
@@ -155,8 +199,10 @@ def _calc_ma(feat: pd.DataFrame, close: pd.Series) -> None:
 
 
 def _calc_kdj(
-    feat: pd.DataFrame, close: pd.Series,
-    high: pd.Series, low: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
 ) -> None:
     low_9 = low.rolling(9).min()
     high_9 = high.rolling(9).max()
@@ -167,8 +213,10 @@ def _calc_kdj(
 
 
 def _calc_stochastic(
-    feat: pd.DataFrame, close: pd.Series,
-    high: pd.Series, low: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
 ) -> None:
     low_14 = low.rolling(14).min()
     high_14 = high.rolling(14).max()
@@ -177,8 +225,10 @@ def _calc_stochastic(
 
 
 def _calc_williams_r(
-    feat: pd.DataFrame, close: pd.Series,
-    high: pd.Series, low: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
 ) -> None:
     high_14 = high.rolling(14).max()
     low_14 = low.rolling(14).min()
@@ -194,15 +244,19 @@ def _calc_rsi(feat: pd.DataFrame, close: pd.Series) -> None:
 
 
 def _calc_atr(
-    feat: pd.DataFrame, close: pd.Series,
-    high: pd.Series, low: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
 ) -> None:
     tr = pd.Series(
-        np.maximum.reduce([
-            high - low,
-            (high - close.shift()).abs(),
-            (low - close.shift()).abs(),
-        ]),
+        np.maximum.reduce(
+            [
+                high - low,
+                (high - close.shift()).abs(),
+                (low - close.shift()).abs(),
+            ]
+        ),
         index=close.index,
     )
     feat["ATR"] = tr.rolling(14).mean()
@@ -213,18 +267,22 @@ def _calc_ema_sma_wma(feat: pd.DataFrame, close: pd.Series) -> None:
     feat["EMA"] = close.ewm(span=20, adjust=False).mean()
     weights = np.arange(1, 21)
     feat["WMA"] = close.rolling(20).apply(
-        lambda x: np.dot(x, weights) / weights.sum(), raw=True,
+        lambda x: np.dot(x, weights) / weights.sum(),
+        raw=True,
     )
 
 
 def _calc_cci(
-    feat: pd.DataFrame, close: pd.Series,
-    high: pd.Series, low: pd.Series,
+    feat: pd.DataFrame,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
 ) -> None:
     tp = (high + low + close) / 3
     tp_ma = tp.rolling(20).mean()
     tp_md = tp.rolling(20).apply(
-        lambda x: np.abs(x - x.mean()).mean(), raw=True,
+        lambda x: np.abs(x - x.mean()).mean(),
+        raw=True,
     )
     feat["CCI"] = (tp - tp_ma) / (0.015 * tp_md + EPSILON)
 

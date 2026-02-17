@@ -35,7 +35,6 @@ import {
   Activity,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTaskStore } from '../../stores/useTaskStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TaskService } from '../../services/taskService';
 
@@ -137,7 +136,11 @@ export default function DashboardPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* 页面标题 */}
       <Box>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+        >
           仪表板
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -168,7 +171,13 @@ export default function DashboardPage() {
                 <Bot size={24} color="white" />
               </Box>
               <Box>
-                <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {systemStats.totalTasks}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -194,7 +203,14 @@ export default function DashboardPage() {
                 <CheckCircle size={24} color="white" />
               </Box>
               <Box>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    color: 'success.main',
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {systemStats.completedTasks}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -220,7 +236,14 @@ export default function DashboardPage() {
                 <Clock size={24} color="white" />
               </Box>
               <Box>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    color: 'warning.main',
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {systemStats.runningTasks}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -246,7 +269,14 @@ export default function DashboardPage() {
                 <AlertTriangle size={24} color="white" />
               </Box>
               <Box>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 600,
+                    color: 'error.main',
+                    fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
+                  }}
+                >
                   {systemStats.failedTasks}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -313,15 +343,24 @@ export default function DashboardPage() {
                           {getTaskStatusIcon(task.status)}
                         </Avatar>
                         <Box>
-                          <Typography variant="body1" sx={{ fontWeight: 500, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                          <Typography
+                            variant="body1"
+                            sx={{ fontWeight: 500, fontSize: { xs: '0.875rem', sm: '1rem' } }}
+                          >
                             {task.task_name}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                          >
                             {task.stock_codes?.length || 0} 只股票
                           </Typography>
                         </Box>
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: { xs: 6, sm: 0 } }}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: { xs: 6, sm: 0 } }}
+                      >
                         <Chip
                           label={getTaskStatusText(task.status)}
                           color={getTaskStatusColor(task.status)}

@@ -4,12 +4,7 @@
 
 import React from 'react';
 import { Box, Card, CardContent, Typography } from '@mui/material';
-import {
-  Target,
-  TrendingUp,
-  Award,
-  TrendingDown,
-} from 'lucide-react';
+import { Target, TrendingUp, Award, TrendingDown } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/utils/backtest/formatters';
 
 interface StatisticsCardsProps {
@@ -41,7 +36,14 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
               <Typography variant="caption" color="text.secondary">
                 持仓股票
               </Typography>
-              <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: { xs: '1.25rem', md: '1.5rem' },
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+              >
                 {statistics.totalStocks}
               </Typography>
             </Box>
@@ -57,7 +59,15 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
               <Typography variant="caption" color="text.secondary">
                 盈利股票
               </Typography>
-              <Typography sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.25rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  color: 'success.main',
+                  fontSize: { xs: '1.25rem', md: '1.5rem' },
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+              >
                 {statistics.profitableStocks}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -76,7 +86,14 @@ export const StatisticsCards: React.FC<StatisticsCardsProps> = ({ statistics }) 
               <Typography variant="caption" color="text.secondary">
                 平均胜率
               </Typography>
-              <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: { xs: '1.25rem', md: '1.5rem' },
+                  overflow: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+              >
                 {formatPercent(statistics.avgWinRate)}
               </Typography>
             </Box>

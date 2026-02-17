@@ -2,12 +2,11 @@
 系统性能优化器
 优化特征计算性能和数据库查询效率
 """
-import asyncio
 import gc
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List
 
 import psutil
 from loguru import logger

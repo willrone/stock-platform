@@ -6,8 +6,8 @@
 """
 
 import math
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from abc import abstractmethod
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -33,7 +33,6 @@ except ImportError:
 
 # 检测Qlib可用性
 try:
-    import qlib
     from qlib.model.base import Model
 
     QLIB_AVAILABLE = True
@@ -67,7 +66,6 @@ class BaseCustomModel(Model):
     @abstractmethod
     def _build_model(self, input_dim: int, seq_len: int) -> "nn.Module":
         """构建模型"""
-        pass
 
     def _prepare_data(
         self, dataset: pd.DataFrame

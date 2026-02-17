@@ -64,10 +64,9 @@ class PurgedGroupTimeSeriesSplit:
         self.embargo_days = cfg.embargo_days
 
     def split(
-        self, data: pd.DataFrame,
-    ) -> Generator[
-        Tuple[pd.DataFrame, pd.DataFrame], None, None,
-    ]:
+        self,
+        data: pd.DataFrame,
+    ) -> Generator[Tuple[pd.DataFrame, pd.DataFrame], None, None,]:
         """
         生成 purged 时间序列分割
 
@@ -84,7 +83,11 @@ class PurgedGroupTimeSeriesSplit:
             boundaries,
         ):
             train_df, val_df = _select_by_index_range(
-                data, dates, t_end, v_start, v_end,
+                data,
+                dates,
+                t_end,
+                v_start,
+                v_end,
             )
             if train_df.empty or val_df.empty:
                 logger.warning(
@@ -93,14 +96,21 @@ class PurgedGroupTimeSeriesSplit:
                 continue
 
             _log_fold_info(
-                fold_idx, train_df, val_df, dates,
-                t_end, v_start, v_end,
-                self.purge_days, self.embargo_days,
+                fold_idx,
+                train_df,
+                val_df,
+                dates,
+                t_end,
+                v_start,
+                v_end,
+                self.purge_days,
+                self.embargo_days,
             )
             yield train_df, val_df
 
     def _compute_fold_boundaries(
-        self, dates: np.ndarray,
+        self,
+        dates: np.ndarray,
     ) -> List[Tuple[int, int, int]]:
         """计算每折的边界索引"""
         n_dates = len(dates)
@@ -109,8 +119,7 @@ class PurgedGroupTimeSeriesSplit:
 
         if fold_size <= gap:
             raise ValueError(
-                f"数据量不足: 每折 {fold_size} 天, "
-                f"purge+embargo = {gap} 天",
+                f"数据量不足: 每折 {fold_size} 天, " f"purge+embargo = {gap} 天",
             )
 
         boundaries: List[Tuple[int, int, int]] = []
@@ -218,7 +227,6 @@ def select_best_fold_split(
         )
 
     logger.info(
-        f"PurgedCV 最后一折: 训练集 {len(last_train)} 条, "
-        f"验证集 {len(last_val)} 条",
+        f"PurgedCV 最后一折: 训练集 {len(last_train)} 条, " f"验证集 {len(last_val)} 条",
     )
     return last_train, last_val

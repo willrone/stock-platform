@@ -194,7 +194,7 @@ export function PortfolioStrategyResults({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(props: any) => {
+                  label={(props: { name: string; percent?: number }) => {
                     const { name, percent } = props;
                     return `${name}: ${((percent || 0) * 100).toFixed(1)}%`;
                   }}
@@ -272,7 +272,15 @@ export function PortfolioStrategyResults({
                   <Typography variant="caption" color="text.secondary">
                     总收益率
                   </Typography>
-                  <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, color: 'success.main', overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontSize: { xs: '0.875rem', md: '1.25rem' },
+                      fontWeight: 600,
+                      color: 'success.main',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {(backtestData.portfolio.total_return * 100).toFixed(2)}%
                   </Typography>
                 </Paper>
@@ -282,7 +290,15 @@ export function PortfolioStrategyResults({
                   <Typography variant="caption" color="text.secondary">
                     年化收益率
                   </Typography>
-                  <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, color: 'success.main', overflow: 'hidden', wordBreak: 'break-word' }}>
+                  <Typography
+                    sx={{
+                      fontSize: { xs: '0.875rem', md: '1.25rem' },
+                      fontWeight: 600,
+                      color: 'success.main',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {(backtestData.portfolio.annualized_return * 100).toFixed(2)}%
                   </Typography>
                 </Paper>
@@ -294,7 +310,14 @@ export function PortfolioStrategyResults({
                       <Typography variant="caption" color="text.secondary">
                         夏普比率
                       </Typography>
-                      <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, overflow: 'hidden', wordBreak: 'break-word' }}>
+                      <Typography
+                        sx={{
+                          fontSize: { xs: '0.875rem', md: '1.25rem' },
+                          fontWeight: 600,
+                          overflow: 'hidden',
+                          wordBreak: 'break-word',
+                        }}
+                      >
                         {backtestData.risk_metrics.sharpe_ratio.toFixed(2)}
                       </Typography>
                     </Paper>
@@ -304,7 +327,15 @@ export function PortfolioStrategyResults({
                       <Typography variant="caption" color="text.secondary">
                         最大回撤
                       </Typography>
-                      <Typography sx={{ fontSize: { xs: '0.875rem', md: '1.25rem' }, fontWeight: 600, color: 'error.main', overflow: 'hidden', wordBreak: 'break-word' }}>
+                      <Typography
+                        sx={{
+                          fontSize: { xs: '0.875rem', md: '1.25rem' },
+                          fontWeight: 600,
+                          color: 'error.main',
+                          overflow: 'hidden',
+                          wordBreak: 'break-word',
+                        }}
+                      >
                         {(backtestData.risk_metrics.max_drawdown * 100).toFixed(2)}%
                       </Typography>
                     </Paper>

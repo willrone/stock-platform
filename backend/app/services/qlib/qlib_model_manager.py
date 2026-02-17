@@ -9,15 +9,13 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Union
 
 from loguru import logger
 
 # 检测可用的深度学习框架
 try:
-    import torch
-    import torch.nn as nn
+    pass
 
     PYTORCH_AVAILABLE = True
 except ImportError:
@@ -25,7 +23,7 @@ except ImportError:
     logger.warning("PyTorch不可用，深度学习模型将不可用")
 
 try:
-    import qlib
+    pass
 
     QLIB_AVAILABLE = True
 except ImportError:
@@ -92,22 +90,18 @@ class BaseModelAdapter(ABC):
     @abstractmethod
     def get_metadata(self) -> ModelMetadata:
         """获取模型元数据"""
-        pass
 
     @abstractmethod
     def get_hyperparameter_specs(self) -> List[HyperparameterSpec]:
         """获取超参数规格"""
-        pass
 
     @abstractmethod
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
         """创建Qlib配置"""
-        pass
 
     @abstractmethod
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
-        pass
 
 
 class LightGBMAdapter(BaseModelAdapter):
@@ -216,10 +210,12 @@ class LightGBMAdapter(BaseModelAdapter):
                 "max_depth": hyperparameters.get("max_depth", 8),
                 "min_data_in_leaf": hyperparameters.get("min_data_in_leaf", 20),
                 "feature_fraction": hyperparameters.get(
-                    "feature_fraction", 0.8879,
+                    "feature_fraction",
+                    0.8879,
                 ),
                 "bagging_fraction": hyperparameters.get(
-                    "bagging_fraction", 0.8789,
+                    "bagging_fraction",
+                    0.8789,
                 ),
                 "lambda_l1": hyperparameters.get("lambda_l1", 0.1),
                 "lambda_l2": hyperparameters.get("lambda_l2", 0.1),

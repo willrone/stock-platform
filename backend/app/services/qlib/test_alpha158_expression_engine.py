@@ -260,7 +260,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
             f"真实数据测试：所有158个因子都应该能计算出来，但失败了{fail_count}个。失败的因子: {zero_cols}",
         )
 
-        print(f"\n真实数据测试统计:")
+        print("\n真实数据测试统计:")
         print(f"  数据形状: {data.shape}")
         print(f"  总因子数: {len(factors.columns)}")
         print(f"  成功因子数: {len(factors.columns) - fail_count}")

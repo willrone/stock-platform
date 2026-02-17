@@ -29,9 +29,9 @@ class LoadedModelPair:
 
     lgb_model: Any
     xgb_model: Any
-    model_type: str          # "legacy" | "unified"
-    feature_set: str         # "alpha158" | "technical_62" | "custom"
-    label_type: str          # "regression" | "binary"
+    model_type: str  # "legacy" | "unified"
+    feature_set: str  # "alpha158" | "technical_62" | "custom"
+    label_type: str  # "regression" | "binary"
     binary_threshold: float  # 仅 binary 模式有意义
 
 
@@ -55,7 +55,9 @@ def load_model_pair(
 
     if lgb_model_id or xgb_model_id:
         return _load_unified_models(
-            model_dir, lgb_model_id, xgb_model_id,
+            model_dir,
+            lgb_model_id,
+            xgb_model_id,
         )
     return _load_legacy_models(model_dir)
 
@@ -102,10 +104,7 @@ def _load_unified_models(
     label_type = metadata.get("label_type", DEFAULT_LABEL_TYPE)
     binary_threshold = metadata.get("binary_threshold", 0.003)
 
-    _logger.info(
-        f"统一引擎模型加载完成: feature_set={feature_set}, "
-        f"label_type={label_type}"
-    )
+    _logger.info(f"统一引擎模型加载完成: feature_set={feature_set}, " f"label_type={label_type}")
     return LoadedModelPair(
         lgb_model=lgb_model,
         xgb_model=xgb_model,
@@ -117,7 +116,9 @@ def _load_unified_models(
 
 
 def _load_single_unified(
-    model_dir: Path, model_id: Optional[str], label: str,
+    model_dir: Path,
+    model_id: Optional[str],
+    label: str,
 ) -> Optional[tuple]:
     """加载单个统一引擎模型，返回 (booster, metadata_dict)"""
     if not model_id:

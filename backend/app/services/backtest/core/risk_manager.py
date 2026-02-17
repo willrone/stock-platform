@@ -41,7 +41,8 @@ class RiskManager:
         self.circuit_breaker_events: List[CircuitBreakerEvent] = []
 
     def check_stop_loss_take_profit(
-        self, positions_with_prices: Dict[str, "PositionPriceInfo"],
+        self,
+        positions_with_prices: Dict[str, "PositionPriceInfo"],
     ) -> List[TradingSignal]:
         """
         检查所有持仓的止损止盈条件
@@ -64,7 +65,10 @@ class RiskManager:
         signals: List[TradingSignal] = []
         for code, info in positions_with_prices.items():
             signal = self._check_single_position(
-                code, info, sl_enabled, tp_enabled,
+                code,
+                info,
+                sl_enabled,
+                tp_enabled,
             )
             if signal is not None:
                 signals.append(signal)
@@ -90,9 +94,7 @@ class RiskManager:
                 f"触发止损: {stock_code}, "
                 f"亏损={pnl_ratio:.2%}, 阈值={-self.config.stop_loss_pct:.2%}"
             )
-            return _build_sell_signal(
-                stock_code, info, f"止损触发(亏损{pnl_ratio:.2%})"
-            )
+            return _build_sell_signal(stock_code, info, f"止损触发(亏损{pnl_ratio:.2%})")
 
         # 止盈检查（浮盈达到阈值）
         if tp_enabled and pnl_ratio >= self.config.take_profit_pct:
@@ -100,14 +102,14 @@ class RiskManager:
                 f"触发止盈: {stock_code}, "
                 f"盈利={pnl_ratio:.2%}, 阈值={self.config.take_profit_pct:.2%}"
             )
-            return _build_sell_signal(
-                stock_code, info, f"止盈触发(盈利{pnl_ratio:.2%})"
-            )
+            return _build_sell_signal(stock_code, info, f"止盈触发(盈利{pnl_ratio:.2%})")
 
         return None
 
     def update_circuit_breaker(
-        self, portfolio_value: float, current_date: datetime,
+        self,
+        portfolio_value: float,
+        current_date: datetime,
     ) -> None:
         """
         更新最大回撤熔断状态
@@ -125,7 +127,8 @@ class RiskManager:
             self.peak_portfolio_value = portfolio_value
 
         drawdown = _calculate_drawdown(
-            portfolio_value, self.peak_portfolio_value,
+            portfolio_value,
+            self.peak_portfolio_value,
         )
 
         if self.circuit_breaker_active:
@@ -134,7 +137,10 @@ class RiskManager:
             self._check_trigger(drawdown, portfolio_value, current_date)
 
     def _check_trigger(
-        self, drawdown: float, value: float, date: datetime,
+        self,
+        drawdown: float,
+        value: float,
+        date: datetime,
     ) -> None:
         """检查是否触发熔断"""
         if drawdown >= self.config.max_drawdown_pct:
@@ -148,12 +154,14 @@ class RiskManager:
             )
             self.circuit_breaker_events.append(event)
             logger.warning(
-                f"熔断触发: 回撤={drawdown:.2%}, "
-                f"阈值={self.config.max_drawdown_pct:.2%}"
+                f"熔断触发: 回撤={drawdown:.2%}, " f"阈值={self.config.max_drawdown_pct:.2%}"
             )
 
     def _check_recovery(
-        self, drawdown: float, value: float, date: datetime,
+        self,
+        drawdown: float,
+        value: float,
+        date: datetime,
     ) -> None:
         """检查是否恢复开仓"""
         recovery_threshold = (
@@ -169,13 +177,11 @@ class RiskManager:
                 peak_value=self.peak_portfolio_value,
             )
             self.circuit_breaker_events.append(event)
-            logger.info(
-                f"熔断恢复: 回撤={drawdown:.2%}, "
-                f"恢复阈值={recovery_threshold:.2%}"
-            )
+            logger.info(f"熔断恢复: 回撤={drawdown:.2%}, " f"恢复阈值={recovery_threshold:.2%}")
 
     def filter_signals_by_circuit_breaker(
-        self, signals: List[TradingSignal],
+        self,
+        signals: List[TradingSignal],
     ) -> List[TradingSignal]:
         """
         熔断时过滤掉 BUY 信号，保留 SELL 信号
@@ -198,12 +204,10 @@ class RiskManager:
     def get_circuit_breaker_summary(self) -> Dict:
         """获取熔断统计摘要"""
         triggered = [
-            e for e in self.circuit_breaker_events
-            if e.event_type == "triggered"
+            e for e in self.circuit_breaker_events if e.event_type == "triggered"
         ]
         recovered = [
-            e for e in self.circuit_breaker_events
-            if e.event_type == "recovered"
+            e for e in self.circuit_breaker_events if e.event_type == "recovered"
         ]
         return {
             "total_triggers": len(triggered),
@@ -247,7 +251,9 @@ def _calculate_drawdown(current: float, peak: float) -> float:
 
 
 def _build_sell_signal(
-    stock_code: str, info: "PositionPriceInfo", reason: str,
+    stock_code: str,
+    info: "PositionPriceInfo",
+    reason: str,
 ) -> TradingSignal:
     """构建止损/止盈卖出信号"""
     return TradingSignal(

@@ -124,9 +124,9 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
       setTotalCount(tradesResponse.pagination.count);
       setTotalPages(Math.ceil(tradesResponse.pagination.count / itemsPerPage));
       setStatistics(statsResponse);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('获取交易记录失败:', err);
-      setError(err.message || '获取交易记录失败');
+      setError(err instanceof Error ? err.message : '获取交易记录失败');
     } finally {
       setLoading(false);
     }
@@ -225,7 +225,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
       link.href = URL.createObjectURL(blob);
       link.download = `交易记录_${taskId}_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('导出交易记录失败:', err);
     }
   };
@@ -311,7 +311,10 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     总交易次数
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' } }}
+                  >
                     {statistics.total_trades}
                   </Typography>
                 </Box>
@@ -327,7 +330,14 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     胜率
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'success.main',
+                      fontSize: { xs: '1.1rem', md: '1.5rem' },
+                    }}
+                  >
                     {formatPercent(statistics.win_rate)}
                   </Typography>
                 </Box>
@@ -343,7 +353,10 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     盈亏比
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' } }}
+                  >
                     {(statistics.profit_factor ?? 0).toFixed(2)}
                   </Typography>
                 </Box>
@@ -424,7 +437,15 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
       <Card>
         <CardContent sx={{ p: { xs: 1, md: 2 } }}>
           <Box sx={{ overflowX: 'auto', maxHeight: 600 }}>
-            <Table stickyHeader sx={{ '& .MuiTableCell-root': { padding: { xs: '4px 8px', md: '16px' }, fontSize: { xs: '0.75rem', md: '0.875rem' } } }}>
+            <Table
+              stickyHeader
+              sx={{
+                '& .MuiTableCell-root': {
+                  padding: { xs: '4px 8px', md: '16px' },
+                  fontSize: { xs: '0.75rem', md: '0.875rem' },
+                },
+              }}
+            >
               <TableHead>
                 <TableRow>
                   <TableCell>
@@ -607,7 +628,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
               <Select
                 value={filters.action}
                 label="操作类型"
-                onChange={e => handleFilterChange('action', e.target.value as any)}
+                onChange={e => handleFilterChange('action', e.target.value as string)}
               >
                 <MenuItem value="ALL">全部</MenuItem>
                 <MenuItem value="BUY">买入</MenuItem>

@@ -2,12 +2,10 @@
 策略配置数据模型
 """
 
-import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, Column, DateTime, String, Text
 
 from app.core.database import Base
 

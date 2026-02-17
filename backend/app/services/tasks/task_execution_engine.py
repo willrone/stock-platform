@@ -3,27 +3,20 @@
 """
 
 import asyncio
-import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
-from app.core.logging_config import PerformanceLogger, set_log_context
-from app.models.task_models import (
-    BacktestTaskConfig,
-    PredictionTaskConfig,
-    TaskStatus,
-    TaskType,
-    TrainingTaskConfig,
-)
+from app.core.logging_config import set_log_context
+from app.models.task_models import TaskStatus, TaskType
 from app.repositories.task_repository import PredictionResultRepository, TaskRepository
 from app.services.prediction import PredictionConfig, PredictionEngine
 
-from .task_queue import QueuedTask, TaskExecutionContext, TaskPriority
+from .task_queue import QueuedTask, TaskExecutionContext
 
 
 @dataclass
@@ -351,7 +344,9 @@ class BacktestTaskExecutor:
                     initial_cash=initial_cash,
                     commission_rate=strategy_config.get("commission_rate", 0.0003),
                     slippage_rate=strategy_config.get("slippage_rate", 0.0001),
-                    enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
+                    enable_unlimited_buy=strategy_config.get(
+                        "enable_unlimited_buy", False
+                    ),
                 )
 
                 # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）
@@ -519,8 +514,9 @@ class BacktestTaskExecutor:
     ) -> None:
         """将交易记录写入 trade_records 表（供前端详细页面使用）"""
         try:
-            from app.models.backtest_detailed_models import TradeRecord
             from uuid import uuid4
+
+            from app.models.backtest_detailed_models import TradeRecord
 
             trade_history = backtest_report.get("trade_history", [])
             if not trade_history:
@@ -535,10 +531,12 @@ class BacktestTaskExecutor:
                 timestamp = trade.get("timestamp")
                 if isinstance(timestamp, str):
                     try:
-                        timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        timestamp = datetime.fromisoformat(
+                            timestamp.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         timestamp = datetime.utcnow()
-                elif hasattr(timestamp, 'to_pydatetime'):
+                elif hasattr(timestamp, "to_pydatetime"):
                     # pandas Timestamp 转换为 Python datetime
                     timestamp = timestamp.to_pydatetime()
                 elif not isinstance(timestamp, datetime):
@@ -548,7 +546,9 @@ class BacktestTaskExecutor:
                     task_id=task_id,
                     backtest_id=backtest_id,
                     trade_id=f"trade_{task_id[:8]}_{idx:06d}",
-                    stock_code=trade.get("stock_code", stock_codes[0] if stock_codes else "UNKNOWN"),
+                    stock_code=trade.get(
+                        "stock_code", stock_codes[0] if stock_codes else "UNKNOWN"
+                    ),
                     stock_name=trade.get("stock_name"),
                     action=trade.get("action", "BUY"),
                     quantity=trade.get("quantity", 0),
@@ -908,7 +908,7 @@ class QlibPrecomputeTaskExecutor:
     def execute(self, queued_task: QueuedTask, context: TaskExecutionContext):
         """执行Qlib预计算任务"""
         # 确保在独立进程中类型可用
-        from typing import Any, Dict, Optional
+        from typing import Any, Dict
 
         task_id = queued_task.task_id
 

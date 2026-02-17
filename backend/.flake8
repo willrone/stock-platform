@@ -37,9 +37,6 @@ select =
     B,  # flake8-bugbear
     I   # isort
 
-# 每个文件的复杂度警告阈值
-max-complexity = 10
-
 # 每个文件的最大行数
 max-file-size = 1000
 

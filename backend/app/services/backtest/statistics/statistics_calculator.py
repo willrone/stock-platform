@@ -5,12 +5,10 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from sqlalchemy import and_, case, distinct, func, select
+from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import func as sql_func
 
 from app.models.backtest_detailed_models import (
     BacktestStatistics,
@@ -187,7 +185,7 @@ class StatisticsCalculator:
                 and_(base_where, SignalRecord.signal_type == "SELL")
             )
             executed_stmt = select(func.count(SignalRecord.id)).where(
-                and_(base_where, SignalRecord.executed == True)
+                and_(base_where, SignalRecord.executed == True)  # noqa: E712
             )
             avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(
                 base_where

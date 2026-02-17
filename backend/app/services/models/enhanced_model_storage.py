@@ -9,21 +9,15 @@
 - 性能对比分析
 """
 
-import asyncio
-import json
-import os
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
-from sqlalchemy import and_, desc, func, or_, select, update
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...core.config import settings
 from ...core.database import get_async_session as get_db
-from ...models.task_models import ModelInfo, ModelLifecycleEvent
+from ...models.task_models import ModelInfo
 from .lineage_tracker import lineage_tracker
 from .model_lifecycle_manager import ModelStatus, model_lifecycle_manager
 

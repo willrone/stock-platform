@@ -145,7 +145,7 @@ export default function TradingViewChart({
       // 转换数据格式
       // DataService.getStockData 返回格式: { stock_code, data: [...], last_updated }
       // 其中 data 字段已经是后端返回的数据数组
-      const dataArray: any[] = Array.isArray(response?.data) ? response.data : [];
+      const dataArray: Record<string, unknown>[] = Array.isArray(response?.data) ? response.data : [];
 
       console.log(`[TradingViewChart] 解析后的数据数组长度: ${dataArray.length}`, {
         responseType: typeof response,
@@ -157,8 +157,8 @@ export default function TradingViewChart({
 
       if (dataArray.length > 0) {
         let formattedData: PriceData[] = dataArray
-          .map((item: any) => ({
-            time: item.date ? item.date.split('T')[0] : item.date, // 只取日期部分
+          .map((item: Record<string, unknown>) => ({
+            time: item.date ? (item.date as string).split('T')[0] : (item.date as string), // 只取日期部分
             open: Number(item.open) || 0,
             high: Number(item.high) || 0,
             low: Number(item.low) || 0,
@@ -241,13 +241,13 @@ export default function TradingViewChart({
         });
         setPriceData([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[TradingViewChart] 获取股票数据失败:', error);
       console.error('[TradingViewChart] 错误详情:', {
-        message: error?.message,
-        stack: error?.stack,
-        response: error?.response,
-        status: error?.status,
+        message: error instanceof Error ? error.message : undefined,
+        stack: error instanceof Error ? error.stack : undefined,
+        response: (error as Record<string, unknown>)?.response,
+        status: (error as Record<string, unknown>)?.status,
       });
       setPriceData([]);
       // 可以在这里添加用户友好的错误提示
@@ -323,7 +323,7 @@ export default function TradingViewChart({
     }
 
     // 合并交易标记和信号标记
-    const allMarkers: any[] = [];
+    const allMarkers: { time: string; position: SeriesMarkerPosition; color: string; shape: SeriesMarkerShape; text: string; size?: number }[] = [];
 
     // 为多策略信号准备颜色映射（按 strategy_name / strategy_id）
     // 常用策略固定颜色映射（保证视觉一致性和易于识别）
@@ -532,7 +532,7 @@ export default function TradingViewChart({
         color: '#2962FF',
         lineWidth: 2,
       });
-      candlestickSeriesRef.current = lineSeries as any;
+      candlestickSeriesRef.current = lineSeries as unknown as ISeriesApi<'Candlestick'>;
     }
 
     // 添加成交量系列
@@ -628,12 +628,29 @@ export default function TradingViewChart({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1, mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: 1,
+            mb: 2,
+          }}
+        >
           <Box>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}
+            >
               {stockCode} 价格走势
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+            >
               当前价格: ¥
               {priceData.length > 0 ? priceData[priceData.length - 1]?.close.toFixed(2) : '--'}
             </Typography>
@@ -745,7 +762,10 @@ export default function TradingViewChart({
             </Box>
           )}
           <Box sx={{ overflowX: 'auto' }}>
-            <Box ref={chartContainerRef} sx={{ height: `${height}px`, width: '100%', minWidth: 350 }} />
+            <Box
+              ref={chartContainerRef}
+              sx={{ height: `${height}px`, width: '100%', minWidth: 350 }}
+            />
           </Box>
         </Box>
       </CardContent>
