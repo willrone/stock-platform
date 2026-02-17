@@ -10,7 +10,7 @@ export interface TrainingProgressData {
   progress: number;
   stage: string;
   message?: string;
-  metrics?: Record<string, any>;
+  metrics?: Record<string, unknown>;
   timestamp: string;
 }
 

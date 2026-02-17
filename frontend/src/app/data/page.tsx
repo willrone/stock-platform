@@ -220,7 +220,7 @@ export default function DataManagementPage() {
       }
     };
 
-    const handleTaskCompleted = (data: { task_id: string; results: any }) => {
+    const handleTaskCompleted = (data: { task_id: string; results: Record<string, unknown> }) => {
       if (data.task_id === precomputeTask.task_id) {
         setPrecomputeTask(prev =>
           prev

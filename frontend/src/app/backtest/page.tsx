@@ -117,7 +117,7 @@ export default function BacktestPage() {
       updateTask(data.task_id, {
         status: 'completed',
         progress: 100,
-        results: data.results,
+        results: data.results as Task['results'],
         completed_at: new Date().toISOString(),
       });
     };

@@ -37,12 +37,13 @@ import {
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TaskService } from '../../services/taskService';
+import { Task } from '../../stores/useTaskStore';
 
 export default function DashboardPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [recentTasks, setRecentTasks] = useState<any[]>([]);
+  const [recentTasks, setRecentTasks] = useState<Task[]>([]);
   const [systemStats, setSystemStats] = useState({
     totalTasks: 0,
     runningTasks: 0,

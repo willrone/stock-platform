@@ -11,7 +11,7 @@ export interface BacktestProgressStage {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   start_time?: string;
   end_time?: string;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
 }
 
 export interface BacktestProgressData {
@@ -45,7 +45,7 @@ export interface BacktestErrorData {
 export interface BacktestCompletionData {
   type: 'backtest_completed';
   task_id: string;
-  results: Record<string, any>;
+  results: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -61,7 +61,7 @@ export type BacktestWebSocketMessage =
   | BacktestErrorData
   | BacktestCompletionData
   | BacktestCancellationData
-  | { type: 'connection_established' | 'pong' | 'error' | 'no_progress_data'; [key: string]: any };
+  | { type: 'connection_established' | 'pong' | 'error' | 'no_progress_data'; [key: string]: unknown };
 
 export type ProgressCallback = (data: BacktestProgressData) => void;
 export type ErrorCallback = (error: BacktestErrorData) => void;
@@ -256,7 +256,7 @@ export class BacktestProgressWebSocket {
   /**
    * 发送消息
    */
-  private sendMessage(message: Record<string, any>): void {
+  private sendMessage(message: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
