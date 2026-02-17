@@ -6,8 +6,16 @@ import React from 'react';
 import { Box, Card, CardHeader, CardContent, Typography } from '@mui/material';
 import { useECharts } from '@/hooks/backtest/useECharts';
 
+interface HoldingPeriodData {
+  avg_holding_period: number;
+  median_holding_period: number;
+  short_term_positions: number;
+  medium_term_positions: number;
+  long_term_positions: number;
+}
+
 interface HoldingPeriodChartProps {
-  holdingPeriods: any;
+  holdingPeriods: HoldingPeriodData;
   isActive: boolean;
 }
 

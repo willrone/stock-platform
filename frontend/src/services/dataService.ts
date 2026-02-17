@@ -395,7 +395,7 @@ export class DataService {
   > {
     const resp = await apiRequest.get<unknown>('/backtest/strategies');
     // 后端返回的是 { key, name, ... } 数组
-    return Array.isArray(resp) ? resp : resp ?? [];
+    return Array.isArray(resp) ? resp : (resp as Array<{ key: string; name: string; description?: string; category?: string; parameters?: Record<string, unknown> }>) ?? [];
   }
 
   /**
@@ -407,7 +407,7 @@ export class DataService {
     source?: 'local' | 'remote';
     limit?: number;
     offset?: number;
-    strategy_config?: Record<string, any>;
+    strategy_config?: Record<string, unknown>;
   }): Promise<LatestSignalsResponse> {
     const { strategy_config, ...rest } = params;
     return apiRequest.get<LatestSignalsResponse>('/signals/latest', {

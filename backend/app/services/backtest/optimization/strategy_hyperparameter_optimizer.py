@@ -777,7 +777,7 @@ class StrategyHyperparameterOptimizer:
                                         and math.isfinite(f)
                                         and math.isfinite(last_val)
                                     ):
-                                        mrets.append(l / f - 1.0)
+                                        mrets.append(last_val / f - 1.0)
 
                                 if mrets:
                                     pos_month_ratio = sum(
@@ -1284,9 +1284,9 @@ class StrategyHyperparameterOptimizer:
                 rets = []
                 for m in sorted(last.keys()):
                     f = first.get(m)
-                    l = last.get(m)
-                    if f and f != 0 and math.isfinite(f) and math.isfinite(l):
-                        rets.append(l / f - 1.0)
+                    last_val = last.get(m)
+                    if f and f != 0 and math.isfinite(f) and math.isfinite(last_val):
+                        rets.append(last_val / f - 1.0)
                 return rets
 
             if history and isinstance(history, list) and len(history) >= 10:

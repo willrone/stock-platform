@@ -6,8 +6,27 @@ import React from 'react';
 import { Box, Card, CardHeader, CardContent, Typography } from '@mui/material';
 import { useECharts } from '@/hooks/backtest/useECharts';
 
+interface MonthlyDistribution {
+  month: number;
+  count: number;
+}
+
+interface TradingPatternData {
+  time_patterns?: {
+    monthly_distribution?: MonthlyDistribution[];
+  };
+  size_patterns?: {
+    avg_trade_size: number;
+    total_volume: number;
+  };
+  frequency_patterns?: {
+    avg_interval_days: number;
+    avg_monthly_trades: number;
+  };
+}
+
 interface TradingPatternChartProps {
-  tradingPatterns: any;
+  tradingPatterns: TradingPatternData;
   isActive: boolean;
 }
 
@@ -34,7 +53,7 @@ export const TradingPatternChart: React.FC<TradingPatternChartProps> = ({
       },
       xAxis: {
         type: 'category',
-        data: patterns.time_patterns?.monthly_distribution?.map((m: any) => `${m.month}月`) || [],
+        data: patterns.time_patterns?.monthly_distribution?.map((m: MonthlyDistribution) => `${m.month}月`) || [],
       },
       yAxis: {
         type: 'value',
@@ -43,7 +62,7 @@ export const TradingPatternChart: React.FC<TradingPatternChartProps> = ({
         {
           name: '交易次数',
           type: 'bar',
-          data: patterns.time_patterns?.monthly_distribution?.map((m: any) => m.count) || [],
+          data: patterns.time_patterns?.monthly_distribution?.map((m: MonthlyDistribution) => m.count) || [],
           itemStyle: {
             color: '#3b82f6',
           },

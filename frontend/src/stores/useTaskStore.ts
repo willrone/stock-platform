@@ -22,29 +22,29 @@ export interface Task {
   created_at: string;
   completed_at?: string;
   error_message?: string;
-  result?: any; // 添加原始结果字段
-  backtest_results?: any; // 添加顶层回测结果字段
+  result?: Record<string, unknown>; // 添加原始结果字段
+  backtest_results?: Record<string, unknown>; // 添加顶层回测结果字段
   config?: {
     backtest_config?: {
       strategy_name?: string;
-      strategy_config?: Record<string, any>;
+      strategy_config?: Record<string, unknown>;
       start_date?: string;
       end_date?: string;
       initial_cash?: number;
       commission_rate?: number;
       slippage_rate?: number;
     };
-    prediction_config?: any;
-    optimization_config?: any;
+    prediction_config?: Record<string, unknown>;
+    optimization_config?: Record<string, unknown>;
     stock_codes?: string[];
     model_id?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   results?: {
     total_stocks: number;
     successful_predictions: number;
     average_confidence: number;
-    backtest_results?: any;
+    backtest_results?: Record<string, unknown>;
     predictions: Array<{
       stock_code: string;
       predicted_direction: number;

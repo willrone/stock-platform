@@ -31,9 +31,9 @@ export const CapitalChart: React.FC<CapitalChartProps> = ({ data, loading, isAct
       },
       tooltip: {
         trigger: 'axis',
-        formatter: function (params: any) {
+        formatter: function (params: { axisValue: string; marker: string; seriesName: string; value: number }[]) {
           let result = `${params[0].axisValue}<br/>`;
-          params.forEach((param: any) => {
+          params.forEach((param: { marker: string; seriesName: string; value: number }) => {
             result += `${param.marker}${param.seriesName}: ¥${param.value.toLocaleString('zh-CN', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,

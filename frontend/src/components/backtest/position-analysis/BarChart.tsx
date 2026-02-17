@@ -82,7 +82,7 @@ export const BarChart: React.FC<BarChartProps> = ({
         axisPointer: {
           type: 'shadow',
         },
-        formatter: function (params: any) {
+        formatter: function (params: { name: string; value: number }[]) {
           const param = params[0];
           const value = param.value;
 
@@ -105,7 +105,7 @@ export const BarChart: React.FC<BarChartProps> = ({
       },
       xAxis: {
         type: 'category',
-        data: chartData.map((item: any) => item.stock_code),
+        data: chartData.map((item: { stock_code: string }) => item.stock_code),
         axisLabel: {
           rotate: 45,
         },

@@ -13,16 +13,16 @@ export interface WebSocketEvents {
   // 任务相关事件
   'task:created': (data: { task_id: string; task_name: string }) => void;
   'task:progress': (data: { task_id: string; progress: number; status: string }) => void;
-  'task:completed': (data: { task_id: string; results: any }) => void;
+  'task:completed': (data: { task_id: string; results: Record<string, unknown> }) => void;
   'task:failed': (data: { task_id: string; error: string }) => void;
 
   // 系统状态事件
-  'system:status': (data: any) => void;
+  'system:status': (data: Record<string, unknown>) => void;
   'system:alert': (data: { level: 'info' | 'warning' | 'error'; message: string }) => void;
 
   // 数据更新事件
   'data:updated': (data: { stock_code: string; timestamp: string }) => void;
-  'prediction:result': (data: { prediction_id: string; results: any }) => void;
+  'prediction:result': (data: { prediction_id: string; results: Record<string, unknown> }) => void;
 }
 
 // WebSocket管理类
@@ -31,7 +31,7 @@ export class WebSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private eventHandlers: Map<string, Function[]> = new Map();
+  private eventHandlers: Map<string, ((...args: unknown[]) => void)[]> = new Map();
 
   constructor() {
     this.connect();
@@ -116,7 +116,7 @@ export class WebSocketService {
   /**
    * 处理接收到的消息
    */
-  private handleMessage(data: any): void {
+  private handleMessage(data: Record<string, unknown>): void {
     const { type } = data;
 
     switch (type) {
@@ -220,7 +220,7 @@ export class WebSocketService {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, []);
     }
-    this.eventHandlers.get(event)!.push(handler);
+    this.eventHandlers.get(event)!.push(handler as (...args: unknown[]) => void);
   }
 
   /**
@@ -229,7 +229,7 @@ export class WebSocketService {
   public off<K extends keyof WebSocketEvents>(event: K, handler: WebSocketEvents[K]): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
-      const index = handlers.indexOf(handler);
+      const index = handlers.indexOf(handler as (...args: unknown[]) => void);
       if (index > -1) {
         handlers.splice(index, 1);
       }
@@ -239,7 +239,7 @@ export class WebSocketService {
   /**
    * 触发事件
    */
-  private emit(event: string, data: any): void {
+  private emit(event: string, data: Record<string, unknown>): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.forEach(handler => {
@@ -255,7 +255,7 @@ export class WebSocketService {
   /**
    * 发送消息到服务器
    */
-  public send(event: string, data?: any): void {
+  public send(event: string, data?: Record<string, unknown>): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       const message = {
         type: event,

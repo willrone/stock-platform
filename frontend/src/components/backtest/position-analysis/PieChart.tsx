@@ -25,9 +25,9 @@ export const PieChart: React.FC<PieChartProps> = ({ data, isActive }) => {
       },
       tooltip: {
         trigger: 'item',
-        formatter: function (params: any) {
+        formatter: function (params: { name: string; value: number; data: { originalValue: number } }) {
           const percentage = (
-            (params.value / chartData.reduce((sum: number, item: any) => sum + item.value, 0)) *
+            (params.value / chartData.reduce((sum: number, item: { value: number }) => sum + item.value, 0)) *
             100
           ).toFixed(1);
           return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(
@@ -38,7 +38,7 @@ export const PieChart: React.FC<PieChartProps> = ({ data, isActive }) => {
       legend: {
         orient: 'vertical',
         left: 'left',
-        data: chartData.map((item: any) => item.name),
+        data: chartData.map((item: { name: string }) => item.name),
       },
       series: [
         {

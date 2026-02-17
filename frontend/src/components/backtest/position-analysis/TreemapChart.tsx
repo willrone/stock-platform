@@ -30,9 +30,9 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ data, isActive }) =>
       },
       tooltip: {
         trigger: 'item',
-        formatter: function (params: any) {
+        formatter: function (params: { name: string; value: number; data: { originalValue: number } }) {
           const percentage = (
-            (params.value / chartData.reduce((sum: number, item: any) => sum + item.value, 0)) *
+            (params.value / chartData.reduce((sum: number, item: { value: number }) => sum + item.value, 0)) *
             100
           ).toFixed(1);
           return `${params.name}<br/>收益: ¥${params.data.originalValue.toFixed(

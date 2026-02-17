@@ -168,9 +168,9 @@ describe('RiskAnalysis', () => {
     render(
       <RiskAnalysis
         taskId="test-task-1"
-        riskMetrics={null as any}
-        returnDistribution={null as any}
-        rollingMetrics={null as any}
+        riskMetrics={null as unknown as never}
+        returnDistribution={null as unknown as never}
+        rollingMetrics={null as unknown as never}
       />
     );
 

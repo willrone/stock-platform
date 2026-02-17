@@ -385,6 +385,9 @@ class BacktestLoopExecutor:
                                 except Exception:
                                     # 静默失败，使用默认价格 0.0
                                     pass
+
+                                return [
+                                    TradingSignal(
                                         signal_type=signal,
                                         stock_code=stock_code,
                                         timestamp=date,

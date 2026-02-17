@@ -848,12 +848,11 @@ class BacktestDetailedRepository:
                         SignalRecord.signal_type == signal_type,
                         SignalRecord.timestamp >= timestamp_start,
                         SignalRecord.timestamp < timestamp_end,
-                        SignalRecord.executed == False,
+                        SignalRecord.executed == False,  # noqa: E712
                     )
                 )
                 .order_by(SignalRecord.timestamp)
             )
-
             result = await self.session.execute(stmt)
             signals = result.scalars().all()
 

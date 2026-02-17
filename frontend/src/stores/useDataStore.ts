@@ -104,7 +104,7 @@ export interface SystemHealth {
 }
 
 export interface PerformanceMetrics {
-  services?: Record<string, any>;
+  services?: Record<string, unknown>;
   summary?: {
     total_services: number;
     avg_response_time: number;

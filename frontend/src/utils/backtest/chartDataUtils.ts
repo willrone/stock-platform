@@ -4,6 +4,18 @@
 
 import { PositionData } from './positionDataUtils';
 
+export interface PositionWeights {
+  current_weights?: Record<string, number>;
+  [key: string]: unknown;
+}
+
+export interface PortfolioSnapshot {
+  snapshot_date: string;
+  portfolio_value: number;
+  cash: number;
+  [key: string]: unknown;
+}
+
 /**
  * 生成饼图数据（基于总收益）
  */
@@ -67,7 +79,7 @@ export const generateTreemapData = (stockPerformance: PositionData[]) => {
 /**
  * 生成持仓权重数据（基于真实权重）
  */
-export const generateWeightChartData = (positionWeights: any) => {
+export const generateWeightChartData = (positionWeights: PositionWeights | null) => {
   const weights = positionWeights?.current_weights;
   if (!weights || Object.keys(weights).length === 0) {
     return null;
@@ -85,7 +97,7 @@ export const generateWeightChartData = (positionWeights: any) => {
 /**
  * 生成资金分配图表数据
  */
-export const generateCapitalChartData = (portfolioSnapshots: any[]) => {
+export const generateCapitalChartData = (portfolioSnapshots: PortfolioSnapshot[]) => {
   if (!portfolioSnapshots || portfolioSnapshots.length === 0) {
     return null;
   }
