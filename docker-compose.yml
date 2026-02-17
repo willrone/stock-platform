@@ -17,6 +17,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL}
       - CORS_ORIGINS=${CORS_ORIGINS},http://frontend:3000,http://localhost:${PROD_FRONTEND_PORT:-3001}
       - WORKERS=${WORKERS}
+      - DATA_ROOT_PATH=/app/data
+      - QLIB_DATA_PATH=/app/data/qlib_data
     volumes:
       - ./data:/app/data
       - ./backend/logs:/app/logs
@@ -35,6 +37,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_BACKEND_HOST=backend:8000
     container_name: stock-prediction-frontend
     ports:
       - "${PROD_FRONTEND_PORT:-3001}:3000"

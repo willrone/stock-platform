@@ -376,12 +376,8 @@ class StrategyHyperparameterOptimizer:
                 "slippage_rate": 0.0001,
             }
 
-        backtest_cfg = BacktestConfig(
-            initial_cash=backtest_config.get("initial_cash", 100000.0),
-            commission_rate=backtest_config.get("commission_rate", 0.0003),
-            slippage_rate=backtest_config.get("slippage_rate", 0.0001),
-            enable_unlimited_buy=backtest_config.get("enable_unlimited_buy", False),
-        )
+        # 基础回测配置（止盈止损会在每个 trial 中根据搜索参数动态覆盖）
+        _base_backtest_config = backtest_config
 
         # 定义目标函数
         def objective(trial: optuna.Trial):
@@ -416,6 +412,17 @@ class StrategyHyperparameterOptimizer:
 
                 # 记录采样到的参数（用于调试）
                 logger.info(f"Trial {trial.number}: 采样参数 = {strategy_params}")
+
+                # 防御：如果采样失败（并发竞争导致空参数），直接返回最差分数
+                if not strategy_params or all(v is None for v in strategy_params.values()):
+                    logger.warning(f"Trial {trial.number}: 采样参数为空，跳过本轮")
+                    if is_multi_objective:
+                        return tuple(
+                            [float("-inf") if objective_config.get("direction", "maximize") == "maximize" else float("inf")]
+                            * len(objective_metric)
+                        )
+                    else:
+                        return float("-inf") if objective_config.get("direction", "maximize") == "maximize" else float("inf")
 
                 # Build strategy_config for backtest.
                 # - single strategy: use sampled params directly
@@ -483,6 +490,17 @@ class StrategyHyperparameterOptimizer:
                     }
                 else:
                     strategy_config_payload = strategy_params
+
+                # 动态构建 BacktestConfig，将搜索参数中的止盈止损传入
+                _bc = _base_backtest_config or {}
+                backtest_cfg = BacktestConfig(
+                    initial_cash=_bc.get("initial_cash", 100000.0),
+                    commission_rate=_bc.get("commission_rate", 0.0003),
+                    slippage_rate=_bc.get("slippage_rate", 0.0001),
+                    enable_unlimited_buy=_bc.get("enable_unlimited_buy", False),
+                    stop_loss_pct=strategy_params.get("stop_loss", _bc.get("stop_loss_pct", 0.05)),
+                    take_profit_pct=strategy_params.get("take_profit", _bc.get("take_profit_pct", 0.15)),
+                )
 
                 # 运行回测（在同步函数中运行异步代码）
                 # 在 Optuna 的 trial 函数中，需要安全地运行异步代码
@@ -854,14 +872,15 @@ class StrategyHyperparameterOptimizer:
                     best_params=None,
                 )
 
-            # 启用并行优化（n_jobs 控制并发数）
-            # 注意：SQLite 存储支持多进程并发访问
-            logger.info(f"开始优化: n_trials={n_trials}, n_jobs={self.n_jobs}, timeout={timeout}")
+            # GridSampler 在 SQLite 存储 + 多线程下存在竞争条件（同一 trial 被多个 worker 领取），
+            # 强制串行执行以避免 "Cannot tell a COMPLETE trial" 错误。
+            effective_n_jobs = 1 if isinstance(sampler, optuna.samplers.GridSampler) else self.n_jobs
+            logger.info(f"开始优化: n_trials={n_trials}, n_jobs={effective_n_jobs} (原始={self.n_jobs}), timeout={timeout}")
             study.optimize(
                 objective, 
                 n_trials=n_trials, 
                 timeout=timeout, 
-                n_jobs=self.n_jobs,  # 并行执行
+                n_jobs=effective_n_jobs,
                 show_progress_bar=False
             )
 
