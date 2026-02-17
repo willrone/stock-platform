@@ -210,7 +210,7 @@ describe('PositionAnalysis', () => {
 
     it('应该处理无效的对象格式数据', () => {
       render(
-        <PositionAnalysis positionAnalysis={{ stock_performance: null } as any} stockCodes={[]} />
+        <PositionAnalysis positionAnalysis={{ stock_performance: null } as unknown as never} stockCodes={[]} />
       );
 
       expect(screen.getByText('暂无持仓分析数据')).toBeInTheDocument();
