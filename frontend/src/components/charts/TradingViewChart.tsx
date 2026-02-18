@@ -25,12 +25,15 @@ import {
 } from '@mui/material';
 import { TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { DataService } from '@/services/dataService';
+import { BacktestService } from '@/services/backtestService';
 
 import { PredictionResult } from '../../services/taskService';
 
 interface TradingViewChartProps {
   stockCode: string;
   height?: number;
+  /** 回测任务ID：传入时使用与回测相同的数据源，确保价格走势正确 */
+  taskId?: string;
   prediction?: PredictionResult;
   startDate?: string;
   endDate?: string;
@@ -64,9 +67,17 @@ interface PriceData {
   volume: number;
 }
 
+/** 从原始数据提取 chart time：仅接受有效的 yyyy-MM-dd，否则返回空（会被 filter 掉） */
+function toChartTime(dateVal: unknown): string {
+  if (dateVal == null) return '';
+  const s = String(dateVal).split('T')[0].trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+
 export default function TradingViewChart({
   stockCode,
   height = 400,
+  taskId,
   prediction,
   startDate,
   endDate,
@@ -128,44 +139,48 @@ export default function TradingViewChart({
       }
 
       console.log(
-        `[TradingViewChart] 开始获取股票数据: ${stockCode}, 时间范围: ${
+        `[TradingViewChart] 开始获取股票数据: ${stockCode}, taskId=${taskId ?? '无'}, 时间范围: ${
           resolvedStart.toISOString().split('T')[0]
         } 至 ${resolvedEnd.toISOString().split('T')[0]}`
       );
 
-      // 调用真实API获取数据
-      const response = await DataService.getStockData(
-        stockCode,
-        resolvedStart.toISOString().split('T')[0],
-        resolvedEnd.toISOString().split('T')[0]
-      );
+      // 回测任务上下文：使用与回测相同的数据源，确保价格走势正确
+      // 传入 startDate/endDate 供后端使用；若指定范围无数据，后端会自动回退到可用数据
+      let dataArray: Record<string, unknown>[] = [];
+      if (taskId) {
+        try {
+          const backtestRes = await BacktestService.getStockPriceForTask(taskId, stockCode, {
+            startDate: resolvedStart.toISOString(),
+            endDate: resolvedEnd.toISOString(),
+          });
+          dataArray = backtestRes?.data ?? [];
+          console.log('[TradingViewChart] 回测专用API返回:', dataArray.length, '条');
+        } catch (e) {
+          console.warn('[TradingViewChart] 回测专用API失败，回退到通用API:', e);
+        }
+      }
+      if (dataArray.length === 0) {
+        const response = await DataService.getStockData(
+          stockCode,
+          resolvedStart.toISOString().split('T')[0],
+          resolvedEnd.toISOString().split('T')[0]
+        );
+        dataArray = Array.isArray(response?.data) ? response.data : [];
+      }
 
-      console.log('[TradingViewChart] API响应:', response);
-
-      // 转换数据格式
-      // DataService.getStockData 返回格式: { stock_code, data: [...], last_updated }
-      // 其中 data 字段已经是后端返回的数据数组
-      const dataArray: Record<string, unknown>[] = Array.isArray(response?.data) ? response.data : [];
-
-      console.log(`[TradingViewChart] 解析后的数据数组长度: ${dataArray.length}`, {
-        responseType: typeof response,
-        responseKeys: response ? Object.keys(response) : [],
-        hasDataArray: Array.isArray(dataArray),
-        dataArrayLength: dataArray.length,
-        firstItem: dataArray[0],
-      });
+      console.log('[TradingViewChart] 数据加载完成:', { dataLen: dataArray.length, first: dataArray[0] });
 
       if (dataArray.length > 0) {
         let formattedData: PriceData[] = dataArray
           .map((item: Record<string, unknown>) => ({
-            time: item.date ? (item.date as string).split('T')[0] : (item.date as string), // 只取日期部分
+            time: toChartTime(item.date ?? item.datetime ?? item.timestamp),
             open: Number(item.open) || 0,
             high: Number(item.high) || 0,
             low: Number(item.low) || 0,
             close: Number(item.close) || 0,
             volume: Number(item.volume) || 0,
           }))
-          .filter((item: PriceData) => item.time); // 过滤掉无效数据
+          .filter((item: PriceData) => !!item.time); // 过滤掉 time 无效的条目，避免重复 time 导致只显示一根 K 线
 
         // 根据timeframe进行数据采样
         if (timeframe === '1W' && formattedData.length > 0) {
@@ -236,7 +251,6 @@ export default function TradingViewChart({
           stockCode,
           startDate: resolvedStart.toISOString().split('T')[0],
           endDate: resolvedEnd.toISOString().split('T')[0],
-          response,
           dataArrayLength: dataArray.length,
         });
         setPriceData([]);
@@ -606,7 +620,7 @@ export default function TradingViewChart({
   // 初始化
   useEffect(() => {
     fetchStockData();
-  }, [stockCode, timeframe, startDate, endDate]);
+  }, [stockCode, taskId, timeframe, startDate, endDate]);
 
   useEffect(() => {
     // 即使数据为空也初始化图表，以便显示空状态

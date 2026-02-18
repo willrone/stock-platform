@@ -7,13 +7,14 @@ import sys
 import asyncio
 from pathlib import Path
 
-# 添加backend到路径
-sys.path.insert(0, str(Path(__file__).parent / "backend"))
+# 添加 backend 到路径 (tests/scripts -> backend)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "backend"))
 
 from app.core.database import get_async_session, SessionLocal
 from app.repositories.task_repository import TaskRepository
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
-from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+from app.services.backtest.utils import BacktestDataAdapter
+from app.services.backtest.models import EnhancedPositionAnalysis
 from loguru import logger
 
 
@@ -71,11 +72,22 @@ async def fill_task_details(task_id: str):
                     'downside_deviation': enhanced_result.extended_risk_metrics.downside_deviation,
                 }
             
-            # 准备分析数据
+            # 准备分析数据（position_analysis 可能是 EnhancedPositionAnalysis 或列表）
+            _pa = enhanced_result.position_analysis
+            if _pa:
+                if isinstance(_pa, EnhancedPositionAnalysis):
+                    position_analysis_data = _pa.to_dict()
+                elif isinstance(_pa, list):
+                    position_analysis_data = [pa.to_dict() for pa in _pa]
+                else:
+                    position_analysis_data = _pa
+            else:
+                position_analysis_data = None
+
             analysis_data = {
                 'drawdown_analysis': enhanced_result.drawdown_analysis.to_dict() if enhanced_result.drawdown_analysis else {},
                 'monthly_returns': [mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
-                'position_analysis': [pa.to_dict() for pa in enhanced_result.position_analysis] if enhanced_result.position_analysis else [],
+                'position_analysis': position_analysis_data,
                 'benchmark_comparison': enhanced_result.benchmark_data or {},
                 'rolling_metrics': {}
             }

@@ -140,6 +140,30 @@ class BacktestExecutor:
             if backtest_config is None:
                 backtest_config = BacktestConfig()
 
+            # 大规模回测自动优化内存：股票数×天数 > 20000 时关闭持仓明细记录
+            num_days = (end_date - start_date).days
+            if len(stock_codes) * num_days > 20000:
+                backtest_config.record_positions_in_history = False
+                backtest_config.portfolio_history_stride = max(backtest_config.portfolio_history_stride, 10)
+                logger.info(
+                    f"大规模回测内存优化: {len(stock_codes)}股×{num_days}天, "
+                    f"关闭持仓明细, stride={backtest_config.portfolio_history_stride}"
+                )
+
+            # ML 策略自动启用 topk_buffer 交易模式（截面排名选股）
+            if strategy_name == "ml_ensemble_lgb_xgb_riskctl" and strategy_config:
+                if "trade_mode" not in strategy_config:
+                    _top_n = strategy_config.get("top_n", 10)
+                    strategy_config.setdefault("trade_mode", "topk_buffer")
+                    strategy_config.setdefault("topk", _top_n)
+                    strategy_config.setdefault("buffer", _top_n * 2)
+                    strategy_config.setdefault("max_changes_per_day", 3)
+                    strategy_config.setdefault("min_buy_score", 0.0)
+                    logger.info(
+                        f"ML策略自动启用 topk_buffer 模式: topk={_top_n}, "
+                        f"buffer={strategy_config['buffer']}, max_changes={strategy_config['max_changes_per_day']}"
+                    )
+
             # 开始进度监控
             if task_id:
                 await self.progress_monitor.start_backtest_monitoring(
@@ -310,6 +334,19 @@ class BacktestExecutor:
             )
             perf_breakdown["align_arrays_s"] = time.perf_counter() - _t1
 
+            # ========== 内存优化：释放 attrs 中的 _precomputed_signals ==========
+            # aligned_arrays 已包含信号数据，attrs 缓存可以释放
+            # 但保留 precomputed_signals 字典作为 fallback（loop executor 可能需要）
+            import gc
+            for _df in stock_data.values():
+                try:
+                    if hasattr(_df, 'attrs') and '_precomputed_signals' in _df.attrs:
+                        del _df.attrs['_precomputed_signals']
+                except Exception:
+                    pass
+            gc.collect()
+            logger.info("✅ 内存优化：已释放 attrs 预计算信号缓存（保留 precomputed_signals 字典）")
+
             # ========== 阶段 6: 执行回测循环 ==========
             self.performance_tracker.start_stage(
                 "backtest_execution",
@@ -337,6 +374,12 @@ class BacktestExecutor:
                 aligned_arrays=aligned_arrays,
             )
             perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
+
+            # ========== 内存优化：回测循环结束后释放大对象 ==========
+            del aligned_arrays
+            precomputed_signals.clear()
+            stock_data.clear()
+            gc.collect()
 
             self.performance_tracker.end_stage(
                 "backtest_execution",

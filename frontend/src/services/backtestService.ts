@@ -373,6 +373,48 @@ export class BacktestService {
   }
 
   /**
+   * 获取回测任务关联的股票K线数据（使用与回测相同的数据源，确保价格走势正确）
+   * 可选传入 startDate/endDate 覆盖任务日期；若任务日期无数据，后端会自动回退到可用数据范围
+   */
+  static async getStockPriceForTask(
+    taskId: string,
+    stockCode: string,
+    options?: { startDate?: string; endDate?: string }
+  ): Promise<{
+    stock_code: string;
+    data: Array<{
+      date: string;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }>;
+  }> {
+    const params: Record<string, string> = {};
+    if (options?.startDate) params.start_date = options.startDate.split('T')[0];
+    if (options?.endDate) params.end_date = options.endDate.split('T')[0];
+    const res = await apiRequest.get<{
+      stock_code: string;
+      start_date: string;
+      end_date: string;
+      data_points: number;
+      data: Array<{
+        date: string;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+      }>;
+    }>(`/backtest-detailed/${taskId}/stock-price/${stockCode}`, params);
+    return {
+      stock_code: res?.stock_code || stockCode,
+      data: res?.data || [],
+    };
+  }
+
+  /**
    * 获取交易统计信息
    */
   static async getTradeStatistics(taskId: string): Promise<TradeStatistics> {

@@ -7,7 +7,8 @@ import asyncio
 from sqlalchemy import text
 from app.core.database import get_async_session
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
-from app.services.backtest.backtest_data_adapter import BacktestDataAdapter
+from app.services.backtest.utils import BacktestDataAdapter
+from app.services.backtest.models import EnhancedPositionAnalysis
 import json
 
 async def fill_task(task_id: str):
@@ -34,21 +35,31 @@ async def fill_task(task_id: str):
             
             # 保存
             repo = BacktestDetailedRepository(session)
-            
-            # 详细结果
+            em = enhanced.extended_risk_metrics
+            extended_metrics = {
+                "sortino_ratio": em.sortino_ratio if em else 0,
+                "calmar_ratio": em.calmar_ratio if em else 0,
+                "max_drawdown_duration": em.max_drawdown_duration if em else 0,
+                "var_95": em.var_95 if em else 0,
+                "downside_deviation": em.downside_deviation if em else 0,
+            }
+            _pa = enhanced.position_analysis
+            position_analysis_data = (
+                _pa.to_dict() if isinstance(_pa, EnhancedPositionAnalysis)
+                else [pa.to_dict() for pa in _pa] if isinstance(_pa, list) else None
+            )
+            analysis_data = {
+                "drawdown_analysis": enhanced.drawdown_analysis.to_dict() if enhanced.drawdown_analysis else {},
+                "monthly_returns": [mr.to_dict() for mr in enhanced.monthly_returns] if enhanced.monthly_returns else [],
+                "position_analysis": position_analysis_data,
+                "benchmark_comparison": enhanced.benchmark_data or {},
+                "rolling_metrics": {},
+            }
             await repo.create_detailed_result(
                 task_id=task_id,
                 backtest_id=f"bt_{task_id[:8]}",
-                sortino_ratio=enhanced.extended_risk_metrics.sortino_ratio if enhanced.extended_risk_metrics else 0,
-                calmar_ratio=enhanced.extended_risk_metrics.calmar_ratio if enhanced.extended_risk_metrics else 0,
-                max_drawdown_duration=enhanced.extended_risk_metrics.max_drawdown_duration if enhanced.extended_risk_metrics else 0,
-                var_95=enhanced.extended_risk_metrics.var_95 if enhanced.extended_risk_metrics else 0,
-                downside_deviation=enhanced.extended_risk_metrics.downside_deviation if enhanced.extended_risk_metrics else 0,
-                drawdown_analysis=enhanced.drawdown_analysis.to_dict() if enhanced.drawdown_analysis else {},
-                monthly_returns=[mr.to_dict() for mr in enhanced.monthly_returns] if enhanced.monthly_returns else [],
-                position_analysis=[pa.to_dict() for pa in enhanced.position_analysis] if enhanced.position_analysis else [],
-                benchmark_comparison={},
-                rolling_metrics={}
+                extended_metrics=extended_metrics,
+                analysis_data=analysis_data,
             )
             print(f"✓ 详细结果已保存")
             

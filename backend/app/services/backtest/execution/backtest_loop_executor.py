@@ -135,10 +135,13 @@ class BacktestLoopExecutor:
                 logger.warning(f"检查任务状态失败: {e}，继续执行")
                 return True  # 检查失败时继续执行，避免因检查错误而中断
 
-        # ========== PERF优化：批量收集数据库操作，循环结束后一次性写入 ==========
+        # ========== PERF优化：批量收集数据库操作，分批写入 ==========
         # 避免在730天循环内每天都做数据库操作（原来是72秒的主要瓶颈）
-        _batch_signals_data: List[dict] = []  # 收集所有信号记录（含 executed/execution_reason）
+        # 内存优化：每积累 _SIGNAL_FLUSH_THRESHOLD 条信号就写入一次DB并释放内存
+        _batch_signals_data: List[dict] = []  # 收集信号记录（含 executed/execution_reason）
         _current_backtest_id: str | None = None  # 缓存 backtest_id
+        _SIGNAL_FLUSH_THRESHOLD = 3000  # 每 3000 条信号刷一次DB（内存优化）
+        _total_flushed_signals = 0  # 已刷入DB的信号总数
         # ========== END PERF优化 ==========
 
         for i, current_date in enumerate(trading_dates):
@@ -316,7 +319,9 @@ class BacktestLoopExecutor:
                                     )
                                 )
 
-                # 若对齐数组未生成信号，再走原有路径（兼容其它策略）
+                # 若对齐数组已生成信号，跳过逐股票回退路径
+                _skip_per_stock_fallback = len(all_signals) > 0
+
                 if not all_signals:
                     # 生成交易信号（支持并行生成多股票信号）
                     all_signals = []
@@ -432,7 +437,9 @@ class BacktestLoopExecutor:
                     return None
 
                 # PERF OPTIMIZATION: 禁用per-day并行，因为信号已经预计算，串行更快
-                if False and self.enable_parallel and len(stock_data) > 3:
+                if _skip_per_stock_fallback:
+                    pass  # aligned_arrays 已生成信号，跳过逐股票回退
+                elif False and self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号
                     # PERF: avoid per-day ThreadPoolExecutor creation and avoid per-stock futures.
                     # We batch stocks into coarse tasks to reduce scheduling overhead.
@@ -1025,7 +1032,13 @@ class BacktestLoopExecutor:
                                 "execution_reason"
                             ] = _unexec_sig.get("execution_reason", "未知原因")
 
-                # NOTE: 中间 flush 已移除，所有信号在回测结束后一次性写入
+                # 内存优化：当信号积累超过阈值时，中间刷入DB并释放内存
+                if task_id and len(_batch_signals_data) >= _SIGNAL_FLUSH_THRESHOLD:
+                    _flushed = self._flush_signals_to_db(
+                        _batch_signals_data, task_id, _current_backtest_id
+                    )
+                    _total_flushed_signals += _flushed
+                    _batch_signals_data.clear()
 
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(
@@ -1167,127 +1180,16 @@ class BacktestLoopExecutor:
 
                 continue
 
-        # ========== PERF优化：循环结束后一次性写入所有信号数据 ==========
-        # 使用 Raw SQL executemany 替代 ORM add_all，跳过 UPDATE 操作
-        # 因为 executed/execution_reason 已在内存中确定
+        # ========== PERF优化：循环结束后写入剩余信号数据 ==========
         if task_id and _batch_signals_data:
-            _total_signals_to_write = len(_batch_signals_data)
-            logger.info(f"🔄 最终一次性写入: {_total_signals_to_write} 条信号记录（Raw SQL）")
+            _flushed = self._flush_signals_to_db(
+                _batch_signals_data, task_id, _current_backtest_id
+            )
+            _total_flushed_signals += _flushed
+            _batch_signals_data.clear()
 
-            try:
-                import json as _json
-
-                _max_retries = 5
-                _retry_delay = 0.5
-                _backoff_factor = 2.0
-
-                # 预处理数据：将 Python 对象转为 DB 兼容格式
-                _insert_rows = []
-                for _sd in _batch_signals_data:
-                    _ts = _sd["timestamp"]
-                    if hasattr(_ts, "isoformat"):
-                        _ts_str = _ts.isoformat()
-                    else:
-                        _ts_str = str(_ts)
-
-                    _meta = _sd.get("metadata")
-                    if _meta is not None:
-                        try:
-                            _meta_str = _json.dumps(
-                                _meta, ensure_ascii=False, default=str
-                            )
-                        except Exception:
-                            _meta_str = None
-                    else:
-                        _meta_str = None
-
-                    _insert_rows.append(
-                        {
-                            "task_id": task_id,
-                            "backtest_id": _current_backtest_id,
-                            "signal_id": _sd["signal_id"],
-                            "stock_code": _sd["stock_code"],
-                            "stock_name": _sd.get("stock_name"),
-                            "signal_type": _sd["signal_type"],
-                            "timestamp": _ts_str,
-                            "price": float(_sd["price"]),
-                            "strength": float(_sd.get("strength", 0.0)),
-                            "reason": _sd.get("reason"),
-                            "signal_metadata": _meta_str,
-                            "executed": 1 if _sd.get("executed") else 0,
-                            "execution_reason": _sd.get("execution_reason"),
-                            "created_at": datetime.utcnow().isoformat(),
-                        }
-                    )
-
-                # 子进程安全：使用同步 sqlite3 直接写入，避免 async engine 在子进程中死锁
-                import sqlite3 as _sqlite3
-                from app.core.config import settings as _settings
-
-                _db_path = str(_settings.DATABASE_URL).replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
-                # 处理相对路径
-                if not _db_path.startswith("/"):
-                    import os as _os
-                    _db_path = _os.path.join(str(_settings.DATA_ROOT_PATH), _db_path.lstrip("./"))
-
-                _WRITE_BATCH_SIZE = 5000
-                _write_start = time.perf_counter()
-
-                _raw_insert_sql = """
-                    INSERT INTO signal_records
-                        (task_id, backtest_id, signal_id, stock_code, stock_name,
-                         signal_type, timestamp, price, strength, reason,
-                         signal_metadata, executed, execution_reason, created_at)
-                    VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """
-
-                for _attempt in range(_max_retries + 1):
-                    try:
-                        _conn = _sqlite3.connect(_db_path, timeout=30)
-                        _conn.execute("PRAGMA journal_mode=WAL")
-                        try:
-                            for _bi in range(0, len(_insert_rows), _WRITE_BATCH_SIZE):
-                                _batch = _insert_rows[_bi : _bi + _WRITE_BATCH_SIZE]
-                                _conn.executemany(_raw_insert_sql, [
-                                    (r["task_id"], r["backtest_id"], r["signal_id"],
-                                     r["stock_code"], r["stock_name"], r["signal_type"],
-                                     r["timestamp"], r["price"], r["strength"],
-                                     r["reason"], r["signal_metadata"], r["executed"],
-                                     r["execution_reason"], r["created_at"])
-                                    for r in _batch
-                                ])
-                            _conn.commit()
-                        finally:
-                            _conn.close()
-
-                        _write_duration = time.perf_counter() - _write_start
-                        logger.info(
-                            f"✅ 最终写入完成: {_total_signals_to_write} 条记录, "
-                            f"耗时 {_write_duration:.2f}s "
-                            f"({_total_signals_to_write / max(_write_duration, 0.001):.0f} 条/秒)"
-                        )
-                        break  # 成功
-
-                    except Exception as e:
-                        _err_msg = str(e).lower()
-                        if "database is locked" in _err_msg or "database locked" in _err_msg:
-                            if _attempt < _max_retries:
-                                _wait = _retry_delay * (_backoff_factor**_attempt)
-                                logger.warning(
-                                    f"最终写入遇到数据库锁定，"
-                                    f"第 {_attempt + 1}/{_max_retries} 次重试，"
-                                    f"等待 {_wait:.2f}s"
-                                )
-                                time.sleep(_wait)
-                            else:
-                                logger.error(f"最终写入重试 {_max_retries} 次后仍然失败: {e}")
-                        else:
-                            logger.error(f"最终写入数据库失败: {e}")
-                            break
-
-            except Exception as e:
-                logger.error(f"最终写入数据库时出错: {e}")
+        if task_id and _total_flushed_signals > 0:
+            logger.info(f"✅ 信号写入完成: 共 {_total_flushed_signals} 条记录")
         # ========== END PERF优化 ==========
 
         # 最终进度更新 + 清理内存缓存
@@ -1329,6 +1231,103 @@ class BacktestLoopExecutor:
             "trading_days": len(trading_dates),
             "circuit_breaker_summary": risk_manager.get_circuit_breaker_summary(),
         }
+
+    @staticmethod
+    def _flush_signals_to_db(
+        batch_signals_data: List[dict],
+        task_id: str,
+        backtest_id: str,
+    ) -> int:
+        """将信号数据批量写入DB并返回写入条数。
+
+        内存优化：调用方在 flush 后应 clear() 列表释放内存。
+        """
+        if not batch_signals_data:
+            return 0
+
+        import json as _json
+        import sqlite3 as _sqlite3
+
+        from app.core.config import settings as _settings
+
+        count = len(batch_signals_data)
+
+        try:
+            # 预处理数据
+            _insert_rows = []
+            for _sd in batch_signals_data:
+                _ts = _sd["timestamp"]
+                _ts_str = _ts.isoformat() if hasattr(_ts, "isoformat") else str(_ts)
+
+                _meta = _sd.get("metadata")
+                _meta_str = None
+                if _meta is not None:
+                    try:
+                        _meta_str = _json.dumps(_meta, ensure_ascii=False, default=str)
+                    except Exception:
+                        pass
+
+                _insert_rows.append((
+                    task_id,
+                    backtest_id,
+                    _sd["signal_id"],
+                    _sd["stock_code"],
+                    _sd.get("stock_name"),
+                    _sd["signal_type"],
+                    _ts_str,
+                    float(_sd["price"]),
+                    float(_sd.get("strength", 0.0)),
+                    _sd.get("reason"),
+                    _meta_str,
+                    1 if _sd.get("executed") else 0,
+                    _sd.get("execution_reason"),
+                    datetime.utcnow().isoformat(),
+                ))
+
+            # 从 DATABASE_URL 提取文件路径（config 已将相对路径解析为绝对路径）
+            _db_url = str(_settings.DATABASE_URL)
+            for _prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
+                if _db_url.startswith(_prefix):
+                    _db_path = _db_url[len(_prefix):]
+                    break
+            else:
+                _db_path = _db_url
+
+            _raw_insert_sql = """
+                INSERT INTO signal_records
+                    (task_id, backtest_id, signal_id, stock_code, stock_name,
+                     signal_type, timestamp, price, strength, reason,
+                     signal_metadata, executed, execution_reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+
+            _WRITE_BATCH_SIZE = 5000
+            _max_retries = 3
+
+            for _attempt in range(_max_retries + 1):
+                try:
+                    _conn = _sqlite3.connect(_db_path, timeout=30)
+                    _conn.execute("PRAGMA journal_mode=WAL")
+                    try:
+                        for _bi in range(0, len(_insert_rows), _WRITE_BATCH_SIZE):
+                            _conn.executemany(
+                                _raw_insert_sql,
+                                _insert_rows[_bi : _bi + _WRITE_BATCH_SIZE],
+                            )
+                        _conn.commit()
+                    finally:
+                        _conn.close()
+                    logger.debug(f"信号批量写入: {count} 条")
+                    return count
+                except Exception as e:
+                    if "locked" in str(e).lower() and _attempt < _max_retries:
+                        time.sleep(0.5 * (2 ** _attempt))
+                    else:
+                        logger.error(f"信号写入DB失败: {e}")
+                        return 0
+        except Exception as e:
+            logger.error(f"信号写入预处理失败: {e}")
+            return 0
 
     def _rebalance_topk_buffer(
         self,

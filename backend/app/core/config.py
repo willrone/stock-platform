@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     CLEANUP_INTERVAL_HOURS: int = 24
 
     # 进程池配置（用于任务执行，独立于WORKERS配置）
-    PROCESS_POOL_SIZE: int = 3  # 进程池大小，建议为CPU核心数
+    PROCESS_POOL_SIZE: int = 1  # 进程池大小，降为1减少内存开销（每个worker ~500-800MB）
     TASK_EXECUTION_TIMEOUT: int = 3600  # 任务执行超时（秒）
 
     # 回测并行化配置（单个回测任务内部的并行化）
@@ -113,6 +113,18 @@ class Settings(BaseSettings):
                 # 相对路径，转换为绝对路径
                 abs_path = str((_BACKEND_DIR / value).resolve())
                 object.__setattr__(self, field, abs_path)
+
+        # DATABASE_URL: 将相对路径的 SQLite URL 转为绝对路径，
+        # 确保子进程（ProcessPoolExecutor）和异步引擎在任意 CWD 下都能找到正确的数据库
+        db_url = self.DATABASE_URL
+        for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
+            if db_url.startswith(prefix):
+                db_path = db_url[len(prefix):]
+                if not db_path.startswith("/"):
+                    abs_db = str((_BACKEND_DIR / db_path).resolve())
+                    object.__setattr__(self, "DATABASE_URL", f"{prefix}{abs_db}")
+                break
+
         return self
 
 

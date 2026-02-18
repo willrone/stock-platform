@@ -18,7 +18,9 @@
       "Bash(tail:*)",
       "Bash(pip show:*)",
       "Bash(pip index:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(sqlite3:*)",
+      "Bash(apt list:*)"
     ]
   }
 }

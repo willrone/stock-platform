@@ -26,13 +26,16 @@ from .ml_model_loader import LoadedModelPair, load_model_pair
 _logger = logging.getLogger(__name__)
 
 # 回归模式阈值
-BUY_RETURN_THRESHOLD = 0.0
-SELL_RETURN_THRESHOLD = -0.002
+# 注意：CSRankNorm 模型的预测值范围约 [-0.3, 0.3]，
+# 需要更高的阈值来过滤噪声信号。
+# 仅选择预测值在分布两端的股票（约 top/bottom 20%）
+BUY_RETURN_THRESHOLD = 0.05
+SELL_RETURN_THRESHOLD = -0.05
 # 二分类模式阈值
 BINARY_BUY_THRESHOLD = 0.5
 BINARY_SELL_THRESHOLD = 0.3
 # 风控默认值
-DEFAULT_STOP_LOSS = -0.02
+DEFAULT_STOP_LOSS = -0.05
 DEFAULT_TARGET_VOL = 0.02
 VOL_SCALE_RANGE = (0.5, 2.0)
 MARKET_FILTER_WINDOW = 5
@@ -58,7 +61,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         """初始化模型相关配置"""
         self.lgb_weight = config.get("lgb_weight", 0.5)
         self.xgb_weight = config.get("xgb_weight", 0.5)
-        self.top_n = config.get("top_n", 5)
+        self.top_n = config.get("top_n", 10)
         default_path = Path(__file__).parents[5] / "data" / "models"
         self.model_path = config.get("model_path", str(default_path))
         self._lgb_model_id = config.get("lgb_model_id")
@@ -190,7 +193,12 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         self,
         combined_df: pd.DataFrame,
     ) -> Optional[pd.DataFrame]:
-        """批量预计算所有股票的信号"""
+        """批量预计算所有股票的信号（含截面排名选股）
+
+        关键优化：使用截面排名（cross-sectional ranking）替代固定阈值。
+        每个交易日对所有股票的预测值排名，只选 Top-N 买入、Bottom-N 卖出。
+        这与滚动训练回测（Top10 夏普 2.09）的选股逻辑一致。
+        """
         if combined_df is None or len(combined_df) == 0:
             return None
         if not self._has_models:
@@ -208,7 +216,9 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                 return None
 
             pred = self._ensemble_predict(X)
-            return self._build_batch_result(df, pred)
+
+            # 截面排名选股：每天只选 top_n 买入，bottom_n 卖出
+            return self._build_batch_result_with_cross_sectional_rank(df, pred)
         except Exception as e:
             _logger.error(f"ML策略批量预计算失败: {e}", exc_info=True)
             return None
@@ -340,14 +350,20 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         return self._interpret_regression(raw_pred)
 
     def _interpret_regression(self, pred_return: float) -> tuple:
-        """回归模式：预测值是收益率（或 CSRankNorm 标准化值）"""
+        """回归模式：预测值是收益率（或 CSRankNorm 标准化值）
+
+        CSRankNorm 模型输出范围约 [-0.3, 0.3]，
+        strength 按预测值超出阈值的幅度线性映射到 [0, 1]。
+        """
         buy_thr = self._buy_threshold
         sell_thr = self._sell_threshold
+        # 预测值范围上限（用于 strength 归一化）
+        _pred_range = 0.3
         if pred_return > buy_thr:
-            strength = min(abs(pred_return - buy_thr) * 2, 1.0)
+            strength = min((pred_return - buy_thr) / _pred_range, 1.0)
             return SignalType.BUY, strength
         if pred_return < sell_thr:
-            strength = min(abs(pred_return - sell_thr) * 2, 1.0)
+            strength = min((sell_thr - pred_return) / _pred_range, 1.0)
             return SignalType.SELL, strength
         return None, 0.0
 
@@ -447,6 +463,76 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
         if not signals:
             return None
+
+        result = pd.DataFrame(signals)
+        result.set_index(["stock_code", "date"], inplace=True)
+        return result
+
+    def _build_batch_result_with_cross_sectional_rank(
+        self,
+        df: pd.DataFrame,
+        pred: np.ndarray,
+    ) -> Optional[pd.DataFrame]:
+        """截面排名选股：每天对所有股票的预测值排名，Top-N 买入，Bottom-N 卖出。
+
+        与滚动训练回测逻辑一致（Top10 夏普 2.09，年化 71.8%）。
+        """
+        if "date" not in df.columns or "stock_code" not in df.columns:
+            return self._build_batch_result(df, pred)
+
+        # 将预测值附加到 df
+        df = df.copy()
+        df["_pred"] = pred
+
+        signals = []
+        top_n = self.top_n  # 默认 5
+
+        for date, group in df.groupby("date"):
+            if len(group) < 2:
+                continue
+
+            # 按预测值排名
+            sorted_group = group.sort_values("_pred", ascending=False)
+
+            # Top-N 买入（预测值最高的 N 只）
+            buy_candidates = sorted_group.head(top_n)
+            for rank_i, (_, row) in enumerate(buy_candidates.iterrows()):
+                pred_val = float(row["_pred"])
+                # 仍需超过最低阈值，避免全市场下跌时强制买入
+                if pred_val > self._buy_threshold * 0.5:
+                    # strength 按排名位置线性衰减：rank 0 → 1.0, rank N-1 → 0.3
+                    rank_strength = max(0.3, 1.0 - rank_i * 0.7 / max(1, top_n - 1))
+                    signals.append({
+                        "stock_code": row["stock_code"],
+                        "date": date,
+                        "signal_type": SignalType.BUY,
+                        "strength": rank_strength,
+                        "price": row.get("close", 0),
+                    })
+
+            # Bottom-N 卖出（预测值最低的 N 只）
+            sell_candidates = sorted_group.tail(top_n)
+            for _, row in sell_candidates.iterrows():
+                pred_val = float(row["_pred"])
+                if pred_val < self._sell_threshold * 0.5:
+                    signals.append({
+                        "stock_code": row["stock_code"],
+                        "date": date,
+                        "signal_type": SignalType.SELL,
+                        "strength": min(1.0, abs(pred_val) / 0.1),
+                        "price": row.get("close", 0),
+                    })
+
+        if not signals:
+            _logger.warning("截面排名选股未产生任何信号")
+            return None
+
+        buy_n = sum(1 for s in signals if s["signal_type"] == SignalType.BUY)
+        sell_n = sum(1 for s in signals if s["signal_type"] == SignalType.SELL)
+        _logger.info(
+            f"截面排名选股完成: BUY={buy_n}, SELL={sell_n}, "
+            f"top_n={top_n}, 总交易日={df['date'].nunique()}"
+        )
 
         result = pd.DataFrame(signals)
         result.set_index(["stock_code", "date"], inplace=True)

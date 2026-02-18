@@ -135,13 +135,18 @@ class DataPreprocessor:
         return trading_dates
 
     def build_date_index(self, stock_data: Dict[str, pd.DataFrame]) -> None:
-        """为每只股票建立日期->整数索引，避免回测循环中重复 get_loc。"""
+        """为每只股票建立日期->整数索引，避免回测循环中重复 get_loc。
+        同时将 float64 列降级为 float32 以节省约 50% 内存。"""
         for data in stock_data.values():
             try:
                 if "_date_to_idx" not in data.attrs:
                     data.attrs["_date_to_idx"] = {
                         d: i for i, d in enumerate(data.index)
                     }
+                # 内存优化：将 float64 列降级为 float32
+                float64_cols = data.select_dtypes(include=['float64']).columns
+                if len(float64_cols) > 0:
+                    data[float64_cols] = data[float64_cols].astype(np.float32)
             except Exception:
                 pass
 
@@ -269,6 +274,8 @@ class DataPreprocessor:
         strategy.precompute_all_signals_batch() 计算截面特征
         （排名、相对强度、market_up_ratio 等），然后将结果
         拆分回各股票的 attrs 缓存。
+
+        内存优化：避免 df.copy()，使用轻量级列赋值 + 及时释放中间对象。
         """
         try:
             logger.info(
@@ -276,13 +283,12 @@ class DataPreprocessor:
             )
 
             # 1. 合并所有股票数据为 MultiIndex DataFrame
+            # 内存优化：不做 df.copy()，只添加必要的列
             frames = []
             for stock_code, df in stock_data.items():
                 if df is None or len(df) < 60:
                     continue
-                tmp = df.copy()
-                tmp["stock_code"] = stock_code
-                tmp["date"] = tmp.index
+                tmp = df.assign(stock_code=stock_code, date=df.index)
                 frames.append(tmp)
 
             if not frames:
@@ -290,6 +296,7 @@ class DataPreprocessor:
                 return False
 
             combined_df = pd.concat(frames, ignore_index=True)
+            del frames  # 及时释放引用
             combined_df.set_index(["stock_code", "date"], inplace=True)
             logger.info(
                 f"合并数据: {len(combined_df)} 行, "
@@ -324,6 +331,9 @@ class DataPreprocessor:
             logger.info(
                 f"✅ batch 预计算完成（含截面特征）: " f"{success_count}/{len(stock_data)} 只股票"
             )
+            # 内存优化：释放大型中间DataFrame
+            del combined_df, result_df
+            import gc; gc.collect()
             return success_count > 0
 
         except Exception as e:
@@ -507,8 +517,10 @@ class DataPreprocessor:
         trading_dates_ns = dates64
 
         # 预分配数组（Phase 3 优化：使用连续内存）
-        close = np.full((N, T), np.nan, dtype=np.float64, order="C")
-        open_ = np.full((N, T), np.nan, dtype=np.float64, order="C")
+        # 内存优化：使用 float32 替代 float64，节省约 50% 内存
+        # 对于价格数据，float32 精度（~7位有效数字）完全足够
+        close = np.full((N, T), np.nan, dtype=np.float32, order="C")
+        open_ = np.full((N, T), np.nan, dtype=np.float32, order="C")
         valid = np.zeros((N, T), dtype=bool, order="C")
         signal = np.zeros((N, T), dtype=np.int8, order="C")
         strength = np.zeros((N, T), dtype=np.float32, order="C")

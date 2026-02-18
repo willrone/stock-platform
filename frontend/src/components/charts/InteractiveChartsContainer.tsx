@@ -504,6 +504,7 @@ export default function InteractiveChartsContainer({
                 {selectedStock ? (
                   <TradingViewChart
                     stockCode={selectedStock}
+                    taskId={taskId}
                     startDate={(() => {
                       const startDate =
                         backtestData?.start_date ||

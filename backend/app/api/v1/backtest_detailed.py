@@ -6,6 +6,7 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -114,6 +115,143 @@ async def get_portfolio_snapshots(
     except Exception as e:
         logger.error(f"[API] 获取组合快照失败: task_id={task_id}, error={e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取组合快照失败: {str(e)}")
+
+
+@router.get(
+    "/{task_id}/stock-price/{stock_code}",
+    response_model=StandardResponse,
+    summary="获取回测任务关联的股票K线数据",
+    description="使用与回测相同的数据源(StockDataLoader)加载OHLCV，确保价格走势图与回测数据一致",
+)
+async def get_backtest_stock_price(
+    task_id: str,
+    stock_code: str,
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD，可选覆盖"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD，可选覆盖"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """获取回测任务中某只股票的价格数据（使用回测相同数据源）"""
+    try:
+        from datetime import datetime
+
+        from sqlalchemy.orm import Session
+
+        from app.core.database import SessionLocal
+        from app.repositories.task_repository import TaskRepository
+        from app.services.data.stock_data_loader import StockDataLoader
+        from app.core.config import settings
+
+        # 获取任务配置（同步会话）
+        db: Session = SessionLocal()
+        try:
+            task_repo = TaskRepository(db)
+            task = task_repo.get_task_by_id(task_id)
+            if not task or task.task_type != "backtest":
+                raise HTTPException(status_code=404, detail="回测任务不存在")
+
+            config = task.config or {}
+            result = task.result or {}
+            # 日期优先级：查询参数 > result > config，支持嵌套 period
+            def _get_date(d: dict, key: str) -> str | None:
+                v = d.get(key)
+                if v:
+                    return v
+                p = d.get("period") or d.get("backtest_config") or {}
+                return p.get(key) if isinstance(p, dict) else None
+
+            start_str = start_date or _get_date(result, "start_date") or _get_date(config, "start_date")
+            end_str = end_date or _get_date(result, "end_date") or _get_date(config, "end_date")
+            if not start_str or not end_str:
+                raise HTTPException(
+                    status_code=400,
+                    detail="任务缺少日期范围，无法获取价格数据",
+                )
+
+            start_dt = (
+                datetime.fromisoformat(start_str.replace("Z", "+00:00").split("T")[0])
+                if isinstance(start_str, str)
+                else start_str
+            )
+            end_dt = (
+                datetime.fromisoformat(end_str.replace("Z", "+00:00").split("T")[0])
+                if isinstance(end_str, str)
+                else end_str
+            )
+        finally:
+            db.close()
+
+        # 使用与回测相同的数据加载器
+        loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+        df = loader.load_stock_data(stock_code, start_date=start_dt, end_date=end_dt)
+
+        # 若指定日期范围内无数据，回退到不限制日期加载，再取可用数据
+        if df.empty or len(df) == 0:
+            df = loader.load_stock_data(stock_code, start_date=None, end_date=None)
+            if not df.empty:
+                # 取最近1年数据，避免返回过多
+                df = df.tail(252)
+                start_str = str(df.index.min().date()) if hasattr(df.index.min(), "date") else str(df.index.min())[:10]
+                end_str = str(df.index.max().date()) if hasattr(df.index.max(), "date") else str(df.index.max())[:10]
+                logger.info(f"指定日期无数据，返回可用范围: {stock_code}, {start_str} ~ {end_str}")
+
+        if df.empty or len(df) == 0:
+            logger.warning(f"未找到股票 {stock_code} 在回测时段内的数据")
+            return StandardResponse(
+                success=True,
+                message=f"未找到股票 {stock_code} 的数据",
+                data={
+                    "stock_code": stock_code,
+                    "start_date": start_str,
+                    "end_date": end_str,
+                    "data_points": 0,
+                    "data": [],
+                },
+            )
+
+        # 确保有 OHLCV 列（Qlib 预计算可能用 $close 等）
+        required = ["open", "high", "low", "close", "volume"]
+        for col in required:
+            if col not in df.columns:
+                logger.warning(f"股票数据缺少列 {col}")
+                return StandardResponse(
+                    success=False,
+                    message=f"数据格式异常，缺少 {col} 列",
+                    data=None,
+                )
+
+        data_points = []
+        for idx in df.index:
+            row = df.loc[idx]
+            ts = idx if hasattr(idx, "isoformat") else pd.Timestamp(idx)
+            date_str = ts.isoformat().split("T")[0] if hasattr(ts, "isoformat") else str(idx)
+            data_points.append(
+                {
+                    "date": date_str,
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "volume": float(row["volume"]),
+                }
+            )
+
+        return StandardResponse(
+            success=True,
+            message="获取成功",
+            data={
+                "stock_code": stock_code,
+                "start_date": start_str,
+                "end_date": end_str,
+                "data_points": len(data_points),
+                "data": data_points,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取回测股票价格失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取股票价格失败: {str(e)}")
 
 
 @router.get("/{task_id}/trade-records", response_model=StandardResponse)

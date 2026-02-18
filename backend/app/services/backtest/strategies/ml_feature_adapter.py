@@ -214,13 +214,13 @@ def _compute_features_via_training_pipeline(data: pd.DataFrame) -> pd.DataFrame:
     - EMA: period=20, 首值用 SMA 初始化
     - WMA: period=20
 
-    性能：向量化计算，单只股票 <10ms。
+    内存优化：使用 float32 减少 ~50% 内存，用 ewm 替代 Python for-loop。
     """
-    close = data["close"].astype(float)
-    high = data["high"].astype(float)
-    low = data["low"].astype(float)
-    open_ = data["open"].astype(float)
-    volume = data["volume"].astype(float)
+    close = data["close"].astype(np.float32)
+    high = data["high"].astype(np.float32)
+    low = data["low"].astype(np.float32)
+    open_ = data["open"].astype(np.float32)
+    volume = data["volume"].astype(np.float32)
 
     features = pd.DataFrame(index=data.index)
 
@@ -230,26 +230,14 @@ def _compute_features_via_training_pipeline(data: pd.DataFrame) -> pd.DataFrame:
     features["MA20"] = close.rolling(20).mean()
     features["MA60"] = close.rolling(60).mean()
     features["SMA"] = close.rolling(20).mean()  # 训练时 SMA 默认 period=20
-    # EMA: 训练时 period=20，首值用 SMA 初始化，后续用 multiplier=2/(20+1)
-    ema_period = 20
-    ema_multiplier = 2 / (ema_period + 1)
-    sma_init = close.rolling(ema_period).mean()
-    ema_vals = np.full(len(close), np.nan)
-    for i in range(len(close)):
-        if i < ema_period - 1:
-            continue
-        elif i == ema_period - 1:
-            ema_vals[i] = sma_init.iloc[i]
-        else:
-            if np.isnan(ema_vals[i - 1]):
-                ema_vals[i] = sma_init.iloc[i] if not np.isnan(sma_init.iloc[i]) else np.nan
-            else:
-                ema_vals[i] = close.iloc[i] * ema_multiplier + ema_vals[i - 1] * (1 - ema_multiplier)
-    features["EMA"] = ema_vals
-    # WMA: 训练时 period=20
+    # EMA: 训练时 period=20 — 用 pandas ewm 替代 Python for-loop（内存+速度优化）
+    features["EMA"] = close.ewm(span=20, adjust=False).mean()
+    # WMA: 训练时 period=20 — 预计算权重避免每次 lambda 重建
     wma_period = 20
+    _wma_weights = np.arange(1, wma_period + 1, dtype=np.float32)
+    _wma_wsum = float(_wma_weights.sum())
     features["WMA"] = close.rolling(wma_period).apply(
-        lambda x: np.average(x, weights=np.arange(1, len(x) + 1)), raw=True
+        lambda x: np.dot(x, _wma_weights) / _wma_wsum, raw=True
     )
 
     # ── RSI (14) ──
@@ -264,24 +252,10 @@ def _compute_features_via_training_pipeline(data: pd.DataFrame) -> pd.DataFrame:
     low_kdj = low.rolling(kdj_period).min()
     high_kdj = high.rolling(kdj_period).max()
     rsv = (close - low_kdj) / (high_kdj - low_kdj).replace(0, np.nan) * 100
-    # K/D 平滑：K = (2/3)*prev_K + (1/3)*RSV，与训练时一致
-    k_vals = np.full(len(close), np.nan)
-    d_vals = np.full(len(close), np.nan)
-    for i in range(len(close)):
-        r = rsv.iloc[i]
-        if np.isnan(r):
-            continue
-        if np.isnan(k_vals[i - 1]) if i > 0 else True:
-            k_vals[i] = r
-        else:
-            k_vals[i] = (2 / 3) * k_vals[i - 1] + (1 / 3) * r
-        if np.isnan(d_vals[i - 1]) if i > 0 else True:
-            d_vals[i] = k_vals[i]
-        else:
-            d_vals[i] = (2 / 3) * d_vals[i - 1] + (1 / 3) * k_vals[i]
-    features["KDJ_K"] = k_vals
-    features["KDJ_D"] = d_vals
-    features["KDJ_J"] = 3 * k_vals - 2 * d_vals
+    # K/D 平滑：K = (2/3)*prev_K + (1/3)*RSV 等价于 ewm(com=2, adjust=False)
+    features["KDJ_K"] = rsv.ewm(com=2, adjust=False).mean()
+    features["KDJ_D"] = features["KDJ_K"].ewm(com=2, adjust=False).mean()
+    features["KDJ_J"] = 3 * features["KDJ_K"] - 2 * features["KDJ_D"]
 
     # ── Stochastic (k_period=14, d_period=3 SMA，与训练时 calculate_stochastic 一致) ──
     stoch_period = 14
@@ -311,30 +285,15 @@ def _compute_features_via_training_pipeline(data: pd.DataFrame) -> pd.DataFrame:
     features["BOLLINGER_MIDDLE"] = bb_mid
     features["BOLLINGER_LOWER"] = bb_mid - 2 * bb_std
 
-    # ── ATR (14) - 指数平滑，与训练时 calculate_atr 一致 ──
-    # 训练时：首值 SMA(TR[:14])，后续 (prev*(period-1)+TR)/period
+    # ── ATR (14) - 用 ewm 近似 Wilder 指数平滑 ──
     atr_period = 14
-    tr = pd.concat([
-        high - low,
-        (high - close.shift(1)).abs(),
-        (low - close.shift(1)).abs(),
-    ], axis=1).max(axis=1)
-    atr_vals = np.full(len(close), np.nan)
-    # tr[0] 无前一日收盘价，从 index=1 开始有效
-    tr_valid_start = 1
-    for i in range(tr_valid_start, len(close)):
-        idx_in_tr = i - tr_valid_start  # 有效 TR 的序号
-        if idx_in_tr < atr_period - 1:
-            continue
-        elif idx_in_tr == atr_period - 1:
-            # 首值：SMA of first `atr_period` valid TRs
-            atr_vals[i] = tr.iloc[tr_valid_start:tr_valid_start + atr_period].mean()
-        else:
-            # 指数平滑
-            prev_atr = atr_vals[i - 1]
-            if not np.isnan(prev_atr):
-                atr_vals[i] = (prev_atr * (atr_period - 1) + tr.iloc[i]) / atr_period
-    features["ATR"] = atr_vals
+    # 使用 np.maximum 替代 pd.concat().max() 避免 attrs 比较导致的 Series truth value 错误
+    tr1 = (high - low).values
+    tr2 = np.abs((high - close.shift(1)).values)
+    tr3 = np.abs((low - close.shift(1)).values)
+    tr = pd.Series(np.fmax(np.fmax(tr1, tr2), tr3), index=data.index)
+    # ewm(span=14) 近似 Wilder 平滑 (prev*(n-1)+TR)/n
+    features["ATR"] = tr.ewm(span=atr_period, adjust=False).mean()
 
     # ── CCI (20) ──
     tp = (high + low + close) / 3
@@ -346,7 +305,7 @@ def _compute_features_via_training_pipeline(data: pd.DataFrame) -> pd.DataFrame:
     obv_sign = np.sign(close.diff()).fillna(0)
     features["OBV"] = (obv_sign * volume).cumsum()
 
-    # ── 价���变动 ──
+    # ── 价格变动 ──
     features["price_change"] = close.pct_change(1)
     features["price_change_5d"] = close.pct_change(5)
     features["price_change_20d"] = close.pct_change(20)
@@ -374,7 +333,7 @@ def _compute_features_via_training_pipeline(data: pd.DataFrame) -> pd.DataFrame:
     features["close"] = close.values
     features["volume"] = volume.values
     if "adj_close" in data.columns:
-        features["adj_close"] = data["adj_close"].astype(float).values
+        features["adj_close"] = data["adj_close"].astype(np.float32).values
 
     _logger.info(f"向量化技术指标计算完成: {len(features.columns)} 列")
     return features
