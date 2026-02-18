@@ -72,7 +72,7 @@ export default function MonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [errorStats, setErrorStats] = useState<ErrorStatistics | null>(null);
   const [anomalies, setAnomalies] = useState<Anomalies | null>(null);
-  const [dataQuality, setDataQuality] = useState<any>(null);
+  const [dataQuality, setDataQuality] = useState<Record<string, unknown> | null>(null);
   const [selectedTab, setSelectedTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('24');
 
@@ -87,7 +87,7 @@ export default function MonitoringPage() {
 
       setErrorStats(errorsData);
       setAnomalies(anomaliesData);
-      setDataQuality(qualityData);
+      setDataQuality(qualityData as Record<string, unknown> | null);
     } catch (error) {
       console.error('加载监控数据失败:', error);
     } finally {

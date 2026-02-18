@@ -4,7 +4,7 @@
 将DataFrame适配为Qlib DatasetH格式
 """
 
-from typing import List, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -148,6 +148,9 @@ class DataFrameDatasetAdapter:
             label_type,
             binary_threshold,
         )
+
+        # 实际使用的特征列名（在 prepare() 首次调用时填充）
+        self._feature_columns: Optional[List[str]] = None
 
         # 记录数据维度信息
         logger.info(
@@ -407,6 +410,10 @@ class DataFrameDatasetAdapter:
         else:
             feature_cols = all_feature_cols
 
+        # 记录实际使用的特征列名（供模型保存时写入 training_meta）
+        if not hasattr(self, "_feature_columns") or self._feature_columns is None:
+            self._feature_columns = list(feature_cols)
+
         # 创建一个包装类，使Series的values返回2D数组
         class FeatureSeries:
             """包装Series，使values返回2D数组"""
@@ -494,6 +501,15 @@ class DataFrameDatasetAdapter:
                     if isinstance(label_series, pd.Series)
                     else np.array(label_series)
                 )
+
+                # 清理 NaN / Inf（XGBoost 不容忍 label 中的 NaN）
+                nan_mask = ~np.isfinite(label_values.astype(float))
+                if nan_mask.any():
+                    logger.warning(
+                        f"label 中发现 {nan_mask.sum()} 个 NaN/Inf，填充为 0.0"
+                    )
+                    label_values = label_values.copy()
+                    label_values[nan_mask] = 0.0
 
                 # qlib的gbdt期望: y.values.ndim == 2 and y.values.shape[1] == 1
                 # 但pandas Series的values通常是1D的

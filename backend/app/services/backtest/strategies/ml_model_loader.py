@@ -8,9 +8,9 @@ ML 模型加载器
 import glob
 import logging
 import pickle
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ class LoadedModelPair:
     feature_set: str  # "alpha158" | "technical_62" | "custom"
     label_type: str  # "regression" | "binary"
     binary_threshold: float  # 仅 binary 模式有意义
+    feature_columns: List[str] = field(default_factory=list)  # 训练时的特征列名
 
 
 def load_model_pair(
@@ -95,16 +96,26 @@ def _load_unified_models(
     lgb_model = lgb_result[0] if lgb_result else None
     xgb_model = xgb_result[0] if xgb_result else None
 
-    if not (lgb_model and xgb_model):
+    if not (lgb_model or xgb_model):
         return None
+
+    # 如果只有一个模型，复用它作为另一个
+    if lgb_model and not xgb_model:
+        _logger.info("仅有 LGB 模型，复用为 XGB")
+        xgb_model = lgb_model
+    elif xgb_model and not lgb_model:
+        _logger.info("仅有 XGB 模型，复用为 LGB")
+        lgb_model = xgb_model
 
     # 从任一模型的 config 中提取元数据
     metadata = lgb_result[1] if lgb_result else xgb_result[1]
     feature_set = metadata.get("feature_set", DEFAULT_FEATURE_SET)
     label_type = metadata.get("label_type", DEFAULT_LABEL_TYPE)
     binary_threshold = metadata.get("binary_threshold", 0.003)
+    feature_columns = metadata.get("feature_columns", [])
 
-    _logger.info(f"统一引擎模型加载完成: feature_set={feature_set}, " f"label_type={label_type}")
+    _logger.info(f"统一引擎模型加载完成: feature_set={feature_set}, "
+                 f"label_type={label_type}, feature_columns={len(feature_columns)}")
     return LoadedModelPair(
         lgb_model=lgb_model,
         xgb_model=xgb_model,
@@ -112,6 +123,7 @@ def _load_unified_models(
         feature_set=feature_set,
         label_type=label_type,
         binary_threshold=binary_threshold,
+        feature_columns=feature_columns,
     )
 
 
@@ -130,7 +142,7 @@ def _load_single_unified(
         _logger.warning(f"{label} 模型未找到: {pattern}")
         return None
 
-    pkl_path = matches[-1]
+    pkl_path = Path(matches[-1])
     obj = _load_pickle(pkl_path)
     if not isinstance(obj, dict) or "model" not in obj:
         _logger.warning(f"{label} 模型格式异常: {type(obj)}")

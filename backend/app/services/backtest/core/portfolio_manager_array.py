@@ -93,11 +93,13 @@ class PortfolioManagerArray:
 
         在每个交易日开始时调用一次，后续的 get_portfolio_value 等方法
         可以直接使用缓存的价格数组，避免重复的字典查找和转换。
-        """
-        # 重置价格数组
-        self._price_array.fill(0.0)
 
-        # 批量填充价格
+        BUGFIX: 不再清零整个价格数组，而是只更新有新价格的股票。
+        对于当天没有价格数据的持仓股票（停牌等），保留上一次已知价格，
+        避免持仓市值被计为0导致组合价值剧烈跳变，从而严重放大波动率。
+        """
+        # 不再 fill(0.0)，保留上一次的价格作为 last known price
+        # 只更新有新价格的股票
         for code, price in current_prices.items():
             idx = self.code_to_idx.get(code)
             if idx is not None:

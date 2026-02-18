@@ -27,6 +27,8 @@ import {
   IconButton,
 } from '@mui/material';
 import { Info, RotateCcw } from 'lucide-react';
+import { DataService } from '../../services/dataService';
+import { Model } from '../../stores/useDataStore';
 
 export interface StrategyParameter {
   type: 'int' | 'float' | 'boolean' | 'string' | 'json';
@@ -58,9 +60,41 @@ export function StrategyConfigForm({
 }: StrategyConfigFormProps) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const prevStrategyRef = React.useRef(strategyName);
   const onChangeRef = React.useRef(onChange);
   const isMountedRef = React.useRef(false);
+
+  // 检测参数名是否为模型ID字段
+  const isModelIdField = (key: string) => key.toLowerCase().endsWith('model_id');
+
+  // 根据字段名推断模型类型过滤条件
+  const getModelTypeFilter = (key: string): string | null => {
+    const k = key.toLowerCase();
+    if (k.includes('lgb') || k.includes('lightgbm')) return 'lightgbm';
+    if (k.includes('xgb') || k.includes('xgboost')) return 'xgboost';
+    return null;
+  };
+
+  // 加载可用模型列表（仅当策略参数中包含 model_id 字段时）
+  useEffect(() => {
+    const hasModelIdParam = Object.keys(parameters).some(isModelIdField);
+    if (!hasModelIdParam) return;
+
+    let cancelled = false;
+    const loadModels = async () => {
+      try {
+        const result = await DataService.getModels();
+        if (!cancelled) {
+          setAvailableModels(result.models.filter(m => m.status === 'ready'));
+        }
+      } catch (e) {
+        console.error('加载模型列表失败:', e);
+      }
+    };
+    loadModels();
+    return () => { cancelled = true; };
+  }, [parameters]);
 
   // 更新onChange ref
   React.useEffect(() => {
@@ -271,6 +305,53 @@ export function StrategyConfigForm({
         return <Switch checked={value} onChange={e => handleValueChange(key, e.target.checked)} />;
 
       case 'string':
+        // 模型ID字段：渲染为模型选择下拉框
+        if (isModelIdField(key)) {
+          const typeFilter = getModelTypeFilter(key);
+          const filteredModels = typeFilter
+            ? availableModels.filter(m => m.model_type === typeFilter)
+            : availableModels;
+
+          return (
+            <FormControl fullWidth error={!!error}>
+              <InputLabel>{param.description || key}</InputLabel>
+              <Select
+                value={value || ''}
+                label={param.description || key}
+                onChange={e => handleValueChange(key, e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value="">
+                  <Typography variant="body2" color="text.secondary">
+                    留空使用默认模型
+                  </Typography>
+                </MenuItem>
+                {filteredModels.length > 0 ? (
+                  filteredModels.map(model => (
+                    <MenuItem key={model.model_id} value={model.model_id}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {model.model_name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          准确率: {(model.accuracy * 100).toFixed(1)}% | {model.model_type} | {new Date(model.created_at).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>
+                    <Typography variant="body2" color="text.secondary">
+                      暂无{typeFilter ? ` ${typeFilter} 类型的` : ''}可用模型
+                    </Typography>
+                  </MenuItem>
+                )}
+              </Select>
+              {error && <FormHelperText>{error}</FormHelperText>}
+            </FormControl>
+          );
+        }
+
         if (param.options && param.options.length > 0) {
           return (
             <FormControl fullWidth error={!!error}>

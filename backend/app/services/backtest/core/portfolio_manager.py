@@ -55,7 +55,11 @@ class PortfolioManager:
         }
 
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
-        """计算组合总价值（含成本）"""
+        """计算组合总价值（含成本）
+
+        BUGFIX: 对于缺少当前价格的持仓，使用上一次已知价格（current_price）
+        而不是忽略该持仓（等同于市值为0），避免组合价值剧烈跳变导致波动率虚高。
+        """
         total_value = self.cash
 
         for stock_code, position in self.positions.items():
@@ -66,13 +70,28 @@ class PortfolioManager:
                     position.quantity * position.avg_cost
                 )
                 total_value += position.market_value
+            elif position.current_price > 0:
+                # 使用上一次已知价格，避免持仓市值被计为0
+                position.market_value = position.quantity * position.current_price
+                position.unrealized_pnl = position.market_value - (
+                    position.quantity * position.avg_cost
+                )
+                total_value += position.market_value
+            else:
+                # 没有任何价格信息，使用成本价作为最后手段
+                position.market_value = position.quantity * position.avg_cost
+                position.unrealized_pnl = 0
+                total_value += position.market_value
 
         return total_value
 
     def get_portfolio_value_without_cost(
         self, current_prices: Dict[str, float]
     ) -> float:
-        """计算组合总价值（无成本）"""
+        """计算组合总价值（无成本）
+
+        BUGFIX: 同 get_portfolio_value，对缺少价格的持仓使用 last known price。
+        """
         total_value = self.cash_without_cost
 
         for stock_code, position in self.positions_without_cost.items():
@@ -82,6 +101,16 @@ class PortfolioManager:
                 position.unrealized_pnl = position.market_value - (
                     position.quantity * position.avg_cost
                 )
+                total_value += position.market_value
+            elif position.current_price > 0:
+                position.market_value = position.quantity * position.current_price
+                position.unrealized_pnl = position.market_value - (
+                    position.quantity * position.avg_cost
+                )
+                total_value += position.market_value
+            else:
+                position.market_value = position.quantity * position.avg_cost
+                position.unrealized_pnl = 0
                 total_value += position.market_value
 
         return total_value

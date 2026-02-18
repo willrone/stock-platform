@@ -616,6 +616,10 @@ async def run_backtest(request: BacktestRequest):
             commission_rate=strategy_config.get("commission_rate", 0.0003),
             slippage_rate=strategy_config.get("slippage_rate", 0.0001),
             enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
+            max_position_size=strategy_config.get("max_position_size", 0.2),
+            stop_loss_pct=strategy_config.get("stop_loss_pct", 0.05),
+            take_profit_pct=strategy_config.get("take_profit_pct", 0.15),
+            max_drawdown_pct=strategy_config.get("max_drawdown_pct", None),
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）

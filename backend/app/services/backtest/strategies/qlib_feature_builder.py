@@ -17,14 +17,12 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# 44 个特征的固定顺序（与训练时 Column_0~43 一一对应）
+# 训练时实际使用的 33 个特征（与 Column_0~32 一一对应）
+# 训练时 DatasetAdapter.prepare() 会过滤掉：
+#   - $ 开头的原始 OHLCV 列（$open/$high/$low/$close/$volume/$vwap）
+#   - leaky 特征（RET1/RET5/RET20/VOL1/VOL5）
+# 所以回测时也必须排除这些列，保持 33 个特征与模型一致
 QLIB_FEATURE_ORDER = [
-    "$open",
-    "$high",
-    "$low",
-    "$close",
-    "$volume",
-    "$vwap",
     "OBV",
     "MA5",
     "KDJ_K",
@@ -56,13 +54,8 @@ QLIB_FEATURE_ORDER = [
     "volume_change",
     "volume_ma_ratio",
     "price_position",
-    "RET1",
-    "RET5",
-    "RET20",
     "STD5",
     "STD20",
-    "VOL1",
-    "VOL5",
 ]
 
 QLIB_FEATURE_COUNT = len(QLIB_FEATURE_ORDER)
@@ -70,13 +63,13 @@ EPSILON = 1e-10
 
 
 def build_qlib_features(data: pd.DataFrame) -> Optional[pd.DataFrame]:
-    """从 OHLCV 数据构建 44 个 Qlib 特征。
+    """从 OHLCV 数据构建与训练一致的 33 个 Qlib 特征。
 
     Args:
         data: 包含 open/high/low/close/volume 列的 DataFrame
 
     Returns:
-        包含 44 列特征的 DataFrame（列名为 Column_0~Column_43），
+        包含 33 列特征的 DataFrame（列名为 Column_0~Column_32），
         行索引与输入一致；数据不足时返回 None。
     """
     if data is None or len(data) < 60:

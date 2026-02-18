@@ -350,7 +350,10 @@ class BacktestTaskExecutor:
                 )
 
                 # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）
-                backtest_report = executor.run_backtest(
+                # run_backtest 是 async def，需要在事件循环中执行
+                import asyncio
+
+                _backtest_coro = executor.run_backtest(
                     strategy_name=strategy_name,
                     stock_codes=stock_codes,
                     start_date=start_date,
@@ -359,6 +362,7 @@ class BacktestTaskExecutor:
                     backtest_config=backtest_config,
                     task_id=task_id,
                 )
+                backtest_report = asyncio.run(_backtest_coro)
 
                 # 步骤4: 计算回测结果
                 progress_tracker.update_step("计算回测结果")

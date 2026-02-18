@@ -123,13 +123,14 @@ export default function PredictionsPage() {
       const response = await DataService.createPrediction(request);
 
       // 处理响应数据
-      if (response && (response as any).predictions) {
-        setPredictions((response as any).predictions);
+      if (response && response.predictions) {
+        setPredictions(response.predictions as unknown as PredictionResult[]);
       } else if (Array.isArray(response)) {
         setPredictions(response as unknown as PredictionResult[]);
       }
-    } catch (err: any) {
-      setError(err.message || '预测失败，请稍后重试');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '预测失败，请稍后重试';
+      setError(message);
       console.error('预测失败:', err);
     } finally {
       setPredicting(false);
@@ -231,7 +232,7 @@ export default function PredictionsPage() {
               <Select
                 value={horizon}
                 label="预测周期"
-                onChange={e => setHorizon(e.target.value as any)}
+                onChange={e => setHorizon(e.target.value as 'intraday' | 'short_term' | 'medium_term')}
               >
                 <MenuItem value="intraday">日内 (Intraday)</MenuItem>
                 <MenuItem value="short_term">短期 (1-5天)</MenuItem>

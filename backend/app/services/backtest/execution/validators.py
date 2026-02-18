@@ -11,7 +11,7 @@ from ....core.error_handler import ErrorSeverity, TaskError
 from ..core.portfolio_manager import PortfolioManager
 from ..models.data_models import TradingSignal
 from ..models.enums import SignalType
-from ..strategies.factory import AdvancedStrategyFactory
+from ..strategies.strategy_factory import StrategyFactory
 
 
 def validate_backtest_parameters(
@@ -23,8 +23,8 @@ def validate_backtest_parameters(
 ) -> bool:
     """验证回测参数"""
     try:
-        # 验证策略名称
-        available_strategies = AdvancedStrategyFactory.get_available_strategies()
+        # 验证策略名称（使用统一的 StrategyFactory，包含 ML 集成策略）
+        available_strategies = StrategyFactory.get_available_strategies()
         # available_strategies 可能是分类字典 {'technical': ['bollinger', ...]} 或扁平列表
         if isinstance(available_strategies, dict):
             all_strategy_names = [

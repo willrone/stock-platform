@@ -364,6 +364,10 @@ class UnifiedQlibTrainingEngine:
                 "split_method": config.split_method,
                 "prediction_horizon": config.prediction_horizon,
             }
+            # 保存实际使用的特征列名，供推理时对齐
+            if hasattr(train_dataset, "_feature_columns") and train_dataset._feature_columns:
+                training_meta["feature_columns"] = train_dataset._feature_columns
+                logger.info(f"保存特征列名: {len(train_dataset._feature_columns)} 列")
             model_path = await save_qlib_model(
                 model,
                 model_id,

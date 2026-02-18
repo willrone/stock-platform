@@ -59,10 +59,13 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         self.lgb_weight = config.get("lgb_weight", 0.5)
         self.xgb_weight = config.get("xgb_weight", 0.5)
         self.top_n = config.get("top_n", 5)
-        default_path = Path(__file__).parents[4] / "data" / "models"
+        default_path = Path(__file__).parents[5] / "data" / "models"
         self.model_path = config.get("model_path", str(default_path))
         self._lgb_model_id = config.get("lgb_model_id")
         self._xgb_model_id = config.get("xgb_model_id")
+        # 允许通过 config 覆盖买卖阈值（CSRankNorm 模型需要更高阈值）
+        self._buy_threshold = config.get("buy_threshold", BUY_RETURN_THRESHOLD)
+        self._sell_threshold = config.get("sell_threshold", SELL_RETURN_THRESHOLD)
         # 模型对象和元数据（加载后填充）
         self._model_pair: Optional[LoadedModelPair] = None
 
@@ -98,6 +101,12 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         if self._model_pair:
             return self._model_pair.feature_set
         return "technical_62"
+
+    @property
+    def _feature_columns(self) -> list:
+        if self._model_pair:
+            return self._model_pair.feature_columns
+        return []
 
     @property
     def _label_type(self) -> str:
@@ -165,7 +174,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             return self._precompute_fallback(data)
 
         try:
-            X = build_feature_matrix(data, self._feature_set)
+            X = build_feature_matrix(data, self._feature_set, self._feature_columns)
             if X is None:
                 return self._precompute_fallback(data)
 
@@ -194,7 +203,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                 _logger.error("数据缺少 stock_code 列")
                 return None
 
-            X = build_feature_matrix_batch(df, self._feature_set)
+            X = build_feature_matrix_batch(df, self._feature_set, self._feature_columns)
             if X is None:
                 return None
 
@@ -206,23 +215,96 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
     # ── 预测核心 ─────────────────────────────────────────
 
-    def _ensemble_predict(self, X: np.ndarray) -> np.ndarray:
-        """双模型集成预测"""
-        mp = self._model_pair
-        lgb_pred = mp.lgb_model.predict(
-            X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X
-        )
-        xgb_pred = self._predict_xgb(X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X)
-        return self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
+    @staticmethod
+    def _unwrap_model(model):
+        """解包 Qlib 模型包装，获取底层原生模型"""
+        # Qlib LGBModel / XGBModel 把原生模型存在 .model 属性
+        if hasattr(model, "model") and model.model is not None:
+            return model.model
+        return model
+
+    def _predict_lgb(self, X: np.ndarray) -> np.ndarray:
+        """LightGBM 预测，兼容 Qlib 包装和原生 Booster"""
+        raw = self._unwrap_model(self._model_pair.lgb_model)
+        if raw is None:
+            return np.zeros(X.shape[0])
+        return raw.predict(X)
 
     def _predict_xgb(self, X: np.ndarray) -> np.ndarray:
-        """XGBoost 预测，兼容 sklearn 和 native API"""
-        model = self._model_pair.xgb_model
-        if hasattr(model, "get_booster"):
-            return model.predict(X)
-        import xgboost as xgb
+        """XGBoost 预测，兼容 Qlib 包装、sklearn API、native Booster 和 LightGBM 模型
 
-        return model.predict(xgb.DMatrix(X))
+        当 lgb_model_id 和 xgb_model_id 指向同一个 LightGBM 模型时，
+        自动检测模型类型并使用 LightGBM 的预测方式。
+        """
+        raw = self._unwrap_model(self._model_pair.xgb_model)
+        if raw is None:
+            return np.zeros(X.shape[0])
+
+        # 检测是否实际上是 LightGBM 模型
+        try:
+            import lightgbm as lgb
+            if isinstance(raw, lgb.Booster):
+                _logger.debug("XGB 槽位检测到 LightGBM Booster，使用 lgb 预测")
+                return raw.predict(X)
+        except ImportError:
+            pass
+
+        # sklearn API (XGBRegressor/XGBClassifier)
+        if hasattr(raw, "get_booster"):
+            return raw.predict(X)
+        # native xgb.Booster 需要 DMatrix
+        import xgboost as xgb
+        if isinstance(raw, xgb.Booster):
+            return raw.predict(xgb.DMatrix(X))
+
+        # 兜底：尝试直接调用 predict
+        _logger.warning(f"XGB 槽位模型类型未知: {type(raw).__name__}，尝试直接 predict")
+        return raw.predict(X)
+
+    def _ensemble_predict(self, X: np.ndarray) -> np.ndarray:
+        """双模型集成预测（支持单模型）
+
+        不再静默吞掉异常——单个模型预测失败时记录错误并降级为另一个模型，
+        两个都失败才返回零向量。
+        """
+        mp = self._model_pair
+        X2d = X.reshape(-1, X.shape[-1]) if X.ndim == 1 else X
+
+        has_lgb = mp.lgb_model is not None
+        has_xgb = mp.xgb_model is not None
+
+        lgb_pred = None
+        xgb_pred = None
+
+        if has_lgb:
+            try:
+                lgb_pred = self._predict_lgb(X2d)
+            except Exception as e:
+                _logger.error(f"LGB 预测失败: {e}", exc_info=True)
+
+        if has_xgb:
+            try:
+                xgb_pred = self._predict_xgb(X2d)
+            except Exception as e:
+                _logger.error(f"XGB 预测失败: {e}", exc_info=True)
+
+        if lgb_pred is not None and xgb_pred is not None:
+            pred = self.lgb_weight * lgb_pred + self.xgb_weight * xgb_pred
+            _logger.debug(
+                f"集成预测: lgb=[{lgb_pred.min():.4f},{lgb_pred.max():.4f}], "
+                f"xgb=[{xgb_pred.min():.4f},{xgb_pred.max():.4f}], "
+                f"ensemble=[{pred.min():.4f},{pred.max():.4f}]"
+            )
+            return pred
+        elif lgb_pred is not None:
+            _logger.warning("仅 LGB 预测可用，XGB 失败或缺失")
+            return lgb_pred
+        elif xgb_pred is not None:
+            _logger.warning("仅 XGB 预测可用，LGB 失败或缺失")
+            return xgb_pred
+        else:
+            _logger.error("LGB 和 XGB 预测均失败，返回零向量")
+            return np.zeros(X2d.shape[0])
 
     def _predict_at_index(
         self,
@@ -236,6 +318,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                 X = build_feature_matrix(
                     data.iloc[max(0, idx - MIN_DATA_LENGTH) : idx + 1],
                     self._feature_set,
+                    self._feature_columns,
                 )
                 if X is not None and len(X) > 0:
                     pred = self._ensemble_predict(X[-1:])
@@ -256,14 +339,15 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             return self._interpret_binary(raw_pred)
         return self._interpret_regression(raw_pred)
 
-    @staticmethod
-    def _interpret_regression(pred_return: float) -> tuple:
-        """回归模式：预测值是收益率"""
-        if pred_return > BUY_RETURN_THRESHOLD:
-            strength = min(abs(pred_return) * 100, 1.0)
+    def _interpret_regression(self, pred_return: float) -> tuple:
+        """回归模式：预测值是收益率（或 CSRankNorm 标准化值）"""
+        buy_thr = self._buy_threshold
+        sell_thr = self._sell_threshold
+        if pred_return > buy_thr:
+            strength = min(abs(pred_return - buy_thr) * 2, 1.0)
             return SignalType.BUY, strength
-        if pred_return < SELL_RETURN_THRESHOLD:
-            strength = min(abs(pred_return) * 100, 1.0)
+        if pred_return < sell_thr:
+            strength = min(abs(pred_return - sell_thr) * 2, 1.0)
             return SignalType.SELL, strength
         return None, 0.0
 
@@ -445,8 +529,8 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             score -= ((mh < 0) & (ms < 0)).astype(float) * 0.002
 
         signals = pd.Series([None] * len(data), index=data.index, dtype=object)
-        signals[score > BUY_RETURN_THRESHOLD] = SignalType.BUY
-        signals[score < SELL_RETURN_THRESHOLD] = SignalType.SELL
+        signals[score > self._buy_threshold] = SignalType.BUY
+        signals[score < self._sell_threshold] = SignalType.SELL
         return signals
 
     # ── 工具方法 ───────────��─────────────────────────────

@@ -34,7 +34,7 @@ class DataLoader:
             # coverage ratio: rows / expected business days (rough)
             total_days = (end_date.date() - start_date.date()).days + 1
             expected = max(1, total_days * 5 // 7)
-            min_rows = 30
+            min_rows = min(10, expected)
             if len(data) < min_rows:
                 return False
             coverage = len(data) / expected

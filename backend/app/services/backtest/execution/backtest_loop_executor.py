@@ -195,6 +195,23 @@ class BacktestLoopExecutor:
                             if j is not None and bool(valid_mat[j, i]):
                                 current_prices[c] = float(close_mat[j, i])
 
+                    # BUGFIX: 对于持仓股票，如果当天 valid_mat 为 False（停牌等），
+                    # 使用最近一个有效交易日的收盘价，避免持仓市值被计为0导致
+                    # 组合价值剧烈跳变，从而严重放大波动率（80-130% → 正常应<30%）
+                    for c in portfolio_stocks:
+                        if c not in current_prices:
+                            j = (
+                                code_to_i.get(c)
+                                if isinstance(code_to_i, dict)
+                                else None
+                            )
+                            if j is not None:
+                                # 向前搜索最近的有效价格
+                                for k in range(i - 1, -1, -1):
+                                    if bool(valid_mat[j, k]):
+                                        current_prices[c] = float(close_mat[j, k])
+                                        break
+
                 else:
                     # [优化 1] 避免 DataFrame 拷贝：使用 .values 和缓存的索引
                     for stock_code, data in stock_data.items():
@@ -215,6 +232,21 @@ class BacktestLoopExecutor:
                                 )
                         except Exception:
                             pass
+
+                    # BUGFIX: 对于持仓股票，如果当天没有数据（停牌等），
+                    # 使用最近一个有效交易日的收盘价，避免持仓市值被计为0
+                    if hasattr(portfolio_manager, 'positions'):
+                        for stock_code in list(portfolio_manager.positions.keys()):
+                            if stock_code not in current_prices:
+                                data = stock_data.get(stock_code)
+                                if data is not None and len(data) > 0:
+                                    # 找到 current_date 之前最近的有效价格
+                                    valid_dates = data.index[data.index <= current_date]
+                                    if len(valid_dates) > 0:
+                                        last_valid_idx = len(valid_dates) - 1
+                                        current_prices[stock_code] = float(
+                                            data["close"].values[last_valid_idx]
+                                        )
 
                 if not current_prices:
                     continue
@@ -856,6 +888,9 @@ class BacktestLoopExecutor:
                             )
 
                     # Rebalance according to TopK+buffer rules
+                    min_buy_score = float(
+                        (strategy_config or {}).get("min_buy_score", 0.0)
+                    )
                     (
                         executed_trade_signals,
                         unexecuted_signals,
@@ -872,6 +907,7 @@ class BacktestLoopExecutor:
                         debug=bool(
                             (strategy_config or {}).get("debug_topk_buffer", False)
                         ),
+                        min_buy_score=min_buy_score,
                     )
 
                     # Debug: show what was executed on key dates / when trades happen
@@ -1111,15 +1147,7 @@ class BacktestLoopExecutor:
                         except Exception as db_error:
                             logger.error(f"更新任务进度到数据库失败: {db_error}", exc_info=True)
 
-                    # 更新进程内的进度监控（轻量，不涉及 DB）
-                    await backtest_progress_monitor.update_execution_progress(
-                        task_id=task_id,
-                        processed_days=i + 1,
-                        current_date=current_date.strftime("%Y-%m-%d"),
-                        signals_generated=len(all_signals),
-                        trades_executed=trades_this_day,
-                        portfolio_value=portfolio_value,
-                    )
+                    # 进度监控已通过同步DB写入完成，跳过async调用避免子进程死锁
 
                 # 定期输出进度日志
                 if i % 50 == 0:
@@ -1133,9 +1161,9 @@ class BacktestLoopExecutor:
                 error_msg = f"回测循环错误，日期: {current_date}, 错误: {e}"
                 logger.error(error_msg)
 
-                # 添加警告到进度监控
+                # 警告已通过logger记录，跳过async调用避免子进程死锁
                 if task_id:
-                    await backtest_progress_monitor.add_warning(task_id, error_msg)
+                    logger.warning(f"回测警告 task={task_id}: {error_msg}")
 
                 continue
 
@@ -1147,13 +1175,7 @@ class BacktestLoopExecutor:
             logger.info(f"🔄 最终一次性写入: {_total_signals_to_write} 条信号记录（Raw SQL）")
 
             try:
-                import asyncio as _asyncio
                 import json as _json
-
-                from sqlalchemy import text as _text
-                from sqlalchemy.exc import OperationalError as _OpError
-
-                from app.core.database import get_async_session_context
 
                 _max_retries = 5
                 _retry_delay = 0.5
@@ -1198,30 +1220,46 @@ class BacktestLoopExecutor:
                         }
                     )
 
-                _insert_sql = _text(
-                    """
+                # 子进程安全：使用同步 sqlite3 直接写入，避免 async engine 在子进程中死锁
+                import sqlite3 as _sqlite3
+                from app.core.config import settings as _settings
+
+                _db_path = str(_settings.DATABASE_URL).replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+                # 处理相对路径
+                if not _db_path.startswith("/"):
+                    import os as _os
+                    _db_path = _os.path.join(str(_settings.DATA_ROOT_PATH), _db_path.lstrip("./"))
+
+                _WRITE_BATCH_SIZE = 5000
+                _write_start = time.perf_counter()
+
+                _raw_insert_sql = """
                     INSERT INTO signal_records
                         (task_id, backtest_id, signal_id, stock_code, stock_name,
                          signal_type, timestamp, price, strength, reason,
                          signal_metadata, executed, execution_reason, created_at)
                     VALUES
-                        (:task_id, :backtest_id, :signal_id, :stock_code, :stock_name,
-                         :signal_type, :timestamp, :price, :strength, :reason,
-                         :signal_metadata, :executed, :execution_reason, :created_at)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
-                )
-
-                # 分批写入，每批 5000 条，避免单次事务过大
-                _WRITE_BATCH_SIZE = 5000
-                _write_start = time.perf_counter()
 
                 for _attempt in range(_max_retries + 1):
                     try:
-                        async with get_async_session_context() as session:
+                        _conn = _sqlite3.connect(_db_path, timeout=30)
+                        _conn.execute("PRAGMA journal_mode=WAL")
+                        try:
                             for _bi in range(0, len(_insert_rows), _WRITE_BATCH_SIZE):
                                 _batch = _insert_rows[_bi : _bi + _WRITE_BATCH_SIZE]
-                                await session.execute(_insert_sql, _batch)
-                            await session.commit()
+                                _conn.executemany(_raw_insert_sql, [
+                                    (r["task_id"], r["backtest_id"], r["signal_id"],
+                                     r["stock_code"], r["stock_name"], r["signal_type"],
+                                     r["timestamp"], r["price"], r["strength"],
+                                     r["reason"], r["signal_metadata"], r["executed"],
+                                     r["execution_reason"], r["created_at"])
+                                    for r in _batch
+                                ])
+                            _conn.commit()
+                        finally:
+                            _conn.close()
 
                         _write_duration = time.perf_counter() - _write_start
                         logger.info(
@@ -1231,12 +1269,9 @@ class BacktestLoopExecutor:
                         )
                         break  # 成功
 
-                    except _OpError as e:
+                    except Exception as e:
                         _err_msg = str(e).lower()
-                        if (
-                            "database is locked" in _err_msg
-                            or "database locked" in _err_msg
-                        ):
+                        if "database is locked" in _err_msg or "database locked" in _err_msg:
                             if _attempt < _max_retries:
                                 _wait = _retry_delay * (_backoff_factor**_attempt)
                                 logger.warning(
@@ -1244,15 +1279,12 @@ class BacktestLoopExecutor:
                                     f"第 {_attempt + 1}/{_max_retries} 次重试，"
                                     f"等待 {_wait:.2f}s"
                                 )
-                                await _asyncio.sleep(_wait)
+                                time.sleep(_wait)
                             else:
                                 logger.error(f"最终写入重试 {_max_retries} 次后仍然失败: {e}")
                         else:
-                            logger.error(f"最终写入数据库失败（非锁定错误）: {e}")
+                            logger.error(f"最终写入数据库失败: {e}")
                             break
-                    except Exception as e:
-                        logger.error(f"最终写入数据库失败: {e}")
-                        break
 
             except Exception as e:
                 logger.error(f"最终写入数据库时出错: {e}")
@@ -1265,16 +1297,8 @@ class BacktestLoopExecutor:
             task_progress_cache.remove(task_id)
 
             final_portfolio_value = portfolio_manager.get_portfolio_value({})
-            await backtest_progress_monitor.update_execution_progress(
-                task_id=task_id,
-                processed_days=len(trading_dates),
-                current_date=trading_dates[-1].strftime("%Y-%m-%d")
-                if trading_dates
-                else None,
-                signals_generated=0,
-                trades_executed=0,
-                portfolio_value=final_portfolio_value,
-            )
+            # 跳过async progress monitor调用，避免子进程死锁
+            logger.info(f"回测循环完成 task={task_id}, days={len(trading_dates)}, portfolio={final_portfolio_value:.2f}")
 
         # 记录性能统计到性能分析器
         if self.enable_performance_profiling and self.performance_profiler:
@@ -1317,6 +1341,7 @@ class BacktestLoopExecutor:
         max_changes: int = 2,
         strategy: Optional[BaseStrategy] = None,
         debug: bool = False,
+        min_buy_score: float = 0.0,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
         """每日 TopK 选股 + buffer 换仓 + 每天最多换 max_changes 只。
 
@@ -1324,6 +1349,7 @@ class BacktestLoopExecutor:
         - 目标持仓数量=topk
         - 若持仓仍在 Top(topk+buffer_n) 内，则尽量保留（减少换手）
         - 每天最多做 max_changes 个 "卖出+买入" 的替换
+        - min_buy_score: 最低买入分数阈值，低于此分数的股票不会被买入（但已持有的可保留在buffer内）
 
         Returns:
             executed_trade_signals, unexecuted_signals, trades_this_day
@@ -1337,14 +1363,19 @@ class BacktestLoopExecutor:
 
         # rank by score desc, tie-break by stock_code for determinism
         ranked = sorted(scores.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
-        topk_list = [c for c, _ in ranked[:topk]]
+        # 过滤：只有分数 > min_buy_score 的股票才能进入 topk 候选
+        qualified = [(c, s) for c, s in ranked if s > min_buy_score]
+        effective_topk = min(topk, len(qualified))
+        topk_list = [c for c, _ in qualified[:effective_topk]]
+        # buffer 仍然基于全排名（已持有的低分股票可以在 buffer 内保留，避免频繁卖出）
         buffer_list = [c for c, _ in ranked[: max(topk, topk + buffer_n)]]
         buffer_set = set(buffer_list)
 
         holdings = list(portfolio_manager.positions.keys())
 
-        # Keep holdings inside buffer zone
-        kept = [c for c in holdings if c in buffer_set]
+        # Keep holdings inside buffer zone, but force-sell if score is actively negative
+        score_map = dict(ranked)
+        kept = [c for c in holdings if c in buffer_set and score_map.get(c, 0.0) >= -min_buy_score]
 
         # If kept > topk, trim lowest-ranked among kept
         rank_index = {c: i for i, (c, _) in enumerate(ranked)}
@@ -1354,7 +1385,7 @@ class BacktestLoopExecutor:
 
         kept_set = set(kept)
 
-        # Sell candidates: holdings outside buffer OR trimmed
+        # Sell candidates: holdings outside buffer OR trimmed OR actively bearish
         to_sell = [c for c in holdings if c not in kept_set]
 
         # Buy candidates: topk names not already kept

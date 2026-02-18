@@ -290,6 +290,12 @@ class SimpleDataService:
                 try:
                     df = pd.read_parquet(parquet_path)
 
+                    # If date is the index, move it to a column
+                    if df.index.name == "date" or (
+                        isinstance(df.index, pd.DatetimeIndex) and "date" not in df.columns
+                    ):
+                        df = df.reset_index()
+
                     # Normalize column names - handle different naming conventions
                     col_mapping = {
                         "ts_code": "stock_code",

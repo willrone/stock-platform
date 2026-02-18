@@ -503,6 +503,8 @@ class DataPreprocessor:
         N = len(stock_codes)
 
         dates64 = np.array(trading_dates, dtype="datetime64[ns]")
+        # 统一 trading_dates 为 datetime64[ns]，供后续 searchsorted 使用
+        trading_dates_ns = dates64
 
         # 预分配数组（Phase 3 优化：使用连续内存）
         close = np.full((N, T), np.nan, dtype=np.float64, order="C")
@@ -511,7 +513,7 @@ class DataPreprocessor:
         signal = np.zeros((N, T), dtype=np.int8, order="C")
         strength = np.zeros((N, T), dtype=np.float32, order="C")
 
-        # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
+        # 如果已做向量化预计算信号，尽量直接读取 per-stock Series 并对齐到 trading_dates
         strategy_key = strategy.name  # 使用 strategy.name 作为稳定的 key
 
         for i, code in enumerate(stock_codes):
@@ -519,14 +521,15 @@ class DataPreprocessor:
 
             # Phase 3 优化：使用 numpy searchsorted 替代 pandas reindex（更快）
             try:
-                # 价格对齐（使用 searchsorted 进行索引���射）
-                df_dates = df.index.values
+                # 价格对齐（使用 searchsorted 进行索引映射）
+                # 确保 df_dates 为 datetime64[ns]，避免与 trading_dates 类型不匹配
+                df_dates = np.array(df.index.values, dtype="datetime64[ns]")
                 # 使用 searchsorted 找到每个 trading_date 在 df_dates 中的位置
-                indices = np.searchsorted(df_dates, trading_dates)
+                indices = np.searchsorted(df_dates, trading_dates_ns)
                 # 处理越界情况
                 indices = np.clip(indices, 0, len(df_dates) - 1)
-                # 检查是否精确匹配
-                matches = df_dates[indices] == trading_dates
+                # 检查是否精确匹配（两边都已是 datetime64[ns]）
+                matches = df_dates[indices] == trading_dates_ns
 
                 # 填充价格数据
                 close_values = df["close"].values[indices]
@@ -572,10 +575,11 @@ class DataPreprocessor:
                 sig_ser = pre.get(strategy_key)
                 if isinstance(sig_ser, pd.Series):
                     # 使用 searchsorted 批量对齐
-                    sig_dates = sig_ser.index.values
-                    sig_indices = np.searchsorted(sig_dates, trading_dates)
+                    # 确保 sig_dates 为 datetime64[ns]，避免类型不匹配
+                    sig_dates = np.array(sig_ser.index.values, dtype="datetime64[ns]")
+                    sig_indices = np.searchsorted(sig_dates, trading_dates_ns)
                     sig_indices = np.clip(sig_indices, 0, len(sig_dates) - 1)
-                    sig_matches = sig_dates[sig_indices] == trading_dates
+                    sig_matches = sig_dates[sig_indices] == trading_dates_ns
 
                     # 获取信号值
                     vals = sig_ser.values[sig_indices].copy()
@@ -618,10 +622,11 @@ class DataPreprocessor:
                 elif isinstance(sig_ser, dict):
                     # dict 路径：转换为 Series 后复用相同逻辑
                     sig_series = pd.Series(sig_ser)
-                    sig_dates = sig_series.index.values
-                    sig_indices = np.searchsorted(sig_dates, trading_dates)
+                    # 确保 sig_dates 为 datetime64[ns]，避免类型不匹配
+                    sig_dates = np.array(sig_series.index.values, dtype="datetime64[ns]")
+                    sig_indices = np.searchsorted(sig_dates, trading_dates_ns)
                     sig_indices = np.clip(sig_indices, 0, len(sig_dates) - 1)
-                    sig_matches = sig_dates[sig_indices] == trading_dates
+                    sig_matches = sig_dates[sig_indices] == trading_dates_ns
 
                     vals = sig_series.values[sig_indices].copy()
                     vals[~sig_matches] = None

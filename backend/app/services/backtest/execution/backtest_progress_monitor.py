@@ -423,13 +423,20 @@ class BacktestProgressMonitor:
         if extra_data:
             notification_data.update(extra_data)
 
-        # 发送WebSocket通知
-        await websocket_manager.notify_task_status(
-            task_id=task_id,
-            status=update_type,
-            progress=progress_data.overall_progress,
-            result=notification_data,
-        )
+        # 发送WebSocket通知（子进程中跳过，避���死锁）
+        import multiprocessing
+        if multiprocessing.current_process().name == 'MainProcess':
+            try:
+                await websocket_manager.notify_task_status(
+                    task_id=task_id,
+                    status=update_type,
+                    progress=progress_data.overall_progress,
+                    result=notification_data,
+                )
+            except Exception as ws_err:
+                logger.debug(f"WebSocket通知失败（非致命）: {ws_err}")
+        else:
+            logger.debug(f"子进程中跳过WebSocket通知: task={task_id}, type={update_type}")
 
 
 # 全局进度监控器实例

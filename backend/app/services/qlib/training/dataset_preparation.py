@@ -408,6 +408,19 @@ def _postprocess_data(
         if val_data is not None and "label" in val_data.columns:
             val_data = csrn.transform(val_data, label_col="label")
 
+        # CSRankNorm 可能在截面样本不足时产生 NaN，需要清理
+        before = len(train_data)
+        train_data = train_data.dropna(subset=["label"])
+        dropped = before - len(train_data)
+        if dropped > 0:
+            logger.info(f"CSRankNorm 后清理 label=NaN: train {dropped}/{before}")
+        if val_data is not None and "label" in val_data.columns:
+            before_v = len(val_data)
+            val_data = val_data.dropna(subset=["label"])
+            dropped_v = before_v - len(val_data)
+            if dropped_v > 0:
+                logger.info(f"CSRankNorm 后清理 label=NaN: val {dropped_v}/{before_v}")
+
     feature_cols = [c for c in train_data.columns if c != "label"]
 
     # 中性化
