@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Box,
   Button,
@@ -31,7 +32,6 @@ import {
   MultiSignalHistoryResponse,
   SignalEvent,
 } from '../../services/dataService';
-import TradingViewChart from '@/components/charts/TradingViewChart';
 import {
   StrategyConfigForm,
   StrategyParameter,
@@ -42,6 +42,11 @@ import {
 } from '../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfig, StrategyConfigService } from '../../services/strategyConfigService';
 import { MobileSignalCard } from '../../components/mobile/MobileSignalCard';
+
+const TradingViewChart = dynamic(
+  () => import('@/components/charts/TradingViewChart'),
+  { ssr: false, loading: () => <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>加载图表...</div> }
+);
 
 export default function SignalsPage() {
   const [strategies, setStrategies] = useState<

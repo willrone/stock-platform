@@ -29,7 +29,12 @@ import {
   CreateOptimizationTaskRequest,
   ParamSpaceConfig,
 } from '../../services/optimizationService';
-import { StockSelector } from '../tasks/StockSelector';
+import dynamic from 'next/dynamic';
+
+const StockSelector = dynamic(
+  () => import('../tasks/StockSelector').then(mod => ({ default: mod.StockSelector })),
+  { ssr: false }
+);
 import { apiRequest } from '../../services/api';
 
 interface CreateOptimizationTaskFormProps {

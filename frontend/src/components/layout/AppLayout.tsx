@@ -131,8 +131,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     // 初始检查
     checkConnection();
 
-    // 定期检查连接状态
-    const interval = setInterval(checkConnection, 5000);
+    // 定期检查连接状态（10秒轮询，减少不必要的检查）
+    const interval = setInterval(checkConnection, 10000);
 
     // 监听系统警告
     const handleSystemAlert = (data: any) => {

@@ -3,16 +3,17 @@
  */
 
 import { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import echarts from '@/lib/echarts';
+import type { EChartsOption } from 'echarts/core';
 
 export const useECharts = (
   data: unknown,
-  options: echarts.EChartsOption | ((data: unknown) => echarts.EChartsOption),
+  options: EChartsOption | ((data: unknown) => EChartsOption),
   dependencies: unknown[] = [],
   isActive: boolean = true
 ) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   useEffect(() => {
     if (!chartRef.current || !data || (Array.isArray(data) && data.length === 0) || !isActive) {

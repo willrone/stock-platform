@@ -25,7 +25,7 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material';
-import * as echarts from 'echarts';
+import echarts from '@/lib/echarts';
 import {
   TrendingUp,
   TrendingDown,

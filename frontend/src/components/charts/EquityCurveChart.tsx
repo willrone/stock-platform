@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import * as echarts from 'echarts';
+import echarts from '@/lib/echarts';
 import {
   Card,
   CardContent,

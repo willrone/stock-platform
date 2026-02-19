@@ -87,55 +87,29 @@ export default function DataManagementPage() {
     message?: string;
   } | null>(null);
 
-  // 检查服务状态
-  const checkServiceStatus = async () => {
+  const loadData = async () => {
+    setLoading(true);
     try {
-      const status = await DataService.getDataServiceStatus();
+      const [status, remote, local] = await Promise.all([
+        DataService.getDataServiceStatus(),
+        DataService.getRemoteStockList(),
+        DataService.getLocalStockListDetailed(),
+      ]);
       setServiceStatus(status);
+      setRemoteStocks(remote.stocks || []);
+      setLocalStocks(local.stocks || []);
     } catch (error) {
-      console.error('检查服务状态失败:', error);
-    }
-  };
-
-  // 加载远端股票列表
-  const loadRemoteStocks = async () => {
-    try {
-      const result = await DataService.getRemoteStockList();
-      setRemoteStocks(result.stocks || []);
-    } catch (error) {
-      console.error('加载远端股票列表失败:', error);
-      setRemoteStocks([]);
-    }
-  };
-
-  // 加载本地股票列表
-  const loadLocalStocks = async () => {
-    try {
-      const result = await DataService.getLocalStockListDetailed();
-      setLocalStocks(result.stocks || []);
-    } catch (error) {
-      console.error('加载本地股票列表失败:', error);
-      setLocalStocks([]);
-    }
-  };
-
-  // 初始化加载
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([checkServiceStatus(), loadRemoteStocks(), loadLocalStocks()]);
+      console.error('加载数据失败:', error);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     loadData();
   }, []);
 
-  // 刷新数据
-  const handleRefresh = async () => {
-    setLoading(true);
-    await Promise.all([checkServiceStatus(), loadRemoteStocks(), loadLocalStocks()]);
-    setLoading(false);
-  };
+  const handleRefresh = () => loadData();
 
   // 同步远端数据
   const handleSyncRemoteData = async () => {
@@ -158,7 +132,7 @@ export default function DataManagementPage() {
 
       // 如果同步成功，刷新数据
       if (result.success) {
-        await handleRefresh();
+        handleRefresh();
       }
     } catch (error) {
       console.error('同步远端数据失败:', error);
@@ -424,7 +398,7 @@ export default function DataManagementPage() {
               variant="outlined"
               size="small"
               startIcon={<RefreshCw size={16} />}
-              onClick={checkServiceStatus}
+              onClick={() => loadData()}
             >
               刷新
             </Button>
@@ -505,13 +479,7 @@ export default function DataManagementPage() {
               variant="outlined"
               size="small"
               startIcon={<RefreshCw size={16} />}
-              onClick={() => {
-                if (activeTab === 'remote') {
-                  loadRemoteStocks();
-                } else {
-                  loadLocalStocks();
-                }
-              }}
+              onClick={() => loadData()}
             >
               刷新
             </Button>

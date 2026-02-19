@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Card,
   CardHeader,
@@ -34,8 +35,12 @@ import {
 import { StrategyConfigService } from '../../services/strategyConfigService';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import OptimizationStatusMonitor from './OptimizationStatusMonitor';
-import OptimizationVisualization from './OptimizationVisualization';
 import { SaveStrategyConfigDialog } from '../backtest/SaveStrategyConfigDialog';
+
+const OptimizationVisualization = dynamic(
+  () => import('./OptimizationVisualization'),
+  { ssr: false, loading: () => <LoadingSpinner text="加载可视化..." /> }
+);
 
 interface OptimizationTaskDetailProps {
   taskId: string;

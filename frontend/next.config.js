@@ -44,4 +44,9 @@ const nextConfig = {
     return config;
   },
 };
-module.exports = nextConfig;
+
+// 使用 ANALYZE=true npm run build 分析 bundle 体积（需先安装 @next/bundle-analyzer）
+module.exports =
+  process.env.ANALYZE === 'true'
+    ? require('@next/bundle-analyzer')({ enabled: true })(nextConfig)
+    : nextConfig;

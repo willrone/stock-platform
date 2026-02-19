@@ -11,6 +11,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from 'react-query';
 import {
   Card,
   CardContent,
@@ -50,6 +51,7 @@ import { MobileTaskCard } from '../../components/mobile/MobileTaskCard';
 
 export default function TasksPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     tasks,
     total,
@@ -67,13 +69,19 @@ export default function TasksPage() {
   const [searchText, setSearchText] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
-  const [stats, setStats] = useState({
-    total: 0,
-    running: 0,
-    completed: 0,
-    failed: 0,
-  });
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  const { data: statsData } = useQuery(
+    ['tasks', 'stats'],
+    () => TaskService.getTaskStats(),
+    { staleTime: 30 * 1000 }
+  );
+  const stats = {
+    total: statsData?.total ?? 0,
+    running: statsData?.running ?? 0,
+    completed: statsData?.completed ?? 0,
+    failed: statsData?.failed ?? 0,
+  };
   const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
   const [deleteForce, setDeleteForce] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -92,45 +100,10 @@ export default function TasksPage() {
     }
   };
 
-  // 加载任务统计信息
-  const loadStats = async () => {
-    try {
-      const statsData = await TaskService.getTaskStats();
-      setStats({
-        total: statsData.total,
-        running: statsData.running,
-        completed: statsData.completed,
-        failed: statsData.failed,
-      });
-    } catch (error) {
-      console.error('加载任务统计失败:', error);
-      // 如果API失败，使用本地计算作为后备
-      setStats({
-        total: tasks.length,
-        running: tasks.filter(t => t.status === 'running').length,
-        completed: tasks.filter(t => t.status === 'completed').length,
-        failed: tasks.filter(t => t.status === 'failed').length,
-      });
-    }
-  };
-
   // 初始化加载
   useEffect(() => {
     loadTasks();
-    loadStats();
   }, []);
-
-  // 当任务列表更新时，也更新统计（作为后备）
-  useEffect(() => {
-    if (tasks.length > 0 && stats.total === 0) {
-      setStats({
-        total: tasks.length,
-        running: tasks.filter(t => t.status === 'running').length,
-        completed: tasks.filter(t => t.status === 'completed').length,
-        failed: tasks.filter(t => t.status === 'failed').length,
-      });
-    }
-  }, [tasks]);
 
   // WebSocket实时更新
   useEffect(() => {
@@ -198,6 +171,7 @@ export default function TasksPage() {
 
   // 刷新任务列表
   const handleRefresh = () => {
+    queryClient.invalidateQueries(['tasks', 'stats']);
     loadTasks();
   };
 
@@ -221,6 +195,7 @@ export default function TasksPage() {
     try {
       await TaskService.deleteTask(taskToDelete, deleteForce);
       console.log('任务删除成功');
+      queryClient.invalidateQueries(['tasks', 'stats']);
       loadTasks();
       setTaskToDelete(null);
       setIsDeleteOpen(false);
@@ -248,6 +223,7 @@ export default function TasksPage() {
       await TaskService.batchDeleteTasks(taskIds);
       console.log(`成功删除 ${taskIds.length} 个任务`);
       setSelectedKeys(new Set());
+      queryClient.invalidateQueries(['tasks', 'stats']);
       loadTasks();
     } catch (error) {
       console.error('批量删除失败');
@@ -261,6 +237,7 @@ export default function TasksPage() {
     try {
       await TaskService.retryTask(taskId);
       console.log('任务已重新启动');
+      queryClient.invalidateQueries(['tasks', 'stats']);
       loadTasks();
     } catch (error) {
       console.error('重新运行失败');

@@ -10,7 +10,8 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useQuery } from 'react-query';
 import {
   Card,
   CardContent,
@@ -42,50 +43,28 @@ import { Task } from '../../stores/useTaskStore';
 export default function DashboardPage() {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [recentTasks, setRecentTasks] = useState<Task[]>([]);
-  const [systemStats, setSystemStats] = useState({
-    totalTasks: 0,
-    runningTasks: 0,
-    completedTasks: 0,
-    failedTasks: 0,
-    dataFiles: 0,
-    systemHealth: 'good' as 'good' | 'warning' | 'error',
-  });
+  const { data: tasksResult, isLoading: tasksLoading } = useQuery(
+    ['tasks', 'recent', 5],
+    () => TaskService.getTasks(undefined, 5, 0),
+    { staleTime: 30 * 1000 }
+  );
 
-  // 加载仪表板数据
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
+  const { data: statsData, isLoading: statsLoading } = useQuery(
+    ['tasks', 'stats'],
+    () => TaskService.getTaskStats(),
+    { staleTime: 30 * 1000 }
+  );
 
-        // 加载最近任务
-        const tasksResult = await TaskService.getTasks(undefined, 5, 0);
-        setRecentTasks(tasksResult.tasks);
-
-        // 加载所有任务以计算统计数据
-        const allTasksResult = await TaskService.getTasks(undefined, 1000, 0);
-        const allTasks = allTasksResult.tasks;
-
-        // 计算统计数据
-        const stats = {
-          totalTasks: allTasks.length,
-          runningTasks: allTasks.filter(t => t.status === 'running').length,
-          completedTasks: allTasks.filter(t => t.status === 'completed').length,
-          failedTasks: allTasks.filter(t => t.status === 'failed').length,
-          dataFiles: 156, // 模拟数据
-          systemHealth: 'good' as const,
-        };
-        setSystemStats(stats);
-      } catch (error) {
-        console.error('加载仪表板数据失败:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboardData();
-  }, []);
+  const loading = tasksLoading || statsLoading;
+  const recentTasks = tasksResult?.tasks ?? [];
+  const systemStats = {
+    totalTasks: statsData?.total ?? 0,
+    runningTasks: statsData?.running ?? 0,
+    completedTasks: statsData?.completed ?? 0,
+    failedTasks: statsData?.failed ?? 0,
+    dataFiles: 156,
+    systemHealth: 'good' as const,
+  };
 
   // 获取任务状态颜色
   const getTaskStatusColor = (status: string): 'primary' | 'success' | 'error' | 'default' => {

@@ -5,6 +5,7 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import {
   TextField,
   Select,
@@ -16,8 +17,12 @@ import {
   Box,
   Typography,
 } from '@mui/material';
-import { StockSelector } from '../tasks/StockSelector';
 import { FeatureSelector } from './FeatureSelector';
+
+const StockSelector = dynamic(
+  () => import('../tasks/StockSelector').then(mod => ({ default: mod.StockSelector })),
+  { ssr: false }
+);
 
 interface CreateModelFormProps {
   formData: {

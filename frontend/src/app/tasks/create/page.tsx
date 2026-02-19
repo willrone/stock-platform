@@ -11,6 +11,7 @@
 'use client';
 
 import React, { Suspense, useEffect, useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import {
   Card,
@@ -37,7 +38,6 @@ import { useDataStore } from '../../../stores/useDataStore';
 import { useTaskStore } from '../../../stores/useTaskStore';
 import { TaskService, CreateTaskRequest } from '../../../services/taskService';
 import { DataService } from '../../../services/dataService';
-import { StockSelector } from '../../../components/tasks/StockSelector';
 import {
   StrategyConfigForm,
   StrategyParameter,
@@ -47,6 +47,11 @@ import {
   PortfolioStrategyItem,
 } from '../../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
+
+const StockSelector = dynamic(
+  () => import('../../../components/tasks/StockSelector').then(mod => ({ default: mod.StockSelector })),
+  { ssr: false, loading: () => <div style={{ minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>加载股票选择器...</div> }
+);
 
 // 包裹 useSearchParams 的内部组件，避免 Suspense 问题
 function CreateTaskPageInner() {

@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardHeader, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
 import { OptimizationResult } from '../../services/optimizationService';
-import * as echarts from 'echarts';
+import echarts from '@/lib/echarts';
 
 interface OptimizationVisualizationProps {
   result: OptimizationResult;

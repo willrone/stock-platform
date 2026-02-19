@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { AppLayout } from '../components/layout/AppLayout';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { MUIThemeProvider } from '../theme/muiTheme';
+import { ReactQueryProvider } from '../providers/ReactQueryProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,9 +27,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <MUIThemeProvider>
-          <ErrorBoundary>
-            <AppLayout>{children}</AppLayout>
-          </ErrorBoundary>
+          <ReactQueryProvider>
+            <ErrorBoundary>
+              <AppLayout>{children}</AppLayout>
+            </ErrorBoundary>
+          </ReactQueryProvider>
         </MUIThemeProvider>
       </body>
     </html>

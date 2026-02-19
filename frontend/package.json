@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
@@ -45,6 +46,7 @@
     "zustand": "4.4.7"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.1.6",
     "@testing-library/jest-dom": "6.1.5",
     "@testing-library/react": "14.1.2",
     "@types/jest": "^30.0.0",

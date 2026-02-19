@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import * as echarts from 'echarts';
+import echarts from '@/lib/echarts';
 import { Card, CardContent, Chip, CircularProgress, Box, Typography } from '@mui/material';
 import { TrendingUp, TrendingDown, Target, AlertCircle } from 'lucide-react';
 import { PredictionResult, TaskService } from '../../services/taskService';

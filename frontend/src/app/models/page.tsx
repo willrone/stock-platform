@@ -7,6 +7,7 @@
 'use client';
 
 import React, { useCallback, useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Card,
   CardContent,
@@ -23,8 +24,12 @@ import { Plus, Brain, TrendingUp, Trash2 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { useDataStore, Model } from '../../stores/useDataStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { TrainingReportModal } from '../../components/models/TrainingReportModal';
 import { ModelListTable } from '../../components/models/ModelListTable';
+
+const TrainingReportModal = dynamic(
+  () => import('../../components/models/TrainingReportModal').then(mod => ({ default: mod.TrainingReportModal })),
+  { ssr: false }
+);
 import { LiveTrainingModal } from '../../components/models/LiveTrainingModal';
 import { CreateModelForm } from '../../components/models/CreateModelForm';
 import {
