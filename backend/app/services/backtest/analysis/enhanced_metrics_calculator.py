@@ -147,17 +147,16 @@ class EnhancedMetricsCalculator:
         )
 
         # Sortino比率
-        downside_returns = returns[returns < 0]
-        if len(downside_returns) > 0:
-            downside_deviation = downside_returns.std() * np.sqrt(252)
-            sortino_ratio = (
-                (annualized_return - self.risk_free_rate) / downside_deviation
-                if downside_deviation > 0
-                else 0
-            )
-        else:
-            downside_deviation = 0
-            sortino_ratio = 0
+        # 标准 downside deviation：对所有收益日计算，正收益视为0
+        target_return = self.risk_free_rate / 252  # 日无风险利率作为目标收益
+        downside_diff = returns - target_return
+        downside_diff = downside_diff.clip(upper=0)  # 正的部分归零
+        downside_deviation = np.sqrt((downside_diff ** 2).mean()) * np.sqrt(252)
+        sortino_ratio = (
+            (annualized_return - self.risk_free_rate) / downside_deviation
+            if downside_deviation > 1e-6
+            else 0
+        )
 
         # 信息比率（假设基准收益为无风险利率）
         excess_returns = returns - (self.risk_free_rate / 252)
@@ -223,13 +222,13 @@ class EnhancedMetricsCalculator:
 
         recovery_days = (recovery_date - max_dd_date).days if recovery_date else None
 
-        # Calmar比率
+        # Calmar比率 = 年化收益 / |最大回撤|（不扣无风险利率）
         annualized_return = (portfolio_values.iloc[-1] / portfolio_values.iloc[0]) ** (
             252 / len(portfolio_values)
         ) - 1
         calmar_ratio = (
-            (annualized_return - self.risk_free_rate) / abs(max_drawdown)
-            if max_drawdown < 0
+            annualized_return / abs(max_drawdown)
+            if max_drawdown < -0.01  # 最大回撤至少1%才有意义
             else 0
         )
 

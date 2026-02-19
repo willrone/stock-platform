@@ -178,6 +178,13 @@ export interface BacktestDetailedResult {
         winning_trades: number;
         losing_trades: number;
       }>;
+  rolling_metrics?: {
+    dates: string[];
+    rolling_sharpe: number[];
+    rolling_volatility: number[];
+    rolling_drawdown: number[];
+    window_size: number;
+  };
   drawdown_analysis: {
     max_drawdown: number;
     max_drawdown_date: string;

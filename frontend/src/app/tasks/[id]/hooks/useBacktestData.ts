@@ -56,7 +56,8 @@ export function useBacktestData(taskId: string, currentTask: Task | null) {
 
       // 使用数据适配器转换数据格式
       console.log('[useBacktestData] 开始适配风险分析数据...');
-      const riskMetrics = BacktestDataAdapter.adaptRiskMetrics(detailedResult);
+      const backtestData = currentTask?.result || currentTask?.results?.backtest_results || currentTask?.backtest_results;
+      const riskMetrics = BacktestDataAdapter.adaptRiskMetrics(detailedResult, backtestData as Record<string, unknown> | null);
       const returnDistribution = BacktestDataAdapter.generateReturnDistribution(detailedResult);
       const rollingMetrics = BacktestDataAdapter.generateRollingMetrics(detailedResult);
 

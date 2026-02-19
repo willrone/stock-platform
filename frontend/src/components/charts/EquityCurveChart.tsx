@@ -401,9 +401,12 @@ export default function EquityCurveChart({
       }
 
       const option = (chartInstance.current as echarts.ECharts & { getOption: () => Record<string, unknown> }).getOption();
+      if (!option || option.dataZoom == null) {
+        return;
+      }
       const dataZoom = option.dataZoom as { xAxisIndex?: number | number[]; start?: number; end?: number }[];
 
-      if (!dataZoom || dataZoom.length === 0) {
+      if (dataZoom.length === 0) {
         return;
       }
 

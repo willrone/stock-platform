@@ -123,56 +123,97 @@ export class BacktestDataAdapter {
 
   /**
    * 将后端数据转换为风险指标格式
+   * @param detailedResult 回测详细结果（扩展风险指标、回撤分析等）
+   * @param backtestData 主回测结果（包含 sharpe_ratio、volatility 等基础指标）
    */
-  static adaptRiskMetrics(detailedResult: BacktestDetailedResult | null | undefined): RiskMetrics {
-    if (!detailedResult) {
-      // 返回默认值，避免页面崩溃
-      return {
-        sharpe_ratio: 0,
-        sortino_ratio: 0,
-        calmar_ratio: 0,
-        information_ratio: 0,
-        max_drawdown: 0,
-        avg_drawdown: 0,
-        drawdown_recovery_time: 0,
-        volatility_daily: 0,
-        volatility_monthly: 0,
-        volatility_annual: 0,
-        var_95: 0,
-        var_99: 0,
-        cvar_95: 0,
-        cvar_99: 0,
-        beta: 0,
-        alpha: 0,
-        tracking_error: 0,
-        upside_capture: 0,
-        downside_capture: 0,
-      };
+  static adaptRiskMetrics(
+    detailedResult: BacktestDetailedResult | null | undefined,
+    backtestData?: Record<string, unknown> | null
+  ): RiskMetrics {
+    const defaultMetrics: RiskMetrics = {
+      sharpe_ratio: 0,
+      sortino_ratio: 0,
+      calmar_ratio: 0,
+      information_ratio: 0,
+      max_drawdown: 0,
+      avg_drawdown: 0,
+      drawdown_recovery_time: 0,
+      volatility_daily: 0,
+      volatility_monthly: 0,
+      volatility_annual: 0,
+      var_95: 0,
+      var_99: 0,
+      cvar_95: 0,
+      cvar_99: 0,
+      beta: 0,
+      alpha: 0,
+      tracking_error: 0,
+      upside_capture: 0,
+      downside_capture: 0,
+    };
+
+    if (!detailedResult && !backtestData) {
+      return defaultMetrics;
     }
 
-    const extended = detailedResult.extended_risk_metrics || {};
+    const extended = detailedResult?.extended_risk_metrics ?? { sortino_ratio: 0, calmar_ratio: 0, max_drawdown_duration: 0, var_95: 0, downside_deviation: 0 };
+    // benchmark_comparison 由后端 JSON 字段返回，但前端接口未声明
+    const detailedAny = detailedResult as Record<string, unknown> | undefined;
+    const benchmark = detailedAny?.benchmark_comparison as Record<string, unknown> | undefined;
 
-    // 从现有数据中提取或计算风险指标
+    // 从主回测结果中提取基础指标
+    const riskMetricsObj = (backtestData?.risk_metrics || {}) as Record<string, number>;
+    const sharpeRatio = riskMetricsObj.sharpe_ratio
+      ?? (backtestData?.sharpe_ratio as number | undefined)
+      ?? 0;
+    const volatilityAnnual = riskMetricsObj.volatility
+      ?? (backtestData?.volatility as number | undefined)
+      ?? 0;
+    const maxDrawdown = riskMetricsObj.max_drawdown
+      ?? (backtestData?.max_drawdown as number | undefined)
+      ?? detailedResult?.drawdown_analysis?.max_drawdown
+      ?? 0;
+
+    // 从波动率推算日/月波动率
+    const volatilityDaily = volatilityAnnual ? volatilityAnnual / Math.sqrt(252) : 0;
+    const volatilityMonthly = volatilityAnnual ? volatilityAnnual / Math.sqrt(12) : 0;
+
+    // 从回撤分析中计算平均回撤
+    const drawdownCurve = detailedResult?.drawdown_analysis?.drawdown_curve;
+    let avgDrawdown = 0;
+    if (Array.isArray(drawdownCurve) && drawdownCurve.length > 0) {
+      const drawdowns = drawdownCurve
+        .map((d: { drawdown?: number }) => d.drawdown ?? 0)
+        .filter((d: number) => d < 0);
+      if (drawdowns.length > 0) {
+        avgDrawdown = drawdowns.reduce((sum: number, d: number) => sum + d, 0) / drawdowns.length;
+      }
+    }
+
+    // 从基准对比数据中提取市场相关性指标
+    const benchmarkMetrics = (benchmark?.comparison_metrics || benchmark || {}) as Record<string, number>;
+
     return {
-      sharpe_ratio: 1.2, // 需要从基础回测结果中获取
-      sortino_ratio: extended.sortino_ratio || 0,
-      calmar_ratio: extended.calmar_ratio || 0,
-      information_ratio: 0.8, // 需要计算
-      max_drawdown: detailedResult.drawdown_analysis?.max_drawdown || 0,
-      avg_drawdown: -0.05, // 需要计算
+      sharpe_ratio: sharpeRatio,
+      // 旧数据可能因计算bug存了极端值，超出合理范围视为无效
+      sortino_ratio: Math.abs(extended.sortino_ratio || 0) <= 20 ? (extended.sortino_ratio || 0) : 0,
+      calmar_ratio: Math.abs(extended.calmar_ratio || 0) <= 20 ? (extended.calmar_ratio || 0) : 0,
+      information_ratio: benchmarkMetrics.information_ratio ?? 0,
+      max_drawdown: maxDrawdown,
+      avg_drawdown: avgDrawdown,
       drawdown_recovery_time: extended.max_drawdown_duration || 0,
-      volatility_daily: 0.02, // 需要计算
-      volatility_monthly: 0.08, // 需要计算
-      volatility_annual: 0.18, // 需要计算
+      volatility_daily: volatilityDaily,
+      volatility_monthly: volatilityMonthly,
+      volatility_annual: volatilityAnnual,
       var_95: extended.var_95 || 0,
-      var_99: -0.05, // 需要计算
-      cvar_95: -0.04, // 需要计算
-      cvar_99: -0.06, // 需要计算
-      beta: 0.95, // 需要从基准对比中获取
-      alpha: 0.02, // 需要从基准对比中获取
-      tracking_error: 0.08, // 需要计算
-      upside_capture: 1.05, // 需要计算
-      downside_capture: 0.92, // 需要计算
+      var_99: 0,
+      cvar_95: 0,
+      cvar_99: 0,
+      beta: benchmarkMetrics.beta ?? 0,
+      alpha: benchmarkMetrics.alpha ?? 0,
+      tracking_error: benchmarkMetrics.tracking_error ?? 0,
+      upside_capture: 0,
+      downside_capture: 0,
     };
   }
 
@@ -240,33 +281,34 @@ export class BacktestDataAdapter {
   static generateRollingMetrics(
     detailedResult: BacktestDetailedResult | null | undefined
   ): RollingMetrics {
+    const empty: RollingMetrics = {
+      dates: [],
+      rolling_sharpe: [],
+      rolling_volatility: [],
+      rolling_drawdown: [],
+      rolling_beta: [],
+      window_size: 60,
+    };
+
     if (!detailedResult) {
-      // 返回默认值，避免页面崩溃
+      return empty;
+    }
+
+    // 使用后端计算的真实滚动指标
+    const rm = detailedResult.rolling_metrics;
+    if (rm && Array.isArray(rm.dates) && rm.dates.length > 0) {
       return {
-        dates: [],
-        rolling_sharpe: [],
-        rolling_volatility: [],
-        rolling_drawdown: [],
-        rolling_beta: [],
-        window_size: 60,
+        dates: rm.dates,
+        rolling_sharpe: rm.rolling_sharpe || [],
+        rolling_volatility: rm.rolling_volatility || [],
+        rolling_drawdown: rm.rolling_drawdown || [],
+        rolling_beta: [], // 后端暂未计算 beta
+        window_size: rm.window_size || 60,
       };
     }
 
-    // 从回撤分析中获取日期序列
-    const dates = detailedResult.drawdown_analysis?.drawdown_curve?.map(d => d.date) || [];
-    const windowSize = 60; // 60日滚动窗口
-
-    // 生成滚动指标（实际应该从历史数据中计算）
-    const rollingData = this.generateRollingData(dates, windowSize);
-
-    return {
-      dates: dates,
-      rolling_sharpe: rollingData.sharpe,
-      rolling_volatility: rollingData.volatility,
-      rolling_drawdown: rollingData.drawdown,
-      rolling_beta: rollingData.beta,
-      window_size: windowSize,
-    };
+    // 无真实数据时返回空，不再生成假数据
+    return empty;
   }
 
   /**
@@ -283,10 +325,10 @@ export class BacktestDataAdapter {
       year: monthData.year,
       month: monthData.month,
       return_rate: monthData.monthly_return,
-      volatility: 0.15, // 需要计算
-      sharpe_ratio: 1.2, // 需要计算
-      max_drawdown: -0.08, // 需要计算
-      trading_days: 21, // 需要计算
+      volatility: 0,
+      sharpe_ratio: 0,
+      max_drawdown: 0,
+      trading_days: 0,
     }));
   }
 
@@ -629,17 +671,6 @@ export class BacktestDataAdapter {
         p75: sorted[Math.floor(sorted.length * 0.75)],
         p95: sorted[Math.floor(sorted.length * 0.95)],
       },
-    };
-  }
-
-  private static generateRollingData(dates: string[], windowSize: number) {
-    const length = dates.length;
-
-    return {
-      sharpe: Array.from({ length }, () => 1.0 + Math.random() * 0.5),
-      volatility: Array.from({ length }, () => 0.15 + Math.random() * 0.1),
-      drawdown: Array.from({ length }, () => -Math.random() * 0.15),
-      beta: Array.from({ length }, () => 0.9 + Math.random() * 0.2),
     };
   }
 

@@ -202,7 +202,7 @@ class BacktestDetailedDataPopulator:
                 "monthly_returns": [mr.to_dict() for mr in enhanced_result.monthly_returns] if enhanced_result.monthly_returns else [],
                 "position_analysis": [pa.to_dict() for pa in enhanced_result.position_analysis] if enhanced_result.position_analysis else [],
                 "benchmark_comparison": enhanced_result.benchmark_data or {},
-                "rolling_metrics": {}  # 可以后续添加滚动指标
+                "rolling_metrics": enhanced_result.rolling_metrics or {}  # 滚动指标时间序列
             }
             
             # 使用原始SQL插入

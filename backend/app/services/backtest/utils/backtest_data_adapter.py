@@ -67,7 +67,17 @@ class BacktestDataAdapter:
                 task_result.get("portfolio_history", []), benchmark_symbol="000300.SH"
             )
 
-            # 7. 构建增强结果
+            # 7. 计算滚动指标时间序列
+            rolling_metrics = self._calculate_rolling_metrics_series(
+                task_result.get("portfolio_history", [])
+            )
+            logger.info(
+                f"滚动指标计算结果: type={type(rolling_metrics)}, "
+                f"keys={list(rolling_metrics.keys()) if isinstance(rolling_metrics, dict) else 'N/A'}, "
+                f"dates_len={len(rolling_metrics.get('dates', []))} if dict else 'N/A'"
+            )
+
+            # 8. 构建增强结果
             enhanced_result = EnhancedBacktestResult(
                 # 现有字段直接映射
                 strategy_name=base_data["strategy_name"],
@@ -95,6 +105,7 @@ class BacktestDataAdapter:
                 position_analysis=position_analysis,
                 drawdown_analysis=drawdown_analysis,
                 benchmark_data=benchmark_data if benchmark_data else None,
+                rolling_metrics=rolling_metrics,
             )
 
             logger.info("回测结果数据适配完成")
@@ -482,3 +493,74 @@ class BacktestDataAdapter:
         except Exception as e:
             logger.error(f"计算最大回撤持续时间失败: {e}")
             return 0
+
+    def _calculate_rolling_metrics_series(
+        self, portfolio_history: List[Dict], window: int = 60
+    ) -> Dict[str, Any]:
+        """计算滚动指标时间序列，用于前端图表展示"""
+        if not portfolio_history:
+            return {}
+
+        try:
+            df = pd.DataFrame(portfolio_history)
+            if "date" in df.columns:
+                df["date"] = pd.to_datetime(df["date"])
+                df.set_index("date", inplace=True)
+
+            returns = df["portfolio_value"].pct_change().dropna()
+
+            if len(returns) < window:
+                logger.warning(
+                    f"数据长度 {len(returns)} 小于滚动窗口 {window}，跳过滚动指标计算"
+                )
+                return {}
+
+            # 滚动夏普比率
+            # 年化收益 = 日均收益 × 252，年化波动率 = 日标准差 × √252
+            rolling_annualized_return = returns.rolling(window).mean() * 252
+            rolling_std = returns.rolling(window).std() * np.sqrt(252)
+            rolling_sharpe = (rolling_annualized_return - self.risk_free_rate) / rolling_std
+
+            # 滚动波动率
+            rolling_volatility = rolling_std
+
+            # 滚动最大回撤
+            rolling_values = df["portfolio_value"]
+            rolling_drawdown_series = []
+            dates = []
+            for i in range(window, len(rolling_values)):
+                window_values = rolling_values.iloc[i - window : i + 1]
+                peak = window_values.expanding().max()
+                dd = ((window_values - peak) / peak).min()
+                rolling_drawdown_series.append(float(dd) if not pd.isna(dd) else 0)
+                dates.append(rolling_values.index[i].isoformat())
+
+            # 对齐数据：取有效部分（去掉 NaN）
+            valid_sharpe = rolling_sharpe.dropna()
+            valid_volatility = rolling_volatility.dropna()
+
+            # 使用 sharpe 的有效日期作为基准
+            result_dates = [d.isoformat() for d in valid_sharpe.index]
+
+            result = {
+                "dates": result_dates,
+                "rolling_sharpe": [
+                    float(v) if not pd.isna(v) else 0 for v in valid_sharpe.values
+                ],
+                "rolling_volatility": [
+                    float(v) if not pd.isna(v) else 0 for v in valid_volatility.values
+                ],
+                "rolling_drawdown": rolling_drawdown_series[
+                    : len(result_dates)
+                ],
+                "window_size": window,
+            }
+
+            logger.info(
+                f"滚动指标计算完成，数据点数: {len(result_dates)}, 窗口: {window}"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"计算滚动指标时间序列失败: {e}", exc_info=True)
+            return {}

@@ -467,9 +467,15 @@ def execute_backtest_task_simple(task_id: str):
         )
 
         try:
-            # 创建异步任务并等待完成
-            async def run_async_backtest():
-                return await executor.run_backtest(
+            # 在新的事件循环中运行异步任务
+            import nest_asyncio
+
+            nest_asyncio.apply()
+
+            async def run_backtest_and_save():
+                """执行回测并保存详细数据，在同一个事件循环中完成"""
+                # 1. 执行回测
+                backtest_report = await executor.run_backtest(
                     strategy_name=strategy_name,
                     stock_codes=stock_codes,
                     start_date=start_date,
@@ -479,48 +485,52 @@ def execute_backtest_task_simple(task_id: str):
                     task_id=task_id,
                 )
 
-            # 在新的事件循环中运行异步任务
-            import nest_asyncio
+                # 更新进度到90%（同步操作，可直接调用）
+                task_repository.update_task_status(
+                    task_id=task_id, status=TaskStatus.RUNNING, progress=90.0
+                )
 
-            nest_asyncio.apply()
+                # 保存回测结果并完成任务
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.COMPLETED,
+                    progress=100.0,
+                    result=backtest_report,
+                )
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                backtest_report = loop.run_until_complete(run_async_backtest())
-            finally:
-                loop.close()
+                task_logger.info(
+                    f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}, 进程ID: {process_id}"
+                )
 
-            # 更新进度到90%
-            task_repository.update_task_status(
-                task_id=task_id, status=TaskStatus.RUNNING, progress=90.0
-            )
+                # 2. 异步保存详细数据
+                # 重要：子进程不能复用主进程的 async_engine（aiosqlite 连接池绑定到创建它的进程/事件循环）
+                # 因此在子进程中就地创建独立的 async_engine 和 session
+                try:
+                    task_logger.info(f"开始保存回测详细数据: {task_id}")
 
-            # 保存回测结果并完成任务
-            task_repository.update_task_status(
-                task_id=task_id,
-                status=TaskStatus.COMPLETED,
-                progress=100.0,
-                result=backtest_report,
-            )
+                    from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
+                    from sqlalchemy.ext.asyncio import create_async_engine as _create_async_engine
+                    from sqlalchemy.ext.asyncio import async_sessionmaker as _async_sessionmaker
 
-            task_logger.info(
-                f"回测任务完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}, 进程ID: {process_id}"
-            )
-
-            # 异步保存详细数据到数据库
-            try:
-                task_logger.info(f"开始保存回测详细数据: {task_id}")
-
-                async def save_detailed_data():
-                    """异步保存详细数据"""
-                    from app.core.database import get_async_session_context, retry_db_operation
+                    from app.core.config import settings as _settings
+                    from app.core.database import retry_db_operation
                     from app.repositories.backtest_detailed_repository import (
                         BacktestDetailedRepository,
                     )
                     from app.services.backtest.models import EnhancedPositionAnalysis
                     from app.services.backtest.statistics import StatisticsCalculator
                     from app.services.backtest.utils import BacktestDataAdapter
+
+                    # 子进程专属 async_engine
+                    _subprocess_async_engine = _create_async_engine(
+                        _settings.DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://"),
+                        echo=False,
+                        future=True,
+                        connect_args={"check_same_thread": False, "timeout": 30.0}
+                        if "sqlite" in _settings.DATABASE_URL.lower()
+                        else {},
+                        pool_pre_ping=True,
+                    )
 
                     adapter = BacktestDataAdapter()
 
@@ -539,7 +549,13 @@ def execute_backtest_task_simple(task_id: str):
                         f"转换后的数据: trade_history={len(enhanced_result.trade_history)}, portfolio_history={len(enhanced_result.portfolio_history)}"
                     )
 
-                    async with get_async_session_context() as session:
+                    _SubprocessSessionLocal = _async_sessionmaker(
+                        _subprocess_async_engine,
+                        class_=_AsyncSession,
+                        expire_on_commit=False,
+                    )
+
+                    async with _SubprocessSessionLocal() as session:
                         try:
 
                             async def _save_data():
@@ -659,16 +675,35 @@ def execute_backtest_task_simple(task_id: str):
                                     )
                                     if enhanced_result.benchmark_data
                                     else {},
-                                    "rolling_metrics": {},
+                                    "rolling_metrics": to_python_type(
+                                        enhanced_result.rolling_metrics
+                                    )
+                                    if enhanced_result.rolling_metrics
+                                    else {},
                                 }
 
                                 # 创建详细结果记录
-                                await repository.create_detailed_result(
-                                    task_id=task_id,
-                                    backtest_id=f"bt_{task_id[:8]}",
-                                    extended_metrics=extended_metrics,
-                                    analysis_data=analysis_data,
+                                task_logger.info(
+                                    f"准备调用 create_detailed_result: task_id={task_id}, "
+                                    f"extended_metrics keys={list(extended_metrics.keys())}, "
+                                    f"analysis_data keys={list(analysis_data.keys())}"
                                 )
+                                try:
+                                    detail_result = await repository.create_detailed_result(
+                                        task_id=task_id,
+                                        backtest_id=f"bt_{task_id[:8]}",
+                                        extended_metrics=extended_metrics,
+                                        analysis_data=analysis_data,
+                                    )
+                                    task_logger.info(
+                                        f"create_detailed_result 返回: {detail_result is not None}"
+                                    )
+                                except Exception as detail_err:
+                                    import traceback as tb
+                                    task_logger.error(
+                                        f"create_detailed_result 异常: {type(detail_err).__name__}: {detail_err}\n"
+                                        f"{tb.format_exc()}"
+                                    )
 
                                 # 批量创建组合快照记录
                                 portfolio_history = (
@@ -854,23 +889,32 @@ def execute_backtest_task_simple(task_id: str):
 
                         except Exception as e:
                             await session.rollback()
+                            import traceback as tb
                             task_logger.error(
-                                f"保存回测详细数据失败: {task_id}, 错误: {e}", exc_info=True
+                                f"保存回测详细数据失败: {task_id}, 错误: {type(e).__name__}: {e}\n{tb.format_exc()}"
                             )
 
-                # 在新的事件循环中运行
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(save_detailed_data())
+                except Exception as save_error:
+                    import traceback as tb
+                    task_logger.error(
+                        f"保存详细数据时出错: {task_id}, 错误: {type(save_error).__name__}: {save_error}\n{tb.format_exc()}"
+                    )
+                    # 不影响主流程，继续执行
                 finally:
-                    loop.close()
+                    # 关闭子进程专属的 async_engine，避免连接泄漏
+                    try:
+                        await _subprocess_async_engine.dispose()
+                    except Exception:
+                        pass
 
-            except Exception as save_error:
-                task_logger.error(
-                    f"保存详细数据时出错: {task_id}, 错误: {save_error}", exc_info=True
-                )
-                # 不影响主流程，继续执行
+                return backtest_report
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                backtest_report = loop.run_until_complete(run_backtest_and_save())
+            finally:
+                loop.close()
 
         except TaskError as task_error:
             # 处理任务错误（如任务被删除）

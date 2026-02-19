@@ -147,6 +147,8 @@ class EnhancedBacktestResult:
     benchmark_data: Optional[Dict[str, Any]] = None
     # 回撤详细分析
     drawdown_analysis: Optional[DrawdownAnalysis] = None
+    # 滚动指标时间序列
+    rolling_metrics: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""

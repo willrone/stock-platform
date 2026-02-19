@@ -20,7 +20,12 @@
       "Bash(pip index:*)",
       "Bash(pip install:*)",
       "Bash(sqlite3:*)",
-      "Bash(apt list:*)"
+      "Bash(apt list:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git stash:*)",
+      "Bash(git stash pop:*)",
+      "Bash(/home/willrone/Github/willrone/willrone/backend/.venv/bin/python3:*)",
+      "Bash(.venv/bin/python3:*)"
     ]
   }
 }
