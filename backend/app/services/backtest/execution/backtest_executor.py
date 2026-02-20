@@ -406,7 +406,9 @@ class BacktestExecutor:
             # ========== 内存优化：回测循环结束后释放大对象 ==========
             del aligned_arrays
             precomputed_signals.clear()
-            stock_data.clear()
+            # 仅清空内部加载的数据，不破坏外部传入的 preloaded_stock_data
+            if preloaded_stock_data is None:
+                stock_data.clear()
             gc.collect()
 
             self.performance_tracker.end_stage(

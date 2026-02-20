@@ -11,6 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.api import api_router
+from app.api.v1.backtest_websocket import backtest_ws_router
 from app.core.config import settings
 from app.core.container import cleanup_container, get_container
 from app.core.database import init_db
@@ -269,6 +270,7 @@ def create_application() -> FastAPI:
     # 包含路由
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
     app.include_router(ws_router)  # WebSocket路由不需要前缀
+    app.include_router(backtest_ws_router)  # 回测WebSocket路由直接挂载，绕过HTTP中间件
 
     # 添加指标端点
     app.get("/metrics")(metrics_endpoint)

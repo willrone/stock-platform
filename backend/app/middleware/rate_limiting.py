@@ -91,6 +91,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
+        # WebSocket连接跳过限流（BaseHTTPMiddleware不兼容WebSocket）
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         # 检查是否在测试环境中（通过请求头）
         is_test_env = request.headers.get(
             "X-Test-Environment"

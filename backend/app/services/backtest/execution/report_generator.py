@@ -489,7 +489,7 @@ class BacktestReportGenerator:
                 )
 
             # 年度收益（年末权益）
-            yearly_values = portfolio_values.resample("Y").last()
+            yearly_values = portfolio_values.resample("YE").last()
             yearly_returns = yearly_values.pct_change().dropna()
 
             if len(yearly_returns) > 0:

@@ -485,12 +485,32 @@ class PortfolioManagerArray:
         if getattr(self.config, "record_portfolio_history", True):
             stride = int(getattr(self.config, "portfolio_history_stride", 1) or 1)
             if stride <= 1 or (self._snapshot_counter % stride == 0):
+                # 构建持仓快照（与非数组版 PortfolioManager 保持一致）
+                if getattr(self.config, "record_positions_in_history", True):
+                    position_indices = np.nonzero(self.quantities > 0)[0]
+                    positions_payload = {}
+                    for i in position_indices:
+                        code = self.stock_codes[i]
+                        qty = int(self.quantities[i])
+                        avg_c = float(self.avg_costs[i])
+                        cur_p = float(self._price_array[i]) if self._price_array_valid else 0.0
+                        mkt_val = qty * cur_p
+                        positions_payload[code] = {
+                            "quantity": qty,
+                            "avg_cost": avg_c,
+                            "current_price": cur_p,
+                            "market_value": mkt_val,
+                            "unrealized_pnl": mkt_val - qty * avg_c,
+                        }
+                else:
+                    positions_payload = {}
+
                 snapshot = {
                     "date": date,
                     "cash": self.cash,
                     "portfolio_value": portfolio_value,
                     "portfolio_value_without_cost": portfolio_value_without_cost,
-                    "positions": {},  # 简化版本，不记录详细持仓
+                    "positions": positions_payload,
                     "total_trades": len(self.trades),
                     "total_commission": self.total_commission,
                     "total_slippage": self.total_slippage,

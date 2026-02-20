@@ -26,6 +26,10 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
+        # WebSocket连接直接放行（BaseHTTPMiddleware不兼容WebSocket）
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         try:
             response = await call_next(request)
             return response
@@ -176,6 +180,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
+        # WebSocket连接直接放行（BaseHTTPMiddleware不兼容WebSocket）
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         start_time = datetime.now()
 
         # 记录请求信息

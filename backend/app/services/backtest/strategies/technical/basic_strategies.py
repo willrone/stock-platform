@@ -120,6 +120,11 @@ class MovingAverageStrategy(BaseStrategy):
                 ):
                     fv = float(sig_val)
                     sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
+                    # P4: 冷却期检查
+                    cd_type = "buy" if fv > 0 else "sell"
+                    if not self._check_cooldown(cd_type, current_date):
+                        return []
+                    self._update_cooldown(cd_type, current_date)
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
@@ -264,11 +269,83 @@ class RSIStrategy(BaseStrategy):
         self.rsi_period_long = config.get("rsi_period_long", 21)
         self.long_rsi_oversold = config.get("long_rsi_oversold", 50)
         self.long_rsi_overbought = config.get("long_rsi_overbought", 50)
-        # 兼容旧参数（不再���用但避免报错）
+        # P4: 信号冷却期参数
+        self.enable_cooldown = config.get("enable_cooldown", True)
+        self.cooldown_days = config.get("cooldown_days", 5)
+        self._last_buy_date: Optional[datetime] = None
+        self._last_sell_date: Optional[datetime] = None
+
+        # P5: RSI 背离检测参数
         self.enable_divergence = config.get("enable_divergence", False)
+        self.divergence_lookback = config.get("divergence_lookback", 20)
+        self.divergence_strength_boost = config.get("divergence_strength_boost", 0.2)
+
+        # 兼容旧参数
         self.enable_crossover = config.get("enable_crossover", True)
         self.uptrend_buy_threshold = config.get("uptrend_buy_threshold", 40)
         self.downtrend_sell_threshold = config.get("downtrend_sell_threshold", 60)
+
+
+    def _check_cooldown(self, signal_type: str, current_date: datetime) -> bool:
+        """P4: 检查信号冷却期，防止短期内重复触发同方向信号"""
+        if not self.enable_cooldown:
+            return True
+        if signal_type == "buy" and self._last_buy_date is not None:
+            delta = (current_date - self._last_buy_date).days
+            if delta < self.cooldown_days:
+                return False
+        if signal_type == "sell" and self._last_sell_date is not None:
+            delta = (current_date - self._last_sell_date).days
+            if delta < self.cooldown_days:
+                return False
+        return True
+
+    def _update_cooldown(self, signal_type: str, current_date: datetime) -> None:
+        """P4: 更新冷却期状态"""
+        if signal_type == "buy":
+            self._last_buy_date = current_date
+        elif signal_type == "sell":
+            self._last_sell_date = current_date
+
+    def _detect_divergence(self, indicators: Dict, idx: int) -> Optional[str]:
+        """P5: RSI 背离检测
+
+        看涨背离：价格创新低，RSI 未创新低（底背离）
+        看跌背离：价格创新高，RSI 未创新高（顶背离）
+
+        Returns: 'bullish' / 'bearish' / None
+        """
+        if not self.enable_divergence:
+            return None
+        lookback = self.divergence_lookback
+        if idx < lookback:
+            return None
+
+        rsi = indicators["rsi"]
+        price = indicators["price"]
+
+        price_window = price.iloc[idx - lookback : idx + 1]
+        rsi_window = rsi.iloc[idx - lookback : idx + 1]
+
+        if price_window.isna().any() or rsi_window.isna().any():
+            return None
+
+        current_price = price_window.iloc[-1]
+        current_rsi = rsi_window.iloc[-1]
+        min_price = price_window.iloc[:-1].min()
+        min_rsi = rsi_window.iloc[:-1].min()
+        max_price = price_window.iloc[:-1].max()
+        max_rsi = rsi_window.iloc[:-1].max()
+
+        # 看涨背离：价格创新低或接近新低，但 RSI 高于前低
+        if current_price <= min_price * 1.01 and current_rsi > min_rsi + 3:
+            return "bullish"
+
+        # 看跌背离：价格创新高或接近新高，但 RSI 低于前高
+        if current_price >= max_price * 0.99 and current_rsi < max_rsi - 3:
+            return "bearish"
+
+        return None
 
     def _calc_rsi_series(self, close_prices: pd.Series, period: int) -> pd.Series:
         """计算 RSI，支持 Numba/talib/pandas 三级 fallback"""
@@ -418,6 +495,42 @@ class RSIStrategy(BaseStrategy):
             ).clip(0.3, 1.0)
             signals[sell_mask.fillna(False)] = sell_strength[sell_mask.fillna(False)]
 
+            # P5: 背离检测 — 在无穿越信号的位置检测背离
+            if self.enable_divergence:
+                price = indicators["price"]
+                for i in range(self.divergence_lookback, len(data)):
+                    if signals.iloc[i] != 0.0:
+                        continue
+                    rsi_val = rsi.iloc[i]
+                    price_window = price.iloc[i - self.divergence_lookback : i + 1]
+                    rsi_window = rsi.iloc[i - self.divergence_lookback : i + 1]
+                    if price_window.isna().any() or rsi_window.isna().any():
+                        continue
+                    cur_p, cur_r = price_window.iloc[-1], rsi_window.iloc[-1]
+                    min_p, min_r = price_window.iloc[:-1].min(), rsi_window.iloc[:-1].min()
+                    max_p, max_r = price_window.iloc[:-1].max(), rsi_window.iloc[:-1].max()
+                    if cur_p <= min_p * 1.01 and cur_r > min_r + 3 and rsi_val < 50:
+                        signals.iloc[i] = min(1.0, 0.5 + self.divergence_strength_boost)
+                    elif cur_p >= max_p * 0.99 and cur_r < max_r - 3 and rsi_val > 50:
+                        signals.iloc[i] = -min(1.0, 0.5 + self.divergence_strength_boost)
+
+            # P4: 冷却期后处理 — 抑制冷却期内的重复信号
+            if self.enable_cooldown and self.cooldown_days > 0:
+                last_buy_idx = -self.cooldown_days - 1
+                last_sell_idx = -self.cooldown_days - 1
+                for i in range(len(signals)):
+                    val = signals.iloc[i]
+                    if val > 0:
+                        if i - last_buy_idx < self.cooldown_days:
+                            signals.iloc[i] = 0.0
+                        else:
+                            last_buy_idx = i
+                    elif val < 0:
+                        if i - last_sell_idx < self.cooldown_days:
+                            signals.iloc[i] = 0.0
+                        else:
+                            last_sell_idx = i
+
             return signals
         except Exception as e:
             logger.error(f"RSI策略向量化计算失败: {e}")
@@ -488,6 +601,11 @@ class RSIStrategy(BaseStrategy):
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
                     prev_rsi = indicators["rsi"].iloc[current_idx - 1] if current_idx > 0 else current_rsi
+                    # P4: 冷却期检查
+                    cd_type2 = "buy" if sig_val == SignalType.BUY else "sell"
+                    if not self._check_cooldown(cd_type2, current_date):
+                        return []
+                    self._update_cooldown(cd_type2, current_date)
                     strength = self._calc_buy_strength(float(prev_rsi)) if sig_val == SignalType.BUY else self._calc_sell_strength(float(prev_rsi))
                     meta = self._build_signal_metadata(indicators, current_idx, current_price, current_rsi, float(prev_rsi))
                     return [
@@ -520,11 +638,12 @@ class RSIStrategy(BaseStrategy):
             current_price = indicators["price"].iloc[current_idx]
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            # 买入信号：RSI穿越超卖 + 统一过滤
+            # 买入信号：RSI穿越超卖 + 统一过滤 + P4冷却期
             if (
                 prev_rsi <= self.oversold_threshold
                 and current_rsi > self.oversold_threshold
                 and self._check_filters_scalar(indicators, current_idx, "buy")
+                and self._check_cooldown("buy", current_date)
             ):
                 strength = self._calc_buy_strength(float(prev_rsi))
                 meta = self._build_signal_metadata(indicators, current_idx, current_price, float(current_rsi), float(prev_rsi))
@@ -538,12 +657,14 @@ class RSIStrategy(BaseStrategy):
                     metadata=meta,
                 )
                 signals.append(signal)
+                self._update_cooldown("buy", current_date)
 
-            # 卖出信号：RSI穿越超买 + 统一过滤
+            # 卖出信号：RSI穿越超买 + 统一过滤 + P4冷却期
             elif (
                 prev_rsi >= self.overbought_threshold
                 and current_rsi <= self.overbought_threshold
                 and self._check_filters_scalar(indicators, current_idx, "sell")
+                and self._check_cooldown("sell", current_date)
             ):
                 strength = self._calc_sell_strength(float(prev_rsi))
                 meta = self._build_signal_metadata(indicators, current_idx, current_price, float(current_rsi), float(prev_rsi))
@@ -557,6 +678,30 @@ class RSIStrategy(BaseStrategy):
                     metadata=meta,
                 )
                 signals.append(signal)
+                self._update_cooldown("sell", current_date)
+
+            # P5: 背离信号（无穿越信号时检测）
+            if not signals and self.enable_divergence:
+                div = self._detect_divergence(indicators, current_idx)
+                if div is not None:
+                    div_type = "buy" if div == "bullish" else "sell"
+                    if self._check_cooldown(div_type, current_date):
+                        div_strength = min(1.0, 0.5 + self.divergence_strength_boost)
+                        sig_type = SignalType.BUY if div == "bullish" else SignalType.SELL
+                        meta = self._build_signal_metadata(indicators, current_idx, current_price, float(current_rsi), float(prev_rsi))
+                        meta["divergence"] = div
+                        div_dir = "看涨" if div == "bullish" else "看跌"
+                        signal = TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=div_strength,
+                            price=current_price,
+                            reason=f"RSI{div_dir}背离, RSI: {current_rsi:.2f}",
+                            metadata=meta,
+                        )
+                        signals.append(signal)
+                        self._update_cooldown(div_type, current_date)
 
             return signals
 

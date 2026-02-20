@@ -21,6 +21,9 @@ from app.services.backtest.execution.backtest_progress_monitor import (
 
 router = APIRouter(prefix="/backtest", tags=["backtest-websocket"])
 
+# 独立的WebSocket路由器，直接挂载在app上，避免HTTP中间件干扰WebSocket连接
+backtest_ws_router = APIRouter()
+
 
 def get_db():
     """获取数据库会话依赖"""
@@ -42,10 +45,8 @@ class BacktestWebSocketManager:
     async def connect(
         self, websocket: WebSocket, connection_id: str, task_id: str
     ) -> bool:
-        """建立WebSocket连接"""
+        """建立WebSocket连接（websocket已在端点中accept）"""
         try:
-            await websocket.accept()
-
             self.active_connections[connection_id] = websocket
             self.connection_tasks[connection_id] = task_id
 
@@ -211,25 +212,32 @@ class BacktestWebSocketManager:
 backtest_ws_manager = BacktestWebSocketManager()
 
 
-@router.websocket("/ws/{task_id}")
+@backtest_ws_router.websocket("/api/v1/backtest/ws/{task_id}")
 async def backtest_progress_websocket(
-    websocket: WebSocket, task_id: str, session: Session = Depends(get_db)
+    websocket: WebSocket, task_id: str
 ):
     """回测进度WebSocket端点"""
     connection_id = f"bt_{task_id}_{datetime.utcnow().timestamp()}"
 
-    # 验证任务存在
+    # 必须先accept，否则无法发送close帧
+    await websocket.accept()
+
+    # 验证任务存在（手动管理数据库会话，避免Depends在WebSocket中的生命周期问题）
     try:
-        task_repository = TaskRepository(session)
-        task = task_repository.get_task_by_id(task_id)
+        session = SessionLocal()
+        try:
+            task_repository = TaskRepository(session)
+            task = task_repository.get_task_by_id(task_id)
 
-        if not task:
-            await websocket.close(code=4004, reason="任务不存在")
-            return
+            if not task:
+                await websocket.close(code=4004, reason="任务不存在")
+                return
 
-        if task.task_type != "backtest":
-            await websocket.close(code=4005, reason="任务类型不是回测")
-            return
+            if task.task_type != "backtest":
+                await websocket.close(code=4005, reason="任务类型不是回测")
+                return
+        finally:
+            session.close()
 
     except Exception as e:
         logger.error(f"验证回测任务失败: {task_id}, 错误: {e}")
@@ -452,4 +460,4 @@ async def cancel_backtest(
 
 
 # 导出主要组件
-__all__ = ["router", "backtest_ws_manager", "BacktestWebSocketManager"]
+__all__ = ["router", "backtest_ws_router", "backtest_ws_manager", "BacktestWebSocketManager"]
