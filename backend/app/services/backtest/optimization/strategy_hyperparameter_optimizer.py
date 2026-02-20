@@ -397,8 +397,12 @@ class StrategyHyperparameterOptimizer:
                 "slippage_rate": 0.0001,
             }
 
-        # 基础回测配置（止盈止损会在每个 trial 中根据搜索参数动态覆盖）
-        _base_backtest_config = backtest_config
+        backtest_cfg = BacktestConfig(
+            initial_cash=backtest_config.get("initial_cash", 100000.0),
+            commission_rate=backtest_config.get("commission_rate", 0.0003),
+            slippage_rate=backtest_config.get("slippage_rate", 0.0001),
+            unlimited_buying=backtest_config.get("unlimited_buying", False),
+        )
 
         # 定义目标函数
         def objective(trial: optuna.Trial):
@@ -537,12 +541,12 @@ class StrategyHyperparameterOptimizer:
                     strategy_config_payload = strategy_params
 
                 # 动态构建 BacktestConfig，将搜索参数中的止盈止损传入
-                _bc = _base_backtest_config or {}
+                _bc = backtest_config or {}
                 backtest_cfg = BacktestConfig(
                     initial_cash=_bc.get("initial_cash", 100000.0),
                     commission_rate=_bc.get("commission_rate", 0.0003),
                     slippage_rate=_bc.get("slippage_rate", 0.0001),
-                    enable_unlimited_buy=_bc.get("enable_unlimited_buy", False),
+                    unlimited_buying=_bc.get("unlimited_buying", False),
                     stop_loss_pct=strategy_params.get(
                         "stop_loss", _bc.get("stop_loss_pct", 0.05)
                     ),

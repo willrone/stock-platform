@@ -476,9 +476,19 @@ class BacktestExecutor:
             backtest_report["backtest_id"] = backtest_id
             perf_breakdown["report_generation_s"] = time.perf_counter() - _t0
 
+            # 添加 backtest_id 到报告（供 trade_records 写入时使用，保持与 signal_records 一致）
+            backtest_report["backtest_id"] = backtest_id
+
             # 添加回测循环统计
             backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
             backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
+
+            # P0: 添加动态持仓信息到报告
+            backtest_report["auto_position_sizing"] = getattr(backtest_config, 'auto_position_sizing', None)
+            backtest_report["unlimited_buying"] = getattr(backtest_config, 'unlimited_buying', None)
+            backtest_report["effective_max_position_size"] = getattr(portfolio_manager, 'effective_max_position_size', None)
+            backtest_report["configured_max_position_size"] = backtest_config.max_position_size
+            backtest_report["n_stocks"] = len(actual_stock_codes)
 
             # P0: 添加熔断统计到报告
             cb_summary = backtest_results.get("circuit_breaker_summary")

@@ -468,23 +468,23 @@ def execute_backtest_task_simple(task_id: str):
         )
 
         # 创建回测配置
-        strategy_config = config.get("strategy_config", {})
-        backtest_config = BacktestConfig(
-            initial_cash=initial_cash,
-            commission_rate=config.get("commission_rate", 0.0003),
-            slippage_rate=config.get("slippage_rate", 0.0001),
-            enable_unlimited_buy=config.get("enable_unlimited_buy", False)
-            or strategy_config.get("enable_unlimited_buy", False),
-            # 风控参数：从 config 或 strategy_config 中读取
-            max_position_size=config.get("max_position_size",
-                strategy_config.get("max_position_size", 0.2)),
-            stop_loss_pct=config.get("stop_loss_pct",
-                strategy_config.get("stop_loss_pct", 0.05)),
-            take_profit_pct=config.get("take_profit_pct",
-                strategy_config.get("take_profit_pct", 0.15)),
-            max_drawdown_pct=config.get("max_drawdown_pct",
-                strategy_config.get("max_drawdown_pct", None)),
-        )
+        # 创建回测配置（透传所有 BacktestConfig 支持的字段）
+        _backtest_kwargs = {
+            "initial_cash": initial_cash,
+            "commission_rate": config.get("commission_rate", 0.0003),
+            "slippage_rate": config.get("slippage_rate", 0.0001),
+        }
+        _optional_fields = [
+            "max_position_size", "stop_loss_pct", "take_profit_pct",
+            "rebalance_frequency", "max_drawdown_pct",
+            "record_portfolio_history", "portfolio_history_stride",
+            "record_positions_in_history", "auto_position_sizing",
+            "unlimited_buying",
+        ]
+        for _f in _optional_fields:
+            if _f in config:
+                _backtest_kwargs[_f] = config[_f]
+        backtest_config = BacktestConfig(**_backtest_kwargs)
 
         # 执行回测
         task_repository.update_task_status(

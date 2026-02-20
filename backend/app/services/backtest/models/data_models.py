@@ -68,11 +68,16 @@ class BacktestConfig:
     # P0-2: 最大回撤熔断（None 或 0 表示不启用）
     max_drawdown_pct: Optional[float] = None
 
-    # 不限制买入模式：启用时忽略单股仓位限制、5%现金保留，资金不足时自动补充
-    enable_unlimited_buy: bool = False
-
     # 性能：大规模回测默认不需要每天的完整组合快照；
     # equity 曲线单独记录，不受该开关影响。
     record_portfolio_history: bool = True
     portfolio_history_stride: int = 5  # 性能优化: 默认每5天记录一次快照，减少内存和I/O开销
     record_positions_in_history: bool = True  # False 时快照不包含 positions 明细
+
+    # P0: 动态持仓比例 - 根据股票池大小自动调整 max_position_size
+    # 设为 False 可禁用自动调整，严格使用 max_position_size 的值
+    auto_position_sizing: bool = True
+
+    # 无限买入模式：所有 BUY 信号都会成交，不受资金和持仓限制
+    # 用于评估策略信号质量，消除资金瓶颈的干扰
+    unlimited_buying: bool = False

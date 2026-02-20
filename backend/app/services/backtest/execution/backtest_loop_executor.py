@@ -842,10 +842,27 @@ class BacktestLoopExecutor:
                 executed_trade_signals = []  # 记录已执行的交易对应的信号
                 unexecuted_signals = []  # 记录未执行的信号及原因
 
+                # 保存原始信号数量（用于后续 _batch_signals_data 索引计算）
+                _original_signal_count = len(all_signals)
+
                 # ===== P0: 熔断过滤（阻止 BUY 信号，保留 SELL） =====
+                _pre_filter_codes = {s.stock_code for s in all_signals}
                 all_signals = risk_manager.filter_signals_by_circuit_breaker(
                     all_signals
                 )
+                _post_filter_codes = {s.stock_code for s in all_signals}
+                # 记录被熔断过滤掉的信号
+                _filtered_codes = _pre_filter_codes - _post_filter_codes
+                if _filtered_codes:
+                    for _fc in _filtered_codes:
+                        unexecuted_signals.append(
+                            {
+                                "stock_code": _fc,
+                                "timestamp": current_date,
+                                "signal_type": "BUY",  # 熔断只过滤 BUY
+                                "execution_reason": "最大回撤熔断（circuit breaker）",
+                            }
+                        )
 
                 # ===== trade execution mode =====
                 trade_mode = None
@@ -934,7 +951,33 @@ class BacktestLoopExecutor:
                     )
                     daily_positions = portfolio_manager.positions
 
-                    for signal in all_signals:
+                    # P0: 信号优先级排序 - SELL 优先执行，BUY 按 strength 降序
+                    sell_signals = [s for s in all_signals if s.signal_type == SignalType.SELL]
+                    buy_signals = [s for s in all_signals if s.signal_type == SignalType.BUY]
+                    sell_signals.sort(key=lambda s: s.strength, reverse=True)
+                    buy_signals.sort(key=lambda s: s.strength, reverse=True)
+                    sorted_signals = sell_signals + buy_signals
+
+                    if len(all_signals) > 1:
+                        logger.debug(
+                            f"[信号排序] date={current_date.strftime('%Y-%m-%d')} "
+                            f"sell={len(sell_signals)} buy={len(buy_signals)} total={len(sorted_signals)}"
+                        )
+
+                    buy_budget_exhausted = False
+
+                    for signal in sorted_signals:
+                        # P0: BUY 预算耗尽时跳过剩余 BUY 信号（SELL 始终执行）
+                        if buy_budget_exhausted and signal.signal_type == SignalType.BUY:
+                            unexecuted_signals.append(
+                                {
+                                    "stock_code": signal.stock_code,
+                                    "timestamp": signal.timestamp,
+                                    "signal_type": signal.signal_type.name,
+                                    "execution_reason": "买入预算已耗尽（优先级排序后跳过）",
+                                }
+                            )
+                            continue
                         # 验证信号
                         is_valid, validation_reason = strategy.validate_signal(
                             signal,
@@ -992,6 +1035,19 @@ class BacktestLoopExecutor:
                                     "execution_reason": failure_reason or "执行失败（未知原因）",
                                 }
                             )
+                            # P0: BUY 因资金/持仓限制失败 → 标记预算耗尽，跳过后续低优先级 BUY
+                            # unlimited_buying 模式下不设置 buy_budget_exhausted
+                            if (
+                                signal.signal_type == SignalType.BUY
+                                and failure_reason
+                                and (
+                                    "资金不足" in failure_reason
+                                    or "可买数量不足" in failure_reason
+                                    or "可用资金不足" in failure_reason
+                                )
+                                and not getattr(portfolio_manager.config, 'unlimited_buying', False)
+                            ):
+                                buy_budget_exhausted = True
 
                 # 记录交易执行总时间
                 if self.enable_performance_profiling and trade_start_time:
@@ -1004,8 +1060,8 @@ class BacktestLoopExecutor:
                 # 避免后续 UPDATE 操作，所有状态在内存中一次性确定
                 if task_id and (executed_trade_signals or unexecuted_signals):
                     # 构建当天信号的快速查找索引（从 _batch_signals_data 尾部回溯）
-                    # 当天新增的信号数量 = len(all_signals)（刚刚 append 的）
-                    _today_start_idx = len(_batch_signals_data) - len(all_signals)
+                    # 当天新增的信号数量 = _original_signal_count（在熔断过滤前保存的）
+                    _today_start_idx = len(_batch_signals_data) - _original_signal_count
                     _today_lookup: Dict[tuple, int] = {}
                     for _si in range(_today_start_idx, len(_batch_signals_data)):
                         _sd = _batch_signals_data[_si]
@@ -1185,7 +1241,20 @@ class BacktestLoopExecutor:
 
                 continue
 
-        # ========== PERF优化：循环结束后写入剩余信号数据 ==========
+        # ========== PERF优化：循环结束后一次性写入所有信号数据 ==========
+        # 使用 Raw SQL executemany 替代 ORM add_all，跳过 UPDATE 操作
+        # 因为 executed/execution_reason 已在内存中确定
+
+        # 清理：确保所有未执行信号都有 execution_reason（防止 NULL）
+        if _batch_signals_data:
+            _null_reason_count = 0
+            for _sd in _batch_signals_data:
+                if not _sd.get("executed") and _sd.get("execution_reason") is None:
+                    _sd["execution_reason"] = "未处理（信号未进入执行流程）"
+                    _null_reason_count += 1
+            if _null_reason_count > 0:
+                logger.info(f"⚠️ 修补了 {_null_reason_count} 条缺失 execution_reason 的信号记录")
+
         if task_id and _batch_signals_data:
             if signal_writer is not None:
                 signal_writer.buffer_many(_batch_signals_data)

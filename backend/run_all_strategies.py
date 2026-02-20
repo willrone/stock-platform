@@ -44,7 +44,7 @@ async def run_strategy(strategy_name: str, stock_codes: list[str]) -> dict:
         initial_cash=INITIAL_CASH,
         commission_rate=0.0003,
         slippage_rate=0.0001,
-        enable_unlimited_buy=True,
+        unlimited_buying=True,
     )
     result = await executor.run_backtest(
         strategy_name=strategy_name,
