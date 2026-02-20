@@ -10,24 +10,36 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import pandas as pd
+
 from ..models import SignalType, TradingSignal
+from .market_regime_detector import (
+    MarketRegime,
+    MarketRegimeDetector,
+    RegimeDetectorConfig,
+    HIGH_VOL_POSITION_SCALE,
+    _classify_strategy,
+)
 
 logger = logging.getLogger(__name__)
+
+# 一致性加成：趋势类和均值回归类同向信号时的 strength 乘数
+CONSENSUS_BOOST = 1.3
 
 
 class SignalIntegrator:
     """信号整合器
 
     - weighted_voting: 按股票聚合 BUY/SELL 信号，加权投票输出最终 BUY/SELL。
-    - rank_sum: 将各策略对股票的“看多强度”转成名次，名次求和后取 TopK（越小越好）。
+    - rank_sum: 将各策略对股票的"看多强度"转成名次，名次求和后取 TopK（越小越好）。
     - borda: Borda count 版本的 rank 融合（名次越靠前得分越高），再取 TopK。
-    - consensus_topk: 取各策略 TopK 的“交集/一致性”优先（出现次数越多越靠前）。
+    - consensus_topk: 取各策略 TopK 的"交集/一致性"优先（出现次数越多越靠前）。
 
-    说明：rank 系列方法更贴近你们的“TopK 选股 + buffer/换手限制”的执行方式，
+    说明：rank 系列方法更贴近你们的"TopK 选股 + buffer/换手限制"的执行方式，
     输出默认是 BUY 信号列表（TopK），SELL 留给执行器的 rebalance 逻辑处理。
     """
 
-    SUPPORTED_METHODS = {"weighted_voting", "rank_sum", "borda", "consensus_topk"}
+    SUPPORTED_METHODS = {"weighted_voting", "rank_sum", "borda", "consensus_topk", "regime_aware_voting"}
 
     def __init__(self, method: str = "weighted_voting"):
         """初始化信号整合器
@@ -47,6 +59,7 @@ class SignalIntegrator:
         *,
         topk: int = 10,
         min_votes: int = 1,
+        market_data: Optional[pd.DataFrame] = None,
     ) -> List[TradingSignal]:
         """
         整合多个策略的信号
@@ -62,6 +75,9 @@ class SignalIntegrator:
             signals: 所有策略生成的信号列表
             weights: 策略权重字典 {strategy_name: weight}
             consistency_threshold: 一致性阈值，超过此阈值时增强信号强度
+            topk: rank 系列方法的 TopK 参数
+            min_votes: rank 系列方法的最小投票数
+            market_data: 市场数据（regime_aware_voting 需要）
 
         Returns:
             整合后的信号列表
@@ -74,7 +90,16 @@ class SignalIntegrator:
             logger.warning("⚠️ SignalIntegrator: 输入信号为空，返回空列表")
             return []
 
-        # rank 系列融合：按“策略 → 股票强度排名”来融合
+        # regime_aware_voting: 动态权重 + weighted_voting
+        if self.method == "regime_aware_voting":
+            return self._integrate_regime_aware(
+                signals=signals,
+                weights=weights,
+                consistency_threshold=consistency_threshold,
+                market_data=market_data,
+            )
+
+        # rank 系列融合：按"策略 → 股票强度排名"来融合
         if self.method in {"rank_sum", "borda", "consensus_topk"}:
             return self._integrate_rank_based(
                 signals=signals,
@@ -282,6 +307,94 @@ class SignalIntegrator:
 
         return integrated_signal
 
+    def _integrate_regime_aware(
+        self,
+        *,
+        signals: List[TradingSignal],
+        weights: Dict[str, float],
+        consistency_threshold: float,
+        market_data: Optional[pd.DataFrame],
+    ) -> List[TradingSignal]:
+        """Regime-aware 动态权重整合。
+
+        流程：
+        1. 用 MarketRegimeDetector 检测当前市场状态
+        2. 根据状态动态调整 weights
+        3. 复用 weighted_voting 逻辑
+        4. 一致性加成：趋势类和均值回归类同向 → strength ×1.3
+        5. metadata 中记录 regime 和调整后的权重
+        """
+        detector = MarketRegimeDetector()
+        regime = detector.detect(market_data) if market_data is not None else MarketRegime.NEUTRAL
+
+        strategy_names = list(weights.keys())
+        dynamic_weights = detector.get_dynamic_weights(regime, strategy_names, weights)
+
+        # 归一化动态权重
+        total_w = sum(dynamic_weights.values())
+        if total_w <= 0:
+            total_w = 1.0
+        norm_weights = {k: v / total_w for k, v in dynamic_weights.items()}
+
+        # 按股票分组 → 复用 _integrate_stock_signals
+        signals_by_stock: Dict[str, List[TradingSignal]] = defaultdict(list)
+        for sig in signals:
+            signals_by_stock[sig.stock_code].append(sig)
+
+        integrated: List[TradingSignal] = []
+        for stock_code, stock_sigs in signals_by_stock.items():
+            result = self._integrate_stock_signals(
+                stock_code, stock_sigs, norm_weights, consistency_threshold,
+            )
+            if result is None:
+                continue
+
+            # 一致性加成：趋势类和均值回归类同向
+            result = self._apply_consensus_boost(result, stock_sigs)
+
+            # 高波动 regime 标记仓位缩放
+            position_scale = HIGH_VOL_POSITION_SCALE if regime == MarketRegime.HIGH_VOLATILITY else 1.0
+
+            # 写入 regime 元数据
+            if result.metadata is None:
+                result.metadata = {}
+            result.metadata.update({
+                "regime": regime.value,
+                "dynamic_weights": dynamic_weights,
+                "position_scale": position_scale,
+            })
+            integrated.append(result)
+
+        logger.info(
+            "regime_aware_voting: regime=%s, 输入 %d 信号 (%d 股票), 输出 %d 信号",
+            regime.value, len(signals), len(signals_by_stock), len(integrated),
+        )
+        return integrated
+
+    def _apply_consensus_boost(
+        self, signal: TradingSignal, source_signals: List[TradingSignal],
+    ) -> TradingSignal:
+        """趋势类和均值回归类策略同向时，strength ×1.3。"""
+        trend_dirs: set[SignalType] = set()
+        mr_dirs: set[SignalType] = set()
+
+        for s in source_signals:
+            name = self._extract_strategy_name(s)
+            cat = _classify_strategy(name)
+            if cat == "trend":
+                trend_dirs.add(s.signal_type)
+            elif cat == "mean_reversion":
+                mr_dirs.add(s.signal_type)
+
+        # 两类都有信号且存在共同方向
+        if trend_dirs and mr_dirs and trend_dirs & mr_dirs:
+            signal.strength = min(1.0, signal.strength * CONSENSUS_BOOST)
+            if signal.metadata is None:
+                signal.metadata = {}
+            signal.metadata["consensus_boost"] = True
+
+        return signal
+
     def _integrate_rank_based(
         self,
         *,
@@ -293,7 +406,7 @@ class SignalIntegrator:
         """Rank-based 融合：输出 BUY TopK。
 
         约定：
-        - 仅使用 BUY 信号作为“看多候选”；SELL 由执行器的再平衡规则处理。
+        - 仅使用 BUY 信号作为"看多候选"；SELL 由执行器的再平衡规则处理。
         - 每个策略对股票按 strength 降序排序得到 rank（1..n）。
         - rank_sum: 聚合 score = -Σ(rank * w)（越大越好，等价于 rank 越小越好）
         - borda: 聚合 score = Σ((n-rank+1) * w)

@@ -331,7 +331,7 @@ def run_multiprocess_backtest(
         "commission_rate": backtest_config.commission_rate,
         "slippage_rate": backtest_config.slippage_rate,
         "max_position_size": backtest_config.max_position_size,
-        "enable_unlimited_buy": getattr(backtest_config, "enable_unlimited_buy", False),
+        "unlimited_buying": getattr(backtest_config, "unlimited_buying", False),
     }
 
     # 8. 启动多进程执行

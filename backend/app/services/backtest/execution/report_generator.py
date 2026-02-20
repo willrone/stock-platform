@@ -114,7 +114,7 @@ class BacktestReportGenerator:
                 "commission_rate": config.commission_rate,
                 "slippage_rate": config.slippage_rate,
                 "max_position_size": config.max_position_size,
-                "enable_unlimited_buy": getattr(config, "enable_unlimited_buy", False),
+                "unlimited_buying": getattr(config, "unlimited_buying", False),
                 **(
                     {"strategy_config": strategy_config}
                     if strategy_config

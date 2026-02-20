@@ -266,7 +266,7 @@ class PortfolioManagerArray:
         signal: TradingSignal,
     ) -> tuple[Optional[Trade], Optional[str]]:
         """执行买入 - 数组优化版本"""
-        unlimited_buy = getattr(self.config, "enable_unlimited_buy", False)
+        unlimited_buy = getattr(self.config, "unlimited_buying", False)
 
         if unlimited_buy:
             available_cash_for_stock = self.cash

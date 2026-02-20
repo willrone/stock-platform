@@ -175,18 +175,18 @@ class LightGBMAdapter(BaseModelAdapter):
             HyperparameterSpec(
                 name="lambda_l1",
                 param_type="float",
-                default_value=0.1,
+                default_value=205.6999,
                 min_value=0.0,
                 max_value=500.0,
-                description="L1正则化系数（Qlib官方基准205.7适用于CSI300全量数据，小数据集建议0.1-1.0）",
+                description="L1正则化系数，Qlib官方基准=205.6999",
             ),
             HyperparameterSpec(
                 name="lambda_l2",
                 param_type="float",
-                default_value=0.1,
+                default_value=580.9768,
                 min_value=0.0,
                 max_value=1000.0,
-                description="L2正则化系数（Qlib官方基准580.9适用于CSI300全量数据，小数据集建议0.1-1.0）",
+                description="L2正则化系数，Qlib官方基准=580.9768",
             ),
             HyperparameterSpec(
                 name="num_iterations",
@@ -205,7 +205,7 @@ class LightGBMAdapter(BaseModelAdapter):
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
                 "loss": "mse",
-                "learning_rate": hyperparameters.get("learning_rate", 0.2),
+                "learning_rate": hyperparameters.get("learning_rate", 0.0421),
                 "num_leaves": hyperparameters.get("num_leaves", 210),
                 "max_depth": hyperparameters.get("max_depth", 8),
                 "min_data_in_leaf": hyperparameters.get("min_data_in_leaf", 20),
@@ -217,8 +217,8 @@ class LightGBMAdapter(BaseModelAdapter):
                     "bagging_fraction",
                     0.8789,
                 ),
-                "lambda_l1": hyperparameters.get("lambda_l1", 0.1),
-                "lambda_l2": hyperparameters.get("lambda_l2", 0.1),
+                "lambda_l1": hyperparameters.get("lambda_l1", 205.6999),
+                "lambda_l2": hyperparameters.get("lambda_l2", 580.9768),
                 "num_threads": 20,
                 "verbose": -1,
             },
@@ -238,7 +238,7 @@ class LightGBMAdapter(BaseModelAdapter):
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
         try:
-            lr = hyperparameters.get("learning_rate", 0.2)
+            lr = hyperparameters.get("learning_rate", 0.0421)
             if not (0.001 <= lr <= 1.0):
                 return False
 

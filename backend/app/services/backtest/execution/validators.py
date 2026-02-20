@@ -109,7 +109,7 @@ def _get_execution_failure_reason(
                 {stock_code: current_price}
             )
             max_position_value = (
-                portfolio_value * portfolio_manager.config.max_position_size
+                portfolio_value * getattr(portfolio_manager, 'effective_max_position_size', portfolio_manager.config.max_position_size)
             )
 
             current_position = portfolio_manager.positions.get(stock_code)

@@ -338,16 +338,26 @@ class BacktestTaskExecutor:
                     max_workers=6,  # 8核CPU，留2核给系统
                 )
 
-                # 创建回测配置
+                # 创建回测配置（透传所有 BacktestConfig 支持的字段）
                 strategy_config = config_dict.get("strategy_config", {})
-                backtest_config = BacktestConfig(
-                    initial_cash=initial_cash,
-                    commission_rate=strategy_config.get("commission_rate", 0.0003),
-                    slippage_rate=strategy_config.get("slippage_rate", 0.0001),
-                    enable_unlimited_buy=strategy_config.get(
-                        "enable_unlimited_buy", False
-                    ),
-                )
+                _backtest_kwargs = {
+                    "initial_cash": initial_cash,
+                    "commission_rate": strategy_config.get("commission_rate", 0.0003),
+                    "slippage_rate": strategy_config.get("slippage_rate", 0.0001),
+                }
+                _optional_fields = [
+                    "max_position_size", "stop_loss_pct", "take_profit_pct",
+                    "rebalance_frequency", "max_drawdown_pct",
+                    "record_portfolio_history", "portfolio_history_stride",
+                    "record_positions_in_history", "auto_position_sizing",
+                    "unlimited_buying",
+                ]
+                for _f in _optional_fields:
+                    if _f in config_dict:
+                        _backtest_kwargs[_f] = config_dict[_f]
+                    elif _f in strategy_config:
+                        _backtest_kwargs[_f] = strategy_config[_f]
+                backtest_config = BacktestConfig(**_backtest_kwargs)
 
                 # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）
                 # run_backtest 是 async def，需要在事件循环中执行
@@ -442,6 +452,13 @@ class BacktestTaskExecutor:
                         "win_rate": backtest_report.get("win_rate", 0),
                         "profit_factor": backtest_report.get("profit_factor", 0),
                     },
+                    # P0: 动态持仓信息
+                    "position_sizing": {
+                        "auto_position_sizing": backtest_report.get("auto_position_sizing"),
+                        "effective_max_position_size": backtest_report.get("effective_max_position_size"),
+                        "configured_max_position_size": backtest_report.get("configured_max_position_size"),
+                        "n_stocks": backtest_report.get("n_stocks"),
+                    },
                 }
 
                 # 步骤5: 完成回测
@@ -527,7 +544,8 @@ class BacktestTaskExecutor:
                 logger.info(f"任务 {task_id} 没有交易记录，跳过写入 trade_records")
                 return
 
-            backtest_id = str(uuid4())  # 生成一个 backtest_id
+            # 优先使用回测报告中的 backtest_id（与 signal_records 保持一致）
+            backtest_id = backtest_report.get("backtest_id") or str(uuid4())
             records_to_add = []
 
             for idx, trade in enumerate(trade_history):

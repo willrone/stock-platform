@@ -615,7 +615,7 @@ async def run_backtest(request: BacktestRequest):
             initial_cash=request.initial_cash,
             commission_rate=strategy_config.get("commission_rate", 0.0003),
             slippage_rate=strategy_config.get("slippage_rate", 0.0001),
-            enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
+            unlimited_buying=strategy_config.get("enable_unlimited_buy", False) or strategy_config.get("unlimited_buying", False),
             max_position_size=strategy_config.get("max_position_size", 0.2),
             stop_loss_pct=strategy_config.get("stop_loss_pct", 0.05),
             take_profit_pct=strategy_config.get("take_profit_pct", 0.15),

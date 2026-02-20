@@ -47,6 +47,9 @@ class PortfolioManager:
         # 开仓日期跟踪（用于最小持仓期检查）
         self._entry_dates: Dict[str, datetime] = {}
 
+        # P0: 动态持仓比例（非 array 版本无 stock_codes，默认使用配置值）
+        self.effective_max_position_size = config.max_position_size
+
     @property
     def entry_dates(self) -> Dict[str, datetime]:
         """返回开仓日期字典 {stock_code: entry_date}"""
@@ -175,7 +178,10 @@ class PortfolioManager:
         Returns:
             tuple[Optional[Trade], Optional[str]]: (交易对象, 失败原因)
         """
-        unlimited_buy = getattr(self.config, "enable_unlimited_buy", False)
+        # 计算可买数量
+        unlimited_buy = getattr(self.config, 'unlimited_buying', False)
+        portfolio_value = self.get_portfolio_value({stock_code: price})
+        max_position_value = portfolio_value * self.effective_max_position_size
 
         if unlimited_buy:
             # 不限制买入：可用全部现金，不限制单股仓位，资金不足时自动补充
