@@ -20,6 +20,9 @@ class ExtendedRiskMetrics:
     calmar_ratio: float = 0.0
     max_drawdown_duration: int = 0
     var_95: float = 0.0  # 95% VaR
+    var_99: float = 0.0  # 99% VaR
+    cvar_95: float = 0.0  # 95% CVaR (Expected Shortfall)
+    cvar_99: float = 0.0  # 99% CVaR
     downside_deviation: float = 0.0
 
     def to_dict(self) -> Dict[str, float]:

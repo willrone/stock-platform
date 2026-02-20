@@ -29,6 +29,16 @@ class CacheChartRequest(BaseModel):
 router = APIRouter(prefix="/backtest-detailed", tags=["回测详细结果"])
 
 
+async def _resolve_backtest_id(
+    repository: BacktestDetailedRepository, task_id: str
+) -> str:
+    """根据 task_id 查找 backtest_id，找不到则抛出 404"""
+    backtest_id = await repository.get_backtest_id_by_task_id(task_id)
+    if not backtest_id:
+        raise HTTPException(status_code=404, detail="未找到该任务的回测记录")
+    return backtest_id
+
+
 @router.get("/{task_id}/detailed-result", response_model=StandardResponse)
 async def get_detailed_backtest_result(
     task_id: str, session: AsyncSession = Depends(get_async_session)
@@ -96,8 +106,9 @@ async def get_portfolio_snapshots(
         end_dt = datetime.fromisoformat(end_date) if end_date else None
 
         logger.info("[API] 开始查询组合快照数据...")
+        backtest_id = await _resolve_backtest_id(repository, task_id)
         snapshots = await repository.get_portfolio_snapshots(
-            task_id=task_id, start_date=start_dt, end_date=end_dt, limit=limit
+            backtest_id=backtest_id, start_date=start_dt, end_date=end_dt, limit=limit
         )
 
         snapshots_data = [snapshot.to_dict() for snapshot in snapshots]
@@ -109,6 +120,8 @@ async def get_portfolio_snapshots(
             data={"snapshots": snapshots_data, "total_count": len(snapshots_data)},
         )
 
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.error(f"[API] 日期格式错误: {e}")
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
@@ -270,13 +283,14 @@ async def get_trade_records(
     """获取交易记录"""
     try:
         repository = BacktestDetailedRepository(session)
+        backtest_id = await _resolve_backtest_id(repository, task_id)
 
         # 解析日期参数
         start_dt = datetime.fromisoformat(start_date) if start_date else None
         end_dt = datetime.fromisoformat(end_date) if end_date else None
 
         trades = await repository.get_trade_records(
-            task_id=task_id,
+            backtest_id=backtest_id,
             stock_code=stock_code,
             action=action,
             start_date=start_dt,
@@ -289,7 +303,7 @@ async def get_trade_records(
 
         # 获取总记录数
         total_count = await repository.get_trade_records_count(
-            task_id=task_id,
+            backtest_id=backtest_id,
             stock_code=stock_code,
             action=action,
             start_date=start_dt,
@@ -311,6 +325,8 @@ async def get_trade_records(
             },
         )
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
     except Exception as e:
@@ -325,10 +341,13 @@ async def get_trade_statistics(
     """获取交易统计信息"""
     try:
         repository = BacktestDetailedRepository(session)
-        stats = await repository.get_trade_statistics(task_id)
+        backtest_id = await _resolve_backtest_id(repository, task_id)
+        stats = await repository.get_trade_statistics(backtest_id)
 
         return StandardResponse(success=True, message="获取交易统计成功", data=stats)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"获取交易统计失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取交易统计失败: {str(e)}")
@@ -351,13 +370,14 @@ async def get_signal_records(
     """获取信号记录"""
     try:
         repository = BacktestDetailedRepository(session)
+        backtest_id = await _resolve_backtest_id(repository, task_id)
 
         # 解析日期参数
         start_dt = datetime.fromisoformat(start_date) if start_date else None
         end_dt = datetime.fromisoformat(end_date) if end_date else None
 
         signals = await repository.get_signal_records(
-            task_id=task_id,
+            backtest_id=backtest_id,
             stock_code=stock_code,
             signal_type=signal_type,
             start_date=start_dt,
@@ -371,7 +391,7 @@ async def get_signal_records(
 
         # 获取总记录数
         total_count = await repository.get_signal_records_count(
-            task_id=task_id,
+            backtest_id=backtest_id,
             stock_code=stock_code,
             signal_type=signal_type,
             start_date=start_dt,
@@ -429,6 +449,8 @@ async def get_signal_records(
             },
         )
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
     except Exception as e:
@@ -446,10 +468,13 @@ async def get_signal_statistics(
     """获取信号统计信息"""
     try:
         repository = BacktestDetailedRepository(session)
-        stats = await repository.get_signal_statistics(task_id)
+        backtest_id = await _resolve_backtest_id(repository, task_id)
+        stats = await repository.get_signal_statistics(backtest_id)
 
         return StandardResponse(success=True, message="获取信号统计成功", data=stats)
 
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
 
@@ -467,7 +492,8 @@ async def get_benchmark_data(
     """获取基准对比数据"""
     try:
         repository = BacktestDetailedRepository(session)
-        benchmark = await repository.get_benchmark_data(task_id, benchmark_symbol)
+        backtest_id = await _resolve_backtest_id(repository, task_id)
+        benchmark = await repository.get_benchmark_data(backtest_id, benchmark_symbol)
 
         if not benchmark:
             raise HTTPException(status_code=404, detail="未找到基准数据")

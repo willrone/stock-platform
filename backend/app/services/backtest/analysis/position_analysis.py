@@ -194,7 +194,7 @@ class PositionAnalyzer:
                 "largest_loss": float(largest_loss),
                 "profit_factor": float(abs(avg_win / avg_loss))
                 if avg_loss != 0
-                else float("inf"),
+                else 0.0,
                 # 持仓期分析
                 "avg_holding_period": int(avg_holding_period),
                 "max_holding_period": int(max_holding_period),

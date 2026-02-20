@@ -1,15 +1,30 @@
 """
-数据生命周期管理服务
-实现临时文件和日志的定期清理，以及历史任务记录的保留策略
+[DEPRECATED] 数据生命周期管理服务 - 旧 SQLite 版本
+
+此模块仍使用旧的 DatabaseManager（原生 sqlite3）进行数据库操作。
+新代码请使用 SQLAlchemy session + app.models.task_models 中的 ORM 模型。
+待后续完整重写后移除此文件。
 """
 
 import os
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from app.models.database import DatabaseManager
+warnings.warn(
+    "data_lifecycle.py 仍使用旧 DatabaseManager，待迁移到 SQLAlchemy",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+# 旧 ORM 兼容 — DatabaseManager 已废弃
+# TODO: 重写为 SQLAlchemy session 操作后删除以下 import
+try:
+    from app.models.database import DatabaseManager
+except ImportError:
+    DatabaseManager = None  # type: ignore
 
 from .parquet_manager import ParquetManager
 

@@ -310,7 +310,7 @@ class EnhancedMetricsCalculator:
         largest_loss = min(losses) if losses else 0
 
         # 盈亏比
-        profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else float("inf")
+        profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0.0
 
         # 交易持续时间分析（简化版）
         trade_durations = []

@@ -3,6 +3,7 @@
 """
 
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -37,6 +38,7 @@ class BacktestExecutor:
         max_workers: Optional[int] = None,
         enable_performance_profiling: bool = False,
         use_multiprocessing: bool = True,
+        persistence=None,
     ):
         """
         初始化回测执行器
@@ -57,6 +59,9 @@ class BacktestExecutor:
         self.max_workers = max_workers
         self.use_multiprocessing = use_multiprocessing
         self.use_array_portfolio = True
+
+        # 持久化服务（可选，向后兼容）
+        self._persistence = persistence
 
         # 数据加载器
         self.data_loader = DataLoader(
@@ -133,8 +138,25 @@ class BacktestExecutor:
         try:
             self.execution_stats["total_backtests"] += 1
 
-            # 生成回测ID
-            backtest_id = f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(str(stock_codes))}"
+            # 生成回测ID 并创建占位行
+            # 优先使用 persistence 服务，向后兼容旧路径
+            if task_id and self._persistence is not None:
+                backtest_id = self._persistence.create_backtest_session(
+                    task_id=task_id,
+                    strategy_name=strategy_name,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            else:
+                backtest_id = str(uuid.uuid4())
+                if task_id:
+                    self._create_placeholder_backtest_result(
+                        task_id=task_id,
+                        backtest_id=backtest_id,
+                        strategy_name=strategy_name,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
 
             # 使用默认配置
             if backtest_config is None:
@@ -361,6 +383,11 @@ class BacktestExecutor:
                     task_id, "backtest_execution", status="running"
                 )
 
+            # 创建信号写入器（优先使用 persistence 服务）
+            _signal_writer = None
+            if task_id and self._persistence is not None:
+                _signal_writer = self._persistence.create_signal_writer(backtest_id)
+
             _t0 = time.perf_counter()
             backtest_results = await self.loop_executor.execute_backtest_loop(
                 strategy=strategy,
@@ -372,6 +399,7 @@ class BacktestExecutor:
                 backtest_id=backtest_id,
                 precomputed_signals=precomputed_signals,
                 aligned_arrays=aligned_arrays,
+                signal_writer=_signal_writer,
             )
             perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
 
@@ -443,6 +471,9 @@ class BacktestExecutor:
                 performance_metrics=performance_metrics,
                 strategy_config=strategy_config,
             )
+            # 将 backtest_id 写入报告，供下游（dependencies.py）复用，
+            # 确保信号记录与交易记录等使用同一个 backtest_id
+            backtest_report["backtest_id"] = backtest_id
             perf_breakdown["report_generation_s"] = time.perf_counter() - _t0
 
             # 添加回测循环统计
@@ -541,3 +572,52 @@ class BacktestExecutor:
     def get_execution_statistics(self) -> Dict[str, Any]:
         """获取执行统计信息"""
         return get_execution_statistics(self.execution_stats)
+
+    @staticmethod
+    def _create_placeholder_backtest_result(
+        task_id: str,
+        backtest_id: str,
+        strategy_name: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> None:
+        """在回测循环开始前，通过 psycopg2 插入一条占位 backtest_results 行。
+
+        这样回测循环中 _flush_signals_to_db 写入 signal_records 时，
+        外键约束 (signal_records.backtest_id → backtest_results.backtest_id) 不会失败。
+        回测结束后 dependencies.py 会 UPDATE 这行填入完整数据。
+        """
+        import psycopg2
+
+        from app.core.config import settings
+
+        sql = """
+            INSERT INTO backtest_results
+                (task_id, backtest_id, strategy_name, start_date, end_date,
+                 initial_cash, final_value, total_return, annualized_return,
+                 volatility, sharpe_ratio, max_drawdown, win_rate,
+                 profit_factor, total_trades)
+            VALUES (%s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s)
+            ON CONFLICT (backtest_id) DO NOTHING
+        """
+        try:
+            conn = psycopg2.connect(settings.database_url_sync)
+            try:
+                cur = conn.cursor()
+                cur.execute(sql, (
+                    task_id, backtest_id, strategy_name,
+                    start_date.isoformat(), end_date.isoformat(),
+                    0, 0, 0, 0,   # initial_cash, final_value, total_return, annualized_return
+                    0, 0, 0, 0,   # volatility, sharpe_ratio, max_drawdown, win_rate
+                    0, 0,         # profit_factor, total_trades
+                ))
+                conn.commit()
+                cur.close()
+                logger.info(f"占位 backtest_results 行已创建: backtest_id={backtest_id}")
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"创建占位 backtest_results 行失败（信号写入可能受影响）: {e}")

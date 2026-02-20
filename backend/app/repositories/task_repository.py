@@ -4,7 +4,7 @@
 
 from __future__ import annotations  # 延迟评估类型注解，避免在独立进程中类型解析问题
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -31,7 +31,9 @@ class TaskRepository:
         self.db = db_session
 
     def _to_json_safe(self, value: Any) -> Any:
-        """递归转换为可 JSON 序列化的类型"""
+        """递归转换为可 JSON 序列化的类型（处理 NaN/Infinity）"""
+        import math
+
         try:
             import numpy as np
         except Exception:
@@ -44,6 +46,10 @@ class TaskRepository:
         from datetime import date, datetime
         from enum import Enum
 
+        if isinstance(value, float):
+            if math.isnan(value) or math.isinf(value):
+                return 0.0
+            return value
         if isinstance(value, dict):
             return {k: self._to_json_safe(v) for k, v in value.items()}
         if isinstance(value, list):
@@ -66,7 +72,10 @@ class TaskRepository:
                 }
         if np is not None:
             if isinstance(value, (np.integer, np.floating)):
-                return value.item()
+                v = value.item()
+                if math.isnan(v) or math.isinf(v):
+                    return 0.0
+                return v
             if isinstance(value, np.ndarray):
                 return [self._to_json_safe(v) for v in value.tolist()]
         return value
@@ -87,7 +96,7 @@ class TaskRepository:
                 config=config,
                 status=TaskStatus.CREATED.value,
                 progress=0.0,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
             self.db.add(task)
@@ -246,23 +255,30 @@ class TaskRepository:
 
             if result is not None:
                 # 强制更新 result 字段，即使值看起来相同
+                import json as _json
+                import re as _re
                 from sqlalchemy.orm.attributes import flag_modified
 
-                task.result = self._to_json_safe(result)
-                flag_modified(task, "result")  # 标记 result 字段为已修改
+                safe_result = self._to_json_safe(result)
+                # JSON round-trip 清洗：将漏网的 NaN/Infinity 替换为 0.0（PG JSONB 不接受非标准 token）
+                json_str = _json.dumps(safe_result, default=str)
+                json_str = _re.sub(r'\bNaN\b', '0.0', json_str)
+                json_str = _re.sub(r'\b-?Infinity\b', '0.0', json_str)
+                task.result = _json.loads(json_str)
+                flag_modified(task, "result")  # 标记 result ���段为已修改
 
             if error_message is not None:
                 task.error_message = error_message
 
             # 更新时间戳
             if status == TaskStatus.RUNNING and not task.started_at:
-                task.started_at = datetime.utcnow()
+                task.started_at = datetime.now(timezone.utc)
             elif status in [
                 TaskStatus.COMPLETED,
                 TaskStatus.FAILED,
                 TaskStatus.CANCELLED,
             ]:
-                task.completed_at = datetime.utcnow()
+                task.completed_at = datetime.now(timezone.utc)
 
             retry_db_operation_sync(
                 lambda: self.db.commit(),
@@ -350,7 +366,7 @@ class TaskRepository:
             is_zombie_task = False
             if task.status == TaskStatus.RUNNING.value:
                 # 如果任务开始时间超过一定时间，认为是僵尸任务
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 task_age = (
                     (now - task.created_at).total_seconds() / 3600
                     if task.created_at
@@ -397,33 +413,61 @@ class TaskRepository:
 
                 from app.models.backtest_detailed_models import (
                     BacktestBenchmark,
+                    BacktestChartCache,
                     BacktestDetailedResult,
+                    BacktestStatistics,
                     PortfolioSnapshot,
+                    SignalRecord,
                     TradeRecord,
                 )
 
-                # 删除各个详细数据表中的数据
-                related_tables = [
-                    (BacktestDetailedResult, "回测详细结果"),
-                    (PortfolioSnapshot, "组合快照"),
-                    (TradeRecord, "交易记录"),
-                    (BacktestBenchmark, "基准数据"),
+                # 先查出该 task 下所有 backtest_id
+                bt_ids = [
+                    r.backtest_id
+                    for r in self.db.query(BacktestDetailedResult.backtest_id)
+                    .filter(BacktestDetailedResult.task_id == task_id)
+                    .all()
                 ]
 
                 total_deleted = 0
-                for model_class, table_name in related_tables:
-                    try:
-                        stmt = sql_delete(model_class).where(
-                            model_class.task_id == task_id
-                        )
-                        result = self.db.execute(stmt)
-                        deleted_count = result.rowcount
-                        if deleted_count > 0:
-                            logger.info(f"删除{table_name}: {deleted_count}条记录")
-                            total_deleted += deleted_count
-                    except Exception as e:
-                        # 表可能不存在，忽略错误
-                        logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
+
+                if bt_ids:
+                    # 子表按 backtest_id 删除
+                    sub_tables = [
+                        (PortfolioSnapshot, "组合快照"),
+                        (TradeRecord, "交易记录"),
+                        (SignalRecord, "信号记录"),
+                        (BacktestBenchmark, "基准数据"),
+                        (BacktestStatistics, "统计信息"),
+                        (BacktestChartCache, "图表缓存"),
+                    ]
+
+                    for model_class, table_name in sub_tables:
+                        try:
+                            stmt = sql_delete(model_class).where(
+                                model_class.backtest_id.in_(bt_ids)
+                            )
+                            result = self.db.execute(stmt)
+                            deleted_count = result.rowcount
+                            if deleted_count > 0:
+                                logger.info(f"删除{table_name}: {deleted_count}条记录")
+                                total_deleted += deleted_count
+                        except Exception as e:
+                            # 表可能不存在，忽略错误
+                            logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
+
+                # 主表按 task_id 删除
+                try:
+                    stmt = sql_delete(BacktestDetailedResult).where(
+                        BacktestDetailedResult.task_id == task_id
+                    )
+                    result = self.db.execute(stmt)
+                    deleted_count = result.rowcount
+                    if deleted_count > 0:
+                        logger.info(f"删除回测详细结果: {deleted_count}条记录")
+                        total_deleted += deleted_count
+                except Exception as e:
+                    logger.debug(f"删除回测详细结果时出错（可能表不存在）: {e}")
 
                 if total_deleted > 0:
                     logger.info(f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录")
@@ -482,7 +526,7 @@ class TaskRepository:
     ) -> Dict[str, Any]:
         """获取任务统计信息"""
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
             query = self.db.query(Task).filter(Task.created_at >= cutoff_date)
             if user_id:
@@ -530,7 +574,7 @@ class TaskRepository:
     def cleanup_old_tasks(self, days: int = 90) -> int:
         """清理旧任务"""
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
             # 只清理已完成或失败的任务
             deleted_count = (
@@ -595,7 +639,7 @@ class PredictionResultRepository:
                 model_id=model_id,
                 features_used=features_used,
                 risk_metrics=risk_metrics,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
             self.db.add(result)
@@ -698,7 +742,7 @@ class BacktestResultRepository:
                 profit_factor=profit_factor,
                 total_trades=total_trades,
                 trade_history=trade_history,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
             self.db.add(result)
@@ -768,7 +812,7 @@ class ModelInfoRepository:
                 performance_metrics=performance_metrics,
                 hyperparameters=hyperparameters,
                 status=status,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
             self.db.add(model_info)

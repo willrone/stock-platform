@@ -4,6 +4,7 @@
 """
 
 import time
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -83,6 +84,7 @@ class BacktestLoopExecutor:
         backtest_id: str = None,
         precomputed_signals: Optional[Dict[Tuple[str, datetime], Any]] = None,
         aligned_arrays: Optional[Dict[str, Any]] = None,
+        signal_writer=None,
     ) -> Dict[str, Any]:
         """执行回测主循环"""
         # 延迟导入以避免循环依赖
@@ -811,11 +813,7 @@ class BacktestLoopExecutor:
 
                         # 使用传入的backtest_id或生成一个（只生成一次）
                         if _current_backtest_id is None:
-                            _current_backtest_id = backtest_id or (
-                                f"bt_{task_id[:8]}"
-                                if task_id
-                                else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                            )
+                            _current_backtest_id = backtest_id or str(uuid.uuid4())
 
                         # 构建信号 lookup key → index 映射，用于后续标记 executed/execution_reason
                         for signal in all_signals:
@@ -1034,10 +1032,17 @@ class BacktestLoopExecutor:
 
                 # 内存优化：当信号积累超过阈值时，中间刷入DB并释放内存
                 if task_id and len(_batch_signals_data) >= _SIGNAL_FLUSH_THRESHOLD:
-                    _flushed = self._flush_signals_to_db(
-                        _batch_signals_data, task_id, _current_backtest_id
-                    )
-                    _total_flushed_signals += _flushed
+                    if signal_writer is not None:
+                        # 使用 StreamSignalWriter
+                        signal_writer.buffer_many(_batch_signals_data)
+                        signal_writer.flush()
+                        _total_flushed_signals = signal_writer.total_written
+                    else:
+                        # 向后兼容：使用旧路径
+                        _flushed = self._flush_signals_to_db(
+                            _batch_signals_data, task_id, _current_backtest_id
+                        )
+                        _total_flushed_signals += _flushed
                     _batch_signals_data.clear()
 
                 # 记录组合快照
@@ -1182,11 +1187,20 @@ class BacktestLoopExecutor:
 
         # ========== PERF优化：循环结束后写入剩余信号数据 ==========
         if task_id and _batch_signals_data:
-            _flushed = self._flush_signals_to_db(
-                _batch_signals_data, task_id, _current_backtest_id
-            )
-            _total_flushed_signals += _flushed
+            if signal_writer is not None:
+                signal_writer.buffer_many(_batch_signals_data)
+                signal_writer.finalize()
+                _total_flushed_signals = signal_writer.total_written
+            else:
+                _flushed = self._flush_signals_to_db(
+                    _batch_signals_data, task_id, _current_backtest_id
+                )
+                _total_flushed_signals += _flushed
             _batch_signals_data.clear()
+        elif task_id and signal_writer is not None:
+            # 缓冲区为空但 signal_writer 可能还有未 finalize 的数据
+            signal_writer.finalize()
+            _total_flushed_signals = signal_writer.total_written
 
         if task_id and _total_flushed_signals > 0:
             logger.info(f"✅ 信号写入完成: 共 {_total_flushed_signals} 条记录")
@@ -1241,12 +1255,15 @@ class BacktestLoopExecutor:
         """将信号数据批量写入DB并返回写入条数。
 
         内存优化：调用方在 flush 后应 clear() 列表释放内存。
+        使用 psycopg2 直接连接 PostgreSQL 批量插入。
         """
         if not batch_signals_data:
             return 0
 
         import json as _json
-        import sqlite3 as _sqlite3
+
+        import psycopg2
+        import psycopg2.extras
 
         from app.core.config import settings as _settings
 
@@ -1268,7 +1285,6 @@ class BacktestLoopExecutor:
                         pass
 
                 _insert_rows.append((
-                    task_id,
                     backtest_id,
                     _sd["signal_id"],
                     _sd["stock_code"],
@@ -1279,26 +1295,19 @@ class BacktestLoopExecutor:
                     float(_sd.get("strength", 0.0)),
                     _sd.get("reason"),
                     _meta_str,
-                    1 if _sd.get("executed") else 0,
+                    True if _sd.get("executed") else False,
                     _sd.get("execution_reason"),
-                    datetime.utcnow().isoformat(),
                 ))
 
-            # 从 DATABASE_URL 提取文件路径（config 已将相对路径解析为绝对路径）
-            _db_url = str(_settings.DATABASE_URL)
-            for _prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
-                if _db_url.startswith(_prefix):
-                    _db_path = _db_url[len(_prefix):]
-                    break
-            else:
-                _db_path = _db_url
+            # 从 DATABASE_URL 构建 psycopg2 连接字符串
+            _dsn = _settings.database_url_sync
 
             _raw_insert_sql = """
                 INSERT INTO signal_records
-                    (task_id, backtest_id, signal_id, stock_code, stock_name,
+                    (backtest_id, signal_id, stock_code, stock_name,
                      signal_type, timestamp, price, strength, reason,
-                     signal_metadata, executed, execution_reason, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     signal_metadata, executed, execution_reason)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
 
             _WRITE_BATCH_SIZE = 5000
@@ -1306,21 +1315,24 @@ class BacktestLoopExecutor:
 
             for _attempt in range(_max_retries + 1):
                 try:
-                    _conn = _sqlite3.connect(_db_path, timeout=30)
-                    _conn.execute("PRAGMA journal_mode=WAL")
+                    _conn = psycopg2.connect(_dsn)
                     try:
+                        _cur = _conn.cursor()
                         for _bi in range(0, len(_insert_rows), _WRITE_BATCH_SIZE):
-                            _conn.executemany(
+                            psycopg2.extras.execute_batch(
+                                _cur,
                                 _raw_insert_sql,
                                 _insert_rows[_bi : _bi + _WRITE_BATCH_SIZE],
                             )
                         _conn.commit()
+                        _cur.close()
                     finally:
                         _conn.close()
                     logger.debug(f"信号批量写入: {count} 条")
                     return count
                 except Exception as e:
-                    if "locked" in str(e).lower() and _attempt < _max_retries:
+                    err_msg = str(e).lower()
+                    if ("deadlock" in err_msg or "could not serialize" in err_msg) and _attempt < _max_retries:
                         time.sleep(0.5 * (2 ** _attempt))
                     else:
                         logger.error(f"信号写入DB失败: {e}")

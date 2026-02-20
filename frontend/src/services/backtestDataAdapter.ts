@@ -157,9 +157,7 @@ export class BacktestDataAdapter {
     }
 
     const extended = detailedResult?.extended_risk_metrics ?? { sortino_ratio: 0, calmar_ratio: 0, max_drawdown_duration: 0, var_95: 0, downside_deviation: 0 };
-    // benchmark_comparison 由后端 JSON 字段返回，但前端接口未声明
-    const detailedAny = detailedResult as Record<string, unknown> | undefined;
-    const benchmark = detailedAny?.benchmark_comparison as Record<string, unknown> | undefined;
+    const benchmark = detailedResult?.benchmark_comparison;
 
     // 从主回测结果中提取基础指标
     const riskMetricsObj = (backtestData?.risk_metrics || {}) as Record<string, number>;
@@ -206,14 +204,14 @@ export class BacktestDataAdapter {
       volatility_monthly: volatilityMonthly,
       volatility_annual: volatilityAnnual,
       var_95: extended.var_95 || 0,
-      var_99: 0,
-      cvar_95: 0,
-      cvar_99: 0,
+      var_99: extended.var_99 || 0,
+      cvar_95: extended.cvar_95 || 0,
+      cvar_99: extended.cvar_99 || 0,
       beta: benchmarkMetrics.beta ?? 0,
       alpha: benchmarkMetrics.alpha ?? 0,
       tracking_error: benchmarkMetrics.tracking_error ?? 0,
-      upside_capture: 0,
-      downside_capture: 0,
+      upside_capture: benchmarkMetrics.upside_capture ?? 0,
+      downside_capture: benchmarkMetrics.downside_capture ?? 0,
     };
   }
 
@@ -313,6 +311,7 @@ export class BacktestDataAdapter {
 
   /**
    * 转换月度绩效数据
+   * 从 portfolio snapshots 的 drawdown_analysis 中提取每日收益，按月聚合计算波动率、夏普、最大回撤、交易天数
    */
   static adaptMonthlyPerformance(
     detailedResult: BacktestDetailedResult | null | undefined
@@ -321,15 +320,83 @@ export class BacktestDataAdapter {
       return [];
     }
 
-    return detailedResult.monthly_returns.map(monthData => ({
-      year: monthData.year,
-      month: monthData.month,
-      return_rate: monthData.monthly_return,
-      volatility: 0,
-      sharpe_ratio: 0,
-      max_drawdown: 0,
-      trading_days: 0,
-    }));
+    // 尝试从 drawdown_analysis.drawdown_curve 提取每日数据来计算月度指标
+    const drawdownCurve = detailedResult.drawdown_analysis?.drawdown_curve;
+    const monthlyDailyReturns = new Map<string, number[]>();
+    const monthlyDailyValues = new Map<string, number[]>();
+
+    if (Array.isArray(drawdownCurve) && drawdownCurve.length > 1) {
+      // 从 drawdown_curve 反推每日组合价值变化
+      // drawdown_curve 包含 { date, drawdown }，我们需要用相邻日期的 drawdown 变化来估算
+      // 但更好的方式是直接用 monthly_returns 中的数据 + drawdown_curve 的日期密度来估算交易天数
+      for (let i = 0; i < drawdownCurve.length; i++) {
+        const item = drawdownCurve[i];
+        const date = new Date(item.date);
+        const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+
+        if (!monthlyDailyValues.has(key)) {
+          monthlyDailyValues.set(key, []);
+        }
+        // 用 drawdown 值作为每日数据点（用于计算交易天数）
+        monthlyDailyValues.get(key)!.push(item.drawdown ?? 0);
+
+        if (i > 0) {
+          // 估算日收益率：drawdown 变化的近似
+          const prevDrawdown = drawdownCurve[i - 1].drawdown ?? 0;
+          const currDrawdown = item.drawdown ?? 0;
+          const dailyReturn = currDrawdown - prevDrawdown;
+
+          const prevDate = new Date(drawdownCurve[i - 1].date);
+          const prevKey = `${prevDate.getFullYear()}-${prevDate.getMonth() + 1}`;
+
+          // 只在同月内计算
+          if (prevKey === key) {
+            if (!monthlyDailyReturns.has(key)) {
+              monthlyDailyReturns.set(key, []);
+            }
+            monthlyDailyReturns.get(key)!.push(dailyReturn);
+          }
+        }
+      }
+    }
+
+    return detailedResult.monthly_returns.map(monthData => {
+      const key = `${monthData.year}-${monthData.month}`;
+      const dailyReturns = monthlyDailyReturns.get(key) || [];
+      const dailyValues = monthlyDailyValues.get(key) || [];
+      const tradingDays = dailyValues.length || 21; // 默认21个交易日
+
+      // 计算月度波动率（日收益率标准差 × √交易天数，年化）
+      let volatility = 0;
+      if (dailyReturns.length > 1) {
+        const mean = dailyReturns.reduce((s, v) => s + v, 0) / dailyReturns.length;
+        const variance = dailyReturns.reduce((s, v) => s + (v - mean) ** 2, 0) / dailyReturns.length;
+        volatility = Math.sqrt(variance) * Math.sqrt(252);
+      }
+
+      // 计算月度夏普比率
+      const monthlyRiskFreeRate = this.riskFreeRate / 12;
+      const sharpeRatio = volatility > 0
+        ? (monthData.monthly_return - monthlyRiskFreeRate) / (volatility / Math.sqrt(12))
+        : 0;
+
+      // 计算月内最大回撤
+      let maxDrawdown = 0;
+      if (dailyValues.length > 0) {
+        // drawdown 值本身就是回撤，取月内最小值
+        maxDrawdown = Math.min(...dailyValues, 0);
+      }
+
+      return {
+        year: monthData.year,
+        month: monthData.month,
+        return_rate: monthData.monthly_return,
+        volatility,
+        sharpe_ratio: sharpeRatio,
+        max_drawdown: maxDrawdown,
+        trading_days: tradingDays,
+      };
+    });
   }
 
   /**
@@ -352,17 +419,25 @@ export class BacktestDataAdapter {
       return a.month - b.month;
     });
 
+    // 先用 adaptMonthlyPerformance 获取带有真实指标的月度数据
+    const adaptedMonthly = this.adaptMonthlyPerformance(detailedResult);
+    const adaptedMap = new Map<string, MonthlyPerformance>();
+    for (const m of adaptedMonthly) {
+      adaptedMap.set(`${m.year}-${m.month}`, m);
+    }
+
     sortedMonthlyReturns.forEach(monthData => {
       if (!yearlyData.has(monthData.year)) {
         yearlyData.set(monthData.year, []);
       }
-      yearlyData.get(monthData.year)!.push({
+      const adapted = adaptedMap.get(`${monthData.year}-${monthData.month}`);
+      yearlyData.get(monthData.year)!.push(adapted || {
         year: monthData.year,
         month: monthData.month,
         return_rate: monthData.monthly_return,
-        volatility: 0.15,
-        sharpe_ratio: 1.2,
-        max_drawdown: -0.08,
+        volatility: 0,
+        sharpe_ratio: 0,
+        max_drawdown: 0,
         trading_days: 21,
       });
     });
@@ -408,21 +483,26 @@ export class BacktestDataAdapter {
       return this.getDefaultSeasonalAnalysis();
     }
 
-    // 按月份计算平均收益率
+    // 按月份计算平均收益率和胜率
     const monthlyAvgReturns = Array.from({ length: 12 }, () => 0);
-    const monthlyWinRates = Array.from({ length: 12 }, () => 0.6);
+    const monthlyWinRates = Array.from({ length: 12 }, () => 0);
     const monthlyCounts = Array.from({ length: 12 }, () => 0);
+    const monthlyWinCounts = Array.from({ length: 12 }, () => 0);
 
     detailedResult.monthly_returns.forEach(monthData => {
       const monthIndex = monthData.month - 1;
       monthlyAvgReturns[monthIndex] += monthData.monthly_return;
       monthlyCounts[monthIndex]++;
+      if (monthData.monthly_return > 0) {
+        monthlyWinCounts[monthIndex]++;
+      }
     });
 
-    // 计算平均值
+    // 计算平均值和胜率
     for (let i = 0; i < 12; i++) {
       if (monthlyCounts[i] > 0) {
         monthlyAvgReturns[i] /= monthlyCounts[i];
+        monthlyWinRates[i] = monthlyWinCounts[i] / monthlyCounts[i];
       }
     }
 
@@ -453,43 +533,105 @@ export class BacktestDataAdapter {
 
   /**
    * 生成基准对比数据
+   * 优先使用后端 benchmark_comparison 中的真实数据
    */
   static generateBenchmarkComparison(
     detailedResult: BacktestDetailedResult | null | undefined
   ): BenchmarkComparison {
+    const empty: BenchmarkComparison = {
+      dates: [],
+      strategy_returns: [],
+      benchmark_returns: [],
+      excess_returns: [],
+      tracking_error: 0,
+      information_ratio: 0,
+      beta: 0,
+      alpha: 0,
+      correlation: 0,
+    };
+
     if (!detailedResult) {
-      // 返回默认值，避免页面崩溃
+      return empty;
+    }
+
+    // 尝试从后端 benchmark_comparison 中获取真实数据
+    const benchmark = detailedResult.benchmark_comparison;
+
+    if (benchmark) {
+      // 后端返回了真实的基准对比数据
+      const benchmarkMetrics = benchmark as Record<string, number>;
+
+      // 从 drawdown_analysis 获取日期序列，用于构建累积收益曲线
+      const drawdownCurve = detailedResult.drawdown_analysis?.drawdown_curve || [];
+      const dates = drawdownCurve.map((d: { date: string }) => d.date);
+
+      // 从月度收益构建策略累积收益序列
+      const monthlyReturns = detailedResult.monthly_returns || [];
+      const strategyReturns: number[] = [];
+      const benchmarkReturns: number[] = [];
+      const excessReturns: number[] = [];
+
+      // 如果后端提供了 benchmark_data（基准每日收盘价），可以计算每日收益
+      const benchmarkData = benchmark.benchmark_data as Record<string, number> | undefined;
+      if (benchmarkData && dates.length > 0) {
+        const benchmarkDates = Object.keys(benchmarkData).sort();
+        const benchmarkValues = benchmarkDates.map(d => benchmarkData[d]);
+
+        // 计算基准每日收益率
+        for (let i = 0; i < dates.length; i++) {
+          // 策略收益：从 drawdown_curve 的 drawdown 变化推算
+          if (i === 0) {
+            strategyReturns.push(0);
+          } else {
+            const prevDD = drawdownCurve[i - 1]?.drawdown ?? 0;
+            const currDD = drawdownCurve[i]?.drawdown ?? 0;
+            strategyReturns.push(currDD - prevDD);
+          }
+
+          // 基准收益：从基准价格数据中查找对应日期
+          if (i < benchmarkValues.length && i > 0) {
+            const bmReturn = (benchmarkValues[i] - benchmarkValues[i - 1]) / benchmarkValues[i - 1];
+            benchmarkReturns.push(bmReturn);
+          } else {
+            benchmarkReturns.push(0);
+          }
+
+          excessReturns.push(strategyReturns[i] - benchmarkReturns[i]);
+        }
+      }
+
       return {
-        dates: [],
-        strategy_returns: [],
-        benchmark_returns: [],
-        excess_returns: [],
-        tracking_error: 0,
-        information_ratio: 0,
-        beta: 0,
-        alpha: 0,
-        correlation: 0,
+        dates,
+        strategy_returns: strategyReturns,
+        benchmark_returns: benchmarkReturns,
+        excess_returns: excessReturns,
+        tracking_error: benchmarkMetrics.tracking_error ?? 0,
+        information_ratio: benchmarkMetrics.information_ratio ?? 0,
+        beta: benchmarkMetrics.beta ?? 0,
+        alpha: benchmarkMetrics.alpha ?? 0,
+        correlation: benchmarkMetrics.correlation ?? 0,
       };
     }
 
-    // 从回撤分析中获取日期序列
-    const dates = detailedResult.drawdown_analysis?.drawdown_curve?.map(d => d.date) || [];
+    // 无基准数据时，仅从月度收益生成策略收益曲线，不伪造基准数据
+    const monthlyReturns = detailedResult.monthly_returns || [];
+    if (monthlyReturns.length === 0) {
+      return empty;
+    }
 
-    // 生成模拟的基准对比数据（实际应该从基准数据中获取）
-    const strategyReturns = dates.map(() => Math.random() * 0.02 - 0.01);
-    const benchmarkReturns = dates.map(() => Math.random() * 0.015 - 0.0075);
-    const excessReturns = strategyReturns.map((sr, i) => sr - benchmarkReturns[i]);
+    const dates = monthlyReturns.map(m => `${m.year}-${String(m.month).padStart(2, '0')}`);
+    const strategyReturns = monthlyReturns.map(m => m.monthly_return);
 
     return {
       dates,
       strategy_returns: strategyReturns,
-      benchmark_returns: benchmarkReturns,
-      excess_returns: excessReturns,
-      tracking_error: 0.08,
-      information_ratio: 0.75,
-      beta: 0.95,
-      alpha: 0.02,
-      correlation: 0.85,
+      benchmark_returns: [], // 无真实基准数据，不伪造
+      excess_returns: [],
+      tracking_error: 0,
+      information_ratio: 0,
+      beta: 0,
+      alpha: 0,
+      correlation: 0,
     };
   }
 
@@ -676,23 +818,21 @@ export class BacktestDataAdapter {
 
   private static getDefaultSeasonalAnalysis(): SeasonalAnalysis {
     return {
-      monthly_avg_returns: [
-        0.02, 0.01, 0.03, 0.015, 0.025, 0.01, -0.005, 0.02, 0.018, 0.022, 0.015, 0.008,
-      ],
-      monthly_win_rates: [0.65, 0.58, 0.72, 0.62, 0.68, 0.55, 0.48, 0.63, 0.61, 0.69, 0.59, 0.52],
+      monthly_avg_returns: Array(12).fill(0),
+      monthly_win_rates: Array(12).fill(0),
       quarterly_performance: {
-        q1: 0.06,
-        q2: 0.05,
-        q3: 0.03,
-        q4: 0.045,
+        q1: 0,
+        q2: 0,
+        q3: 0,
+        q4: 0,
       },
       best_month: {
-        month: 3,
-        avg_return: 0.03,
+        month: 0,
+        avg_return: 0,
       },
       worst_month: {
-        month: 7,
-        avg_return: -0.005,
+        month: 0,
+        avg_return: 0,
       },
     };
   }

@@ -225,6 +225,16 @@ export function PerformanceBreakdown({
     const yearSet = new Set(heatmapData.map(item => item[1]));
     const years = Array.from(yearSet).sort();
 
+    // 安全计算 min/max，过滤掉 NaN/null/undefined
+    const validValues = heatmapData
+      .map(item => item[2])
+      .filter((v): v is number => typeof v === 'number' && isFinite(v));
+    const dataMin = validValues.length > 0 ? Math.min(...validValues) : -0.1;
+    const dataMax = validValues.length > 0 ? Math.max(...validValues) : 0.1;
+    // 确保 min !== max，否则 visualMap 会报错
+    const visualMin = dataMin === dataMax ? dataMin - 0.01 : dataMin;
+    const visualMax = dataMin === dataMax ? dataMax + 0.01 : dataMax;
+
     const option = {
       title: {
         text: '月度表现热力图',
@@ -237,6 +247,7 @@ export function PerformanceBreakdown({
       tooltip: {
         position: 'top',
         formatter: function (params: { data: [number, number, number] }) {
+          const monthIndex = params.data[0];
           const year = params.data[1];
           const value = params.data[2];
 
@@ -257,7 +268,8 @@ export function PerformanceBreakdown({
               break;
           }
 
-          return `${year}年${month}<br/>${label}: ${(value * 100).toFixed(2)}${unit}`;
+          const monthLabel = monthNames[monthIndex] || '';
+          return `${year}年${monthLabel}<br/>${label}: ${(value * 100).toFixed(2)}${unit}`;
         },
       },
       grid: {
@@ -279,8 +291,8 @@ export function PerformanceBreakdown({
         },
       },
       visualMap: {
-        min: Math.min(...heatmapData.map(item => item[2])),
-        max: Math.max(...heatmapData.map(item => item[2])),
+        min: visualMin,
+        max: visualMax,
         calculable: true,
         orient: 'horizontal',
         left: 'center',
@@ -309,6 +321,8 @@ export function PerformanceBreakdown({
           label: {
             show: true,
             formatter: function (params: { data: [number, number, number] }) {
+              const val = params.data[2];
+              return typeof val === 'number' && isFinite(val) ? (val * 100).toFixed(1) : '';
             },
           },
           emphasis: {

@@ -33,38 +33,37 @@ class StatisticsCalculator:
         计算所有统计信息并创建或更新统计记录
 
         Args:
-            task_id: 任务ID
-            backtest_id: 回测ID
+            task_id: 任务ID（仅用于日志）
+            backtest_id: 回测ID（用于查询子表）
 
         Returns:
             BacktestStatistics: 统计记录对象
         """
         try:
-            self.logger.info(f"开始计算统计信息: task_id={task_id}")
+            self.logger.info(f"开始计算统计信息: task_id={task_id}, backtest_id={backtest_id}")
 
             # 检查是否已存在统计记录
             stmt = select(BacktestStatistics).where(
-                BacktestStatistics.task_id == task_id
+                BacktestStatistics.backtest_id == backtest_id
             )
             result = await self.session.execute(stmt)
             existing_stats = result.scalar_one_or_none()
 
-            # 计算各项统计
-            signal_stats = await self._calculate_signal_statistics(task_id)
-            trade_stats = await self._calculate_trade_statistics(task_id)
-            position_stats = await self._calculate_position_statistics(task_id)
-            time_range_stats = await self._calculate_time_range_statistics(task_id)
+            # 计算各项统计（全部基于 backtest_id）
+            signal_stats = await self._calculate_signal_statistics(backtest_id)
+            trade_stats = await self._calculate_trade_statistics(backtest_id)
+            position_stats = await self._calculate_position_statistics(backtest_id)
+            time_range_stats = await self._calculate_time_range_statistics(backtest_id)
             stock_distribution_stats = (
-                await self._calculate_stock_distribution_statistics(task_id)
+                await self._calculate_stock_distribution_statistics(backtest_id)
             )
-            performance_stats = await self._calculate_performance_statistics(task_id)
+            performance_stats = await self._calculate_performance_statistics(backtest_id)
 
             # 合并所有统计
             if existing_stats:
                 # 更新现有记录
                 self._update_statistics_object(
                     existing_stats,
-                    task_id,
                     backtest_id,
                     signal_stats,
                     trade_stats,
@@ -74,14 +73,13 @@ class StatisticsCalculator:
                     performance_stats,
                 )
                 await self.session.flush()
-                self.logger.info(f"更新统计信息成功: task_id={task_id}")
+                self.logger.info(f"更新统计信息成功: backtest_id={backtest_id}")
                 return existing_stats
             else:
                 # 创建新记录
-                new_stats = BacktestStatistics(task_id=task_id, backtest_id=backtest_id)
+                new_stats = BacktestStatistics(backtest_id=backtest_id)
                 self._update_statistics_object(
                     new_stats,
-                    task_id,
                     backtest_id,
                     signal_stats,
                     trade_stats,
@@ -92,17 +90,16 @@ class StatisticsCalculator:
                 )
                 self.session.add(new_stats)
                 await self.session.flush()
-                self.logger.info(f"创建统计信息成功: task_id={task_id}")
+                self.logger.info(f"创建统计信息成功: backtest_id={backtest_id}")
                 return new_stats
 
         except Exception as e:
-            self.logger.error(f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True)
+            self.logger.error(f"计算统计信息失败: backtest_id={backtest_id}, error={e}", exc_info=True)
             raise
 
     def _update_statistics_object(
         self,
         stats: BacktestStatistics,
-        task_id: str,
         backtest_id: str,
         signal_stats: Dict[str, Any],
         trade_stats: Dict[str, Any],
@@ -112,7 +109,6 @@ class StatisticsCalculator:
         performance_stats: Dict[str, Any],
     ):
         """更新统计对象"""
-        stats.task_id = task_id
         stats.backtest_id = backtest_id
 
         # 信号统计
@@ -171,12 +167,11 @@ class StatisticsCalculator:
         )
         stats.largest_position_size = performance_stats.get("largest_position_size")
 
-    async def _calculate_signal_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def _calculate_signal_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """计算信号统计信息"""
         try:
-            base_where = SignalRecord.task_id == task_id
+            base_where = SignalRecord.backtest_id == backtest_id
 
-            # 并行执行多个查询
             total_stmt = select(func.count(SignalRecord.id)).where(base_where)
             buy_stmt = select(func.count(SignalRecord.id)).where(
                 and_(base_where, SignalRecord.signal_type == "BUY")
@@ -218,10 +213,10 @@ class StatisticsCalculator:
             self.logger.error(f"计算信号统计失败: {e}", exc_info=True)
             return {}
 
-    async def _calculate_trade_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def _calculate_trade_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """计算交易统计信息"""
         try:
-            base_where = TradeRecord.task_id == task_id
+            base_where = TradeRecord.backtest_id == backtest_id
 
             # 总交易数
             total_stmt = select(func.count(TradeRecord.id)).where(base_where)
@@ -303,11 +298,11 @@ class StatisticsCalculator:
             self.logger.error(f"计算交易统计失败: {e}", exc_info=True)
             return {}
 
-    async def _calculate_position_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def _calculate_position_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """计算持仓统计信息"""
         try:
             # 获取所有交易记录
-            stmt = select(TradeRecord).where(TradeRecord.task_id == task_id)
+            stmt = select(TradeRecord).where(TradeRecord.backtest_id == backtest_id)
             result = await self.session.execute(stmt)
             trades = result.scalars().all()
 
@@ -324,7 +319,7 @@ class StatisticsCalculator:
             stock_returns = defaultdict(float)
             for trade in trades:
                 if trade.pnl is not None:
-                    stock_returns[trade.stock_code] += trade.pnl
+                    stock_returns[trade.stock_code] += float(trade.pnl)
 
             if not stock_returns:
                 return {
@@ -351,15 +346,15 @@ class StatisticsCalculator:
             self.logger.error(f"计算持仓统计失败: {e}", exc_info=True)
             return {}
 
-    async def _calculate_time_range_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def _calculate_time_range_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """计算时间范围统计信息"""
         try:
             # 信号时间范围
             signal_min_stmt = select(func.min(SignalRecord.timestamp)).where(
-                SignalRecord.task_id == task_id
+                SignalRecord.backtest_id == backtest_id
             )
             signal_max_stmt = select(func.max(SignalRecord.timestamp)).where(
-                SignalRecord.task_id == task_id
+                SignalRecord.backtest_id == backtest_id
             )
             signal_min_result = await self.session.execute(signal_min_stmt)
             signal_max_result = await self.session.execute(signal_max_stmt)
@@ -368,10 +363,10 @@ class StatisticsCalculator:
 
             # 交易时间范围
             trade_min_stmt = select(func.min(TradeRecord.timestamp)).where(
-                TradeRecord.task_id == task_id
+                TradeRecord.backtest_id == backtest_id
             )
             trade_max_stmt = select(func.max(TradeRecord.timestamp)).where(
-                TradeRecord.task_id == task_id
+                TradeRecord.backtest_id == backtest_id
             )
             trade_min_result = await self.session.execute(trade_min_stmt)
             trade_max_result = await self.session.execute(trade_max_stmt)
@@ -381,10 +376,9 @@ class StatisticsCalculator:
             # 计算交易天数（去重后的日期数）
             trading_days = 0
             if first_trade_date and last_trade_date:
-                # 获取所有交易日期（去重）
                 dates_stmt = (
                     select(func.date(TradeRecord.timestamp).label("trade_date"))
-                    .where(TradeRecord.task_id == task_id)
+                    .where(TradeRecord.backtest_id == backtest_id)
                     .distinct()
                 )
                 dates_result = await self.session.execute(dates_stmt)
@@ -402,21 +396,21 @@ class StatisticsCalculator:
             return {}
 
     async def _calculate_stock_distribution_statistics(
-        self, task_id: str
+        self, backtest_id: str
     ) -> Dict[str, Any]:
         """计算股票分布统计信息"""
         try:
             # 信号股票分布
             signal_stocks_stmt = select(
                 func.count(distinct(SignalRecord.stock_code))
-            ).where(SignalRecord.task_id == task_id)
+            ).where(SignalRecord.backtest_id == backtest_id)
             signal_stocks_result = await self.session.execute(signal_stocks_stmt)
             unique_stocks_signaled = signal_stocks_result.scalar() or 0
 
             # 交易股票分布
             trade_stocks_stmt = select(
                 func.count(distinct(TradeRecord.stock_code))
-            ).where(TradeRecord.task_id == task_id)
+            ).where(TradeRecord.backtest_id == backtest_id)
             trade_stocks_result = await self.session.execute(trade_stocks_stmt)
             unique_stocks_traded = trade_stocks_result.scalar() or 0
 
@@ -425,7 +419,7 @@ class StatisticsCalculator:
                 select(
                     SignalRecord.stock_code, func.count(SignalRecord.id).label("count")
                 )
-                .where(SignalRecord.task_id == task_id)
+                .where(SignalRecord.backtest_id == backtest_id)
                 .group_by(SignalRecord.stock_code)
                 .order_by(func.count(SignalRecord.id).desc())
                 .limit(1)
@@ -439,7 +433,7 @@ class StatisticsCalculator:
                 select(
                     TradeRecord.stock_code, func.count(TradeRecord.id).label("count")
                 )
-                .where(TradeRecord.task_id == task_id)
+                .where(TradeRecord.backtest_id == backtest_id)
                 .group_by(TradeRecord.stock_code)
                 .order_by(func.count(TradeRecord.id).desc())
                 .limit(1)
@@ -458,13 +452,13 @@ class StatisticsCalculator:
             self.logger.error(f"计算股票分布统计失败: {e}", exc_info=True)
             return {}
 
-    async def _calculate_performance_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def _calculate_performance_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """计算性能指标统计信息"""
         try:
             # 获取所有交易记录
             stmt = (
                 select(TradeRecord)
-                .where(TradeRecord.task_id == task_id)
+                .where(TradeRecord.backtest_id == backtest_id)
                 .order_by(TradeRecord.timestamp)
             )
             result = await self.session.execute(stmt)

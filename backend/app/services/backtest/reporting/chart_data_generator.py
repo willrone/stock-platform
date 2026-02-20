@@ -242,9 +242,7 @@ class ChartDataGenerator:
             "avg_loss": total_loss / losing_trades if losing_trades > 0 else 0,
             "profit_factor": total_profit / total_loss
             if total_loss > 0
-            else float("inf")
-            if total_profit > 0
-            else 0,
+            else 0.0,
         }
 
         return {"profit_distribution": profit_distribution, "trade_stats": trade_stats}

@@ -558,7 +558,7 @@ class PortfolioManager:
             float(np.mean([t.pnl for t in losing_trades])) if losing_trades else 0.0
         )
         profit_factor = (
-            float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
+            float(abs(avg_win / avg_loss)) if avg_loss != 0 else 0.0
         )
 
         total_cap_inj = getattr(self, "total_capital_injection", 0.0)

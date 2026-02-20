@@ -274,7 +274,7 @@ class BacktestTaskExecutor:
             try:
                 # 解析任务配置
                 config_dict = queued_task.config
-                strategy_name = config_dict.get("strategy_name", "default_strategy")
+                strategy_name = config_dict.get("strategy_name") or config_dict.get("strategy", "default_strategy")
                 stock_codes = config_dict.get("stock_codes", [])
                 start_date = datetime.fromisoformat(config_dict.get("start_date"))
                 end_date = datetime.fromisoformat(config_dict.get("end_date"))

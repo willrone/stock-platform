@@ -1,14 +1,69 @@
 """
-任务管理服务
-实现任务创建、状态管理、进度跟踪和结果保存功能
+[DEPRECATED] 任务管理服务 - 旧 SQLite 版本
+
+此模块仍使用旧的 DatabaseManager（原生 sqlite3）进行数据库操作。
+新代码请使用 SQLAlchemy session + app.models.task_models 中的 ORM 模型。
+待后续完整重写后移除此文件。
 """
 
 import json
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.models.database import DatabaseManager, Task, TaskResult, TaskStatus
+warnings.warn(
+    "task_manager.py 仍使用旧 DatabaseManager，待迁移到 SQLAlchemy",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from app.models.task_models import TaskStatus
+
+# 旧 ORM 兼容 — DatabaseManager 已废弃，此处保留以维持运行
+# TODO: 重写为 SQLAlchemy session 操作后删除以下 import
+try:
+    from app.models.database import DatabaseManager
+except ImportError:
+    DatabaseManager = None  # type: ignore
+
+# TaskResult / Task dataclass 原定义在旧 database.py 中，现已移除。
+# 下面用轻量 dataclass 替代，仅供本模块内部使用，不对外暴露。
+
+@dataclass
+class _LegacyTask:
+    """旧 Task dataclass（仅供本模块内部兼容）"""
+    id: int = 0
+    name: str = ""
+    description: str = ""
+    stock_codes: str = ""
+    indicators: str = ""
+    models: str = ""
+    parameters: str = ""
+    status: TaskStatus = TaskStatus.CREATED
+    progress: float = 0.0
+    created_at: datetime = None  # type: ignore
+    started_at: datetime = None  # type: ignore
+    completed_at: datetime = None  # type: ignore
+    error_message: str = None  # type: ignore
+
+Task = _LegacyTask  # alias
+
+@dataclass
+class _LegacyTaskResult:
+    """旧 TaskResult dataclass（仅供本模块内部兼容）"""
+    id: int = 0
+    task_id: int = 0
+    stock_code: str = ""
+    prediction_date: str = None  # type: ignore
+    prediction_value: float = 0.0
+    confidence: float = 0.0
+    model_name: str = ""
+    indicators_used: str = ""
+    backtest_metrics: str = ""
+    created_at: datetime = None  # type: ignore
+
+TaskResult = _LegacyTaskResult  # alias
 
 
 @dataclass

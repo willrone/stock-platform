@@ -3,7 +3,7 @@
 用于管理回测详细结果、图表缓存、组合快照等数据的CRUD操作
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -60,32 +60,93 @@ class BacktestDetailedRepository:
         backtest_id: str,
         extended_metrics: Dict[str, float],
         analysis_data: Dict[str, Any],
+        backtest_report: Optional[Dict[str, Any]] = None,
     ) -> Optional[BacktestDetailedResult]:
-        """创建回测详细结果记录"""
+        """创建或更新回测详细结果记录（即 BacktestResult）
+
+        如果 backtest_executor 已预创建占位行，则 UPDATE；否则 INSERT。
+
+        Args:
+            task_id: 任务ID（外键关联 tasks 表）
+            backtest_id: 回测ID（UUID）
+            extended_metrics: 扩展风险指标
+            analysis_data: 分析数据（drawdown, monthly_returns 等）
+            backtest_report: 回测报告数据（包含 strategy_name, total_return 等必填字段）
+        """
         try:
-            detailed_result = BacktestDetailedResult(
+            report = backtest_report or {}
+
+            field_values = dict(
                 task_id=task_id,
-                backtest_id=backtest_id,
+                strategy_name=report.get("strategy_name", "unknown"),
+                start_date=self._ensure_datetime(report.get("start_date")) or datetime.now(timezone.utc),
+                end_date=self._ensure_datetime(report.get("end_date")) or datetime.now(timezone.utc),
+                initial_cash=report.get("initial_cash", 100000.0),
+                final_value=report.get("final_value", 0.0),
+                total_return=report.get("total_return", 0.0),
+                annualized_return=report.get("annualized_return", 0.0),
+                volatility=report.get("volatility", 0.0),
+                sharpe_ratio=report.get("sharpe_ratio", 0.0),
+                max_drawdown=report.get("max_drawdown", 0.0),
+                win_rate=report.get("win_rate", 0.0),
+                profit_factor=report.get("profit_factor", 0.0),
+                total_trades=report.get("total_trades", 0),
+                # 扩展风险指标
                 sortino_ratio=extended_metrics.get("sortino_ratio", 0.0),
                 calmar_ratio=extended_metrics.get("calmar_ratio", 0.0),
                 max_drawdown_duration=extended_metrics.get("max_drawdown_duration", 0),
                 var_95=extended_metrics.get("var_95", 0.0),
                 downside_deviation=extended_metrics.get("downside_deviation", 0.0),
+                # JSONB 分析数据
                 drawdown_analysis=analysis_data.get("drawdown_analysis"),
                 monthly_returns=analysis_data.get("monthly_returns"),
                 position_analysis=analysis_data.get("position_analysis"),
-                benchmark_comparison=analysis_data.get("benchmark_comparison"),
                 rolling_metrics=analysis_data.get("rolling_metrics"),
+                benchmark_comparison=analysis_data.get("benchmark_comparison"),
             )
 
-            self.session.add(detailed_result)
-            await self.session.flush()
+            # 尝试查找已有的占位行（由 backtest_executor 预创建）
+            stmt = select(BacktestDetailedResult).where(
+                BacktestDetailedResult.backtest_id == backtest_id
+            )
+            result = await self.session.execute(stmt)
+            existing = result.scalar_one_or_none()
 
-            self.logger.info(f"创建回测详细结果: task_id={task_id}, backtest_id={backtest_id}")
-            return detailed_result
+            if existing:
+                # UPDATE 占位行
+                for key, value in field_values.items():
+                    setattr(existing, key, value)
+                await self.session.flush()
+                self.logger.info(f"更新回测详细结果（占位行）: task_id={task_id}, backtest_id={backtest_id}")
+                return existing
+            else:
+                # INSERT 新行
+                detailed_result = BacktestDetailedResult(
+                    backtest_id=backtest_id,
+                    **field_values,
+                )
+                self.session.add(detailed_result)
+                await self.session.flush()
+                self.logger.info(f"创建回测详细结果: task_id={task_id}, backtest_id={backtest_id}")
+                return detailed_result
 
         except Exception as e:
             self.logger.error("创建回测详细结果失败: {}", e, exc_info=True)
+            return None
+
+    async def get_backtest_id_by_task_id(self, task_id: str) -> Optional[str]:
+        """根据 task_id 查找对应的 backtest_id"""
+        try:
+            stmt = select(BacktestDetailedResult.backtest_id).where(
+                BacktestDetailedResult.task_id == task_id
+            )
+            result = await self.session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row is not None:
+                return str(row)
+            return None
+        except Exception as e:
+            self.logger.error("根据task_id查找backtest_id失败: {}", e, exc_info=True)
             return None
 
     async def get_detailed_result_by_task_id(
@@ -167,7 +228,7 @@ class BacktestDetailedRepository:
                 if "rolling_metrics" in analysis_data:
                     detailed_result.rolling_metrics = analysis_data["rolling_metrics"]
 
-            detailed_result.updated_at = datetime.utcnow()
+            detailed_result.updated_at = datetime.now(timezone.utc)
             await self.session.flush()
 
             self.logger.info(f"更新回测详细结果: task_id={task_id}")
@@ -180,14 +241,13 @@ class BacktestDetailedRepository:
     # ==================== PortfolioSnapshot 相关操作 ====================
 
     async def batch_create_portfolio_snapshots(
-        self, task_id: str, backtest_id: str, snapshots_data: List[Dict[str, Any]]
+        self, backtest_id: str, snapshots_data: List[Dict[str, Any]]
     ) -> bool:
         """批量创建组合快照"""
         try:
             snapshots = []
             for snapshot_data in snapshots_data:
                 snapshot = PortfolioSnapshot(
-                    task_id=task_id,
                     backtest_id=backtest_id,
                     snapshot_date=self._ensure_datetime(snapshot_data["date"]),
                     portfolio_value=snapshot_data["portfolio_value"],
@@ -202,7 +262,7 @@ class BacktestDetailedRepository:
             self.session.add_all(snapshots)
             await self.session.flush()
 
-            self.logger.info(f"批量创建组合快照: task_id={task_id}, count={len(snapshots)}")
+            self.logger.info(f"批量创建组合快照: backtest_id={backtest_id}, count={len(snapshots)}")
             return True
 
         except Exception as e:
@@ -211,14 +271,14 @@ class BacktestDetailedRepository:
 
     async def get_portfolio_snapshots(
         self,
-        task_id: str,
+        backtest_id: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = None,
     ) -> List[PortfolioSnapshot]:
         """获取组合快照列表"""
         try:
-            stmt = select(PortfolioSnapshot).where(PortfolioSnapshot.task_id == task_id)
+            stmt = select(PortfolioSnapshot).where(PortfolioSnapshot.backtest_id == backtest_id)
 
             if start_date:
                 stmt = stmt.where(PortfolioSnapshot.snapshot_date >= start_date)
@@ -240,14 +300,13 @@ class BacktestDetailedRepository:
     # ==================== TradeRecord 相关操作 ====================
 
     async def batch_create_trade_records(
-        self, task_id: str, backtest_id: str, trades_data: List[Dict[str, Any]]
+        self, backtest_id: str, trades_data: List[Dict[str, Any]]
     ) -> bool:
         """批量创建交易记录"""
         try:
             trades = []
             for trade_data in trades_data:
                 trade = TradeRecord(
-                    task_id=task_id,
                     backtest_id=backtest_id,
                     trade_id=trade_data["trade_id"],
                     stock_code=trade_data["stock_code"],
@@ -266,7 +325,7 @@ class BacktestDetailedRepository:
             self.session.add_all(trades)
             await self.session.flush()
 
-            self.logger.info(f"批量创建交易记录: task_id={task_id}, count={len(trades)}")
+            self.logger.info(f"批量创建交易记录: backtest_id={backtest_id}, count={len(trades)}")
             return True
 
         except Exception as e:
@@ -275,7 +334,7 @@ class BacktestDetailedRepository:
 
     async def get_trade_records(
         self,
-        task_id: str,
+        backtest_id: str,
         stock_code: Optional[str] = None,
         action: Optional[str] = None,
         start_date: Optional[datetime] = None,
@@ -287,7 +346,7 @@ class BacktestDetailedRepository:
     ) -> List[TradeRecord]:
         """获取交易记录列表"""
         try:
-            stmt = select(TradeRecord).where(TradeRecord.task_id == task_id)
+            stmt = select(TradeRecord).where(TradeRecord.backtest_id == backtest_id)
 
             if stock_code:
                 stmt = stmt.where(TradeRecord.stock_code == stock_code)
@@ -324,7 +383,7 @@ class BacktestDetailedRepository:
 
     async def get_trade_records_count(
         self,
-        task_id: str,
+        backtest_id: str,
         stock_code: Optional[str] = None,
         action: Optional[str] = None,
         start_date: Optional[datetime] = None,
@@ -333,7 +392,7 @@ class BacktestDetailedRepository:
         """获取交易记录总数"""
         try:
             stmt = select(func.count(TradeRecord.id)).where(
-                TradeRecord.task_id == task_id
+                TradeRecord.backtest_id == backtest_id
             )
 
             if stock_code:
@@ -352,13 +411,13 @@ class BacktestDetailedRepository:
             self.logger.error("获取交易记录总数失败: {}", e, exc_info=True)
             return 0
 
-    async def get_trade_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def get_trade_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """获取交易统计信息（优化：优先从统计表读取，不存在则实时计算）"""
         try:
             # 优先从统计表读取
             try:
                 stats_stmt = select(BacktestStatistics).where(
-                    BacktestStatistics.task_id == task_id
+                    BacktestStatistics.backtest_id == backtest_id
                 )
                 stats_result = await self.session.execute(stats_stmt)
                 stats = stats_result.scalar_one_or_none()
@@ -385,71 +444,71 @@ class BacktestDetailedRepository:
                 if "no such table" in error_str or (
                     "table" in error_str and "does not exist" in error_str
                 ):
-                    self.logger.debug(f"统计表不存在，回退到实时计算: task_id={task_id}")
+                    self.logger.debug(f"统计表不存在，回退到实时计算: backtest_id={backtest_id}")
                 else:
                     self.logger.warning(
-                        f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}"
+                        f"查询统计表失败，回退到实时计算: backtest_id={backtest_id}, error={stats_error}"
                     )
 
             # 向后兼容：如果统计表不存在或没有数据，实时计算
             try:
                 total_stmt = select(func.count(TradeRecord.id)).where(
-                    TradeRecord.task_id == task_id
+                    TradeRecord.backtest_id == backtest_id
                 )
                 total_result = await self.session.execute(total_stmt)
                 total_trades = total_result.scalar() or 0
 
                 buy_stmt = select(func.count(TradeRecord.id)).where(
-                    and_(TradeRecord.task_id == task_id, TradeRecord.action == "BUY")
+                    and_(TradeRecord.backtest_id == backtest_id, TradeRecord.action == "BUY")
                 )
                 buy_result = await self.session.execute(buy_stmt)
                 buy_trades = buy_result.scalar() or 0
 
                 sell_stmt = select(func.count(TradeRecord.id)).where(
-                    and_(TradeRecord.task_id == task_id, TradeRecord.action == "SELL")
+                    and_(TradeRecord.backtest_id == backtest_id, TradeRecord.action == "SELL")
                 )
                 sell_result = await self.session.execute(sell_stmt)
                 sell_trades = sell_result.scalar() or 0
 
                 profit_stmt = select(func.count(TradeRecord.id)).where(
-                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
+                    and_(TradeRecord.backtest_id == backtest_id, TradeRecord.pnl > 0)
                 )
                 profit_result = await self.session.execute(profit_stmt)
                 profit_trades = profit_result.scalar() or 0
 
                 loss_stmt = select(func.count(TradeRecord.id)).where(
-                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
+                    and_(TradeRecord.backtest_id == backtest_id, TradeRecord.pnl < 0)
                 )
                 loss_result = await self.session.execute(loss_stmt)
                 loss_trades = loss_result.scalar() or 0
 
                 pnl_stmt = select(func.sum(TradeRecord.pnl)).where(
-                    TradeRecord.task_id == task_id
+                    TradeRecord.backtest_id == backtest_id
                 )
                 pnl_result = await self.session.execute(pnl_stmt)
                 total_pnl = pnl_result.scalar() or 0.0
 
                 avg_profit_stmt = select(func.avg(TradeRecord.pnl)).where(
-                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl > 0)
+                    and_(TradeRecord.backtest_id == backtest_id, TradeRecord.pnl > 0)
                 )
                 avg_profit_result = await self.session.execute(avg_profit_stmt)
                 avg_profit = avg_profit_result.scalar() or 0.0
 
                 avg_loss_stmt = select(func.avg(TradeRecord.pnl)).where(
-                    and_(TradeRecord.task_id == task_id, TradeRecord.pnl < 0)
+                    and_(TradeRecord.backtest_id == backtest_id, TradeRecord.pnl < 0)
                 )
                 avg_loss_result = await self.session.execute(avg_loss_stmt)
                 avg_loss = avg_loss_result.scalar() or 0.0
 
                 commission_stmt = select(func.sum(TradeRecord.commission)).where(
-                    TradeRecord.task_id == task_id
+                    TradeRecord.backtest_id == backtest_id
                 )
                 commission_result = await self.session.execute(commission_stmt)
                 total_commission = commission_result.scalar() or 0.0
 
                 holding_stmt = select(func.avg(TradeRecord.holding_days)).where(
                     and_(
-                        TradeRecord.task_id == task_id,
+                        TradeRecord.backtest_id == backtest_id,
                         TradeRecord.holding_days.isnot(None),
                     )
                 )
@@ -482,10 +541,10 @@ class BacktestDetailedRepository:
                 if "no such table" in error_str or (
                     "table" in error_str and "does not exist" in error_str
                 ):
-                    self.logger.info(f"交易记录表不存在，返回空统计: task_id={task_id}")
+                    self.logger.info(f"交易记录表不存在，返回空���计: backtest_id={backtest_id}")
                 else:
                     self.logger.warning(
-                        f"计算交易统计失败: task_id={task_id}, error={calc_error}"
+                        f"计算交易统计失败: backtest_id={backtest_id}, error={calc_error}"
                     )
                 # 返回空统计
                 return {
@@ -528,7 +587,6 @@ class BacktestDetailedRepository:
 
     async def save_signal_record(
         self,
-        task_id: str,
         backtest_id: str,
         signal_id: str,
         stock_code: str,
@@ -544,7 +602,6 @@ class BacktestDetailedRepository:
         """保存信号记录"""
         try:
             signal_record = SignalRecord(
-                task_id=task_id,
                 backtest_id=backtest_id,
                 signal_id=signal_id,
                 stock_code=stock_code,
@@ -562,7 +619,7 @@ class BacktestDetailedRepository:
             await self.session.flush()
 
             self.logger.debug(
-                f"保存信号记录: task_id={task_id}, signal_id={signal_id}, type={signal_type}"
+                f"保存信号记录: backtest_id={backtest_id}, signal_id={signal_id}, type={signal_type}"
             )
             return signal_record
 
@@ -571,14 +628,13 @@ class BacktestDetailedRepository:
             return None
 
     async def batch_save_signal_records(
-        self, task_id: str, backtest_id: str, signals_data: List[Dict[str, Any]]
+        self, backtest_id: str, signals_data: List[Dict[str, Any]]
     ) -> bool:
         """批量保存信号记录"""
         try:
             signals = []
             for signal_data in signals_data:
                 signal = SignalRecord(
-                    task_id=task_id,
                     backtest_id=backtest_id,
                     signal_id=signal_data["signal_id"],
                     stock_code=signal_data["stock_code"],
@@ -601,7 +657,7 @@ class BacktestDetailedRepository:
             self.session.add_all(signals)
             await self.session.flush()
 
-            self.logger.info(f"批量保存信号记录: task_id={task_id}, count={len(signals)}")
+            self.logger.info(f"批量保存信号记录: backtest_id={backtest_id}, count={len(signals)}")
             return True
 
         except Exception as e:
@@ -610,7 +666,7 @@ class BacktestDetailedRepository:
 
     async def get_signal_records(
         self,
-        task_id: str,
+        backtest_id: str,
         stock_code: Optional[str] = None,
         signal_type: Optional[str] = None,
         start_date: Optional[datetime] = None,
@@ -623,7 +679,7 @@ class BacktestDetailedRepository:
     ) -> List[SignalRecord]:
         """获取信号记录列表"""
         try:
-            stmt = select(SignalRecord).where(SignalRecord.task_id == task_id)
+            stmt = select(SignalRecord).where(SignalRecord.backtest_id == backtest_id)
 
             if stock_code:
                 stmt = stmt.where(SignalRecord.stock_code == stock_code)
@@ -662,7 +718,7 @@ class BacktestDetailedRepository:
 
     async def get_signal_records_count(
         self,
-        task_id: str,
+        backtest_id: str,
         stock_code: Optional[str] = None,
         signal_type: Optional[str] = None,
         start_date: Optional[datetime] = None,
@@ -674,7 +730,7 @@ class BacktestDetailedRepository:
 
             async def _get_count():
                 stmt = select(func.count(SignalRecord.id)).where(
-                    SignalRecord.task_id == task_id
+                    SignalRecord.backtest_id == backtest_id
                 )
 
                 if stock_code:
@@ -695,20 +751,20 @@ class BacktestDetailedRepository:
                 _get_count,
                 max_retries=3,
                 retry_delay=0.1,
-                operation_name=f"获取信号记录总数 (task_id={task_id})",
+                operation_name=f"获取信号记录总数 (backtest_id={backtest_id})",
             )
 
         except Exception as e:
             self.logger.error("获取信号记录总数失败: {}", e, exc_info=True)
             return 0
 
-    async def get_signal_statistics(self, task_id: str) -> Dict[str, Any]:
+    async def get_signal_statistics(self, backtest_id: str) -> Dict[str, Any]:
         """获取信号统计信息（优化：优先从统计表读取，不存在则实时计算）"""
         try:
             # 优先从统计表读取
             try:
                 stats_stmt = select(BacktestStatistics).where(
-                    BacktestStatistics.task_id == task_id
+                    BacktestStatistics.backtest_id == backtest_id
                 )
                 stats_result = await self.session.execute(stats_stmt)
                 stats = stats_result.scalar_one_or_none()
@@ -730,10 +786,10 @@ class BacktestDetailedRepository:
                 if "no such table" in error_str or (
                     "table" in error_str and "does not exist" in error_str
                 ):
-                    self.logger.debug(f"统计表不存在，回退到实时计算: task_id={task_id}")
+                    self.logger.debug(f"统计表不存在，回退到实时计算: backtest_id={backtest_id}")
                 else:
                     self.logger.warning(
-                        f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}"
+                        f"查询统计表失败，回退到实时计算: backtest_id={backtest_id}, error={stats_error}"
                     )
 
             # 向后兼容：如果统计表不存在或没有数据，实时计算
@@ -742,7 +798,7 @@ class BacktestDetailedRepository:
 
                 start_time = time.time()
 
-                base_where = SignalRecord.task_id == task_id
+                base_where = SignalRecord.backtest_id == backtest_id
 
                 total_stmt = select(func.count(SignalRecord.id)).where(base_where)
                 buy_stmt = select(func.count(SignalRecord.id)).where(
@@ -778,7 +834,7 @@ class BacktestDetailedRepository:
                 elapsed_time = time.time() - start_time
                 if elapsed_time > 1.0:
                     self.logger.warning(
-                        f"信号统计查询耗时较长: {elapsed_time:.2f}秒, task_id={task_id}, total_signals={total_signals}"
+                        f"信号统计查询耗时较长: {elapsed_time:.2f}秒, backtest_id={backtest_id}, total_signals={total_signals}"
                     )
 
                 return {
@@ -796,10 +852,10 @@ class BacktestDetailedRepository:
                 if "no such table" in error_str or (
                     "table" in error_str and "does not exist" in error_str
                 ):
-                    self.logger.info(f"信号记录表不存在，返回空统计: task_id={task_id}")
+                    self.logger.info(f"信号记录表不存在，返回空统计: backtest_id={backtest_id}")
                 else:
                     self.logger.warning(
-                        f"计算信号统计失败: task_id={task_id}, error={calc_error}"
+                        f"计算信号统计失败: backtest_id={backtest_id}, error={calc_error}"
                     )
                 # 返回空统计
                 return {
@@ -829,7 +885,7 @@ class BacktestDetailedRepository:
             }
 
     async def mark_signal_as_executed(
-        self, task_id: str, stock_code: str, timestamp: datetime, signal_type: str
+        self, backtest_id: str, stock_code: str, timestamp: datetime, signal_type: str
     ) -> bool:
         """标记信号为已执行（基于股票代码、时间和类型匹配）"""
         try:
@@ -843,7 +899,7 @@ class BacktestDetailedRepository:
                 select(SignalRecord)
                 .where(
                     and_(
-                        SignalRecord.task_id == task_id,
+                        SignalRecord.backtest_id == backtest_id,
                         SignalRecord.stock_code == stock_code,
                         SignalRecord.signal_type == signal_type,
                         SignalRecord.timestamp >= timestamp_start,
@@ -863,7 +919,7 @@ class BacktestDetailedRepository:
                 signal.execution_reason = None  # 已执行时清空未执行原因
                 await self.session.flush()
                 self.logger.debug(
-                    f"标记信号为已执行: task_id={task_id}, signal_id={signal.signal_id}"
+                    f"标记信号为已执行: backtest_id={backtest_id}, signal_id={signal.signal_id}"
                 )
                 return True
 
@@ -875,7 +931,7 @@ class BacktestDetailedRepository:
 
     async def update_signal_execution_reason(
         self,
-        task_id: str,
+        backtest_id: str,
         stock_code: str,
         timestamp: datetime,
         signal_type: str,
@@ -893,7 +949,7 @@ class BacktestDetailedRepository:
                 select(SignalRecord)
                 .where(
                     and_(
-                        SignalRecord.task_id == task_id,
+                        SignalRecord.backtest_id == backtest_id,
                         SignalRecord.stock_code == stock_code,
                         SignalRecord.signal_type == signal_type,
                         SignalRecord.timestamp >= timestamp_start,
@@ -913,7 +969,7 @@ class BacktestDetailedRepository:
                 signal.execution_reason = execution_reason
                 await self.session.flush()
                 self.logger.debug(
-                    f"更新信号未执行原因: task_id={task_id}, signal_id={signal.signal_id}, reason={execution_reason}"
+                    f"更新信号未执行原因: backtest_id={backtest_id}, signal_id={signal.signal_id}, reason={execution_reason}"
                 )
                 return True
 
@@ -924,13 +980,13 @@ class BacktestDetailedRepository:
             return False
 
     async def batch_mark_signals_as_executed(
-        self, task_id: str, signal_keys: List[tuple]
+        self, backtest_id: str, signal_keys: List[tuple]
     ) -> int:
         """
         批量标记信号为已执行
 
         Args:
-            task_id: 任务ID
+            backtest_id: 回测ID
             signal_keys: 信号键列表，每个元素为 (stock_code, timestamp, signal_type)
 
         Returns:
@@ -942,7 +998,7 @@ class BacktestDetailedRepository:
         try:
             # 构建 CASE WHEN 语句
             case_conditions = []
-            params = {"task_id": task_id}
+            params = {"backtest_id": backtest_id}
 
             for i, (stock_code, timestamp, signal_type) in enumerate(signal_keys):
                 # 将时间戳转换为日期范围
@@ -965,9 +1021,9 @@ class BacktestDetailedRepository:
             sql = text(
                 f"""
                 UPDATE signal_records
-                SET executed = 1, execution_reason = NULL
-                WHERE task_id = :task_id
-                AND executed = 0
+                SET executed = true, execution_reason = NULL
+                WHERE backtest_id = :backtest_id
+                AND executed = false
                 AND ({where_clause})
             """
             )
@@ -977,7 +1033,7 @@ class BacktestDetailedRepository:
             await self.session.flush()
 
             self.logger.info(
-                f"批量标记信号为已执行: task_id={task_id}, "
+                f"批量标记信号为已执行: backtest_id={backtest_id}, "
                 f"请求数={len(signal_keys)}, 更新数={updated_count}"
             )
             return updated_count
@@ -987,13 +1043,13 @@ class BacktestDetailedRepository:
             return 0
 
     async def batch_update_signal_execution_reasons(
-        self, task_id: str, signal_reasons: List[tuple]
+        self, backtest_id: str, signal_reasons: List[tuple]
     ) -> int:
         """
         批量更新信号的未执行原因
 
         Args:
-            task_id: 任务ID
+            backtest_id: 回测ID
             signal_reasons: 信号原因列表，每个元素为 (stock_code, timestamp, signal_type, execution_reason)
 
         Returns:
@@ -1006,7 +1062,7 @@ class BacktestDetailedRepository:
             # 构建 CASE WHEN 语句用于 execution_reason
             case_when_parts = []
             where_conditions = []
-            params = {"task_id": task_id}
+            params = {"backtest_id": backtest_id}
 
             for i, (stock_code, timestamp, signal_type, execution_reason) in enumerate(
                 signal_reasons
@@ -1036,8 +1092,8 @@ class BacktestDetailedRepository:
                 f"""
                 UPDATE signal_records
                 SET execution_reason = CASE {case_when_clause} END
-                WHERE task_id = :task_id
-                AND executed = 0
+                WHERE backtest_id = :backtest_id
+                AND executed = false
                 AND ({where_clause})
             """
             )
@@ -1047,7 +1103,7 @@ class BacktestDetailedRepository:
             await self.session.flush()
 
             self.logger.info(
-                f"批量更新信号未执行原因: task_id={task_id}, "
+                f"批量更新信号未执行原因: backtest_id={backtest_id}, "
                 f"请求数={len(signal_reasons)}, 更新数={updated_count}"
             )
             return updated_count
@@ -1060,7 +1116,6 @@ class BacktestDetailedRepository:
 
     async def create_benchmark_data(
         self,
-        task_id: str,
         backtest_id: str,
         benchmark_symbol: str,
         benchmark_name: str,
@@ -1070,7 +1125,6 @@ class BacktestDetailedRepository:
         """创建基准数据"""
         try:
             benchmark = BacktestBenchmark(
-                task_id=task_id,
                 backtest_id=backtest_id,
                 benchmark_symbol=benchmark_symbol,
                 benchmark_name=benchmark_name,
@@ -1086,7 +1140,7 @@ class BacktestDetailedRepository:
             self.session.add(benchmark)
             await self.session.flush()
 
-            self.logger.info(f"创建基准数据: task_id={task_id}, benchmark={benchmark_symbol}")
+            self.logger.info(f"创建基准数据: backtest_id={backtest_id}, benchmark={benchmark_symbol}")
             return benchmark
 
         except Exception as e:
@@ -1094,13 +1148,13 @@ class BacktestDetailedRepository:
             return None
 
     async def get_benchmark_data(
-        self, task_id: str, benchmark_symbol: str
+        self, backtest_id: str, benchmark_symbol: str
     ) -> Optional[BacktestBenchmark]:
         """获取基准数据"""
         try:
             stmt = select(BacktestBenchmark).where(
                 and_(
-                    BacktestBenchmark.task_id == task_id,
+                    BacktestBenchmark.backtest_id == backtest_id,
                     BacktestBenchmark.benchmark_symbol == benchmark_symbol,
                 )
             )
@@ -1116,25 +1170,43 @@ class BacktestDetailedRepository:
     async def delete_task_data(self, task_id: str) -> bool:
         """删除任务相关的所有详细数据"""
         try:
-            # 删除各个表中的数据
-            tables_and_models = [
-                (BacktestDetailedResult, "回测详细结果"),
-                (PortfolioSnapshot, "组合快照"),
-                (TradeRecord, "交易记录"),
-                (SignalRecord, "信号记录"),
-                (BacktestBenchmark, "基准数据"),
-            ]
+            # 先查出该 task 下所有 backtest_id
+            bt_stmt = select(BacktestDetailedResult.backtest_id).where(
+                BacktestDetailedResult.task_id == task_id
+            )
+            bt_result = await self.session.execute(bt_stmt)
+            backtest_ids = [row[0] for row in bt_result.all()]
 
             deleted_counts = {}
 
-            for model_class, table_name in tables_and_models:
-                stmt = delete(model_class).where(model_class.task_id == task_id)
-                result = await self.session.execute(stmt)
-                deleted_count = result.rowcount
-                deleted_counts[table_name] = deleted_count
+            if backtest_ids:
+                # 子表按 backtest_id 删除
+                sub_tables = [
+                    (PortfolioSnapshot, "组合快照"),
+                    (TradeRecord, "交易记录"),
+                    (SignalRecord, "信号记录"),
+                    (BacktestBenchmark, "基准数据"),
+                    (BacktestStatistics, "统计信息"),
+                    (BacktestChartCache, "图表缓存"),
+                ]
 
-                if deleted_count > 0:
-                    self.logger.info(f"删除{table_name}: {deleted_count}条记录")
+                for model_class, table_name in sub_tables:
+                    stmt = delete(model_class).where(
+                        model_class.backtest_id.in_(backtest_ids)
+                    )
+                    result = await self.session.execute(stmt)
+                    deleted_count = result.rowcount
+                    deleted_counts[table_name] = deleted_count
+
+                    if deleted_count > 0:
+                        self.logger.info(f"删除{table_name}: {deleted_count}条记录")
+
+            # 主表按 task_id 删除
+            main_stmt = delete(BacktestDetailedResult).where(
+                BacktestDetailedResult.task_id == task_id
+            )
+            main_result = await self.session.execute(main_stmt)
+            deleted_counts["回测详细结果"] = main_result.rowcount
 
             await self.session.flush()
 
@@ -1150,7 +1222,7 @@ class BacktestDetailedRepository:
     async def cleanup_old_data(self, days_to_keep: int = 30) -> Dict[str, int]:
         """清理旧数据"""
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
             # 清理各个表中的旧数据
             tables_and_models = [

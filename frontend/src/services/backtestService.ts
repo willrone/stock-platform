@@ -15,6 +15,9 @@ export interface BacktestDetailedResult {
     max_drawdown_duration: number;
     var_95: number;
     downside_deviation: number;
+    var_99?: number;
+    cvar_95?: number;
+    cvar_99?: number;
   };
   monthly_returns: Array<{
     year: number;
@@ -22,6 +25,10 @@ export interface BacktestDetailedResult {
     date: string;
     monthly_return: number;
     cumulative_return: number;
+    volatility?: number;
+    sharpe_ratio?: number;
+    max_drawdown?: number;
+    trading_days?: number;
   }>;
   position_analysis:
     | {
@@ -195,6 +202,19 @@ export interface BacktestDetailedResult {
       date: string;
       drawdown: number;
     }>;
+  };
+  benchmark_comparison?: {
+    strategy_return?: number;
+    benchmark_return?: number;
+    alpha?: number;
+    beta?: number;
+    information_ratio?: number;
+    tracking_error?: number;
+    upside_capture?: number;
+    downside_capture?: number;
+    var_99?: number;
+    cvar_95?: number;
+    cvar_99?: number;
   };
 }
 

@@ -233,13 +233,13 @@ class MovingAverageStrategy(BaseStrategy):
 
 class RSIStrategy(BaseStrategy):
     """
-    优化的RSI策略 - 基于业界最佳实践
+    优化的RSI策略 v2 - P0~P3 全面升级
 
     核心改进：
-    1. 趋势对齐：在上升趋势中，只在RSI回调时买入；在下降趋势中，只在RSI反弹时卖出
-    2. RSI穿越信号：等待RSI从超买超卖区域穿越回来，而不是仅仅在超买超卖区域就交易
-    3. 背离检测：检测价格与RSI的背离作为反转信号
-    4. 结合移动平均线判断趋势方向
+    1. P0: generate_signals 与 precompute_all_signals 逻辑统一（共用 _check_filters）
+    2. P1: 趋势对齐（MA50）+ 成交量确认
+    3. P2: ATR 动态止损止盈 + 动态信号强度
+    4. P3: 多周期 RSI 共振（RSI7 + RSI21）
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -247,102 +247,174 @@ class RSIStrategy(BaseStrategy):
         self.rsi_period = config.get("rsi_period", 14)
         self.oversold_threshold = config.get("oversold_threshold", 30)
         self.overbought_threshold = config.get("overbought_threshold", 70)
-        # 趋势对齐参数
-        self.trend_ma_period = config.get("trend_ma_period", 50)  # 用于判断趋势的均线周期
+        # P1: 趋势对齐参数
+        self.trend_ma_period = config.get("trend_ma_period", 50)
         self.enable_trend_alignment = config.get("enable_trend_alignment", True)
-        self.enable_divergence = config.get("enable_divergence", True)
-        self.enable_crossover = config.get("enable_crossover", True)  # 启用RSI穿越信号
-        # 趋势对齐的RSI阈值
-        self.uptrend_buy_threshold = config.get(
-            "uptrend_buy_threshold", 40
-        )  # 上升趋势中的买入阈值
-        self.downtrend_sell_threshold = config.get(
-            "downtrend_sell_threshold", 60
-        )  # 下降趋势中的卖出阈值
+        # P1: 成交量确认参数
+        self.enable_volume_confirm = config.get("enable_volume_confirm", False)
+        self.volume_threshold = config.get("volume_threshold", 0.8)
+        self.volume_ma_period = config.get("volume_ma_period", 20)
+        # P2: ATR 参数
+        self.atr_period = config.get("atr_period", 14)
+        self.atr_stop_multiplier = config.get("atr_stop_multiplier", 2.0)
+        self.atr_profit_multiplier = config.get("atr_profit_multiplier", 3.0)
+        # P3: 多周期 RSI 参数
+        self.enable_multi_rsi = config.get("enable_multi_rsi", False)
+        self.rsi_period_short = config.get("rsi_period_short", 7)
+        self.rsi_period_long = config.get("rsi_period_long", 21)
+        self.long_rsi_oversold = config.get("long_rsi_oversold", 50)
+        self.long_rsi_overbought = config.get("long_rsi_overbought", 50)
+        # 兼容旧参数（不再���用但避免报错）
+        self.enable_divergence = config.get("enable_divergence", False)
+        self.enable_crossover = config.get("enable_crossover", True)
+        self.uptrend_buy_threshold = config.get("uptrend_buy_threshold", 40)
+        self.downtrend_sell_threshold = config.get("downtrend_sell_threshold", 60)
 
-    def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """
-        计算RSI指标 - 性能优化版（使用 Numba 加速）
-        """
-        close_prices = data["close"]
-
-        # 优先使用 Numba 加速版本（Phase 3 优化）
+    def _calc_rsi_series(self, close_prices: pd.Series, period: int) -> pd.Series:
+        """计算 RSI，支持 Numba/talib/pandas 三级 fallback"""
         try:
             from .numba_indicators import NUMBA_AVAILABLE, rsi_wilder
 
             if NUMBA_AVAILABLE:
-                rsi_values = rsi_wilder(close_prices.values, self.rsi_period)
-                rsi = pd.Series(rsi_values, index=close_prices.index)
-            elif TALIB_AVAILABLE:
-                rsi = pd.Series(
-                    talib.RSI(close_prices.values, timeperiod=self.rsi_period),
-                    index=close_prices.index,
-                )
-            else:
-                # Fallback: 使用pandas实现RSI（Wilder's smoothing method）
-                delta = close_prices.diff()
-                gain = (
-                    (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-                )
-                loss = (
-                    (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
-                )
-                rs = gain / loss
-                rsi = 100 - (100 / (1 + rs))
-        except Exception as e:
-            logger.warning(f"Numba RSI 计算失败，回退到 pandas: {e}")
-            # Fallback to pandas
-            delta = close_prices.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
+                return pd.Series(rsi_wilder(close_prices.values, period), index=close_prices.index)
+        except Exception:
+            pass
 
-        return {
+        if TALIB_AVAILABLE:
+            return pd.Series(talib.RSI(close_prices.values, timeperiod=period), index=close_prices.index)
+
+        # pandas fallback
+        delta = close_prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+
+    def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """计算全部指标：RSI（多周期）、趋势、成交量、ATR"""
+        close_prices = data["close"]
+
+        # 主 RSI
+        rsi = self._calc_rsi_series(close_prices, self.rsi_period)
+
+        indicators = {
             "rsi": rsi,
             "price": close_prices,
         }
 
+        # P3: 多周期 RSI
+        if self.enable_multi_rsi:
+            indicators["rsi_short"] = self._calc_rsi_series(close_prices, self.rsi_period_short)
+            indicators["rsi_long"] = self._calc_rsi_series(close_prices, self.rsi_period_long)
+
+        # P1: 趋势判断（用 MA 斜率而非价格位置，避免与超卖/超买矛盾）
+        if self.enable_trend_alignment:
+            trend_ma = close_prices.rolling(window=self.trend_ma_period).mean()
+            indicators["uptrend"] = trend_ma > trend_ma.shift(5)  # MA50 斜率向上
+            indicators["downtrend"] = trend_ma < trend_ma.shift(5)  # MA50 斜率向下
+
+        # P1: 成交量确认
+        if self.enable_volume_confirm and "volume" in data.columns:
+            volume = data["volume"]
+            vol_ma = volume.rolling(window=self.volume_ma_period).mean()
+            indicators["volume_confirm"] = volume > vol_ma * self.volume_threshold
+        else:
+            indicators["volume_confirm"] = pd.Series(True, index=close_prices.index)
+
+        # P2: ATR
+        if "high" in data.columns and "low" in data.columns:
+            high = data["high"]
+            low = data["low"]
+            prev_close = close_prices.shift(1)
+            tr = pd.concat([
+                high - low,
+                (high - prev_close).abs(),
+                (low - prev_close).abs(),
+            ], axis=1).max(axis=1)
+            indicators["atr"] = tr.rolling(window=self.atr_period).mean()
+        else:
+            indicators["atr"] = pd.Series(0.0, index=close_prices.index)
+
+        return indicators
+
+    def _calc_buy_strength(self, prev_rsi_val: float) -> float:
+        """动态买入强度：超卖越深强度越高"""
+        strength = (self.oversold_threshold - prev_rsi_val) / self.oversold_threshold
+        return float(np.clip(strength, 0.3, 1.0))
+
+    def _calc_sell_strength(self, prev_rsi_val: float) -> float:
+        """动态卖出强度：超买越高强度越高"""
+        strength = (prev_rsi_val - self.overbought_threshold) / (100 - self.overbought_threshold)
+        return float(np.clip(strength, 0.3, 1.0))
+
+    def _check_filters_scalar(self, indicators: Dict, idx: int, signal_type: str) -> bool:
+        """P0: 统一过滤逻辑（标量版，供 generate_signals fallback 使用）"""
+        # P1: 趋势对齐
+        if self.enable_trend_alignment:
+            if signal_type == "buy" and "uptrend" in indicators:
+                if not indicators["uptrend"].iloc[idx]:
+                    return False
+            if signal_type == "sell" and "downtrend" in indicators:
+                if not indicators["downtrend"].iloc[idx]:
+                    return False
+
+        # P1: 成交量确认
+        if self.enable_volume_confirm and "volume_confirm" in indicators:
+            if not indicators["volume_confirm"].iloc[idx]:
+                return False
+
+        # P3: 多周期 RSI 共振
+        if self.enable_multi_rsi and "rsi_long" in indicators:
+            rsi_long_val = indicators["rsi_long"].iloc[idx]
+            if not np.isnan(rsi_long_val):
+                if signal_type == "buy" and rsi_long_val >= self.long_rsi_oversold:
+                    return False
+                if signal_type == "sell" and rsi_long_val <= self.long_rsi_overbought:
+                    return False
+
+        return True
+
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """[性能优化] 向量化计算全量RSI信号（含趋势对齐，返回浮点强度）
+        """[性能优化] 向量化计算全量RSI信号（P0~P3 全部过滤）
 
         返回值：正数=买入信号（强度），负数=卖出信号（强度），0=无信号
-        买入强度 = (oversold_threshold - prev_rsi) / oversold_threshold，反映超卖深度
-        卖出强度 = (prev_rsi - overbought_threshold) / (100 - overbought_threshold)
         """
         try:
             indicators = self.get_cached_indicators(data)
             rsi = indicators["rsi"]
             prev_rsi = rsi.shift(1)
-            close = indicators["price"]
 
-            # 基础穿越信号：从超卖区回升 -> 买入；从超买区回调 -> 卖出
-            buy_mask = (prev_rsi <= self.oversold_threshold) & (
-                rsi > self.oversold_threshold
-            )
-            sell_mask = (prev_rsi >= self.overbought_threshold) & (
-                rsi < self.overbought_threshold
-            )
+            # 基础穿越信号
+            buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
+            sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
 
-            # 趋势对齐过滤：只在趋势方向一致时允许信号
-            if self.enable_trend_alignment:
-                trend_ma = close.rolling(window=self.trend_ma_period).mean()
-                uptrend = close > trend_ma
-                downtrend = close < trend_ma
-                buy_mask = buy_mask & uptrend.fillna(False)
-                sell_mask = sell_mask & downtrend.fillna(False)
+            # P1: 趋势对齐过滤
+            if self.enable_trend_alignment and "uptrend" in indicators:
+                buy_mask = buy_mask & indicators["uptrend"].fillna(False)
+                sell_mask = sell_mask & indicators["downtrend"].fillna(False)
 
-            # 构造浮点强度信号 Series
+            # P1: 成交量确认
+            if self.enable_volume_confirm and "volume_confirm" in indicators:
+                vol_confirm = indicators["volume_confirm"].fillna(False)
+                buy_mask = buy_mask & vol_confirm
+                sell_mask = sell_mask & vol_confirm
+
+            # P3: 多周期 RSI 共振
+            if self.enable_multi_rsi and "rsi_long" in indicators:
+                rsi_long = indicators["rsi_long"]
+                buy_mask = buy_mask & (rsi_long < self.long_rsi_oversold).fillna(False)
+                sell_mask = sell_mask & (rsi_long > self.long_rsi_overbought).fillna(False)
+
+            # 构造浮点强度信号
             signals = pd.Series(0.0, index=data.index, dtype=np.float64)
             # 买入强度：超卖越深强度越高
             buy_strength = (
                 (self.oversold_threshold - prev_rsi) / self.oversold_threshold
             ).clip(0.3, 1.0)
             signals[buy_mask.fillna(False)] = buy_strength[buy_mask.fillna(False)]
-            # 卖出强度：超买越高强度越高（负值）
+            # 卖出强度（负值）
             sell_strength = -(
-                (prev_rsi - self.overbought_threshold)
-                / (100 - self.overbought_threshold)
+                (prev_rsi - self.overbought_threshold) / (100 - self.overbought_threshold)
             ).clip(0.3, 1.0)
             signals[sell_mask.fillna(False)] = sell_strength[sell_mask.fillna(False)]
 
@@ -351,16 +423,40 @@ class RSIStrategy(BaseStrategy):
             logger.error(f"RSI策略向量化计算失败: {e}")
             return None
 
+    def _build_signal_metadata(self, indicators: Dict, idx: int, current_price: float, current_rsi: float, prev_rsi: float) -> Dict:
+        """P2: 构建信号 metadata，包含 ATR 动态止损止盈"""
+        meta = {"rsi": current_rsi, "prev_rsi": prev_rsi}
+
+        # 多周期 RSI 信息
+        if self.enable_multi_rsi and "rsi_long" in indicators:
+            rsi_long_val = indicators["rsi_long"].iloc[idx]
+            if not np.isnan(rsi_long_val):
+                meta["rsi_long"] = float(rsi_long_val)
+        if self.enable_multi_rsi and "rsi_short" in indicators:
+            rsi_short_val = indicators["rsi_short"].iloc[idx]
+            if not np.isnan(rsi_short_val):
+                meta["rsi_short"] = float(rsi_short_val)
+
+        # ATR 动态止损止盈
+        atr_val = indicators.get("atr")
+        if atr_val is not None:
+            atr = atr_val.iloc[idx]
+            if not np.isnan(atr) and atr > 0:
+                meta["atr"] = float(atr)
+                meta["suggested_stop_loss"] = float(current_price - self.atr_stop_multiplier * atr)
+                meta["suggested_take_profit"] = float(current_price + self.atr_profit_multiplier * atr)
+
+        return meta
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
-        """生成RSI信号 - 简化版（移除复杂的趋势和背离检测）"""
-        # 性能优化：优先检查是否已有全量预计算信号
+        """生成RSI信号 - P0: 与 precompute_all_signals 逻辑完全一致"""
+        # 优先使用预计算信号（向量化快路径）
         try:
             precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
                 sig_val = precomputed.get(current_date)
-                # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
                 if (
                     isinstance(sig_val, (int, float, np.number))
                     and float(sig_val) != 0.0
@@ -372,6 +468,8 @@ class RSIStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
+                    prev_rsi = indicators["rsi"].iloc[current_idx - 1] if current_idx > 0 else current_rsi
+                    meta = self._build_signal_metadata(indicators, current_idx, current_price, current_rsi, float(prev_rsi))
                     return [
                         TradingSignal(
                             timestamp=current_date,
@@ -380,7 +478,7 @@ class RSIStrategy(BaseStrategy):
                             strength=min(1.0, abs(fv)),
                             price=current_price,
                             reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
-                            metadata={"rsi": current_rsi},
+                            metadata=meta,
                         )
                     ]
                 elif isinstance(sig_val, SignalType):
@@ -389,33 +487,32 @@ class RSIStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
+                    prev_rsi = indicators["rsi"].iloc[current_idx - 1] if current_idx > 0 else current_rsi
+                    strength = self._calc_buy_strength(float(prev_rsi)) if sig_val == SignalType.BUY else self._calc_sell_strength(float(prev_rsi))
+                    meta = self._build_signal_metadata(indicators, current_idx, current_price, current_rsi, float(prev_rsi))
                     return [
                         TradingSignal(
                             timestamp=current_date,
                             stock_code=stock_code,
                             signal_type=sig_val,
-                            strength=0.8,
+                            strength=strength,
                             price=current_price,
                             reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
-                            metadata={"rsi": current_rsi},
+                            metadata=meta,
                         )
                     ]
                 return []
         except Exception:
             pass
 
+        # Fallback: 逐日计算（P0: 与 precompute 过滤逻辑完全一致）
         signals = []
 
         try:
-            # 计算指标（按 DataFrame 缓存）
             indicators = self.get_cached_indicators(data)
 
             current_idx = self._get_current_idx(data, current_date)
-            if current_idx < self.rsi_period:
-                return signals
-
-            # 需要至少2个数据点来判断RSI穿越
-            if current_idx < 1:
+            if current_idx < max(self.rsi_period, 1):
                 return signals
 
             current_rsi = indicators["rsi"].iloc[current_idx]
@@ -423,36 +520,41 @@ class RSIStrategy(BaseStrategy):
             current_price = indicators["price"].iloc[current_idx]
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
-            # 简化逻辑：只保留基本的RSI穿越信号
-            # 买入信号：RSI从超卖区域向上穿越
+            # 买入信号：RSI穿越超卖 + 统一过滤
             if (
                 prev_rsi <= self.oversold_threshold
                 and current_rsi > self.oversold_threshold
+                and self._check_filters_scalar(indicators, current_idx, "buy")
             ):
+                strength = self._calc_buy_strength(float(prev_rsi))
+                meta = self._build_signal_metadata(indicators, current_idx, current_price, float(current_rsi), float(prev_rsi))
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.BUY,
-                    strength=0.8,
+                    strength=strength,
                     price=current_price,
                     reason=f"RSI从超卖区域向上穿越({prev_rsi:.2f}->{current_rsi:.2f})",
-                    metadata={"rsi": current_rsi, "prev_rsi": prev_rsi},
+                    metadata=meta,
                 )
                 signals.append(signal)
 
-            # 卖出信号：RSI从超买区域向下穿越
+            # 卖出信号：RSI穿越超买 + 统一过滤
             elif (
                 prev_rsi >= self.overbought_threshold
                 and current_rsi <= self.overbought_threshold
+                and self._check_filters_scalar(indicators, current_idx, "sell")
             ):
+                strength = self._calc_sell_strength(float(prev_rsi))
+                meta = self._build_signal_metadata(indicators, current_idx, current_price, float(current_rsi), float(prev_rsi))
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.SELL,
-                    strength=0.8,
+                    strength=strength,
                     price=current_price,
                     reason=f"RSI从超买区域向下穿越({prev_rsi:.2f}->{current_rsi:.2f})",
-                    metadata={"rsi": current_rsi, "prev_rsi": prev_rsi},
+                    metadata=meta,
                 )
                 signals.append(signal)
 

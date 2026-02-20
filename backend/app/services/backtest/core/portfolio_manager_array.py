@@ -497,6 +497,16 @@ class PortfolioManagerArray:
                 }
                 self.portfolio_history.append(snapshot)
 
+                # 记录无成本组合快照（与非数组版 PortfolioManager 保持一致）
+                snapshot_without_cost = {
+                    "date": date,
+                    "cash": self.cash_without_cost,
+                    "portfolio_value": portfolio_value_without_cost,
+                    "positions": {},
+                    "total_trades": len(self.trades),
+                }
+                self.portfolio_history_without_cost.append(snapshot_without_cost)
+
     def get_performance_metrics(self) -> Dict[str, float]:
         """计算绩效指标（含成本）"""
         if not self.equity_curve:
@@ -552,7 +562,7 @@ class PortfolioManagerArray:
             float(np.mean([t["pnl"] for t in losing_trades])) if losing_trades else 0.0
         )
         profit_factor = (
-            float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
+            float(abs(avg_win / avg_loss)) if avg_loss != 0 else 0.0
         )
 
         total_cap_inj = getattr(self, "total_capital_injection", 0.0)
@@ -576,14 +586,69 @@ class PortfolioManagerArray:
         return metrics
 
     def get_performance_metrics_without_cost(self) -> Dict[str, float]:
-        """计算绩效指标（无成本）- 简化版本"""
-        # 简化实现，仅返回基础指标
+        """计算绩效指标（无成本）- 基于 portfolio_history_without_cost"""
+        if not self.portfolio_history_without_cost:
+            return {}
+
+        # 计算收益序列
+        values = [
+            snapshot["portfolio_value"]
+            for snapshot in self.portfolio_history_without_cost
+        ]
+        returns = pd.Series(values).pct_change().dropna()
+
+        if len(returns) == 0:
+            return {}
+
+        # 基础指标
+        total_invested = self.config.initial_cash + getattr(
+            self, "total_capital_injection", 0.0
+        )
+        total_return = (values[-1] - total_invested) / total_invested
+
+        # 年化收益率
+        days = (
+            self.portfolio_history_without_cost[-1]["date"]
+            - self.portfolio_history_without_cost[0]["date"]
+        ).days
+        annualized_return = (
+            (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
+        )
+
+        # 波动率
+        volatility = returns.std() * np.sqrt(252)
+
+        # 信息比率（相对于含成本收益）
+        if self.portfolio_history:
+            values_with_cost = [
+                snapshot["portfolio_value"] for snapshot in self.portfolio_history
+            ]
+            returns_with_cost = pd.Series(values_with_cost).pct_change().dropna()
+            if len(returns_with_cost) == len(returns):
+                excess_returns = returns - returns_with_cost
+                tracking_error = excess_returns.std() * np.sqrt(252)
+                information_ratio = (
+                    excess_returns.mean() * np.sqrt(252) / tracking_error
+                    if tracking_error > 0
+                    else 0
+                )
+            else:
+                information_ratio = 0.0
+        else:
+            information_ratio = 0.0
+
+        # 最大回撤
+        cumulative_returns = (1 + returns).cumprod()
+        running_max = cumulative_returns.expanding().max()
+        drawdown = (cumulative_returns - running_max) / running_max
+        max_drawdown = drawdown.min()
+
         return {
-            "total_return": 0.0,
-            "annualized_return": 0.0,
-            "volatility": 0.0,
-            "information_ratio": 0.0,
-            "max_drawdown": 0.0,
-            "mean": 0.0,
-            "std": 0.0,
+            "total_return": float(total_return),
+            "annualized_return": float(annualized_return),
+            "volatility": float(volatility),
+            "information_ratio": float(information_ratio),
+            "max_drawdown": float(max_drawdown),
+            "mean": float(returns.mean()),
+            "std": float(returns.std()),
         }

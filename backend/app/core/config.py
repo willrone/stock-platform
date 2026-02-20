@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     WORKERS: int = 1
 
     # 数据库配置
-    DATABASE_URL: str = "sqlite:///./data/app.db"
+    DATABASE_URL: str = "postgresql+asyncpg://willrone:willrone@localhost:5432/willrone"
 
     # 远端数据服务配置
     REMOTE_DATA_SERVICE_URL: str = "http://192.168.3.62:5002"
@@ -94,8 +94,8 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """同步数据库URL"""
-        return self.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite:///")
+        """同步数据库URL（postgresql+asyncpg → postgresql）"""
+        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
     @model_validator(mode="after")
     def resolve_relative_paths(self) -> "Settings":
@@ -113,17 +113,6 @@ class Settings(BaseSettings):
                 # 相对路径，转换为绝对路径
                 abs_path = str((_BACKEND_DIR / value).resolve())
                 object.__setattr__(self, field, abs_path)
-
-        # DATABASE_URL: 将相对路径的 SQLite URL 转为绝对路径，
-        # 确保子进程（ProcessPoolExecutor）和异步引擎在任意 CWD 下都能找到正确的数据库
-        db_url = self.DATABASE_URL
-        for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
-            if db_url.startswith(prefix):
-                db_path = db_url[len(prefix):]
-                if not db_path.startswith("/"):
-                    abs_db = str((_BACKEND_DIR / db_path).resolve())
-                    object.__setattr__(self, "DATABASE_URL", f"{prefix}{abs_db}")
-                break
 
         return self
 

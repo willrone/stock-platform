@@ -212,6 +212,26 @@ class BacktestDataAdapter:
                 var_95 = 0.0
             extended_metrics["var_95"] = var_95
 
+            # VaR 99%
+            var_99 = returns.quantile(0.01)
+            if pd.isna(var_99) or np.isnan(var_99):
+                var_99 = 0.0
+            extended_metrics["var_99"] = var_99
+
+            # CVaR 95% (Expected Shortfall)
+            cvar_95_series = returns[returns <= var_95]
+            cvar_95 = float(cvar_95_series.mean()) if len(cvar_95_series) > 0 else float(var_95)
+            if pd.isna(cvar_95) or np.isnan(cvar_95):
+                cvar_95 = 0.0
+            extended_metrics["cvar_95"] = cvar_95
+
+            # CVaR 99%
+            cvar_99_series = returns[returns <= var_99]
+            cvar_99 = float(cvar_99_series.mean()) if len(cvar_99_series) > 0 else float(var_99)
+            if pd.isna(cvar_99) or np.isnan(cvar_99):
+                cvar_99 = 0.0
+            extended_metrics["cvar_99"] = cvar_99
+
             # 最大回撤持续时间
             extended_metrics[
                 "max_drawdown_duration"
@@ -232,6 +252,9 @@ class BacktestDataAdapter:
                 calmar_ratio=extended_metrics["calmar_ratio"],
                 max_drawdown_duration=extended_metrics["max_drawdown_duration"],
                 var_95=extended_metrics["var_95"],
+                var_99=extended_metrics.get("var_99", 0.0),
+                cvar_95=extended_metrics.get("cvar_95", 0.0),
+                cvar_99=extended_metrics.get("cvar_99", 0.0),
                 downside_deviation=extended_metrics["downside_deviation"],
             )
 

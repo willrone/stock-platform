@@ -5,9 +5,10 @@
 
 import json
 import logging
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
+
+from sqlalchemy import text
 
 from app.core.database import SessionLocal
 from app.models.task_models import TaskStatus
@@ -19,8 +20,8 @@ logger = logging.getLogger(__name__)
 class TaskMonitor:
     """任务监控器"""
 
-    def __init__(self, db_path: str = "data/app.db"):
-        self.db_path = db_path
+    def __init__(self):
+        pass
 
     def _get_task_timeout_minutes(self, config_str: str, default_minutes: int) -> int:
         """
@@ -41,7 +42,7 @@ class TaskMonitor:
         if not config_str:
             return default_minutes
         try:
-            config = json.loads(config_str)
+            config = json.loads(config_str) if isinstance(config_str, str) else config_str
             # 优先从 optimization_config.timeout 读取（秒）
             timeout_seconds = None
             opt_cfg = config.get("optimization_config", {})
@@ -69,34 +70,32 @@ class TaskMonitor:
         Returns:
             卡住的任务列表
         """
+        session = SessionLocal()
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-
-            # 查询所有运行中/排队中的任务（含 config 用于读取自定义超时）
-            cursor.execute(
-                """
-                SELECT task_id, task_name, task_type, status,
-                       created_at, started_at, progress, config
-                FROM tasks 
-                WHERE status IN ('running', 'queued')
-                ORDER BY created_at DESC
-            """
+            result = session.execute(
+                text("""
+                    SELECT task_id, task_name, task_type, status,
+                           created_at, started_at, progress, config
+                    FROM tasks
+                    WHERE status IN ('running', 'queued')
+                    ORDER BY created_at DESC
+                """)
             )
 
             now = datetime.now()
             tasks = []
-            for row in cursor.fetchall():
-                (
-                    task_id,
-                    task_name,
-                    task_type,
-                    status,
-                    created_at,
-                    started_at,
-                    progress,
-                    config_str,
-                ) = row
+            for row in result.mappings():
+                task_id = str(row["task_id"])
+                task_name = row["task_name"]
+                task_type = row["task_type"]
+                status = row["status"]
+                created_at = row["created_at"]
+                started_at = row["started_at"]
+                progress = row["progress"]
+                config_val = row["config"]
+
+                # config 在 PG 中是 JSONB，可能已经是 dict
+                config_str = config_val if isinstance(config_val, (str, dict)) else None
 
                 # 计算该任务的实际超时阈值
                 task_timeout = self._get_task_timeout_minutes(
@@ -104,13 +103,15 @@ class TaskMonitor:
                 )
 
                 # 判断是否超时
-                ref_time_str = started_at or created_at
-                if not ref_time_str:
+                ref_time = started_at or created_at
+                if not ref_time:
                     continue
-                try:
-                    ref_time = datetime.fromisoformat(ref_time_str)
-                except ValueError:
-                    continue
+
+                if isinstance(ref_time, str):
+                    try:
+                        ref_time = datetime.fromisoformat(ref_time)
+                    except ValueError:
+                        continue
 
                 elapsed_minutes = (now - ref_time).total_seconds() / 60
                 if elapsed_minutes < task_timeout:
@@ -129,8 +130,8 @@ class TaskMonitor:
                         "task_name": task_name,
                         "task_type": task_type,
                         "status": status,
-                        "created_at": created_at,
-                        "started_at": started_at,
+                        "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
+                        "started_at": started_at.isoformat() if started_at and hasattr(started_at, 'isoformat') else str(started_at) if started_at else None,
                         "progress": progress,
                         "timeout_minutes": task_timeout,
                     }
@@ -142,7 +143,7 @@ class TaskMonitor:
             logger.error(f"获取卡住任务失败: {e}")
             return []
         finally:
-            conn.close()
+            session.close()
 
     def force_complete_task(self, task_id: str, status: str = "cancelled") -> bool:
         """
@@ -234,35 +235,33 @@ class TaskMonitor:
 
     def get_task_statistics(self) -> Dict[str, Any]:
         """获取任务统计信息"""
+        session = SessionLocal()
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-
             # 统计各状态任务数量
-            cursor.execute(
-                """
-                SELECT status, COUNT(*) as count
-                FROM tasks 
-                GROUP BY status
-            """
+            result = session.execute(
+                text("""
+                    SELECT status, COUNT(*) as count
+                    FROM tasks
+                    GROUP BY status
+                """)
             )
 
             status_counts = {}
-            for status, count in cursor.fetchall():
-                status_counts[status] = count
+            for row in result.mappings():
+                status_counts[row["status"]] = row["count"]
 
             # 统计最近24小时的任务
-            yesterday = (datetime.now() - timedelta(days=1)).isoformat()
-            cursor.execute(
-                """
-                SELECT COUNT(*) as count
-                FROM tasks 
-                WHERE created_at > ?
-            """,
-                (yesterday,),
+            yesterday = (datetime.now() - timedelta(days=1))
+            result = session.execute(
+                text("""
+                    SELECT COUNT(*) as count
+                    FROM tasks
+                    WHERE created_at > :cutoff
+                """),
+                {"cutoff": yesterday},
             )
 
-            recent_count = cursor.fetchone()[0]
+            recent_count = result.scalar() or 0
 
             return {
                 "status_counts": status_counts,
@@ -274,7 +273,7 @@ class TaskMonitor:
             logger.error(f"获取任务统计失败: {e}")
             return {}
         finally:
-            conn.close()
+            session.close()
 
 
 # 全局任务监控器实例

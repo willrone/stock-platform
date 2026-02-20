@@ -1,5 +1,5 @@
 """
-任务管理相关数据模型
+任务管理相关数据模型（PostgreSQL）
 """
 
 import uuid
@@ -8,9 +8,25 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+
+# ──────────────────────────── 枚举（保持不变） ────────────────────────────
 
 
 class TaskType(Enum):
@@ -36,28 +52,59 @@ class TaskStatus(Enum):
     PAUSED = "paused"
 
 
+# ──────────────────────────── ORM 模型 ────────────────────────────
+
+
 class Task(Base):
     """任务表"""
 
     __tablename__ = "tasks"
 
-    task_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    task_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
     task_name = Column(String(255), nullable=False)
-    task_type = Column(String(50), nullable=False)
-    status = Column(String(50), nullable=False, default=TaskStatus.CREATED.value)
+    task_type = Column(
+        String(50),
+        nullable=False,
+        comment="任务类型",
+    )
+    status = Column(
+        String(50),
+        nullable=False,
+        server_default=TaskStatus.CREATED.value,
+        comment="任务状态",
+    )
     user_id = Column(String(255), nullable=True)
-    config = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Float, nullable=False, default=0.0)
-    result = Column(JSON, nullable=True)
+    config = Column(JSONB, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    progress = Column(Float, nullable=False, server_default=text("0"))
+    result = Column(JSONB, nullable=True)
     error_message = Column(Text, nullable=True)
-    estimated_duration = Column(Integer, nullable=True)  # 预估时长（秒）
+    estimated_duration = Column(Integer, nullable=True, comment="预估时长（秒）")
+
+    __table_args__ = (
+        Index("ix_tasks_status", "status"),
+        Index("ix_tasks_task_type", "task_type"),
+        Index("ix_tasks_user_id", "user_id"),
+        Index("ix_tasks_created_at", "created_at"),
+    )
 
     def to_dict(self):
         return {
-            "task_id": self.task_id,
+            "task_id": str(self.task_id),
             "task_name": self.task_name,
             "task_type": self.task_type,
             "status": self.status,
@@ -80,36 +127,63 @@ class PredictionResult(Base):
 
     __tablename__ = "prediction_results"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(String, nullable=False)
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     stock_code = Column(String(20), nullable=False)
-    prediction_date = Column(DateTime, nullable=False)
-    predicted_price = Column(Float, nullable=False)
-    predicted_direction = Column(Integer, nullable=False)  # 1: 上涨, -1: 下跌, 0: 持平
+    prediction_date = Column(DateTime(timezone=True), nullable=False)
+    predicted_price = Column(Numeric(15, 2), nullable=False)
+    predicted_direction = Column(
+        Integer, nullable=False, comment="1: 上涨, -1: 下跌, 0: 持平"
+    )
     confidence_score = Column(Float, nullable=False)
-    confidence_interval_lower = Column(Float, nullable=True)
-    confidence_interval_upper = Column(Float, nullable=True)
-    model_id = Column(String(255), nullable=False)
-    features_used = Column(JSON, nullable=True)
-    risk_metrics = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    confidence_interval_lower = Column(Numeric(15, 2), nullable=True)
+    confidence_interval_upper = Column(Numeric(15, 2), nullable=True)
+    model_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("model_info.model_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    features_used = Column(JSONB, nullable=True)
+    risk_metrics = Column(JSONB, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_prediction_task_id", "task_id"),
+        Index("ix_prediction_stock_date", "stock_code", "prediction_date"),
+    )
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "task_id": self.task_id,
+            "id": str(self.id),
+            "task_id": str(self.task_id),
             "stock_code": self.stock_code,
             "prediction_date": self.prediction_date.isoformat()
             if self.prediction_date
             else None,
-            "predicted_price": self.predicted_price,
+            "predicted_price": float(self.predicted_price)
+            if self.predicted_price
+            else None,
             "predicted_direction": self.predicted_direction,
             "confidence_score": self.confidence_score,
             "confidence_interval": {
-                "lower": self.confidence_interval_lower,
-                "upper": self.confidence_interval_upper,
+                "lower": float(self.confidence_interval_lower)
+                if self.confidence_interval_lower
+                else None,
+                "upper": float(self.confidence_interval_upper)
+                if self.confidence_interval_upper
+                else None,
             },
-            "model_id": self.model_id,
+            "model_id": str(self.model_id) if self.model_id else None,
             "features_used": self.features_used,
             "risk_metrics": self.risk_metrics,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -117,18 +191,31 @@ class PredictionResult(Base):
 
 
 class BacktestResult(Base):
-    """回测结果表"""
+    """回测结果表（合并了原 BacktestDetailedResult 的扩展字段）"""
 
     __tablename__ = "backtest_results"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(String, nullable=False)
-    backtest_id = Column(String, nullable=False, unique=True)
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    backtest_id = Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        server_default=text("gen_random_uuid()"),
+    )
     strategy_name = Column(String(255), nullable=False)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
-    initial_cash = Column(Float, nullable=False)
-    final_value = Column(Float, nullable=False)
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
+    initial_cash = Column(Numeric(15, 2), nullable=False)
+    final_value = Column(Numeric(15, 2), nullable=False)
     total_return = Column(Float, nullable=False)
     annualized_return = Column(Float, nullable=False)
     volatility = Column(Float, nullable=False)
@@ -137,22 +224,56 @@ class BacktestResult(Base):
     win_rate = Column(Float, nullable=False)
     profit_factor = Column(Float, nullable=False)
     total_trades = Column(Integer, nullable=False)
-    trade_history = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    # trade_history ��删除（与 trade_records 表冗余）
+
+    # ── 从 BacktestDetailedResult 合并的扩展风险指标 ──
+    sortino_ratio = Column(Float, nullable=True, comment="索提诺比率")
+    calmar_ratio = Column(Float, nullable=True, comment="卡玛比率")
+    max_drawdown_duration = Column(Integer, nullable=True, comment="最大回撤持续天数")
+    var_95 = Column(Float, nullable=True, comment="95% VaR")
+    downside_deviation = Column(Float, nullable=True, comment="下行偏差")
+
+    # ── 从 BacktestDetailedResult 合并的 JSONB 分析数据 ──
+    drawdown_analysis = Column(JSONB, nullable=True, comment="回撤详细分析数据")
+    monthly_returns = Column(JSONB, nullable=True, comment="月度收益分析数据")
+    position_analysis = Column(JSONB, nullable=True, comment="持仓分析数据")
+    rolling_metrics = Column(JSONB, nullable=True, comment="滚动指标数据")
+    benchmark_comparison = Column(JSONB, nullable=True, comment="基准对比数据")
+
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_backtest_task_id", "task_id"),
+        Index("ix_backtest_strategy", "strategy_name"),
+    )
 
     def to_dict(self):
+        # 从 benchmark_comparison JSONB 中提取捕获率等指标
+        bm = self.benchmark_comparison or {}
         return {
-            "id": self.id,
-            "task_id": self.task_id,
-            "backtest_id": self.backtest_id,
+            "id": str(self.id),
+            "task_id": str(self.task_id),
+            "backtest_id": str(self.backtest_id),
             "strategy_name": self.strategy_name,
             "period": {
-                "start_date": self.start_date.isoformat() if self.start_date else None,
+                "start_date": self.start_date.isoformat()
+                if self.start_date
+                else None,
                 "end_date": self.end_date.isoformat() if self.end_date else None,
             },
             "portfolio": {
-                "initial_cash": self.initial_cash,
-                "final_value": self.final_value,
+                "initial_cash": float(self.initial_cash)
+                if self.initial_cash
+                else None,
+                "final_value": float(self.final_value) if self.final_value else None,
                 "total_return": self.total_return,
                 "annualized_return": self.annualized_return,
             },
@@ -160,14 +281,35 @@ class BacktestResult(Base):
                 "volatility": self.volatility,
                 "sharpe_ratio": self.sharpe_ratio,
                 "max_drawdown": self.max_drawdown,
+                "sortino_ratio": self.sortino_ratio,
+                "calmar_ratio": self.calmar_ratio,
+                "max_drawdown_duration": self.max_drawdown_duration,
+                "var_95": self.var_95,
+                "downside_deviation": self.downside_deviation,
+            },
+            # 前端 BacktestDetailedResult 接口期望的字段名
+            "extended_risk_metrics": {
+                "sortino_ratio": self.sortino_ratio,
+                "calmar_ratio": self.calmar_ratio,
+                "max_drawdown_duration": self.max_drawdown_duration,
+                "var_95": self.var_95,
+                "var_99": bm.get("var_99", 0),
+                "cvar_95": bm.get("cvar_95", 0),
+                "cvar_99": bm.get("cvar_99", 0),
+                "downside_deviation": self.downside_deviation,
             },
             "trading_stats": {
                 "total_trades": self.total_trades,
                 "win_rate": self.win_rate,
                 "profit_factor": self.profit_factor,
             },
-            "trade_history": self.trade_history,
+            "drawdown_analysis": self.drawdown_analysis,
+            "monthly_returns": self.monthly_returns,
+            "position_analysis": self.position_analysis,
+            "rolling_metrics": self.rolling_metrics,
+            "benchmark_comparison": self.benchmark_comparison,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 
@@ -176,33 +318,58 @@ class ModelInfo(Base):
 
     __tablename__ = "model_info"
 
-    model_id = Column(String, primary_key=True)
+    model_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
     model_name = Column(String(255), nullable=False)
     model_type = Column(String(100), nullable=False)
     version = Column(String(50), nullable=False)
-    parent_model_id = Column(String, nullable=True)  # 父模型ID，用于版本管理
-    file_path = Column(String(500), nullable=False)
-    training_data_start = Column(DateTime, nullable=True)
-    training_data_end = Column(DateTime, nullable=True)
-    performance_metrics = Column(JSON, nullable=True)
-    hyperparameters = Column(JSON, nullable=True)
-    status = Column(String(50), nullable=False, default="training")
-    training_progress = Column(Float, nullable=True, default=0.0)  # 训练进度 0-100
-    training_stage = Column(String(100), nullable=True)  # 当前训练阶段
-    evaluation_report = Column(JSON, nullable=True)  # 评估报告
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    parent_model_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("model_info.model_id", ondelete="SET NULL"),
+        nullable=True,
+        comment="父模型ID，用于版本管理",
     )
-    deployed_at = Column(DateTime, nullable=True)
+    file_path = Column(
+        String(500),
+        nullable=False,
+        comment="模型文件相对路径（相对于 MODEL_STORAGE_PATH）",
+    )
+    training_data_start = Column(DateTime(timezone=True), nullable=True)
+    training_data_end = Column(DateTime(timezone=True), nullable=True)
+    performance_metrics = Column(JSONB, nullable=True)
+    hyperparameters = Column(JSONB, nullable=True)
+    status = Column(String(50), nullable=False, server_default=text("'training'"))
+    training_progress = Column(Float, nullable=True, server_default=text("0"))
+    training_stage = Column(String(100), nullable=True, comment="当前训练阶段")
+    evaluation_report = Column(JSONB, nullable=True, comment="评估报告")
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    deployed_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_model_info_model_type", "model_type"),
+        Index("ix_model_info_status", "status"),
+    )
 
     def to_dict(self):
         return {
-            "model_id": self.model_id,
+            "model_id": str(self.model_id),
             "model_name": self.model_name,
             "model_type": self.model_type,
             "version": self.version,
-            "parent_model_id": self.parent_model_id,
+            "parent_model_id": str(self.parent_model_id)
+            if self.parent_model_id
+            else None,
             "file_path": self.file_path,
             "training_data_period": {
                 "start": self.training_data_start.isoformat()
@@ -229,18 +396,30 @@ class ModelLifecycleEvent(Base):
 
     __tablename__ = "model_lifecycle_events"
 
-    event_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    model_id = Column(String, nullable=False)
+    event_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    model_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("model_info.model_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     from_status = Column(String(50), nullable=False)
     to_status = Column(String(50), nullable=False)
     reason = Column(Text, nullable=True)
-    event_metadata = Column(JSON, nullable=True)  # 附加元数据
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    event_metadata = Column(JSONB, nullable=True, comment="附加元数据")
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_lifecycle_model_id", "model_id"),)
 
     def to_dict(self):
         return {
-            "event_id": self.event_id,
-            "model_id": self.model_id,
+            "event_id": str(self.event_id),
+            "model_id": str(self.model_id),
             "from_status": self.from_status,
             "to_status": self.to_status,
             "reason": self.reason,
@@ -249,7 +428,9 @@ class ModelLifecycleEvent(Base):
         }
 
 
-# 数据传输对象 (DTOs)
+# ──────────────────────────── DTOs（保持不变） ────────────────────────────
+
+
 @dataclass
 class PredictionTaskConfig:
     """预测任务配置"""

@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 from typing import Any, Dict
 
-import websockets
 from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
 from loguru import logger
@@ -258,7 +257,7 @@ async def backtest_progress_websocket(
                         "timestamp": datetime.utcnow().isoformat(),
                     },
                 )
-            except websockets.WebSocketDisconnect:
+            except WebSocketDisconnect:
                 await backtest_ws_manager.disconnect(connection_id)
                 break
             except RuntimeError as e:

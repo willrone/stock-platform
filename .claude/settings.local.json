@@ -25,7 +25,9 @@
       "Bash(git stash:*)",
       "Bash(git stash pop:*)",
       "Bash(/home/willrone/Github/willrone/willrone/backend/.venv/bin/python3:*)",
-      "Bash(.venv/bin/python3:*)"
+      "Bash(.venv/bin/python3:*)",
+      "Bash(PGPASSWORD=willrone psql:*)",
+      "Bash(ip addr:*)"
     ]
   }
 }
