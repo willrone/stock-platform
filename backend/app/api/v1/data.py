@@ -564,6 +564,16 @@ async def get_local_stock_list_simple():
                     or file_name.endswith(".BJ")
                 ):
                     stock_codes_set.add(file_name)
+                elif file_name.isdigit():
+                    # 纯数字文件名（如 000001.parquet），根据代码前缀推断市场
+                    if file_name.startswith('6'):
+                        stock_codes_set.add(f"{file_name}.SH")
+                    elif file_name.startswith('0') or file_name.startswith('3'):
+                        stock_codes_set.add(f"{file_name}.SZ")
+                    elif file_name.startswith('4') or file_name.startswith('8') or file_name.startswith('9'):
+                        stock_codes_set.add(f"{file_name}.BJ")
+                    else:
+                        logger.debug(f"无法推断市场代码: {file_name}")
 
         # 转换为列表并排序
         stock_codes = sorted(list(stock_codes_set))
@@ -606,25 +616,35 @@ async def get_local_stock_list_simple():
 async def sync_remote_data(
     request: RemoteDataSyncRequest,
     sftp_sync_service: SFTPSyncService = Depends(get_sftp_sync_service),
+    data_service: SimpleDataService = Depends(get_data_service),
 ):
-    # Friendly message when SFTP sync is disabled (default)
+    # When SFTP is disabled, fall back to HTTP sync via data_service
     if not getattr(sftp_sync_service, "enabled", False):
-        return StandardResponse(
-            success=False,
-            message=(
-                "SFTP同步未启用（SFTP_SYNC_ENABLED=false）。"
-                "如需在分布式部署中使用远端同步，请在backend/.env中开启并配置SFTP参数。"
-            ),
-            data={
-                "success": False,
-                "total_files": 0,
-                "synced_files": 0,
-                "failed_files": [],
-                "total_size": 0,
-                "total_size_mb": 0,
-                "duration_seconds": 0,
-            },
-        )
+        logger.info("SFTP未启用，自动降级为HTTP同步")
+        try:
+            result = await data_service.sync_remote_data_via_http(
+                stock_codes=request.stock_codes,
+            )
+            return StandardResponse(
+                success=result["success"],
+                message=result["message"],
+                data=result,
+            )
+        except Exception as e:
+            logger.error(f"HTTP同步失败: {e}", exc_info=True)
+            return StandardResponse(
+                success=False,
+                message=f"HTTP同步失败: {str(e)}",
+                data={
+                    "success": False,
+                    "total_files": 0,
+                    "synced_files": 0,
+                    "failed_files": [],
+                    "total_size": 0,
+                    "total_size_mb": 0,
+                    "duration_seconds": 0,
+                },
+            )
 
     """
     同步远端数据

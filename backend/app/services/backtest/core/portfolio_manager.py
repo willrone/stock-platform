@@ -213,6 +213,11 @@ class PortfolioManager:
                 else:
                     return None, f"可用资金不足: 需要保留5%现金，可用资金 {self.cash:.2f}"
 
+        # 根据信号强度缩放可用资金（strength 0.0~1.0 影响仓位大小）
+        sig_strength = getattr(signal, "strength", 1.0) if signal else 1.0
+        if isinstance(sig_strength, (int, float)) and 0.0 < sig_strength < 1.0:
+            available_cash_for_stock *= sig_strength
+
         # 计算购买数量（假设最小交易单位为100股）
         quantity = int(available_cash_for_stock / price / 100) * 100
 

@@ -221,36 +221,20 @@ class SignalIntegrator:
         # 确定最终信号类型和强度
         if buy_score > sell_score:
             final_type = SignalType.BUY
-            # 计算买入信号的加权平均强度
-            final_strength = (
-                buy_weighted_strength_sum / buy_weight_sum
-                if buy_weight_sum > 0
-                else 0.0
-            )
+            # 使用加权投票得分作为强度（而非加权平均），让权重差异体现在 strength 中
+            final_strength = min(1.0, buy_score)
         elif sell_score > buy_score:
             final_type = SignalType.SELL
-            # 计算卖出信号的加权平均强度
-            final_strength = (
-                sell_weighted_strength_sum / sell_weight_sum
-                if sell_weight_sum > 0
-                else 0.0
-            )
+            # 使用加权投票得分作为强度（而非加权平均），让权重差异体现在 strength 中
+            final_strength = min(1.0, sell_score)
         else:
             # 得分相等或都为0时，选择信号数量更多的方向
             if buy_count > sell_count:
                 final_type = SignalType.BUY
-                final_strength = (
-                    buy_weighted_strength_sum / buy_weight_sum
-                    if buy_weight_sum > 0
-                    else 0.0
-                )
+                final_strength = min(1.0, buy_score)
             elif sell_count > buy_count:
                 final_type = SignalType.SELL
-                final_strength = (
-                    sell_weighted_strength_sum / sell_weight_sum
-                    if sell_weight_sum > 0
-                    else 0.0
-                )
+                final_strength = min(1.0, sell_score)
             else:
                 # 完全平局（信号数量和得分都相等）
                 # 修复：不再返回 None，而是选择最近的信号类型

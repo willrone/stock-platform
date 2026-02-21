@@ -18,7 +18,9 @@ unavailable.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -598,6 +600,210 @@ class SimpleDataService:
         except Exception as e:
             logger.error(f"获取股票列表异常: {e}")
             return None
+
+    # ---------------------------------------------------------------------
+    # HTTP-based remote data sync (replaces SFTP when disabled)
+    # ---------------------------------------------------------------------
+    async def sync_remote_data_via_http(
+        self,
+        stock_codes: list[str] | None = None,
+        concurrency: int = 8,
+    ) -> dict:
+        """通过 HTTP 从远端 data_service 下载股票日线数据并保存为本地 parquet 文件。
+
+        Args:
+            stock_codes: 要同步的股票代码列表，None 则同步全部远端股票
+            concurrency: 并发下载数（默认 8）
+
+        Returns:
+            与前端期望一致的结果 dict（success, synced_files, total_files, total_size_mb …）
+        """
+        start_time = datetime.now()
+
+        # 1. 确定远端 base_url
+        working_url = await self._get_working_url("api/data/health")
+        if working_url is None:
+            return {
+                "success": False,
+                "total_files": 0,
+                "synced_files": 0,
+                "failed_files": [],
+                "total_size": 0,
+                "total_size_mb": 0,
+                "duration_seconds": 0,
+                "message": "无法连接到远端数据服务",
+            }
+
+        # 2. 获取股票列表
+        if stock_codes is None:
+            logger.info("HTTP同步: 正在获取远端股票列表...")
+            remote_stocks = await self.get_remote_stock_list()
+            if not remote_stocks:
+                return {
+                    "success": False,
+                    "total_files": 0,
+                    "synced_files": 0,
+                    "failed_files": [],
+                    "total_size": 0,
+                    "total_size_mb": 0,
+                    "duration_seconds": 0,
+                    "message": "无法获取远端股票列表",
+                }
+            stock_codes = [s["ts_code"] for s in remote_stocks if s.get("ts_code")]
+            logger.info(f"HTTP同步: 获取到 {len(stock_codes)} 只股票")
+
+        total_files = len(stock_codes)
+
+        # 3. 确定本地 parquet 存储目录
+        project_root = Path(__file__).parent.parent.parent.parent.parent  # willrone/
+        parquet_dir = project_root / "data" / "parquet" / "stock_data"
+        parquet_dir.mkdir(parents=True, exist_ok=True)
+
+        # 4. 并发下载
+        semaphore = asyncio.Semaphore(concurrency)
+        synced: list[str] = []
+        failed: list[str] = []
+        total_size = 0
+        lock = asyncio.Lock()
+
+        async def _download_one(ts_code: str, idx: int) -> None:
+            nonlocal total_size
+            async with semaphore:
+                try:
+                    safe_code = ts_code.replace(".", "_")
+                    local_path = parquet_dir / f"{safe_code}.parquet"
+
+                    # 增量同步：如果本地文件已存在且 >1KB，跳过
+                    if local_path.exists() and local_path.stat().st_size > 1024:
+                        async with lock:
+                            synced.append(ts_code)
+                            total_size += local_path.stat().st_size
+                        if idx % 500 == 0:
+                            logger.info(f"HTTP同步 [{idx}/{total_files}] {ts_code}: 已存在，跳过")
+                        return
+
+                    # 从远端下载全量日线数据
+                    url = f"{working_url.rstrip('/')}/api/data/stock/{ts_code}/daily"
+                    params = {"start_date": "1990-01-01", "end_date": "2099-12-31"}
+
+                    client = await self._get_client()
+                    resp = await client.get(url, params=params, timeout=60.0)
+
+                    if resp.status_code != 200:
+                        async with lock:
+                            failed.append(ts_code)
+                        if idx % 100 == 0:
+                            logger.warning(
+                                f"HTTP同步 [{idx}/{total_files}] {ts_code}: HTTP {resp.status_code}"
+                            )
+                        return
+
+                    payload = resp.json()
+                    if not payload.get("success") or not payload.get("data"):
+                        async with lock:
+                            failed.append(ts_code)
+                        return
+
+                    rows = payload["data"]
+
+                    # 构建 DataFrame，与本地 parquet 格式一致
+                    df = pd.DataFrame(rows)
+                    # 远端返回: date, open, high, low, close, volume
+                    # 本地格式: stock_code, date, open, high, low, close, volume
+                    if "stock_code" not in df.columns:
+                        df.insert(0, "stock_code", ts_code)
+                    if "ts_code" in df.columns and "stock_code" not in df.columns:
+                        df.rename(columns={"ts_code": "stock_code"}, inplace=True)
+
+                    df["date"] = pd.to_datetime(df["date"])
+                    for col in ["open", "high", "low", "close"]:
+                        if col in df.columns:
+                            df[col] = df[col].astype(float)
+                    if "volume" in df.columns:
+                        df["volume"] = df["volume"].astype("int64")
+
+                    # 只保留标准列
+                    keep_cols = [
+                        "stock_code", "date", "open", "high", "low", "close", "volume",
+                    ]
+                    df = df[[c for c in keep_cols if c in df.columns]]
+                    df.sort_values("date", inplace=True)
+                    df.reset_index(drop=True, inplace=True)
+
+                    # 原子写入
+                    tmp_path = local_path.with_suffix(".parquet.tmp")
+                    df.to_parquet(tmp_path, index=False, engine="pyarrow")
+                    os.replace(str(tmp_path), str(local_path))
+
+                    fsize = local_path.stat().st_size
+                    async with lock:
+                        synced.append(ts_code)
+                        total_size += fsize
+
+                    if idx % 100 == 0:
+                        logger.info(
+                            f"HTTP同步 [{idx}/{total_files}] {ts_code}: "
+                            f"{len(rows)} 条记录, {fsize / 1024:.1f}KB"
+                        )
+
+                except Exception as e:
+                    async with lock:
+                        failed.append(ts_code)
+                    if idx % 100 == 0:
+                        logger.error(f"HTTP同步 [{idx}/{total_files}] {ts_code}: {e}")
+
+        # 创建所有下载任务
+        tasks = [_download_one(code, i + 1) for i, code in enumerate(stock_codes)]
+
+        # 进度日志协程
+        async def _progress_logger():
+            while True:
+                await asyncio.sleep(10)
+                done = len(synced) + len(failed)
+                if done >= total_files:
+                    break
+                elapsed = (datetime.now() - start_time).total_seconds()
+                speed = done / elapsed if elapsed > 0 else 0
+                remaining = (total_files - done) / speed if speed > 0 else 0
+                logger.info(
+                    f"HTTP同步进度: {done}/{total_files} "
+                    f"(成功 {len(synced)}, 失败 {len(failed)}) | "
+                    f"速度 {speed:.1f}/s | 预计剩余 {remaining:.0f}s"
+                )
+
+        progress_task = asyncio.create_task(_progress_logger())
+
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            progress_task.cancel()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                pass
+
+        duration = (datetime.now() - start_time).total_seconds()
+        total_size_mb = round(total_size / (1024 * 1024), 2)
+        success = len(synced) > 0
+
+        message = (
+            f"HTTP同步完成: {len(synced)}/{total_files} 成功"
+            f"{f', {len(failed)} 失败' if failed else ''}"
+            f", 总大小 {total_size_mb}MB, 耗时 {duration:.1f}秒"
+        )
+        logger.info(message)
+
+        return {
+            "success": success,
+            "total_files": total_files,
+            "synced_files": len(synced),
+            "failed_files": failed[:100],
+            "total_size": total_size,
+            "total_size_mb": total_size_mb,
+            "duration_seconds": round(duration, 2),
+            "message": message,
+        }
+
 
     async def __aenter__(self):
         return self

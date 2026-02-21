@@ -112,6 +112,34 @@ class StrategyFactory:
         Returns:
             策略组合实例
         """
+        # 兼容 sub_strategies 格式（前端传入）转换为 strategies 格式
+        if "sub_strategies" in config and config["sub_strategies"]:
+            ext_weights = config.get("weights", {})
+            converted = []
+            # 前端类名 → 工厂注册名 映射
+            _name_map = {
+                "RSI": "rsi", "MACD": "macd",
+                "MeanReversion": "mean_reversion",
+                "MovingAverage": "moving_average",
+                "Bollinger": "bollinger", "BollingerBand": "bollinger",
+                "Stochastic": "stochastic", "CCI": "cci",
+                "PairsTrading": "pairs_trading",
+                "Cointegration": "cointegration",
+                "ValueFactor": "value_factor",
+                "MomentumFactor": "momentum_factor",
+                "LowVolatility": "low_volatility",
+                "MultiFactor": "multi_factor",
+            }
+            for sc in config["sub_strategies"]:
+                stype = sc.get("type", "")
+                # 规范化策略名：先查映射表，再尝试小写
+                stype_norm = _name_map.get(stype, stype.lower())
+                sparams = sc.get("params", {})
+                w = ext_weights.get(sc.get("type", ""), ext_weights.get(stype_norm, 1.0))
+                converted.append({"name": stype_norm, "weight": w, "config": sparams})
+            config = dict(config)
+            config["strategies"] = converted
+
         # 兼容前端未传或传空 strategies 的情况，使用默认组合
         if "strategies" not in config or not config["strategies"]:
             config = dict(config)

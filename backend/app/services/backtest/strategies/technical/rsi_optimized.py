@@ -37,8 +37,8 @@ class RSIOptimizedStrategy(BaseStrategy):
     def __init__(self, config: Dict[str, Any]):
         super().__init__("RSIOptimized", config)
         self.rsi_period = config.get("rsi_period", 14)
-        self.oversold_threshold = config.get("oversold_threshold", 30)
-        self.overbought_threshold = config.get("overbought_threshold", 70)
+        self.oversold_threshold = config.get("oversold_threshold", config.get("oversold", 30))
+        self.overbought_threshold = config.get("overbought_threshold", config.get("overbought", 70))
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算RSI指标 - 简化版"""

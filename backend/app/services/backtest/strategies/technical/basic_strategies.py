@@ -250,8 +250,8 @@ class RSIStrategy(BaseStrategy):
     def __init__(self, config: Dict[str, Any]):
         super().__init__("RSI", config)
         self.rsi_period = config.get("rsi_period", 14)
-        self.oversold_threshold = config.get("oversold_threshold", 30)
-        self.overbought_threshold = config.get("overbought_threshold", 70)
+        self.oversold_threshold = config.get("oversold_threshold", config.get("oversold", 30))
+        self.overbought_threshold = config.get("overbought_threshold", config.get("overbought", 70))
         # P1: 趋势对齐参数
         self.trend_ma_period = config.get("trend_ma_period", 50)
         self.enable_trend_alignment = config.get("enable_trend_alignment", True)
@@ -413,6 +413,42 @@ class RSIStrategy(BaseStrategy):
             indicators["atr"] = pd.Series(0.0, index=close_prices.index)
 
         return indicators
+
+    def compute_score(self, data, current_date) -> float:
+        """基于当前 RSI 值计算连续评分（-1.0 ~ +1.0）。
+
+        不依赖穿越条件，每天都输出分值：
+        - RSI < oversold: 正分（看多），RSI 越低分越高
+        - RSI > overbought: 负分（看空），RSI 越高分越低
+        - 中间区域: 线性映射到接�� 0 的小值
+        """
+        try:
+            indicators = self.get_cached_indicators(data)
+            current_idx = self._get_current_idx(data, current_date)
+            if current_idx < 0 or current_idx >= len(indicators["rsi"]):
+                return 0.0
+
+            rsi_val = float(indicators["rsi"].iloc[current_idx])
+            if rsi_val != rsi_val:  # NaN check
+                return 0.0
+
+            oversold = self.oversold_threshold
+            overbought = self.overbought_threshold
+            midpoint = (oversold + overbought) / 2.0
+
+            if rsi_val <= oversold:
+                # 超卖区：线性映射 [0, oversold] -> [+1.0, +0.1]
+                score = 0.1 + 0.9 * (oversold - rsi_val) / max(oversold, 1.0)
+            elif rsi_val >= overbought:
+                # 超买区：线性映射 [overbought, 100] -> [-0.1, -1.0]
+                score = -(0.1 + 0.9 * (rsi_val - overbought) / max(100.0 - overbought, 1.0))
+            else:
+                # 中间区域：线性映射到 [-0.1, +0.1]
+                score = 0.1 * (midpoint - rsi_val) / max((overbought - oversold) / 2.0, 1.0)
+
+            return max(-1.0, min(1.0, score))
+        except Exception:
+            return 0.0
 
     def _calc_buy_strength(self, prev_rsi_val: float) -> float:
         """动态买入强度：超卖越深强度越高"""

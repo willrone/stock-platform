@@ -146,7 +146,8 @@ export default function BacktestTaskStatus({
   // 获取回测配置信息
   const getBacktestConfig = () => {
     const result = task.result;
-    const config = result?.backtest_config || task.config?.backtest_config || {};
+    // task.config 直接包含 start_date/end_date/initial_cash 等字段（非嵌套在 backtest_config 下）
+    const config = result?.backtest_config || task.config?.backtest_config || task.config || {};
 
     // 获取原始策略名称并转换为中文
     const rawStrategyName =

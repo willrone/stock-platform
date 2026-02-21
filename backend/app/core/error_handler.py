@@ -399,24 +399,43 @@ def handle_exception(func):
     return wrapper
 
 
-async def handle_async_exception(func):
-    """装饰器：异步函数统一异常处理"""
+def handle_async_exception(func):
+    """装饰器：异步/同步函数统一异常处理"""
+    import asyncio
+    import functools
+    import inspect
 
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except BaseError as e:
-            # 已经是我们的错误类型，直接处理
-            error_recovery_manager.handle_error(e)
-            raise
-        except Exception as e:
-            # 转换为我们的错误类型
-            system_error = SystemError(
-                message=f"未处理的异步异常: {str(e)}",
-                severity=ErrorSeverity.HIGH,
-                original_exception=e,
-            )
-            error_recovery_manager.handle_error(system_error)
-            raise system_error
-
-    return wrapper
+    if inspect.iscoroutinefunction(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except BaseError as e:
+                error_recovery_manager.handle_error(e)
+                raise
+            except Exception as e:
+                system_error = SystemError(
+                    message=f"未处理的异步异常: {str(e)}",
+                    severity=ErrorSeverity.HIGH,
+                    original_exception=e,
+                )
+                error_recovery_manager.handle_error(system_error)
+                raise system_error
+        return wrapper
+    else:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except BaseError as e:
+                error_recovery_manager.handle_error(e)
+                raise
+            except Exception as e:
+                system_error = SystemError(
+                    message=f"未处理的异常: {str(e)}",
+                    severity=ErrorSeverity.HIGH,
+                    original_exception=e,
+                )
+                error_recovery_manager.handle_error(system_error)
+                raise system_error
+        return wrapper

@@ -59,6 +59,7 @@ def mock_detailed_result():
 def mock_repository(mock_detailed_result):
     """模拟 BacktestDetailedRepository"""
     repo = MagicMock()
+    repo.get_backtest_id_by_task_id = AsyncMock(return_value="bt-1")
     repo.get_detailed_result_by_task_id = AsyncMock(return_value=mock_detailed_result)
     repo.get_portfolio_snapshots = AsyncMock(return_value=[])
     repo.get_trade_records = AsyncMock(return_value=[])

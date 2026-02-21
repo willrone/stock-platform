@@ -73,7 +73,7 @@ class TestPredictionEngineAccuracy:
         return data
     
     @given(
-        stock_code=st.text(min_size=8, max_size=10).filter(lambda x: '.' in x),
+        stock_code=st.from_regex(r'[0-9]{6}\.[A-Z]{2}', fullmatch=True),
         model_id=st.text(min_size=1, max_size=50),
         confidence_level=st.floats(min_value=0.5, max_value=0.99),
         horizon=st.sampled_from(["short_term", "medium_term", "long_term"])
@@ -484,7 +484,7 @@ class TestRiskAssessmentAccuracy:
         
         # 验证置信区间属性
         assert interval.lower_bound <= predicted_price <= interval.upper_bound
-        assert interval.lower_bound > 0
+        assert interval.lower_bound >= 0  # 价格不能为负，但高波动率下可以为0（被 max(0,...) 截断）
         assert interval.confidence_level == confidence_level
         assert interval.method == "parametric"
         

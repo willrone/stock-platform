@@ -119,10 +119,9 @@ class TestSimpleIntegration:
             if hasattr(self.stock_data_service, 'save_to_parquet'):
                 save_success = self.stock_data_service.save_to_parquet(df, stock_code)
                 assert save_success
-                # 4. 验证文件存在
+                # 4. 验证文件存在（save_to_parquet 保存到 data_path/parquet/<stock_code>.parquet）
                 if hasattr(self.stock_data_service, 'data_path'):
-                    year = start_date.year
-                    file_path = self.stock_data_service.data_path / "daily" / stock_code / f"{year}.parquet"
+                    file_path = self.stock_data_service.data_path / "parquet" / f"{stock_code}.parquet"
                     assert file_path.exists()
             
             # 5. 测试缓存功能

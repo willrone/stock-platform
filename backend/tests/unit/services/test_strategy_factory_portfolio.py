@@ -93,10 +93,10 @@ class TestStrategyFactoryPortfolio:
         
         strategy = StrategyFactory.create_strategy("portfolio", config)
         
-        # 权重应该自动归一化
+        # 权重应该���动归一化（注意：策略名称是大写的，如 "RSI", "MACD"）
         assert abs(sum(strategy.weights.values()) - 1.0) < 0.001
-        assert abs(strategy.weights["rsi"] - 0.5) < 0.001
-        assert abs(strategy.weights["macd"] - 0.5) < 0.001
+        assert abs(strategy.weights["RSI"] - 0.5) < 0.001
+        assert abs(strategy.weights["MACD"] - 0.5) < 0.001
     
     def test_portfolio_default_weight(self):
         """测试组合策略默认权重"""
@@ -120,21 +120,25 @@ class TestStrategyFactoryPortfolio:
         for weight in strategy.weights.values():
             assert abs(weight - 0.5) < 0.001
     
-    def test_portfolio_missing_strategies_error(self):
-        """测试缺少strategies字段的错误"""
+    def test_portfolio_missing_strategies_uses_default(self):
+        """测试缺少strategies字段时使用默认组合策略"""
         config = {}
         
-        with pytest.raises(TaskError, match="必须包含'strategies'字段"):
-            StrategyFactory.create_strategy("portfolio", config)
+        # 源码已改为：缺少 strategies 时提供默认组合（bollinger + cci + macd）
+        strategy = StrategyFactory.create_strategy("portfolio", config)
+        assert isinstance(strategy, StrategyPortfolio)
+        assert len(strategy.strategies) == 3
     
-    def test_portfolio_empty_strategies_error(self):
-        """测试空strategies列表的错误"""
+    def test_portfolio_empty_strategies_uses_default(self):
+        """测试空strategies列表时使用默认组合策略"""
         config = {
             "strategies": []
         }
         
-        with pytest.raises(TaskError, match="必须是非空列表"):
-            StrategyFactory.create_strategy("portfolio", config)
+        # 源码已改为：空 strategies 时提供默认组合（bollinger + cci + macd）
+        strategy = StrategyFactory.create_strategy("portfolio", config)
+        assert isinstance(strategy, StrategyPortfolio)
+        assert len(strategy.strategies) == 3
     
     def test_portfolio_invalid_strategy_config(self):
         """测试无效策略配置"""
@@ -177,4 +181,4 @@ class TestStrategyFactoryPortfolio:
         
         # 应该创建单策略，不是组合策略
         assert not isinstance(strategy, StrategyPortfolio)
-        assert strategy.name == "rsi"
+        assert strategy.name == "RSI"  # 策略内部名称是大写的

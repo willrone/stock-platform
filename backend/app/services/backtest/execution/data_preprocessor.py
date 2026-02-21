@@ -433,7 +433,7 @@ class DataPreprocessor:
                         for sig in integrated:
                             signal_dict[
                                 (sig.stock_code, sig.timestamp)
-                            ] = sig.signal_type
+                            ] = (sig.signal_type, sig.strength)
                             integrated_count += 1
 
                 logger.info(f"✅ Portfolio策略信号整合完成: {integrated_count} 个整合信号")

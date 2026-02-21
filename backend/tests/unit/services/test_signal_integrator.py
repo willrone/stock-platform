@@ -75,11 +75,9 @@ class TestSignalIntegrator:
         weights = {"rsi": 0.5, "macd": 0.5}
         integrated = integrator.integrate(signals, weights)
         
-        # 应该生成一个信号（卖出信号，因为MACD权重更高）
-        assert len(integrated) == 1
-        assert integrated[0].signal_type == SignalType.SELL
-        # 冲突时信号强度应该降低
-        assert integrated[0].strength < 0.8
+        # 1 BUY vs 1 SELL → conflict_ratio = 0.5 > 0.4 阈值
+        # 高冲突时信号整合器会放弃该信号（返回空列表）
+        assert len(integrated) == 0
     
     def test_consistency_enhancement(self):
         """测试一致性增强"""

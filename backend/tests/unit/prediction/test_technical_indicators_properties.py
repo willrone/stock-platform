@@ -163,7 +163,7 @@ class TestTechnicalIndicatorProperties:
                     # 为每只股票创建测试数据
                     for stock_code in stock_codes:
                         test_data = data_service.generate_mock_data(stock_code, start_date, end_date)
-                        data_service.save_to_local(test_data, stock_code, merge_with_existing=False)
+                        data_service.save_to_local(test_data, stock_code)
                     
                     # 创建批量请求
                     request = BatchIndicatorRequest(

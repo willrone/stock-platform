@@ -3,7 +3,17 @@
 测试回测WebSocket端点
 
 验证WebSocket端点是否正常工作
+
+注意：这是一个独立脚本，需要运行中的后端服务器。
+不适合作为 pytest 单元测试运行（依赖 websockets/aiohttp 连接真实服务器）。
 """
+
+import pytest
+
+pytest.skip(
+    "此文件是独立集成测试脚本，需要运行中的后端服务器，不适合 pytest 单元测试",
+    allow_module_level=True,
+)
 
 import asyncio
 import json

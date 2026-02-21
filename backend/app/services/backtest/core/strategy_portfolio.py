@@ -98,68 +98,105 @@ class StrategyPortfolio(BaseStrategy):
         """
         [性能优化] 向量化预计算组合策略的整合信号
 
-        对于组合策略，需要：
-        1. 收集所有子策略的预计算信号（浮点强度：正=买，负=卖，0=无）
-        2. 按日期进行向量化的加权投票整合
-        3. 返回整合后的浮点强度信号序列
+        使用 score-based 逻辑：每个子策略对每个日期计算连续分值(-1.0~+1.0)，
+        加权求和后判断是否触发交易信号。
 
-        Args:
-            data: 股票数据 DataFrame
-
-        Returns:
-            整合后的信号 Series，index 为日期，值为浮点强度（正=买，负=卖，0=无信号）
+        这解决了旧逻辑中 RSI precompute 返回全零导致被排除的问题。
         """
         import logging
 
         logger = logging.getLogger(__name__)
 
         try:
-            # 1. 收集所有子策略的预计算信号
-            sub_signals_map: Dict[str, pd.Series] = {}
+            all_dates = data.index
+            result = pd.Series(0.0, index=all_dates, dtype=np.float64)
 
+            # 检查所有子策略是否支持 compute_score
+            has_score = all(
+                hasattr(s, 'compute_score') and callable(getattr(s, 'compute_score'))
+                for s in self.strategies
+            )
+
+            if not has_score:
+                logger.info("部分子策略不支持 compute_score，回退到旧逻辑")
+                return self._precompute_signal_based(data)
+
+            # === Score-based 预计算 ===
+            total_weight = sum(
+                self.weights.get(s.name, 1.0 / len(self.strategies))
+                for s in self.strategies
+            )
+            if total_weight == 0:
+                total_weight = 1.0
+
+            score_threshold = 0.3
+            if hasattr(self, 'config') and isinstance(self.config, dict):
+                score_threshold = self.config.get("score_threshold", 0.3)
+
+            for date in all_dates:
+                weighted_sum = 0.0
+                for strategy in self.strategies:
+                    try:
+                        score = strategy.compute_score(data, date)
+                        w = self.weights.get(strategy.name, 1.0 / len(self.strategies))
+                        weighted_sum += score * (w / total_weight)
+                    except Exception:
+                        continue
+
+                if abs(weighted_sum) >= score_threshold:
+                    result.loc[date] = max(-1.0, min(1.0, weighted_sum))
+
+            buy_count = (result > 0).sum()
+            sell_count = (result < 0).sum()
+            logger.info(
+                "Score-based precompute done: BUY=%d, SELL=%d, threshold=%.2f, strategies=%d",
+                buy_count, sell_count, score_threshold, len(self.strategies)
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error("Score-based precompute failed, fallback: %s", e)
+            return self._precompute_signal_based(data)
+
+    def _precompute_signal_based(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """旧的 signal-based 预计算逻辑（作为 fallback）"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            sub_signals_map = {}
             for strategy in self.strategies:
                 try:
                     sig_series = strategy.precompute_all_signals(data)
                     if sig_series is not None and len(sig_series) > 0:
                         sub_signals_map[strategy.name] = sig_series
                 except Exception as e:
-                    logger.warning(f"子策略 {strategy.name} 预计算失败: {e}")
+                    logger.warning("Sub-strategy %s precompute failed: %s", strategy.name, e)
                     continue
 
             if not sub_signals_map:
-                logger.warning("组合策略: 所有子策略预计算均失败，返回 None")
                 return None
 
-            # 2. 向量化整合信号（按日期加权投票）
             all_dates = data.index
-
-            # 初始化结果（浮点强度）
             result = pd.Series(0.0, index=all_dates, dtype=np.float64)
 
-            # 归一化权重
             total_weight = sum(
                 self.weights.get(name, 1.0) for name in sub_signals_map.keys()
             )
             if total_weight == 0:
                 total_weight = len(sub_signals_map)
 
-            # 对每个日期进行加权投票（支持浮点和枚举两种信号格式）
             for date in all_dates:
                 buy_score = 0.0
                 sell_score = 0.0
-
                 for strategy_name, sig_series in sub_signals_map.items():
                     weight = self.weights.get(strategy_name, 1.0) / total_weight
-
                     try:
                         if date in sig_series.index:
                             sig = sig_series.loc[date]
-                            # 兼容浮点信号和枚举信号
-                            if (
-                                isinstance(sig, (int, float))
-                                and sig != 0
-                                and not pd.isna(sig)
-                            ):
+                            if isinstance(sig, (int, float)) and sig != 0 and not pd.isna(sig):
                                 if sig > 0:
                                     buy_score += abs(float(sig)) * weight
                                 else:
@@ -171,26 +208,15 @@ class StrategyPortfolio(BaseStrategy):
                     except Exception:
                         continue
 
-                # 一致性阈值 0.5：至少50%的权重同意才出信号
                 consistency_threshold = 0.5
                 if buy_score > sell_score and buy_score >= consistency_threshold:
-                    # 输出正浮点值（买入强度）
                     result.loc[date] = min(1.0, buy_score)
                 elif sell_score > buy_score and sell_score >= consistency_threshold:
-                    # 输出负浮点值（卖出强度）
                     result.loc[date] = -min(1.0, sell_score)
 
-            # 统计信号数量
-            buy_count = (result > 0).sum()
-            sell_count = (result < 0).sum()
-            logger.info(
-                f"✅ 组合策略向量化预计算完成: BUY={buy_count}, SELL={sell_count}, 子策略数={len(sub_signals_map)}"
-            )
-
             return result
-
         except Exception as e:
-            logger.error(f"组合策略向量化预计算失败: {e}")
+            logger.error("Signal-based precompute failed: %s", e)
             return None
 
     def generate_signals(
@@ -228,6 +254,32 @@ class StrategyPortfolio(BaseStrategy):
                 elif isinstance(precomputed, dict):
                     sig_type = precomputed.get(current_date)
 
+                # 支持浮点信号（正=买入，负=卖出）
+                if isinstance(sig_type, (int, float)) and sig_type != 0 and not pd.isna(sig_type):
+                    fv = float(sig_type)
+                    final_sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    try:
+                        current_price = float(data.loc[current_date, "close"])
+                    except Exception:
+                        current_price = 0.0
+
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=final_sig_type,
+                            strength=min(1.0, abs(fv)),
+                            price=current_price,
+                            reason=f"[向量化] 组合策略信号 ({len(self.strategies)} 子策略)",
+                            metadata={
+                                "strategy_name": self.name,
+                                "source_strategy": self.name,
+                                "sub_strategies": [s.name for s in self.strategies],
+                            },
+                        )
+                    ]
+
                 if isinstance(sig_type, SignalType):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     # 获取当前价格
@@ -241,7 +293,7 @@ class StrategyPortfolio(BaseStrategy):
                             timestamp=current_date,
                             stock_code=stock_code,
                             signal_type=sig_type,
-                            strength=0.8,  # 组合策略默认强度
+                            strength=0.8,  # 组合策略默认强度（枚举信号无浮点强度）
                             price=current_price,
                             reason=f"[向量化] 组合策略信号 ({len(self.strategies)} 子策略)",
                             metadata={
@@ -255,6 +307,61 @@ class StrategyPortfolio(BaseStrategy):
         except Exception as e:
             logger.debug(f"组合策略预计算信号查找失败: {e}")
 
+        # === Score-based 整合：每个子策略计算连续分值，加权求和 ===
+        try:
+            scores = {}
+            for strategy in self.strategies:
+                score = strategy.compute_score(data, current_date)
+                scores[strategy.name] = score
+
+            # 加权求和
+            weighted_sum = 0.0
+            total_weight = 0.0
+            for strategy in self.strategies:
+                w = self.weights.get(strategy.name, 1.0 / len(self.strategies))
+                weighted_sum += scores[strategy.name] * w
+                total_weight += w
+
+            final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+            # 阈值判断（默认 0.3，可通过 config 配置）
+            score_threshold = 0.3
+            if hasattr(self, 'config') and isinstance(self.config, dict):
+                score_threshold = self.config.get("score_threshold", 0.3)
+
+            if abs(final_score) >= score_threshold:
+                sig_type = SignalType.BUY if final_score > 0 else SignalType.SELL
+                strength = min(1.0, abs(final_score))
+                stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                try:
+                    current_price = float(data.loc[current_date, "close"])
+                except Exception:
+                    current_price = 0.0
+
+                return [
+                    TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=strength,
+                        price=current_price,
+                        reason=f"[score-based] 组合评分 {final_score:.3f} (阈值 {score_threshold})",
+                        metadata={
+                            "strategy_name": self.name,
+                            "source_strategy": self.name,
+                            "integration_method": "score_based",
+                            "scores": scores,
+                            "weighted_score": final_score,
+                            "score_threshold": score_threshold,
+                            "sub_strategies": [s.name for s in self.strategies],
+                        },
+                    )
+                ]
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Score-based 整合失败，回退到信号整合: {e}")
+
+        # === Fallback: 原有信号收集 + SignalIntegrator 整合 ===
         all_signals = []
 
         # profiling: collect per-sub-strategy timings (seconds)

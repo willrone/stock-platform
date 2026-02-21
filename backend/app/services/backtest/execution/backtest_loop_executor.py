@@ -348,11 +348,16 @@ class BacktestLoopExecutor:
                     if precomputed_signals:
                         signal = precomputed_signals.get((stock_code, date))
                         if signal is not None:
+                            # 解包 (SignalType, strength) 元组（Portfolio 策略路径）
+                            _tuple_strength = None
+                            if isinstance(signal, tuple) and len(signal) == 2:
+                                signal, _tuple_strength = signal
+
                             # 将信号类型转换为 TradingSignal 对象
                             if isinstance(signal, SignalType):
                                 # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
                                 current_price = 0.0
-                                sig_strength = 1.0
+                                sig_strength = _tuple_strength if _tuple_strength is not None else 1.0
 
                                 try:
                                     # 方法 1: 优先使用 aligned_arrays（最快，O(1) 查找）

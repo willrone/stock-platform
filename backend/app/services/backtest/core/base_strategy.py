@@ -185,3 +185,22 @@ class BaseStrategy(ABC):
                     return False, f"单股持仓过大: {position_ratio:.2%} > 30%"
 
         return True, None
+
+    def compute_score(self, data: pd.DataFrame, current_date: datetime) -> float:
+        """计算当日连续评分，范围 -1.0（强烈看空）到 +1.0（强烈看多），0.0 表示中性。
+
+        默认实现：基于 generate_signals 的结果转换（向后兼容）。
+        子类应覆盖此方法以提供更精细的连续评分。
+        """
+        try:
+            signals = self.generate_signals(data, current_date)
+            if not signals:
+                return 0.0
+            sig = signals[0]
+            if sig.signal_type == SignalType.BUY:
+                return float(sig.strength)
+            elif sig.signal_type == SignalType.SELL:
+                return -float(sig.strength)
+        except Exception:
+            pass
+        return 0.0

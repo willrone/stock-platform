@@ -1,0 +1,21 @@
+{
+  "model_id": "ŝẆQŴĢĢųÂ𝙅TӣĵĿsZà6øĠ_informer_20260221_032116_797305",
+  "evaluation_id": "eval_ŝẆQŴĢĢųÂ𝙅TӣĵĿsZà6øĠ_informer_20260221_032116_797305_20260221_032116",
+  "evaluation_date": "2026-02-21T03:21:16.814732",
+  "evaluator": "test_user",
+  "performance_metrics": {},
+  "stability_metrics": {},
+  "business_metrics": {},
+  "evaluation_period": {
+    "start_date": "2024-01-01T00:00:00",
+    "end_date": "2024-02-19T00:00:00"
+  },
+  "test_data_info": {
+    "samples": 50,
+    "features": 5,
+    "date_range_days": 49
+  },
+  "overall_score": 0.0,
+  "recommendation": "reject",
+  "notes": null
+}

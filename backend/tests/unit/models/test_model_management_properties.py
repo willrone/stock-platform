@@ -52,7 +52,7 @@ class ModelManagementStateMachine(RuleBasedStateMachine):
         
         # 初始化服务
         self.model_storage = ModelStorage(str(self.storage_dir))
-        self.version_manager = ModelVersionManager(self.model_storage)
+        self.version_manager = ModelVersionManager(models_dir=str(self.storage_dir), storage=self.model_storage)
         self.evaluator = ModelEvaluator(self.model_storage, str(self.data_dir))
         self.deployment_service = ModelDeploymentService(self.model_storage, self.evaluator)
         
@@ -130,7 +130,7 @@ class ModelManagementStateMachine(RuleBasedStateMachine):
             model.fit(X, y)
             
             # 创建元数据
-            model_id = f"{model_name}_{model_type.value}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+            model_id = f"{model_name}_{model_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
             metadata = ModelMetadata(
                 model_id=model_id,
                 model_name=model_name,
@@ -138,8 +138,8 @@ class ModelManagementStateMachine(RuleBasedStateMachine):
                 version="1.0.0",
                 description=f"测试模型 {model_name}",
                 created_by="test_user",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
                 status=ModelStatus.TRAINED,
                 training_data_info={
                     "stock_codes": ["TEST001"],
@@ -337,7 +337,7 @@ class TestModelManagementProperties:
         
         # 初始化服务
         self.model_storage = ModelStorage(str(self.storage_dir))
-        self.version_manager = ModelVersionManager(self.model_storage)
+        self.version_manager = ModelVersionManager(models_dir=str(self.storage_dir), storage=self.model_storage)
         self.evaluator = ModelEvaluator(self.model_storage, str(self.data_dir))
         self.deployment_service = ModelDeploymentService(self.model_storage, self.evaluator)
         
@@ -399,7 +399,7 @@ class TestModelManagementProperties:
             model.fit(X, y)
             
             # 创建元数据
-            model_id = f"{model_name}_{model_type.value}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+            model_id = f"{model_name}_{model_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
             metadata = ModelMetadata(
                 model_id=model_id,
                 model_name=model_name,
@@ -407,8 +407,8 @@ class TestModelManagementProperties:
                 version="1.0.0",
                 description=f"测试模型 {model_name}",
                 created_by="test_user",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
                 status=ModelStatus.TRAINED,
                 training_data_info={"samples": 50},
                 hyperparameters={},
@@ -453,7 +453,7 @@ class TestModelManagementProperties:
         y = np.random.randn(50)
         model.fit(X, y)
         
-        model_id = f"test_model_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+        model_id = f"test_model_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         metadata = ModelMetadata(
             model_id=model_id,
             model_name="test_model",
@@ -461,8 +461,8 @@ class TestModelManagementProperties:
             version="1.0.0",
             description="基础版本",
             created_by="test_user",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
             status=ModelStatus.TRAINED,
             training_data_info={"samples": 50},
             hyperparameters={},
@@ -490,17 +490,17 @@ class TestModelManagementProperties:
             if success:
                 created_versions.append(version)
         
-        # 验证版本列表
+        # 验证版本列表（list_versions 返回 List[Dict]）
         versions = self.version_manager.list_versions(model_id)
-        version_strings = [v.version for v in versions]
+        version_strings = [v["version"] for v in versions]
         
         # 所有创建的版本都应该存在
         for version in created_versions[1:]:  # 跳过基础版本，因为它可能不在版本列表中
             if version in version_strings:
                 # 如果版本存在，验证其属性
-                version_obj = next(v for v in versions if v.version == version)
-                assert version_obj.created_by == "test_user"
-                assert version_obj.description == f"版本 {version}"
+                version_obj = next(v for v in versions if v["version"] == version)
+                assert version_obj["created_by"] == "test_user"
+                assert version_obj["description"] == f"版本 {version}"
     
     @given(st.sampled_from(["production", "staging", "canary"]))
     @settings(max_examples=3, deadline=30000)
@@ -512,7 +512,7 @@ class TestModelManagementProperties:
         y = np.random.randn(50)
         model.fit(X, y)
         
-        model_id = f"deploy_test_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+        model_id = f"deploy_test_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         metadata = ModelMetadata(
             model_id=model_id,
             model_name="deploy_test",
@@ -520,8 +520,8 @@ class TestModelManagementProperties:
             version="1.0.0",
             description="部署测试模型",
             created_by="test_user",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
             status=ModelStatus.TRAINED,
             training_data_info={"samples": 50},
             hyperparameters={},
