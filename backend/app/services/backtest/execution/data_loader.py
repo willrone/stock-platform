@@ -395,3 +395,82 @@ class DataLoader:
         stock_data = dict(sorted(stock_data.items(), key=lambda x: x[0]))
 
         return stock_data
+
+    def load_multiple_stocks_sync(
+        self,
+        stock_codes: List[str],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        同步加载多只股票数据（P0+P1 CPU 优化版本）
+
+        使用 multiprocessing.pool.ThreadPool 替代 ThreadPoolExecutor，
+        避免在子进程中因 nest_asyncio + asyncio 事件循环导致的死锁和性能开销。
+
+        Args:
+            stock_codes: 股票代码列表
+            start_date: 开始日期
+            end_date: 结束日期
+
+        Returns:
+            {stock_code: DataFrame} 字典，按股票代码排序
+        """
+        from multiprocessing.pool import ThreadPool
+
+        stock_data: Dict[str, pd.DataFrame] = {}
+        failed_stocks: List[str] = []
+        precomputed_count = 0
+
+        def _load_one(stock_code: str):
+            """加载单只股票，返�� (code, data, error, from_precomputed)"""
+            try:
+                data = self.load_stock_data(stock_code, start_date, end_date)
+                from_pre = data.attrs.get("from_precomputed", False)
+                return (stock_code, data, None, from_pre)
+            except Exception as e:
+                logger.error(f"加载股票数据失败: {stock_code}, 错误: {e}")
+                return (stock_code, None, str(e), False)
+
+        if len(stock_codes) > 1 and self.max_workers:
+            pool_size = min(self.max_workers, len(stock_codes), 16)
+            logger.info(
+                f"[sync] 并行加载 {len(stock_codes)} 只股票，"
+                f"ThreadPool workers={pool_size}"
+            )
+            with ThreadPool(processes=pool_size) as pool:
+                results = pool.map(_load_one, stock_codes)
+
+            for code, data, error, from_pre in results:
+                if data is not None and self._is_data_valid(
+                    data, start_date, end_date
+                ):
+                    stock_data[code] = data
+                    if from_pre:
+                        precomputed_count += 1
+                else:
+                    failed_stocks.append(code)
+        else:
+            for code in stock_codes:
+                code, data, error, from_pre = _load_one(code)
+                if data is not None and self._is_data_valid(
+                    data, start_date, end_date
+                ):
+                    stock_data[code] = data
+                    if from_pre:
+                        precomputed_count += 1
+                else:
+                    failed_stocks.append(code)
+
+        if precomputed_count > 0:
+            logger.info(
+                f"从预计算结果加载了 {precomputed_count}/{len(stock_data)} 只股票"
+            )
+        if failed_stocks:
+            logger.warning(f"部分股票数据加载失败: {len(failed_stocks)} 只")
+        if not stock_data:
+            raise TaskError(
+                message="所有股票数据加载失败", severity=ErrorSeverity.HIGH
+            )
+
+        return dict(sorted(stock_data.items(), key=lambda x: x[0]))
