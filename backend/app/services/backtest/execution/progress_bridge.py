@@ -36,7 +36,7 @@ class ProgressBridge:
         num_workers: int,
         db_url: str,
     ):
-        self._task_id = task_id
+        self._task_id = str(task_id)
         self._queue = progress_queue
         self._num_workers = num_workers
         self._db_url = db_url

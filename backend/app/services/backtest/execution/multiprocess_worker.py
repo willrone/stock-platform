@@ -128,7 +128,7 @@ def worker_backtest(args: tuple) -> Dict[str, Any]:
             data_dir=data_dir,
             max_workers=min(4, len(stock_codes)),
         )
-        stock_data = loader.load_multiple_stocks_sync(
+        stock_data = loader.load_multiple_stocks(
             stock_codes, start_date, end_date,
         )
         t_load = time.perf_counter() - t0

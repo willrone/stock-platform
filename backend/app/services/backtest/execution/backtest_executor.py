@@ -132,6 +132,8 @@ class BacktestExecutor:
         """
         # 轻量分段计时
         perf_breakdown: Dict[str, float] = {}
+        # 确保 task_id 是字符串（可能传入 UUID 对象）
+        task_id = str(task_id) if task_id else task_id
         _t_total0 = time.perf_counter()
 
         # 启动性能追踪
@@ -662,6 +664,8 @@ class BacktestExecutor:
         import gc
 
         perf_breakdown: Dict[str, float] = {}
+        # 确保 task_id 是字符串（可能传入 UUID 对象）
+        task_id = str(task_id) if task_id else task_id
         _t_total0 = time.perf_counter()
 
         self.performance_tracker.start_backtest()
@@ -782,7 +786,7 @@ class BacktestExecutor:
                 logger.info(f"使用预加载数据: {len(stock_data)} 只股票")
             else:
                 # P0+P1: 使用同步并行版本，绕过 asyncio
-                stock_data = self.data_loader.load_multiple_stocks_sync(
+                stock_data = self.data_loader.load_multiple_stocks(
                     stock_codes, start_date, end_date
                 )
 
@@ -1032,6 +1036,9 @@ class BacktestExecutor:
         from app.core.config import settings
 
         perf_breakdown: dict = {}
+        # 确保 task_id 是字符串（可能传入 UUID 对象）
+        task_id = str(task_id) if task_id else task_id
+        backtest_id = str(backtest_id) if backtest_id else backtest_id
         _t_total = time.perf_counter()
 
         # 确定 worker 数量
