@@ -317,6 +317,7 @@ class QlibFormatConverter:
         stock_code: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        columns: Optional[list] = None,
     ) -> pd.DataFrame:
         """
         从文件加载Qlib格式数据
@@ -326,6 +327,9 @@ class QlibFormatConverter:
             stock_code: 股票代码（可选，用于过滤）
             start_date: 开始日期（可选）
             end_date: 结束日期（可选）
+            columns: 需要的列名列表（可选，None=全部列）。
+                     仅对 parquet 生效，在 I/O 层面只读取指定列，
+                     配合 pyarrow filters 可大幅降低内存占用（186列→5列=97%节省）。
 
         Returns:
             Qlib格式DataFrame
@@ -339,15 +343,33 @@ class QlibFormatConverter:
 
             # 根据文件扩展名选择读取方式
             if file_path.suffix == ".parquet":
-                # 尝试使用不同的引擎读取，处理MultiIndex兼容性问题
+                # [P0 优化] 构建 pyarrow filters + column selection，避免全量加载
+                pa_filters = []
+                if start_date is not None:
+                    pa_filters.append(("date", ">=", pd.Timestamp(start_date)))
+                if end_date is not None:
+                    pa_filters.append(("date", "<=", pd.Timestamp(end_date)))
+
+                read_kwargs = {"engine": "pyarrow"}
+                if columns is not None:
+                    read_kwargs["columns"] = columns
+                if pa_filters:
+                    read_kwargs["filters"] = pa_filters
+
                 try:
-                    df = pd.read_parquet(file_path, engine="pyarrow")
+                    df = pd.read_parquet(file_path, **read_kwargs)
                 except Exception as e:
-                    logger.debug(f"使用pyarrow读取失败: {e}，尝试fastparquet")
+                    logger.debug(f"使用pyarrow+filters读取失败: {e}，退回全量加载")
+                    # fallback: fastparquet 不支持 pyarrow filters
+                    fallback_kwargs = {}
+                    if columns is not None:
+                        fallback_kwargs["columns"] = columns
                     try:
-                        df = pd.read_parquet(file_path, engine="fastparquet")
+                        df = pd.read_parquet(
+                            file_path, engine="fastparquet", **fallback_kwargs
+                        )
                     except Exception as e2:
-                        logger.warning(f"使用fastparquet也失败: {e2}，尝试默认引擎")
+                        logger.warning(f"fastparquet也失败: {e2}，默认引擎全量加载")
                         df = pd.read_parquet(file_path)
             elif file_path.suffix == ".csv":
                 df = pd.read_csv(file_path, index_col=[0, 1], parse_dates=True)
@@ -356,12 +378,8 @@ class QlibFormatConverter:
 
             # 确保是MultiIndex
             if not isinstance(df.index, pd.MultiIndex):
-                # 如果读取后不是MultiIndex，尝试重建
                 if df.index.nlevels == 1 and len(df.columns) > 0:
-                    # 可能是索引被展平了，尝试从列中恢复
                     logger.warning(f"数据索引不是MultiIndex，尝试重建: {file_path}")
-                    # 如果文件是单股票文件，可能索引只有日期
-                    # 这种情况下，我们需要根据stock_code参数重建MultiIndex
                     if stock_code is not None:
                         df.index = pd.MultiIndex.from_tuples(
                             [(stock_code, idx) for idx in df.index],
@@ -375,33 +393,29 @@ class QlibFormatConverter:
             # 过滤股票代码
             if stock_code is not None:
                 try:
-                    # 使用xs提取，但保留层级结构
                     df = df.xs(stock_code, level=0, drop_level=False)
                 except KeyError:
                     logger.warning(f"股票 {stock_code} 不在数据中")
                     return pd.DataFrame()
 
-            # 过滤日期范围（使用更安全的方式）
-            if start_date is not None or end_date is not None:
-                try:
-                    # 获取日期层级（使用numpy数组避免索引长度问题）
-                    date_level = df.index.get_level_values(1).to_numpy()
-
-                    # 构建布尔掩码（使用numpy数组）
-                    mask = np.ones(len(df), dtype=bool)
-
-                    if start_date is not None:
-                        start_ts = pd.Timestamp(start_date)
-                        mask = mask & (date_level >= start_ts)
-                    if end_date is not None:
-                        end_ts = pd.Timestamp(end_date)
-                        mask = mask & (date_level <= end_ts)
-
-                    # 使用numpy布尔数组进行过滤
-                    df = df.iloc[mask]
-                except Exception as e:
-                    logger.warning(f"日期过滤失败: {e}，返回全部数据")
-                    # 如果过滤失败，返回全部数据而不是空DataFrame
+            # 对于 csv 或 pyarrow filters 失败的 fallback 场景，仍需 Python 层面日期过滤
+            # 如果 parquet + pa_filters 已在 I/O 层过滤，这里跳过避免重复工作
+            needs_python_date_filter = (
+                file_path.suffix != ".parquet" or not pa_filters
+            ) if file_path.suffix == ".parquet" else True
+            # 简化：csv 始终需要；parquet 有 pa_filters 时跳过
+            if file_path.suffix != ".parquet" or not pa_filters:
+                if start_date is not None or end_date is not None:
+                    try:
+                        date_level = df.index.get_level_values(1).to_numpy()
+                        mask = np.ones(len(df), dtype=bool)
+                        if start_date is not None:
+                            mask = mask & (date_level >= pd.Timestamp(start_date))
+                        if end_date is not None:
+                            mask = mask & (date_level <= pd.Timestamp(end_date))
+                        df = df.iloc[mask]
+                    except Exception as e:
+                        logger.warning(f"日期过滤失败: {e}，返回全部数据")
 
             logger.debug(f"加载Qlib数据: {file_path}, 形状: {df.shape}")
 

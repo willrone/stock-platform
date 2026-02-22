@@ -123,11 +123,14 @@ class DataLoader:
             if stock_file.exists():
                 # Qlib 文件通常以下划线命名（000001_SZ），内部 index level 0 也可能是该格式。
                 # 为避免 KeyError + 大量 warning，统一用 safe_code 去读取/过滤。
+                # [P0] 只读取 OHLCV 列，避免加载全部 186 列因子数据（节省 ~97% 内存）
+                _backtest_columns = ["$open", "$high", "$low", "$close", "$volume"]
                 qlib_data = converter.load_qlib_data(
                     stock_file,
                     stock_code=safe_code,
                     start_date=start_date,
                     end_date=end_date,
+                    columns=_backtest_columns,
                 )
 
                 if not qlib_data.empty:
@@ -143,12 +146,14 @@ class DataLoader:
                         except KeyError:
                             # 如果MultiIndex中没有该股票，尝试直接使用
                             if qlib_data.index.nlevels == 2:
-                                stock_data = qlib_data.copy()
+                                # [P1] xs() KeyError fallback: 直接使用，无需 copy
+                                stock_data = qlib_data
                                 stock_data.index = stock_data.index.get_level_values(1)
                             else:
                                 return None
                     else:
-                        stock_data = qlib_data.copy()
+                        # [P1] 无需 copy，rename() 默认返回新 DataFrame
+                        stock_data = qlib_data
 
                     # 列名映射：$close -> close等（回测策略期望的格式）
                     column_mapping = {
@@ -176,11 +181,13 @@ class DataLoader:
 
             all_stocks_file = self.qlib_data_path / "all_stocks.parquet"
             if use_all and all_stocks_file.exists():
+                # [P0] 只读取 OHLCV 列
                 qlib_data = converter.load_qlib_data(
                     all_stocks_file,
                     stock_code=safe_code,
                     start_date=start_date,
                     end_date=end_date,
+                    columns=["$open", "$high", "$low", "$close", "$volume"],
                 )
 
                 if not qlib_data.empty:
@@ -194,7 +201,8 @@ class DataLoader:
                         except KeyError:
                             return None
                     else:
-                        stock_data = qlib_data.copy()
+                        # [P1] 无需 copy，rename() 默认返回新 DataFrame
+                        stock_data = qlib_data
 
                     # 列名映射
                     column_mapping = {

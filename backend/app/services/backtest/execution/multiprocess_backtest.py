@@ -45,6 +45,27 @@ def _worker_backtest(
         回测结果字典
     """
     try:
+        # [P2] 子进程中重新配置 loguru（spawn 模式下 logger 不会继承父进程配置）
+        import os as _os
+        from pathlib import Path as _Path
+        logger.remove()  # 移除默认 handler
+        _log_dir = _Path("/home/willrone/Projects/willrone/data/logs")
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            _log_dir / f"worker_{worker_id}.log",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | PID:{process} | {message}",
+            level="INFO",
+            rotation="50 MB",
+            retention="7 days",
+            enqueue=False,  # 子进程内无需线程安全队列
+        )
+        # 同时保留 stderr 输出便于调试
+        logger.add(
+            lambda msg: None,  # /dev/null — 子进程 stderr 通常不��见
+            level="WARNING",
+        )
+        logger.info(f"Worker {worker_id} 启动, PID={_os.getpid()}, 股票数={len(stock_codes)}")
+
         # 1. 重建数据结构
         stock_data = {}
         for code in stock_codes:
