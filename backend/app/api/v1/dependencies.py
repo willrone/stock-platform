@@ -6,6 +6,7 @@ API依赖注入和共享函数
 """
 
 import os
+import signal
 from typing import Optional
 
 from fastapi import Header
@@ -272,6 +273,9 @@ def execute_backtest_task_simple(task_id: str):
     """
     import asyncio
 
+    # [FIX] 忽略 SIGUSR1 信号，防止 py-spy 等调试工具误杀子进程
+    signal.signal(signal.SIGUSR1, signal.SIG_IGN)
+
     # 绑定进程ID到日志上下文
     process_id = os.getpid()
     task_logger = logger.bind(process_id=process_id, task_id=task_id, log_type="task")
@@ -459,9 +463,12 @@ def execute_backtest_task_simple(task_id: str):
         from app.services.backtest.persistence import BacktestPersistenceService
         persistence = BacktestPersistenceService()
 
+        # [FIX] 在 ProcessPoolExecutor 子进程中禁用 DataLoader 的并行加载
+        # 子进程内创建 ThreadPoolExecutor 会导致死锁（nest_asyncio + new_event_loop 环境）
+        # enable_parallel 仅控制 DataLoader 的线程池，不影响其他并行特性
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
-            enable_parallel=enable_parallel,
+            enable_parallel=False,
             max_workers=max_workers,
             enable_performance_profiling=enable_performance_profiling,
             persistence=persistence,

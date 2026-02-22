@@ -119,13 +119,16 @@ class ProcessTaskExecutor:
         logger.debug(f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}")
         return future
 
-    async def submit_async(self, fn: Callable, *args, **kwargs) -> Any:
+    async def submit_async(
+        self, fn: Callable, *args, timeout: Optional[float] = None, **kwargs
+    ) -> Any:
         """
         异步提交任务到进程池并等待结果
 
         Args:
             fn: 要执行的函数
             *args: 位置参数
+            timeout: 超时时间（秒），None 表示不限时。超时后抛出 TimeoutError。
             **kwargs: 关键字参数
 
         Returns:
@@ -134,9 +137,25 @@ class ProcessTaskExecutor:
         loop = asyncio.get_event_loop()
         future = self.submit(fn, *args, **kwargs)
 
-        # 在事件循环中等待结果
-        result = await loop.run_in_executor(None, future.result)
-        return result
+        if timeout is not None:
+            # 使用 asyncio.wait_for 实现超时
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(None, future.result),
+                    timeout=timeout,
+                )
+                return result
+            except asyncio.TimeoutError:
+                # 尝试取消 future
+                future.cancel()
+                raise TimeoutError(
+                    f"子进程任务超时（{timeout}s），已取消。"
+                    f"可能原因：子进程死锁或数据量过大。"
+                )
+        else:
+            # 无超时，保持原有行为
+            result = await loop.run_in_executor(None, future.result)
+            return result
 
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
