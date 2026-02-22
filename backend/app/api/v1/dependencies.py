@@ -468,7 +468,7 @@ def execute_backtest_task_simple(task_id: str):
         # enable_parallel 仅控制 DataLoader 的线程池，不影响其他并行特性
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
-            enable_parallel=False,
+            enable_parallel=True,
             max_workers=max_workers,
             enable_performance_profiling=enable_performance_profiling,
             persistence=persistence,
@@ -499,74 +499,66 @@ def execute_backtest_task_simple(task_id: str):
         )
 
         try:
-            # 在新的事件循环中运行异步任务
-            import nest_asyncio
+            # [P2] 使用同步版本执行回测，绕过 asyncio 事件循环
+            # 多进程并行回测在 run_backtest_sync 内部自动启用（股票数 > 100）
+            backtest_report = executor.run_backtest_sync(
+                strategy_name=strategy_name,
+                stock_codes=stock_codes,
+                start_date=start_date,
+                end_date=end_date,
+                strategy_config=config.get("strategy_config", {}),
+                backtest_config=backtest_config,
+                task_id=task_id,
+            )
 
-            nest_asyncio.apply()
+            # 更新进度到90%
+            task_repository.update_task_status(
+                task_id=task_id, status=TaskStatus.RUNNING, progress=90.0
+            )
 
-            async def run_backtest_and_save():
-                """执行回测并通过 persistence 服务保存详细数据"""
-                # 1. 执行回测
-                backtest_report = await executor.run_backtest(
-                    strategy_name=strategy_name,
-                    stock_codes=stock_codes,
-                    start_date=start_date,
-                    end_date=end_date,
-                    strategy_config=config.get("strategy_config", {}),
-                    backtest_config=backtest_config,
-                    task_id=task_id,
-                )
+            task_logger.info(
+                f"回测执行完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}, 进程ID: {process_id}"
+            )
 
-                # 更新进度到90%
-                task_repository.update_task_status(
-                    task_id=task_id, status=TaskStatus.RUNNING, progress=90.0
-                )
+            # 通过 persistence 服务保存详细数据（async，用临时事件循环）
+            backtest_id = backtest_report.get("backtest_id", "")
+            try:
+                task_logger.info(f"开始保存回测详细数据: {task_id}")
 
-                task_logger.info(
-                    f"回测执行完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}, 进程ID: {process_id}"
-                )
-
-                # 2. 通过 persistence 服务统一保存所有详细数据
-                backtest_id = backtest_report.get("backtest_id", "")
-                try:
-                    task_logger.info(f"开始保存回测详细数据: {task_id}")
-                    success = await persistence.save_backtest_results(
+                async def _save_results():
+                    return await persistence.save_backtest_results(
                         task_id=task_id,
                         backtest_id=backtest_id,
                         backtest_report=backtest_report,
                     )
-                    if success:
-                        task_logger.info(f"回测详细数据保存成功: {task_id}")
-                    else:
-                        task_logger.error(f"回测详细数据保存返回失败: {task_id}")
-                        # persistence 内部已处理 tasks.status，这里兜底
-                        task_repository.update_task_status(
-                            task_id=task_id,
-                            status=TaskStatus.COMPLETED,
-                            progress=100.0,
-                            result=backtest_report,
-                        )
-                except Exception as save_error:
-                    import traceback as tb
-                    task_logger.error(
-                        f"保存详细数据时出错: {task_id}, 错误: {type(save_error).__name__}: {save_error}\n{tb.format_exc()}"
-                    )
-                    # 保存失败不影响主流程，兜底标记完成
+
+                _save_loop = asyncio.new_event_loop()
+                try:
+                    success = _save_loop.run_until_complete(_save_results())
+                finally:
+                    _save_loop.close()
+
+                if success:
+                    task_logger.info(f"回测详细数据保存成功: {task_id}")
+                else:
+                    task_logger.error(f"回测详细数据保存返回失败: {task_id}")
                     task_repository.update_task_status(
                         task_id=task_id,
                         status=TaskStatus.COMPLETED,
                         progress=100.0,
                         result=backtest_report,
                     )
-
-                return backtest_report
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                backtest_report = loop.run_until_complete(run_backtest_and_save())
-            finally:
-                loop.close()
+            except Exception as save_error:
+                import traceback as tb
+                task_logger.error(
+                    f"保存详细数据时出错: {task_id}, 错误: {type(save_error).__name__}: {save_error}"
+                )
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.COMPLETED,
+                    progress=100.0,
+                    result=backtest_report,
+                )
 
         except TaskError as task_error:
             # 处理任务错误（如任务被删除）
