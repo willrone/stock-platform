@@ -31,7 +31,7 @@ import {
   IconButton,
 } from '@mui/material';
 import { ArrowLeft, Settings, Target, TrendingUp, Shield, Info, Activity } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useDataStore } from '../../../stores/useDataStore';
 import { useTaskStore } from '../../../stores/useTaskStore';
 import { TaskService, CreateTaskRequest } from '../../../services/taskService';
@@ -49,6 +49,7 @@ import { StrategyConfigService, StrategyConfig } from '../../../services/strateg
 
 export default function CreateTaskPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { models, selectedModel, setModels, setSelectedModel } = useDataStore();
   const { setCreating } = useTaskStore();
 
@@ -91,6 +92,8 @@ export default function CreateTaskPage() {
     enable_performance_profiling: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [rebuildTaskName, setRebuildTaskName] = useState<string>("");
+  const [isRebuild, setIsRebuild] = useState(false);
 
   // 加载模型列表
   useEffect(() => {
@@ -116,7 +119,8 @@ export default function CreateTaskPage() {
       if (taskType === 'backtest') {
         try {
           const response = await fetch('/api/v1/backtest/strategies');
-          const data = await response.json();
+          const resp = await response.json();
+        const data = resp.data || resp;
           if (data.success && data.data) {
             setAvailableStrategies(data.data);
             // 如果当前策略不在列表中，设置为第一个策略
@@ -135,6 +139,81 @@ export default function CreateTaskPage() {
 
     loadStrategies();
   }, [taskType]);
+
+  useEffect(() => {
+    const rebuildTaskId = searchParams.get("rebuild");
+    if (!rebuildTaskId) return;
+
+    const loadRebuildTask = async () => {
+      try {
+        const response = await fetch("/api/v1/tasks/" + rebuildTaskId);
+        const resp = await response.json();
+        const data = resp.data || resp;
+        if (!data || !data.task_id) return;
+
+        setIsRebuild(true);
+        setRebuildTaskName(data.task_name || "");
+
+        // 设置任务类型
+        if (data.task_type === "backtest") {
+          setTaskType("backtest");
+        } else {
+          setTaskType("prediction");
+        }
+
+        // 预填股票
+        if (data.stock_codes && Array.isArray(data.stock_codes)) {
+          setSelectedStocks(data.stock_codes);
+        }
+
+        const bc = data.config || data.backtest_config || {};
+
+        // 预填表单字段
+        setFormData(prev => ({
+          ...prev,
+          task_name: "重建 - " + (data.task_name || ""),
+          description: data.description || "",
+          strategy_name: bc.strategy_name || prev.strategy_name,
+          start_date: bc.start_date || prev.start_date,
+          end_date: bc.end_date || prev.end_date,
+          initial_cash: bc.initial_cash || prev.initial_cash,
+          commission_rate: bc.commission_rate !== undefined ? bc.commission_rate : prev.commission_rate,
+          slippage_rate: bc.slippage_rate !== undefined ? bc.slippage_rate : prev.slippage_rate,
+          enable_performance_profiling: bc.enable_performance_profiling || false,
+        }));
+
+        // 预填策略配置
+        if (bc.strategy_name === "portfolio" && bc.strategy_config) {
+          setStrategyType("portfolio");
+          setPortfolioConfig({
+            strategies: bc.strategy_config.strategies || [],
+            integration_method: bc.strategy_config.integration_method || "weighted_voting",
+          });
+          setPortfolioConfigKey(prev => prev + 1);
+        } else if (bc.strategy_config) {
+          setStrategyType("single");
+          setStrategyConfig(bc.strategy_config);
+          setConfigFormKey(prev => prev + 1);
+        }
+
+        // 预填预测配置
+        if (data.prediction_config) {
+          const pc = data.prediction_config;
+          setFormData(prev => ({
+            ...prev,
+            model_id: pc.model_id || prev.model_id,
+            horizon: pc.horizon || prev.horizon,
+            confidence_level: pc.confidence_level ? pc.confidence_level * 100 : prev.confidence_level,
+            risk_assessment: pc.risk_assessment !== undefined ? pc.risk_assessment : prev.risk_assessment,
+          }));
+        }
+      } catch (error) {
+        console.error("加载重建任务失败:", error);
+      }
+    };
+
+    loadRebuildTask();
+  }, [searchParams]);
 
   // 加载已保存的配置列表
   useEffect(() => {
@@ -304,10 +383,10 @@ export default function CreateTaskPage() {
         </IconButton>
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-            创建任务
+            {isRebuild ? "重建任务" : "创建任务"}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            配置股票预测或回测任务参数
+            {isRebuild ? "基于「" + rebuildTaskName + "」重建" : "配置股票预测或回测任务参数"}
           </Typography>
         </Box>
       </Box>
