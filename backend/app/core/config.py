@@ -95,7 +95,12 @@ class Settings(BaseSettings):
     @property
     def database_url_sync(self) -> str:
         """同步数据库URL"""
-        return self.DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite:///")
+        url = self.DATABASE_URL
+        # SQLite: aiosqlite -> 同步
+        url = url.replace("sqlite+aiosqlite://", "sqlite:///")
+        # PostgreSQL: asyncpg -> psycopg2
+        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+        return url
 
     @model_validator(mode="after")
     def resolve_relative_paths(self) -> "Settings":

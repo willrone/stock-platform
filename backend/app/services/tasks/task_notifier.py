@@ -73,52 +73,45 @@ class TaskNotifier:
 
     async def _check_and_notify(self):
         """检查任务状态变化并通知"""
-        session = SessionLocal()
-        try:
-            task_repository = TaskRepository(session)
+        with SessionLocal() as session:
+            try:
+                task_repository = TaskRepository(session)
 
-            # 获取最近更新的任务（运行中或刚完成的任务）
-            # 只检查最近1分钟内更新的任务
-            cutoff_time = datetime.utcnow() - timedelta(minutes=1)
+                # 获取最近更新的任务（运行中或刚完成的任务）
+                # 只检查最近1分钟内更新的任务
+                cutoff_time = datetime.utcnow() - timedelta(minutes=1)
 
-            # 获取所有运行中的任务
-            running_tasks = task_repository.get_tasks_by_status(TaskStatus.RUNNING)
+                # 获取所有运行中的任务
+                running_tasks = task_repository.get_tasks_by_status(TaskStatus.RUNNING)
 
-            # 获取最近完成或失败的任务
-            recent_tasks = task_repository.get_recently_updated_tasks(cutoff_time)
+                # 获取最近完成或失败的任务
+                recent_tasks = task_repository.get_recently_updated_tasks(cutoff_time)
 
-            # 合并任务列表
-            all_tasks = set(running_tasks) | set(recent_tasks)
+                # 合并任务列表
+                all_tasks = set(running_tasks) | set(recent_tasks)
 
-            for task in all_tasks:
-                # 检查是否需要通知
-                # 使用 progress 字段的变化来判断是否有更新
-                last_check = self._last_check_time.get(task.task_id)
-                last_progress = self._last_progress.get(task.task_id, -1)  # 记录上次进度
+                for task in all_tasks:
+                    last_check = self._last_check_time.get(task.task_id)
+                    last_progress = self._last_progress.get(task.task_id, -1)
 
-                # 如果进度有变化，或者时间戳有变化，都需要通知
-                progress_changed = task.progress != last_progress
-                task_update_time = (
-                    task.completed_at or task.started_at or task.created_at
-                )
-                time_changed = not last_check or (
-                    task_update_time and task_update_time > last_check
-                )
+                    progress_changed = task.progress != last_progress
+                    task_update_time = (
+                        task.completed_at or task.started_at or task.created_at
+                    )
+                    time_changed = not last_check or (
+                        task_update_time and task_update_time > last_check
+                    )
 
-                if not progress_changed and not time_changed:
-                    continue  # 任务状态未变化，跳过
+                    if not progress_changed and not time_changed:
+                        continue
 
-                # 更新最后检查时间和进度
-                self._last_check_time[task.task_id] = datetime.utcnow()
-                self._last_progress[task.task_id] = task.progress  # 记录当前进度
+                    self._last_check_time[task.task_id] = datetime.utcnow()
+                    self._last_progress[task.task_id] = task.progress
 
-                # 发送通知
-                await self._notify_task_update(task)
+                    await self._notify_task_update(task)
 
-        except Exception as e:
-            logger.error(f"检查任务状态失败: {e}", exc_info=True)
-        finally:
-            session.close()
+            except Exception as e:
+                logger.error(f"检查任务状态失败: {e}", exc_info=True)
 
     async def _notify_task_update(self, task):
         """通知任务状态更新"""
