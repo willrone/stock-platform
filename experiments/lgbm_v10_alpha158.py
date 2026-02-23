@@ -18,7 +18,7 @@ from scipy.stats import spearmanr
 import warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 np.random.seed(42)
 
 def compute_alpha158_features(df: pd.DataFrame) -> pd.DataFrame:

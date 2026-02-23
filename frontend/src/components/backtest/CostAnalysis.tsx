@@ -99,14 +99,14 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: { xs: 1, sm: 2 },
         }}
       >
         {/* 含成本年化收益 */}
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, md: 2 } }}>
               <TrendingDown size={20} color="#d32f2f" />
             </Box>
             <Tooltip title="考虑交易成本后的年化超额收益率">
@@ -126,9 +126,11 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               </Box>
             </Tooltip>
             <Typography
-              variant="h4"
               sx={{
                 fontWeight: 600,
+                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' },
+                overflow: 'hidden',
+                wordBreak: 'break-word',
                 color:
                   (costComparison.withCost.annualized_return || 0) >= 0
                     ? 'success.main'
@@ -142,8 +144,8 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
 
         {/* 无成本年化收益 */}
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, md: 2 } }}>
               <TrendingUp size={20} color="#2e7d32" />
             </Box>
             <Tooltip title="不考虑交易成本的年化超额收益率">
@@ -163,9 +165,11 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               </Box>
             </Tooltip>
             <Typography
-              variant="h4"
               sx={{
                 fontWeight: 600,
+                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' },
+                overflow: 'hidden',
+                wordBreak: 'break-word',
                 color:
                   (costComparison.withoutCost.annualized_return || 0) >= 0
                     ? 'success.main'
@@ -179,8 +183,8 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
 
         {/* 成本影响 */}
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, md: 2 } }}>
               <DollarSign size={20} color="#ed6c02" />
             </Box>
             <Tooltip title="交易成本对年化收益的影响">
@@ -199,7 +203,7 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
+            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, overflow: 'hidden', wordBreak: 'break-word', color: 'warning.main' }}>
               {(costImpact?.impact || 0) * 100 >= 0 ? '-' : '+'}
               {Math.abs((costImpact?.impact || 0) * 100).toFixed(2)}%
             </Typography>
@@ -208,8 +212,8 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
 
         {/* 成本占比 */}
         <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, md: 2 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: { xs: 1, md: 2 } }}>
               <PieChart size={20} color="#9c27b0" />
             </Box>
             <Tooltip title="总交易成本占初始资金的比例">
@@ -228,7 +232,7 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
                 <Info size={12} style={{ marginLeft: 4 }} />
               </Box>
             </Tooltip>
-            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+            <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
               {((costImpact?.costRatio || 0) * 100).toFixed(2)}%
             </Typography>
           </CardContent>
@@ -248,7 +252,7 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                 gap: 2,
               }}
             >
@@ -360,16 +364,16 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               sx={{
                 mt: 3,
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-                gap: 2,
+                gridTemplateColumns: { xs: 'repeat(3, 1fr)', md: 'repeat(3, 1fr)' },
+                gap: { xs: 1, sm: 2 },
               }}
             >
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                     总手续费
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     ¥
                     {(costComparison.costStats.total_commission || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
@@ -380,11 +384,11 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               </Card>
 
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                     总滑点成本
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     ¥
                     {(costComparison.costStats.total_slippage || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,
@@ -395,11 +399,11 @@ export function CostAnalysis({ backtestData, loading = false }: CostAnalysisProp
               </Card>
 
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <CardContent sx={{ textAlign: 'center', p: { xs: 1, md: 2 } }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
                     总交易成本
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '0.85rem', sm: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word', color: 'warning.main' }}>
                     ¥
                     {(costComparison.costStats.total_cost || 0).toLocaleString('zh-CN', {
                       minimumFractionDigits: 2,

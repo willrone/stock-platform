@@ -128,30 +128,31 @@ class LightGBMAdapter(BaseModelAdapter):
         )
 
     def get_hyperparameter_specs(self) -> List[HyperparameterSpec]:
+        # 默认值对齐 Qlib 官方基准配置（qlib/examples/benchmarks/LightGBM）
         return [
             HyperparameterSpec(
                 name="learning_rate",
                 param_type="float",
-                default_value=0.1,
+                default_value=0.2,
                 min_value=0.01,
                 max_value=0.3,
-                description="学习率，控制每次迭代的步长",
+                description="学习率，Qlib官方基准=0.2",
             ),
             HyperparameterSpec(
                 name="num_leaves",
                 param_type="int",
-                default_value=31,
+                default_value=210,
                 min_value=10,
-                max_value=300,
-                description="叶子节点数，控制模型复杂度",
+                max_value=512,
+                description="叶子节点数，Qlib官方基准=210",
             ),
             HyperparameterSpec(
                 name="max_depth",
                 param_type="int",
-                default_value=-1,
+                default_value=8,
                 min_value=3,
                 max_value=15,
-                description="树的最大深度，-1表示无限制",
+                description="树的最大深度，Qlib官方基准=8",
             ),
             HyperparameterSpec(
                 name="min_data_in_leaf",
@@ -164,92 +165,93 @@ class LightGBMAdapter(BaseModelAdapter):
             HyperparameterSpec(
                 name="feature_fraction",
                 param_type="float",
-                default_value=0.9,
+                default_value=0.8879,
                 min_value=0.4,
                 max_value=1.0,
-                description="特征采样比例",
+                description="特征采样比例，Qlib官方基准=0.8879",
             ),
             HyperparameterSpec(
                 name="bagging_fraction",
                 param_type="float",
-                default_value=0.8,
+                default_value=0.8789,
                 min_value=0.4,
                 max_value=1.0,
-                description="样本采样比例",
+                description="样本采样比例，Qlib官方基准=0.8789",
             ),
             HyperparameterSpec(
                 name="lambda_l1",
                 param_type="float",
-                default_value=0.0,
+                default_value=0.1,
                 min_value=0.0,
-                max_value=100.0,
-                description="L1正则化系数",
+                max_value=500.0,
+                description="L1正则化系数（Qlib官方基准205.7适用于CSI300全量数据，小数据集建议0.1-1.0）",
             ),
             HyperparameterSpec(
                 name="lambda_l2",
                 param_type="float",
-                default_value=0.0,
+                default_value=0.1,
                 min_value=0.0,
-                max_value=100.0,
-                description="L2正则化系数",
+                max_value=1000.0,
+                description="L2正则化系数（Qlib官方基准580.9适用于CSI300全量数据，小数据集建议0.1-1.0）",
             ),
             HyperparameterSpec(
                 name="num_iterations",
                 param_type="int",
-                default_value=100,
+                default_value=1000,
                 min_value=10,
-                max_value=1000,
-                description="训练迭代次数（epochs），LightGBM使用num_iterations参数",
+                max_value=5000,
+                description="训练迭代次数，Qlib官方基准=1000",
             ),
         ]
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
+        # Qlib 官方基准默认值（qlib/examples/benchmarks/LightGBM）
         config = {
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
-                "loss": "huber",  # 使用Huber损失，对异常值更鲁棒
-                "huber_delta": hyperparameters.get("huber_delta", 0.1),  # Huber损失的delta参数
-                "learning_rate": hyperparameters.get("learning_rate", 0.1),
-                "num_leaves": hyperparameters.get("num_leaves", 31),
-                "max_depth": hyperparameters.get("max_depth", -1),
+                "loss": "mse",
+                "learning_rate": hyperparameters.get("learning_rate", 0.2),
+                "num_leaves": hyperparameters.get("num_leaves", 210),
+                "max_depth": hyperparameters.get("max_depth", 8),
                 "min_data_in_leaf": hyperparameters.get("min_data_in_leaf", 20),
-                "feature_fraction": hyperparameters.get("feature_fraction", 0.9),
-                "bagging_fraction": hyperparameters.get("bagging_fraction", 0.8),
-                "lambda_l1": hyperparameters.get("lambda_l1", 0.0),
-                "lambda_l2": hyperparameters.get("lambda_l2", 0.0),
+                "feature_fraction": hyperparameters.get(
+                    "feature_fraction", 0.8879,
+                ),
+                "bagging_fraction": hyperparameters.get(
+                    "bagging_fraction", 0.8789,
+                ),
+                "lambda_l1": hyperparameters.get("lambda_l1", 0.1),
+                "lambda_l2": hyperparameters.get("lambda_l2", 0.1),
                 "num_threads": 20,
-                "verbose": -1,  # 禁用LightGBM的默认输出，但保留训练历史
+                "verbose": -1,
             },
         }
 
-        # 添加epoch数配置（LightGBM使用num_iterations或n_estimators）
-        num_iterations = None
-        if "num_iterations" in hyperparameters:
-            num_iterations = hyperparameters["num_iterations"]
-        elif "n_estimators" in hyperparameters:
-            num_iterations = hyperparameters["n_estimators"]
-        elif "epochs" in hyperparameters:
-            num_iterations = hyperparameters["epochs"]
-
-        if num_iterations:
-            config["kwargs"]["num_iterations"] = num_iterations
+        # num_iterations: 用户可通过多种 key 传入
+        num_iterations = (
+            hyperparameters.get("num_iterations")
+            or hyperparameters.get("n_estimators")
+            or hyperparameters.get("epochs")
+            or 1000  # Qlib 官方基准默认 1000
+        )
+        config["kwargs"]["num_iterations"] = int(num_iterations)
 
         return config
 
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
         try:
-            lr = hyperparameters.get("learning_rate", 0.1)
-            if not (0.01 <= lr <= 0.3):
+            lr = hyperparameters.get("learning_rate", 0.2)
+            if not (0.001 <= lr <= 1.0):
                 return False
 
-            num_leaves = hyperparameters.get("num_leaves", 31)
-            if not (10 <= num_leaves <= 300):
+            num_leaves = hyperparameters.get("num_leaves", 210)
+            if not (2 <= num_leaves <= 1024):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -377,24 +379,31 @@ class XGBoostAdapter(BaseModelAdapter):
         ]
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
+        # Qlib XGBModel.__init__ stores all kwargs into self._params,
+        # which is passed directly to xgb.train() as the params dict.
+        # Only include valid xgboost native parameters here.
+        # n_estimators / num_boost_round are NOT xgb params — they are
+        # passed as a separate argument to xgb.train() via XGBModel.fit().
+        num_boost_round = (
+            hyperparameters.get("n_estimators")
+            or hyperparameters.get("num_iterations")
+            or hyperparameters.get("epochs")
+            or 1000
+        )
+
         config = {
             "class": "XGBModel",
             "module_path": "qlib.contrib.model.xgboost",
             "kwargs": {
-                "learning_rate": hyperparameters.get("learning_rate", 0.1),
+                "eta": hyperparameters.get("learning_rate", 0.1),
                 "max_depth": hyperparameters.get("max_depth", 6),
-                "n_estimators": hyperparameters.get("n_estimators", 100),
                 "subsample": hyperparameters.get("subsample", 0.8),
                 "colsample_bytree": hyperparameters.get("colsample_bytree", 0.8),
-                "random_state": 42,
+                "seed": 42,
+                "nthread": 20,
+                "verbosity": 1,
             },
         }
-
-        # 支持num_iterations或epochs作为n_estimators的别名
-        if "num_iterations" in hyperparameters:
-            config["kwargs"]["n_estimators"] = hyperparameters["num_iterations"]
-        elif "epochs" in hyperparameters:
-            config["kwargs"]["n_estimators"] = hyperparameters["epochs"]
 
         return config
 

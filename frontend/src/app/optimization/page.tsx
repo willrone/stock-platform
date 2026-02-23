@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
+import { useSearchParams } from 'next/navigation';
 import { OptimizationService, OptimizationTask } from '../../services/optimizationService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import CreateOptimizationTaskForm from '../../components/optimization/CreateOptimizationTaskForm';
@@ -19,10 +20,19 @@ import OptimizationTaskList from '../../components/optimization/OptimizationTask
 import OptimizationTaskDetail from '../../components/optimization/OptimizationTaskDetail';
 
 export default function OptimizationPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('list');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<OptimizationTask[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // 检查是否是重建任务
+  useEffect(() => {
+    const isRebuild = searchParams.get('rebuild') === 'true';
+    if (isRebuild) {
+      setActiveTab('create');
+    }
+  }, [searchParams]);
 
   // 加载任务列表
   const loadTasks = async () => {
@@ -52,9 +62,9 @@ export default function OptimizationPage() {
   };
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 3 }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}>
           超参优化
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -66,6 +76,8 @@ export default function OptimizationPage() {
         value={activeTab}
         onChange={(e, newValue) => setActiveTab(newValue)}
         aria-label="优化任务标签页"
+        variant="scrollable"
+        scrollButtons="auto"
       >
         <Tab label="任务列表" value="list" />
         <Tab label="创建任务" value="create" />

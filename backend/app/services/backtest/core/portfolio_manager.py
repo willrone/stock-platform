@@ -41,6 +41,17 @@ class PortfolioManager:
         self.total_commission = 0.0
         self.total_slippage = 0.0
 
+        # 不限制买入模式：累计补充资金总额
+        self.total_capital_injection = 0.0
+
+        # 开仓日期跟踪（用于最小持仓期检查）
+        self._entry_dates: Dict[str, datetime] = {}
+
+    @property
+    def entry_dates(self) -> Dict[str, datetime]:
+        """返回开仓日期字典 {stock_code: entry_date}"""
+        return {code: dt for code, dt in self._entry_dates.items() if code in self.positions}
+
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
         """计算组合总价值（含成本）"""
         total_value = self.cash
@@ -133,39 +144,50 @@ class PortfolioManager:
         Returns:
             tuple[Optional[Trade], Optional[str]]: (交易对象, 失败原因)
         """
-        # 计算可买数量
-        portfolio_value = self.get_portfolio_value({stock_code: price})
-        max_position_value = portfolio_value * self.config.max_position_size
+        unlimited_buy = getattr(self.config, "enable_unlimited_buy", False)
 
-        current_position = self.positions.get(stock_code)
-        current_position_value = (
-            current_position.market_value if current_position else 0
-        )
+        if unlimited_buy:
+            # 不限制买入：可用全部现金，不限制单股仓位，资金不足时自动补充
+            available_cash_for_stock = self.cash
+        else:
+            # 常规模式：单股仓位限制 + 保留5%现金
+            portfolio_value = self.get_portfolio_value({stock_code: price})
+            max_position_value = portfolio_value * self.config.max_position_size
 
-        available_cash_for_stock = max_position_value - current_position_value
-        available_cash_for_stock = min(
-            available_cash_for_stock, self.cash * 0.95
-        )  # 保留5%现金
+            current_position = self.positions.get(stock_code)
+            current_position_value = (
+                current_position.market_value if current_position else 0
+            )
 
-        if available_cash_for_stock <= 0:
-            if (
-                current_position_value > 0
-                and current_position_value >= max_position_value
-            ):
-                return (
-                    None,
-                    f"已达到最大持仓限制: 当前持仓 {current_position_value:.2f} >= 最大持仓 {max_position_value:.2f}",
-                )
-            else:
-                return None, f"可用资金不足: 需要保留5%现金，可用资金 {self.cash:.2f}"
+            available_cash_for_stock = max_position_value - current_position_value
+            available_cash_for_stock = min(
+                available_cash_for_stock, self.cash * 0.95
+            )  # 保留5%现金
+
+            if available_cash_for_stock <= 0:
+                if (
+                    current_position_value > 0
+                    and current_position_value >= max_position_value
+                ):
+                    return (
+                        None,
+                        f"已达到最大持仓限制: 当前持仓 {current_position_value:.2f} >= 最大持仓 {max_position_value:.2f}",
+                    )
+                else:
+                    return None, f"可用资金不足: 需要保留5%现金，可用资金 {self.cash:.2f}"
 
         # 计算购买数量（假设最小交易单位为100股）
         quantity = int(available_cash_for_stock / price / 100) * 100
-        if quantity <= 0:
+
+        if not unlimited_buy and quantity <= 0:
             return (
                 None,
                 f"可买数量不足: 可用资金 {available_cash_for_stock:.2f}，价格 {price:.2f}，无法买入100股",
             )
+
+        # 不限制买入模式下，若现金不足买100股则补充资金后按100股买入
+        if unlimited_buy and quantity <= 0:
+            quantity = 100
 
         # 计算实际成本
         total_cost = quantity * price
@@ -174,10 +196,20 @@ class PortfolioManager:
         total_cost_with_commission = total_cost + commission
 
         if total_cost_with_commission > self.cash:
-            return (
-                None,
-                f"资金不足: 需要 {total_cost_with_commission:.2f}（含手续费 {commission:.2f}），可用 {self.cash:.2f}",
-            )
+            if unlimited_buy:
+                # 自动补充资金（含成本与无成本账本同步）
+                needed = total_cost_with_commission - self.cash
+                self.cash += needed
+                self.total_capital_injection += needed
+                self.cash_without_cost += needed  # 无成本账本同步，避免后续扣款异常
+                logger.debug(
+                    f"不限制买入: 补充资金 {needed:.2f} 用于买入 {stock_code}"
+                )
+            else:
+                return (
+                    None,
+                    f"资金不足: 需要 {total_cost_with_commission:.2f}（含手续费 {commission:.2f}），可用 {self.cash:.2f}",
+                )
 
         # 执行交易（含成本）
         self.cash -= total_cost_with_commission
@@ -209,6 +241,8 @@ class PortfolioManager:
                 unrealized_pnl=0,
                 realized_pnl=0,
             )
+            # 新开仓：记录开仓日期
+            self._entry_dates[stock_code] = signal.timestamp
 
         # 执行交易（无成本）- 使用原始价格，不扣除手续费和滑点
         cost_without_fees = quantity * original_price
@@ -305,6 +339,9 @@ class PortfolioManager:
         # 更新持仓（含成本）
         position.realized_pnl += pnl
         del self.positions[stock_code]
+
+        # 清除开仓日期
+        self._entry_dates.pop(stock_code, None)
 
         # 执行交易（无成本）- 使用原始价格，不扣除手续费和滑点
         proceeds_without_fees = quantity * original_price
@@ -441,10 +478,11 @@ class PortfolioManager:
         if len(returns) == 0:
             return {}
 
-        # 基础指标
-        total_return = (
-            values[-1] - self.config.initial_cash
-        ) / self.config.initial_cash
+        # 基础指标（不限制买入时，收益基准含补充资金）
+        total_invested = self.config.initial_cash + getattr(
+            self, "total_capital_injection", 0.0
+        )
+        total_return = (values[-1] - total_invested) / total_invested
 
         # 年化收益率
         if self.equity_curve:
@@ -488,6 +526,7 @@ class PortfolioManager:
             float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
         )
 
+        total_cap_inj = getattr(self, "total_capital_injection", 0.0)
         metrics = {
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),
@@ -501,6 +540,7 @@ class PortfolioManager:
             "losing_trades": len(losing_trades),
             "total_commission": float(self.total_commission),
             "total_slippage": float(self.total_slippage),
+            "total_capital_injection": float(total_cap_inj),
             "total_cost": float(self.total_commission + self.total_slippage),
         }
 

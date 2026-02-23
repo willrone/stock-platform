@@ -142,7 +142,7 @@ export default function BacktestProgressIndicator({
     if (showDetails) {
       return (
         <Box className={className} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <PlayIcon className="w-4 h-4" style={{ color: '#1976d2' }} />
               <Typography variant="body2" sx={{ fontWeight: 500 }}>

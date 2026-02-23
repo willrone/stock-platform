@@ -3,13 +3,13 @@
 验证模型文件可以被 ml_ensemble_strategy.py 正确加载
 """
 import sys
-sys.path.insert(0, '/Users/ronghui/Documents/GitHub/willrone/backend')
+sys.path.insert(0, '/Users/ronghui/Projects/willrone/backend')
 
 import pickle
 from pathlib import Path
 import numpy as np
 
-MODEL_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/models')
+MODEL_DIR = Path('/Users/ronghui/Projects/willrone/data/models')
 
 def test_model_loading():
     """测试模型加载"""

@@ -259,7 +259,7 @@ def run_multiprocess_backtest(
     from .data_loader import DataLoader
     # 使用传入的数据目录或默认绝对路径
     if data_dir is None:
-        data_dir = "/Users/ronghui/Documents/GitHub/willrone/data"
+        data_dir = "/Users/ronghui/Projects/willrone/data"
     
     logger.info(f"数据目录: {data_dir}")
     data_loader = DataLoader(data_dir=data_dir, max_workers=num_workers)

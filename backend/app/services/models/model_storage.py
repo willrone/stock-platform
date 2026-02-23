@@ -7,6 +7,7 @@ import json
 import os
 import pickle
 import shutil
+from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
@@ -155,9 +156,10 @@ class ModelStorage:
         ]:
             dir_path.mkdir(exist_ok=True)
 
-        # 模型缓存
-        self.model_cache: Dict[str, Any] = {}
-        self.metadata_cache: Dict[str, ModelMetadata] = {}
+        # 模型缓存（LRU，最多缓存 10 个模型）
+        self._max_cache_size = 10
+        self.model_cache: OrderedDict[str, Any] = OrderedDict()
+        self.metadata_cache: OrderedDict[str, ModelMetadata] = OrderedDict()
 
         logger.info(f"模型存储初始化完成: {self.storage_root}")
 
@@ -268,6 +270,7 @@ class ModelStorage:
             cache_key = f"{model_id}_{metadata.version}"
             if cache_key in self.model_cache:
                 logger.debug(f"从缓存加载模型: {model_id}")
+                self.model_cache.move_to_end(cache_key)
                 return self.model_cache[cache_key], metadata
 
             # 从文件加载
@@ -282,7 +285,11 @@ class ModelStorage:
             # 验证文件完整性
             current_hash = self._calculate_file_hash(model_file_path)
             if current_hash != metadata.model_file_hash:
-                logger.warning(f"模型文件哈希不匹配: {model_id}，可能文件已损坏")
+                raise ModelError(
+                    message=f"模型文件哈希不匹配: {model_id}，文件可能已被篡改或损坏",
+                    severity=ErrorSeverity.HIGH,
+                    context=ErrorContext(model_id=model_id),
+                )
 
             # 加载模型
             if JOBLIB_AVAILABLE:
@@ -294,8 +301,13 @@ class ModelStorage:
                 with open(model_file_path, "rb") as f:
                     model = pickle.load(f)
 
-            # 缓存模型
+            # 缓存模型（LRU 淘汰）
             self.model_cache[cache_key] = model
+            self.model_cache.move_to_end(cache_key)
+            if len(self.model_cache) > self._max_cache_size:
+                evicted_key, _ = self.model_cache.popitem(last=False)
+                self.metadata_cache.pop(evicted_key, None)
+                logger.debug(f"模型缓存已满，淘汰最久未使用: {evicted_key}")
 
             logger.info(f"模型加载成功: {model_id}, 版本: {metadata.version}")
             return model, metadata
@@ -417,12 +429,12 @@ class ModelStorage:
             logger.warning(f"模型备份失败: {model_id}, 错误: {e}")
 
     def _calculate_file_hash(self, file_path: Path) -> str:
-        """计算文件哈希"""
-        hash_md5 = hashlib.md5()
+        """计算文件SHA256哈希"""
+        hash_sha256 = hashlib.sha256()
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
 
     def get_storage_stats(self) -> Dict[str, Any]:
         """获取存储统计信息"""

@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 import warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """计算技术指标特征"""
@@ -261,6 +261,6 @@ if __name__ == '__main__':
     model, importance = train_model(data)
     
     # 保存模型
-    model_path = Path('/Users/ronghui/Documents/GitHub/willrone/experiments/lgbm_model.txt')
+    model_path = Path('/Users/ronghui/Projects/willrone/experiments/lgbm_model.txt')
     model.save_model(str(model_path))
     print(f"\n模型已保存到: {model_path}")

@@ -351,6 +351,7 @@ class BacktestTaskExecutor:
                     initial_cash=initial_cash,
                     commission_rate=strategy_config.get("commission_rate", 0.0003),
                     slippage_rate=strategy_config.get("slippage_rate", 0.0001),
+                    enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
                 )
 
                 # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）
@@ -1069,8 +1070,16 @@ class HyperparameterOptimizationTaskExecutor:
                 # 更新任务状态为运行中
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
 
-                # 创建进度回调
+                # 创建进度回调（节流：每 100 trials 或每 60 秒写一次 DB，减少 SQLite 写入压力）
+                # perf: P0-3 从 50 trials/30s 提升到 100 trials/60s，减少 SQLite 锁竞争
                 # 注意：StrategyHyperparameterOptimizer 的 progress_callback 签名已扩展，包含 trial 统计信息
+                import time as _time
+
+                PROGRESS_TRIAL_INTERVAL = 100  # 每 N 个 trials 更新一次（从 50 提升到 100）
+                PROGRESS_TIME_INTERVAL = 60.0  # 每 N 秒更新一次（从 30 提升到 60）
+                _last_db_update_time = _time.monotonic()
+                _last_db_update_trial = 0
+
                 def progress_callback(
                     trial_num,
                     n_trials,
@@ -1085,13 +1094,31 @@ class HyperparameterOptimizationTaskExecutor:
                     best_trial_number=None,
                     best_params=None,
                 ):
-                    progress = (trial_num / n_trials) * 100
+                    nonlocal _last_db_update_time, _last_db_update_trial
+
+                    progress = (trial_num / n_trials) * 100 if n_trials > 0 else 100.0
                     message = f"Trial {trial_num}/{n_trials}"
                     if score is not None:
                         message += f", Score: {score:.4f}"
 
                     if context.progress_callback:
                         context.progress_callback(progress, message)
+
+                    # 节流判断：最后一个 trial 必须更新
+                    now = _time.monotonic()
+                    is_last_trial = trial_num >= n_trials
+                    trials_since_update = trial_num - _last_db_update_trial
+                    time_since_update = now - _last_db_update_time
+                    should_update = (
+                        is_last_trial
+                        or trials_since_update >= PROGRESS_TRIAL_INTERVAL
+                        or time_since_update >= PROGRESS_TIME_INTERVAL
+                    )
+                    if not should_update:
+                        return
+
+                    _last_db_update_time = now
+                    _last_db_update_trial = trial_num
 
                     # 构建当前状态数据
                     current_result = {
@@ -1129,8 +1156,8 @@ class HyperparameterOptimizationTaskExecutor:
                     logger.error(error_msg)
                     raise ValueError(error_msg) from e
 
-                # 使用 n_jobs=1 避免多进程状态同步问题
-                optimizer = StrategyHyperparameterOptimizer(n_jobs=1)
+                # 启用并行 trials（Optuna RDBStorage + SQLite timeout=30s 支持并发访问）
+                optimizer = StrategyHyperparameterOptimizer(n_jobs=4)
 
                 # 创建新的事件循环来运行异步代码
                 new_loop = asyncio.new_event_loop()

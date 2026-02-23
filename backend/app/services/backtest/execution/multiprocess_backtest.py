@@ -259,7 +259,7 @@ def run_multiprocess_backtest(
     from .data_loader import DataLoader
     # 使用传入的数据目录或默认绝对路径
     if data_dir is None:
-        data_dir = "/Users/ronghui/Documents/GitHub/willrone/data"
+        data_dir = "/Users/ronghui/Projects/willrone/data"
     
     logger.info(f"数据目录: {data_dir}")
     data_loader = DataLoader(data_dir=data_dir, max_workers=num_workers)
@@ -322,6 +322,7 @@ def run_multiprocess_backtest(
         'commission_rate': backtest_config.commission_rate,
         'slippage_rate': backtest_config.slippage_rate,
         'max_position_size': backtest_config.max_position_size,
+        'enable_unlimited_buy': getattr(backtest_config, 'enable_unlimited_buy', False),
     }
     
     # 8. 启动多进程执行
@@ -394,13 +395,23 @@ def run_multiprocess_backtest(
     all_trades = []
     for r in successful_results:
         all_trades.extend(r['trades'])
+
+    # 合并补充资金（各 worker 平均，因 equity 为各 worker 平均）
+    merged_capital_injection = 0.0
+    if successful_results:
+        inj_list = [
+            r.get('performance_metrics', {}).get('total_capital_injection', 0.0)
+            for r in successful_results
+        ]
+        merged_capital_injection = sum(inj_list) / len(inj_list) if inj_list else 0.0
     
     # 计算合并后的绩效指标
     if merged_equity_curve:
         values = [v for _, v in merged_equity_curve]
         returns = pd.Series(values).pct_change().dropna()
         
-        total_return = (values[-1] - backtest_config.initial_cash) / backtest_config.initial_cash
+        total_invested = backtest_config.initial_cash + merged_capital_injection
+        total_return = (values[-1] - total_invested) / total_invested if total_invested > 0 else 0.0
         
         days = (merged_equity_curve[-1][0] - merged_equity_curve[0][0]).days
         annualized_return = (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
@@ -420,6 +431,7 @@ def run_multiprocess_backtest(
             'sharpe_ratio': float(sharpe_ratio),
             'max_drawdown': float(max_drawdown),
             'total_trades': len(all_trades),
+            'total_capital_injection': float(merged_capital_injection),
         }
     else:
         merged_metrics = {}

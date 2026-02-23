@@ -10,7 +10,8 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -47,8 +48,10 @@ import {
 } from '../../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
 
-export default function CreateTaskPage() {
+// 包裹 useSearchParams 的内部组件，避免 Suspense 问题
+function CreateTaskPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { models, selectedModel, setModels, setSelectedModel } = useDataStore();
   const { setCreating } = useTaskStore();
 
@@ -74,6 +77,12 @@ export default function CreateTaskPage() {
   const [configFormKey, setConfigFormKey] = useState(0);
   const [portfolioConfigKey, setPortfolioConfigKey] = useState(0);
   const [selectedPortfolioConfigId, setSelectedPortfolioConfigId] = useState('');
+  // 将 strategy_name 独立为单独的 state，避免与 formData 其他字段的更新互相干扰
+  const [strategyName, setStrategyName] = useState('moving_average');
+  // 标记策略名是否已被用户或 URL 参数设置，防止 loadStrategies 覆盖
+  const strategySetByUrlRef = useRef(false);
+  // 标记策略列表是否已加载过，防止 Strict Mode 双重执行导致重复请求
+  const strategiesLoadedRef = useRef(false);
   const [formData, setFormData] = useState({
     task_name: '',
     description: '',
@@ -82,15 +91,85 @@ export default function CreateTaskPage() {
     confidence_level: 95,
     risk_assessment: true,
     // 回测配置
-    strategy_name: 'moving_average',
     start_date: '',
     end_date: '',
     initial_cash: 100000,
     commission_rate: 0.0003,
     slippage_rate: 0.0001,
     enable_performance_profiling: false,
+    enable_unlimited_buy: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 标记 URL 参数是否已处理，防止重复执行
+  const urlParamsProcessedRef = useRef(false);
+
+  // 从 URL 参数恢复任务配置（重建任务功能）— 只在挂载时执行一次
+  useEffect(() => {
+    if (urlParamsProcessedRef.current) return;
+    urlParamsProcessedRef.current = true;
+
+    const rebuild = searchParams.get('rebuild');
+    if (rebuild === 'true') {
+      // 任务类型
+      const taskTypeParam = searchParams.get('task_type');
+      if (taskTypeParam === 'backtest' || taskTypeParam === 'prediction') {
+        setTaskType(taskTypeParam);
+      }
+
+      // 任务名称
+      const taskName = searchParams.get('task_name');
+      if (taskName) {
+        setFormData(prev => ({ ...prev, task_name: taskName }));
+      }
+
+      // 股票代码
+      const stockCodes = searchParams.get('stock_codes');
+      if (stockCodes) {
+        const codes = stockCodes.split(',').filter(c => c.trim());
+        setSelectedStocks(codes);
+      }
+
+      // 回测任务特定参数
+      if (taskTypeParam === 'backtest') {
+        const strategyNameParam = searchParams.get('strategy_name');
+        const startDate = searchParams.get('start_date');
+        const endDate = searchParams.get('end_date');
+        const initialCash = searchParams.get('initial_cash');
+        const commissionRate = searchParams.get('commission_rate');
+        const slippageRate = searchParams.get('slippage_rate');
+        const enableProfiling = searchParams.get('enable_performance_profiling');
+        const strategyConfigStr = searchParams.get('strategy_config');
+        const enableUnlimitedBuy = searchParams.get('enable_unlimited_buy');
+
+        if (strategyNameParam) {
+          setStrategyName(strategyNameParam);
+          strategySetByUrlRef.current = true;
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          start_date: startDate || prev.start_date,
+          end_date: endDate || prev.end_date,
+          initial_cash: initialCash ? parseFloat(initialCash) : prev.initial_cash,
+          commission_rate: commissionRate ? parseFloat(commissionRate) : prev.commission_rate,
+          slippage_rate: slippageRate ? parseFloat(slippageRate) : prev.slippage_rate,
+          enable_performance_profiling: enableProfiling === 'true',
+          enable_unlimited_buy: enableUnlimitedBuy === 'true',
+        }));
+
+        if (strategyConfigStr) {
+          try {
+            const config = JSON.parse(strategyConfigStr);
+            setStrategyConfig(config);
+          } catch (e) {
+            console.error('Failed to parse strategy_config:', e);
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 加载模型列表
   useEffect(() => {
@@ -112,35 +191,57 @@ export default function CreateTaskPage() {
 
   // 加载可用策略列表
   useEffect(() => {
+    let cancelled = false;
+
+    if (taskType !== 'backtest') {
+      // 切换离开回测时重置，以便切回来时重新加载
+      strategiesLoadedRef.current = false;
+      return;
+    }
+
+    // 防止 Strict Mode 双重执行导致重复请求
+    if (strategiesLoadedRef.current) return;
+
     const loadStrategies = async () => {
-      if (taskType === 'backtest') {
-        try {
-          const response = await fetch('/api/v1/backtest/strategies');
-          const data = await response.json();
-          if (data.success && data.data) {
-            setAvailableStrategies(data.data);
-            // 如果当前策略不在列表中，设置为第一个策略
-            if (
-              data.data.length > 0 &&
-              !data.data.find((s: any) => s.key === formData.strategy_name)
-            ) {
-              updateFormData('strategy_name', data.data[0].key);
-            }
+      try {
+        const response = await fetch('/api/v1/backtest/strategies');
+        if (cancelled) return;
+        const data = await response.json();
+        if (cancelled) return;
+
+        if (data.success && data.data) {
+          strategiesLoadedRef.current = true;
+          setAvailableStrategies(data.data);
+          // 如果 URL 参数已设置策略，不覆盖
+          if (strategySetByUrlRef.current) {
+            return;
           }
-        } catch (error) {
-          console.error('加载策略列表失败:', error);
+          // 使用函数式更新读取最新的 strategyName
+          setStrategyName(prev => {
+            const currentInList = data.data.find((s: any) => s.key === prev);
+            if (!currentInList && data.data.length > 0) {
+              return data.data[0].key;
+            }
+            return prev;
+          });
         }
+      } catch (error) {
+        console.error('加载策略列表失败:', error);
       }
     };
 
     loadStrategies();
+
+    return () => {
+      cancelled = true;
+    };
   }, [taskType]);
 
   // 加载已保存的配置列表
   useEffect(() => {
     const loadSavedConfigs = async () => {
       const targetStrategyName =
-        strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name;
+        strategyType === 'portfolio' ? 'portfolio' : strategyName;
       if (taskType === 'backtest' && targetStrategyName) {
         setLoadingConfigs(true);
         try {
@@ -157,7 +258,7 @@ export default function CreateTaskPage() {
     };
 
     loadSavedConfigs();
-  }, [taskType, formData.strategy_name, strategyType]);
+  }, [taskType, strategyName, strategyType]);
 
   useEffect(() => {
     setSelectedPortfolioConfigId('');
@@ -250,7 +351,7 @@ export default function CreateTaskPage() {
             }
           : {
               backtest_config: {
-                strategy_name: strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name,
+                strategy_name: strategyType === 'portfolio' ? 'portfolio' : strategyName,
                 start_date: formData.start_date,
                 end_date: formData.end_date,
                 initial_cash: formData.initial_cash,
@@ -262,9 +363,10 @@ export default function CreateTaskPage() {
                       ? {
                           strategies: portfolioConfig.strategies,
                           integration_method: portfolioConfig.integration_method,
+                          enable_unlimited_buy: formData.enable_unlimited_buy,
                         }
-                      : {}
-                    : strategyConfig,
+                      : { enable_unlimited_buy: formData.enable_unlimited_buy }
+                    : { ...strategyConfig, enable_unlimited_buy: formData.enable_unlimited_buy },
                 enable_performance_profiling: formData.enable_performance_profiling,
               },
             }),
@@ -297,16 +399,16 @@ export default function CreateTaskPage() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* 页面标题 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* ��面标题 */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
         <IconButton onClick={handleBack}>
           <ArrowLeft size={20} />
         </IconButton>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.5rem', md: '2.125rem' } }}>
             创建任务
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
             配置股票预测或回测任务参数
           </Typography>
         </Box>
@@ -482,9 +584,9 @@ export default function CreateTaskPage() {
                       const newType = e.target.value as 'single' | 'portfolio';
                       setStrategyType(newType);
                       if (newType === 'portfolio') {
-                        updateFormData('strategy_name', 'portfolio');
+                        setStrategyName('portfolio');
                       } else if (availableStrategies.length > 0) {
-                        updateFormData('strategy_name', availableStrategies[0].key);
+                        setStrategyName(availableStrategies[0].key);
                       }
                     }}
                   >
@@ -500,9 +602,9 @@ export default function CreateTaskPage() {
                     <FormControl fullWidth required disabled={availableStrategies.length === 0}>
                       <InputLabel>交易策略</InputLabel>
                       <Select
-                        value={formData.strategy_name}
+                        value={strategyName}
                         label="交易策略"
-                        onChange={e => updateFormData('strategy_name', e.target.value)}
+                        onChange={e => setStrategyName(e.target.value)}
                       >
                         {availableStrategies.map(strategy => (
                           <MenuItem key={strategy.key} value={strategy.key}>
@@ -520,17 +622,17 @@ export default function CreateTaskPage() {
                     </FormControl>
 
                     {/* 单策略配置表单 */}
-                    {formData.strategy_name &&
-                      formData.strategy_name !== 'portfolio' &&
+                    {strategyName &&
+                      strategyName !== 'portfolio' &&
                       (() => {
                         const selectedStrategy = availableStrategies.find(
-                          s => s.key === formData.strategy_name
+                          s => s.key === strategyName
                         );
                         if (selectedStrategy && selectedStrategy.parameters) {
                           return (
                             <StrategyConfigForm
-                              key={`${formData.strategy_name}-${configFormKey}`}
-                              strategyName={formData.strategy_name}
+                              key={`${strategyName}-${configFormKey}`}
+                              strategyName={strategyName}
                               parameters={selectedStrategy.parameters}
                               values={
                                 configFormKey > 0 && Object.keys(strategyConfig).length > 0
@@ -695,12 +797,32 @@ export default function CreateTaskPage() {
                     onChange={e => updateFormData('enable_performance_profiling', e.target.checked)}
                   />
                 </Box>
+
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Activity size={20} color="#1976d2" />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        不限制买入
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        启用后忽略仓位限制和现金保留，资金不足时自动补充，确保信号执行
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Switch
+                    checked={formData.enable_unlimited_buy}
+                    onChange={e => updateFormData('enable_unlimited_buy', e.target.checked)}
+                  />
+                </Box>
               </CardContent>
             </Card>
           )}
 
           {/* 提交按钮 */}
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
             <Button
               variant="contained"
               color="primary"
@@ -711,7 +833,7 @@ export default function CreateTaskPage() {
             >
               {loading ? '创建中...' : '创建任务'}
             </Button>
-            <Button variant="outlined" size="large" onClick={handleBack}>
+            <Button variant="outlined" size="large" onClick={handleBack} sx={{ minWidth: { sm: 100 } }}>
               取消
             </Button>
           </Box>
@@ -817,5 +939,14 @@ export default function CreateTaskPage() {
         </Box>
       </Box>
     </Box>
+  );
+}
+
+// 用 Suspense 包裹，防止 useSearchParams 导致整个页面 suspend/remount
+export default function CreateTaskPage() {
+  return (
+    <Suspense fallback={<Box sx={{ p: 4 }}><Typography>加载中...</Typography></Box>}>
+      <CreateTaskPageInner />
+    </Suspense>
   );
 }

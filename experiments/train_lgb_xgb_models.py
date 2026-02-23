@@ -19,8 +19,8 @@ warnings.filterwarnings('ignore')
 SEED = 42
 np.random.seed(SEED)
 
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
-MODEL_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/models')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
+MODEL_DIR = Path('/Users/ronghui/Projects/willrone/data/models')
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """计算技术指标特征"""

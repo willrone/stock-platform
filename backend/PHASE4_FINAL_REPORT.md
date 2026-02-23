@@ -224,7 +224,7 @@ merged_metrics = {}  # 重新计算指标
 
 **实际路径**：
 ```
-/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data/
+/Users/ronghui/Projects/willrone/data/parquet/stock_data/
 ```
 
 **解决方案**：
@@ -276,19 +276,19 @@ merged_metrics = {}  # 重新计算指标
 ### 新增文件
 
 1. **`multiprocess_backtest.py`**（450 行）
-   - 路径：`/Users/ronghui/Documents/GitHub/willrone/backend/app/services/backtest/execution/`
+   - 路径：`/Users/ronghui/Projects/willrone/backend/app/services/backtest/execution/`
    - 功能：多进程并行回测核心模块
 
 2. **`test_phase4_multiprocess.py`**（190 行）
-   - 路径：`/Users/ronghui/Documents/GitHub/willrone/backend/`
+   - 路径：`/Users/ronghui/Projects/willrone/backend/`
    - 功能：性能测试脚本
 
 3. **`PHASE4_PROGRESS.md`**
-   - 路径：`/Users/ronghui/Documents/GitHub/willrone/backend/`
+   - 路径：`/Users/ronghui/Projects/willrone/backend/`
    - 功能：进度跟踪文档
 
 4. **`PHASE4_FINAL_REPORT.md`**（本文件）
-   - 路径：`/Users/ronghui/Documents/GitHub/willrone/backend/`
+   - 路径：`/Users/ronghui/Projects/willrone/backend/`
    - 功能：最终报告
 
 ### 修改文件

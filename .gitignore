@@ -306,10 +306,12 @@ backend/models/
 !backend/models/.gitkeep
 
 # 缓存文件
-cache/
+/cache/
 .cache/
 backend/cache/
 frontend/.cache/
+# 保留 qlib cache 模块（Python 源码，非缓存数据）
+!backend/app/services/qlib/cache/
 
 # 临时文件
 tmp/

@@ -297,7 +297,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: { xs: 1, md: 0 } }}>
       {/* 统计信息卡片 */}
       {statistics && (
         <Box
@@ -311,7 +311,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     总交易次数
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
                     {statistics.total_trades}
                   </Typography>
                 </Box>
@@ -327,7 +327,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     胜率
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
                     {formatPercent(statistics.win_rate)}
                   </Typography>
                 </Box>
@@ -343,7 +343,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                   <Typography variant="caption" color="text.secondary">
                     盈亏比
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
                     {(statistics.profit_factor ?? 0).toFixed(2)}
                   </Typography>
                 </Box>
@@ -364,6 +364,7 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
                     sx={{
                       fontWeight: 600,
                       color: statistics.total_pnl >= 0 ? 'success.main' : 'error.main',
+                      fontSize: { xs: '1.1rem', md: '1.5rem' },
                     }}
                   >
                     {formatCurrency(statistics.total_pnl)}
@@ -421,9 +422,9 @@ export function TradeHistoryTable({ taskId, onTradeClick }: TradeHistoryTablePro
 
       {/* 交易记录表格 */}
       <Card>
-        <CardContent sx={{ p: 0 }}>
+        <CardContent sx={{ p: { xs: 1, md: 2 } }}>
           <Box sx={{ overflowX: 'auto', maxHeight: 600 }}>
-            <Table stickyHeader>
+            <Table stickyHeader sx={{ '& .MuiTableCell-root': { padding: { xs: '4px 8px', md: '16px' }, fontSize: { xs: '0.75rem', md: '0.875rem' } } }}>
               <TableHead>
                 <TableRow>
                   <TableCell>

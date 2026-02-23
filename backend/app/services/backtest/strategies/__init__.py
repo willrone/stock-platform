@@ -1,53 +1,52 @@
 """
-策略模块
+量化交易策略集合
 
-包含所有交易策略实现
+包含以下策略类型：
+1. 技术分析策略：布林带策略、随机指标策略、CCI策略
+2. 统计套利策略：配对交易策略、均值回归策略、协整策略
+3. 因子投资策略：价值因子策略、动量因子策略、低波动因子策略、多因子组合策略
 """
 
-# 高级策略
-from .strategies import (  # 技术分析策略; 统计套利策略; 因子投资策略; 高级策略工厂（向后兼容）
-    AdvancedStrategyFactory,
-    BollingerBandStrategy,
-    CCIStrategy,
-    CointegrationStrategy,
-    FactorStrategy,
-    LowVolatilityStrategy,
-    MeanReversionStrategy,
-    MomentumFactorStrategy,
-    MultiFactorStrategy,
-    PairsTradingStrategy,
-    StatisticalArbitrageStrategy,
-    StochasticStrategy,
-    ValueFactorStrategy,
-)
+# 基类
+from .base.statistical_arbitrage_base import StatisticalArbitrageStrategy
+from .base.factor_base import FactorStrategy
 
-# 统一的策略工厂
-from .strategy_factory import StrategyFactory
+# 技术分析策略
+from .technical.bollinger_band import BollingerBandStrategy
+from .technical.stochastic import StochasticStrategy
+from .technical.cci import CCIStrategy
 
-# 基础技术分析策略
-from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy, RSIStrategy
+# 统计套利策略
+from .statistical_arbitrage.pairs_trading import PairsTradingStrategy
+from .statistical_arbitrage.mean_reversion import MeanReversionStrategy
+from .statistical_arbitrage.cointegration import CointegrationStrategy
+
+# 因子投资策略
+from .factor.value_factor import ValueFactorStrategy
+from .factor.momentum_factor import MomentumFactorStrategy
+from .factor.low_volatility import LowVolatilityStrategy
+from .factor.multi_factor import MultiFactorStrategy
+
+# 工厂类
+from .factory import AdvancedStrategyFactory
 
 __all__ = [
-    # 基础技术分析策略
-    "MovingAverageStrategy",
-    "RSIStrategy",
-    "MACDStrategy",
-    # 高级技术分析策略
+    # 基类
+    "StatisticalArbitrageStrategy",
+    "FactorStrategy",
+    # 技术分析策略
     "BollingerBandStrategy",
     "StochasticStrategy",
     "CCIStrategy",
     # 统计套利策略
-    "StatisticalArbitrageStrategy",
     "PairsTradingStrategy",
     "MeanReversionStrategy",
     "CointegrationStrategy",
     # 因子投资策略
-    "FactorStrategy",
     "ValueFactorStrategy",
     "MomentumFactorStrategy",
     "LowVolatilityStrategy",
     "MultiFactorStrategy",
-    # 策略工厂
-    "StrategyFactory",
-    "AdvancedStrategyFactory",  # 向后兼容别名
+    # 工厂类
+    "AdvancedStrategyFactory",
 ]

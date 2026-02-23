@@ -11,7 +11,7 @@ import pandas as pd
 from datetime import datetime
 
 # 添加项目路径
-sys.path.insert(0, '/Users/ronghui/Documents/GitHub/willrone/backend')
+sys.path.insert(0, '/Users/ronghui/Projects/willrone/backend')
 
 try:
     from app.services.qlib.unified_qlib_training_engine import (

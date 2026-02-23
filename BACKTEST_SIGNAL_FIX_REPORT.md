@@ -16,8 +16,8 @@
 **原因**：
 - 默认 `data_dir = "backend/data"`
 - 项目根目录计算错误：`Path(__file__).parent.parent.parent.parent.parent` 
-- 实际解析到：`/Users/ronghui/Documents/GitHub/willrone/backend/backend/data`
-- 正确路径应该是：`/Users/ronghui/Documents/GitHub/willrone/data`
+- 实际解析到：`/Users/ronghui/Projects/willrone/backend/backend/data`
+- 正确路径应该是：`/Users/ronghui/Projects/willrone/data`
 
 **修复**：
 ```python

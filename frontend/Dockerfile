@@ -15,6 +15,10 @@ RUN npm config set registry https://registry.npmmirror.com && \
 COPY . .
 
 # 构建应用
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NEXT_PUBLIC_BACKEND_HOST=backend:8000
+ENV NEXT_PUBLIC_BACKEND_HOST=${NEXT_PUBLIC_BACKEND_HOST}
 RUN npm run build
 
 # 生产阶段

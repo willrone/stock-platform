@@ -111,6 +111,65 @@ class ModelTrainingRequest(BaseModel):
         default="random_search", description="超参数搜索策略"
     )
     hyperparameter_search_trials: int = Field(default=10, description="超参数搜索试验次数")
+    # === 统一训练体系新增字段 ===
+    feature_set: str = Field(
+        default="alpha158",
+        description="特征集: alpha158 / technical_62 / custom",
+    )
+    label_type: str = Field(
+        default="regression",
+        description="标签类型: regression / binary",
+    )
+    binary_threshold: float = Field(
+        default=0.003,
+        description="二分类阈值（仅 label_type=binary 时生效）",
+    )
+    split_method: str = Field(
+        default="ratio",
+        description="数据分割方式: ratio / hardcut",
+    )
+    train_end_date: Optional[str] = Field(
+        default=None,
+        description="训练集截止日期（仅 split_method=hardcut 时生效）",
+    )
+    val_end_date: Optional[str] = Field(
+        default=None,
+        description="验证集截止日期（仅 split_method=hardcut 时生效）",
+    )
+    # === 滚动训练配置（P2） ===
+    enable_rolling: bool = Field(
+        default=False,
+        description="是否启用滚动训练",
+    )
+    # === CSRankNorm 标签变换 ===
+    enable_cs_rank_norm: bool = Field(
+        default=False,
+        description="是否启用 CSRankNorm 标签变换（截面排名标准化）",
+    )
+    rolling_window_type: str = Field(
+        default="sliding",
+        description="滚动窗口类型: sliding / expanding",
+    )
+    rolling_step: int = Field(
+        default=60,
+        description="滚动步长（交易日）",
+    )
+    rolling_train_window: int = Field(
+        default=480,
+        description="训练窗口大小（交易日）",
+    )
+    rolling_valid_window: int = Field(
+        default=60,
+        description="验证窗口大小（交易日）",
+    )
+    enable_sample_decay: bool = Field(
+        default=True,
+        description="是否启用样本时间衰减权重",
+    )
+    sample_decay_rate: float = Field(
+        default=0.999,
+        description="样本衰减率（每天）",
+    )
 
 
 class RemoteDataSyncRequest(BaseModel):
@@ -139,6 +198,7 @@ class ParamSpaceConfig(BaseModel):
     type: str = Field(..., description="参数类型: int, float, categorical")
     low: Optional[float] = Field(None, description="最小值（数值类型）")
     high: Optional[float] = Field(None, description="最大值（数值类型）")
+    step: Optional[float] = Field(None, description="步长（网格搜索时使用）")
     choices: Optional[List[Any]] = Field(None, description="可选值列表（分类类型）")
     default: Optional[Any] = Field(None, description="默认值")
     enabled: bool = Field(default=True, description="是否启用优化")
@@ -174,8 +234,8 @@ class OptimizationConfig(BaseModel):
     n_trials: int = Field(
         default=50,
         ge=1,
-        le=1000,
-        description="试验次数，参数空间大时建议 300–500+，上限 1000",
+        le=10000,
+        description="试验次数，参数空间大时建议 300–500+，网格搜索可能需要更多",
     )
     optimization_method: str = Field(
         default="tpe", description="优化方法: tpe, random, grid, nsga2, motpe"
@@ -196,8 +256,8 @@ class HyperparameterOptimizationRequest(BaseModel):
     n_trials: int = Field(
         default=50,
         ge=1,
-        le=1000,
-        description="试验次数，上限 1000",
+        le=10000,
+        description="试验次数，网格搜索可能需要更多",
     )
     optimization_method: str = Field(default="tpe", description="优化方法")
     timeout: Optional[int] = Field(None, description="超时时间（秒）")

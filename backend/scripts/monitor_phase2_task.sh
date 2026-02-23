@@ -1,7 +1,7 @@
 #!/bin/bash
 
 TASK_ID="a5249513-5296-4711-8933-e74b6b525e85"
-PROGRESS_FILE="/Users/ronghui/Documents/GitHub/willrone/backend/PHASE2_PROGRESS.md"
+PROGRESS_FILE="/Users/ronghui/Projects/willrone/backend/PHASE2_PROGRESS.md"
 
 echo "开始监控任务: $TASK_ID"
 echo "按 Ctrl+C 停止监控"

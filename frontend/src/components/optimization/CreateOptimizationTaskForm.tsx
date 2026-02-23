@@ -23,6 +23,7 @@ import {
   FormHelperText,
 } from '@mui/material';
 import { Save, Loader2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import {
   OptimizationService,
   CreateOptimizationTaskRequest,
@@ -45,6 +46,7 @@ interface Strategy {
 export default function CreateOptimizationTaskForm({
   onTaskCreated,
 }: CreateOptimizationTaskFormProps) {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
@@ -63,6 +65,7 @@ export default function CreateOptimizationTaskForm({
     n_trials: 50,
     optimization_method: 'tpe',
     timeout: undefined as number | undefined,
+    enable_unlimited_buy: false,
   });
   const [paramSpace, setParamSpace] = useState<Record<string, ParamSpaceConfig>>({});
   const [objectiveWeights, setObjectiveWeights] = useState<Record<string, number>>({
@@ -76,6 +79,78 @@ export default function CreateOptimizationTaskForm({
 
   const isMultiObjectiveMethod =
     formData.optimization_method === 'nsga2' || formData.optimization_method === 'motpe';
+
+  // 从 URL 参数加载重建配置
+  useEffect(() => {
+    const isRebuild = searchParams.get('rebuild') === 'true';
+    if (!isRebuild) return;
+
+    console.log('[CreateOptimizationTaskForm] 检测到重建任务请求，开始加载配置...');
+
+    // 任务名称
+    const taskName = searchParams.get('task_name');
+    if (taskName) {
+      setFormData(prev => ({ ...prev, task_name: taskName }));
+    }
+
+    // 股票代码
+    const stockCodes = searchParams.get('stock_codes');
+    if (stockCodes) {
+      setSelectedStocks(stockCodes.split(','));
+    }
+
+    // 策略名称
+    const strategyName = searchParams.get('strategy_name');
+    if (strategyName) {
+      setFormData(prev => ({ 
+        ...prev, 
+        strategy_name: strategyName,
+        optimization_mode: strategyName === 'portfolio' ? 'portfolio' : 'single'
+      }));
+    }
+
+    // 日期范围
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+    if (startDate) setFormData(prev => ({ ...prev, start_date: startDate }));
+    if (endDate) setFormData(prev => ({ ...prev, end_date: endDate }));
+
+    // 优化配置
+    const objectiveMetric = searchParams.get('objective_metric');
+    const direction = searchParams.get('direction');
+    const nTrials = searchParams.get('n_trials');
+    const optimizationMethod = searchParams.get('optimization_method');
+    const timeout = searchParams.get('timeout');
+
+    const enableUnlimitedBuy = searchParams.get('enable_unlimited_buy');
+    if (enableUnlimitedBuy === 'true') {
+      setFormData(prev => ({ ...prev, enable_unlimited_buy: true }));
+    }
+
+    if (objectiveMetric) {
+      setFormData(prev => ({ 
+        ...prev, 
+        objective_metric: objectiveMetric.includes(',') ? objectiveMetric.split(',') : objectiveMetric 
+      }));
+    }
+    if (direction) setFormData(prev => ({ ...prev, direction: direction as 'maximize' | 'minimize' }));
+    if (nTrials) setFormData(prev => ({ ...prev, n_trials: parseInt(nTrials) }));
+    if (optimizationMethod) setFormData(prev => ({ ...prev, optimization_method: optimizationMethod }));
+    if (timeout) setFormData(prev => ({ ...prev, timeout: parseInt(timeout) }));
+
+    // 参数空间配置
+    const paramSpaceStr = searchParams.get('param_space');
+    if (paramSpaceStr) {
+      try {
+        const parsedParamSpace = JSON.parse(paramSpaceStr);
+        setParamSpace(parsedParamSpace);
+      } catch (error) {
+        console.error('[CreateOptimizationTaskForm] 解析参数空间配置失败:', error);
+      }
+    }
+
+    console.log('[CreateOptimizationTaskForm] 配置加载完成');
+  }, [searchParams]);
 
   // 加载策略列表
   useEffect(() => {
@@ -229,12 +304,21 @@ export default function CreateOptimizationTaskForm({
         topk: 10,
         buffer: 20,
         max_changes_per_day: 2,
+        enable_unlimited_buy: formData.enable_unlimited_buy,
       };
 
       const filteredParamSpace: Record<string, ParamSpaceConfig> = { ...paramSpace };
       delete filteredParamSpace.topk;
       delete filteredParamSpace.buffer;
       delete filteredParamSpace.max_changes_per_day;
+
+      // 单策略模式也传递 backtest_config，以便 enable_unlimited_buy 生效
+      const backtestConfigToSend =
+        formData.optimization_mode === 'portfolio'
+          ? fixedTradeConfig
+          : formData.enable_unlimited_buy
+            ? { enable_unlimited_buy: true }
+            : undefined;
 
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
@@ -252,7 +336,7 @@ export default function CreateOptimizationTaskForm({
         n_trials: formData.n_trials,
         optimization_method: formData.optimization_method,
         timeout: formData.timeout,
-        backtest_config: formData.optimization_mode === 'portfolio' ? fixedTradeConfig : undefined,
+        backtest_config: backtestConfigToSend,
       };
 
       console.log('创建优化任务请求:', request);
@@ -273,6 +357,7 @@ export default function CreateOptimizationTaskForm({
         n_trials: 50,
         optimization_method: 'tpe',
         timeout: undefined,
+        enable_unlimited_buy: false,
       });
       setSelectedStocks([]);
       setParamSpace({});
@@ -297,10 +382,10 @@ export default function CreateOptimizationTaskForm({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box>
-        <Typography variant="h5" component="h2" sx={{ fontWeight: 600, mb: 1 }}>
+        <Typography variant="h5" component="h2" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
           创建超参优化任务
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
           配置优化参数，寻找策略的最佳参数组合
         </Typography>
       </Box>
@@ -472,7 +557,7 @@ export default function CreateOptimizationTaskForm({
                   }}
                 >
                   <Box
-                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}
                   >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -529,7 +614,7 @@ export default function CreateOptimizationTaskForm({
                         <Box
                           sx={{
                             display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                            gridTemplateColumns: { xs: '1fr', md: formData.optimization_method === 'grid' ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)' },
                             gap: 2,
                           }}
                         >
@@ -553,6 +638,22 @@ export default function CreateOptimizationTaskForm({
                             fullWidth
                             helperText={config.type === 'int' ? '整数' : '浮点数'}
                           />
+                          {formData.optimization_method === 'grid' && (
+                            <TextField
+                              type="number"
+                              label="步长"
+                              value={config.step?.toString() || ''}
+                              onChange={e =>
+                                updateParamSpace(paramName, 'step', parseFloat(e.target.value))
+                              }
+                              fullWidth
+                              helperText={
+                                config.low !== undefined && config.high !== undefined && config.step
+                                  ? `${Math.floor((config.high - config.low) / config.step) + 1} 个值`
+                                  : '网格搜索必填'
+                              }
+                            />
+                          )}
                         </Box>
                       )}
                     </>
@@ -747,8 +848,8 @@ export default function CreateOptimizationTaskForm({
             onChange={e =>
               setFormData(prev => ({ ...prev, n_trials: parseInt(e.target.value) || 50 }))
             }
-            inputProps={{ min: 10, max: 1000 }}
-            helperText="参数空间较大时建议 300–500+，上限 1000"
+            inputProps={{ min: 10, max: 10000 }}
+            helperText={formData.optimization_method === 'grid' ? '网格搜索：应等于所有参数值的笛卡尔积数量' : '参数空间较大时建议 300–500+，上限 10000'}
             fullWidth
           />
 
@@ -777,10 +878,28 @@ export default function CreateOptimizationTaskForm({
             >
               <MenuItem value="tpe">TPE (Tree-structured Parzen Estimator)</MenuItem>
               <MenuItem value="random">随机搜索</MenuItem>
+              <MenuItem value="grid">网格搜索 (Grid Search)</MenuItem>
               <MenuItem value="nsga2">NSGA-II (多目标)</MenuItem>
               <MenuItem value="motpe">MOTPE (多目标)</MenuItem>
             </Select>
           </FormControl>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                不限制买入
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                启用后忽略仓位限制和现金保留，资金不足时自动补充
+              </Typography>
+            </Box>
+            <Switch
+              checked={formData.enable_unlimited_buy}
+              onChange={e =>
+                setFormData(prev => ({ ...prev, enable_unlimited_buy: e.target.checked }))
+              }
+            />
+          </Box>
 
           <TextField
             type="number"
@@ -798,13 +917,15 @@ export default function CreateOptimizationTaskForm({
         </CardContent>
       </Card>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: { xs: 'stretch', sm: 'flex-end' }, gap: 2 }}>
         <Button
           variant="contained"
           color="primary"
           onClick={handleSubmit}
           disabled={loading}
           startIcon={!loading && <Save size={16} />}
+          fullWidth={false}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           {loading ? '创建中...' : '创建优化任务'}
         </Button>

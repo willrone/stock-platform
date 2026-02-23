@@ -8,7 +8,7 @@ from datetime import datetime
 import sys
 import os
 
-sys.path.insert(0, '/Users/ronghui/Documents/GitHub/willrone/backend')
+sys.path.insert(0, '/Users/ronghui/Projects/willrone/backend')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.settings')
 
 from app.services.qlib.enhanced_qlib_provider import Alpha158Calculator
@@ -18,7 +18,7 @@ from app.core.config import settings
 async def test_handler():
     """测试handler计算所有158个因子"""
     # 加载真实数据
-    parquet_path = Path('/Users/ronghui/Documents/GitHub/willrone/backend/data/parquet/stock_data/002463_SZ.parquet')
+    parquet_path = Path('/Users/ronghui/Projects/willrone/backend/data/parquet/stock_data/002463_SZ.parquet')
     data = pd.read_parquet(parquet_path)
     data['date'] = pd.to_datetime(data['date'])
     data = data.set_index('date')

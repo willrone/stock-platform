@@ -65,8 +65,14 @@ class BacktestConfig:
     take_profit_pct: float = 0.15  # 止盈比例
     rebalance_frequency: str = "daily"  # 调仓频率
 
+    # P0-2: 最大回撤熔断（None 或 0 表示不启用）
+    max_drawdown_pct: Optional[float] = None
+
+    # 不限制买入模式：启用时忽略单股仓位限制、5%现金保留，资金不足时自动补充
+    enable_unlimited_buy: bool = False
+
     # 性能：大规模回测默认不需要每天的完整组合快照；
     # equity 曲线单独记录，不受该开关影响。
     record_portfolio_history: bool = True
-    portfolio_history_stride: int = 1  # >1 表示降采样（每 stride 天记录一次）
+    portfolio_history_stride: int = 5  # 性能优化: 默认每5天记录一次快照，减少内存和I/O开销
     record_positions_in_history: bool = True  # False 时快照不包含 positions 明细

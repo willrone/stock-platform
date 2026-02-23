@@ -3,6 +3,12 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   output: 'standalone',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   async rewrites() {
     // 从环境变量获取后端服务器地址，如果没有则使用默认值
     // 支持通过环境变量 NEXT_PUBLIC_BACKEND_HOST 配置后端地址

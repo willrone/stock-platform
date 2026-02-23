@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # ==================== 配置 ====================
-DATA_DIR = Path('/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data')
+DATA_DIR = Path('/Users/ronghui/Projects/willrone/data/parquet/stock_data')
 TRAIN_START = '2018-01-01'
 TRAIN_END = '2022-12-31'
 TEST_START = '2023-01-01'

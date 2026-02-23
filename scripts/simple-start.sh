@@ -306,7 +306,7 @@ start_frontend() {
     cd "$PROJECT_ROOT/frontend"
     
     # 后台启动前端服务
-    nohup npm run dev > ../data/logs/frontend.log 2>&1 &
+    nohup env HOST=0.0.0.0 npm run dev > ../data/logs/frontend.log 2>&1 &
     frontend_pid=$!
     echo $frontend_pid > ../data/frontend.pid
     

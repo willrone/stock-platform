@@ -579,14 +579,14 @@ export function PerformanceBreakdown({
           }}
         >
           <Card>
-            <CardContent sx={{ p: 2 }}>
+            <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingUp size={20} color="#1976d2" />
-                <Box>
+                <Box sx={{ overflow: 'hidden' }}>
                   <Typography variant="caption" color="text.secondary">
                     平均年化收益
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {formatPercent(yearlyStats.avgReturn)}
                   </Typography>
                 </Box>
@@ -595,14 +595,14 @@ export function PerformanceBreakdown({
           </Card>
 
           <Card>
-            <CardContent sx={{ p: 2 }}>
+            <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Activity size={20} color="#9c27b0" />
-                <Box>
+                <Box sx={{ overflow: 'hidden' }}>
                   <Typography variant="caption" color="text.secondary">
                     平均波动率
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {formatPercent(yearlyStats.avgVolatility)}
                   </Typography>
                 </Box>
@@ -611,14 +611,14 @@ export function PerformanceBreakdown({
           </Card>
 
           <Card>
-            <CardContent sx={{ p: 2 }}>
+            <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Target size={20} color="#2e7d32" />
-                <Box>
+                <Box sx={{ overflow: 'hidden' }}>
                   <Typography variant="caption" color="text.secondary">
                     平均夏普比率
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {formatRatio(yearlyStats.avgSharpe)}
                   </Typography>
                 </Box>
@@ -627,14 +627,14 @@ export function PerformanceBreakdown({
           </Card>
 
           <Card>
-            <CardContent sx={{ p: 2 }}>
+            <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Clock size={20} color="#ed6c02" />
-                <Box>
+                <Box sx={{ overflow: 'hidden' }}>
                   <Typography variant="caption" color="text.secondary">
                     回测年数
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {yearlyStats.totalYears} 年
                   </Typography>
                 </Box>
@@ -651,27 +651,28 @@ export function PerformanceBreakdown({
         >
           <Card>
             <CardHeader
+              sx={{ px: { xs: 1.5, md: 2 }, pt: { xs: 1.5, md: 2 }, pb: 0 }}
               title={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Award size={20} color="#2e7d32" />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  <Typography sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1rem', md: '1.25rem' } }}>
                     最佳年份
                   </Typography>
                 </Box>
               }
             />
-            <CardContent>
+            <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                <Box sx={{ overflow: 'hidden' }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2rem' } }}>
                     {yearlyStats.bestYear.year}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     年化收益率
                   </Typography>
                 </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>
+                <Box sx={{ textAlign: 'right', overflow: 'hidden' }}>
+                  <Typography sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {formatPercent(yearlyStats.bestYear.annual_return)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -684,27 +685,28 @@ export function PerformanceBreakdown({
 
           <Card>
             <CardHeader
+              sx={{ px: { xs: 1.5, md: 2 }, pt: { xs: 1.5, md: 2 }, pb: 0 }}
               title={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <TrendingDown size={20} color="#d32f2f" />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                  <Typography sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1rem', md: '1.25rem' } }}>
                     最差年份
                   </Typography>
                 </Box>
               }
             />
-            <CardContent>
+            <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                <Box sx={{ overflow: 'hidden' }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2rem' } }}>
                     {yearlyStats.worstYear.year}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     年化收益率
                   </Typography>
                 </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main' }}>
+                <Box sx={{ textAlign: 'right', overflow: 'hidden' }}>
+                  <Typography sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                     {formatPercent(yearlyStats.worstYear.annual_return)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -775,7 +777,7 @@ export function PerformanceBreakdown({
                       width: '100%',
                     }}
                   >
-                    <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '0.95rem', md: '1.25rem' } }}>
                       月度表现热力图
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
@@ -848,7 +850,7 @@ export function PerformanceBreakdown({
                             key={quarter}
                             sx={{
                               textAlign: 'center',
-                              p: 2,
+                              p: { xs: 1.5, md: 2 },
                               border: 1,
                               borderColor: 'divider',
                               borderRadius: 1,
@@ -858,9 +860,11 @@ export function PerformanceBreakdown({
                               {quarter.toUpperCase()}
                             </Typography>
                             <Typography
-                              variant="h5"
                               sx={{
                                 fontWeight: 600,
+                                fontSize: { xs: '1.1rem', md: '1.5rem' },
+                                overflow: 'hidden',
+                                wordBreak: 'break-word',
                                 color: performance >= 0 ? 'success.main' : 'error.main',
                               }}
                             >
@@ -895,7 +899,7 @@ export function PerformanceBreakdown({
                           <Typography variant="body2" sx={{ color: 'success.dark' }}>
                             {monthNames[seasonalAnalysis.best_month.month - 1]}
                           </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                          <Typography sx={{ fontWeight: 600, color: 'success.dark', fontSize: { xs: '1rem', md: '1.25rem' } }}>
                             {formatPercent(seasonalAnalysis.best_month.avg_return)}
                           </Typography>
                         </Box>
@@ -918,7 +922,7 @@ export function PerformanceBreakdown({
                           <Typography variant="body2" sx={{ color: 'error.dark' }}>
                             {monthNames[seasonalAnalysis.worst_month.month - 1]}
                           </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.dark' }}>
+                          <Typography sx={{ fontWeight: 600, color: 'error.dark', fontSize: { xs: '1rem', md: '1.25rem' } }}>
                             {formatPercent(seasonalAnalysis.worst_month.avg_return)}
                           </Typography>
                         </Box>
@@ -933,9 +937,9 @@ export function PerformanceBreakdown({
           {activeTab === 'yearly' && (
             <Card>
               <CardHeader title="年度绩效统计" />
-              <CardContent sx={{ p: 0 }}>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table>
+              <CardContent sx={{ p: { xs: 0, md: 0 } }}>
+                <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+                  <Table sx={{ '& .MuiTableCell-root': { px: { xs: 1, md: 2 }, py: { xs: 0.75, md: 1 }, fontSize: { xs: '0.75rem', md: '0.875rem' } } }}>
                     <TableHead>
                       <TableRow>
                         <TableCell>年份</TableCell>
@@ -1035,7 +1039,7 @@ export function PerformanceBreakdown({
                       <Box
                         sx={{
                           textAlign: 'center',
-                          p: 2,
+                          p: { xs: 1.5, md: 2 },
                           border: 1,
                           borderColor: 'divider',
                           borderRadius: 1,
@@ -1044,7 +1048,7 @@ export function PerformanceBreakdown({
                         <Typography variant="caption" color="text.secondary">
                           跟踪误差
                         </Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                           {formatPercent(benchmarkComparison.tracking_error)}
                         </Typography>
                       </Box>
@@ -1052,7 +1056,7 @@ export function PerformanceBreakdown({
                       <Box
                         sx={{
                           textAlign: 'center',
-                          p: 2,
+                          p: { xs: 1.5, md: 2 },
                           border: 1,
                           borderColor: 'divider',
                           borderRadius: 1,
@@ -1061,7 +1065,7 @@ export function PerformanceBreakdown({
                         <Typography variant="caption" color="text.secondary">
                           信息比率
                         </Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                           {formatRatio(benchmarkComparison.information_ratio)}
                         </Typography>
                       </Box>
@@ -1069,7 +1073,7 @@ export function PerformanceBreakdown({
                       <Box
                         sx={{
                           textAlign: 'center',
-                          p: 2,
+                          p: { xs: 1.5, md: 2 },
                           border: 1,
                           borderColor: 'divider',
                           borderRadius: 1,
@@ -1078,7 +1082,7 @@ export function PerformanceBreakdown({
                         <Typography variant="caption" color="text.secondary">
                           Beta系数
                         </Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: { xs: '1.1rem', md: '1.5rem' }, overflow: 'hidden', wordBreak: 'break-word' }}>
                           {formatRatio(benchmarkComparison.beta)}
                         </Typography>
                       </Box>
@@ -1086,7 +1090,7 @@ export function PerformanceBreakdown({
                       <Box
                         sx={{
                           textAlign: 'center',
-                          p: 2,
+                          p: { xs: 1.5, md: 2 },
                           border: 1,
                           borderColor: 'divider',
                           borderRadius: 1,
@@ -1096,9 +1100,11 @@ export function PerformanceBreakdown({
                           Alpha系数
                         </Typography>
                         <Typography
-                          variant="h5"
                           sx={{
                             fontWeight: 600,
+                            fontSize: { xs: '1.1rem', md: '1.5rem' },
+                            overflow: 'hidden',
+                            wordBreak: 'break-word',
                             color: benchmarkComparison.alpha >= 0 ? 'success.main' : 'error.main',
                           }}
                         >
@@ -1118,7 +1124,7 @@ export function PerformanceBreakdown({
                         <Typography variant="body2" sx={{ color: 'primary.dark' }}>
                           相关系数
                         </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.dark' }}>
+                        <Typography sx={{ fontWeight: 600, color: 'primary.dark', fontSize: { xs: '1rem', md: '1.25rem' } }}>
                           {formatRatio(benchmarkComparison.correlation)}
                         </Typography>
                       </Box>

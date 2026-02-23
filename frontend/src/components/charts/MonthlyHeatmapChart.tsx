@@ -306,14 +306,16 @@ export default function MonthlyHeatmapChart({
             <Box
               sx={{
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 justifyContent: 'space-between',
                 width: '100%',
+                gap: 1,
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Calendar size={20} color="#1976d2" />
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                   月度收益热力图
                 </Typography>
                 <Tooltip title="显示每月收益率的分布，帮助识别季节性模式">
@@ -337,9 +339,11 @@ export default function MonthlyHeatmapChart({
             <Box
               sx={{
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 justifyContent: 'space-between',
                 width: '100%',
+                gap: 1,
               }}
             >
               <FormControl size="small" sx={{ minWidth: 128 }}>
@@ -394,7 +398,7 @@ export default function MonthlyHeatmapChart({
                       表现最佳月份
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                         {MONTH_NAMES[bestMonth.month - 1]}
                       </Typography>
                       <Chip
@@ -422,7 +426,7 @@ export default function MonthlyHeatmapChart({
                       表现最差月份
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                         {MONTH_NAMES[worstMonth.month - 1]}
                       </Typography>
                       <Chip
@@ -440,17 +444,19 @@ export default function MonthlyHeatmapChart({
         }
       />
 
-      <CardContent>
-        <Box ref={chartRef} sx={{ height, width: '100%', minHeight: 400 }} />
+      <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Box ref={chartRef} sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 500 }} />
+        </Box>
 
         {/* 月度详细统计表格 */}
         {showStatistics && (
           <Box sx={{ mt: 3 }}>
-            <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2 }}>
+            <Typography variant="h6" component="h4" sx={{ fontWeight: 600, mb: 2, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
               月度统计详情
             </Typography>
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
+            <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: { xs: 550, sm: 700 } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>月份</TableCell>

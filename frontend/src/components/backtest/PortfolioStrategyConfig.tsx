@@ -274,9 +274,9 @@ export function PortfolioStrategyConfig({
             <Card key={`${strategy.name}_${index}`} variant="outlined">
               <CardHeader
                 title={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <TrendingUp size={18} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                       {strategyInfo?.name || strategy.name}
                     </Typography>
                     <Chip
@@ -336,11 +336,11 @@ export function PortfolioStrategyConfig({
 
                   {/* 权重配置 */}
                   <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', mb: 1, gap: 0.5 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         权重
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                         原始: {strategy.weight.toFixed(2)} | 归一化:{' '}
                         {(normalizedWeight * 100).toFixed(1)}%
                       </Typography>

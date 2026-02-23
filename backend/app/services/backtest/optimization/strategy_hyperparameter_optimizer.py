@@ -21,7 +21,7 @@ from loguru import logger
 try:
     import optuna
     from optuna.pruners import MedianPruner, HyperbandPruner
-    from optuna.samplers import NSGAIISampler, TPESampler
+    from optuna.samplers import NSGAIISampler, TPESampler, GridSampler
     from optuna.storages import RDBStorage
 except ImportError as e:
     logger.error(f"无法导入 optuna 模块: {e}")
@@ -56,6 +56,57 @@ class StrategyHyperparameterOptimizer:
         os.makedirs(self._storage_dir, exist_ok=True)
         
         logger.info(f"StrategyHyperparameterOptimizer 初始化: n_jobs={n_jobs}, persistent={use_persistent_storage}")
+
+    @staticmethod
+    def _build_grid_search_space(
+        param_space: Dict[str, Any],
+    ) -> Dict[str, list]:
+        """
+        从 param_space 构建 GridSampler 所需的离散搜索空间。
+
+        GridSampler 要求格式: {"param_name": [v1, v2, v3, ...]}
+        对于 int/float 类型，使用 step 字段离散化；无 step 则自动推断。
+        对于 categorical 类型，直接使用 choices。
+
+        Args:
+            param_space: 参数空间定义
+
+        Returns:
+            GridSampler 兼容的搜索空间字典
+        """
+        import numpy as np
+
+        search_space: Dict[str, list] = {}
+
+        for name, cfg in param_space.items():
+            if not cfg.get("enabled", True):
+                continue
+
+            param_type = cfg.get("type", "float")
+
+            if param_type == "categorical":
+                choices = cfg.get("choices", [])
+                if choices:
+                    search_space[name] = list(choices)
+                continue
+
+            low = cfg.get("low")
+            high = cfg.get("high")
+            if low is None or high is None:
+                continue
+
+            step = cfg.get("step")
+
+            if param_type == "int":
+                low_i, high_i = int(low), int(high)
+                step_i = int(step) if step else max(1, (high_i - low_i) // 10)
+                search_space[name] = list(range(low_i, high_i + 1, step_i))
+            elif param_type == "float":
+                step_f = float(step) if step else (high - low) / 10.0
+                values = np.arange(low, high + step_f * 0.5, step_f).tolist()
+                search_space[name] = [round(v, 6) for v in values]
+
+        return search_space
 
     async def optimize_strategy_parameters(
         self,
@@ -120,9 +171,19 @@ class StrategyHyperparameterOptimizer:
         )
 
         # 预加载数据到缓存（避免每个 trial 重复加载）
+        # perf: 创建临时 DataLoader 用于预加载，确保缓存真正生效
+        # 之前未传 data_loader 导致 preload_async 直接返回 0，缓存完全失效
+        from app.services.backtest.execution.data_loader import DataLoader as _DataLoader
+        _temp_loader = _DataLoader(
+            data_dir=str(settings.DATA_ROOT_PATH),
+            max_workers=4,
+        )
         logger.info(f"预加载股票数据: {len(stock_codes)} 只股票")
-        await self._data_cache.preload_async(stock_codes, start_date, end_date)
-        logger.info("数据预加载完成")
+        preloaded_count = await self._data_cache.preload_async(
+            stock_codes, start_date, end_date,
+            data_loader=_temp_loader.load_stock_data,
+        )
+        logger.info(f"数据预加载完成: {preloaded_count} 只股票已缓存")
 
         # 创建 SQLite 存储（支持断点续跑和并行）
         #
@@ -189,6 +250,20 @@ class StrategyHyperparameterOptimizer:
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
             elif optimization_method == "random":
                 sampler = optuna.samplers.RandomSampler(seed=42)
+            elif optimization_method == "grid":
+                grid_search_space = self._build_grid_search_space(param_space)
+                if not grid_search_space:
+                    logger.warning("网格搜索空间为空，回退到 TPE")
+                    sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
+                else:
+                    grid_total = 1
+                    for vals in grid_search_space.values():
+                        grid_total *= len(vals)
+                    logger.info(
+                        f"网格搜索空间: {len(grid_search_space)} 个参数, "
+                        f"共 {grid_total} 个组合"
+                    )
+                    sampler = GridSampler(grid_search_space)
             else:
                 sampler = TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
@@ -196,22 +271,65 @@ class StrategyHyperparameterOptimizer:
                 study_name=study_name,
                 direction=direction,
                 sampler=sampler,
-                pruner=pruner,
+                pruner=pruner if optimization_method != "grid" else None,
                 storage=storage,
                 load_if_exists=True  # 支持断点续跑
             )
 
         # 注入先验知识：将默认参数作为第一个 trial，加速收敛
+        # 网格搜索不需要注入（GridSampler 会遍历所有组合）
         default_params = {}
-        for param_name, param_config in param_space.items():
-            if param_config.get("enabled", True) and "default" in param_config:
-                default_params[param_name] = param_config["default"]
+        if optimization_method != "grid":
+            for param_name, param_config in param_space.items():
+                if param_config.get("enabled", True) and "default" in param_config:
+                    default_params[param_name] = param_config["default"]
         if default_params and not is_multi_objective:
             try:
                 study.enqueue_trial(default_params)
                 logger.info(f"注入默认参数作为初始 trial: {list(default_params.keys())}")
             except Exception as e:
                 logger.warning(f"注入默认参数失败: {e}")
+
+        # 断点续跑：扣除已完成的 trials，避免重复执行
+        existing_completed = len([
+            t for t in study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ])
+        if existing_completed > 0:
+            remaining = max(0, n_trials - existing_completed)
+            logger.info(
+                f"断点续跑: 已有 {existing_completed} 个已完成 trials，"
+                f"原计划 {n_trials} 个，剩余需执行 {remaining} 个"
+            )
+            n_trials = remaining
+            if n_trials <= 0:
+                logger.info("所有 trials 已完成，无需继续优化")
+                # 直接返回已有结果，避免 n_trials=0 导致后续除零错误
+                completed_trials = [
+                    t for t in study.trials
+                    if t.state == optuna.trial.TrialState.COMPLETE
+                ]
+                best_trial = study.best_trial if not is_multi_objective and completed_trials else None
+                return {
+                    "success": True,
+                    "strategy_name": strategy_name,
+                    "best_params": best_trial.params if best_trial else None,
+                    "best_score": best_trial.value if best_trial else None,
+                    "best_trial_number": best_trial.number if best_trial else None,
+                    "objective_metric": objective_metric,
+                    "n_trials": existing_completed,
+                    "completed_trials": existing_completed,
+                    "running_trials": 0,
+                    "pruned_trials": len([
+                        t for t in study.trials
+                        if t.state == optuna.trial.TrialState.PRUNED
+                    ]),
+                    "failed_trials": len([
+                        t for t in study.trials
+                        if t.state == optuna.trial.TrialState.FAIL
+                    ]),
+                    "message": f"断点续跑: 所有 {existing_completed} 个 trials 已完成，无需继续",
+                }
 
         # 创建回测执行器
         try:
@@ -222,10 +340,33 @@ class StrategyHyperparameterOptimizer:
                 data_dir=str(settings.DATA_ROOT_PATH),
                 enable_performance_profiling=enable_perf,
             )
-            logger.info(f"回测执行器已创建，数据目录: {settings.DATA_ROOT_PATH}")
+            logger.info(f"回测执���器已创建，数据目录: {settings.DATA_ROOT_PATH}")
         except Exception as e:
             logger.error(f"创建回测执行器失败: {e}", exc_info=True)
             raise
+
+        # perf: P0-1 一次性加载所有股票数据到内存，供所有 trial 复用
+        # 避免每个 trial 重复调用 load_multiple_stocks() 读取 500 个 parquet 文件
+        logger.info(f"一次性加载 {len(stock_codes)} 只股票数据到内存...")
+        _preloaded_stock_data = executor.data_loader.load_multiple_stocks(
+            stock_codes, start_date, end_date
+        )
+        logger.info(
+            f"股票数据加载完成: {len(_preloaded_stock_data)} 只股票, "
+            f"总记录数: {sum(len(df) for df in _preloaded_stock_data.values())}"
+        )
+
+        # perf: P0-2 预计算 trading_dates，所有 trial 共享同一份
+        # trading_dates 只取决于股票数据和日期范围，与策略参数无关
+        from app.services.backtest.execution.data_preprocessor import DataPreprocessor
+        _preprocessor = DataPreprocessor()
+        _precomputed_trading_dates = _preprocessor.get_trading_calendar(
+            _preloaded_stock_data, start_date, end_date
+        )
+        _precomputed_context = {
+            "trading_dates": _precomputed_trading_dates,
+        }
+        logger.info(f"预计算 trading_dates 完成: {len(_precomputed_trading_dates)} 个交易日")
 
         # 默认回测配置
         if backtest_config is None:
@@ -235,11 +376,8 @@ class StrategyHyperparameterOptimizer:
                 "slippage_rate": 0.0001,
             }
 
-        backtest_cfg = BacktestConfig(
-            initial_cash=backtest_config.get("initial_cash", 100000.0),
-            commission_rate=backtest_config.get("commission_rate", 0.0003),
-            slippage_rate=backtest_config.get("slippage_rate", 0.0001),
-        )
+        # 基础回测配置（止盈止损会在每个 trial 中根据搜索参数动态覆盖）
+        _base_backtest_config = backtest_config
 
         # 定义目标函数
         def objective(trial: optuna.Trial):
@@ -274,6 +412,17 @@ class StrategyHyperparameterOptimizer:
 
                 # 记录采样到的参数（用于调试）
                 logger.info(f"Trial {trial.number}: 采样参数 = {strategy_params}")
+
+                # 防御：如果采样失败（并发竞争导致空参数），直接返回最差分数
+                if not strategy_params or all(v is None for v in strategy_params.values()):
+                    logger.warning(f"Trial {trial.number}: 采样参数为空，跳过本轮")
+                    if is_multi_objective:
+                        return tuple(
+                            [float("-inf") if objective_config.get("direction", "maximize") == "maximize" else float("inf")]
+                            * len(objective_metric)
+                        )
+                    else:
+                        return float("-inf") if objective_config.get("direction", "maximize") == "maximize" else float("inf")
 
                 # Build strategy_config for backtest.
                 # - single strategy: use sampled params directly
@@ -342,6 +491,17 @@ class StrategyHyperparameterOptimizer:
                 else:
                     strategy_config_payload = strategy_params
 
+                # 动态构建 BacktestConfig，将搜索参数中的止盈止损传入
+                _bc = _base_backtest_config or {}
+                backtest_cfg = BacktestConfig(
+                    initial_cash=_bc.get("initial_cash", 100000.0),
+                    commission_rate=_bc.get("commission_rate", 0.0003),
+                    slippage_rate=_bc.get("slippage_rate", 0.0001),
+                    enable_unlimited_buy=_bc.get("enable_unlimited_buy", False),
+                    stop_loss_pct=strategy_params.get("stop_loss", _bc.get("stop_loss_pct", 0.05)),
+                    take_profit_pct=strategy_params.get("take_profit", _bc.get("take_profit_pct", 0.15)),
+                )
+
                 # 运行回测（在同步函数中运行异步代码）
                 # 在 Optuna 的 trial 函数中，需要安全地运行异步代码
                 # 使用新的事件循环，避免与外部事件循环冲突
@@ -363,6 +523,8 @@ class StrategyHyperparameterOptimizer:
                                         end_date=end_date,
                                         strategy_config=strategy_config_payload,
                                         backtest_config=backtest_cfg,
+                                        preloaded_stock_data=_preloaded_stock_data,
+                                        precomputed_context=_precomputed_context,
                                     )
                                 )
                             finally:
@@ -383,6 +545,8 @@ class StrategyHyperparameterOptimizer:
                                 end_date=end_date,
                                 strategy_config=strategy_config_payload,
                                 backtest_config=backtest_cfg,
+                                preloaded_stock_data=_preloaded_stock_data,
+                                precomputed_context=_precomputed_context,
                             )
                         )
                     finally:
@@ -708,14 +872,15 @@ class StrategyHyperparameterOptimizer:
                     best_params=None,
                 )
 
-            # 启用并行优化（n_jobs 控制并发数）
-            # 注意：SQLite 存储支持多进程并发访问
-            logger.info(f"开始优化: n_trials={n_trials}, n_jobs={self.n_jobs}, timeout={timeout}")
+            # GridSampler 在 SQLite 存储 + 多线程下存在竞争条件（同一 trial 被多个 worker 领取），
+            # 强制串行执行以避免 "Cannot tell a COMPLETE trial" 错误。
+            effective_n_jobs = 1 if isinstance(sampler, optuna.samplers.GridSampler) else self.n_jobs
+            logger.info(f"开始优化: n_trials={n_trials}, n_jobs={effective_n_jobs} (原始={self.n_jobs}), timeout={timeout}")
             study.optimize(
                 objective, 
                 n_trials=n_trials, 
                 timeout=timeout, 
-                n_jobs=self.n_jobs,  # 并行执行
+                n_jobs=effective_n_jobs,
                 show_progress_bar=False
             )
 
@@ -1060,6 +1225,10 @@ class StrategyHyperparameterOptimizer:
                         (oos_values[-1] / oos_values[0] - 1.0) if oos_values[0] else 0.0
                     )
                     mdd_oos = abs(_max_drawdown(oos_values))
+
+                    # 零交易惩罚：portfolio 完全平坦（无收益无回撤）说明没有实际交易
+                    if total_ret_oos == 0.0 and mdd_oos == 0.0:
+                        return 0.05
 
                     mrets = _monthly_returns(oos_dates, oos_values)
                     if mrets:

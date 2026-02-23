@@ -43,7 +43,7 @@ sed -i '' 's/id(self)/self.name/g' <文件>
 ```
 
 **记录文档**：
-- `/Users/ronghui/Documents/GitHub/willrone/backend/SIGNAL_FIX.md`
+- `/Users/ronghui/Projects/willrone/backend/SIGNAL_FIX.md`
 
 ### ✅ 6. 创建测试回测任务验证修复效果
 **测试任务 1 - MA策略**：

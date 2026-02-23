@@ -114,7 +114,7 @@ frontend/src/components/
 
 ### 1. 启动开发服务器
 ```bash
-cd ~/Documents/GitHub/willrone/frontend
+cd ~/Projects/willrone/frontend
 npm run dev
 ```
 

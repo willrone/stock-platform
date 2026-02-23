@@ -20,11 +20,11 @@ from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
 
 
-def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict[str, Any]]) -> Tuple[bool, str, Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]], Optional[str]]:
+def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict[str, Any]]) -> Tuple[bool, str, Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]], Optional[str]]:
     """模块级 worker：为单只股票预计算信号（用于 ProcessPoolExecutor）。
 
     Returns:
-        (ok, stock_code, (date_ns[int64], signal_value[float32], close[float32]) | None, err)
+        (ok, stock_code, (date_ns[int64], signal_value[float32], strength[float32], close[float32]) | None, err)
     """
     stock_code, data_pack, strategy_info = task
     try:
@@ -76,16 +76,18 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
         if close is None:
             return (False, stock_code, None, "缺少 close 列")
 
-        # 将 SignalType/数字统一映射为 float32（BUY=1, SELL=-1）
-        # 注意：Series dtype 可能是 object
+        # 将 SignalType/数字统一映射为 float32（BUY=正, SELL=负）
+        # 保留信号强度信息：SignalType 默认强度 1.0，数值型保留原始绝对值
         out_dates = []
         out_vals = []
+        out_strengths = []
         out_close = []
         for dt, v in sigs.items():
             if v is None or v == 0 or v == SignalType.HOLD:
                 continue
             if isinstance(v, SignalType):
                 vv = 1.0 if v == SignalType.BUY else -1.0 if v == SignalType.SELL else 0.0
+                strength = 1.0
             else:
                 try:
                     vv = float(v)
@@ -93,6 +95,7 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
                     continue
                 if vv == 0:
                     continue
+                strength = min(1.0, abs(vv))
             # price
             try:
                 px = float(close.loc[dt])
@@ -100,15 +103,16 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
                 px = 0.0
             out_dates.append(np.int64(pd.Timestamp(dt).value))
             out_vals.append(np.float32(vv))
+            out_strengths.append(np.float32(strength))
             out_close.append(np.float32(px))
 
         if not out_dates:
-            return (True, stock_code, (np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float32), np.empty(0, dtype=np.float32)), None)
+            return (True, stock_code, (np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float32), np.empty(0, dtype=np.float32), np.empty(0, dtype=np.float32)), None)
 
         return (
             True,
             stock_code,
-            (np.asarray(out_dates, dtype=np.int64), np.asarray(out_vals, dtype=np.float32), np.asarray(out_close, dtype=np.float32)),
+            (np.asarray(out_dates, dtype=np.int64), np.asarray(out_vals, dtype=np.float32), np.asarray(out_strengths, dtype=np.float32), np.asarray(out_close, dtype=np.float32)),
             None,
         )
 
@@ -321,15 +325,15 @@ class BatchSignalGenerator:
                                 continue
                             if packed is None:
                                 continue
-                            date_ns, vals, closes = packed
+                            date_ns, vals, strengths, closes = packed
                             # packed 可能为空（无信号）
-                            for d_ns, v, px in zip(date_ns, vals, closes):
+                            for d_ns, v, st, px in zip(date_ns, vals, strengths, closes):
                                 signal_records.append(
                                     {
                                         "stock_code": stock_code,
                                         "date": pd.to_datetime(int(d_ns)),
                                         "signal_type": SignalType.BUY if float(v) > 0 else SignalType.SELL,
-                                        "strength": float(abs(v)),
+                                        "strength": float(st),
                                         "price": float(px),
                                     }
                                 )
@@ -348,14 +352,20 @@ class BatchSignalGenerator:
                     for date, signal_value in signals_series.items():
                         if signal_value is None or signal_value == 0 or signal_value == SignalType.HOLD:
                             continue
+                        # 与多进程 worker 保持一致的强度提取逻辑
+                        if isinstance(signal_value, SignalType):
+                            strength = 1.0
+                        else:
+                            try:
+                                strength = min(1.0, abs(float(signal_value)))
+                            except (TypeError, ValueError):
+                                strength = 1.0
                         signal_records.append(
                             {
                                 "stock_code": stock_code,
                                 "date": date,
                                 "signal_type": self._convert_signal_value(signal_value),
-                                "strength": abs(float(signal_value))
-                                if isinstance(signal_value, (int, float))
-                                else 1.0,
+                                "strength": strength,
                                 "price": float(close.loc[date]) if close is not None and date in df.index else 0.0,
                             }
                         )

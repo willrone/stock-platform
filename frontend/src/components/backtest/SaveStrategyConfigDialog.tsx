@@ -16,6 +16,8 @@ import {
   Box,
   Typography,
   Alert,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { Save } from 'lucide-react';
 
@@ -40,6 +42,8 @@ export function SaveStrategyConfigDialog({
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // 当对话框打开时，生成默认配置名称
   useEffect(() => {
@@ -86,7 +90,9 @@ export function SaveStrategyConfigDialog({
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth
+      fullScreen={isMobile}
+    >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Save size={20} />

@@ -25,18 +25,18 @@ class DataLoader:
         data: pd.DataFrame,
         start_date: datetime,
         end_date: datetime,
-        min_rows: int = 30,
         min_coverage_ratio: float = 0.7,
     ) -> bool:
         """简单的数据有效性过滤：行数>0 且 覆盖足够长，避免抽样到缺失股票影响结果"""
         try:
             if data is None or data.empty:
                 return False
-            if len(data) < min_rows:
-                return False
             # coverage ratio: rows / expected business days (rough)
             total_days = (end_date.date() - start_date.date()).days + 1
             expected = max(1, total_days * 5 // 7)
+            min_rows = 30
+            if len(data) < min_rows:
+                return False
             coverage = len(data) / expected
             return coverage >= min_coverage_ratio
         except Exception:
@@ -382,5 +382,10 @@ class DataLoader:
 
         if not stock_data:
             raise TaskError(message="所有股票数据加载失败", severity=ErrorSeverity.HIGH)
+
+        # 按股票代码排序，确保回测结果可复现
+        # 并行加载时 as_completed() 返回顺序不确定，会导致信号执行顺序不同
+        # 当同一天有多个买入信号且资金有限时，处理顺序影响哪些股票能成交
+        stock_data = dict(sorted(stock_data.items(), key=lambda x: x[0]))
 
         return stock_data

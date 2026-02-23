@@ -34,6 +34,9 @@ class MovingAverageStrategy(BaseStrategy):
         # 降低默认阈值：从 0.02 (2%) 降到 0.005 (0.5%)
         # 原因：实际市场中，金叉/死叉时的 ma_diff 通常小于 1%
         self.signal_threshold = config.get("signal_threshold", 0.005)
+        # 趋势过滤：MA60 方向一致时才触发信号
+        self.trend_window = config.get("trend_window", 60)
+        self.enable_trend_filter = config.get("enable_trend_filter", True)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算移动平均指标"""
@@ -53,21 +56,37 @@ class MovingAverageStrategy(BaseStrategy):
         return indicators
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """[性能优化] 向量化计算全量均线交叉信号"""
+        """[性能优化] 向量化计算全量均线交叉信号（返回浮点强度，含趋势过滤）
+
+        返回值：正数=买入信号（强度），负数=卖出信号（强度），0=无信号
+        强度 = ma_diff * 10，clamp 到 [-1, 1]
+        趋势过滤：MA60 向上时才允许金叉买入，MA60 向下时才允许死叉卖出
+        """
         try:
             indicators = self.get_cached_indicators(data)
             ma_diff = indicators["ma_diff"]
             prev_ma_diff = ma_diff.shift(1)
+            close = indicators["price"]
 
             # 向量化逻辑判断
             buy_mask = (prev_ma_diff <= 0) & (ma_diff > 0) & (abs(ma_diff) > self.signal_threshold)
             sell_mask = (prev_ma_diff >= 0) & (ma_diff < 0) & (abs(ma_diff) > self.signal_threshold)
 
-            # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
-            signals[buy_mask.fillna(False)] = SignalType.BUY
-            signals[sell_mask.fillna(False)] = SignalType.SELL
-            
+            # 趋势过滤：MA60 方向一致时才触发信号
+            if self.enable_trend_filter:
+                trend_ma = close.rolling(window=self.trend_window).mean()
+                trend_up = trend_ma > trend_ma.shift(5)    # MA60 向上
+                trend_down = trend_ma < trend_ma.shift(5)  # MA60 向下
+                buy_mask = buy_mask & trend_up.fillna(False)
+                sell_mask = sell_mask & trend_down.fillna(False)
+
+            # 构造浮点强度信号 Series：正=买入，负=卖出，0=无信号
+            signals = pd.Series(0.0, index=data.index, dtype=np.float64)
+            # 买入强度：ma_diff * 10，clamp 到 (0, 1]
+            signals[buy_mask.fillna(False)] = (ma_diff[buy_mask.fillna(False)] * 10).clip(0.3, 1.0)
+            # 卖出强度：ma_diff * 10（负值），clamp 到 [-1, -0.3)
+            signals[sell_mask.fillna(False)] = (ma_diff[sell_mask.fillna(False)] * 10).clip(-1.0, -0.3)
+
             return signals
         except Exception as e:
             logger.error(f"MA策略向量化计算失败: {e}")
@@ -81,8 +100,11 @@ class MovingAverageStrategy(BaseStrategy):
         try:
             precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
-                sig_type = precomputed.get(current_date)
-                if isinstance(sig_type, SignalType):
+                sig_val = precomputed.get(current_date)
+                # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
+                if isinstance(sig_val, (int, float, np.number)) and float(sig_val) != 0.0:
+                    fv = float(sig_val)
+                    sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
@@ -92,6 +114,25 @@ class MovingAverageStrategy(BaseStrategy):
                         timestamp=current_date,
                         stock_code=stock_code,
                         signal_type=sig_type,
+                        strength=min(1.0, abs(fv)),
+                        price=current_price,
+                        reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
+                        metadata={
+                            "sma_short": indicators["sma_short"].iloc[current_idx],
+                            "sma_long": indicators["sma_long"].iloc[current_idx],
+                            "ma_diff": current_ma_diff,
+                        },
+                    )]
+                elif isinstance(sig_val, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_ma_diff = indicators["ma_diff"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_val,
                         strength=min(1.0, abs(current_ma_diff) * 10),
                         price=current_price,
                         reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
@@ -240,19 +281,39 @@ class RSIStrategy(BaseStrategy):
         }
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """[性能优化] 向量化计算全量RSI信号"""
+        """[性能优化] 向量化计算全量RSI信号（含趋势对齐，返回浮点强度）
+
+        返回值：正数=买入信号（强度），负数=卖出信号（强度），0=无信号
+        买入强度 = (oversold_threshold - prev_rsi) / oversold_threshold，反映超卖深度
+        卖出强度 = (prev_rsi - overbought_threshold) / (100 - overbought_threshold)
+        """
         try:
             indicators = self.get_cached_indicators(data)
             rsi = indicators["rsi"]
             prev_rsi = rsi.shift(1)
+            close = indicators["price"]
 
-            # 简化版逻辑：从超卖区回升 -> 买入；从超买区回调 -> 卖出
+            # 基础穿越信号：从超卖区回升 -> 买入；从超买区回调 -> 卖出
             buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
             sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
-            signals[buy_mask.fillna(False)] = SignalType.BUY
-            signals[sell_mask.fillna(False)] = SignalType.SELL
+            # 趋势对齐过滤：只在趋势方向一致时允许信号
+            if self.enable_trend_alignment:
+                trend_ma = close.rolling(window=self.trend_ma_period).mean()
+                uptrend = close > trend_ma
+                downtrend = close < trend_ma
+                buy_mask = buy_mask & uptrend.fillna(False)
+                sell_mask = sell_mask & downtrend.fillna(False)
+
+            # 构造浮点强度信号 Series
+            signals = pd.Series(0.0, index=data.index, dtype=np.float64)
+            # 买入强度：超卖越深强度越高
+            buy_strength = ((self.oversold_threshold - prev_rsi) / self.oversold_threshold).clip(0.3, 1.0)
+            signals[buy_mask.fillna(False)] = buy_strength[buy_mask.fillna(False)]
+            # 卖出强度：超买越高强度越高（负值）
+            sell_strength = -((prev_rsi - self.overbought_threshold) / (100 - self.overbought_threshold)).clip(0.3, 1.0)
+            signals[sell_mask.fillna(False)] = sell_strength[sell_mask.fillna(False)]
+
             return signals
         except Exception as e:
             logger.error(f"RSI策略向量化计算失败: {e}")
@@ -266,8 +327,11 @@ class RSIStrategy(BaseStrategy):
         try:
             precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
-                sig_type = precomputed.get(current_date)
-                if isinstance(sig_type, SignalType):
+                sig_val = precomputed.get(current_date)
+                # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
+                if isinstance(sig_val, (int, float, np.number)) and float(sig_val) != 0.0:
+                    fv = float(sig_val)
+                    sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
@@ -277,6 +341,21 @@ class RSIStrategy(BaseStrategy):
                         timestamp=current_date,
                         stock_code=stock_code,
                         signal_type=sig_type,
+                        strength=min(1.0, abs(fv)),
+                        price=current_price,
+                        reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
+                        metadata={"rsi": current_rsi},
+                    )]
+                elif isinstance(sig_val, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_rsi = indicators["rsi"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_val,
                         strength=0.8,
                         price=current_price,
                         reason=f"[向量化] RSI信号, RSI: {current_rsi:.2f}",
@@ -381,9 +460,14 @@ class MACDStrategy(BaseStrategy):
         }
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """[性能优化] 向量化计算全量MACD信号"""
+        """[性能优化] 向量化计算全量MACD信号（返回浮点强度，含零轴过滤）
+
+        返回值：正数=买入信号（强度），负数=卖出信号（强度），0=无信号
+        零轴过滤：MACD线在零轴以上的金叉为强信号，零轴以下的金叉强度减半
+        """
         try:
             indicators = self.get_cached_indicators(data)
+            macd_line = indicators["macd"]
             macd_hist = indicators["macd_hist"]
             prev_hist = macd_hist.shift(1)
 
@@ -391,10 +475,22 @@ class MACDStrategy(BaseStrategy):
             buy_mask = (prev_hist <= 0) & (macd_hist > 0)
             sell_mask = (prev_hist >= 0) & (macd_hist < 0)
 
-            # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
-            signals[buy_mask.fillna(False)] = SignalType.BUY
-            signals[sell_mask.fillna(False)] = SignalType.SELL
+            # 构造浮点强度信号 Series
+            signals = pd.Series(0.0, index=data.index, dtype=np.float64)
+
+            # 买入强度：柱状图越大强度越高
+            buy_strength = (macd_hist * 100).clip(0.3, 1.0)
+            # 零轴过滤：MACD线在零轴以下的金叉，强度减半
+            below_zero = macd_line < 0
+            buy_strength[below_zero] = buy_strength[below_zero] * 0.5
+            signals[buy_mask.fillna(False)] = buy_strength[buy_mask.fillna(False)]
+
+            # 卖出强度：柱状图越负强度越高（负值）
+            sell_strength = (macd_hist * 100).clip(-1.0, -0.3)
+            # 零轴过滤：MACD线在零轴以上的死叉，强度减半
+            above_zero = macd_line > 0
+            sell_strength[above_zero] = sell_strength[above_zero] * 0.5
+            signals[sell_mask.fillna(False)] = sell_strength[sell_mask.fillna(False)]
 
             return signals
         except Exception as e:
@@ -405,12 +501,15 @@ class MACDStrategy(BaseStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成MACD信号"""
-        # 性能优化：优先��查是否已有全量预计算信号
+        # 性能优化：优先检查是否已有全量预计算信号
         try:
             precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
             if precomputed is not None:
-                sig_type = precomputed.get(current_date)
-                if isinstance(sig_type, SignalType):
+                sig_val = precomputed.get(current_date)
+                # 支持浮点信号（正=买入，负=卖出）和旧枚举格式
+                if isinstance(sig_val, (int, float, np.number)) and float(sig_val) != 0.0:
+                    fv = float(sig_val)
+                    sig_type = SignalType.BUY if fv > 0 else SignalType.SELL
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
@@ -420,9 +519,28 @@ class MACDStrategy(BaseStrategy):
                         timestamp=current_date,
                         stock_code=stock_code,
                         signal_type=sig_type,
-                        strength=min(1.0, abs(current_hist) * 100),
+                        strength=min(1.0, abs(fv)),
                         price=current_price,
                         reason=f"[向量化] MACD{'金叉' if sig_type == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
+                        metadata={
+                            "macd": indicators["macd"].iloc[current_idx],
+                            "macd_signal": indicators["macd_signal"].iloc[current_idx],
+                            "macd_hist": current_hist,
+                        },
+                    )]
+                elif isinstance(sig_val, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_hist = indicators["macd_hist"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_val,
+                        strength=min(1.0, abs(current_hist) * 100),
+                        price=current_price,
+                        reason=f"[向量化] MACD{'金叉' if sig_val == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
                         metadata={
                             "macd": indicators["macd"].iloc[current_idx],
                             "macd_signal": indicators["macd_signal"].iloc[current_idx],

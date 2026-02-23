@@ -110,7 +110,7 @@ if response.status_code == 200:
     print()
     
     # 保存 task_id 到文件
-    with open("/Users/ronghui/Documents/GitHub/willrone/backend/phase3_task_id.txt", "w") as f:
+    with open("/Users/ronghui/Projects/willrone/backend/phase3_task_id.txt", "w") as f:
         f.write(task_id)
     
     print("=" * 60)

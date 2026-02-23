@@ -144,7 +144,8 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     }
 
     // 从过滤后的股票列表中随机选择（如果没有搜索，则从全部列表选择）
-    const availableStocks = filteredStocks.filter(stock => !value.includes(stock.code));
+    // 注意：不过滤已选股票，直接从全部可用股票中选择（替换模式）
+    const availableStocks = filteredStocks;
 
     if (availableStocks.length === 0) {
       console.warn('没有可选的股票');
@@ -158,11 +159,10 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     const shuffled = [...availableStocks].sort(() => Math.random() - 0.5);
     const selectedStocks = shuffled.slice(0, selectCount).map(stock => stock.code);
 
-    // 添加到已选列表
-    const newValue = [...value, ...selectedStocks];
-    onChange?.(newValue);
+    // 替换已选列表（而不是追加）
+    onChange?.(selectedStocks);
 
-    console.log(`随机选择了 ${selectedStocks.length} 只股票`);
+    console.log(`随机选择了 ${selectedStocks.length} 只股票（替换模式）`);
   };
 
   // 移除股票
@@ -239,9 +239,9 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
       {/* 已选股票 */}
       <Card>
         <CardHeader
-          title="已选股票"
+          title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>已选股票</Typography>}
           action={
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
               {/* 随机选择 */}
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 <TextField
@@ -250,7 +250,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
                   value={randomCount}
                   onChange={e => setRandomCount(e.target.value)}
                   placeholder="数量"
-                  sx={{ width: 80 }}
+                  sx={{ width: { xs: 60, sm: 80 } }}
                   inputProps={{ min: 1 }}
                 />
                 <Button
@@ -261,7 +261,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
                   onClick={handleRandomSelect}
                   disabled={filteredStocks.length === 0 || loadingAllStocks}
                 >
-                  随机选择
+                  随机
                 </Button>
               </Box>
               {value.length > 0 && (
@@ -409,7 +409,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
         <CardHeader
           title={
             <Box>
-              <Typography variant="h6" component="span">
+              <Typography variant="h6" component="span" sx={{ fontSize: { xs: '0.9rem', sm: '1.25rem' } }}>
                 本地股票列表
               </Typography>
               {searchValue ? (
@@ -444,7 +444,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
+                  gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
                   gap: 1,
                 }}
               >

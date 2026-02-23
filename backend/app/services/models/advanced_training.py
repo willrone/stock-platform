@@ -187,7 +187,7 @@ class EnsembleModelManager:
                         model.load_model(str(model_path))
                     else:
                         # PyTorch模型
-                        model = torch.load(model_path, map_location="cpu")
+                        model = torch.load(model_path, map_location="cpu", weights_only=True)
 
                     models.append(
                         {

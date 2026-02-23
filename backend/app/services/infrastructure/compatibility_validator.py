@@ -14,7 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import pkg_resources
+from importlib import metadata
 from loguru import logger
 from packaging import version
 
@@ -104,8 +104,8 @@ class DependencyValidator:
         """获取已安装的包及其版本"""
         packages = {}
         try:
-            for dist in pkg_resources.working_set:
-                packages[dist.project_name.lower()] = dist.version
+            for dist in metadata.distributions():
+                packages[dist.name.lower()] = dist.version
         except Exception as e:
             logger.warning(f"获取已安装包列表失败: {e}")
         return packages

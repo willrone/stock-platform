@@ -14,6 +14,7 @@ export interface ParamSpaceConfig {
   type: 'int' | 'float' | 'categorical';
   low?: number;
   high?: number;
+  step?: number;
   choices?: any[];
   default?: any;
   enabled?: boolean;

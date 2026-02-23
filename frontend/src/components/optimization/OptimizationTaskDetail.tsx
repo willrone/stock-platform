@@ -143,13 +143,13 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: { xs: 1, sm: 2 } }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button variant="outlined" onClick={onBack} sx={{ minWidth: 40, px: 1 }}>
             <ArrowLeft size={20} />
           </Button>
           <Box>
-            <Typography variant="h4" component="h2" sx={{ fontWeight: 600 }}>
+            <Typography variant="h4" component="h2" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}>
               {task.task_name}
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -165,6 +165,7 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
             loadTask();
             loadStatus();
           }}
+          sx={{ alignSelf: { xs: 'flex-end', sm: 'auto' } }}
         >
           刷新
         </Button>
@@ -175,6 +176,8 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
           value={selectedTab}
           onChange={(e, newValue) => setSelectedTab(newValue)}
           aria-label="任务详情标签页"
+          variant="scrollable"
+          scrollButtons="auto"
         >
           <Tab label="运行状态" value="status" />
           <Tab label="优化结果" value="results" disabled={task.status !== 'completed'} />
@@ -206,7 +209,7 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
                           <Box sx={{ textAlign: 'center' }}>
                             <Typography
                               variant="h4"
-                              sx={{ fontWeight: 600, color: 'success.main' }}
+                              sx={{ fontWeight: 600, color: 'success.main', fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
                             >
                               {result.best_score?.toFixed(4) || '-'}
                             </Typography>
@@ -219,7 +222,7 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
                       <Card>
                         <CardContent>
                           <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                            <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}>
                               {result.completed_trials} / {result.n_trials}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
@@ -231,7 +234,7 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
                       <Card>
                         <CardContent>
                           <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                            <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}>
                               {result.optimization_metadata?.duration_seconds
                                 ? `${Math.round(
                                     result.optimization_metadata.duration_seconds / 60
@@ -258,7 +261,7 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
                                 width: '100%',
                               }}
                             >
-                              <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                              <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                                 最佳参数
                               </Typography>
                               <Button

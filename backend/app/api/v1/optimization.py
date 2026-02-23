@@ -47,6 +47,7 @@ async def create_optimization_task(
                         "type": space.type,
                         "low": space.low,
                         "high": space.high,
+                        "step": space.step,
                         "choices": space.choices,
                         "default": space.default,
                         "enabled": space.enabled,

@@ -11,7 +11,14 @@
       "Bash(timeout 10 python:*)",
       "Bash(python:*)",
       "Bash(source:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(python3:*)",
+      "Bash(tail:*)",
+      "Bash(pip show:*)",
+      "Bash(pip index:*)",
+      "Bash(pip install:*)"
     ]
   }
 }

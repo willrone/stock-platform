@@ -233,7 +233,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
 
 1. **运行修复脚本**：
 ```bash
-cd ~/Documents/GitHub/willrone
+cd ~/Projects/willrone
 python3 fix_portfolio_strategy.py
 ```
 

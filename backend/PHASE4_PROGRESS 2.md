@@ -20,7 +20,7 @@
 #### 已完成工作
 
 1. **核心模块开发** ✅
-   - 文件：`/Users/ronghui/Documents/GitHub/willrone/backend/app/services/backtest/execution/multiprocess_backtest.py`
+   - 文件：`/Users/ronghui/Projects/willrone/backend/app/services/backtest/execution/multiprocess_backtest.py`
    - 代码量：~450 行
    - 功能：
      - `_worker_backtest()`: Worker 进程执行函数
@@ -30,7 +30,7 @@
      - 结果合并（权益曲线、交易记录、绩效指标）
 
 2. **测试脚本开发** ✅
-   - 文件：`/Users/ronghui/Documents/GitHub/willrone/backend/test_phase4_multiprocess.py`
+   - 文件：`/Users/ronghui/Projects/willrone/backend/test_phase4_multiprocess.py`
    - 功能：
      - 加载基线任务 814287d1 的股票列表（500只）
      - 执行多进程回测（8核并行）
@@ -49,12 +49,12 @@
 
 - **现象**：DataLoader 找不到 parquet 数据文件
 - **原因**：相对路径 "backend/data" 在多进程环境下解析错误
-- **实际路径**：`/Users/ronghui/Documents/GitHub/willrone/data/parquet/stock_data/`
+- **实际路径**：`/Users/ronghui/Projects/willrone/data/parquet/stock_data/`
 - **影响**：无法完成测试验证
 
 **解决方案**：
 1. 在 `run_multiprocess_backtest()` 中接受 `data_dir` 参数
-2. 测试脚本传递绝对路径：`/Users/ronghui/Documents/GitHub/willrone/data`
+2. 测试脚本传递绝对路径：`/Users/ronghui/Projects/willrone/data`
 3. DataLoader 使用传入的绝对路径
 
 #### 下一步

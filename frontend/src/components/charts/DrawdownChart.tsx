@@ -341,14 +341,16 @@ export default function DrawdownChart({
             <Box
               sx={{
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 justifyContent: 'space-between',
                 width: '100%',
+                gap: 1,
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingDown size={20} color="#d32f2f" />
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                   回撤分析
                 </Typography>
                 <Tooltip title="显示组合价值从峰值下跌的幅度">
@@ -395,7 +397,7 @@ export default function DrawdownChart({
                     最大回撤
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main', fontSize: { xs: '0.875rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
                       {Math.abs(data.maxDrawdown).toFixed(2)}%
                     </Typography>
                     <Chip label={drawdownRating.text} color={drawdownRating.color} size="small" />
@@ -418,7 +420,7 @@ export default function DrawdownChart({
                   <Typography variant="caption" color="text.secondary">
                     最大回撤日期
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.main', fontSize: { xs: '0.875rem', sm: '1.25rem' }, wordBreak: 'break-word' }}>
                     {data.maxDrawdownDate
                       ? new Date(data.maxDrawdownDate).toLocaleDateString('zh-CN')
                       : '未知'}
@@ -441,7 +443,7 @@ export default function DrawdownChart({
                   <Typography variant="caption" color="text.secondary">
                     回撤持续天数
                   </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'secondary.main' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'secondary.main', fontSize: { xs: '0.875rem', sm: '1.25rem' } }}>
                     {data.maxDrawdownDuration || 0} 天
                   </Typography>
                 </Box>
@@ -466,8 +468,10 @@ export default function DrawdownChart({
         }
       />
 
-      <CardContent>
-        <Box ref={chartRef} sx={{ height, width: '100%', minHeight: 400 }} />
+      <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Box ref={chartRef} sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 400 }} />
+        </Box>
       </CardContent>
     </Card>
   );

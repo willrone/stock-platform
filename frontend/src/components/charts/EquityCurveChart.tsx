@@ -557,14 +557,16 @@ export default function EquityCurveChart({
             <Box
               sx={{
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 justifyContent: 'space-between',
                 width: '100%',
+                gap: 1,
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TrendingUp size={20} color="#1976d2" />
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                   收益曲线分析
                 </Typography>
                 <Tooltip title="显示组合价值或收益率随时间的变化">
@@ -592,9 +594,11 @@ export default function EquityCurveChart({
             <Box
               sx={{
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 justifyContent: 'space-between',
                 width: '100%',
+                gap: 1,
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -652,8 +656,10 @@ export default function EquityCurveChart({
         }
       />
 
-      <CardContent>
-        <Box ref={chartRef} sx={{ height, width: '100%', minHeight: 400 }} />
+      <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Box ref={chartRef} sx={{ height, width: '100%', minHeight: { xs: 300, sm: 400 }, minWidth: 400 }} />
+        </Box>
       </CardContent>
     </Card>
   );

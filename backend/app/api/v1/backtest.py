@@ -161,6 +161,13 @@ async def get_available_strategies():
                         "min": 3,
                         "max": 20,
                     },
+                    "min_holding_period": {
+                        "type": "int",
+                        "default": 0,
+                        "description": "最小持仓期（天数），开仓后至少持有N天才允许平仓，0表示不限制",
+                        "min": 0,
+                        "max": 60,
+                    },
                 },
             },
             # 新增技术分析策略
@@ -345,6 +352,13 @@ async def get_available_strategies():
                         "min": 5,
                         "max": 60,
                     },
+                    "exit_threshold": {
+                        "type": "float",
+                        "default": 0.5,
+                        "description": "出场阈值",
+                        "min": 0.1,
+                        "max": 2.0,
+                    },
                 },
             },
             # 因子投资策略
@@ -454,6 +468,58 @@ async def get_available_strategies():
                     },
                 },
             },
+            "ml_ensemble_lgb_xgb_riskctl": {
+                "name": "ML集成策略(LGB+XGB+风控)",
+                "description": "双模型集成（LightGBM 50% + XGBoost 50%）+ 三重风控。支持通过 model_id 加载 Qlib 训练的模型。",
+                "category": "other",
+                "parameters": {
+                    "lgb_model_id": {
+                        "type": "string",
+                        "default": "",
+                        "description": "LightGBM 模型ID（Qlib格式，留空则使用默认 lgb_model.pkl）",
+                    },
+                    "xgb_model_id": {
+                        "type": "string",
+                        "default": "",
+                        "description": "XGBoost 模型ID（Qlib格式，留空则使用默认 xgb_model.pkl）",
+                    },
+                    "lgb_weight": {
+                        "type": "float",
+                        "default": 0.5,
+                        "description": "LightGBM 权重",
+                        "min": 0.0,
+                        "max": 1.0,
+                    },
+                    "xgb_weight": {
+                        "type": "float",
+                        "default": 0.5,
+                        "description": "XGBoost 权重",
+                        "min": 0.0,
+                        "max": 1.0,
+                    },
+                    "buy_threshold": {
+                        "type": "float",
+                        "default": 0.02,
+                        "description": "买入阈值（预测收益率）",
+                        "min": 0.0,
+                        "max": 0.1,
+                    },
+                    "sell_threshold": {
+                        "type": "float",
+                        "default": -0.02,
+                        "description": "卖出阈值（预测收益率）",
+                        "min": -0.1,
+                        "max": 0.0,
+                    },
+                    "max_drawdown_threshold": {
+                        "type": "float",
+                        "default": 0.15,
+                        "description": "最大回撤阈值（触发风控）",
+                        "min": 0.05,
+                        "max": 0.5,
+                    },
+                },
+            },
         }
 
         result = []
@@ -550,6 +616,7 @@ async def run_backtest(request: BacktestRequest):
             initial_cash=request.initial_cash,
             commission_rate=strategy_config.get("commission_rate", 0.0003),
             slippage_rate=strategy_config.get("slippage_rate", 0.0001),
+            enable_unlimited_buy=strategy_config.get("enable_unlimited_buy", False),
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）
@@ -661,8 +728,8 @@ async def run_backtest(request: BacktestRequest):
         return StandardResponse(success=True, message="回测执行成功", data=result)
 
     except Exception as e:
-        logger.error(f"回测执行失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"回测执行失败: {str(e)}")
+        logger.error("回测执行失败: " + str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="回测执行失败: " + str(e))
 
 
 @router.get("/portfolio-templates", response_model=StandardResponse)
