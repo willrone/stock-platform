@@ -463,8 +463,9 @@ def execute_backtest_task_simple(task_id: str):
         from app.services.backtest.persistence import BacktestPersistenceService
         persistence = BacktestPersistenceService()
 
-        # [P0+P1 CPU优化] 恢复并行数据加载，使用 ThreadPool 替代 ThreadPoolExecutor
-        # run_backtest_sync() 绕过 asyncio 事件循环，消除 nest_asyncio 开销
+        # [FIX] 在 ProcessPoolExecutor 子进程中禁用 DataLoader 的并行加载
+        # 子进程内创建 ThreadPoolExecutor 会导致死锁（nest_asyncio + new_event_loop 环境）
+        # enable_parallel 仅控制 DataLoader 的线程池，不影响其他并行特性
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
             enable_parallel=True,
@@ -473,6 +474,7 @@ def execute_backtest_task_simple(task_id: str):
             persistence=persistence,
         )
 
+        # 创建回测配置
         # 创建回测配置（透传所有 BacktestConfig 支持的字段）
         _backtest_kwargs = {
             "initial_cash": initial_cash,
@@ -497,7 +499,8 @@ def execute_backtest_task_simple(task_id: str):
         )
 
         try:
-            # [P0] 同步执行回测，绕过 nest_asyncio + asyncio.new_event_loop 开销
+            # [P2] 使用同步版本执行回测，绕过 asyncio 事件循环
+            # 多进程并行回测在 run_backtest_sync 内部自动启用（股票数 > 100）
             backtest_report = executor.run_backtest_sync(
                 strategy_name=strategy_name,
                 stock_codes=stock_codes,
@@ -514,12 +517,10 @@ def execute_backtest_task_simple(task_id: str):
             )
 
             task_logger.info(
-                f"回测执行完成: {task_id}, "
-                f"总收益: {backtest_report.get('total_return', 0):.2%}, "
-                f"进程ID: {process_id}"
+                f"回测执行完成: {task_id}, 总收益: {backtest_report.get('total_return', 0):.2%}, 进程ID: {process_id}"
             )
 
-            # 通过 persistence 服务保存详细数据（仅此步需要 asyncio）
+            # 通过 persistence 服务保存详细数据（async，用临时事件循环）
             backtest_id = backtest_report.get("backtest_id", "")
             try:
                 task_logger.info(f"开始保存回测详细数据: {task_id}")
@@ -531,11 +532,11 @@ def execute_backtest_task_simple(task_id: str):
                         backtest_report=backtest_report,
                     )
 
-                loop = asyncio.new_event_loop()
+                _save_loop = asyncio.new_event_loop()
                 try:
-                    success = loop.run_until_complete(_save_results())
+                    success = _save_loop.run_until_complete(_save_results())
                 finally:
-                    loop.close()
+                    _save_loop.close()
 
                 if success:
                     task_logger.info(f"回测详细数据保存成功: {task_id}")
@@ -550,9 +551,7 @@ def execute_backtest_task_simple(task_id: str):
             except Exception as save_error:
                 import traceback as tb
                 task_logger.error(
-                    f"保存详细数据时出错: {task_id}, "
-                    f"错误: {type(save_error).__name__}: {save_error}\n"
-                    f"{tb.format_exc()}"
+                    f"保存详细数据时出错: {task_id}, 错误: {type(save_error).__name__}: {save_error}"
                 )
                 task_repository.update_task_status(
                     task_id=task_id,

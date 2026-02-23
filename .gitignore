@@ -491,4 +491,6 @@ test-results.xml
 junit.xml
 
 # Pre-commit备份
-.pre-commit-config.yaml.bak
+.pre-commit-config.yaml.bakbackend/backend/models/evaluations/
+backend/backend/
+*.bak.*

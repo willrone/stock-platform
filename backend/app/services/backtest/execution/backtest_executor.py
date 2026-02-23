@@ -20,6 +20,8 @@ from .backtest_loop_executor import BacktestLoopExecutor
 
 # from .backtest_progress_monitor import backtest_progress_monitor
 from .data_loader import DataLoader
+from .multiprocess_worker import worker_backtest
+from .progress_bridge import ProgressBridge
 
 # 导入新模块
 from .data_preprocessor import DataPreprocessor
@@ -130,6 +132,8 @@ class BacktestExecutor:
         """
         # 轻量分段计时
         perf_breakdown: Dict[str, float] = {}
+        # 确保 task_id 是字符串（可能传入 UUID 对象）
+        task_id = str(task_id) if task_id else task_id
         _t_total0 = time.perf_counter()
 
         # 启动性能追踪
@@ -660,6 +664,8 @@ class BacktestExecutor:
         import gc
 
         perf_breakdown: Dict[str, float] = {}
+        # 确保 task_id 是字符串（可能传入 UUID 对象）
+        task_id = str(task_id) if task_id else task_id
         _t_total0 = time.perf_counter()
 
         self.performance_tracker.start_backtest()
@@ -711,6 +717,31 @@ class BacktestExecutor:
                     strategy_config.setdefault("max_changes_per_day", 3)
                     strategy_config.setdefault("min_buy_score", 0.0)
 
+            # ── P2: 多进程并行回测（股票数 > 50 时自动启用） ──
+            MULTIPROCESS_THRESHOLD = 50
+            if len(stock_codes) > MULTIPROCESS_THRESHOLD:
+                logger.info(
+                    f"🚀 P2 多进程回测: {len(stock_codes)} 只股票 "
+                    f"(阈值 {MULTIPROCESS_THRESHOLD}), 自动启用多进程并行"
+                )
+                try:
+                    return self._run_multiprocess_backtest_sync(
+                        strategy_name=strategy_name,
+                        stock_codes=stock_codes,
+                        start_date=start_date,
+                        end_date=end_date,
+                        strategy_config=strategy_config,
+                        backtest_config=backtest_config,
+                        task_id=task_id,
+                        backtest_id=backtest_id,
+                    )
+                except Exception as mp_err:
+                    logger.error(
+                        f"多进程回测失败，回退到单进程: {mp_err}",
+                        exc_info=True,
+                    )
+                    # 回退到下面的单进程路径
+
             # 进度监控（同步版本：直接操作内存数据结构）
             if task_id:
                 self._start_progress_sync(task_id, backtest_id)
@@ -755,7 +786,7 @@ class BacktestExecutor:
                 logger.info(f"使用预加载数据: {len(stock_data)} 只股票")
             else:
                 # P0+P1: 使用同步并行版本，绕过 asyncio
-                stock_data = self.data_loader.load_multiple_stocks_sync(
+                stock_data = self.data_loader.load_multiple_stocks(
                     stock_codes, start_date, end_date
                 )
 
@@ -979,6 +1010,464 @@ class BacktestExecutor:
                 severity=ErrorSeverity.HIGH,
                 original_exception=e,
             )
+
+    # ── P2: 多进程并行回测 ──
+
+    def _run_multiprocess_backtest_sync(
+        self,
+        strategy_name: str,
+        stock_codes: list,
+        start_date,
+        end_date,
+        strategy_config: dict,
+        backtest_config,
+        task_id: str,
+        backtest_id: str,
+    ) -> dict:
+        """
+        多进程并行回测（P2 核心优化）
+
+        将股票列表分成 N 组，每组由独立 worker 进程执行回测，
+        最后合并结果。进度通过 Queue + ProgressBridge 实时写入 DB。
+        """
+        import multiprocessing as mp
+        from multiprocessing import Queue
+
+        from app.core.config import settings
+
+        perf_breakdown: dict = {}
+        # 确保 task_id 是字符串（可能传入 UUID 对象）
+        task_id = str(task_id) if task_id else task_id
+        backtest_id = str(backtest_id) if backtest_id else backtest_id
+        _t_total = time.perf_counter()
+
+        # 确定 worker 数量
+        cpu_count = mp.cpu_count() or 4
+        num_workers = min(cpu_count - 2, 16)
+        num_workers = max(num_workers, 2)  # 至少 2 个 worker
+
+        logger.info(
+            f"P2 多进程回测: stocks={len(stock_codes)}, "
+            f"workers={num_workers}, cpus={cpu_count}"
+        )
+
+        # 更新任务进度到 30%（开始多进程阶段）
+        if task_id:
+            self._update_progress_db_direct(
+                task_id, 30.0,
+                {"stage": "multiprocess_init", "num_workers": num_workers},
+            )
+
+        # 分组：尽量均匀分配
+        groups = [[] for _ in range(num_workers)]
+        for i, code in enumerate(stock_codes):
+            groups[i % num_workers].append(code)
+        # 移除空组
+        groups = [g for g in groups if g]
+        actual_workers = len(groups)
+
+        logger.info(
+            f"股票分组: {actual_workers} 组, "
+            f"每组 {[len(g) for g in groups]}"
+        )
+
+        # 序列化配置
+        config_dict = self._serialize_backtest_config(backtest_config)
+        data_dir = str(self.data_loader.data_dir)
+
+        # 创建进度队列和桥接器
+        progress_queue = Queue()
+        bridge = ProgressBridge(
+            task_id=task_id,
+            progress_queue=progress_queue,
+            num_workers=actual_workers,
+            db_url=settings.database_url_sync,
+        )
+        bridge.start()
+
+        # 准备 worker 参数
+        worker_args = []
+        for wid, group in enumerate(groups):
+            worker_args.append((
+                wid,
+                group,
+                data_dir,
+                start_date.isoformat(),
+                end_date.isoformat(),
+                strategy_name,
+                strategy_config or {},
+                config_dict,
+                task_id,
+                progress_queue,
+            ))
+
+        # 启动多进程池
+        _t_mp = time.perf_counter()
+        ctx = mp.get_context("spawn")
+
+        try:
+            with ctx.Pool(processes=actual_workers) as pool:
+                results = pool.map(worker_backtest, worker_args)
+        finally:
+            bridge.stop()
+
+        perf_breakdown["multiprocess_s"] = time.perf_counter() - _t_mp
+
+        # 检查结果
+        errors = [r for r in results if "error" in r]
+        successes = [r for r in results if "error" not in r]
+
+        if errors:
+            for err in errors:
+                logger.error(
+                    f"Worker {err['worker_id']} 失败: {err['error']}"
+                )
+
+        if not successes:
+            raise RuntimeError(
+                f"所有 {actual_workers} 个 worker 都失败: "
+                + "; ".join(e.get("error", "?") for e in errors)
+            )
+
+        logger.info(
+            f"多进程完成: {len(successes)}/{actual_workers} 成功, "
+            f"{len(errors)} 失败"
+        )
+
+        # 合并结果
+        _t_merge = time.perf_counter()
+        merged = self._merge_worker_results(
+            successes, backtest_config, strategy_name,
+            stock_codes, start_date, end_date, strategy_config,
+        )
+        perf_breakdown["merge_s"] = time.perf_counter() - _t_merge
+
+        # 添加 backtest_id
+        merged["backtest_id"] = backtest_id
+
+        # worker 计时汇总
+        worker_timings = [r.get("timing", {}) for r in successes]
+        perf_breakdown["worker_timings"] = worker_timings
+        perf_breakdown["total_wall_s"] = time.perf_counter() - _t_total
+        perf_breakdown["num_workers"] = actual_workers
+        merged["perf_breakdown"] = perf_breakdown
+
+        logger.info(
+            f"🎉 P2 多进程回测完成: "
+            f"total={perf_breakdown['total_wall_s']:.1f}s, "
+            f"mp={perf_breakdown['multiprocess_s']:.1f}s, "
+            f"return={merged.get('total_return', 0):.2%}"
+        )
+
+        return merged
+
+    def _merge_worker_results(
+        self,
+        results: list,
+        backtest_config,
+        strategy_name: str,
+        stock_codes: list,
+        start_date,
+        end_date,
+        strategy_config: dict,
+    ) -> dict:
+        """
+        合并多个 worker 的回测结果
+
+        输出格式与 BacktestReportGenerator.generate_backtest_report() 一致，
+        确保 persistence.save_backtest_results() 能正确处理。
+        """
+        import numpy as np
+        import pandas as pd
+
+        # ── 合并基础统计 ──
+        total_signals = sum(r["total_signals"] for r in results)
+        total_executed_trades = sum(r["executed_trades"] for r in results)
+        trading_days = max(
+            (r.get("trading_days", 0) for r in results), default=0
+        )
+
+        # ── 合并交易记录（已序列化为 dict） ──
+        all_trade_history = []
+        for r in results:
+            all_trade_history.extend(r.get("trade_history", []))
+
+        # ── 合并 portfolio_history（按日期对齐求和） ──
+        date_to_snapshot: dict = {}
+        for r in results:
+            for snapshot in r.get("portfolio_history", []):
+                date_str = snapshot["date"]
+                if date_str not in date_to_snapshot:
+                    date_to_snapshot[date_str] = {
+                        "date": date_str,
+                        "portfolio_value": 0.0,
+                        "portfolio_value_without_cost": 0.0,
+                        "cash": 0.0,
+                        "positions_count": 0,
+                        "positions": {},
+                        "total_return": 0.0,
+                    }
+                agg = date_to_snapshot[date_str]
+                agg["portfolio_value"] += snapshot.get("portfolio_value", 0.0)
+                agg["portfolio_value_without_cost"] += snapshot.get(
+                    "portfolio_value_without_cost",
+                    snapshot.get("portfolio_value", 0.0),
+                )
+                agg["cash"] += snapshot.get("cash", 0.0)
+                agg["positions_count"] += snapshot.get("positions_count", 0)
+                # 合并持仓（不同 worker 的股票不重叠）
+                agg["positions"].update(snapshot.get("positions", {}))
+
+        merged_history = sorted(
+            date_to_snapshot.values(), key=lambda x: x["date"]
+        )
+
+        # 计算合并后的 total_return
+        total_injection = sum(
+            r.get("total_capital_injection", 0.0) for r in results
+        )
+        total_initial = backtest_config.initial_cash * len(results)
+        total_invested = total_initial + total_injection
+
+        for snap in merged_history:
+            pv = snap["portfolio_value"]
+            snap["total_return"] = (
+                (pv - total_invested) / total_invested
+                if total_invested > 0 else 0.0
+            )
+            pv_nc = snap["portfolio_value_without_cost"]
+            snap["total_return_without_cost"] = (
+                (pv_nc - total_invested) / total_invested
+                if total_invested > 0 else 0.0
+            )
+
+        # ── 合并权益曲线（用于指标计算） ──
+        date_to_values: dict = {}
+        for r in results:
+            for date_val, value in r.get("equity_curve", []):
+                if date_val not in date_to_values:
+                    date_to_values[date_val] = 0.0
+                date_to_values[date_val] += value
+        merged_equity = sorted(date_to_values.items(), key=lambda x: x[0])
+
+        # ── 计算合并后的绩效指标 ──
+        final_value = merged_equity[-1][1] if merged_equity else total_invested
+        merged_metrics = {}
+
+        if merged_equity and len(merged_equity) > 1:
+            values = [v for _, v in merged_equity]
+            returns = pd.Series(values).pct_change().dropna()
+
+            total_return = (
+                (values[-1] - total_invested) / total_invested
+                if total_invested > 0 else 0.0
+            )
+
+            days = (merged_equity[-1][0] - merged_equity[0][0]).days
+            ann_return = (
+                (1 + total_return) ** (365 / max(days, 1)) - 1
+                if days > 0 else 0.0
+            )
+
+            vol = float(returns.std() * np.sqrt(252)) if len(returns) > 1 else 0.0
+            sharpe = ann_return / vol if vol > 0 else 0.0
+
+            cum_ret = (1 + returns).cumprod()
+            running_max = cum_ret.expanding().max()
+            drawdown = (cum_ret - running_max) / running_max
+            max_dd = float(drawdown.min()) if len(drawdown) > 0 else 0.0
+
+            # 胜率（trade_history 是 dict 列表）
+            winning = sum(
+                1 for t in all_trade_history
+                if t.get("pnl", 0) > 0
+            )
+            losing = sum(
+                1 for t in all_trade_history
+                if t.get("pnl", 0) < 0
+            )
+            win_rate = winning / len(all_trade_history) if all_trade_history else 0.0
+
+            # profit_factor
+            gross_profit = sum(
+                t.get("pnl", 0) for t in all_trade_history if t.get("pnl", 0) > 0
+            )
+            gross_loss = abs(sum(
+                t.get("pnl", 0) for t in all_trade_history if t.get("pnl", 0) < 0
+            ))
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0.0
+
+            merged_metrics = {
+                "total_return": float(total_return),
+                "annualized_return": float(ann_return),
+                "volatility": vol,
+                "sharpe_ratio": float(sharpe),
+                "max_drawdown": max_dd,
+                "total_trades": len(all_trade_history),
+                "win_rate": float(win_rate),
+                "profit_factor": float(profit_factor),
+                "winning_trades": winning,
+                "losing_trades": losing,
+                "total_capital_injection": float(total_injection),
+            }
+        else:
+            merged_metrics = {
+                "total_return": 0.0,
+                "annualized_return": 0.0,
+                "volatility": 0.0,
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "total_trades": len(all_trade_history),
+                "win_rate": 0.0,
+                "profit_factor": 0.0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "total_capital_injection": float(total_injection),
+            }
+
+        # ── 合并成本统计 ──
+        total_commission = sum(r.get("total_commission", 0.0) for r in results)
+        total_slippage = sum(r.get("total_slippage", 0.0) for r in results)
+
+        # ── 合并熔断信息 ──
+        cb_summary = None
+        for r in results:
+            cb = r.get("circuit_breaker_summary")
+            if cb and cb.get("triggered"):
+                cb_summary = cb
+                break
+
+        # ── 构建报告（兼容 report_generator + persistence 格式） ──
+        actual_codes = []
+        for r in results:
+            actual_codes.extend(r.get("stock_codes", []))
+
+        report = {
+            # 基础信息
+            "strategy_name": strategy_name,
+            "stock_codes": actual_codes,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "initial_cash": total_invested,
+            "final_value": float(final_value),
+            # 绩效指标（顶层，供 dependencies.py 直接读取）
+            "total_return": merged_metrics.get("total_return", 0.0),
+            "annualized_return": merged_metrics.get("annualized_return", 0.0),
+            "volatility": merged_metrics.get("volatility", 0.0),
+            "sharpe_ratio": merged_metrics.get("sharpe_ratio", 0.0),
+            "max_drawdown": merged_metrics.get("max_drawdown", 0.0),
+            "win_rate": merged_metrics.get("win_rate", 0.0),
+            "profit_factor": merged_metrics.get("profit_factor", 0.0),
+            "winning_trades": merged_metrics.get("winning_trades", 0),
+            "losing_trades": merged_metrics.get("losing_trades", 0),
+            "total_trades": merged_metrics.get("total_trades", 0),
+            "total_signals": total_signals,
+            "executed_trades": total_executed_trades,
+            "trading_days": trading_days,
+            # 嵌套绩效指标（供 persistence adapter 使用）
+            "performance_metrics": merged_metrics,
+            # 交易和组合历史（persistence 核心数据）
+            "trade_history": all_trade_history,
+            "portfolio_history": merged_history,
+            # 配置信息
+            "backtest_config": {
+                "strategy_name": strategy_name,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "initial_cash": backtest_config.initial_cash,
+                "commission_rate": backtest_config.commission_rate,
+                "slippage_rate": backtest_config.slippage_rate,
+                "max_position_size": backtest_config.max_position_size,
+                "unlimited_buying": getattr(backtest_config, "unlimited_buying", False),
+                **(
+                    {"strategy_config": strategy_config}
+                    if strategy_config and isinstance(strategy_config, dict)
+                    else {}
+                ),
+            },
+            # 成本统计
+            "cost_statistics": {
+                "total_commission": float(total_commission),
+                "total_slippage": float(total_slippage),
+                "total_capital_injection": float(total_injection),
+                "total_cost": float(total_commission + total_slippage),
+            },
+            # 元信息
+            "n_stocks": len(actual_codes),
+            "auto_position_sizing": getattr(
+                backtest_config, "auto_position_sizing", None
+            ),
+            "unlimited_buying": getattr(
+                backtest_config, "unlimited_buying", None
+            ),
+            "configured_max_position_size": backtest_config.max_position_size,
+            "multiprocess": True,
+            "num_workers": len(results),
+        }
+
+        if cb_summary:
+            report["circuit_breaker"] = cb_summary
+
+        return report
+
+    @staticmethod
+    def _serialize_backtest_config(config) -> dict:
+        """将 BacktestConfig 序列化为 dict（供子进程重建）"""
+        return {
+            "initial_cash": config.initial_cash,
+            "commission_rate": config.commission_rate,
+            "slippage_rate": config.slippage_rate,
+            "max_position_size": config.max_position_size,
+            "stop_loss_pct": config.stop_loss_pct,
+            "take_profit_pct": config.take_profit_pct,
+            "rebalance_frequency": config.rebalance_frequency,
+            "max_drawdown_pct": getattr(config, "max_drawdown_pct", None),
+            "record_portfolio_history": config.record_portfolio_history,
+            "portfolio_history_stride": config.portfolio_history_stride,
+            "record_positions_in_history": config.record_positions_in_history,
+            "auto_position_sizing": getattr(
+                config, "auto_position_sizing", True
+            ),
+            "unlimited_buying": getattr(
+                config, "unlimited_buying", False
+            ),
+        }
+
+    def _update_progress_db_direct(
+        self, task_id: str, progress: float, extra_data: dict = None,
+    ) -> None:
+        """直接用 psycopg2 更新进度（不依赖 SessionLocal 连接池）"""
+        import json
+        import psycopg2
+        from app.core.config import settings
+
+        try:
+            conn = psycopg2.connect(settings.database_url_sync)
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT result FROM tasks WHERE task_id = %s",
+                    (task_id,),
+                )
+                row = cur.fetchone()
+                result_data = row[0] if row and row[0] else {}
+                if not isinstance(result_data, dict):
+                    result_data = {}
+                if extra_data:
+                    result_data["progress_data"] = extra_data
+                cur.execute(
+                    """
+                    UPDATE tasks SET progress = %s, result = %s::jsonb
+                    WHERE task_id = %s AND status = 'running'
+                    """,
+                    (progress, json.dumps(result_data, default=str), task_id),
+                )
+                conn.commit()
+                cur.close()
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"直接更新进度失败: {e}")
 
     # ── 同步辅助方法（供 run_backtest_sync 使用） ──
 
