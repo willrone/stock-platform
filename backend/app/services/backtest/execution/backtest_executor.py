@@ -1086,7 +1086,7 @@ class BacktestExecutor:
         _batch_executed_signals: List[dict] = []  # 收集已执行的信号
         _batch_unexecuted_signals: List[dict] = []  # 收集未执行的信号
         _current_backtest_id: str | None = None  # 缓存 backtest_id
-        _BATCH_FLUSH_THRESHOLD = 5000  # 流式写入阈值
+        _BATCH_FLUSH_THRESHOLD = 1000  # 流式写入阈值
 
         # 流式写入辅助函数：当积累足够数据时写入数据库
         async def _flush_batch_to_db(
