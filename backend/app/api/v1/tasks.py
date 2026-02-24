@@ -13,11 +13,13 @@ from loguru import logger
 from app.api.v1.dependencies import (
     execute_backtest_task_simple,
     execute_prediction_task_simple,
+    execute_qlib_precompute_task_simple,
     get_current_user,
 )
 from app.api.v1.schemas import (
     BacktestCompareRequest,
     BacktestExportRequest,
+    RebuildTaskRequest,
     StandardResponse,
     TaskCreateRequest,
 )
@@ -30,6 +32,7 @@ from app.services.data.stock_data_loader import StockDataLoader
 from app.services.prediction.prediction_engine import PredictionConfig, PredictionEngine
 from app.services.tasks.process_executor import get_process_executor
 from app.services.tasks.task_monitor import task_monitor
+from app.utils.dict_merge import deep_merge
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
@@ -632,6 +635,103 @@ async def get_task_stats(user_id: str = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"获取任务统计失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取任务统计失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.post("/{task_id}/rebuild", response_model=StandardResponse)
+async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str = Depends(get_current_user)):
+    """基于已有任务重建新任务"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+
+        # 查询原任务
+        original_task = task_repository.get_task_by_id(task_id)
+        if not original_task:
+            raise HTTPException(status_code=404, detail=f"原任务不存在: {task_id}")
+
+        task_type = original_task.task_type
+        original_config = original_task.config or {}
+
+        # training 类型不支持重建
+        if task_type == "training":
+            raise HTTPException(status_code=400, detail="训练任务请到模型管理页面创建")
+
+        # 深度合并配置
+        if request.config_override:
+            merged_config = deep_merge(original_config, request.config_override)
+        else:
+            merged_config = dict(original_config)
+
+        # 生成新任务名
+        original_name = original_task.task_name or "未命名任务"
+        new_task_name = request.task_name or f"[重建] {original_name}"
+
+        # 确定 TaskType 枚举
+        from app.models.task_models import TaskType as TaskTypeEnum
+        type_map = {
+            "backtest": TaskTypeEnum.BACKTEST,
+            "prediction": TaskTypeEnum.PREDICTION,
+            "hyperparameter_optimization": TaskTypeEnum.HYPERPARAMETER_OPTIMIZATION,
+            "qlib_precompute": TaskTypeEnum.QLIB_PRECOMPUTE,
+        }
+        task_type_enum = type_map.get(task_type)
+        if not task_type_enum:
+            raise HTTPException(status_code=400, detail=f"不支持重建的任务类型: {task_type}")
+
+        # 创建新任务
+        new_task = task_repository.create_task(
+            task_name=new_task_name,
+            task_type=task_type_enum,
+            user_id=user_id,
+            config=merged_config,
+        )
+
+        # 提交到进程池执行
+        try:
+            process_executor = get_process_executor()
+
+            if task_type == "prediction":
+                process_executor.submit(execute_prediction_task_simple, new_task.task_id)
+            elif task_type == "backtest":
+                process_executor.submit(execute_backtest_task_simple, new_task.task_id)
+            elif task_type == "hyperparameter_optimization":
+                from app.api.v1.optimization import execute_optimization_task_simple
+                process_executor.submit(execute_optimization_task_simple, new_task.task_id)
+            elif task_type == "qlib_precompute":
+                process_executor.submit(execute_qlib_precompute_task_simple, new_task.task_id)
+
+            logger.info(f"重建任务已提交: {new_task.task_id}, 原任务: {task_id}, 类型: {task_type}")
+        except Exception as submit_error:
+            logger.error(f"重建任务提交失败: {submit_error}", exc_info=True)
+            try:
+                task_repository.update_task_status(
+                    task_id=new_task.task_id,
+                    status=TaskStatus.FAILED,
+                    error_message=f"任务提交失败: {str(submit_error)}",
+                )
+            except:
+                pass
+
+        task_data = {
+            "task_id": new_task.task_id,
+            "task_name": new_task.task_name,
+            "task_type": new_task.task_type,
+            "status": new_task.status,
+            "progress": new_task.progress,
+            "config": merged_config,
+            "original_task_id": task_id,
+            "created_at": new_task.created_at.isoformat() if new_task.created_at else datetime.now().isoformat(),
+        }
+
+        return StandardResponse(success=True, message="任务重建成功", data=task_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"重建任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"重建任务失败: {str(e)}")
     finally:
         session.close()
 

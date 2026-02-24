@@ -255,6 +255,69 @@ async def get_available_strategies():
                     },
                 },
             },
+            "kdj": {
+                "name": "KDJ策略",
+                "description": "基于KDJ随机指标的超买超卖策略，J值低位金叉买入，高位死叉卖出",
+                "category": "technical",
+                "parameters": {
+                    "k_period": {
+                        "type": "int",
+                        "default": 9,
+                        "description": "K线周期",
+                        "min": 5,
+                        "max": 30,
+                    },
+                    "d_period": {
+                        "type": "int",
+                        "default": 3,
+                        "description": "D线周期",
+                        "min": 2,
+                        "max": 10,
+                    },
+                    "j_smooth": {
+                        "type": "int",
+                        "default": 3,
+                        "description": "J线平滑周期",
+                        "min": 2,
+                        "max": 10,
+                    },
+                    "oversold": {
+                        "type": "int",
+                        "default": 20,
+                        "description": "超卖阈值",
+                        "min": 10,
+                        "max": 30,
+                    },
+                    "overbought": {
+                        "type": "int",
+                        "default": 80,
+                        "description": "超买阈值",
+                        "min": 70,
+                        "max": 90,
+                    },
+                },
+            },
+            "obv": {
+                "name": "OBV策略",
+                "description": "基于能量潮指标的趋势跟踪策略，OBV上穿均线买入，下穿均线卖出",
+                "category": "technical",
+                "parameters": {
+                    "obv_ma_period": {
+                        "type": "int",
+                        "default": 20,
+                        "description": "OBV均线周期",
+                        "min": 5,
+                        "max": 60,
+                    },
+                    "signal_threshold": {
+                        "type": "float",
+                        "default": 0.02,
+                        "description": "信号阈值",
+                        "min": 0.001,
+                        "max": 0.1,
+                    },
+                },
+            },
             # 统计套利策略
             "pairs_trading": {
                 "name": "配对交易策略",

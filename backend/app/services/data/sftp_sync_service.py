@@ -77,7 +77,6 @@ class SFTPSyncService:
                 for k, v in {
                     "SFTP_HOST": self.host,
                     "SFTP_USERNAME": self.username,
-                    "SFTP_PASSWORD": self.password,
                     "SFTP_REMOTE_LIST_PATH": self.remote_list_path,
                     "SFTP_REMOTE_DATA_DIR": self.remote_data_dir,
                 }.items()
@@ -127,13 +126,19 @@ class SFTPSyncService:
 
         try:
             logger.debug(f"正在建立SSH连接...")
-            ssh.connect(
+            connect_kwargs = dict(
                 hostname=self.host,
                 port=self.port,
                 username=self.username,
-                password=self.password,
                 timeout=30,
             )
+            if self.password:
+                connect_kwargs["password"] = self.password
+            else:
+                # 无密码时使用 SSH key 认证（自动查找 ~/.ssh/id_*）
+                connect_kwargs["allow_agent"] = True
+                connect_kwargs["look_for_keys"] = True
+            ssh.connect(**connect_kwargs)
             logger.debug(f"SSH连接成功，正在打开SFTP通道...")
             sftp = ssh.open_sftp()
             logger.info(f"成功连接到SFTP服务器: {self.host}")

@@ -222,3 +222,9 @@ class BacktestExportRequest(BaseModel):
     include_charts: Optional[List[str]] = Field(default=None, description="包含的图表类型")
     include_tables: Optional[List[str]] = Field(default=None, description="包含的数据表格")
     include_raw_data: bool = Field(default=False, description="是否包含原始数据")
+
+
+class RebuildTaskRequest(BaseModel):
+    """任务重建请求"""
+    task_name: Optional[str] = Field(None, description="新任务名称，默认为 [重建] {原名}")
+    config_override: Optional[Dict[str, Any]] = Field(None, description="配置覆盖，深度合并到原 config")

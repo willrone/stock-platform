@@ -59,6 +59,7 @@ import {
   Calendar,
   FileText,
   Save,
+  Copy,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTaskStore, Task } from '../../../stores/useTaskStore';
@@ -786,6 +787,13 @@ export default function TaskDetailPage() {
             </Button>
           )}
 
+          <Button
+            variant="outlined"
+            startIcon={<Copy size={16} />}
+            onClick={() => router.push("/tasks/create?rebuild=" + taskId)}
+          >
+            重建任务
+          </Button>
           <Button
             variant="outlined"
             color="error"
@@ -2124,6 +2132,7 @@ export default function TaskDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
     </Box>
   );
 }

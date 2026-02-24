@@ -544,12 +544,12 @@ async def get_system_info():
     try:
         import platform
 
-        import pkg_resources
+        import importlib.metadata
 
         # 获取已安装的包
         installed_packages = {}
-        for dist in pkg_resources.working_set:
-            installed_packages[dist.project_name.lower()] = dist.version
+        for dist in importlib.metadata.distributions():
+            installed_packages[dist.metadata["Name"].lower()] = dist.metadata["Version"]
 
         system_info = {
             "platform": platform.platform(),

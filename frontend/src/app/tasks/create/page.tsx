@@ -120,15 +120,14 @@ export default function CreateTaskPage() {
         try {
           const response = await fetch('/api/v1/backtest/strategies');
           const resp = await response.json();
-        const data = resp.data || resp;
-          if (data.success && data.data) {
-            setAvailableStrategies(data.data);
+          if (resp.success && resp.data) {
+            setAvailableStrategies(resp.data);
             // 如果当前策略不在列表中，设置为第一个策略
             if (
-              data.data.length > 0 &&
-              !data.data.find((s: any) => s.key === formData.strategy_name)
+              resp.data.length > 0 &&
+              !resp.data.find((s: any) => s.key === formData.strategy_name)
             ) {
-              updateFormData('strategy_name', data.data[0].key);
+              updateFormData('strategy_name', resp.data[0].key);
             }
           }
         } catch (error) {

@@ -46,7 +46,7 @@ async def _configure_async_sqlite_connection(dbapi_conn, connection_record):
 
 async_engine = create_async_engine(
     settings.DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://"),
-    echo=settings.DEBUG,
+    echo=False,  # 关闭 SQL 语句日志，避免控制台刷屏
     future=True,
     # SQLite 特定配置
     connect_args={
@@ -71,7 +71,7 @@ if "sqlite" in settings.DATABASE_URL.lower():
 # 优化连接池配置以支持多进程访问
 sync_engine = create_engine(
     settings.database_url_sync,
-    echo=settings.DEBUG,
+    echo=False,  # 关闭 SQL 语句日志，避免控制台刷屏
     future=True,
     # 连接池配置（支持多进程）
     pool_size=10,  # 连接池大小

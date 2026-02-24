@@ -2,7 +2,7 @@
 量化交易策略集合
 
 包含以下策略类型：
-1. 技术分析策略：布林带策略、随机指标策略、CCI策略
+1. 技术分析策略：布林带策略、随机指标策略、CCI策略、KDJ策略、OBV策略
 2. 统计套利策略：配对交易策略、均值回归策略、协整策略
 3. 因子投资策略：价值因子策略、动量因子策略、低波动因子策略、多因子组合策略
 """
@@ -438,6 +438,255 @@ class CCIStrategy(BaseStrategy):
 
         except Exception as e:
             logger.error(f"CCI策略信号生成失败: {e}")
+            return []
+
+
+class KDJStrategy(BaseStrategy):
+    """KDJ随机指标策略"""
+
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__("KDJ", config)
+        self.k_period = config.get("k_period", 9)
+        self.d_period = config.get("d_period", 3)
+        self.j_smooth = config.get("j_smooth", 3)
+        self.oversold = config.get("oversold", 20)
+        self.overbought = config.get("overbought", 80)
+
+    def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """计算KDJ指标：K=随机指标K值，D=K的移动平均，J=3*K-2*D"""
+        high = data["high"]
+        low = data["low"]
+        close = data["close"]
+
+        lowest_low = low.rolling(window=self.k_period).min()
+        highest_high = high.rolling(window=self.k_period).max()
+        rsv = 100 * (close - lowest_low) / (highest_high - lowest_low + 1e-10)
+        k_line = rsv.rolling(window=self.j_smooth).mean()
+        d_line = k_line.rolling(window=self.d_period).mean()
+        j_line = 3 * k_line - 2 * d_line
+
+        return {"k_line": k_line, "d_line": d_line, "j_line": j_line, "price": close}
+
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量KDJ信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            k = indicators["k_line"]
+            d = indicators["d_line"]
+            j = indicators["j_line"]
+            prev_k = k.shift(1)
+            prev_d = d.shift(1)
+
+            # 买入：J < oversold 且 K上穿D（金叉）
+            buy_mask = (
+                (j < self.oversold) &
+                (k > d) &
+                (prev_k <= prev_d)
+            )
+            # 卖出：J > overbought 且 K下穿D（死叉）
+            sell_mask = (
+                (j > self.overbought) &
+                (k < d) &
+                (prev_k >= prev_d)
+            )
+
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
+            return signals
+        except Exception as e:
+            logger.error(f"KDJ策略向量化计算失败: {e}")
+            return None
+
+    def generate_signals(
+        self, data: pd.DataFrame, current_date: datetime
+    ) -> List[TradingSignal]:
+        """生成KDJ交易信号"""
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if isinstance(sig_type, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_k = indicators["k_line"].iloc[current_idx]
+                    current_d = indicators["d_line"].iloc[current_idx]
+                    current_j = indicators["j_line"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=0.8,
+                        price=current_price,
+                        reason=f"[向量化] KDJ{'低位金叉' if sig_type == SignalType.BUY else '高位死叉'}，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
+                        metadata={"k_line": current_k, "d_line": current_d, "j_line": current_j},
+                    )]
+                return []
+        except Exception:
+            pass
+
+        signals = []
+        try:
+            indicators = self.get_cached_indicators(data)
+            current_idx = self._get_current_idx(data, current_date)
+            if current_idx < self.k_period + self.d_period + self.j_smooth:
+                return signals
+
+            current_price = indicators["price"].iloc[current_idx]
+            current_k = indicators["k_line"].iloc[current_idx]
+            current_d = indicators["d_line"].iloc[current_idx]
+            current_j = indicators["j_line"].iloc[current_idx]
+            prev_k = indicators["k_line"].iloc[current_idx - 1]
+            prev_d = indicators["d_line"].iloc[current_idx - 1]
+
+            stock_code = data.attrs.get("stock_code", "UNKNOWN")
+
+            if current_j < self.oversold and current_k > current_d and prev_k <= prev_d:
+                strength = (self.oversold - current_j) / self.oversold
+                signal = TradingSignal(
+                    timestamp=current_date,
+                    stock_code=stock_code,
+                    signal_type=SignalType.BUY,
+                    strength=min(1.0, strength),
+                    price=current_price,
+                    reason=f"KDJ低位金叉，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
+                    metadata={"k_line": current_k, "d_line": current_d, "j_line": current_j},
+                )
+                signals.append(signal)
+            elif current_j > self.overbought and current_k < current_d and prev_k >= prev_d:
+                strength = (current_j - self.overbought) / (100 - self.overbought)
+                signal = TradingSignal(
+                    timestamp=current_date,
+                    stock_code=stock_code,
+                    signal_type=SignalType.SELL,
+                    strength=min(1.0, strength),
+                    price=current_price,
+                    reason=f"KDJ高位死叉，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
+                    metadata={"k_line": current_k, "d_line": current_d, "j_line": current_j},
+                )
+                signals.append(signal)
+
+            return signals
+        except Exception as e:
+            logger.error(f"KDJ策略信号生成失败: {e}")
+            return []
+
+
+class OBVStrategy(BaseStrategy):
+    """能量潮(OBV)策略"""
+
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__("OBV", config)
+        self.obv_ma_period = config.get("obv_ma_period", 20)
+        self.signal_threshold = config.get("signal_threshold", 0.02)
+
+    def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """计算OBV及OBV均线（价涨加量，价跌减量）"""
+        close = data["close"]
+        volume = data["volume"] if "volume" in data.columns else pd.Series(0, index=data.index)
+
+        price_change = close.diff()
+        obv_direction = np.where(price_change > 0, volume, np.where(price_change < 0, -volume, 0))
+        obv = pd.Series(obv_direction, index=data.index).cumsum()
+        obv_ma = obv.rolling(window=self.obv_ma_period).mean()
+
+        return {"obv": obv, "obv_ma": obv_ma, "price": close}
+
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        """[性能优化] 向量化计算全量OBV信号"""
+        try:
+            indicators = self.get_cached_indicators(data)
+            obv = indicators["obv"]
+            obv_ma = indicators["obv_ma"]
+            prev_obv = obv.shift(1)
+            prev_obv_ma = obv_ma.shift(1)
+
+            # 买入：OBV上穿OBV_MA
+            buy_mask = (prev_obv <= prev_obv_ma) & (obv > obv_ma)
+            # 卖出：OBV下穿OBV_MA
+            sell_mask = (prev_obv >= prev_obv_ma) & (obv < obv_ma)
+
+            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals[buy_mask.fillna(False)] = SignalType.BUY
+            signals[sell_mask.fillna(False)] = SignalType.SELL
+            return signals
+        except Exception as e:
+            logger.error(f"OBV策略向量化计算失败: {e}")
+            return None
+
+    def generate_signals(
+        self, data: pd.DataFrame, current_date: datetime
+    ) -> List[TradingSignal]:
+        """生成OBV交易信号"""
+        try:
+            precomputed = data.attrs.get("_precomputed_signals", {}).get(self.name)
+            if precomputed is not None:
+                sig_type = precomputed.get(current_date)
+                if isinstance(sig_type, SignalType):
+                    indicators = self.get_cached_indicators(data)
+                    current_idx = self._get_current_idx(data, current_date)
+                    stock_code = data.attrs.get("stock_code", "UNKNOWN")
+                    current_price = indicators["price"].iloc[current_idx]
+                    current_obv = indicators["obv"].iloc[current_idx]
+                    current_obv_ma = indicators["obv_ma"].iloc[current_idx]
+                    return [TradingSignal(
+                        timestamp=current_date,
+                        stock_code=stock_code,
+                        signal_type=sig_type,
+                        strength=0.8,
+                        price=current_price,
+                        reason=f"[向量化] OBV{'上穿均线' if sig_type == SignalType.BUY else '下穿均线'}，OBV: {current_obv:.0f}, MA: {current_obv_ma:.0f}",
+                        metadata={"obv": current_obv, "obv_ma": current_obv_ma},
+                    )]
+                return []
+        except Exception:
+            pass
+
+        signals = []
+        try:
+            indicators = self.get_cached_indicators(data)
+            current_idx = self._get_current_idx(data, current_date)
+            if current_idx < self.obv_ma_period:
+                return signals
+
+            current_price = indicators["price"].iloc[current_idx]
+            current_obv = indicators["obv"].iloc[current_idx]
+            current_obv_ma = indicators["obv_ma"].iloc[current_idx]
+            prev_obv = indicators["obv"].iloc[current_idx - 1]
+            prev_obv_ma = indicators["obv_ma"].iloc[current_idx - 1]
+
+            stock_code = data.attrs.get("stock_code", "UNKNOWN")
+
+            if prev_obv <= prev_obv_ma and current_obv > current_obv_ma:
+                strength = 0.8
+                signal = TradingSignal(
+                    timestamp=current_date,
+                    stock_code=stock_code,
+                    signal_type=SignalType.BUY,
+                    strength=strength,
+                    price=current_price,
+                    reason=f"OBV上穿均线，能量积累，OBV: {current_obv:.0f}",
+                    metadata={"obv": current_obv, "obv_ma": current_obv_ma},
+                )
+                signals.append(signal)
+            elif prev_obv >= prev_obv_ma and current_obv < current_obv_ma:
+                strength = 0.8
+                signal = TradingSignal(
+                    timestamp=current_date,
+                    stock_code=stock_code,
+                    signal_type=SignalType.SELL,
+                    strength=strength,
+                    price=current_price,
+                    reason=f"OBV下穿均线，能量衰减，OBV: {current_obv:.0f}",
+                    metadata={"obv": current_obv, "obv_ma": current_obv_ma},
+                )
+                signals.append(signal)
+
+            return signals
+        except Exception as e:
+            logger.error(f"OBV策略信号生成失败: {e}")
             return []
 
 
@@ -1450,6 +1699,8 @@ class AdvancedStrategyFactory:
         "bollinger": BollingerBandStrategy,
         "stochastic": StochasticStrategy,
         "cci": CCIStrategy,
+        "kdj": KDJStrategy,
+        "obv": OBVStrategy,
         # 统计套利策略
         "pairs_trading": PairsTradingStrategy,
         "mean_reversion": MeanReversionStrategy,
@@ -1487,7 +1738,7 @@ class AdvancedStrategyFactory:
         }
 
         for name in cls._strategies.keys():
-            if name in ["bollinger", "stochastic", "cci"]:
+            if name in ["bollinger", "stochastic", "cci", "kdj", "obv"]:
                 categories["technical"].append(name)
             elif name in ["pairs_trading", "mean_reversion", "cointegration"]:
                 categories["statistical_arbitrage"].append(name)

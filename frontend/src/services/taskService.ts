@@ -192,4 +192,14 @@ export class TaskService {
   }> {
     return apiRequest.get('/tasks/stats');
   }
+
+  /**
+   * 重建任务（基于已有任务的配置创建新任务）
+   */
+  static async rebuildTask(
+    taskId: string,
+    params: { task_name?: string; config_override?: Record<string, any> }
+  ): Promise<Task> {
+    return apiRequest.post<Task>(`/tasks/${taskId}/rebuild`, params);
+  }
 }

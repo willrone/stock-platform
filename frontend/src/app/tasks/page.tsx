@@ -40,7 +40,7 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
-import { Plus, RefreshCw, Search, Eye, Play, Pause, Trash2, Filter, BarChart3 } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Play, Pause, Trash2, Filter, BarChart3, Copy } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTaskStore, Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
@@ -528,6 +528,16 @@ export default function TasksPage() {
                           </Tooltip>
                         )}
 
+                        <Tooltip title="重建任务">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              router.push("/tasks/create?rebuild=" + task.task_id);
+                            }}
+                          >
+                            <Copy size={16} />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="删除任务">
                           <IconButton
                             size="small"
