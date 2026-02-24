@@ -18,11 +18,7 @@ from ..models import (
     TradingSignal,
 )
 from ..strategies.strategy_factory import StrategyFactory
-from ..strategies.technical.basic_strategies import (
-    MACDStrategy,
-    MovingAverageStrategy,
-    RSIStrategy,
-)
+from ..strategies.technical import MACDStrategy, MovingAverageStrategy, RSIStrategy
 
 # 从策略模块导入
 from .base_strategy import BaseStrategy

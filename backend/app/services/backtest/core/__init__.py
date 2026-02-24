@@ -16,11 +16,7 @@ from ..models import (
 from ..strategies.strategy_factory import StrategyFactory
 
 # 从策略模块导入（策略已移动到strategies目录）
-from ..strategies.technical.basic_strategies import (
-    MACDStrategy,
-    MovingAverageStrategy,
-    RSIStrategy,
-)
+from ..strategies.technical import MACDStrategy, MovingAverageStrategy, RSIStrategy
 
 # 从各个模块导入
 from .base_strategy import BaseStrategy

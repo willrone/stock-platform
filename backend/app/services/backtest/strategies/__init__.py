@@ -25,7 +25,7 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 from .strategy_factory import StrategyFactory
 
 # 基础技术分析策略
-from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy, RSIStrategy
+from .technical import MACDStrategy, MovingAverageStrategy, RSIStrategy
 
 __all__ = [
     # 基础技术分析策略

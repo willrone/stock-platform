@@ -24,7 +24,8 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
     StochasticStrategy,
     ValueFactorStrategy,
 )
-from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy, RSIStrategy
+from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy
+from .technical.rsi_optimized import RSIOptimizedStrategy
 from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
 
 
@@ -34,7 +35,7 @@ class StrategyFactory:
     _strategies = {
         # 基础技术分析策略
         "moving_average": MovingAverageStrategy,
-        "rsi": RSIStrategy,
+        "rsi": RSIOptimizedStrategy,
         "macd": MACDStrategy,
         # 高级技术分析策略
         "bollinger": BollingerBandStrategy,
