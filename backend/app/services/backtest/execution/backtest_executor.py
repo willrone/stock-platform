@@ -293,15 +293,20 @@ class BacktestExecutor:
             # 预处理（日期索引 + 预计算信号 + 信号提取）
             _t0 = time.perf_counter()
 
-            # ✅ 日期预索引：为每只股票建立 date->idx 映射，回测循环里用 O(1) 查找替代 get_loc
-            # 经验上这是纯收益（相比指标预热，不会把计算串行化）。
+            # ✅ 日期预索引
+            _t_sub = time.perf_counter()
             self._build_date_index(stock_data)
+            perf_breakdown["precompute_sub_build_date_index_s"] = time.perf_counter() - _t_sub
 
-            # ✅ 信号向量化预计算：在进入每日循环前，先尝试一次性算出全量买卖点
+            # ✅ 信号向量化预计算
+            _t_sub = time.perf_counter()
             self._precompute_strategy_signals(strategy, stock_data)
+            perf_breakdown["precompute_sub_strategy_signals_s"] = time.perf_counter() - _t_sub
             
-            # ✅ 信号提取优化：将预计算信号提取到扁平字典，避免回测循环中重复查找 attrs
+            # ✅ 信号提取优化
+            _t_sub = time.perf_counter()
             precomputed_signals = self._extract_precomputed_signals_to_dict(strategy, stock_data)
+            perf_breakdown["precompute_sub_extract_signals_s"] = time.perf_counter() - _t_sub
             
             # 🔍 调试日志：检查预计算信号
             logger.info(f"🔍 预计算信号字典大小: {len(precomputed_signals)}")
@@ -372,7 +377,7 @@ class BacktestExecutor:
             _t0 = time.perf_counter()
             # Phase1 预备：将 close/valid/signal 对齐成 ndarray，减少主循环 DataFrame/dict 访问
             _t1 = time.perf_counter()
-            aligned_arrays = self._build_aligned_arrays(strategy, stock_data, trading_dates)
+            aligned_arrays = self._build_aligned_arrays(strategy, stock_data, trading_dates, perf_breakdown=perf_breakdown)
             perf_breakdown["align_arrays_s"] = time.perf_counter() - _t1
 
             backtest_results = await self._execute_backtest_loop(
@@ -385,6 +390,7 @@ class BacktestExecutor:
                 backtest_id=backtest_id,
                 precomputed_signals=precomputed_signals,
                 aligned_arrays=aligned_arrays,
+                perf_breakdown=perf_breakdown,
             )
             perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
 
@@ -824,6 +830,7 @@ class BacktestExecutor:
         strategy: BaseStrategy,
         stock_data: Dict[str, pd.DataFrame],
         trading_dates: List[datetime],
+        perf_breakdown: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
         """[Phase3] 将数据/信号对齐到 ndarray，减少主循环 DataFrame/字典访问。
         
@@ -842,6 +849,7 @@ class BacktestExecutor:
               'signal': int8[N,T] (1=BUY, -1=SELL, 0=NONE)
             }
         """
+        _t_align_alloc = time.perf_counter()
         stock_codes = list(stock_data.keys())
         T = len(trading_dates)
         N = len(stock_codes)
@@ -853,10 +861,13 @@ class BacktestExecutor:
         open_ = np.full((N, T), np.nan, dtype=np.float64, order='C')
         valid = np.zeros((N, T), dtype=bool, order='C')
         signal = np.zeros((N, T), dtype=np.int8, order='C')
+        _align_alloc_s = time.perf_counter() - _t_align_alloc
 
         # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
         strategy_key = strategy.name  # 使用 strategy.name 作为稳定的 key
 
+        _t_align_price = time.perf_counter()
+        _acc_align_signal = 0.0
         for i, code in enumerate(stock_codes):
             df = stock_data[code]
 
@@ -895,6 +906,7 @@ class BacktestExecutor:
                     except Exception:
                         pass
 
+            _t_align_sig_one = time.perf_counter()
             # 信号对齐（Phase 3 优化：使用 reindex 批量对齐 + 向量化映射）
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
@@ -921,6 +933,19 @@ class BacktestExecutor:
                     signal[i, sell_mask] = -1
             except Exception as e:
                 logger.warning(f"股票 {code} 信号对齐失败: {e}")
+            _acc_align_signal += time.perf_counter() - _t_align_sig_one
+
+        _align_price_s = time.perf_counter() - _t_align_price - _acc_align_signal
+        _align_signal_s = _acc_align_signal
+
+        if perf_breakdown is not None:
+            perf_breakdown['align_sub_alloc_arrays_s'] = _align_alloc_s
+            perf_breakdown['align_sub_price_reindex_s'] = _align_price_s
+            perf_breakdown['align_sub_signal_reindex_s'] = _align_signal_s
+            logger.info(
+                f"📊 align_arrays 细粒度: alloc={_align_alloc_s:.2f}s, "
+                f"price_reindex={_align_price_s:.2f}s, signal_reindex={_align_signal_s:.2f}s"
+            )
 
         return {
             'stock_codes': stock_codes,
@@ -1025,6 +1050,7 @@ class BacktestExecutor:
         backtest_id: str = None,
         precomputed_signals: Optional[Dict[Tuple[str, datetime], Any]] = None,
         aligned_arrays: Optional[Dict[str, Any]] = None,
+        perf_breakdown: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
         """执行回测主循环"""
         total_signals = 0
@@ -1033,6 +1059,15 @@ class BacktestExecutor:
         # 性能统计：信号生成时间
         signal_generation_times = []
         trade_execution_times = []
+
+        # ========== 细粒度性能统计累加器 ==========
+        _ml_price_lookup = 0.0
+        _ml_signal_extract = 0.0
+        _ml_trade_exec = 0.0
+        _ml_portfolio_snap = 0.0
+        _ml_batch_collect = 0.0
+        _ml_batch_flush = 0.0
+        _ml_progress_update = 0.0
 
         # 辅助函数：检查任务状态
         def _is_task_running(status) -> bool:
@@ -1165,6 +1200,7 @@ class BacktestExecutor:
             # 任务状态检查已合并到进度更新中（每5%检查一次），无需单独检查
             try:
                 # 获取当前价格（Phase3：使用向量化优化）
+                _t_ml = time.perf_counter()
                 current_prices: Dict[str, float] = {}
 
                 if aligned_arrays is not None:
@@ -1214,10 +1250,12 @@ class BacktestExecutor:
                         except Exception:
                             pass
 
+                _ml_price_lookup += time.perf_counter() - _t_ml
                 if not current_prices:
                     continue
 
                 # 生成交易信号（Phase1：优先用 ndarray signal matrix）
+                _t_ml = time.perf_counter()
                 all_signals: List[TradingSignal] = []
 
                 if aligned_arrays is not None:
@@ -1660,9 +1698,11 @@ class BacktestExecutor:
                     except Exception:
                         pass
 
+                _ml_signal_extract += time.perf_counter() - _t_ml
                 total_signals += len(all_signals)
 
                 # PERF优化：收集信号记录到内存，循环结束后批量写入数据库
+                _t_ml = time.perf_counter()
                 if task_id and all_signals:
                     try:
                         import uuid
@@ -1693,6 +1733,8 @@ class BacktestExecutor:
                     except Exception as e:
                         logger.warning(f"保存信号记录时出错: {e}")
 
+                _ml_batch_collect += time.perf_counter() - _t_ml
+                _t_ml = time.perf_counter()
                 # 执行交易信号（性能监控）
                 trade_start_time = (
                     time.perf_counter() if self.enable_performance_profiling else None
@@ -1825,6 +1867,7 @@ class BacktestExecutor:
                         "execute_trades_batch", trade_duration
                     )
 
+                _ml_trade_exec += time.perf_counter() - _t_ml
                 # PERF优化：收集未执行和已执行信号到内存，循环结束后批量写入
                 if task_id and unexecuted_signals:
                     _batch_unexecuted_signals.extend(unexecuted_signals)
@@ -1832,6 +1875,7 @@ class BacktestExecutor:
                 if task_id and executed_trade_signals:
                     _batch_executed_signals.extend(executed_trade_signals)
 
+                _t_ml = time.perf_counter()
                 # PERF优化A：流式增量写入 - 每积累1000条记录就写入一次数据库
                 if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) >= _BATCH_FLUSH_THRESHOLD:
                     await _flush_batch_to_db(
@@ -1844,11 +1888,14 @@ class BacktestExecutor:
                     _batch_signals_data.clear()
                     _batch_executed_signals.clear()
                     _batch_unexecuted_signals.clear()
+                _ml_batch_flush += time.perf_counter() - _t_ml
 
+                _t_ml = time.perf_counter()
                 # 记录组合快照
                 portfolio_manager.record_portfolio_snapshot(
                     current_date, current_prices
                 )
+                _ml_portfolio_snap += time.perf_counter() - _t_ml
 
                 # --- Sanity check (debug): topk_buffer must never exceed topk holdings ---
                 # 这条只做告警，不改变交易行为，用于定位"持仓数为何会>topk"。
@@ -1873,6 +1920,7 @@ class BacktestExecutor:
                     logger.warning(f"[topk_buffer][sanity] check failed: {e}")
 
                 # 更新进度监控（同时更新数据库）
+                _t_ml = time.perf_counter()
                 # 性能优化：进度更新从每5天改为每5%，减少DB写入次数（~14次 vs ~146次）
                 # 同时合并任务状态检查，避免额外的DB读取
                 _progress_pct = (i + 1) / len(trading_dates) * 100
@@ -1959,6 +2007,7 @@ class BacktestExecutor:
                         portfolio_value=portfolio_value,
                     )
 
+                _ml_progress_update += time.perf_counter() - _t_ml
                 # 定期输出进度日志
                 if i % 50 == 0:
                     progress = (i + 1) / len(trading_dates) * 100
@@ -1976,6 +2025,27 @@ class BacktestExecutor:
                     await backtest_progress_monitor.add_warning(task_id, error_msg)
 
                 continue
+
+        # ========== 写入 main_loop 细粒度计时 ==========
+        if perf_breakdown is not None:
+            perf_breakdown["mainloop_sub_price_lookup_s"] = _ml_price_lookup
+            perf_breakdown["mainloop_sub_signal_extract_s"] = _ml_signal_extract
+            perf_breakdown["mainloop_sub_trade_exec_s"] = _ml_trade_exec
+            perf_breakdown["mainloop_sub_portfolio_snap_s"] = _ml_portfolio_snap
+            perf_breakdown["mainloop_sub_batch_collect_s"] = _ml_batch_collect
+            perf_breakdown["mainloop_sub_batch_flush_s"] = _ml_batch_flush
+            perf_breakdown["mainloop_sub_progress_update_s"] = _ml_progress_update
+            _ml_total = (_ml_price_lookup + _ml_signal_extract + _ml_trade_exec +
+                        _ml_portfolio_snap + _ml_batch_collect + _ml_batch_flush +
+                        _ml_progress_update)
+            perf_breakdown["mainloop_sub_accounted_s"] = _ml_total
+            logger.info(
+                f"📊 main_loop 细粒度: price={_ml_price_lookup:.1f}s, "
+                f"signal={_ml_signal_extract:.1f}s, trade={_ml_trade_exec:.1f}s, "
+                f"snap={_ml_portfolio_snap:.1f}s, batch_collect={_ml_batch_collect:.1f}s, "
+                f"flush={_ml_batch_flush:.1f}s, progress={_ml_progress_update:.1f}s, "
+                f"accounted={_ml_total:.1f}s"
+            )
 
         # ========== PERF优化：循环结束后写入剩余数据 ==========
         # 写入流式写入未处理完的剩余数据
