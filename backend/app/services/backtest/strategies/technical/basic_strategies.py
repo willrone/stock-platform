@@ -184,6 +184,7 @@ class RSIStrategy(BaseStrategy):
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("RSI", config)
+        logger.info(f"📌 RSI策略实例化: class={self.__class__.__name__}, module={self.__class__.__module__}, rsi_period={config.get('rsi_period', 14)}")
         self.rsi_period = config.get("rsi_period", 14)
         self.oversold_threshold = config.get("oversold_threshold", 30)
         self.overbought_threshold = config.get("overbought_threshold", 70)
@@ -202,37 +203,54 @@ class RSIStrategy(BaseStrategy):
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """
-        计算RSI指标 - 性能优化版（使用 Numba 加速）
+        计算RSI指标 - 性能优化版
+        优先级：预计算列 > Numba > TA-Lib > pandas rolling
         """
+        import time as _time
+        _t0 = _time.perf_counter()
         close_prices = data["close"]
+        calc_path = "unknown"
 
-        # 优先使用 Numba 加速版本（Phase 3 优化）
-        try:
-            from .numba_indicators import NUMBA_AVAILABLE, rsi_wilder
-            
-            if NUMBA_AVAILABLE:
-                rsi_values = rsi_wilder(close_prices.values, self.rsi_period)
-                rsi = pd.Series(rsi_values, index=close_prices.index)
-            elif TALIB_AVAILABLE:
-                rsi = pd.Series(
-                    talib.RSI(close_prices.values, timeperiod=self.rsi_period),
-                    index=close_prices.index,
-                )
-            else:
-                # Fallback: 使用pandas实现RSI（Wilder's smoothing method）
+        # 1. 优先复用 data_loader 预计算的 RSI 列（零成本）
+        precomputed_col = f"RSI{self.rsi_period}"
+        if precomputed_col in data.columns:
+            rsi = data[precomputed_col]
+            calc_path = f"precomputed({precomputed_col})"
+        else:
+            # 2. Numba 加速
+            try:
+                from .numba_indicators import NUMBA_AVAILABLE, rsi_wilder
+
+                if NUMBA_AVAILABLE:
+                    rsi_values = rsi_wilder(close_prices.values, self.rsi_period)
+                    rsi = pd.Series(rsi_values, index=close_prices.index)
+                    calc_path = "numba"
+                elif TALIB_AVAILABLE:
+                    rsi = pd.Series(
+                        talib.RSI(close_prices.values, timeperiod=self.rsi_period),
+                        index=close_prices.index,
+                    )
+                    calc_path = "talib"
+                else:
+                    delta = close_prices.diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+                    rs = gain / loss
+                    rsi = 100 - (100 / (1 + rs))
+                    calc_path = "pandas_rolling"
+            except Exception as e:
+                logger.warning(f"Numba RSI 计算失败，回退到 pandas: {e}")
                 delta = close_prices.diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
                 rs = gain / loss
                 rsi = 100 - (100 / (1 + rs))
-        except Exception as e:
-            logger.warning(f"Numba RSI 计算失败，回退到 pandas: {e}")
-            # Fallback to pandas
-            delta = close_prices.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
+                calc_path = "pandas_fallback"
+
+        _elapsed_ms = (_time.perf_counter() - _t0) * 1000
+        stock_code = data.attrs.get("stock_code", "?")
+        if _elapsed_ms > 5:  # 只记录耗时 >5ms 的
+            logger.debug(f"📊 RSI.calculate_indicators [{stock_code}]: path={calc_path}, {_elapsed_ms:.1f}ms")
 
         return {
             "rsi": rsi,

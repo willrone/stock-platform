@@ -621,13 +621,18 @@ class BacktestExecutor:
         # 这里使用混合策略：CPU 密集型任务用多进程，I/O 密集型用多线程
         use_multiprocessing = getattr(self, 'use_multiprocessing', False)
 
+        _stock_times = []  # 收集每只股票的预计算耗时
+
         def _work_one(item):
             stock_code, data = item
             try:
+                import time as _time
+                _t = _time.perf_counter()
                 all_sigs = strategy.precompute_all_signals(data)
+                _elapsed = _time.perf_counter() - _t
+                _stock_times.append((stock_code, _elapsed, len(data)))
                 if all_sigs is not None:
                     cache = data.attrs.setdefault("_precomputed_signals", {})
-                    # 使用 strategy.name 作为稳定的 key，避免多进程环境下 id() 变化
                     cache[strategy.name] = all_sigs
                     return True, stock_code, None
                 return False, stock_code, None
@@ -676,6 +681,25 @@ class BacktestExecutor:
                     logger.warning(
                         f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
                     )
+
+        # 📊 性能统计：预计算耗时分布
+        if _stock_times:
+            times_only = [t for _, t, _ in _stock_times]
+            total_time = sum(times_only)
+            avg_time = total_time / len(times_only)
+            max_item = max(_stock_times, key=lambda x: x[1])
+            min_item = min(_stock_times, key=lambda x: x[1])
+            logger.info(
+                f"📊 策略 {strategy.name} 预计算性能统计: "
+                f"总计={total_time:.2f}s, 平均={avg_time*1000:.1f}ms/股, "
+                f"最慢={max_item[0]}({max_item[1]*1000:.1f}ms, {max_item[2]}行), "
+                f"最快={min_item[0]}({min_item[1]*1000:.1f}ms, {min_item[2]}行), "
+                f"股票数={len(_stock_times)}"
+            )
+            # 记录 top5 最慢的股票
+            sorted_times = sorted(_stock_times, key=lambda x: x[1], reverse=True)[:5]
+            for code, t, rows in sorted_times:
+                logger.info(f"  🐢 慢股: {code} = {t*1000:.1f}ms ({rows}行)")
 
         if success_count > 0:
             logger.info(

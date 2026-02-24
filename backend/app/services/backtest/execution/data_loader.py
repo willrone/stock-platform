@@ -274,6 +274,8 @@ class DataLoader:
 
         # [性能优化] 预计算常用技术指标列，供策略复用，避免每个策略重复 rolling
         try:
+            import time as _time
+            _t_precomp = _time.perf_counter()
             close = data["close"]
 
             # 常用均线/波动（当前验收组合用到：MA20/MA50/MA60 + STD20/STD60 + RSI14）
@@ -294,6 +296,10 @@ class DataLoader:
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
                 rs = gain / loss
                 data["RSI14"] = 100 - (100 / (1 + rs))
+
+            _precomp_ms = (_time.perf_counter() - _t_precomp) * 1000
+            if _precomp_ms > 10:
+                logger.debug(f"📊 DataLoader预计算指标 [{stock_code}]: {_precomp_ms:.1f}ms, {len(data)}行, 列={list(data.columns)}")
         except Exception as e:
             logger.warning(f"预计算常用指标失败 {stock_code}: {e}")
 
