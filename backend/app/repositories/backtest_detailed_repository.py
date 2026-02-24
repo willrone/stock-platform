@@ -3,6 +3,7 @@
 用于管理回测详细结果、图表缓存、组合快照等数据的CRUD操作
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -565,35 +566,58 @@ class BacktestDetailedRepository:
     async def batch_save_signal_records(
         self, task_id: str, backtest_id: str, signals_data: List[Dict[str, Any]]
     ) -> bool:
-        """批量保存信号记录"""
+        """批量保存信号记录（原生SQL批量插入，绕过ORM开销）"""
+        if not signals_data:
+            return True
+
         try:
-            signals = []
-            for signal_data in signals_data:
-                signal = SignalRecord(
-                    task_id=task_id,
-                    backtest_id=backtest_id,
-                    signal_id=signal_data["signal_id"],
-                    stock_code=signal_data["stock_code"],
-                    stock_name=signal_data.get("stock_name"),
-                    signal_type=signal_data["signal_type"],
-                    timestamp=self._ensure_datetime(signal_data["timestamp"]),
-                    price=signal_data["price"],
-                    strength=signal_data.get("strength", 0.0),
-                    reason=signal_data.get("reason"),
-                    signal_metadata=signal_data.get(
-                        "metadata"
-                    ),  # 从metadata字段读取，但存储为signal_metadata
-                    executed=signal_data.get("executed", False),
-                    execution_reason=signal_data.get(
-                        "execution_reason"
-                    ),  # 添加 execution_reason 字段
-                )
-                signals.append(signal)
+            now = datetime.utcnow().isoformat()
+            rows = []
+            for sd in signals_data:
+                ts = self._ensure_datetime(sd["timestamp"])
+                metadata = sd.get("metadata")
+                if metadata is not None and not isinstance(metadata, str):
+                    metadata = json.dumps(metadata, ensure_ascii=False)
+                rows.append({
+                    "task_id": task_id,
+                    "backtest_id": backtest_id,
+                    "signal_id": sd["signal_id"],
+                    "stock_code": sd["stock_code"],
+                    "stock_name": sd.get("stock_name"),
+                    "signal_type": sd["signal_type"],
+                    "timestamp": ts.isoformat() if ts else None,
+                    "price": sd["price"],
+                    "strength": sd.get("strength", 0.0),
+                    "reason": sd.get("reason"),
+                    "signal_metadata": metadata,
+                    "executed": 1 if sd.get("executed", False) else 0,
+                    "execution_reason": sd.get("execution_reason"),
+                    "created_at": now,
+                })
 
-            self.session.add_all(signals)
+            # SQLite 单条 INSERT 最多 999 个参数，14 列 → 每批最多 71 行，取 60 安全值
+            CHUNK = 60
+            for start in range(0, len(rows), CHUNK):
+                chunk = rows[start:start + CHUNK]
+                placeholders = []
+                params = {}
+                for i, r in enumerate(chunk):
+                    ph = ", ".join(f":v{i}_{k}" for k in r)
+                    placeholders.append(f"({ph})")
+                    for k, v in r.items():
+                        params[f"v{i}_{k}"] = v
+                values_sql = ", ".join(placeholders)
+                sql = text(f"""
+                    INSERT INTO signal_records
+                        (task_id, backtest_id, signal_id, stock_code, stock_name,
+                         signal_type, timestamp, price, strength, reason,
+                         signal_metadata, executed, execution_reason, created_at)
+                    VALUES {values_sql}
+                """)
+                await self.session.execute(sql, params)
+
             await self.session.flush()
-
-            self.logger.info(f"批量保存信号记录: task_id={task_id}, count={len(signals)}")
+            self.logger.info(f"批量保存信号记录(原生SQL): task_id={task_id}, count={len(rows)}")
             return True
 
         except Exception as e:
@@ -920,7 +944,7 @@ class BacktestDetailedRepository:
         self, task_id: str, signal_keys: List[tuple]
     ) -> int:
         """
-        批量标记信号为已执行
+        批量标记信号为已执行（分块 IN 查询，避免参数爆炸）
 
         Args:
             task_id: 任务ID
@@ -933,45 +957,42 @@ class BacktestDetailedRepository:
             return 0
 
         try:
-            # 构建 CASE WHEN 语句
-            case_conditions = []
-            params = {"task_id": task_id}
+            total_updated = 0
+            # 每批处理 200 条，避免 SQLite 参数上限
+            CHUNK = 200
+            for start in range(0, len(signal_keys), CHUNK):
+                chunk = signal_keys[start:start + CHUNK]
+                conditions = []
+                params = {"task_id": task_id}
 
-            for i, (stock_code, timestamp, signal_type) in enumerate(signal_keys):
-                # 将时间戳转换为日期范围
-                ts = self._ensure_datetime(timestamp)
-                timestamp_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
-                timestamp_end = timestamp_start + timedelta(days=1)
+                for i, (stock_code, timestamp, signal_type) in enumerate(chunk):
+                    ts = self._ensure_datetime(timestamp)
+                    date_str = ts.strftime("%Y-%m-%d") if ts else ""
+                    params[f"sc_{i}"] = stock_code
+                    params[f"st_{i}"] = signal_type
+                    params[f"ds_{i}"] = date_str
+                    conditions.append(
+                        f"(stock_code = :sc_{i} AND signal_type = :st_{i} "
+                        f"AND date(timestamp) = :ds_{i})"
+                    )
 
-                params[f"stock_code_{i}"] = stock_code
-                params[f"signal_type_{i}"] = signal_type
-                params[f"ts_start_{i}"] = timestamp_start
-                params[f"ts_end_{i}"] = timestamp_end
+                where_clause = " OR ".join(conditions)
+                sql = text(f"""
+                    UPDATE signal_records
+                    SET executed = 1, execution_reason = NULL
+                    WHERE task_id = :task_id
+                    AND executed = 0
+                    AND ({where_clause})
+                """)
+                result = await self.session.execute(sql, params)
+                total_updated += result.rowcount
 
-                case_conditions.append(
-                    f"(stock_code = :stock_code_{i} AND signal_type = :signal_type_{i} "
-                    f"AND timestamp >= :ts_start_{i} AND timestamp < :ts_end_{i})"
-                )
-
-            # 构建完整的 UPDATE 语句
-            where_clause = " OR ".join(case_conditions)
-            sql = text(f"""
-                UPDATE signal_records
-                SET executed = 1, execution_reason = NULL
-                WHERE task_id = :task_id
-                AND executed = 0
-                AND ({where_clause})
-            """)
-
-            result = await self.session.execute(sql, params)
-            updated_count = result.rowcount
             await self.session.flush()
-
             self.logger.info(
                 f"批量标记信号为已执行: task_id={task_id}, "
-                f"请求数={len(signal_keys)}, 更新数={updated_count}"
+                f"请求数={len(signal_keys)}, 更新数={total_updated}"
             )
-            return updated_count
+            return total_updated
 
         except Exception as e:
             self.logger.error("批量标记信号为已执行失败: {}", e, exc_info=True)
@@ -981,7 +1002,7 @@ class BacktestDetailedRepository:
         self, task_id: str, signal_reasons: List[tuple]
     ) -> int:
         """
-        批量更新信号的未执行原因
+        批量更新信号的未执行原因（分块 + 精简 CASE WHEN，避免参数爆炸）
 
         Args:
             task_id: 任务ID
@@ -994,50 +1015,48 @@ class BacktestDetailedRepository:
             return 0
 
         try:
-            # 构建 CASE WHEN 语句用于 execution_reason
-            case_when_parts = []
-            where_conditions = []
-            params = {"task_id": task_id}
+            total_updated = 0
+            # 每批处理 150 条（CASE WHEN 比纯 IN 多参数，取保守值）
+            CHUNK = 150
+            for start in range(0, len(signal_reasons), CHUNK):
+                chunk = signal_reasons[start:start + CHUNK]
+                case_when_parts = []
+                where_conditions = []
+                params = {"task_id": task_id}
 
-            for i, (stock_code, timestamp, signal_type, execution_reason) in enumerate(signal_reasons):
-                # 将时间戳转换为日期范围
-                ts = self._ensure_datetime(timestamp)
-                timestamp_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
-                timestamp_end = timestamp_start + timedelta(days=1)
+                for i, (stock_code, timestamp, signal_type, execution_reason) in enumerate(chunk):
+                    ts = self._ensure_datetime(timestamp)
+                    date_str = ts.strftime("%Y-%m-%d") if ts else ""
+                    params[f"sc_{i}"] = stock_code
+                    params[f"st_{i}"] = signal_type
+                    params[f"ds_{i}"] = date_str
+                    params[f"r_{i}"] = execution_reason
 
-                params[f"stock_code_{i}"] = stock_code
-                params[f"signal_type_{i}"] = signal_type
-                params[f"ts_start_{i}"] = timestamp_start
-                params[f"ts_end_{i}"] = timestamp_end
-                params[f"reason_{i}"] = execution_reason
+                    condition = (
+                        f"(stock_code = :sc_{i} AND signal_type = :st_{i} "
+                        f"AND date(timestamp) = :ds_{i})"
+                    )
+                    where_conditions.append(condition)
+                    case_when_parts.append(f"WHEN {condition} THEN :r_{i}")
 
-                condition = (
-                    f"(stock_code = :stock_code_{i} AND signal_type = :signal_type_{i} "
-                    f"AND timestamp >= :ts_start_{i} AND timestamp < :ts_end_{i})"
-                )
-                where_conditions.append(condition)
-                case_when_parts.append(f"WHEN {condition} THEN :reason_{i}")
+                case_when_clause = " ".join(case_when_parts)
+                where_clause = " OR ".join(where_conditions)
+                sql = text(f"""
+                    UPDATE signal_records
+                    SET execution_reason = CASE {case_when_clause} END
+                    WHERE task_id = :task_id
+                    AND executed = 0
+                    AND ({where_clause})
+                """)
+                result = await self.session.execute(sql, params)
+                total_updated += result.rowcount
 
-            # 构建完整的 UPDATE 语句
-            case_when_clause = " ".join(case_when_parts)
-            where_clause = " OR ".join(where_conditions)
-            sql = text(f"""
-                UPDATE signal_records
-                SET execution_reason = CASE {case_when_clause} END
-                WHERE task_id = :task_id
-                AND executed = 0
-                AND ({where_clause})
-            """)
-
-            result = await self.session.execute(sql, params)
-            updated_count = result.rowcount
             await self.session.flush()
-
             self.logger.info(
                 f"批量更新信号未执行原因: task_id={task_id}, "
-                f"请求数={len(signal_reasons)}, 更新数={updated_count}"
+                f"请求数={len(signal_reasons)}, 更新数={total_updated}"
             )
-            return updated_count
+            return total_updated
 
         except Exception as e:
             self.logger.error("批量更新信号未执行原因失败: {}", e, exc_info=True)
