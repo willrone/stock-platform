@@ -41,17 +41,19 @@ class RSIOptimizedStrategy(BaseStrategy):
         self.overbought_threshold = config.get("overbought_threshold", 70)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算RSI指标 - 简化版"""
+        """计算RSI指标 - 优先复用预计算列"""
         close_prices = data["close"]
 
-        # 计算RSI
-        if TALIB_AVAILABLE:
+        # 优先复用 data_loader 预计算的 RSI14 列
+        precomputed_col = f"RSI{self.rsi_period}"
+        if precomputed_col in data.columns:
+            rsi = data[precomputed_col]
+        elif TALIB_AVAILABLE:
             rsi = pd.Series(
                 talib.RSI(close_prices.values, timeperiod=self.rsi_period),
                 index=close_prices.index,
             )
         else:
-            # 使用pandas实现RSI
             delta = close_prices.diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
