@@ -594,7 +594,7 @@ async def run_backtest(request: BacktestRequest):
                 "ENABLE_BACKTEST_PERFORMANCE_PROFILING", default=False
             ),
             enable_parallel=True,
-            use_multiprocessing=True,  # 启用多进程以突破GIL限制
+            use_multiprocessing=False,  # 关闭多进程：DataFrame序列化开销远大于计算本身（2.27s vs 0.40s）
             max_workers=8,  # 使用8个工作进程
         )
 

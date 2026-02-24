@@ -341,7 +341,7 @@ class BacktestTaskExecutor:
                 executor = BacktestExecutor(
                     data_dir=str(settings.DATA_ROOT_PATH),
                     enable_performance_profiling=enable_perf,
-                    use_multiprocessing=True,  # Phase 2: 启用多进程信号预计算
+                    use_multiprocessing=False,  # 关闭多进程：DataFrame序列化开销远大于计算本身（2.27s vs 0.40s）
                     max_workers=6,  # 8核CPU，留2核给系统
                 )
 
