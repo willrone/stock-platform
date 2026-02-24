@@ -645,48 +645,17 @@ class BacktestExecutor:
             except Exception as e:
                 return False, stock_code, str(e)
 
-        if self.enable_parallel and total_stocks >= 4:
-            if use_multiprocessing:
-                # 多进程模式：突破 GIL 限制，适合 CPU 密集型策略计算
-                # 注意：需要将数据序列化传递，开销较大但可真正并行
-                try:
-                    from concurrent.futures import ProcessPoolExecutor as PoolExecutor
-                    # 多进程需要使用模块级函数，这里使用包装器
-                    results = self._precompute_signals_multiprocess(
-                        strategy, stock_data
-                    )
-                    for ok, stock_code, err in results:
-                        if ok:
-                            success_count += 1
-                        elif err:
-                            logger.warning(
-                                f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
-                            )
-                except Exception as e:
-                    logger.warning(f"多进程预计算失败，回退到多线程: {e}")
-                    use_multiprocessing = False
-
-            if not use_multiprocessing:
-                # 多线程模式：受 GIL 限制，但序列化开销小
-                with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
-                    futures = [ex.submit(_work_one, it) for it in stock_data.items()]
-                    for fu in as_completed(futures):
-                        ok, stock_code, err = fu.result()
-                        if ok:
-                            success_count += 1
-                        elif err:
-                            logger.warning(
-                                f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
-                            )
-        else:
-            for it in stock_data.items():
-                ok, stock_code, err = _work_one(it)
-                if ok:
-                    success_count += 1
-                elif err:
-                    logger.warning(
-                        f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
-                    )
+        # [性能优化] 强制串行执行：precompute 是 CPU 密集型（pandas/numpy），
+        # ThreadPool 受 GIL 限制反而更慢（实测：串行 28s vs 并行 79s vs Web并行 390s）。
+        # 多进程虽能突破 GIL，但 DataFrame 序列化开销远大于计算本身。
+        for it in stock_data.items():
+            ok, stock_code, err = _work_one(it)
+            if ok:
+                success_count += 1
+            elif err:
+                logger.warning(
+                    f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
+                )
 
         # 📊 性能统计：预计算耗时分布
         if _stock_times:
