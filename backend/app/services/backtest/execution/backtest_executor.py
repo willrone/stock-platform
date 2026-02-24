@@ -1162,14 +1162,7 @@ class BacktestExecutor:
             gen_time_total = 0.0
             gen_time_max = 0.0
 
-            # 在循环开始时检查任务状态（每50个交易日检查一次，避免频繁检查）
-            if task_id and i % 50 == 0 and i > 0:
-                if not check_task_status():
-                    logger.info(f"任务状态检查失败，停止回测执行: {task_id}")
-                    raise TaskError(
-                        message=f"任务 {task_id} 已被删除或状态已改变，停止回测执行",
-                        severity=ErrorSeverity.LOW,
-                    )
+            # 任务状态检查已合并到进度更新中（每5%检查一次），无需单独检查
             try:
                 # 获取当前价格（Phase3：使用向量化优化）
                 current_prices: Dict[str, float] = {}
@@ -1880,22 +1873,21 @@ class BacktestExecutor:
                     logger.warning(f"[topk_buffer][sanity] check failed: {e}")
 
                 # 更新进度监控（同时更新数据库）
-                if task_id and i % 5 == 0:  # 每5天更新一次进度
+                # 性能优化：进度更新从每5天改为每5%，减少DB写入次数（~14次 vs ~146次）
+                # 同时合并任务状态检查，避免额外的DB读取
+                _progress_pct = (i + 1) / len(trading_dates) * 100
+                _should_update_progress = (
+                    task_id
+                    and (int(_progress_pct) % 5 == 0)
+                    and (i == 0 or int(((i) / len(trading_dates)) * 100) % 5 != 0)
+                )
+                if _should_update_progress:
                     portfolio_value = portfolio_manager.get_portfolio_value(
                         current_prices
                     )
-                    logger.debug(
-                        f"准备更新进度: task_id={task_id}, i={i}, total_days={len(trading_dates)}, signals={len(all_signals)}, trades={trades_this_day}, total_signals={total_signals}, total_trades={executed_trades}"
-                    )
+                    overall_progress = 30 + (_progress_pct / 100) * 60  # 30%到90%
 
-                    # 计算进度百分比（回测执行阶段占30-90%，即60%的进度范围）
-                    execution_progress = (i + 1) / len(trading_dates) * 100
-                    overall_progress = 30 + (execution_progress / 100) * 60  # 30%到90%
-
-                    # 更新数据库中的任务进度（包含详细数据）
                     try:
-                        # 注意：datetime 已在文件顶部导入，不要在此重复导入
-                        # 否则会导致 "cannot access local variable 'datetime'" 错误
                         from app.core.database import SessionLocal
                         from app.models.task_models import TaskStatus
                         from app.repositories.task_repository import TaskRepository
@@ -1903,81 +1895,61 @@ class BacktestExecutor:
                         session = SessionLocal()
                         try:
                             task_repo = TaskRepository(session)
-
-                            # 读取现有的 result 数据
                             existing_task = task_repo.get_task_by_id(task_id)
+
+                            # 合并任务状态检查（原来每50天单独检查）
                             if not existing_task:
-                                logger.warning(f"任务不存在，无法更新进度: {task_id}")
-                                # 任务已被删除，停止回测执行
                                 raise TaskError(
                                     message=f"任务 {task_id} 已被删除，停止回测执行",
                                     severity=ErrorSeverity.LOW,
                                 )
-                            # 检查任务状态，如果不是运行中，则停止执行
-                            elif not _is_task_running(existing_task.status):
-                                logger.warning(
-                                    f"任务状态为 {existing_task.status}，停止回测执行: {task_id}"
-                                )
+                            if not _is_task_running(existing_task.status):
                                 raise TaskError(
                                     message=f"任务 {task_id} 状态为 {existing_task.status}，停止回测执行",
                                     severity=ErrorSeverity.LOW,
                                 )
-                            else:
-                                result_data = existing_task.result or {}
-                                if not isinstance(result_data, dict):
-                                    result_data = {}
-                                progress_data = result_data.get("progress_data", {})
-                                if not isinstance(progress_data, dict):
-                                    progress_data = {}
 
-                                # 更新进度数据
-                                progress_data.update(
-                                    {
-                                        "processed_days": i + 1,
-                                        "total_days": len(trading_dates),
-                                        "current_date": current_date.strftime(
-                                            "%Y-%m-%d"
-                                        ),
-                                        "signals_generated": len(all_signals),
-                                        "trades_executed": trades_this_day,
-                                        "total_signals": total_signals,
-                                        "total_trades": executed_trades,
-                                        "portfolio_value": portfolio_value,
-                                        "last_updated": datetime.utcnow().isoformat(),
-                                    }
-                                )
+                            result_data = existing_task.result or {}
+                            if not isinstance(result_data, dict):
+                                result_data = {}
+                            progress_data = result_data.get("progress_data", {})
+                            if not isinstance(progress_data, dict):
+                                progress_data = {}
 
-                                result_data["progress_data"] = progress_data
+                            progress_data.update({
+                                "processed_days": i + 1,
+                                "total_days": len(trading_dates),
+                                "current_date": current_date.strftime("%Y-%m-%d"),
+                                "total_signals": total_signals,
+                                "total_trades": executed_trades,
+                                "portfolio_value": portfolio_value,
+                                "last_updated": datetime.utcnow().isoformat(),
+                            })
+                            result_data["progress_data"] = progress_data
 
-                                # 记录日志以便调试
-                                logger.info(
-                                    f"更新回测进度数据: task_id={task_id}, processed_days={i+1}, total_days={len(trading_dates)}, signals={total_signals}, trades={executed_trades}, portfolio={portfolio_value:.2f}, progress_data_keys={list(progress_data.keys())}"
-                                )
-
-                                task_repo.update_task_status(
-                                    task_id=task_id,
-                                    status=TaskStatus.RUNNING,
-                                    progress=overall_progress,
-                                    result=result_data,  # 包含详细进度数据
-                                )
-
-                                # 确保 result 字段被标记为已修改并提交
-                                session.commit()
-                                logger.info(
-                                    f"进度数据已提交到数据库: task_id={task_id}, result_data_keys={list(result_data.keys())}, progress_data={progress_data}"
-                                )
+                            task_repo.update_task_status(
+                                task_id=task_id,
+                                status=TaskStatus.RUNNING,
+                                progress=overall_progress,
+                                result=result_data,
+                            )
+                            session.commit()
+                            logger.info(
+                                f"进度更新: {_progress_pct:.0f}%, days={i+1}/{len(trading_dates)}, "
+                                f"signals={total_signals}, trades={executed_trades}"
+                            )
                         except Exception as inner_error:
                             session.rollback()
-                            logger.error(
-                                f"更新任务进度到数据库失败（内部错误）: {inner_error}", exc_info=True
-                            )
-                            raise
+                            if isinstance(inner_error, TaskError):
+                                raise
+                            logger.warning(f"更新进度失败: {inner_error}")
                         finally:
                             session.close()
+                    except TaskError:
+                        raise
                     except Exception as db_error:
-                        logger.error(f"更新任务进度到数据库失败: {db_error}", exc_info=True)
+                        logger.warning(f"进度更新DB错误: {db_error}")
 
-                    # 更新进程内的进度监控（虽然主进程看不到，但保持一致性）
                     await backtest_progress_monitor.update_execution_progress(
                         task_id=task_id,
                         processed_days=i + 1,
