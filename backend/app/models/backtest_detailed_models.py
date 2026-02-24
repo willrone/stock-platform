@@ -252,6 +252,7 @@ class SignalRecord(Base):
         Index("idx_signal_stock_time", "stock_code", "timestamp"),
         Index("idx_signal_type", "signal_type"),
         Index("idx_signal_executed", "executed"),
+        Index("idx_signal_task_stock_type", "task_id", "stock_code", "signal_type"),  # 复合索引，加速按任务+股票+信号类型查询
     )
 
     def to_dict(self):

@@ -1086,7 +1086,7 @@ class BacktestExecutor:
         _batch_executed_signals: List[dict] = []  # 收集已执行的信号
         _batch_unexecuted_signals: List[dict] = []  # 收集未执行的信号
         _current_backtest_id: str | None = None  # 缓存 backtest_id
-        _BATCH_FLUSH_THRESHOLD = 1000  # 流式写入阈值
+        _BATCH_FLUSH_THRESHOLD = 5000  # 流式写入阈值（从1000提升，减少flush次数）
 
         # 流式写入辅助函数：当积累足够数据时写入数据库
         async def _flush_batch_to_db(
@@ -1096,7 +1096,11 @@ class BacktestExecutor:
             backtest_id: str | None,
             clear_after: bool = True,
         ) -> None:
-            """流式写入批量数据到数据库"""
+            """流式写入批量数据到数据库
+
+            优化：INSERT 时直接带 executed 和 execution_reason 字段，
+            避免后续两个昂贵的 UPDATE 操作（原先用超长 OR 链全表扫描）。
+            """
             if not task_id:
                 return
             total_count = len(signals_data) + len(executed_signals) + len(unexecuted_signals)
@@ -1111,51 +1115,58 @@ class BacktestExecutor:
                     BacktestDetailedRepository,
                 )
 
+                # ===== 优化核心：INSERT 前合并 executed/reason 状态 =====
+                # 构建已执行信号的查找集合 (stock_code, signal_type, date_str)
+                executed_set = set()
+                for sig in executed_signals:
+                    ts = sig["timestamp"]
+                    date_str = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    executed_set.add((sig["stock_code"], sig["signal_type"], date_str))
+
+                # 构建未执行信号的原因查找字典
+                unexecuted_map = {}
+                for sig in unexecuted_signals:
+                    ts = sig["timestamp"]
+                    date_str = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    key = (sig["stock_code"], sig["signal_type"], date_str)
+                    unexecuted_map[key] = sig.get("execution_reason", "未执行")
+
+                # 在 signals_data 上直接设置 executed 和 execution_reason
+                matched_exec = 0
+                matched_unexec = 0
+                for sig_data in signals_data:
+                    ts = sig_data["timestamp"]
+                    date_str = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    key = (sig_data["stock_code"], sig_data["signal_type"], date_str)
+
+                    if key in executed_set:
+                        sig_data["executed"] = True
+                        sig_data["execution_reason"] = None
+                        matched_exec += 1
+                    elif key in unexecuted_map:
+                        sig_data["executed"] = False
+                        sig_data["execution_reason"] = unexecuted_map[key]
+                        matched_unexec += 1
+                    # else: 保持默认 executed=False, execution_reason=None
+
                 async with get_async_session_context() as session:
                     try:
                         repository = BacktestDetailedRepository(session)
 
-                        # 1. 批量保存所有信号记录
+                        # 一次 INSERT 搞定，不再需要后续 UPDATE
                         if signals_data:
                             await repository.batch_save_signal_records(
                                 task_id=task_id,
                                 backtest_id=backtest_id,
-                                signals_data=list(signals_data),  # 复制列表避免清空后问题
-                            )
-
-                        # 2. 批量更新未执行信号的原因
-                        if unexecuted_signals:
-                            signal_reasons = [
-                                (
-                                    sig["stock_code"],
-                                    sig["timestamp"],
-                                    sig["signal_type"],
-                                    sig["execution_reason"]
-                                )
-                                for sig in unexecuted_signals
-                            ]
-                            await repository.batch_update_signal_execution_reasons(
-                                task_id=task_id,
-                                signal_reasons=signal_reasons
-                            )
-
-                        # 3. 批量标记已执行的信号
-                        if executed_signals:
-                            signal_keys = [
-                                (
-                                    sig["stock_code"],
-                                    sig["timestamp"],
-                                    sig["signal_type"]
-                                )
-                                for sig in executed_signals
-                            ]
-                            await repository.batch_mark_signals_as_executed(
-                                task_id=task_id,
-                                signal_keys=signal_keys
+                                signals_data=list(signals_data),
                             )
 
                         await session.commit()
-                        logger.info(f"✅ 流式写入完成: {total_count} 条记录")
+                        logger.info(
+                            f"✅ 流式写入完成: {len(signals_data)} 条信号记录"
+                            f"（executed={matched_exec}, unexecuted={matched_unexec}, "
+                            f"default={len(signals_data) - matched_exec - matched_unexec}）"
+                        )
 
                     except Exception as e:
                         await session.rollback()
