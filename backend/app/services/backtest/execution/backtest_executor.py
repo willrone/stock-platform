@@ -835,64 +835,68 @@ class BacktestExecutor:
         # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
         strategy_key = strategy.name  # 使用 strategy.name 作为稳定的 key
 
+        # Phase 4 优化：将 trading_dates 转为 datetime64 数组，用于 searchsorted
+        _td_ns = np.array(trading_dates, dtype='datetime64[ns]')
+
         _t_align_price = time.perf_counter()
         _acc_align_signal = 0.0
         for i, code in enumerate(stock_codes):
             df = stock_data[code]
 
-            # Phase 3 优化：使用 reindex 批量对齐（比逐个查找快）
+            # Phase 4 优化：纯 numpy searchsorted 替代 pandas reindex
+            # 完全绕过 pandas，避免 attrs 复制和 DataFrame 开销
             try:
-                # 价格对齐（使用 reindex 一次性完成）
-                s_close = df['close'].reindex(trading_dates)
-                close_values = s_close.values  # 直接获取 numpy 数组
-                close[i, :] = close_values
-                
+                df_idx_ns = df.index.values.astype('datetime64[ns]')
+                # searchsorted 找到 trading_dates 在股票日期中的插入位置
+                pos = np.searchsorted(df_idx_ns, _td_ns)
+                # 限制索引范围
+                n_rows = len(df_idx_ns)
+                pos_clipped = np.clip(pos, 0, n_rows - 1)
+                # 只有精确匹配的日期才有效
+                match_mask = df_idx_ns[pos_clipped] == _td_ns
+
+                # 直接从 numpy 数组填充（绕过 pandas）
+                close_vals = df['close'].values
+                close[i, match_mask] = close_vals[pos_clipped[match_mask]]
+                valid[i, :] = match_mask
+
                 if 'open' in df.columns:
-                    s_open = df['open'].reindex(trading_dates)
-                    open_[i, :] = s_open.values
-                
-                # 使用向量化操作判断有效性
-                valid[i, :] = ~np.isnan(close_values)
-                
+                    open_vals = df['open'].values
+                    open_[i, match_mask] = open_vals[pos_clipped[match_mask]]
+
             except Exception as e:
-                # fallback: per-date fill (slow path, should be rare)
-                logger.warning(f"股票 {code} 数组对齐失败，使用慢速路径: {e}")
-                idx_map = df.attrs.get('_date_to_idx') if hasattr(df, 'attrs') else None
-                for t, d in enumerate(trading_dates):
-                    try:
-                        if idx_map and d in idx_map:
-                            k = int(idx_map[d])
-                            close[i, t] = float(df['close'].iloc[k])
-                            if 'open' in df.columns:
-                                open_[i, t] = float(df['open'].iloc[k])
-                            valid[i, t] = True
-                        elif d in df.index:
-                            k = df.index.get_loc(d)
-                            close[i, t] = float(df['close'].values[k])
-                            if 'open' in df.columns:
-                                open_[i, t] = float(df['open'].values[k])
-                            valid[i, t] = True
-                    except Exception:
-                        pass
+                # fallback: pandas reindex（慢速路径）
+                logger.warning(f"股票 {code} numpy对齐失败，回退到pandas: {e}")
+                try:
+                    s_close = df['close'].reindex(trading_dates)
+                    close_values = s_close.values
+                    close[i, :] = close_values
+                    if 'open' in df.columns:
+                        open_[i, :] = df['open'].reindex(trading_dates).values
+                    valid[i, :] = ~np.isnan(close_values)
+                except Exception as e2:
+                    logger.warning(f"股票 {code} pandas对齐也失败: {e2}")
 
             _t_align_sig_one = time.perf_counter()
-            # 信号对齐（Phase 3 优化：使用 reindex 批量对齐 + 向量化映射）
+            # 信号对齐：同样用 searchsorted 替代 reindex
             try:
                 pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
                 sig_ser = pre.get(strategy_key)
                 if isinstance(sig_ser, pd.Series):
-                    # 使用 reindex 批量对齐
-                    s = sig_ser.reindex(trading_dates)
-                    vals = s.values  # 直接获取 numpy 数组
-                    # 向量化映射 SignalType to int8（优化：避免 Python 循环）
-                    # 使用 np.where 进行向量化条件赋值
-                    buy_mask = vals == SignalType.BUY
-                    sell_mask = vals == SignalType.SELL
-                    signal[i, buy_mask] = 1
-                    signal[i, sell_mask] = -1
+                    # Phase 4: numpy searchsorted 对齐信号
+                    sig_idx_ns = sig_ser.index.values.astype('datetime64[ns]')
+                    sig_pos = np.searchsorted(sig_idx_ns, _td_ns)
+                    sig_n = len(sig_idx_ns)
+                    sig_pos_clipped = np.clip(sig_pos, 0, max(sig_n - 1, 0))
+                    sig_match = sig_idx_ns[sig_pos_clipped] == _td_ns
+                    sig_vals = sig_ser.values
+                    matched_vals = sig_vals[sig_pos_clipped[sig_match]]
+                    buy_mask = matched_vals == SignalType.BUY
+                    sell_mask = matched_vals == SignalType.SELL
+                    sig_indices = np.where(sig_match)[0]
+                    signal[i, sig_indices[buy_mask]] = 1
+                    signal[i, sig_indices[sell_mask]] = -1
                 elif isinstance(sig_ser, dict):
-                    # dict 路径：向量化填充（优化：避免 Python 循环）
-                    # 将 dict 转换为 Series 后使用向量化操作
                     sig_series = pd.Series(sig_ser)
                     s = sig_series.reindex(trading_dates)
                     vals = s.values
