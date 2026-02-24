@@ -616,14 +616,30 @@ async def run_backtest(request: BacktestRequest):
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）
-        backtest_report = await executor.run_backtest(
-            strategy_name=request.strategy_name,
-            stock_codes=request.stock_codes,
-            start_date=request.start_date,
-            end_date=request.end_date,
-            strategy_config=strategy_config,
-            backtest_config=backtest_config,
-        )
+        # 性能优化：在独立线程的事件循环中运行回测，避免阻塞FastAPI主事件循环
+        # run_backtest 是 async 函数（内部有 await），不能直接用 asyncio.to_thread
+        # 所以在线程中创建新的事件循环来运行
+        import asyncio
+
+        def _run_backtest_in_thread():
+            """在独立线程中运行回测，避免阻塞FastAPI事件循环"""
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(executor.run_backtest(
+                    strategy_name=request.strategy_name,
+                    stock_codes=request.stock_codes,
+                    start_date=request.start_date,
+                    end_date=request.end_date,
+                    strategy_config=strategy_config,
+                    backtest_config=backtest_config,
+                ))
+            finally:
+                loop.close()
+
+        backtest_report = await asyncio.to_thread(_run_backtest_in_thread)
 
         # 转换数据格式以匹配前端期望
         # NOTE: backtest_report may contain numpy scalar types; coerce to native Python
