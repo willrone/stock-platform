@@ -189,7 +189,7 @@ class MACDStrategy(BaseStrategy):
         # 使用talib或pandas计算MACD
         if TALIB_AVAILABLE:
             macd, macd_signal, macd_hist = talib.MACD(
-                close_prices.values,
+                close_prices.values.astype(float),
                 fastperiod=self.fast_period,
                 slowperiod=self.slow_period,
                 signalperiod=self.signal_period,
