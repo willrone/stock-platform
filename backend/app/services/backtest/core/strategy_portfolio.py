@@ -223,7 +223,7 @@ class StrategyPortfolio(BaseStrategy):
                         timestamp=current_date,
                         stock_code=stock_code,
                         signal_type=sig_type,
-                        strength=0.8,  # 组合策略默认强度
+                        strength=0.5,  # 组合策略预计算模式，无子策略详情，使用中性强度
                         price=current_price,
                         reason=f"[向量化] 组合策略信号 ({len(self.strategies)} 子策略)",
                         metadata={

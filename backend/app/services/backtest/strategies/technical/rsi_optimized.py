@@ -141,11 +141,16 @@ class RSIOptimizedStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_rsi = indicators["rsi"].iloc[current_idx]
+                    # 动态计算 strength：RSI 越极端，strength 越高
+                    if sig_type == SignalType.BUY:
+                        _strength = min(1.0, max(0.1, (self.oversold_threshold - current_rsi) / self.oversold_threshold)) if current_rsi < self.oversold_threshold else 0.3
+                    else:
+                        _strength = min(1.0, max(0.1, (current_rsi - self.overbought_threshold) / (100 - self.overbought_threshold))) if current_rsi > self.overbought_threshold else 0.3
                     return [TradingSignal(
                         timestamp=current_date,
                         stock_code=stock_code,
                         signal_type=sig_type,
-                        strength=0.8,
+                        strength=_strength,
                         price=current_price,
                         reason=f"RSI信号, RSI: {current_rsi:.2f}",
                         metadata={"rsi": current_rsi},
@@ -173,11 +178,13 @@ class RSIOptimizedStrategy(BaseStrategy):
 
             # 买入信号：RSI从超卖区域向上穿越
             if prev_rsi <= self.oversold_threshold and current_rsi > self.oversold_threshold:
+                # 动态 strength：prev_rsi 越低（越超卖），信号越强
+                _buy_strength = min(1.0, max(0.1, (self.oversold_threshold - prev_rsi) / self.oversold_threshold))
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.BUY,
-                    strength=0.8,
+                    strength=_buy_strength,
                     price=current_price,
                     reason=f"RSI从超卖区域向上穿越({prev_rsi:.2f}->{current_rsi:.2f})",
                     metadata={"rsi": current_rsi, "prev_rsi": prev_rsi},
@@ -186,11 +193,13 @@ class RSIOptimizedStrategy(BaseStrategy):
 
             # 卖出信号：RSI从超买区域向下穿越
             elif prev_rsi >= self.overbought_threshold and current_rsi <= self.overbought_threshold:
+                # 动态 strength：prev_rsi 越高（越超买），信号越强
+                _sell_strength = min(1.0, max(0.1, (prev_rsi - self.overbought_threshold) / (100 - self.overbought_threshold)))
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
                     signal_type=SignalType.SELL,
-                    strength=0.8,
+                    strength=_sell_strength,
                     price=current_price,
                     reason=f"RSI从超买区域向下穿越({prev_rsi:.2f}->{current_rsi:.2f})",
                     metadata={"rsi": current_rsi, "prev_rsi": prev_rsi},

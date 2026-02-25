@@ -137,7 +137,7 @@ def _worker_backtest(
                                 timestamp=current_date,
                                 stock_code=code,
                                 signal_type=sig_type,
-                                strength=0.8,
+                                strength=0.5,  # 预计算信号无指标详情，使用中性强度
                                 price=price,
                                 reason=f"Precomputed signal",
                                 metadata={}

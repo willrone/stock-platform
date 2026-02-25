@@ -321,7 +321,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             signals.append(TradingSignal(
                 stock_code=stock_code,
                 signal_type=SignalType.SELL,
-                strength=0.8 if position_scale == 0 else 0.5,
+                strength=min(1.0, max(0.1, (0.5 - prob) / 0.5)) if position_scale == 0 else min(1.0, max(0.1, (0.4 - prob) / 0.4)),
                 price=data["close"].iloc[idx],
                 timestamp=current_date,
                 reason=f"ML集成预测概率={prob:.3f}, 触发风控" if position_scale == 0 else f"ML集成预测概率低={prob:.3f}"

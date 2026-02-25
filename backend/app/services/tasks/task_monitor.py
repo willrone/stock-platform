@@ -37,7 +37,7 @@ class TaskMonitor:
             cursor = conn.cursor()
 
             # 计算超时时间点
-            timeout_time = datetime.now() - timedelta(minutes=timeout_minutes)
+            timeout_time = datetime.utcnow() - timedelta(minutes=timeout_minutes)
             timeout_str = timeout_time.isoformat()
 
             # 查询运行中但超时的任务
@@ -191,7 +191,7 @@ class TaskMonitor:
                 status_counts[status] = count
 
             # 统计最近24小时的任务
-            yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+            yesterday = (datetime.utcnow() - timedelta(days=1)).isoformat()
             cursor.execute(
                 """
                 SELECT COUNT(*) as count
