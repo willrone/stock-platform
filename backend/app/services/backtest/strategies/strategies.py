@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import talib
 import pandas as pd
 from loguru import logger
 from scipy import stats
@@ -188,18 +189,14 @@ class StochasticStrategy(BaseStrategy):
         self.overbought = config.get("overbought", 80)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算随机指标"""
         high = data["high"]
         low = data["low"]
         close = data["close"]
-
         lowest_low = low.rolling(window=self.k_period).min()
         highest_high = high.rolling(window=self.k_period).max()
-
         k_percent = 100 * (close - lowest_low) / (highest_high - lowest_low)
         d_percent = k_percent.rolling(window=self.d_period).mean()
-
-        return {"k_percent": k_percent, "d_percent": d_percent, "price": close}
+        return {"k_percent": k_percent, "d_percent": d_percent, "price": data["close"]}
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
         """[性能优化] 向量化计算全量随机指标信号"""
@@ -333,12 +330,10 @@ class CCIStrategy(BaseStrategy):
         close = data["close"]
 
         typical_price = (high + low + close) / 3
-        sma = typical_price.rolling(window=self.period).mean()
-        mean_deviation = typical_price.rolling(window=self.period).apply(
-            lambda x: np.abs(x - x.mean()).mean(), raw=True
-        )
 
-        cci = (typical_price - sma) / (0.015 * mean_deviation)
+        # 使用 talib.CCI 替换手动 rolling.apply 计算（性能优化）
+        cci_values = talib.CCI(high.values.astype(np.float64), low.values.astype(np.float64), close.values.astype(np.float64), timeperiod=self.period)
+        cci = pd.Series(cci_values, index=data.index)
 
         return {"cci": cci, "typical_price": typical_price, "price": close}
 
@@ -988,8 +983,11 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         """计算协整指标（优先复用 DataLoader 预计算列，避免重复 rolling）"""
         close_prices = data["close"]
 
-        returns = close_prices.pct_change().dropna()
-        half_life = self._estimate_half_life(returns)
+        # PERF: numpy diff 比 pandas pct_change().dropna() 快 ~3x
+        close_arr = close_prices.values
+        returns_arr = np.diff(close_arr) / close_arr[:-1]
+        returns = pd.Series(returns_arr, index=close_prices.index[1:])
+        half_life = self._estimate_half_life(returns_arr)
 
         pre = self._extract_indicators_from_precomputed(
             data,
@@ -1023,29 +1021,40 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             "mean_reversion_strength": mean_reversion_strength,
         }
 
-    def _estimate_half_life(self, returns: pd.Series) -> float:
-        """估计半衰期"""
+    def _estimate_half_life(self, returns) -> float:
+        """估计半衰期。纯 numpy 实现，避免 pandas shift/iloc/isna 开销。
+
+        Args:
+            returns: pd.Series 或 np.ndarray（收益率序列）
+        """
         try:
-            lag_returns = returns.shift(1)
-            window = min(len(returns) - 1, 252)
+            # 统一转为 numpy array
+            arr = returns.values if isinstance(returns, pd.Series) else np.asarray(returns, dtype=float)
 
-            recent_returns = returns.iloc[-window:]
-            recent_lag = lag_returns.iloc[-window:]
-
-            valid_idx = ~(recent_returns.isna() | recent_lag.isna())
-            if valid_idx.sum() < 10:
+            # 取最近 252 个有效值
+            window = min(len(arr) - 1, 252)
+            if window < 10:
                 return self.half_life
 
-            X = recent_lag[valid_idx].values.reshape(-1, 1)
-            y = recent_returns[valid_idx].values
+            y = arr[-window:]       # t 期收益
+            x = arr[-window - 1:-1] # t-1 期收益（lag）
 
-            X_with_const = np.column_stack([np.ones(len(X)), X])
-            beta = np.linalg.lstsq(X_with_const, y, rcond=None)[0]
-
-            if beta[1] >= 0:
+            # 过滤 NaN/Inf
+            valid = np.isfinite(x) & np.isfinite(y)
+            if valid.sum() < 10:
                 return self.half_life
 
-            half_life = -np.log(2) / beta[1]
+            y = y[valid]
+            x = x[valid]
+
+            # 解析解 OLS: beta = cov(x,y)/var(x)
+            x_centered = x - np.mean(x)
+            beta = np.dot(x_centered, y - np.mean(y)) / (np.dot(x_centered, x_centered) + 1e-10)
+
+            if beta >= 0:
+                return self.half_life
+
+            half_life = -np.log(2) / beta
             return max(1, min(half_life, 252))
 
         except Exception as e:

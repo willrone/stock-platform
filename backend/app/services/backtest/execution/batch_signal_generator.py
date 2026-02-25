@@ -35,6 +35,7 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
         idx = pd.to_datetime(index_ns)
         df = pd.DataFrame(values, columns=columns, index=idx)
         df.attrs["stock_code"] = data_pack.get("stock_code", stock_code)
+        df.attrs["from_precomputed"] = data_pack.get("from_precomputed", False)
 
         # 重建策略对象
         from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
@@ -271,6 +272,7 @@ class BatchSignalGenerator:
                                 "columns": columns,
                                 "index_ns": np.asarray(index_ns, dtype=np.int64),
                                 "stock_code": df.attrs.get("stock_code", stock_code),
+                                "from_precomputed": df.attrs.get("from_precomputed", False),
                             },
                             {
                                 "name": getattr(self.strategy, "name", None),
