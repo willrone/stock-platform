@@ -475,6 +475,37 @@ class BacktestExecutor:
             backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
             backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
 
+            # 汇总信号执行统计，补充可执行口径执行率与 Top 拒绝原因
+            if task_id:
+                try:
+                    from app.core.database import get_async_session_context
+                    from app.repositories.backtest_detailed_repository import (
+                        BacktestDetailedRepository,
+                    )
+
+                    async with get_async_session_context() as session:
+                        repo = BacktestDetailedRepository(session)
+                        signal_stats = await repo.get_signal_statistics(task_id)
+                    backtest_report["signal_execution_summary"] = {
+                        "execution_rate": signal_stats.get("execution_rate", 0.0),
+                        "execution_rate_actionable": signal_stats.get(
+                            "execution_rate_actionable", 0.0
+                        ),
+                        "raw_signal_count": signal_stats.get("raw_signal_count", 0),
+                        "actionable_signal_count": signal_stats.get(
+                            "actionable_signal_count", 0
+                        ),
+                        "executed_signal_count": signal_stats.get(
+                            "executed_signal_count", 0
+                        ),
+                        "top_rejection_reasons": signal_stats.get(
+                            "top_rejection_reasons", []
+                        ),
+                    }
+                except Exception as sig_err:
+                    logger.warning(f"获取信号执行统计失败: {sig_err}")
+                    backtest_report["signal_execution_summary"] = {}
+
             if self.enable_performance_profiling:
                 self.performance_profiler.end_stage(
                     "report_generation", {"report_size": len(str(backtest_report))}

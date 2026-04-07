@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import retry_db_operation
+from app.services.backtest.utils.rejection_reason_classifier import (
+    aggregate_rejection_reasons,
+    is_actionable_rejection,
+)
 from app.models.backtest_detailed_models import (
     BacktestBenchmark,
     BacktestChartCache,
@@ -694,8 +698,62 @@ class BacktestDetailedRepository:
             self.logger.error("获取信号记录总数失败: {}", e, exc_info=True)
             return 0
 
+    async def _get_rejection_breakdown_and_actionable(
+        self, task_id: str
+    ) -> tuple[Dict[str, int], List[Dict[str, Any]], int]:
+        """
+        从 signal_records 获取拒绝原因聚合与可执行信号数。
+        Returns:
+            (rejection_breakdown_dict, top_rejection_reasons, actionable_count)
+        """
+        try:
+            stmt = select(SignalRecord.execution_reason, SignalRecord.executed).where(
+                SignalRecord.task_id == task_id
+            )
+            result = await self.session.execute(stmt)
+            rows = result.all()
+
+            raw_reasons: List[Optional[str]] = []
+            actionable_count = 0
+            for row in rows:
+                if hasattr(row, "_mapping"):
+                    reason = row._mapping.get("execution_reason")
+                    executed = row._mapping.get("executed", False)
+                else:
+                    reason = row[0] if len(row) > 0 else None
+                    executed = bool(row[1]) if len(row) > 1 else False
+
+                if executed:
+                    actionable_count += 1
+                elif reason:
+                    raw_reasons.append(reason)
+                    if is_actionable_rejection(reason):
+                        actionable_count += 1
+
+            breakdown, top_list = aggregate_rejection_reasons(raw_reasons)
+            return breakdown, top_list, actionable_count
+        except Exception as e:
+            self.logger.warning(f"获取拒绝原因聚合失败: {e}")
+            return {}, [], 0
+
     async def get_signal_statistics(self, task_id: str) -> Dict[str, Any]:
         """获取信号统计信息（优化：优先从统计表读取，不存在则实时计算）"""
+        base_fail = {
+            "total_signals": 0,
+            "buy_signals": 0,
+            "sell_signals": 0,
+            "executed_signals": 0,
+            "unexecuted_signals": 0,
+            "execution_rate": 0.0,
+            "execution_rate_actionable": 0.0,
+            "raw_signal_count": 0,
+            "actionable_signal_count": 0,
+            "executed_signal_count": 0,
+            "avg_strength": 0.0,
+            "rejection_reason_breakdown": {},
+            "top_rejection_reasons": [],
+        }
+
         try:
             # 优先从统计表读取
             try:
@@ -706,7 +764,14 @@ class BacktestDetailedRepository:
                 stats = stats_result.scalar_one_or_none()
 
                 if stats:
-                    # 从统计表返回
+                    breakdown, top_list, actionable_count = (
+                        await self._get_rejection_breakdown_and_actionable(task_id)
+                    )
+                    raw = stats.total_signals
+                    executed = stats.executed_signals
+                    rate_actionable = (
+                        executed / actionable_count if actionable_count > 0 else 0.0
+                    )
                     return {
                         "total_signals": stats.total_signals,
                         "buy_signals": stats.buy_signals,
@@ -715,6 +780,12 @@ class BacktestDetailedRepository:
                         "unexecuted_signals": stats.unexecuted_signals,
                         "execution_rate": stats.execution_rate,
                         "avg_strength": stats.avg_signal_strength,
+                        "raw_signal_count": raw,
+                        "actionable_signal_count": actionable_count,
+                        "executed_signal_count": executed,
+                        "execution_rate_actionable": float(rate_actionable),
+                        "rejection_reason_breakdown": breakdown,
+                        "top_rejection_reasons": top_list,
                     }
             except Exception as stats_error:
                 # 如果统计表不存在或其他错误，回退到实时计算
@@ -773,6 +844,15 @@ class BacktestDetailedRepository:
                         f"信号统计查询耗时较长: {elapsed_time:.2f}秒, task_id={task_id}, total_signals={total_signals}"
                     )
 
+                breakdown, top_list, actionable_count = (
+                    await self._get_rejection_breakdown_and_actionable(task_id)
+                )
+                rate_actionable = (
+                    executed_signals / actionable_count
+                    if actionable_count > 0
+                    else 0.0
+                )
+
                 return {
                     "total_signals": total_signals,
                     "buy_signals": buy_signals,
@@ -781,6 +861,12 @@ class BacktestDetailedRepository:
                     "unexecuted_signals": unexecuted_signals,
                     "execution_rate": execution_rate,
                     "avg_strength": float(avg_strength) if avg_strength else 0.0,
+                    "raw_signal_count": total_signals,
+                    "actionable_signal_count": actionable_count,
+                    "executed_signal_count": executed_signals,
+                    "execution_rate_actionable": float(rate_actionable),
+                    "rejection_reason_breakdown": breakdown,
+                    "top_rejection_reasons": top_list,
                 }
             except Exception as calc_error:
                 # 如果信号记录表不存在，返回空统计
@@ -793,32 +879,14 @@ class BacktestDetailedRepository:
                     self.logger.warning(
                         f"计算信号统计失败: task_id={task_id}, error={calc_error}"
                     )
-                # 返回空统计
-                return {
-                    "total_signals": 0,
-                    "buy_signals": 0,
-                    "sell_signals": 0,
-                    "executed_signals": 0,
-                    "unexecuted_signals": 0,
-                    "execution_rate": 0.0,
-                    "avg_strength": 0.0,
-                }
+                return base_fail.copy()
 
         except Exception as e:
             import traceback
 
             error_detail = traceback.format_exc()
             self.logger.error("获取信号统计失败: {}\n{}", e, error_detail, exc_info=True)
-            # 返回空统计而不是抛出异常，避免前端报错
-            return {
-                "total_signals": 0,
-                "buy_signals": 0,
-                "sell_signals": 0,
-                "executed_signals": 0,
-                "unexecuted_signals": 0,
-                "execution_rate": 0.0,
-                "avg_strength": 0.0,
-            }
+            return base_fail.copy()
 
     async def mark_signal_as_executed(
         self, task_id: str, stock_code: str, timestamp: datetime, signal_type: str
