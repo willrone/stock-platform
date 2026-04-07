@@ -198,21 +198,28 @@ class PortfolioManagerArray:
         # 计算可买数量
         portfolio_value = self.get_portfolio_value({stock_code: price})
         max_position_value = portfolio_value * self.config.max_position_size
+        board_lot_size = max(1, int(getattr(self.config, "board_lot_size", 100) or 100))
+        cash_reserve_ratio = float(
+            getattr(self.config, "cash_reserve_ratio", 0.05) or 0.0
+        )
+        cash_reserve_ratio = min(max(cash_reserve_ratio, 0.0), 0.99)
+        reserve_cash = self.cash * (1 - cash_reserve_ratio)
+        reserve_pct = f"{cash_reserve_ratio:.0%}"
 
         current_position_value = self.quantities[idx] * price if self.quantities[idx] > 0 else 0
         available_cash_for_stock = max_position_value - current_position_value
-        available_cash_for_stock = min(available_cash_for_stock, self.cash * 0.95)
+        available_cash_for_stock = min(available_cash_for_stock, reserve_cash)
 
         if available_cash_for_stock <= 0:
             if current_position_value > 0 and current_position_value >= max_position_value:
                 return None, f"已达到最大持仓限制"
             else:
-                return None, f"可用资金不足"
+                return None, f"可用资金不足: 需要保留{reserve_pct}现金"
 
-        # 计算购买数量（100股为单位）
-        quantity = int(available_cash_for_stock / price / 100) * 100
+        # 计算购买数量（按配置的最小交易单位取整）
+        quantity = int(available_cash_for_stock / price / board_lot_size) * board_lot_size
         if quantity <= 0:
-            return None, f"可买数量不足"
+            return None, f"可买数量不足: 无法买入{board_lot_size}股"
 
         # 计算成本
         total_cost = quantity * price

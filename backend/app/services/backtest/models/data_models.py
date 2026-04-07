@@ -61,6 +61,8 @@ class BacktestConfig:
     commission_rate: float = 0.001  # 手续费率
     slippage_rate: float = 0.001  # 滑点率
     max_position_size: float = 0.2  # 最大单股持仓比例
+    cash_reserve_ratio: float = 0.05  # 预留现金比例
+    board_lot_size: int = 100  # 最小买入手数（A股默认100股）
     stop_loss_pct: float = 0.05  # 止损比例
     take_profit_pct: float = 0.15  # 止盈比例
     rebalance_frequency: str = "daily"  # 调仓频率

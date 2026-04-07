@@ -2710,10 +2710,20 @@ class BacktestExecutor:
                     current_position.market_value if current_position else 0
                 )
 
+                cash_reserve_ratio = float(
+                    getattr(portfolio_manager.config, "cash_reserve_ratio", 0.05)
+                    or 0.0
+                )
+                cash_reserve_ratio = min(max(cash_reserve_ratio, 0.0), 0.99)
+                reserve_cash = portfolio_manager.cash * (1 - cash_reserve_ratio)
+                reserve_pct = f"{cash_reserve_ratio:.0%}"
+                board_lot_size = max(
+                    1,
+                    int(getattr(portfolio_manager.config, "board_lot_size", 100) or 100),
+                )
+
                 available_cash_for_stock = max_position_value - current_position_value
-                available_cash_for_stock = min(
-                    available_cash_for_stock, portfolio_manager.cash * 0.95
-                )  # 保留5%现金
+                available_cash_for_stock = min(available_cash_for_stock, reserve_cash)
 
                 if available_cash_for_stock <= 0:
                     if (
@@ -2722,12 +2732,14 @@ class BacktestExecutor:
                     ):
                         return f"已达到最大持仓限制: 当前持仓 {current_position_value:.2f} >= 最大持仓 {max_position_value:.2f}"
                     else:
-                        return f"可用资金不足: 需要保留5%现金，可用资金 {portfolio_manager.cash:.2f}"
+                        return f"可用资金不足: 需要保留{reserve_pct}现金，可用资金 {portfolio_manager.cash:.2f}"
 
-                # 计算购买数量（最小交易单位为100股）
-                quantity = int(available_cash_for_stock / current_price / 100) * 100
+                # 计算购买数量（按配置的最小交易单位取整）
+                quantity = int(
+                    available_cash_for_stock / current_price / board_lot_size
+                ) * board_lot_size
                 if quantity <= 0:
-                    return f"可买数量不足: 可用资金 {available_cash_for_stock:.2f}，价格 {current_price:.2f}，无法买入100股"
+                    return f"可买数量不足: 可用资金 {available_cash_for_stock:.2f}，价格 {current_price:.2f}，无法买入{board_lot_size}股"
 
                 # 计算实际成本（包含手续费和滑点）
                 # 应用滑点（买入时价格上涨）
