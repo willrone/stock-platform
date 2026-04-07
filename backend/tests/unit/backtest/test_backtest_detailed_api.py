@@ -66,7 +66,18 @@ def mock_repository(mock_detailed_result):
     repo.get_trade_statistics = AsyncMock(return_value={"total_trades": 0, "win_rate": 0.0})
     repo.get_signal_records = AsyncMock(return_value=[])
     repo.get_signal_records_count = AsyncMock(return_value=0)
-    repo.get_signal_statistics = AsyncMock(return_value={"total_signals": 0})
+    repo.get_signal_statistics = AsyncMock(
+        return_value={
+            "total_signals": 0,
+            "raw_signal_count": 0,
+            "actionable_signal_count": 0,
+            "executed_signal_count": 0,
+            "execution_rate": 0.0,
+            "execution_rate_actionable": 0.0,
+            "rejection_reason_breakdown": {},
+            "top_rejection_reasons": [],
+        }
+    )
     repo.get_benchmark_data = AsyncMock(return_value=None)
     repo.delete_task_data = AsyncMock(return_value=True)
     return repo
@@ -110,13 +121,20 @@ class TestBacktestDetailedAPI:
 
     @patch("app.api.v1.backtest_detailed.BacktestDetailedRepository")
     def test_get_signal_statistics_200(self, mock_repo_cls, client, mock_repository):
-        """GET /{task_id}/signal-statistics 返回 200"""
+        """GET /{task_id}/signal-statistics 返回 200，含工单#24 新字段"""
         mock_repo_cls.return_value = mock_repository
         resp = client.get("/backtest-detailed/task-1/signal-statistics")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
         assert data["data"]["total_signals"] == 0
+        # 工单#24：新口径与拒绝原因
+        assert "raw_signal_count" in data["data"]
+        assert "actionable_signal_count" in data["data"]
+        assert "executed_signal_count" in data["data"]
+        assert "execution_rate_actionable" in data["data"]
+        assert "rejection_reason_breakdown" in data["data"]
+        assert "top_rejection_reasons" in data["data"]
 
     @patch("app.api.v1.backtest_detailed.BacktestDetailedRepository")
     def test_get_trade_records_200(self, mock_repo_cls, client, mock_repository):

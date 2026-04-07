@@ -551,6 +551,102 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
         </Card>
       )}
 
+      {/* 工单#24：信号执行统计（来自 task.result.signal_execution_summary） */}
+      {backtestData?.signal_execution_summary &&
+        (backtestData.signal_execution_summary.raw_signal_count !== undefined ||
+          (backtestData.signal_execution_summary.top_rejection_reasons &&
+            backtestData.signal_execution_summary.top_rejection_reasons.length > 0)) && (
+        <Card>
+          <CardHeader title="信号执行统计" />
+          <CardContent>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, 1fr)',
+                  md: 'repeat(4, 1fr)',
+                },
+                gap: 2,
+                mb: 2,
+              }}
+            >
+              {backtestData.signal_execution_summary.raw_signal_count !== undefined && (
+                <>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      原始信号数
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600}>
+                      {backtestData.signal_execution_summary.raw_signal_count}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      可执行 / 实际执行
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600}>
+                      {backtestData.signal_execution_summary.actionable_signal_count} /{' '}
+                      {backtestData.signal_execution_summary.executed_signal_count}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      旧口径执行率
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} color="success.main">
+                      {(
+                        (backtestData.signal_execution_summary.execution_rate ?? 0) * 100
+                      ).toFixed(1)}
+                      %
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      可执行口径执行率
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} color="success.main">
+                      {(
+                        (backtestData.signal_execution_summary
+                          .execution_rate_actionable ?? 0) * 100
+                      ).toFixed(1)}
+                      %
+                    </Typography>
+                  </Box>
+                </>
+              )}
+            </Box>
+            {backtestData.signal_execution_summary.top_rejection_reasons &&
+              backtestData.signal_execution_summary.top_rejection_reasons.length > 0 && (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Top 拒绝原因
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                    {backtestData.signal_execution_summary.top_rejection_reasons
+                      .slice(0, 6)
+                      .map((r: { reason: string; count: number }, i: number) => (
+                        <Box component="li" key={i} sx={{ py: 0.25 }}>
+                          <Typography variant="body2" component="span">
+                            {r.reason}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            component="span"
+                            color="text.secondary"
+                            sx={{ ml: 1 }}
+                          >
+                            ({r.count})
+                          </Typography>
+                        </Box>
+                      ))}
+                  </Box>
+                </Box>
+              )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* 风险评估总结 */}
       <Card>
         <CardHeader title="风险评估总结" />
