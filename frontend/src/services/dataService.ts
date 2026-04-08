@@ -9,170 +9,38 @@
  */
 
 import { apiRequest } from './api';
-import { StockData, Model, SystemStatus } from '../stores/useDataStore';
+import type {
+  LatestSignalsResponse,
+  MultiLatestSignalsResponse,
+  MultiSignalHistoryResponse,
+  PredictionRequest,
+  PredictionResponse,
+  SignalHistoryResponse,
+  StockData,
+  SystemStatus,
+  TechnicalIndicators,
+} from '../types/data';
+import type { BacktestRequest, BacktestResult } from '../types/backtest';
+import type { Model } from '../types/model';
 
-// 股票数据请求参数
-export interface StockDataRequest {
-  stock_code: string;
-  start_date: string;
-  end_date: string;
-}
-
-// 技术指标响应
-export interface TechnicalIndicators {
-  stock_code: string;
-  indicators: {
-    ma_5: number;
-    ma_10: number;
-    ma_20: number;
-    ma_60: number;
-    rsi: number;
-    macd: number;
-    macd_signal: number;
-    bb_upper: number;
-    bb_lower: number;
-  };
-  calculation_date: string;
-}
-
-// 预测请求
-export interface PredictionRequest {
-  stock_codes: string[];
-  model_id: string;
-  horizon: 'intraday' | 'short_term' | 'medium_term';
-  confidence_level: number;
-}
-
-// 预测响应
-export interface PredictionResponse {
-  predictions: Array<{
-    stock_code: string;
-    predicted_direction: number;
-    predicted_return: number;
-    confidence_score: number;
-    confidence_interval: {
-      lower: number;
-      upper: number;
-    };
-    risk_assessment: {
-      value_at_risk: number;
-      volatility: number;
-    };
-  }>;
-  model_id: string;
-  horizon: string;
-}
-
-// 回测请求
-export interface BacktestRequest {
-  strategy_name: string;
-  stock_codes: string[];
-  start_date: string;
-  end_date: string;
-  initial_cash: number;
-}
-
-// 回测结果
-export interface BacktestResult {
-  strategy_name: string;
-  period: {
-    start_date: string;
-    end_date: string;
-  };
-  portfolio: {
-    initial_cash: number;
-    final_value: number;
-    total_return: number;
-    annualized_return: number;
-  };
-  risk_metrics: {
-    max_drawdown: number;
-    sharpe_ratio: number;
-    volatility: number;
-  };
-  trading_stats: {
-    total_trades: number;
-    win_rate: number;
-    profit_factor: number;
-  };
-}
-
-// 策略信号 - 最新信号
-export interface LatestSignalItem {
-  stock_code: string;
-  latest_signal: 'BUY' | 'SELL' | 'HOLD';
-  signal_date: string | null;
-  strength: number;
-  price: number | null;
-  reason: string | null;
-}
-
-export interface LatestSignalsResponse {
-  strategy_name: string;
-  days: number;
-  source: 'local' | 'remote';
-  pagination: {
-    total: number;
-    limit: number;
-    offset: number;
-  };
-  signals: LatestSignalItem[];
-  failures?: string[];
-}
-
-// 多策略 - 最新信号：每只股票的多策略结果
-export interface MultiLatestSignalPerStrategyItem {
-  latest_signal: 'BUY' | 'SELL' | 'HOLD';
-  signal_date: string | null;
-  strength: number;
-  price: number | null;
-  reason: string | null;
-}
-
-export interface MultiLatestSignalRow {
-  stock_code: string;
-  stock_name?: string | null;
-  per_strategy: {
-    [strategyName: string]: MultiLatestSignalPerStrategyItem | null;
-  };
-}
-
-export interface MultiLatestSignalsResponse {
-  strategy_names: string[];
-  days: number;
-  source: 'local' | 'remote';
-  pagination: {
-    total: number;
-    limit: number;
-    offset: number;
-  };
-  signals: MultiLatestSignalRow[];
-  failures?: string[];
-}
-
-// 策略信号 - 历史事件
-export interface SignalEvent {
-  timestamp: string;
-  signal: 'BUY' | 'SELL';
-  strength: number;
-  price: number;
-  reason: string;
-  metadata?: Record<string, any>;
-}
-
-export interface SignalHistoryResponse {
-  stock_code: string;
-  strategy_name: string;
-  days: number;
-  events: SignalEvent[];
-}
-
-export interface MultiSignalHistoryResponse {
-  stock_code: string;
-  strategy_names: string[];
-  days: number;
-  events_by_strategy: Record<string, SignalEvent[]>;
-}
+export type {
+  LatestSignalItem,
+  LatestSignalsResponse,
+  MultiLatestSignalPerStrategyItem,
+  MultiLatestSignalRow,
+  MultiLatestSignalsResponse,
+  MultiSignalHistoryResponse,
+  PredictionRequest,
+  PredictionResponse,
+  SignalEvent,
+  SignalHistoryResponse,
+  StockData,
+  StockDataRequest,
+  SystemStatus,
+  TechnicalIndicators,
+} from '../types/data';
+export type { BacktestRequest, BacktestResult } from '../types/backtest';
+export type { Model } from '../types/model';
 
 // 数据服务类
 export class DataService {

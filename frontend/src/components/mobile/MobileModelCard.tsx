@@ -13,7 +13,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import { Trash2, FileText, Activity } from 'lucide-react';
-import { Model } from '../../stores/useDataStore';
+import type { Model } from '../../types/model';
 
 interface MobileModelCardProps {
   model: Model;

@@ -46,7 +46,8 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { DataService, PredictionRequest, PredictionResponse } from '../../services/dataService';
-import { useDataStore, Model } from '../../stores/useDataStore';
+import { useDataStore } from '../../stores/useDataStore';
+import type { Model } from '../../types/model';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 interface PredictionResult {

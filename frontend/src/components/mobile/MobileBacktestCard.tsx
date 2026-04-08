@@ -14,15 +14,14 @@ import {
 import { Eye, Trash2, TrendingUp, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-interface BacktestTask {
-  task_id: string;
-  task_name: string;
-  status: string;
-  progress?: number;
-  stock_codes?: string[];
-  config?: any;
-  created_at: string;
-}
+import type { Task } from '../../types/task';
+
+type BacktestTask = Pick<
+  Task,
+  'task_id' | 'task_name' | 'progress' | 'stock_codes' | 'config' | 'created_at'
+> & {
+  status: Task['status'] | 'pending';
+};
 
 interface MobileBacktestCardProps {
   task: BacktestTask;

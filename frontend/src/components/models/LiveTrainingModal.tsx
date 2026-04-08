@@ -19,7 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import { TrendingUp } from 'lucide-react';
-import { Model } from '../../stores/useDataStore';
+import type { Model } from '../../types/model';
 
 interface LiveTrainingModalProps {
   isOpen: boolean;

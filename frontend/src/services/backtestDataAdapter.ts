@@ -3,7 +3,7 @@
  * 将后端返回的数据转换为前端组件需要的格式
  */
 
-import { BacktestDetailedResult } from './backtestService';
+import type { BacktestDetailedResult } from '../types/backtest';
 
 // 风险指标接口（前端组件需要的格式）
 export interface RiskMetrics {

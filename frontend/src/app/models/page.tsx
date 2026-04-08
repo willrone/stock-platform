@@ -21,7 +21,8 @@ import {
 } from '@mui/material';
 import { Plus, Brain, TrendingUp, Trash2 } from 'lucide-react';
 import { DataService } from '../../services/dataService';
-import { useDataStore, Model } from '../../stores/useDataStore';
+import { useDataStore } from '../../stores/useDataStore';
+import type { Model } from '../../types/model';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TrainingReportModal } from '../../components/models/TrainingReportModal';
 import { ModelListTable } from '../../components/models/ModelListTable';

@@ -14,15 +14,17 @@ import {
 import { Eye, Trash2, Play, Pause, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+import type { Task } from '../../types/task';
+
+type MobileTaskCardTask = Pick<
+  Task,
+  'task_id' | 'task_name' | 'progress' | 'stock_codes' | 'created_at'
+> & {
+  status: Task['status'] | 'pending';
+};
+
 interface MobileTaskCardProps {
-  task: {
-    task_id: string;
-    task_name: string;
-    status: string;
-    progress?: number;
-    stock_codes?: string[];
-    created_at: string;
-  };
+  task: MobileTaskCardTask;
   onDelete?: (id: string) => void;
   onToggle?: (id: string) => void;
 }

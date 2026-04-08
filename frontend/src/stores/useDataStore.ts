@@ -13,105 +13,25 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-export interface StockData {
-  stock_code: string;
-  data: Array<{
-    date: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-    adj_close?: number;
-  }>;
-  indicators?: {
-    ma_5?: number;
-    ma_10?: number;
-    ma_20?: number;
-    ma_60?: number;
-    rsi?: number;
-    macd?: number;
-    macd_signal?: number;
-    bb_upper?: number;
-    bb_lower?: number;
-  };
-  last_updated: string;
-}
+import type {
+  DataServiceStatus,
+  PerformanceMetrics,
+  StockData,
+  SyncProgress,
+  SystemHealth,
+  SystemStatus,
+} from '../types/data';
+import type { Model } from '../types/model';
 
-export interface Model {
-  model_id: string;
-  model_name: string;
-  model_type: string;
-  version: string;
-  accuracy: number;
-  created_at: string;
-  status: 'active' | 'inactive' | 'training' | 'ready' | 'failed';
-  description?: string;
-  training_progress?: number;
-  training_stage?: string;
-  performance_metrics?: {
-    accuracy: number;
-    precision: number;
-    recall: number;
-    f1_score: number;
-    sharpe_ratio: number;
-    max_drawdown: number;
-  };
-}
-
-export interface SystemStatus {
-  api_server: { status: string; uptime: string };
-  data_service: { status: string; last_update: string };
-  prediction_engine: { status: string; active_models: number };
-  task_manager: { status: string; running_tasks: number };
-  database: { status: string; connection: string };
-  remote_data_service: { status: string; url: string };
-}
-
-export interface DataServiceStatus {
-  service_url: string;
-  is_connected: boolean;
-  last_check: string;
-  response_time: number;
-  error_message?: string;
-}
-
-export interface SyncProgress {
-  sync_id: string;
-  total_stocks: number;
-  completed_stocks: number;
-  failed_stocks: number;
-  current_stock: string | null;
-  progress_percentage: number;
-  estimated_remaining_time_seconds: number | null;
-  start_time: string;
-  status: string;
-  last_update: string;
-}
-
-export interface SystemHealth {
-  overall_healthy: boolean;
-  services: Record<
-    string,
-    {
-      healthy: boolean;
-      response_time_ms: number;
-      last_check: string;
-      error_message: string | null;
-    }
-  >;
-  check_time: string;
-}
-
-export interface PerformanceMetrics {
-  services?: Record<string, any>;
-  summary?: {
-    total_services: number;
-    avg_response_time: number;
-    total_requests: number;
-    total_errors: number;
-  };
-}
+export type {
+  DataServiceStatus,
+  PerformanceMetrics,
+  StockData,
+  SyncProgress,
+  SystemHealth,
+  SystemStatus,
+} from '../types/data';
+export type { Model } from '../types/model';
 
 interface DataState {
   // 股票数据
