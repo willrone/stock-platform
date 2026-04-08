@@ -4,11 +4,11 @@
 锁定 /tasks 相关核心接口的返回结构，避免 task/backtest DTO 再次漂移。
 """
 
+import sys
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
-import sys
 
 import pytest
 from fastapi import FastAPI
