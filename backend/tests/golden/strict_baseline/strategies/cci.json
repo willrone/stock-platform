@@ -1,0 +1,129 @@
+{
+  "config_snapshot": {
+    "backtest_config_sha256": "cb23b4f2b628053e45bd215b0ad1c7d137d5b32322f9684aed9548e370b18d9c",
+    "capital": {
+      "commission_rate": 0.0003,
+      "initial_cash": 100000,
+      "slippage_rate": 0.0001
+    },
+    "config_sha256": "06ba3295072c6770f01ce20d1b23062c55107ee1879a2a5299ba4bcf8030b763",
+    "date_range": {
+      "end_date": "2026-02-23",
+      "start_date": "2021-01-01"
+    },
+    "stock_universe": {
+      "count": 1000,
+      "sha256": "e3a470e57cc8ec101da4513cf6f64a8553ff8d2d9ef6f0d0dd969ae9328a8b9d"
+    },
+    "strategy_config": {
+      "overbought": 100,
+      "oversold": -100,
+      "period": 20
+    },
+    "strategy_name": "cci"
+  },
+  "fingerprints": {
+    "backtest_config_sha256": "cb23b4f2b628053e45bd215b0ad1c7d137d5b32322f9684aed9548e370b18d9c",
+    "metrics_sha256": "6c53cfa0a157b13f41af9ddab9cc92ca1c2ff09b0702518378e1a50b936e9743",
+    "monthly_returns_detail_length": 61,
+    "monthly_returns_detail_sha256": "e71c6373d7a198646dd02a0ddade21239a013f15177800b781ee5ee845c1805e",
+    "perf_breakdown_sha256": "613334c960e903acc62ac4a3ba8661d0455b70f9f950fc4ab2f0eb6e4b359c7e",
+    "performance_analysis_sha256": "4ecf9f1c7f9ba22ca941b074171024ea43b870c957ca1823227fdef9a9b5eae2",
+    "portfolio_history_length": 1239,
+    "portfolio_history_sha256": "a1cabb425358455ad281d3abacd8a8f3bb5f9c5d9c552864c265d0e4e443bfcb",
+    "trade_history_length": 11759,
+    "trade_history_sha256": "0cf582267d4015b7fa5f27d398a89db201ee72f2bdee29379b27996efa399971"
+  },
+  "metric_snapshot": {
+    "cost_statistics": {
+      "cost_ratio": 0.04490295904167952,
+      "total_commission": 3367.7226032984895,
+      "total_cost": 4490.295904167952,
+      "total_slippage": 1122.5733008694629
+    },
+    "metrics": {
+      "annualized_return": 0.0961374429714148,
+      "max_drawdown": -0.2968884426683574,
+      "profit_factor": 0.7151382976672441,
+      "sharpe_ratio": 0.42740206418133897,
+      "total_return": 0.5976270145844599,
+      "total_trades": 11759,
+      "volatility": 0.22493443768354246,
+      "win_rate": 0.6639691714836223
+    },
+    "signal_execution_summary": {
+      "actionable_signal_count": 22696,
+      "executed_signal_count": 22696,
+      "execution_rate": 0.12153015764222069,
+      "execution_rate_actionable": 1.0,
+      "raw_signal_count": 186752,
+      "top_rejection_reasons": [
+        {
+          "count": 84078,
+          "reason": "无持仓",
+          "reason_key": "no_position"
+        },
+        {
+          "count": 70262,
+          "reason": "可买数量不足",
+          "reason_key": "insufficient_buy_quantity"
+        },
+        {
+          "count": 9716,
+          "reason": "仓位限制",
+          "reason_key": "position_limit"
+        }
+      ]
+    },
+    "top_level": {
+      "annualized_return": 0.0961374429714148,
+      "best_month": 0.11979857129030247,
+      "excess_return_with_cost": {
+        "annualized_return": 0.0961374429714148,
+        "information_ratio": 0.42740206418133897,
+        "max_drawdown": -0.2968884426683574,
+        "mean": 0.014169537700114497,
+        "std": 0.22493443768354246
+      },
+      "excess_return_without_cost": {
+        "annualized_return": 0.0,
+        "information_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "final_value": 159762.70145844598,
+      "losing_trades": 1744,
+      "max_drawdown": -0.2968884426683574,
+      "monthly_return_mean": 0.009115341523631101,
+      "monthly_return_std": 0.053021519547462766,
+      "profit_factor": 0.7151382976672441,
+      "sharpe_ratio": 0.42740206418133897,
+      "total_return": 0.5976270145844599,
+      "total_signals": 186752,
+      "total_trades": 11759,
+      "trading_days": 1239,
+      "volatility": 0.22493443768354246,
+      "win_rate": 0.6639691714836223,
+      "winning_trades": 3446,
+      "worst_month": -0.14842823133695748
+    }
+  },
+  "schema_version": "strict-baseline-golden.v1",
+  "source_task": {
+    "completed_at": "2026-04-07 15:31:25.855380",
+    "created_at": "2026-04-07 15:21:34.999152",
+    "task_id": "5650fcfd-b429-4d83-b641-5fe0e14447ef",
+    "task_name": "重建 - perf-verify-cci-talib-v3"
+  },
+  "strategy_name": "cci",
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}

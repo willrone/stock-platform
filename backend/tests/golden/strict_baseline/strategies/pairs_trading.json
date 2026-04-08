@@ -1,0 +1,119 @@
+{
+  "config_snapshot": {
+    "backtest_config_sha256": "4330a5d420bfa56fe92abd2fa7f565357063108b425dcf59c61c3dd114b0e5ce",
+    "capital": {
+      "commission_rate": 0.0003,
+      "initial_cash": 100000,
+      "slippage_rate": 0.0001
+    },
+    "config_sha256": "201a61a0dff01661aac5e3a08341435cd232e2bcc149b9fac1ab888f566081ff",
+    "date_range": {
+      "end_date": "2026-02-23",
+      "start_date": "2021-01-01"
+    },
+    "stock_universe": {
+      "count": 1000,
+      "sha256": "e3a470e57cc8ec101da4513cf6f64a8553ff8d2d9ef6f0d0dd969ae9328a8b9d"
+    },
+    "strategy_config": {
+      "downtrend_sell_threshold": 60,
+      "enable_crossover": true,
+      "enable_divergence": true,
+      "enable_trend_alignment": true,
+      "overbought_threshold": 70,
+      "oversold_threshold": 30,
+      "rsi_period": 14,
+      "trend_ma_period": 50,
+      "uptrend_buy_threshold": 40
+    },
+    "strategy_name": "pairs_trading"
+  },
+  "fingerprints": {
+    "backtest_config_sha256": "4330a5d420bfa56fe92abd2fa7f565357063108b425dcf59c61c3dd114b0e5ce",
+    "metrics_sha256": "9adb90db56a69f652c042fea222d1cc9a021c444345100b38d1b6a6853dc7330",
+    "monthly_returns_detail_length": 61,
+    "monthly_returns_detail_sha256": "76038859b443aaea10f8fde6596e54ca1b5c6d49b0a69c90ed80abcde7bc82d4",
+    "perf_breakdown_sha256": "79feda1c1a82a4bcf74e741c470b8d50002bf5c874bbf7278db0b2392aec8b33",
+    "performance_analysis_sha256": "314d2ba70bf61213abd64db2d99e24afc6aa5bebf216d8acc6797324da8d89c7",
+    "portfolio_history_length": 1239,
+    "portfolio_history_sha256": "5b92005c9972166de80598c8e762b80906594d99bf12c4d5b7a97c8c7779918f",
+    "trade_history_length": 6720,
+    "trade_history_sha256": "02c077832ac76321cb70e358008a70e878e33883f890ce2534e880c0b2b937ba"
+  },
+  "metric_snapshot": {
+    "cost_statistics": {
+      "cost_ratio": 0.029470574110746384,
+      "total_commission": 2210.294189453125,
+      "total_cost": 2947.057373046875,
+      "total_slippage": 736.7631225585938
+    },
+    "metrics": {
+      "annualized_return": 0.1327506321742553,
+      "max_drawdown": -0.39001313799910137,
+      "profit_factor": 0.9090958497091468,
+      "sharpe_ratio": 0.21536340568381201,
+      "total_return": 0.8893284625816346,
+      "total_trades": 6720,
+      "volatility": 0.6164029202303501,
+      "win_rate": 0.6479973949853468
+    },
+    "signal_execution_summary": {
+      "actionable_signal_count": 0,
+      "executed_signal_count": 0,
+      "execution_rate": 0.0,
+      "execution_rate_actionable": 0.0,
+      "raw_signal_count": 0,
+      "top_rejection_reasons": []
+    },
+    "top_level": {
+      "annualized_return": 0.1327506321742553,
+      "best_month": 0.2509993105648263,
+      "excess_return_with_cost": {
+        "annualized_return": 0.1327506321742553,
+        "information_ratio": 0.21536340568381201,
+        "max_drawdown": -0.39001313799910137,
+        "mean": 0.0388297341510355,
+        "std": 0.6164029202303501
+      },
+      "excess_return_without_cost": {
+        "annualized_return": 0.0,
+        "information_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "final_value": 188932.84625816345,
+      "losing_trades": 1081,
+      "max_drawdown": -0.39001313799910137,
+      "monthly_return_mean": 0.01284238123138094,
+      "monthly_return_std": 0.0696948777530604,
+      "profit_factor": 0.9090958497091468,
+      "sharpe_ratio": 0.21536340568381201,
+      "total_return": 0.8893284625816346,
+      "total_signals": 63179,
+      "total_trades": 6720,
+      "trading_days": 1239,
+      "volatility": 0.6164029202303501,
+      "win_rate": 0.6479973949853468,
+      "winning_trades": 1990,
+      "worst_month": -0.16338827273433476
+    }
+  },
+  "schema_version": "strict-baseline-golden.v1",
+  "source_task": {
+    "completed_at": "2026-04-07 15:55:36.799105",
+    "created_at": "2026-04-07 15:25:14.612329",
+    "task_id": "63b92d02-130b-49e8-936a-fbb68f9e9597",
+    "task_name": "重建 - perf-verify-pairs_trading-20260224"
+  },
+  "strategy_name": "pairs_trading",
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}

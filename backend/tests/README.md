@@ -53,6 +53,13 @@ python -m pytest tests/ --maxfail=1 -x
 - `./scripts/quality.sh flake8` / `./scripts/quality.sh mypy`：单独执行对应静态检查
 - 默认 pytest target 为 `tests/unit/infrastructure/test_basic_infrastructure.py`，用于确认命令与环境稳定可执行；完整回归仍按上面的 `python -m pytest tests/ -v` 手动触发
 
+### strict-baseline golden files
+
+- Manifest：`tests/golden/strict_baseline/manifest.json`
+- 导出：`python tests/scripts/export_strict_baseline_goldens.py`
+- 自检：`python tests/scripts/verify_strict_baseline_golden.py`
+- 单任务对比：`python tests/scripts/verify_strict_baseline_golden.py --task-id <task_id> --strategy <strategy_name>`
+
 ## 测试规范
 
 - **单元测试**：测试单个函数或类的功能

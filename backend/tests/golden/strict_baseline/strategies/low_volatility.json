@@ -1,0 +1,135 @@
+{
+  "config_snapshot": {
+    "backtest_config_sha256": "21c3dfc1b72075a81ca0013e8fb4ad92a72c2e28381d5ab5dd9b9001fbe4a163",
+    "capital": {
+      "commission_rate": 0.0003,
+      "initial_cash": 100000,
+      "slippage_rate": 0.0001
+    },
+    "config_sha256": "9b94a55422ece718f6b6bb45809f62251abc5f2831b679ef77452fbdd4fb0643",
+    "date_range": {
+      "end_date": "2026-02-23",
+      "start_date": "2021-01-01"
+    },
+    "stock_universe": {
+      "count": 1000,
+      "sha256": "e3a470e57cc8ec101da4513cf6f64a8553ff8d2d9ef6f0d0dd969ae9328a8b9d"
+    },
+    "strategy_config": {
+      "downtrend_sell_threshold": 60,
+      "enable_crossover": true,
+      "enable_divergence": true,
+      "enable_trend_alignment": true,
+      "overbought_threshold": 70,
+      "oversold_threshold": 30,
+      "rsi_period": 14,
+      "trend_ma_period": 50,
+      "uptrend_buy_threshold": 40
+    },
+    "strategy_name": "low_volatility"
+  },
+  "fingerprints": {
+    "backtest_config_sha256": "21c3dfc1b72075a81ca0013e8fb4ad92a72c2e28381d5ab5dd9b9001fbe4a163",
+    "metrics_sha256": "d1fa0f8ab864c3ec2a86d1e5baa85775fe4d96a449238b98610a509c727e1fe5",
+    "monthly_returns_detail_length": 61,
+    "monthly_returns_detail_sha256": "a1949ead809ff0c8228a7d059e54fa54e91998fb29edb25093ef310a4f337ac4",
+    "perf_breakdown_sha256": "490ebee971774f395ca46cfddb8d750724e084def8313b3fdca5ea33f68525a2",
+    "performance_analysis_sha256": "f1678fcf763aea57f0bc34752951ccdbad6404b3ba385f5721f4b1cb18ac94fd",
+    "portfolio_history_length": 1239,
+    "portfolio_history_sha256": "994a02ff65ce8b22c4c34dc39e48c736aa1aebcf6fc16af14bf759b314bf348c",
+    "trade_history_length": 25,
+    "trade_history_sha256": "04108ffa6bd406bbcefe60f95276ffca9600e3865acdd712f21da4b3015f4626"
+  },
+  "metric_snapshot": {
+    "cost_statistics": {
+      "cost_ratio": 0.0003968497330788523,
+      "total_commission": 29.76447296142578,
+      "total_cost": 39.684974670410156,
+      "total_slippage": 9.920500755310059
+    },
+    "metrics": {
+      "annualized_return": -0.037908634794608154,
+      "max_drawdown": -0.5232770364319094,
+      "profit_factor": Infinity,
+      "sharpe_ratio": -0.1382002165473952,
+      "total_return": -0.17901685325622557,
+      "total_trades": 25,
+      "volatility": 0.27430228216471386,
+      "win_rate": 0.0
+    },
+    "signal_execution_summary": {
+      "actionable_signal_count": 25,
+      "executed_signal_count": 25,
+      "execution_rate": 5.1611624589429524e-05,
+      "execution_rate_actionable": 1.0,
+      "raw_signal_count": 484387,
+      "top_rejection_reasons": [
+        {
+          "count": 476182,
+          "reason": "强度过低",
+          "reason_key": "strength_too_low"
+        },
+        {
+          "count": 7852,
+          "reason": "可买数量不足",
+          "reason_key": "insufficient_buy_quantity"
+        },
+        {
+          "count": 328,
+          "reason": "仓位限制",
+          "reason_key": "position_limit"
+        }
+      ]
+    },
+    "top_level": {
+      "annualized_return": -0.037908634794608154,
+      "best_month": 0.18662317813925955,
+      "excess_return_with_cost": {
+        "annualized_return": -0.037908634794608154,
+        "information_ratio": -0.1382002165473952,
+        "max_drawdown": -0.5232770364319094,
+        "mean": 0.01727941958726907,
+        "std": 0.27430228216471386
+      },
+      "excess_return_without_cost": {
+        "annualized_return": 0.0,
+        "information_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "final_value": 82098.31467437744,
+      "losing_trades": 0,
+      "max_drawdown": -0.5232770364319094,
+      "monthly_return_mean": -0.0010320149408360457,
+      "monthly_return_std": 0.0654655055863043,
+      "profit_factor": Infinity,
+      "sharpe_ratio": -0.1382002165473952,
+      "total_return": -0.17901685325622557,
+      "total_signals": 484387,
+      "total_trades": 25,
+      "trading_days": 1239,
+      "volatility": 0.27430228216471386,
+      "win_rate": 0.0,
+      "winning_trades": 0,
+      "worst_month": -0.24096611638140497
+    }
+  },
+  "schema_version": "strict-baseline-golden.v1",
+  "source_task": {
+    "completed_at": "2026-04-07 15:41:33.357955",
+    "created_at": "2026-04-07 15:23:37.952609",
+    "task_id": "8ec31dac-3a89-4587-8e6e-957f5abe2f0a",
+    "task_name": "重建 - perf-verify-low_volatility-20260224"
+  },
+  "strategy_name": "low_volatility",
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}

@@ -1,0 +1,274 @@
+{
+  "generated_at": "2026-04-08T03:40:18+00:00",
+  "golden_dir": "strategies",
+  "schema_version": "strict-baseline-manifest.v1",
+  "strategy_count": 15,
+  "strategy_names": [
+    "stochastic",
+    "cci",
+    "cointegration",
+    "multi_factor",
+    "obv",
+    "low_volatility",
+    "momentum_factor",
+    "rsi",
+    "bollinger",
+    "pairs_trading",
+    "kdj",
+    "value_factor",
+    "mean_reversion",
+    "moving_average",
+    "macd"
+  ],
+  "task_id_mapping": [
+    {
+      "annualized_return": 0.1556407949003551,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/stochastic.json",
+      "final_value": 209244.8531025201,
+      "max_drawdown": -0.2949239046261706,
+      "sharpe_ratio": 0.7006479112933013,
+      "stock_count": 1000,
+      "strategy_name": "stochastic",
+      "task_id": "87dca06e-84c4-4d09-b4d8-3c8cf22e75a1",
+      "task_name": "重建 - perf-verify-stochastic-20260224",
+      "total_return": 1.092448531025201
+    },
+    {
+      "annualized_return": 0.0961374429714148,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/cci.json",
+      "final_value": 159762.70145844598,
+      "max_drawdown": -0.2968884426683574,
+      "sharpe_ratio": 0.42740206418133897,
+      "stock_count": 1000,
+      "strategy_name": "cci",
+      "task_id": "5650fcfd-b429-4d83-b641-5fe0e14447ef",
+      "task_name": "重建 - perf-verify-cci-talib-v3",
+      "total_return": 0.5976270145844599
+    },
+    {
+      "annualized_return": 0.13389111679631727,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/cointegration.json",
+      "final_value": 189905.77238649508,
+      "max_drawdown": -0.27565591178446275,
+      "sharpe_ratio": 0.6389867945886564,
+      "stock_count": 1000,
+      "strategy_name": "cointegration",
+      "task_id": "1846214a-881d-464d-af0c-5864f82771a5",
+      "task_name": "重建 - perf-verify-cointegration-numpy-opt",
+      "total_return": 0.8990577238649509
+    },
+    {
+      "annualized_return": 0.08011028873817327,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/multi_factor.json",
+      "final_value": 148192.03626578825,
+      "max_drawdown": -0.24798676455897192,
+      "sharpe_ratio": 0.3247122737739297,
+      "stock_count": 1000,
+      "strategy_name": "multi_factor",
+      "task_id": "1c88160e-2b4d-47b3-a74d-cbf3dc20bc20",
+      "task_name": "重建 - perf-verify-multi_factor-20260224",
+      "total_return": 0.4819203626578825
+    },
+    {
+      "annualized_return": 0.0807282791306807,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/obv.json",
+      "final_value": 148625.31600488638,
+      "max_drawdown": -0.510780743375989,
+      "sharpe_ratio": 0.3483965748263831,
+      "stock_count": 1000,
+      "strategy_name": "obv",
+      "task_id": "ca493750-1107-4b6f-9e38-6f8126c1bb55",
+      "task_name": "重建 - perf-verify-obv-20260224",
+      "total_return": 0.4862531600488638
+    },
+    {
+      "annualized_return": -0.037908634794608154,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/low_volatility.json",
+      "final_value": 82098.31467437744,
+      "max_drawdown": -0.5232770364319094,
+      "sharpe_ratio": -0.1382002165473952,
+      "stock_count": 1000,
+      "strategy_name": "low_volatility",
+      "task_id": "8ec31dac-3a89-4587-8e6e-957f5abe2f0a",
+      "task_name": "重建 - perf-verify-low_volatility-20260224",
+      "total_return": -0.17901685325622557
+    },
+    {
+      "annualized_return": -0.025691888408039376,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/momentum_factor.json",
+      "final_value": 87559.80178117752,
+      "max_drawdown": -0.6257232370996484,
+      "sharpe_ratio": -0.03332922328661704,
+      "stock_count": 1000,
+      "strategy_name": "momentum_factor",
+      "task_id": "86e9aa33-ae67-4889-8ab7-b439f4904c8c",
+      "task_name": "重建 - perf-verify-momentum_factor-20260224",
+      "total_return": -0.12440198218822479
+    },
+    {
+      "annualized_return": 0.19477910275306942,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/rsi.json",
+      "final_value": 248018.72585376466,
+      "max_drawdown": -0.2706448709337125,
+      "sharpe_ratio": 0.8322871892666766,
+      "stock_count": 1000,
+      "strategy_name": "rsi",
+      "task_id": "34ab0a39-d54b-4127-ab09-77ef03619dc1",
+      "task_name": "重建 - perf-verify-rsi-20260224",
+      "total_return": 1.4801872585376465
+    },
+    {
+      "annualized_return": 0.23096755795665014,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/bollinger.json",
+      "final_value": 288820.87118690833,
+      "max_drawdown": -0.28075979984383803,
+      "sharpe_ratio": 1.0088368739960087,
+      "stock_count": 1000,
+      "strategy_name": "bollinger",
+      "task_id": "eebddc55-1734-4b38-a072-fa2682af994d",
+      "task_name": "重建 - perf-verify-bollinger-20260224",
+      "total_return": 1.8882087118690833
+    },
+    {
+      "annualized_return": 0.1327506321742553,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/pairs_trading.json",
+      "final_value": 188932.84625816345,
+      "max_drawdown": -0.39001313799910137,
+      "sharpe_ratio": 0.21536340568381201,
+      "stock_count": 1000,
+      "strategy_name": "pairs_trading",
+      "task_id": "63b92d02-130b-49e8-936a-fbb68f9e9597",
+      "task_name": "重建 - perf-verify-pairs_trading-20260224",
+      "total_return": 0.8893284625816346
+    },
+    {
+      "annualized_return": 0.14042742203808034,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/kdj.json",
+      "final_value": 195559.78336603238,
+      "max_drawdown": -0.3002361599698917,
+      "sharpe_ratio": 0.535113799432152,
+      "stock_count": 1000,
+      "strategy_name": "kdj",
+      "task_id": "e78a5ab8-5b0b-4bb6-8e30-26b31c26fd54",
+      "task_name": "重建 - perf-verify-kdj-20260224",
+      "total_return": 0.9555978336603238
+    },
+    {
+      "annualized_return": 0.054355460660923116,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/value_factor.json",
+      "final_value": 131017.23529052734,
+      "max_drawdown": -0.5784295895004272,
+      "sharpe_ratio": 0.08265516271813812,
+      "stock_count": 1000,
+      "strategy_name": "value_factor",
+      "task_id": "77b6111d-706e-490b-99a7-a079da46c1b9",
+      "task_name": "重建 - perf-verify-value_factor-20260224",
+      "total_return": 0.31017235290527345
+    },
+    {
+      "annualized_return": 0.22130528789077597,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/mean_reversion.json",
+      "final_value": 277434.4724159241,
+      "max_drawdown": -0.3559933919474483,
+      "sharpe_ratio": 0.2966171048773719,
+      "stock_count": 1000,
+      "strategy_name": "mean_reversion",
+      "task_id": "dcb1b357-26b7-4d63-ab2a-cef8176ae977",
+      "task_name": "重建 - perf-verify-mean_reversion-20260224",
+      "total_return": 1.7743447241592407
+    },
+    {
+      "annualized_return": 0.09737545441964479,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/moving_average.json",
+      "final_value": 160685.8287432869,
+      "max_drawdown": -0.40613642085654933,
+      "sharpe_ratio": 0.4503471266094468,
+      "stock_count": 1000,
+      "strategy_name": "moving_average",
+      "task_id": "d6408834-1c25-4815-b5b8-253be25ebd1a",
+      "task_name": "重建 - perf-verify-moving_average-20260224",
+      "total_return": 0.606858287432869
+    },
+    {
+      "annualized_return": 0.05678598599181717,
+      "date_range": {
+        "end_date": "2026-02-23",
+        "start_date": "2021-01-01"
+      },
+      "file": "strategies/macd.json",
+      "final_value": 132566.10885258327,
+      "max_drawdown": -0.5400534172918807,
+      "sharpe_ratio": 0.24872486615008355,
+      "stock_count": 1000,
+      "strategy_name": "macd",
+      "task_id": "149c1268-7893-41d2-ab5a-6134cf8c9c3e",
+      "task_name": "重建 - 重建 - macd_1000stocks_test",
+      "total_return": 0.32566108852583275
+    }
+  ],
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}

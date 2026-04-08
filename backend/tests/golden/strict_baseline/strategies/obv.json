@@ -1,0 +1,123 @@
+{
+  "config_snapshot": {
+    "backtest_config_sha256": "38abc4a0a31430821eb023ca9933a0a761008457290ec1dd0b144ad4622a4c43",
+    "capital": {
+      "commission_rate": 0.0003,
+      "initial_cash": 100000,
+      "slippage_rate": 0.0001
+    },
+    "config_sha256": "f653ef959ae84398b4b42ccb08211916c22e7e201733ab9ca6c9fb41357deb30",
+    "date_range": {
+      "end_date": "2026-02-23",
+      "start_date": "2021-01-01"
+    },
+    "stock_universe": {
+      "count": 1000,
+      "sha256": "e3a470e57cc8ec101da4513cf6f64a8553ff8d2d9ef6f0d0dd969ae9328a8b9d"
+    },
+    "strategy_config": {
+      "obv_ma_period": 20,
+      "signal_threshold": 0.02
+    },
+    "strategy_name": "obv"
+  },
+  "fingerprints": {
+    "backtest_config_sha256": "38abc4a0a31430821eb023ca9933a0a761008457290ec1dd0b144ad4622a4c43",
+    "metrics_sha256": "0a04d1277e7c98d8607dc8f6450e8afdf338a88925df248cdeb0a172f5167e5e",
+    "monthly_returns_detail_length": 61,
+    "monthly_returns_detail_sha256": "65c78553485a19c461264e4b7e2a64afe6961ddc450da8b2323fc13f034389d8",
+    "perf_breakdown_sha256": "d644e9ee1fad358c334700657b28d4fb0acfd2c38581c3e27f7e4bae048f1734",
+    "performance_analysis_sha256": "c71c0b01bac2a71c34b5b892f3c9f4c35150c3e5fdb1033df3ecc01fee324e27",
+    "portfolio_history_length": 1239,
+    "portfolio_history_sha256": "73beba5c0fb62bda5c34274c5290435e7f5dcbcc55edd8ee2263ecad6e9fa3a0",
+    "trade_history_length": 38339,
+    "trade_history_sha256": "ded5e7030023d4eed18f056974d177c8eee825e3b887c54bc7a1b2e28f601449"
+  },
+  "metric_snapshot": {
+    "cost_statistics": {
+      "cost_ratio": 0.1320868814097531,
+      "total_commission": 9906.516739886518,
+      "total_cost": 13208.688140975311,
+      "total_slippage": 3302.1714010887945
+    },
+    "metrics": {
+      "annualized_return": 0.0807282791306807,
+      "max_drawdown": -0.510780743375989,
+      "profit_factor": 3.3121668205728865,
+      "sharpe_ratio": 0.3483965748263831,
+      "total_return": 0.4862531600488638,
+      "total_trades": 38339,
+      "volatility": 0.23171375657441562,
+      "win_rate": 0.2496599749741581
+    },
+    "signal_execution_summary": {
+      "actionable_signal_count": 73810,
+      "executed_signal_count": 73810,
+      "execution_rate": 0.27197022734809684,
+      "execution_rate_actionable": 1.0,
+      "raw_signal_count": 271390,
+      "top_rejection_reasons": [
+        {
+          "count": 98874,
+          "reason": "可买数量不足",
+          "reason_key": "insufficient_buy_quantity"
+        },
+        {
+          "count": 98706,
+          "reason": "无持仓",
+          "reason_key": "no_position"
+        }
+      ]
+    },
+    "top_level": {
+      "annualized_return": 0.0807282791306807,
+      "best_month": 0.22466245393876716,
+      "excess_return_with_cost": {
+        "annualized_return": 0.0807282791306807,
+        "information_ratio": 0.3483965748263831,
+        "max_drawdown": -0.510780743375989,
+        "mean": 0.014596594648772892,
+        "std": 0.23171375657441562
+      },
+      "excess_return_without_cost": {
+        "annualized_return": 0.0,
+        "information_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "final_value": 148625.31600488638,
+      "losing_trades": 13792,
+      "max_drawdown": -0.510780743375989,
+      "monthly_return_mean": 0.009070155199759612,
+      "monthly_return_std": 0.07215107457505485,
+      "profit_factor": 3.3121668205728865,
+      "sharpe_ratio": 0.3483965748263831,
+      "total_return": 0.4862531600488638,
+      "total_signals": 271390,
+      "total_trades": 38339,
+      "trading_days": 1239,
+      "volatility": 0.23171375657441562,
+      "win_rate": 0.2496599749741581,
+      "winning_trades": 4589,
+      "worst_month": -0.1766200449547357
+    }
+  },
+  "schema_version": "strict-baseline-golden.v1",
+  "source_task": {
+    "completed_at": "2026-04-07 15:41:27.409369",
+    "created_at": "2026-04-07 15:23:09.577833",
+    "task_id": "ca493750-1107-4b6f-9e38-6f8126c1bb55",
+    "task_name": "重建 - perf-verify-obv-20260224"
+  },
+  "strategy_name": "obv",
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}

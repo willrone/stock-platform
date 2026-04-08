@@ -1,0 +1,131 @@
+{
+  "config_snapshot": {
+    "backtest_config_sha256": "163d163adf75ff0b32015d876019517ba5b8b3cb85248f9c4d7ab0d4dbf647ef",
+    "capital": {
+      "commission_rate": 0.0003,
+      "initial_cash": 100000,
+      "slippage_rate": 0.0001
+    },
+    "config_sha256": "3d42d27be1df4bcd9d8b5c232601fddf4d0904c15f0c3fae9a96ff756bbea713",
+    "date_range": {
+      "end_date": "2026-02-23",
+      "start_date": "2021-01-01"
+    },
+    "stock_universe": {
+      "count": 1000,
+      "sha256": "e3a470e57cc8ec101da4513cf6f64a8553ff8d2d9ef6f0d0dd969ae9328a8b9d"
+    },
+    "strategy_config": {
+      "d_period": 3,
+      "j_smooth": 3,
+      "k_period": 9,
+      "overbought": 80,
+      "oversold": 20
+    },
+    "strategy_name": "kdj"
+  },
+  "fingerprints": {
+    "backtest_config_sha256": "163d163adf75ff0b32015d876019517ba5b8b3cb85248f9c4d7ab0d4dbf647ef",
+    "metrics_sha256": "4c09b03953407b31e48b900a0918aaf91b0e7fcee62088b477f24bd89cb1cf8d",
+    "monthly_returns_detail_length": 61,
+    "monthly_returns_detail_sha256": "7937a695f474b3cb0b022125c9d74a76fe303a9fd0597026f657154628c92417",
+    "perf_breakdown_sha256": "4db86759d854339df5a3f15b1398ab21a2ebaae9652c0b783387183275a1eabf",
+    "performance_analysis_sha256": "76cc01db844ddf0db37ef26317f7a263169bc871ce809ea3684fb77c9863ab4f",
+    "portfolio_history_length": 1239,
+    "portfolio_history_sha256": "aed11b339ea64043b7a78a499666ecedcf918b82383b717976106a918d3067e7",
+    "trade_history_length": 3336,
+    "trade_history_sha256": "90a4b02d74d26c088f7cbdb60414ac9c9da0209298649e03f4c80fe060411814"
+  },
+  "metric_snapshot": {
+    "cost_statistics": {
+      "cost_ratio": 0.01215215680293355,
+      "total_commission": 911.4124805050234,
+      "total_cost": 1215.215680293355,
+      "total_slippage": 303.80319978833165
+    },
+    "metrics": {
+      "annualized_return": 0.14042742203808034,
+      "max_drawdown": -0.3002361599698917,
+      "profit_factor": 1.2620375418231375,
+      "sharpe_ratio": 0.535113799432152,
+      "total_return": 0.9555978336603238,
+      "total_trades": 3336,
+      "volatility": 0.26242534239837967,
+      "win_rate": 0.6301754385964913
+    },
+    "signal_execution_summary": {
+      "actionable_signal_count": 6479,
+      "executed_signal_count": 6479,
+      "execution_rate": 0.08566366533127075,
+      "execution_rate_actionable": 1.0,
+      "raw_signal_count": 75633,
+      "top_rejection_reasons": [
+        {
+          "count": 41841,
+          "reason": "可买数量不足",
+          "reason_key": "insufficient_buy_quantity"
+        },
+        {
+          "count": 21641,
+          "reason": "无持仓",
+          "reason_key": "no_position"
+        },
+        {
+          "count": 5672,
+          "reason": "仓位限制",
+          "reason_key": "position_limit"
+        }
+      ]
+    },
+    "top_level": {
+      "annualized_return": 0.14042742203808034,
+      "best_month": 0.33247259277758134,
+      "excess_return_with_cost": {
+        "annualized_return": 0.14042742203808034,
+        "information_ratio": 0.535113799432152,
+        "max_drawdown": -0.3002361599698917,
+        "mean": 0.016531242707311596,
+        "std": 0.26242534239837967
+      },
+      "excess_return_without_cost": {
+        "annualized_return": 0.0,
+        "information_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "final_value": 195559.78336603238,
+      "losing_trades": 527,
+      "max_drawdown": -0.3002361599698917,
+      "monthly_return_mean": 0.014923230869763188,
+      "monthly_return_std": 0.0764221795521547,
+      "profit_factor": 1.2620375418231375,
+      "sharpe_ratio": 0.535113799432152,
+      "total_return": 0.9555978336603238,
+      "total_signals": 75633,
+      "total_trades": 3336,
+      "trading_days": 1239,
+      "volatility": 0.26242534239837967,
+      "win_rate": 0.6301754385964913,
+      "winning_trades": 898,
+      "worst_month": -0.14927105515874783
+    }
+  },
+  "schema_version": "strict-baseline-golden.v1",
+  "source_task": {
+    "completed_at": "2026-04-07 15:54:48.097475",
+    "created_at": "2026-04-07 15:25:41.015741",
+    "task_id": "e78a5ab8-5b0b-4bb6-8e30-26b31c26fd54",
+    "task_name": "重建 - perf-verify-kdj-20260224"
+  },
+  "strategy_name": "kdj",
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}

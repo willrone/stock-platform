@@ -1,0 +1,135 @@
+{
+  "config_snapshot": {
+    "backtest_config_sha256": "f5429eb9341eb09dc7e87ecff885acfa2e4672ffbfea45ce903984dd57f9a110",
+    "capital": {
+      "commission_rate": 0.0003,
+      "initial_cash": 100000,
+      "slippage_rate": 0.0001
+    },
+    "config_sha256": "d5b26a07d36d400a9cdadf1840a06bbdd9d9bea6b7c0a1bbb7e06b9678d0f755",
+    "date_range": {
+      "end_date": "2026-02-23",
+      "start_date": "2021-01-01"
+    },
+    "stock_universe": {
+      "count": 1000,
+      "sha256": "e3a470e57cc8ec101da4513cf6f64a8553ff8d2d9ef6f0d0dd969ae9328a8b9d"
+    },
+    "strategy_config": {
+      "downtrend_sell_threshold": 60,
+      "enable_crossover": true,
+      "enable_divergence": true,
+      "enable_trend_alignment": true,
+      "overbought_threshold": 70,
+      "oversold_threshold": 30,
+      "rsi_period": 14,
+      "trend_ma_period": 50,
+      "uptrend_buy_threshold": 40
+    },
+    "strategy_name": "bollinger"
+  },
+  "fingerprints": {
+    "backtest_config_sha256": "f5429eb9341eb09dc7e87ecff885acfa2e4672ffbfea45ce903984dd57f9a110",
+    "metrics_sha256": "433ed5a40a23e2051b79833f4d57ac6d8bb1d133b8498ca35527d0fef75f66a5",
+    "monthly_returns_detail_length": 61,
+    "monthly_returns_detail_sha256": "9108c1e15aef7f1a6f121eba23cfead65e63cf3005671eeb13be8b667414254d",
+    "perf_breakdown_sha256": "605e830c9479c0b57b3738f253d7cfec1d226f77abc2fe0e811ba6f7e0a3790a",
+    "performance_analysis_sha256": "ac46ad5f954cf91fc0c7b261b8460c3ca5d122d6f18113ea1dd51e991804967c",
+    "portfolio_history_length": 1239,
+    "portfolio_history_sha256": "1007900adb7e7b01d3ca8810da9241ba6eb49a2a5e16853041fbe5a8951d62e0",
+    "trade_history_length": 6911,
+    "trade_history_sha256": "7fed51931584932469ac9e2b6d560a7115993fb011de9363c8428d9e617bd1dd"
+  },
+  "metric_snapshot": {
+    "cost_statistics": {
+      "cost_ratio": 0.040711268716492645,
+      "total_commission": 3053.345671476958,
+      "total_cost": 4071.1268716492646,
+      "total_slippage": 1017.7812001723063
+    },
+    "metrics": {
+      "annualized_return": 0.23096755795665014,
+      "max_drawdown": -0.28075979984383803,
+      "profit_factor": 1.026188116439177,
+      "sharpe_ratio": 1.0088368739960087,
+      "total_return": 1.8882087118690833,
+      "total_trades": 6911,
+      "volatility": 0.22894440509671926,
+      "win_rate": 0.6880733944954128
+    },
+    "signal_execution_summary": {
+      "actionable_signal_count": 13296,
+      "executed_signal_count": 13296,
+      "execution_rate": 0.1196673506858192,
+      "execution_rate_actionable": 1.0,
+      "raw_signal_count": 111108,
+      "top_rejection_reasons": [
+        {
+          "count": 53682,
+          "reason": "无持仓",
+          "reason_key": "no_position"
+        },
+        {
+          "count": 36892,
+          "reason": "可买数量不足",
+          "reason_key": "insufficient_buy_quantity"
+        },
+        {
+          "count": 7238,
+          "reason": "仓位限制",
+          "reason_key": "position_limit"
+        }
+      ]
+    },
+    "top_level": {
+      "annualized_return": 0.23096755795665014,
+      "best_month": 0.21604345148300852,
+      "excess_return_with_cost": {
+        "annualized_return": 0.23096755795665014,
+        "information_ratio": 1.0088368739960087,
+        "max_drawdown": -0.28075979984383803,
+        "mean": 0.014422141903465422,
+        "std": 0.22894440509671926
+      },
+      "excess_return_without_cost": {
+        "annualized_return": 0.0,
+        "information_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "final_value": 288820.87118690833,
+      "losing_trades": 952,
+      "max_drawdown": -0.28075979984383803,
+      "monthly_return_mean": 0.01946695174511147,
+      "monthly_return_std": 0.06294708189456727,
+      "profit_factor": 1.026188116439177,
+      "sharpe_ratio": 1.0088368739960087,
+      "total_return": 1.8882087118690833,
+      "total_signals": 111108,
+      "total_trades": 6911,
+      "trading_days": 1239,
+      "volatility": 0.22894440509671926,
+      "win_rate": 0.6880733944954128,
+      "winning_trades": 2100,
+      "worst_month": -0.1530768075628013
+    }
+  },
+  "schema_version": "strict-baseline-golden.v1",
+  "source_task": {
+    "completed_at": "2026-04-07 15:49:47.939530",
+    "created_at": "2026-04-07 15:24:47.381722",
+    "task_id": "eebddc55-1734-4b38-a072-fa2682af994d",
+    "task_name": "重建 - perf-verify-bollinger-20260224"
+  },
+  "strategy_name": "bollinger",
+  "tolerance_policy": {
+    "hash_fields": "exact",
+    "ignored_sections": [
+      "source_task"
+    ],
+    "integer_fields": "exact",
+    "money_abs_tolerance": 1e-06,
+    "ratio_abs_tolerance": 1e-09
+  }
+}
