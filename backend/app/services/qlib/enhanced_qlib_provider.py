@@ -4,12 +4,9 @@
 基于现有QlibDataProvider，添加Alpha158因子计算和缓存机制
 """
 
-import asyncio
-import hashlib
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -263,172 +260,11 @@ except ImportError as e:
 from ...core.config import settings
 from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
+from .factor_cache import FactorCache
+from .qlib_data_adapter import QlibDataAdapter
 
 # 全局Qlib初始化状态（跨实例共享）
 _QLIB_GLOBAL_INITIALIZED = False
-
-
-class FactorCache:
-    """因子计算结果缓存 - 优化版"""
-
-    def __init__(self, cache_dir: str = "./data/qlib_cache"):
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # 缓存配置
-        self.max_cache_size = 50  # 最大缓存文件数
-        self.default_ttl = timedelta(hours=24)  # 默认缓存过期时间
-
-        # 内存缓存层
-        self.memory_cache = {}
-        self.max_memory_cache_size = 10  # 最大内存缓存项数
-        self.memory_cache_stats = {"hits": 0, "misses": 0, "evictions": 0}
-
-        logger.info(f"因子缓存初始化: {self.cache_dir}, 内存缓存大小: {self.max_memory_cache_size}")
-
-    def get_cache_key(
-        self, stock_codes: List[str], date_range: Tuple[datetime, datetime]
-    ) -> str:
-        """生成缓存键 - 优化版"""
-        # 对股票代码排序，确保相同股票集合生成相同的缓存键
-        sorted_codes = sorted(stock_codes)
-        codes_str = "_".join(sorted_codes)
-        # 使用更高效的哈希算法
-        codes_hash = hashlib.sha1(codes_str.encode()).hexdigest()[:12]
-        start_str = date_range[0].strftime("%Y%m%d")
-        end_str = date_range[1].strftime("%Y%m%d")
-        return f"alpha_{codes_hash}_{start_str}_{end_str}"
-
-    def get_cached_factors(self, cache_key: str) -> Optional[pd.DataFrame]:
-        """获取缓存的因子数据 - 优先从内存缓存获取"""
-        # 1. 先从内存缓存获取
-        if cache_key in self.memory_cache:
-            cache_item = self.memory_cache[cache_key]
-            factors = cache_item["data"]
-            timestamp = cache_item["timestamp"]
-
-            # 检查内存缓存是否过期
-            if datetime.now() - timestamp < self.default_ttl:
-                self.memory_cache_stats["hits"] += 1
-                logger.debug(f"内存缓存命中: {cache_key}, 数据量: {len(factors)}")
-                return factors
-            else:
-                # 内存缓存过期，删除
-                del self.memory_cache[cache_key]
-                self.memory_cache_stats["misses"] += 1
-                logger.debug(f"内存缓存过期: {cache_key}")
-        else:
-            self.memory_cache_stats["misses"] += 1
-
-        # 2. 从磁盘缓存获取
-        cache_file = self.cache_dir / f"{cache_key}.parquet"
-        if cache_file.exists():
-            try:
-                # 检查文件是否过期
-                file_time = datetime.fromtimestamp(cache_file.stat().st_mtime)
-                if datetime.now() - file_time > self.default_ttl:
-                    logger.debug(f"磁盘缓存已过期: {cache_key}")
-                    cache_file.unlink()
-                    return None
-
-                factors = pd.read_parquet(cache_file)
-                logger.info(f"磁盘缓存命中: {cache_key}, 数据量: {len(factors)}")
-
-                # 将数据加载到内存缓存
-                self._add_to_memory_cache(cache_key, factors)
-
-                return factors
-            except Exception as e:
-                logger.warning(f"读取磁盘缓存失败: {e}")
-                # 删除损坏的缓存文件
-                try:
-                    cache_file.unlink()
-                except:
-                    pass
-        return None
-
-    def save_factors(self, cache_key: str, factors: pd.DataFrame):
-        """保存因子数据到缓存 - 同时保存到内存和磁盘"""
-        try:
-            # 1. 保存到内存缓存
-            self._add_to_memory_cache(cache_key, factors)
-
-            # 2. 保存到磁盘缓存
-            cache_file = self.cache_dir / f"{cache_key}.parquet"
-            # 优化：使用更快的压缩方式
-            factors.to_parquet(cache_file, compression="snappy")
-
-            # 清理旧缓存
-            self._cleanup_old_cache()
-
-            logger.info(f"因子数据缓存成功: {cache_key}, 数据量: {len(factors)}")
-        except Exception as e:
-            logger.warning(f"保存因子缓存失败: {e}")
-
-    def _add_to_memory_cache(self, cache_key: str, factors: pd.DataFrame):
-        """添加数据到内存缓存"""
-        # 检查内存缓存大小
-        if len(self.memory_cache) >= self.max_memory_cache_size:
-            # 删除最旧的缓存项
-            oldest_key = next(iter(self.memory_cache))
-            del self.memory_cache[oldest_key]
-            self.memory_cache_stats["evictions"] += 1
-            logger.debug(f"内存缓存淘汰: {oldest_key}")
-
-        # 添加到内存缓存
-        self.memory_cache[cache_key] = {"data": factors, "timestamp": datetime.now()}
-
-    def _cleanup_old_cache(self):
-        """清理旧缓存文件"""
-        try:
-            cache_files = list(self.cache_dir.glob("*.parquet"))
-            if len(cache_files) <= self.max_cache_size:
-                return
-
-            # 按修改时间排序，删除最旧的文件
-            cache_files.sort(key=lambda f: f.stat().st_mtime)
-            files_to_remove = len(cache_files) - self.max_cache_size
-
-            for i in range(files_to_remove):
-                cache_files[i].unlink()
-                logger.debug(f"删除旧缓存文件: {cache_files[i].name}")
-
-        except Exception as e:
-            logger.warning(f"清理缓存失败: {e}")
-
-    def get_cache_stats(self) -> Dict[str, int]:
-        """获取缓存统计信息"""
-        # 计算磁盘缓存文件数
-        try:
-            disk_cache_count = len(list(self.cache_dir.glob("*.parquet")))
-        except:
-            disk_cache_count = 0
-
-        return {
-            "memory_cache_size": len(self.memory_cache),
-            "disk_cache_size": disk_cache_count,
-            "memory_cache_hits": self.memory_cache_stats["hits"],
-            "memory_cache_misses": self.memory_cache_stats["misses"],
-            "memory_cache_evictions": self.memory_cache_stats["evictions"],
-            "max_memory_cache_size": self.max_memory_cache_size,
-            "max_disk_cache_size": self.max_cache_size,
-        }
-
-    def clear_cache(self, memory_only: bool = False):
-        """清除缓存"""
-        # 清除内存缓存
-        self.memory_cache.clear()
-        self.memory_cache_stats = {"hits": 0, "misses": 0, "evictions": 0}
-        logger.info("内存缓存已清除")
-
-        # 清除磁盘缓存
-        if not memory_only:
-            try:
-                for cache_file in self.cache_dir.glob("*.parquet"):
-                    cache_file.unlink()
-                logger.info("磁盘缓存已清除")
-            except Exception as e:
-                logger.warning(f"清除磁盘缓存失败: {e}")
 
 
 import multiprocessing as mp
@@ -2546,6 +2382,7 @@ class EnhancedQlibDataProvider:
         self.data_service = data_service or SimpleDataService()
         self.indicator_calculator = TechnicalIndicatorCalculator()
         self.alpha_calculator = Alpha158Calculator()
+        self.data_adapter = QlibDataAdapter()
 
         # Qlib初始化状态
         self._qlib_initialized = False
@@ -2906,317 +2743,82 @@ class EnhancedQlibDataProvider:
         return combined_features
 
     def _convert_to_qlib_format(self, df: pd.DataFrame) -> pd.DataFrame:
-        """转换为Qlib标准格式 - 优化版本"""
-        if df.empty:
-            return pd.DataFrame()
-
-        logger.debug(f"开始转换Qlib格式: 输入数据 {df.shape}")
-
-        # 1. 处理索引格式
-        df_qlib = self._ensure_multiindex_format(df)
-
-        # 2. 标准化列名
-        df_qlib = self._standardize_column_names(df_qlib)
-
-        # 3. 数据类型优化
-        df_qlib = self._optimize_data_types(df_qlib)
-
-        # 4. 处理缺失值
-        df_qlib = self._handle_missing_values(df_qlib)
-
-        # 5. 排序和去重
-        df_qlib = self._sort_and_deduplicate(df_qlib)
-
-        logger.info(f"Qlib格式转换完成: {df_qlib.shape}, 列: {list(df_qlib.columns)}")
-        return df_qlib
+        """转换为 Qlib 标准格式。"""
+        return self.data_adapter._convert_to_qlib_format(df)
 
     def _ensure_multiindex_format(self, df: pd.DataFrame) -> pd.DataFrame:
-        """确保数据使用MultiIndex格式 (instrument, datetime)"""
-        if isinstance(df.index, pd.MultiIndex):
-            # 已经是MultiIndex，检查层级名称
-            if len(df.index.names) == 2:
-                # 标准化索引名称
-                df.index.names = ["instrument", "datetime"]
-                return df
-            else:
-                logger.warning(f"MultiIndex层级数不正确: {len(df.index.names)}")
-
-        # 需要创建MultiIndex
-        if "stock_code" in df.columns and "date" in df.columns:
-            # 确保date列是datetime类型
-            if not pd.api.types.is_datetime64_any_dtype(df["date"]):
-                df["date"] = pd.to_datetime(df["date"])
-
-            # 设置MultiIndex
-            df_indexed = df.set_index(["stock_code", "date"])
-            df_indexed.index.names = ["instrument", "datetime"]
-            return df_indexed
-
-        elif isinstance(df.index, pd.DatetimeIndex) and "stock_code" in df.columns:
-            # 日期在索引中，股票代码在列中
-            df_reset = df.reset_index()
-            df_reset.rename(columns={"index": "date"}, inplace=True)
-            df_reset["date"] = pd.to_datetime(df_reset["date"])
-            df_indexed = df_reset.set_index(["stock_code", "date"])
-            df_indexed.index.names = ["instrument", "datetime"]
-            return df_indexed
-
-        else:
-            logger.warning("无法创建MultiIndex，缺少必要的股票代码或日期信息")
-            return df
+        """确保数据使用 MultiIndex 格式。"""
+        return self.data_adapter._ensure_multiindex_format(df)
 
     def _standardize_column_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """标准化列名为Qlib格式"""
-        # Qlib标准列名映射
-        column_mapping = {
-            # 基础OHLCV数据
-            "open": "$open",
-            "high": "$high",
-            "low": "$low",
-            "close": "$close",
-            "volume": "$volume",
-            "adj_close": "$close",  # 如果有复权价格，使用它作为收盘价
-            # 技术指标（保持原名或添加前缀）
-            "MA5": "MA5",
-            "MA10": "MA10",
-            "MA20": "MA20",
-            "MA60": "MA60",
-            "EMA": "EMA20",
-            "WMA": "WMA20",
-            "RSI": "RSI14",
-            "MACD": "MACD",
-            "MACD_SIGNAL": "MACD_SIGNAL",
-            "MACD_HISTOGRAM": "MACD_HIST",
-            "BOLLINGER_UPPER": "BOLL_UPPER",
-            "BOLLINGER_MIDDLE": "BOLL_MIDDLE",
-            "BOLLINGER_LOWER": "BOLL_LOWER",
-            "ATR": "ATR14",
-            "VWAP": "VWAP",
-            "OBV": "OBV",
-            "STOCH_K": "STOCH_K",
-            "STOCH_D": "STOCH_D",
-            "WILLIAMS_R": "WILLIAMS_R",
-            "CCI": "CCI20",
-            "KDJ_K": "KDJ_K",
-            "KDJ_D": "KDJ_D",
-            "KDJ_J": "KDJ_J",
-            # 基本面特征
-            "price_change": "RET1",
-            "price_change_5d": "RET5",
-            "price_change_20d": "RET20",
-            "volume_change": "VOLUME_RET1",
-            "volume_ma_ratio": "VOLUME_MA_RATIO",
-            "volatility_5d": "VOLATILITY5",
-            "volatility_20d": "VOLATILITY20",
-            "price_position": "PRICE_POSITION",
-        }
-
-        # 只重命名存在的列
-        existing_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
-        df_renamed = df.rename(columns=existing_mapping)
-
-        # 确保基础OHLCV列存在
-        required_base_cols = ["$open", "$high", "$low", "$close", "$volume"]
-        missing_base_cols = [
-            col for col in required_base_cols if col not in df_renamed.columns
-        ]
-
-        if missing_base_cols:
-            logger.warning(f"缺少基础OHLCV列: {missing_base_cols}")
-
-        logger.debug(f"列名标准化完成: {len(existing_mapping)} 个列被重命名")
-        return df_renamed
+        """标准化列名为 Qlib 格式。"""
+        return self.data_adapter._standardize_column_names(df)
 
     def _optimize_data_types(self, df: pd.DataFrame) -> pd.DataFrame:
-        """优化数据类型以节省内存"""
-        df_optimized = df.copy()
-
-        # 价格相关列使用float32
-        price_cols = ["$open", "$high", "$low", "$close"]
-        for col in price_cols:
-            if col in df_optimized.columns:
-                df_optimized[col] = pd.to_numeric(
-                    df_optimized[col], errors="coerce"
-                ).astype("float32")
-
-        # 成交量使用int64（可能很大）
-        if "$volume" in df_optimized.columns:
-            df_optimized["$volume"] = pd.to_numeric(
-                df_optimized["$volume"], errors="coerce"
-            ).astype("int64")
-
-        # 技术指标使用float32
-        indicator_cols = [
-            col for col in df_optimized.columns if col not in price_cols + ["$volume"]
-        ]
-        for col in indicator_cols:
-            if df_optimized[col].dtype in ["float64", "object"]:
-                df_optimized[col] = pd.to_numeric(
-                    df_optimized[col], errors="coerce"
-                ).astype("float32")
-
-        logger.debug("数据类型优化完成")
-        return df_optimized
+        """优化数据类型。"""
+        return self.data_adapter._optimize_data_types(df)
 
     def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
-        """处理缺失值 - 改进版：区分缺失值类型，使用更智能的填充策略"""
-        df_filled = df.copy()
-
-        # 确保数据按时间排序（避免未来信息泄漏）
-        if isinstance(df_filled.index, pd.MultiIndex):
-            df_filled = df_filled.sort_index()
-        elif df_filled.index.name in ["datetime", "date", "time"] or isinstance(
-            df_filled.index, pd.DatetimeIndex
-        ):
-            df_filled = df_filled.sort_index()
-
-        # 基础价格数据：前向填充（停牌等情况）
-        price_cols = ["$open", "$high", "$low", "$close", "$volume"]
-        for col in price_cols:
-            if col in df_filled.columns:
-                # 前向填充，然后后向填充（处理开头缺失）
-                df_filled[col] = df_filled[col].ffill().bfill()
-
-        # 技术指标：区分缺失原因
-        indicator_cols = [
-            col for col in df_filled.columns if col not in price_cols + ["label"]
-        ]
-        
-        for col in indicator_cols:
-            if col not in df_filled.columns:
-                continue
-                
-            col_data = df_filled[col]
-            missing_mask = col_data.isna()
-            
-            if not missing_mask.any():
-                continue
-            
-            missing_count = missing_mask.sum()
-            total_count = len(col_data)
-            missing_ratio = missing_count / total_count if total_count > 0 else 0
-            
-            # 判断缺失原因：
-            # 1. 如果缺失比例很高（>50%），可能是计算窗口不足，使用中位数填充
-            # 2. 如果缺失比例较低，可能是数据缺失，使用前向填充
-            # 3. 对于技术指标，如果开头缺失（计算窗口不足），使用NaN或中位数
-            # 4. 对于中间缺失（数据缺失），使用前向填充
-            
-            if missing_ratio > 0.5:
-                # 高缺失率：可能是计算窗口不足，使用中位数填充
-                median_value = col_data.median()
-                if pd.notna(median_value):
-                    df_filled[col] = col_data.fillna(median_value)
-                else:
-                    # 如果中位数也是NaN，使用0（作为最后手段）
-                    df_filled[col] = col_data.fillna(0)
-                logger.debug(
-                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用中位数填充"
-                )
-            else:
-                # 低缺失率：可能是数据缺失，使用前向填充
-                # 先前向填充，然后后向填充（处理开头缺失）
-                df_filled[col] = col_data.ffill().bfill()
-                
-                # 如果仍有缺失（开头），使用中位数
-                if df_filled[col].isna().any():
-                    median_value = df_filled[col].median()
-                    if pd.notna(median_value):
-                        df_filled[col] = df_filled[col].fillna(median_value)
-                    else:
-                        df_filled[col] = df_filled[col].fillna(0)
-                
-                logger.debug(
-                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数"
-                )
-
-        # 记录缺失值处理情况
-        missing_counts_before = df.isnull().sum()
-        missing_counts_after = df_filled.isnull().sum()
-        
-        if missing_counts_before.sum() > 0:
-            logger.debug(
-                f"缺失值处理完成 - 处理前: {missing_counts_before[missing_counts_before > 0].to_dict()}, "
-                f"处理后: {missing_counts_after[missing_counts_after > 0].to_dict()}"
-            )
-
-        return df_filled
+        """处理缺失值。"""
+        return self.data_adapter._handle_missing_values(df)
 
     def _sort_and_deduplicate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """排序和去重"""
-        if not isinstance(df.index, pd.MultiIndex):
-            return df
-
-        # 按instrument和datetime排序
-        df_sorted = df.sort_index()
-
-        # 去除重复的索引
-        if df_sorted.index.duplicated().any():
-            logger.warning(f"发现重复索引，去重前: {len(df_sorted)}")
-            df_sorted = df_sorted[~df_sorted.index.duplicated(keep="last")]
-            logger.warning(f"去重后: {len(df_sorted)}")
-
-        return df_sorted
+        """排序并去重。"""
+        return self.data_adapter._sort_and_deduplicate(df)
 
     def _add_fundamental_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """添加基本面特征"""
-        # 价格变化率
-        df["price_change"] = df["close"].pct_change()
-        df["price_change_5d"] = df["close"].pct_change(periods=5)
-        df["price_change_20d"] = df["close"].pct_change(periods=20)
-
-        # 成交量变化率
-        df["volume_change"] = df["volume"].pct_change()
-        df["volume_ma_ratio"] = df["volume"] / df["volume"].rolling(20).mean()
-
-        # 波动率
-        df["volatility_5d"] = df["price_change"].rolling(5).std()
-        df["volatility_20d"] = df["price_change"].rolling(20).std()
-
-        # 价格位置
-        df["price_position"] = (df["close"] - df["low"].rolling(20).min()) / (
-            df["high"].rolling(20).max() - df["low"].rolling(20).min()
-        )
-
-        return df
+        """添加基本面衍生特征。"""
+        return self.data_adapter._add_fundamental_features(df)
 
     async def create_qlib_model_config(
         self, model_type: str, hyperparameters: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """创建Qlib模型配置"""
-        base_config = {
-            "class": "LGBModel",  # 默认使用LightGBM
-            "module_path": "qlib.contrib.model.gbdt",
-            "kwargs": {
-                "loss": "huber",  # 使用Huber损失，对异常值更鲁棒
-                "huber_delta": hyperparameters.get("huber_delta", 0.1) if hyperparameters else 0.1,  # Huber损失的delta参数
-                "colsample_bytree": 0.8879,
-                "learning_rate": 0.0421,
-                "subsample": 0.8789,
-                "lambda_l1": 205.6999,
-                "lambda_l2": 580.9768,
-                "max_depth": 8,
-                "num_leaves": 210,
-                "num_threads": 20,
-            },
-        }
+        """创建 Qlib 模型配置。"""
+        return await self.data_adapter.create_qlib_model_config(
+            model_type, hyperparameters
+        )
 
-        # 根据模型类型调整配置
-        if model_type.lower() == "lightgbm":
-            base_config["class"] = "LGBModel"
-            base_config["module_path"] = "qlib.contrib.model.gbdt"
-        elif model_type.lower() == "xgboost":
-            base_config["class"] = "XGBModel"
-            base_config["module_path"] = "qlib.contrib.model.xgboost"
-        elif model_type.lower() == "mlp":
-            base_config["class"] = "DNNModelPytorch"
-            base_config["module_path"] = "qlib.contrib.model.pytorch_nn"
+    async def validate_and_fix_qlib_format(
+        self, data: pd.DataFrame
+    ) -> Tuple[bool, pd.DataFrame]:
+        """验证并修复 Qlib 数据格式。"""
+        return await self.data_adapter.validate_and_fix_qlib_format(data)
 
-        # 合并用户提供的超参数
-        if hyperparameters:
-            base_config["kwargs"].update(hyperparameters)
+    def _fix_missing_columns(
+        self, data: pd.DataFrame, missing_cols: List[str]
+    ) -> pd.DataFrame:
+        """修复缺失列。"""
+        return self.data_adapter._fix_missing_columns(data, missing_cols)
 
-        return base_config
+    def _fix_data_types(self, data: pd.DataFrame) -> pd.DataFrame:
+        """修复数据类型。"""
+        return self.data_adapter._fix_data_types(data)
+
+    def _check_data_quality(self, data: pd.DataFrame) -> List[str]:
+        """检查数据质量问题。"""
+        return self.data_adapter._check_data_quality(data)
+
+    def _fix_data_quality_issues(
+        self, data: pd.DataFrame, issues: List[str]
+    ) -> pd.DataFrame:
+        """修复数据质量问题。"""
+        return self.data_adapter._fix_data_quality_issues(data, issues)
+
+    async def validate_qlib_data_format(self, data: pd.DataFrame) -> bool:
+        """验证 Qlib 数据格式。"""
+        return await self.data_adapter.validate_qlib_data_format(data)
+
+    async def convert_dataframe_to_qlib(
+        self, df: pd.DataFrame, validate: bool = True, fix_issues: bool = True
+    ) -> Tuple[bool, pd.DataFrame, Dict[str, Any]]:
+        """将 DataFrame 转换为 Qlib 格式。"""
+        return await self.data_adapter.convert_dataframe_to_qlib(
+            df, validate=validate, fix_issues=fix_issues
+        )
+
+    async def get_qlib_format_example(self) -> Dict[str, Any]:
+        """获取 Qlib 格式说明示例。"""
+        return await self.data_adapter.get_qlib_format_example()
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计信息"""

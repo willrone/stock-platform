@@ -15,6 +15,7 @@ from .enhanced_qlib_provider import (
     EnhancedQlibDataProvider,
     FactorCache,
 )
+from .qlib_data_adapter import QlibDataAdapter
 from .qlib_model_manager import (
     HyperparameterSpec,
     ModelCategory,
@@ -47,6 +48,7 @@ __all__ = [
     "EnhancedQlibDataProvider",
     "Alpha158Calculator",
     "FactorCache",
+    "QlibDataAdapter",
     # 训练引擎
     "UnifiedQlibTrainingEngine",
     "QlibTrainingConfig",
