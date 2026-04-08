@@ -13,6 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from loguru import logger
 from sqlalchemy import or_
 
+from app.api.v1.model_dto import build_model_detail_dto, build_model_list_item_dto
 from app.api.v1.schemas import ModelTrainingRequest, StandardResponse
 from app.core.database import SessionLocal
 from app.models.task_models import ModelInfo
@@ -777,46 +778,9 @@ async def list_models():
     """获取模型列表"""
     session = SessionLocal()
     try:
-        model_repository = ModelInfoRepository(session)
-
         # 获取所有模型（包括training、failed等状态）
         models = session.query(ModelInfo).order_by(ModelInfo.created_at.desc()).all()
-
-        # 转换为前端期望的格式
-        model_list = []
-        for model in models:
-            # 安全地获取performance_metrics
-            performance_metrics = model.performance_metrics
-            if isinstance(performance_metrics, str):
-                try:
-                    import json
-
-                    performance_metrics = json.loads(performance_metrics)
-                except:
-                    performance_metrics = {}
-            if not isinstance(performance_metrics, dict):
-                performance_metrics = {}
-
-            accuracy = performance_metrics.get("accuracy", 0.0)
-            if isinstance(accuracy, dict):
-                accuracy = (
-                    accuracy.get("value", 0.0) if isinstance(accuracy, dict) else 0.0
-                )
-
-            model_data = {
-                "model_id": model.model_id,
-                "model_name": model.model_name,
-                "model_type": model.model_type,
-                "version": model.version,
-                "accuracy": float(accuracy) if accuracy else 0.0,
-                "created_at": model.created_at.isoformat()
-                if model.created_at
-                else datetime.now().isoformat(),
-                "status": model.status,
-                "training_progress": model.training_progress or 0.0,
-                "training_stage": model.training_stage,
-            }
-            model_list.append(model_data)
+        model_list = [build_model_list_item_dto(model) for model in models]
 
         return StandardResponse(
             success=True, message="模型列表获取成功", data={"models": model_list}
@@ -1086,57 +1050,11 @@ async def get_model_detail(model_id: str):
         if not model:
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
 
-        # 转换为前端期望的格式
-        performance_metrics = model.performance_metrics or {}
-        if isinstance(performance_metrics, str):
-            try:
-                import json
-
-                performance_metrics = json.loads(performance_metrics)
-            except:
-                performance_metrics = {}
-        if not isinstance(performance_metrics, dict):
-            performance_metrics = {}
-
-        # 提取准确率（从performance_metrics或计算）
-        accuracy = performance_metrics.get("accuracy", 0.0)
-        if isinstance(accuracy, dict):
-            accuracy = accuracy.get("value", 0.0) if isinstance(accuracy, dict) else 0.0
-
-        training_data_period = {}
-        if model.training_data_start and model.training_data_end:
-            training_data_period = {
-                "start": model.training_data_start.isoformat(),
-                "end": model.training_data_end.isoformat(),
-            }
-
-        # 从evaluation_report中提取stock_codes
-        stock_codes = []
-        if model.evaluation_report and isinstance(model.evaluation_report, dict):
-            training_data_info = model.evaluation_report.get("training_data_info", {})
-            if isinstance(training_data_info, dict):
-                stock_codes = training_data_info.get("stock_codes", [])
-
-        model_detail = {
-            "model_id": model.model_id,
-            "model_name": model.model_name,
-            "model_type": model.model_type,
-            "version": model.version,
-            "accuracy": float(accuracy) if accuracy else 0.0,
-            "description": f"{model.model_type}模型 - {model.model_name}",
-            "performance_metrics": performance_metrics,
-            "training_info": {
-                "training_data_period": training_data_period,
-                "hyperparameters": model.hyperparameters or {},
-                "stock_codes": stock_codes,
-            },
-            "created_at": model.created_at.isoformat()
-            if model.created_at
-            else datetime.now().isoformat(),
-            "status": model.status,
-        }
-
-        return StandardResponse(success=True, message="模型详情获取成功", data=model_detail)
+        return StandardResponse(
+            success=True,
+            message="模型详情获取成功",
+            data=build_model_detail_dto(model),
+        )
 
     except HTTPException:
         raise

@@ -10,10 +10,25 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from app.api.v1.model_dto import build_training_progress_dto_from_model
 from app.api.v1.schemas import StandardResponse
-
-# from app.services.tasks.task_manager import task_manager  # 将在运行时导入
+from app.core.database import SessionLocal
+from app.models.task_models import ModelInfo
 from app.services.models.model_lifecycle_manager import model_lifecycle_manager
+
+
+def _get_task_manager() -> Any:
+    """延迟加载 task_manager，兼容未启用旧任务系统的部署。"""
+    try:
+        from app.services.tasks.task_manager import task_manager
+
+        return task_manager
+    except Exception:
+        return None
+
+
+# 兼容历史代码对 module-level task_manager 的引用。
+task_manager = _get_task_manager()
 
 router = APIRouter(prefix="/training", tags=["训练进度"])
 
@@ -162,46 +177,67 @@ async def get_training_task(task_id: str):
     "/tasks/{task_id}/progress", response_model=StandardResponse, summary="获取训练进度"
 )
 async def get_training_progress(task_id: str):
-    """获取训练进度"""
+    """获取训练进度（兼容 task_id / model_id 两种输入）。"""
     try:
-        task = task_manager.get_task(task_id)
+        manager = _get_task_manager()
 
-        if not task:
-            raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
-
-        # 获取进度信息
-        progress_info = {
-            "task_id": task_id,
-            "status": task.status,
-            "progress_percentage": task.progress_percentage,
-            "created_at": task.created_at.isoformat(),
-            "updated_at": task.updated_at.isoformat(),
-            "elapsed_time": (datetime.now() - task.created_at).total_seconds(),
-        }
-
-        # 添加训练特定进度
-        if hasattr(task, "progress"):
-            progress_info.update(
-                {
-                    "current_epoch": task.progress.get("current_epoch", 0),
-                    "total_epochs": task.progress.get("total_epochs", 0),
-                    "current_batch": task.progress.get("current_batch", 0),
-                    "total_batches": task.progress.get("total_batches", 0),
-                    "current_loss": task.progress.get("current_loss"),
-                    "best_loss": task.progress.get("best_loss"),
-                    "current_accuracy": task.progress.get("current_accuracy"),
-                    "best_accuracy": task.progress.get("best_accuracy"),
-                    "learning_rate": task.progress.get("learning_rate"),
-                    "estimated_remaining": task.progress.get("estimated_remaining"),
+        if manager is not None:
+            task = manager.get_task(task_id)
+            if task:
+                progress_info = {
+                    "task_id": task_id,
+                    "status": task.status,
+                    "progress_percentage": task.progress_percentage,
+                    "created_at": task.created_at.isoformat(),
+                    "updated_at": task.updated_at.isoformat(),
+                    "elapsed_time": (datetime.now() - task.created_at).total_seconds(),
                 }
+
+                if hasattr(task, "progress"):
+                    progress_info.update(
+                        {
+                            "current_epoch": task.progress.get("current_epoch", 0),
+                            "total_epochs": task.progress.get("total_epochs", 0),
+                            "current_batch": task.progress.get("current_batch", 0),
+                            "total_batches": task.progress.get("total_batches", 0),
+                            "current_loss": task.progress.get("current_loss"),
+                            "best_loss": task.progress.get("best_loss"),
+                            "current_accuracy": task.progress.get("current_accuracy"),
+                            "best_accuracy": task.progress.get("best_accuracy"),
+                            "learning_rate": task.progress.get("learning_rate"),
+                            "estimated_remaining": task.progress.get(
+                                "estimated_remaining"
+                            ),
+                        }
+                    )
+
+                if hasattr(task, "logs"):
+                    recent_logs = task.logs[-10:] if len(task.logs) > 10 else task.logs
+                    progress_info["recent_logs"] = recent_logs
+
+                return StandardResponse(
+                    success=True,
+                    message="成功获取训练进度",
+                    data=progress_info,
+                )
+
+        session = SessionLocal()
+        try:
+            model = (
+                session.query(ModelInfo)
+                .filter(ModelInfo.model_id == task_id)
+                .first()
             )
+            if not model:
+                raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
-        # 添加最近的训练日志
-        if hasattr(task, "logs"):
-            recent_logs = task.logs[-10:] if len(task.logs) > 10 else task.logs
-            progress_info["recent_logs"] = recent_logs
-
-        return StandardResponse(success=True, message="成功获取训练进度", data=progress_info)
+            return StandardResponse(
+                success=True,
+                message="成功获取训练进度",
+                data=build_training_progress_dto_from_model(model),
+            )
+        finally:
+            session.close()
 
     except HTTPException:
         raise
