@@ -8,15 +8,16 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Set
+from typing import Dict, Optional
 
 from loguru import logger
 
 from app.api.v1.backtest_websocket import backtest_ws_manager
 from app.core.database import SessionLocal
-from app.models.task_models import TaskStatus
+from app.models.task_models import Task, TaskStatus
 from app.repositories.task_repository import TaskRepository
 from app.services.backtest.execution.backtest_progress_monitor import (
+    BacktestProgressData,
     backtest_progress_monitor,
 )
 from app.websocket import manager
@@ -172,175 +173,168 @@ class TaskNotifier:
             # 如果回测WebSocket通知失败，回退到通用通知
             await self._notify_general_task_update(task)
 
-    async def _sync_backtest_progress_from_task(self, task):
-        """从任务状态同步回测进度到进度监控器"""
+    async def _sync_backtest_progress_from_task(self, task: Task) -> None:
+        """
+        从任务状态同步回测进度到进度监控器。
+
+        注意：running 状态下绝不把 task.result.progress_data 回灌到 monitor，
+        以避免旧进度在重跑/重建时被错误继承。
+        """
         try:
-            if task.status == TaskStatus.RUNNING.value:
-                progress_data = backtest_progress_monitor.get_progress_data(
-                    task.task_id
-                )
-                if not progress_data:
-                    # 初始化进度监控
-                    await backtest_progress_monitor.start_backtest_monitoring(
-                        task_id=task.task_id,
-                        backtest_id=f"bt_{task.task_id[:8]}",
-                        total_trading_days=0,
-                    )
+            if task.status != TaskStatus.RUNNING.value:
+                return
 
-                progress_data = backtest_progress_monitor.get_progress_data(
-                    task.task_id
-                )
-                if progress_data:
-                    # 从数据库读取详细进度数据
-                    db_progress_data = {}
-                    if task.result and isinstance(task.result, dict):
-                        db_progress_data = task.result.get("progress_data", {})
-                        logger.info(
-                            f"从数据库读取进度数据: task_id={task.task_id}, progress_data={db_progress_data}, result={task.result}"
-                        )
+            progress_data = backtest_progress_monitor.get_progress_data(task.task_id)
+            if not progress_data:
+                await self._start_backtest_progress(task.task_id)
+                progress_data = backtest_progress_monitor.get_progress_data(task.task_id)
 
-                    # 同步详细数据
-                    if db_progress_data:
-                        progress_data.processed_trading_days = db_progress_data.get(
-                            "processed_days", 0
-                        )
-                        progress_data.total_trading_days = db_progress_data.get(
-                            "total_days", 0
-                        )
-                        progress_data.current_date = db_progress_data.get(
-                            "current_date"
-                        )
-                        progress_data.total_signals_generated = db_progress_data.get(
-                            "total_signals", 0
-                        )
-                        progress_data.total_trades_executed = db_progress_data.get(
-                            "total_trades", 0
-                        )
-                        progress_data.current_portfolio_value = db_progress_data.get(
-                            "portfolio_value", 0.0
-                        )
-                        logger.info(
-                            f"同步进度数据完成: processed_days={progress_data.processed_trading_days}, total_days={progress_data.total_trading_days}, signals={progress_data.total_signals_generated}, trades={progress_data.total_trades_executed}, portfolio={progress_data.current_portfolio_value}"
-                        )
-                    else:
-                        logger.warning(
-                            f"数据库中没有进度数据: task_id={task.task_id}, result={task.result}, result_type={type(task.result)}"
-                        )
+            if progress_data and self._should_reset_for_new_run(
+                task.progress, progress_data
+            ):
+                self._reset_progress_for_new_run(progress_data)
 
-                    # 更新总体进度
-                    progress_data.overall_progress = task.progress
+            if progress_data:
+                progress_data.overall_progress = task.progress
 
-                    # 根据任务进度正确设置阶段状态
-                    if task.progress >= 30:  # 如果进度 >= 30%，说明前几个阶段已完成
-                        # 初始化已完成
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "initialization",
-                            progress=100,
-                            status="completed",
-                        )
-                        # 数据加载已完成
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "data_loading",
-                            progress=100,
-                            status="completed",
-                        )
-                        # 策略设置已完成
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "strategy_setup",
-                            progress=100,
-                            status="completed",
-                        )
-
-                        # 回测执行阶段
-                        if task.progress < 90:
-                            execution_progress = (task.progress - 30) / 60 * 100
-                            await backtest_progress_monitor.update_stage(
-                                task.task_id,
-                                "backtest_execution",
-                                progress=execution_progress,
-                                status="running",
-                            )
-                        else:
-                            # 回测执行已完成
-                            await backtest_progress_monitor.update_stage(
-                                task.task_id,
-                                "backtest_execution",
-                                progress=100,
-                                status="completed",
-                            )
-
-                            if task.progress < 95:
-                                await backtest_progress_monitor.update_stage(
-                                    task.task_id,
-                                    "metrics_calculation",
-                                    progress=min((task.progress - 90) / 5 * 100, 100),
-                                    status="running",
-                                )
-                            else:
-                                # 指标计算已完成
-                                await backtest_progress_monitor.update_stage(
-                                    task.task_id,
-                                    "metrics_calculation",
-                                    progress=100,
-                                    status="completed",
-                                )
-                                await backtest_progress_monitor.update_stage(
-                                    task.task_id,
-                                    "data_storage",
-                                    progress=min((task.progress - 95) / 5 * 100, 100),
-                                    status="running",
-                                )
-                    elif task.progress >= 25:
-                        # 初始化已完成
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "initialization",
-                            progress=100,
-                            status="completed",
-                        )
-                        # 数据加载已完成
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "data_loading",
-                            progress=100,
-                            status="completed",
-                        )
-                        # 策略设置进行中
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "strategy_setup",
-                            progress=min((task.progress - 25) / 5 * 100, 100),
-                            status="running",
-                        )
-                    elif task.progress >= 10:
-                        # 初始化已完成
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "initialization",
-                            progress=100,
-                            status="completed",
-                        )
-                        # 数据加载进行中
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "data_loading",
-                            progress=min((task.progress - 10) / 15 * 100, 100),
-                            status="running",
-                        )
-                    else:
-                        # 初始化进行中
-                        await backtest_progress_monitor.update_stage(
-                            task.task_id,
-                            "initialization",
-                            progress=min(task.progress * 10, 100),
-                            status="running",
-                        )
-
+            await self._sync_backtest_stages(task.task_id, task.progress)
         except Exception as e:
-            logger.warning(f"同步回测进度失败: {task.task_id}, 错误: {e}", exc_info=True)
+            logger.warning(
+                f"同步回测进度失败: {task.task_id}, 错误: {e}", exc_info=True
+            )
+
+    async def _start_backtest_progress(self, task_id: str) -> None:
+        """初始化回测进度监控器。"""
+        await backtest_progress_monitor.start_backtest_monitoring(
+            task_id=task_id,
+            backtest_id=f"bt_{task_id[:8]}",
+            total_trading_days=0,
+        )
+
+    @staticmethod
+    def _should_reset_for_new_run(
+        task_progress: float, progress_data: BacktestProgressData
+    ) -> bool:
+        """
+        判断是否需要重置 monitor，避免新运行时显示旧 detailed 进度。
+
+        依据：新任务进入 running 时 progress 初始值通常约 10%，而旧运行会残留
+        processed_days/current_date 等字段。
+        """
+        if task_progress > 10.0:
+            return False
+
+        return (
+            progress_data.processed_trading_days > 0
+            or progress_data.current_date is not None
+            or progress_data.total_signals_generated > 0
+            or progress_data.total_trades_executed > 0
+        )
+
+    @staticmethod
+    def _reset_progress_for_new_run(progress_data: BacktestProgressData) -> None:
+        """重置回测进度监控器详细字段（仅用于新运行起点）。"""
+        now = datetime.utcnow()
+        progress_data.start_time = now
+        progress_data.overall_progress = 0.0
+        progress_data.current_stage = "initializing"
+
+        progress_data.total_trading_days = 0
+        progress_data.processed_trading_days = 0
+        progress_data.current_date = None
+        progress_data.processing_speed = 0.0
+        progress_data.estimated_completion = None
+        progress_data.elapsed_time = None
+
+        progress_data.total_signals_generated = 0
+        progress_data.total_trades_executed = 0
+        progress_data.current_portfolio_value = 0.0
+
+        progress_data.error_message = None
+        progress_data.warnings = []
+
+        for stage in progress_data.stages:
+            stage.start_time = None
+            stage.end_time = None
+            stage.progress = 0.0
+            stage.status = "pending"
+            stage.details = {}
+
+    async def _sync_backtest_stages(self, task_id: str, task_progress: float) -> None:
+        """根据 overall_progress 更新阶段状态。"""
+        progress_value = float(task_progress)
+
+        def relative_progress(delta: float, denominator: float) -> float:
+            return min((delta / denominator) * 100.0, 100.0)
+
+        stage_updates: list[tuple[str, float, str]] = []
+        if progress_value >= 30:
+            stage_updates.extend(
+                [
+                    ("initialization", 100.0, "completed"),
+                    ("data_loading", 100.0, "completed"),
+                    ("strategy_setup", 100.0, "completed"),
+                ]
+            )
+            if progress_value < 90:
+                stage_updates.append(
+                    (
+                        "backtest_execution",
+                        relative_progress(progress_value - 30.0, 60.0),
+                        "running",
+                    )
+                )
+            else:
+                stage_updates.append(("backtest_execution", 100.0, "completed"))
+                if progress_value < 95:
+                    stage_updates.append(
+                        (
+                            "metrics_calculation",
+                            relative_progress(progress_value - 90.0, 5.0),
+                            "running",
+                        )
+                    )
+                else:
+                    stage_updates.append(("metrics_calculation", 100.0, "completed"))
+                    stage_updates.append(
+                        (
+                            "data_storage",
+                            relative_progress(progress_value - 95.0, 5.0),
+                            "running",
+                        )
+                    )
+        elif progress_value >= 25:
+            stage_updates.extend(
+                [
+                    ("initialization", 100.0, "completed"),
+                    ("data_loading", 100.0, "completed"),
+                    (
+                        "strategy_setup",
+                        relative_progress(progress_value - 25.0, 5.0),
+                        "running",
+                    ),
+                ]
+            )
+        elif progress_value >= 10:
+            stage_updates.extend(
+                [
+                    ("initialization", 100.0, "completed"),
+                    (
+                        "data_loading",
+                        relative_progress(progress_value - 10.0, 15.0),
+                        "running",
+                    ),
+                ]
+            )
+        else:
+            stage_updates.append(
+                ("initialization", min(progress_value * 10.0, 100.0), "running")
+            )
+
+        for stage_name, progress, status in stage_updates:
+            await backtest_progress_monitor.update_stage(
+                task_id, stage_name, progress=progress, status=status
+            )
 
     async def _notify_general_task_update(self, task):
         """通知普通任务更新"""
