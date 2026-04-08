@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.backtest.reporting import (
-    BacktestReportBuildInput,
     BacktestReportBuilder,
+    BacktestReportBuildInput,
 )
 
 
