@@ -126,8 +126,8 @@ def _run_backtest_patch_stack(
     )
     stack.enter_context(
         patch.object(
-            executor,
-            "_generate_backtest_report",
+            executor.report_builder,
+            "build_report",
             return_value=report_template.copy(),
         )
     )

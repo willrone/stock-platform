@@ -21,6 +21,7 @@ from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..core.portfolio_manager_array import PortfolioManagerArray
 from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
+from ..reporting import BacktestReportBuildInput, BacktestReportBuilder
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
 from .data_loader import DataLoader
@@ -145,6 +146,7 @@ class BacktestExecutor:
             "successful_backtests": 0,
             "failed_backtests": 0,
         }
+        self.report_builder = BacktestReportBuilder()
 
         # 性能分析器（可选）
         self.enable_performance_profiling = (
@@ -460,20 +462,23 @@ class BacktestExecutor:
                 )
 
             _t0 = time.perf_counter()
-            backtest_report = self._generate_backtest_report(
-                strategy_name,
-                stock_codes,
-                start_date,
-                end_date,
-                backtest_config,
-                portfolio_manager,
-                performance_metrics,
+            report_input = BacktestReportBuildInput(
+                strategy_name=strategy_name,
+                stock_codes=stock_codes,
+                start_date=start_date,
+                end_date=end_date,
+                config=backtest_config,
+                portfolio_manager=portfolio_manager,
+                performance_metrics=performance_metrics,
                 strategy_config=strategy_config,
             )
+            backtest_report = self.report_builder.build_report(report_input)
             perf_breakdown["report_generation_s"] = time.perf_counter() - _t0
-            # 将回测循环统计（信号数、交易日等）写入报告，便于排查"无信号记录"等问题
-            backtest_report["total_signals"] = backtest_results.get("total_signals", 0)
-            backtest_report["trading_days"] = backtest_results.get("trading_days", 0)
+            self.report_builder.attach_runtime_diagnostics(
+                backtest_report,
+                backtest_results,
+                perf_breakdown,
+            )
 
             # 汇总信号执行统计，补充可执行口径执行率与 Top 拒绝原因
             if task_id:
@@ -486,22 +491,10 @@ class BacktestExecutor:
                     async with get_async_session_context() as session:
                         repo = BacktestDetailedRepository(session)
                         signal_stats = await repo.get_signal_statistics(task_id)
-                    backtest_report["signal_execution_summary"] = {
-                        "execution_rate": signal_stats.get("execution_rate", 0.0),
-                        "execution_rate_actionable": signal_stats.get(
-                            "execution_rate_actionable", 0.0
-                        ),
-                        "raw_signal_count": signal_stats.get("raw_signal_count", 0),
-                        "actionable_signal_count": signal_stats.get(
-                            "actionable_signal_count", 0
-                        ),
-                        "executed_signal_count": signal_stats.get(
-                            "executed_signal_count", 0
-                        ),
-                        "top_rejection_reasons": signal_stats.get(
-                            "top_rejection_reasons", []
-                        ),
-                    }
+                    self.report_builder.attach_signal_execution_summary(
+                        backtest_report,
+                        signal_stats,
+                    )
                 except Exception as sig_err:
                     logger.warning(f"获取信号执行统计失败: {sig_err}")
                     backtest_report["signal_execution_summary"] = {}
@@ -560,7 +553,11 @@ class BacktestExecutor:
 
             # 轻量分段计时结果写入报告（bench脚本唯一入口依赖此字段）
             perf_breakdown["total_wall_s"] = time.perf_counter() - _t_total0
-            backtest_report["perf_breakdown"] = perf_breakdown
+            self.report_builder.attach_runtime_diagnostics(
+                backtest_report,
+                backtest_results,
+                perf_breakdown,
+            )
 
             return backtest_report
 
@@ -2116,161 +2113,6 @@ class BacktestExecutor:
             "executed_trades": executed_trades,
             "trading_days": len(trading_dates),
         }
-
-    def _generate_backtest_report(
-        self,
-        strategy_name: str,
-        stock_codes: List[str],
-        start_date: datetime,
-        end_date: datetime,
-        config: BacktestConfig,
-        portfolio_manager: PortfolioManager,
-        performance_metrics: Dict[str, float],
-        strategy_config: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """生成回测报告"""
-
-        # 基础信息
-        report = {
-            "strategy_name": strategy_name,
-            "stock_codes": stock_codes,
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
-            "initial_cash": config.initial_cash,
-            # NOTE: Do NOT call get_portfolio_value({}) here - passing an empty price map
-            # will value all positions at 0 and return cash-only, which makes final_value
-            # inconsistent with total_return/portfolio_history.
-            # Use the last recorded portfolio value (already computed with prices) when available.
-            "final_value": (
-                portfolio_manager.portfolio_history[-1]["portfolio_value"]
-                if getattr(portfolio_manager, "portfolio_history", None)
-                else portfolio_manager.get_portfolio_value({})
-            ),
-            # 收益指标
-            "total_return": performance_metrics.get("total_return", 0),
-            "annualized_return": performance_metrics.get("annualized_return", 0),
-            # 风险指标
-            "volatility": performance_metrics.get("volatility", 0),
-            "sharpe_ratio": performance_metrics.get("sharpe_ratio", 0),
-            "max_drawdown": performance_metrics.get("max_drawdown", 0),
-            # 交易统计
-            "total_trades": performance_metrics.get("total_trades", 0),
-            "win_rate": performance_metrics.get("win_rate", 0),
-            "profit_factor": performance_metrics.get("profit_factor", 0),
-            "winning_trades": performance_metrics.get("winning_trades", 0),
-            "losing_trades": performance_metrics.get("losing_trades", 0),
-            # 将指标也放在 metrics 字段中，方便优化器使用
-            "metrics": {
-                "sharpe_ratio": performance_metrics.get("sharpe_ratio", 0),
-                "total_return": performance_metrics.get("total_return", 0),
-                "annualized_return": performance_metrics.get("annualized_return", 0),
-                "max_drawdown": performance_metrics.get("max_drawdown", 0),
-                "volatility": performance_metrics.get("volatility", 0),
-                "win_rate": performance_metrics.get("win_rate", 0),
-                "profit_factor": performance_metrics.get("profit_factor", 0),
-                "total_trades": performance_metrics.get("total_trades", 0),
-            },
-            # 配置信息
-            "backtest_config": {
-                "strategy_name": strategy_name,  # 添加策略名称，方便前端获取
-                "start_date": start_date.isoformat(),  # 添加开始日期
-                "end_date": end_date.isoformat(),  # 添加结束日期
-                "initial_cash": config.initial_cash,  # 添加初始资金
-                "commission_rate": config.commission_rate,
-                "slippage_rate": config.slippage_rate,
-                "max_position_size": config.max_position_size,
-                **(
-                    {"strategy_config": strategy_config}
-                    if strategy_config
-                    and isinstance(strategy_config, dict)
-                    and len(strategy_config) > 0
-                    else {}
-                ),
-            },
-            # 交易记录
-            "trade_history": [
-                {
-                    "trade_id": trade.trade_id if hasattr(trade, 'trade_id') else trade['trade_id'],
-                    "stock_code": trade.stock_code if hasattr(trade, 'stock_code') else trade['stock_code'],
-                    "action": trade.action if hasattr(trade, 'action') else trade['action'],
-                    "quantity": trade.quantity if hasattr(trade, 'quantity') else trade['quantity'],
-                    "price": trade.price if hasattr(trade, 'price') else trade['price'],
-                    "timestamp": (trade.timestamp if hasattr(trade, 'timestamp') else trade['timestamp']).isoformat(),
-                    "commission": trade.commission if hasattr(trade, 'commission') else trade['commission'],
-                    "slippage_cost": getattr(trade, "slippage_cost", 0.0) if hasattr(trade, 'slippage_cost') else trade.get('slippage_cost', 0.0),
-                    "pnl": trade.pnl if hasattr(trade, 'pnl') else trade['pnl'],
-                }
-                for trade in portfolio_manager.trades
-            ],
-            # 组合历史（包含完整的positions信息）
-            "portfolio_history": [
-                {
-                    "date": snapshot["date"].isoformat(),
-                    "portfolio_value": snapshot["portfolio_value"],
-                    "portfolio_value_without_cost": snapshot.get(
-                        "portfolio_value_without_cost", snapshot["portfolio_value"]
-                    ),
-                    "cash": snapshot["cash"],
-                    "positions_count": len(snapshot.get("positions", {})),
-                    "positions": snapshot.get("positions", {}),  # 包含完整的持仓信息
-                    "total_return": (snapshot["portfolio_value"] - config.initial_cash)
-                    / config.initial_cash
-                    if config.initial_cash > 0
-                    else 0,
-                    "total_return_without_cost": (
-                        snapshot.get(
-                            "portfolio_value_without_cost", snapshot["portfolio_value"]
-                        )
-                        - config.initial_cash
-                    )
-                    / config.initial_cash
-                    if config.initial_cash > 0
-                    else 0,
-                }
-                for snapshot in portfolio_manager.portfolio_history
-            ],
-            # 交易成本统计
-            "cost_statistics": {
-                "total_commission": portfolio_manager.total_commission,
-                "total_slippage": portfolio_manager.total_slippage,
-                "total_cost": portfolio_manager.total_commission
-                + portfolio_manager.total_slippage,
-                "cost_ratio": (
-                    portfolio_manager.total_commission
-                    + portfolio_manager.total_slippage
-                )
-                / config.initial_cash
-                if config.initial_cash > 0
-                else 0,
-            },
-        }
-
-        # 添加无成本指标到报告
-        metrics_without_cost = portfolio_manager.get_performance_metrics_without_cost()
-        report["excess_return_without_cost"] = {
-            "mean": metrics_without_cost.get("mean", 0),
-            "std": metrics_without_cost.get("std", 0),
-            "annualized_return": metrics_without_cost.get("annualized_return", 0),
-            "information_ratio": metrics_without_cost.get("information_ratio", 0),
-            "max_drawdown": metrics_without_cost.get("max_drawdown", 0),
-        }
-
-        report["excess_return_with_cost"] = {
-            "mean": performance_metrics.get("volatility", 0) / np.sqrt(252)
-            if performance_metrics.get("volatility", 0) > 0
-            else 0,
-            "std": performance_metrics.get("volatility", 0),
-            "annualized_return": performance_metrics.get("annualized_return", 0),
-            "information_ratio": performance_metrics.get(
-                "sharpe_ratio", 0
-            ),  # 使用夏普比率作为近似
-            "max_drawdown": performance_metrics.get("max_drawdown", 0),
-        }
-
-        # 计算额外的分析指标
-        report.update(self._calculate_additional_metrics(portfolio_manager))
-
-        return report
 
     def _rebalance_topk_buffer(
         self,
