@@ -99,6 +99,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+backend/reports/quality/
 
 # 翻译
 *.mo

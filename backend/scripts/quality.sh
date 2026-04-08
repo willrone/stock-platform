@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+MODE="${1:-snapshot}"
+TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+SNAPSHOT_DIR="${QUALITY_SNAPSHOT_DIR:-$ROOT_DIR/reports/quality/$TIMESTAMP}"
+PYTEST_TARGET="${PYTEST_TARGET:-tests/unit/infrastructure/test_basic_infrastructure.py}"
+
+mkdir -p "$SNAPSHOT_DIR"
+
+log() {
+  printf '\n[%s] %s\n' "$(date +%H:%M:%S)" "$*"
+}
+
+ensure_venv() {
+  if [ ! -x "$VENV_DIR/bin/python" ]; then
+    log "创建虚拟环境: $VENV_DIR"
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
+  fi
+}
+
+ensure_quality_deps() {
+  log "安装/校验质量依赖"
+  "$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel
+  "$VENV_DIR/bin/python" -m pip install -r "$ROOT_DIR/requirements-quality.txt"
+}
+
+run_and_capture() {
+  local name="$1"
+  shift
+  local logfile="$SNAPSHOT_DIR/${name}.txt"
+  log "运行 $name"
+  set +e
+  "$@" > >(tee "$logfile") 2>&1
+  local status=$?
+  set -e
+  printf '%s=%s\n' "$name" "$status" >> "$SNAPSHOT_DIR/status.env"
+  return "$status"
+}
+
+run_snapshot() {
+  local pytest_status=0
+  local flake8_status=0
+  local mypy_status=0
+
+  run_and_capture pytest "$VENV_DIR/bin/python" -m pytest "$PYTEST_TARGET" -q || pytest_status=$?
+  run_and_capture flake8 "$VENV_DIR/bin/python" -m flake8 app tests || flake8_status=$?
+  run_and_capture mypy "$VENV_DIR/bin/python" -m mypy app --ignore-missing-imports || mypy_status=$?
+
+  cat > "$SNAPSHOT_DIR/summary.md" <<EOF
+# Backend 质量快照
+
+- 时间: $(date -Iseconds)
+- 虚拟环境: $VENV_DIR
+- pytest target: $PYTEST_TARGET
+- pytest exit: $pytest_status
+- flake8 exit: $flake8_status
+- mypy exit: $mypy_status
+
+说明：
+- pytest 这里默认跑 backend 基础 smoke，用来确认命令与环境可执行；
+- flake8 / mypy 失败通常表示当前代码库仍有存量问题，但不影响“命令已接线、结果可稳定产出”的目标。
+EOF
+
+  log "质量快照输出目录: $SNAPSHOT_DIR"
+
+  if [ "$pytest_status" -ne 0 ] || [ "$flake8_status" -ne 0 ] || [ "$mypy_status" -ne 0 ]; then
+    return 1
+  fi
+}
+
+main() {
+  set -e
+  case "$MODE" in
+    install)
+      ensure_venv
+      ensure_quality_deps
+      ;;
+    pytest)
+      ensure_venv
+      ensure_quality_deps
+      exec "$VENV_DIR/bin/python" -m pytest "$PYTEST_TARGET" -q
+      ;;
+    flake8)
+      ensure_venv
+      ensure_quality_deps
+      exec "$VENV_DIR/bin/python" -m flake8 app tests
+      ;;
+    mypy)
+      ensure_venv
+      ensure_quality_deps
+      exec "$VENV_DIR/bin/python" -m mypy app --ignore-missing-imports
+      ;;
+    snapshot|all)
+      ensure_venv
+      ensure_quality_deps
+      run_snapshot
+      ;;
+    *)
+      echo "用法: $0 [install|pytest|flake8|mypy|snapshot]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

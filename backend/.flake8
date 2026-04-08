@@ -5,6 +5,7 @@ max-line-length = 88
 max-complexity = 10
 # 排除的目录和文件
 exclude =
+    .*,
     .git,
     __pycache__,
     .venv,
@@ -36,12 +37,6 @@ select =
     C,  # mccabe complexity
     B,  # flake8-bugbear
     I   # isort
-
-# 每个文件的复杂度警告阈值
-max-complexity = 10
-
-# 每个文件的最大行数
-max-file-size = 1000
 
 # 统计信息
 statistics = True

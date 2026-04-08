@@ -26,7 +26,13 @@ tests/
 
 ```bash
 cd backend
-source venv/bin/activate
+source .venv/bin/activate
+
+# 一键准备并生成质量快照（推荐）
+./scripts/quality.sh snapshot
+
+# 仅运行 backend pytest smoke
+./scripts/quality.sh pytest
 
 # 运行所有测试
 python -m pytest tests/ -v
@@ -39,6 +45,13 @@ python -m pytest tests/unit/infrastructure/ -v
 # 快速检查（遇第一个失败即停止）
 python -m pytest tests/ --maxfail=1 -x
 ```
+
+### 质量命令说明
+
+- `./scripts/quality.sh install`：补齐 backend `.venv` 所需质量依赖
+- `./scripts/quality.sh snapshot`：运行 pytest smoke + flake8 + mypy，并把结果落到 `reports/quality/<timestamp>/`
+- `./scripts/quality.sh flake8` / `./scripts/quality.sh mypy`：单独执行对应静态检查
+- 默认 pytest target 为 `tests/unit/infrastructure/test_basic_infrastructure.py`，用于确认命令与环境稳定可执行；完整回归仍按上面的 `python -m pytest tests/ -v` 手动触发
 
 ## 测试规范
 

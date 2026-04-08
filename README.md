@@ -162,16 +162,16 @@ npm run dev
 ### 后端开发
 
 ```bash
-# 运行测试
+# 一键准备 backend 质量环境并输出快照
 cd backend
+./scripts/quality.sh snapshot
+
+# 运行完整测试
 python -m pytest
 
-# 代码格式化
-black app/
-isort app/
-
-# 类型检查
-mypy app/
+# 单独执行静态检查
+./scripts/quality.sh flake8
+./scripts/quality.sh mypy
 ```
 
 ### 前端开发
