@@ -181,6 +181,49 @@ class TestTaskContractAPI:
         assert payload["config"]["model_id"] == "model-v1"
         assert payload["original_task_id"] is None
 
+    @patch("app.api.v1.tasks.log_structured_exception")
+    @patch("app.api.v1.tasks.get_process_executor")
+    @patch("app.api.v1.tasks.TaskRepository")
+    @patch("app.api.v1.tasks.SessionLocal")
+    def test_create_task_submit_failure_marks_task_failed(
+        self,
+        mock_session_local,
+        mock_repository_cls,
+        mock_executor_factory,
+        mock_log_structured_exception,
+        client,
+        mock_session,
+        prediction_task,
+    ):
+        """任务提交失败时应显式回写 FAILED，而不是静默吞错。"""
+
+        mock_session_local.return_value = mock_session
+        mock_repository = MagicMock()
+        mock_repository.create_task.return_value = prediction_task
+        mock_repository_cls.return_value = mock_repository
+
+        executor = MagicMock()
+        executor.submit.side_effect = RuntimeError("pool down")
+        mock_executor_factory.return_value = executor
+
+        response = client.post(
+            "/tasks",
+            json={
+                "task_name": "预测任务",
+                "task_type": "prediction",
+                "stock_codes": ["000001.SZ"],
+                "model_id": "model-v1",
+                "prediction_config": {"horizon": "short_term"},
+            },
+        )
+
+        assert response.status_code == 200
+        mock_log_structured_exception.assert_called_once()
+        assert mock_repository.update_task_status.call_count == 1
+        update_kwargs = mock_repository.update_task_status.call_args.kwargs
+        assert update_kwargs["task_id"] == "task-pred-1"
+        assert "任务提交失败: pool down" == update_kwargs["error_message"]
+
     @patch("app.api.v1.tasks.TaskRepository")
     @patch("app.api.v1.tasks.SessionLocal")
     def test_list_tasks_contract(
@@ -266,6 +309,55 @@ class TestTaskContractAPI:
         assert payload["results"]["backtest_results"] == backtest_task.result
         assert payload["backtest_results"] == backtest_task.result
         assert payload["result"] == backtest_task.result
+
+    @patch("app.api.v1.tasks.log_best_effort_failure")
+    @patch("app.api.v1.tasks.PredictionResultRepository")
+    @patch("app.api.v1.tasks.TaskRepository")
+    @patch("app.api.v1.tasks.SessionLocal")
+    def test_get_task_detail_logs_latest_price_load_failure(
+        self,
+        mock_session_local,
+        mock_repository_cls,
+        mock_prediction_repository_cls,
+        mock_log_best_effort_failure,
+        client,
+        mock_session,
+        backtest_task,
+        prediction_row,
+    ):
+        """最新价格读取失败时应记录告警并继续返回任务详情。"""
+
+        mock_session_local.return_value = mock_session
+        mock_repository = MagicMock()
+        mock_repository.get_task_by_id.return_value = backtest_task
+        mock_repository_cls.return_value = mock_repository
+
+        mock_prediction_repository = MagicMock()
+        mock_prediction_repository.get_prediction_results_by_task.return_value = [prediction_row]
+        mock_prediction_repository_cls.return_value = mock_prediction_repository
+
+        fake_stock_loader_module = ModuleType("app.services.data.stock_data_loader")
+
+        class FakeStockDataLoader:
+            def __init__(self, data_root: str):
+                self.data_root = data_root
+
+            def load_stock_data(self, stock_code: str, end_date=None):
+                raise RuntimeError("data file missing")
+
+        fake_stock_loader_module.StockDataLoader = FakeStockDataLoader
+
+        with patch.dict(
+            sys.modules,
+            {"app.services.data.stock_data_loader": fake_stock_loader_module},
+        ):
+            response = client.get("/tasks/task-bt-1")
+
+        assert response.status_code == 200
+        payload = response.json()["data"]
+        assert payload["results"]["predictions"][0]["stock_code"] == "000001.SZ"
+        mock_log_best_effort_failure.assert_called_once()
+        assert mock_log_best_effort_failure.call_args.kwargs["context"]["stock_code"] == "000001.SZ"
 
     @patch("app.api.v1.tasks.get_process_executor")
     @patch("app.api.v1.tasks.deep_merge")

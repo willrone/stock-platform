@@ -10,6 +10,12 @@ from loguru import logger
 
 from app.api.v1.schemas import BacktestRequest, StandardResponse
 from app.core.config import settings
+from app.core.error_handler import (
+    ErrorContext,
+    ErrorSeverity,
+    ErrorType,
+    log_structured_exception,
+)
 from app.services.backtest import BacktestConfig, BacktestExecutor
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
@@ -21,6 +27,37 @@ def _parse_bool_env(var_name: str, default: bool = False) -> bool:
     if val is None:
         return default
     return val.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+
+def _coerce_numeric_value(
+    value: object,
+    *,
+    field_name: str,
+    default: float,
+    context: ErrorContext,
+) -> float:
+    """将回测结果中的数值安全转换为 float，并记录降级日志。"""
+    try:
+        if value is None:
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError) as conversion_error:
+        log_structured_exception(
+            f"回测结果字段 {field_name} 不是可序列化数值，已回退默认值",
+            error=conversion_error,
+            error_type=ErrorType.VALIDATION_ERROR,
+            severity=ErrorSeverity.LOW,
+            context=ErrorContext(
+                additional_data={
+                    **(context.additional_data or {}),
+                    "field_name": field_name,
+                    "raw_value": repr(value),
+                    "default": default,
+                }
+            ),
+        )
+        return float(default)
 
 
 @router.get("/strategies", response_model=StandardResponse)
@@ -641,20 +678,27 @@ async def run_backtest(request: BacktestRequest):
 
         backtest_report = await asyncio.to_thread(_run_backtest_in_thread)
 
-        # 转换数据格式以匹配前端期望
-        # NOTE: backtest_report may contain numpy scalar types; coerce to native Python
-        # types to avoid JSON serialization errors.
-        def _to_float(x, default=0.0):
-            try:
-                if x is None:
-                    return float(default)
-                return float(x)
-            except Exception:
-                return float(default)
+        # 转换数据格式以匹配前端期望。
+        # NOTE: backtest_report 可能带有 numpy 标量或异常值，这里统一收敛并记录日志。
+        conversion_context = ErrorContext(
+            additional_data={
+                "route": "run_backtest",
+                "strategy_name": request.strategy_name,
+                "stock_codes": request.stock_codes,
+            }
+        )
 
         portfolio_history = backtest_report.get("portfolio_history", [])
         dates = [snapshot["date"] for snapshot in portfolio_history]
-        equity_curve = [_to_float(snapshot.get("portfolio_value", 0.0)) for snapshot in portfolio_history]
+        equity_curve = [
+            _coerce_numeric_value(
+                snapshot.get("portfolio_value", 0.0),
+                field_name="portfolio_value",
+                default=0.0,
+                context=conversion_context,
+            )
+            for snapshot in portfolio_history
+        ]
 
         # 计算回撤曲线（百分比）
         drawdown_curve = []
@@ -672,9 +716,19 @@ async def run_backtest(request: BacktestRequest):
                 {
                     "date": trade.get("timestamp", ""),
                     "action": "buy" if trade.get("action") == "BUY" else "sell",
-                    "price": _to_float(trade.get("price", 0.0)),
+                    "price": _coerce_numeric_value(
+                        trade.get("price", 0.0),
+                        field_name="trade_price",
+                        default=0.0,
+                        context=conversion_context,
+                    ),
                     "quantity": int(trade.get("quantity", 0) or 0),
-                    "pnl": _to_float(trade.get("pnl", 0.0)),
+                    "pnl": _coerce_numeric_value(
+                        trade.get("pnl", 0.0),
+                        field_name="trade_pnl",
+                        default=0.0,
+                        context=conversion_context,
+                    ),
                 }
             )
 
@@ -705,26 +759,65 @@ async def run_backtest(request: BacktestRequest):
                 ),
             },
             "portfolio": {
-                "initial_cash": _to_float(
+                "initial_cash": _coerce_numeric_value(
                     backtest_report.get("initial_cash", request.initial_cash),
+                    field_name="initial_cash",
                     default=request.initial_cash,
+                    context=conversion_context,
                 ),
-                "final_value": _to_float(
+                "final_value": _coerce_numeric_value(
                     backtest_report.get("final_value", request.initial_cash),
+                    field_name="final_value",
                     default=request.initial_cash,
+                    context=conversion_context,
                 ),
-                "total_return": _to_float(backtest_report.get("total_return", 0.0)),
-                "annualized_return": _to_float(backtest_report.get("annualized_return", 0.0)),
+                "total_return": _coerce_numeric_value(
+                    backtest_report.get("total_return", 0.0),
+                    field_name="total_return",
+                    default=0.0,
+                    context=conversion_context,
+                ),
+                "annualized_return": _coerce_numeric_value(
+                    backtest_report.get("annualized_return", 0.0),
+                    field_name="annualized_return",
+                    default=0.0,
+                    context=conversion_context,
+                ),
             },
             "risk_metrics": {
-                "volatility": _to_float(backtest_report.get("volatility", 0.0)),
-                "sharpe_ratio": _to_float(backtest_report.get("sharpe_ratio", 0.0)),
-                "max_drawdown": _to_float(backtest_report.get("max_drawdown", 0.0)),
+                "volatility": _coerce_numeric_value(
+                    backtest_report.get("volatility", 0.0),
+                    field_name="volatility",
+                    default=0.0,
+                    context=conversion_context,
+                ),
+                "sharpe_ratio": _coerce_numeric_value(
+                    backtest_report.get("sharpe_ratio", 0.0),
+                    field_name="sharpe_ratio",
+                    default=0.0,
+                    context=conversion_context,
+                ),
+                "max_drawdown": _coerce_numeric_value(
+                    backtest_report.get("max_drawdown", 0.0),
+                    field_name="max_drawdown",
+                    default=0.0,
+                    context=conversion_context,
+                ),
             },
             "trading_stats": {
                 "total_trades": int(backtest_report.get("total_trades", 0) or 0),
-                "win_rate": _to_float(backtest_report.get("win_rate", 0.0)),
-                "profit_factor": _to_float(backtest_report.get("profit_factor", 0.0)),
+                "win_rate": _coerce_numeric_value(
+                    backtest_report.get("win_rate", 0.0),
+                    field_name="win_rate",
+                    default=0.0,
+                    context=conversion_context,
+                ),
+                "profit_factor": _coerce_numeric_value(
+                    backtest_report.get("profit_factor", 0.0),
+                    field_name="profit_factor",
+                    default=0.0,
+                    context=conversion_context,
+                ),
             },
             "trade_history": trade_history,
             # 添加前端需要的图表数据
@@ -734,7 +827,10 @@ async def run_backtest(request: BacktestRequest):
         }
 
         logger.info(
-            f"回测完成: 总收益={backtest_report.get('total_return', 0):.2%}, 夏普比率={backtest_report.get('sharpe_ratio', 0):.2f}"
+            "回测完成: 总收益={:.2%}, 夏普比率={:.2f}".format(
+                result["portfolio"]["total_return"],
+                result["risk_metrics"]["sharpe_ratio"],
+            )
         )
 
         return StandardResponse(success=True, message="回测执行成功", data=result)

@@ -4,7 +4,7 @@
 
 import traceback
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -147,6 +147,61 @@ class ValidationError(BaseError):
 
     def __init__(self, message: str, **kwargs):
         super().__init__(message, ErrorType.VALIDATION_ERROR, **kwargs)
+
+
+ERROR_CLASS_BY_TYPE = {
+    ErrorType.PREDICTION_ERROR: PredictionError,
+    ErrorType.TASK_ERROR: TaskError,
+    ErrorType.MODEL_ERROR: ModelError,
+    ErrorType.DATA_ERROR: DataError,
+    ErrorType.SYSTEM_ERROR: SystemError,
+    ErrorType.VALIDATION_ERROR: ValidationError,
+}
+
+
+def log_structured_exception(
+    message: str,
+    *,
+    error: Exception,
+    error_type: ErrorType = ErrorType.SYSTEM_ERROR,
+    severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+    context: Optional[ErrorContext] = None,
+) -> BaseError:
+    """归一化异常并输出带上下文的结构化日志。"""
+    if isinstance(error, BaseError):
+        normalized_error = error
+    else:
+        error_class = ERROR_CLASS_BY_TYPE.get(error_type, SystemError)
+        normalized_error = error_class(
+            message=message,
+            severity=severity,
+            context=context,
+            original_exception=error,
+        )
+
+    bound_logger = logger.bind(
+        error_id=normalized_error.error_id,
+        error_type=normalized_error.error_type.value,
+        severity=normalized_error.severity.value,
+        context=normalized_error.to_dict().get("context", {}),
+    )
+    bound_logger.opt(exception=normalized_error.original_exception or error).error(
+        message
+    )
+    return normalized_error
+
+
+
+def log_best_effort_failure(
+    message: str,
+    *,
+    error: Exception,
+    context: Optional[Dict[str, Any]] = None,
+) -> None:
+    """记录补偿/兜底动作失败，避免静默吞错。"""
+    logger.bind(best_effort=True, context=context or {}).opt(exception=error).warning(
+        message
+    )
 
 
 class ErrorRecoveryManager:

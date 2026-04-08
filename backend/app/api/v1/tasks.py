@@ -28,7 +28,14 @@ from app.api.v1.schemas import (
 )
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.error_handler import TaskError
+from app.core.error_handler import (
+    ErrorContext,
+    ErrorSeverity,
+    ErrorType,
+    TaskError,
+    log_best_effort_failure,
+    log_structured_exception,
+)
 from app.models.task_models import TaskStatus, TaskType
 from app.repositories.task_repository import PredictionResultRepository, TaskRepository
 from app.services.data.stock_data_loader import StockDataLoader
@@ -38,6 +45,58 @@ from app.services.tasks.task_monitor import task_monitor
 from app.utils.dict_merge import deep_merge
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
+
+
+def _build_route_error_context(
+    *,
+    user_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    model_id: Optional[str] = None,
+    stock_code: Optional[str] = None,
+    **additional_data,
+) -> ErrorContext:
+    """构建 tasks 路由统一错误上下文。"""
+    return ErrorContext(
+        user_id=user_id,
+        task_id=task_id,
+        model_id=model_id,
+        stock_code=stock_code,
+        additional_data=additional_data or None,
+    )
+
+
+
+def _mark_task_failed_after_submit_error(
+    task_repository: TaskRepository,
+    *,
+    task_id: str,
+    submit_error: Exception,
+    context: ErrorContext,
+) -> None:
+    """在任务提交失败后尽力回写 FAILED 状态，并记录补偿失败。"""
+    try:
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.FAILED,
+            error_message=f"任务提交失败: {submit_error}",
+        )
+    except Exception as update_error:
+        log_best_effort_failure(
+            "任务提交失败后回写 FAILED 状态也失败",
+            error=update_error,
+            context={
+                "task_id": task_id,
+                "submit_error": str(submit_error),
+                "error_context": {
+                    "user_id": context.user_id,
+                    "task_id": context.task_id,
+                    "model_id": context.model_id,
+                    "stock_code": context.stock_code,
+                    "request_id": context.request_id,
+                    "additional_data": context.additional_data,
+                },
+            },
+        )
 
 
 @router.post("", response_model=StandardResponse)
@@ -94,31 +153,36 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
         # 将任务提交到进程池执行（异步，不阻塞）
         try:
             process_executor = get_process_executor()
-            loop = asyncio.get_event_loop()
 
-            # 使用run_in_executor将任务提交到进程池
-            # 注意：这里只是提交任务，不等待结果，立即返回
+            # 使用进程池提交任务，但不等待执行完成。
             if task_type == TaskType.PREDICTION:
-                future = process_executor.submit(
-                    execute_prediction_task_simple, task.task_id
-                )
+                process_executor.submit(execute_prediction_task_simple, task.task_id)
             else:  # BACKTEST
-                future = process_executor.submit(
-                    execute_backtest_task_simple, task.task_id
-                )
+                process_executor.submit(execute_backtest_task_simple, task.task_id)
 
             logger.info(f"任务已提交到进程池: {task.task_id}, 类型: {task_type.value}")
         except Exception as submit_error:
-            logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
-            # 如果提交失败，标记任务为失败
-            try:
-                task_repository.update_task_status(
-                    task_id=task.task_id,
-                    status=TaskStatus.FAILED,
-                    error_message=f"任务提交失败: {str(submit_error)}",
-                )
-            except:
-                pass
+            submit_context = _build_route_error_context(
+                user_id=user_id,
+                task_id=task.task_id,
+                model_id=config.get("model_id"),
+                operation="task_submit",
+                route="create_task",
+                task_type=task_type.value,
+            )
+            log_structured_exception(
+                "将任务提交到进程池时出错",
+                error=submit_error,
+                error_type=ErrorType.TASK_ERROR,
+                severity=ErrorSeverity.HIGH,
+                context=submit_context,
+            )
+            _mark_task_failed_after_submit_error(
+                task_repository,
+                task_id=task.task_id,
+                submit_error=submit_error,
+                context=submit_context,
+            )
 
         task_data = build_task_mutation_dto(
             task,
@@ -375,7 +439,7 @@ async def get_prediction_series(
 async def get_chart_data(task_id: str, chart_type: str):
     """获取特定图表数据"""
 
-    print(f"DEBUG: 请求图表数据 - task_id: {task_id}, chart_type: {chart_type}")
+    logger.info(f"请求图表数据: task_id={task_id}, chart_type={chart_type}")
 
     valid_chart_types = [
         "equity_curve",
@@ -387,7 +451,7 @@ async def get_chart_data(task_id: str, chart_type: str):
     ]
 
     if chart_type not in valid_chart_types:
-        print(f"DEBUG: 不支持的图表类型: {chart_type}")
+        logger.warning(f"不支持的图表类型: {chart_type}")
         raise HTTPException(status_code=400, detail=f"不支持的图表类型: {chart_type}")
 
     session = SessionLocal()
@@ -395,37 +459,24 @@ async def get_chart_data(task_id: str, chart_type: str):
         task_repository = TaskRepository(session)
         task = task_repository.get_task_by_id(task_id)
 
-        print(
-            f"DEBUG: 任务查询结果 - task: {task is not None}, result: {task.result is not None if task else None}"
-        )
-
         if not task or not task.result:
-            print(
-                f"DEBUG: 回测数据不存在 - task: {task}, result: {task.result if task else None}"
-            )
             raise HTTPException(status_code=404, detail="回测数据不存在")
 
         if task.task_type != "backtest":
-            print(f"DEBUG: 任务类型不是回测 - task_type: {task.task_type}")
             raise HTTPException(status_code=400, detail="只有回测任务支持图表数据")
 
         # 获取原始回测结果
         raw_result = task.result
-        print(f"DEBUG: 原始结果类型: {type(raw_result)}")
         if isinstance(raw_result, str):
             import json
 
             raw_result = json.loads(raw_result)
-            print(f"DEBUG: 解析后的结果类型: {type(raw_result)}")
 
         # 生成图表数据
-        print(f"DEBUG: 开始生成图表数据 - chart_type: {chart_type}")
         from app.services.backtest.reporting import ChartDataGenerator
 
         chart_generator = ChartDataGenerator()
         chart_data = await chart_generator.generate_chart_data(raw_result, chart_type)
-
-        print(f"DEBUG: 图表数据生成成功")
 
         return StandardResponse(
             success=True,
@@ -436,8 +487,19 @@ async def get_chart_data(task_id: str, chart_type: str):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"DEBUG: 图表数据生成失败 - error: {e}")
-        logger.error(f"获取图表数据失败: {e}", exc_info=True)
+        chart_context = _build_route_error_context(
+            task_id=task_id,
+            operation="get_chart_data",
+            route="get_chart_data",
+            chart_type=chart_type,
+        )
+        log_structured_exception(
+            "获取图表数据失败",
+            error=e,
+            error_type=ErrorType.TASK_ERROR,
+            severity=ErrorSeverity.MEDIUM,
+            context=chart_context,
+        )
         raise HTTPException(status_code=500, detail=f"获取图表数据失败: {str(e)}")
     finally:
         session.close()
@@ -660,21 +722,39 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
                 process_executor.submit(execute_backtest_task_simple, new_task.task_id)
             elif task_type == "hyperparameter_optimization":
                 from app.api.v1.optimization import execute_optimization_task_simple
-                process_executor.submit(execute_optimization_task_simple, new_task.task_id)
+
+                process_executor.submit(
+                    execute_optimization_task_simple, new_task.task_id
+                )
             elif task_type == "qlib_precompute":
-                process_executor.submit(execute_qlib_precompute_task_simple, new_task.task_id)
+                process_executor.submit(
+                    execute_qlib_precompute_task_simple, new_task.task_id
+                )
 
             logger.info(f"重建任务已提交: {new_task.task_id}, 原任务: {task_id}, 类型: {task_type}")
         except Exception as submit_error:
-            logger.error(f"重建任务提交失败: {submit_error}", exc_info=True)
-            try:
-                task_repository.update_task_status(
-                    task_id=new_task.task_id,
-                    status=TaskStatus.FAILED,
-                    error_message=f"任务提交失败: {str(submit_error)}",
-                )
-            except:
-                pass
+            submit_context = _build_route_error_context(
+                user_id=user_id,
+                task_id=new_task.task_id,
+                model_id=merged_config.get("model_id"),
+                operation="task_rebuild_submit",
+                route="rebuild_task",
+                task_type=task_type,
+                original_task_id=task_id,
+            )
+            log_structured_exception(
+                "重建任务提交到进程池失败",
+                error=submit_error,
+                error_type=ErrorType.TASK_ERROR,
+                severity=ErrorSeverity.HIGH,
+                context=submit_context,
+            )
+            _mark_task_failed_after_submit_error(
+                task_repository,
+                task_id=new_task.task_id,
+                submit_error=submit_error,
+                context=submit_context,
+            )
 
         task_data = build_task_mutation_dto(
             new_task,
@@ -739,8 +819,18 @@ async def get_task_detail(task_id: str):
                     )
                     if not data.empty and "close" in data.columns:
                         latest_price = float(data["close"].iloc[-1])
-                except Exception:
-                    latest_price = None
+                except Exception as price_error:
+                    log_best_effort_failure(
+                        "加载股票最新价格失败，回退为 None",
+                        error=price_error,
+                        context={
+                            "task_id": task_id,
+                            "stock_code": result.stock_code,
+                            "prediction_date": result.prediction_date.isoformat()
+                            if hasattr(result.prediction_date, "isoformat")
+                            else str(result.prediction_date),
+                        },
+                    )
                 latest_prices[result.stock_code] = latest_price
 
             current_price = latest_prices.get(result.stock_code)

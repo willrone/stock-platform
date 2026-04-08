@@ -19,6 +19,13 @@ from app.api.v1.schemas import (
 )
 from app.core.config import settings
 from app.core.container import get_data_service, get_sftp_sync_service
+from app.core.error_handler import (
+    ErrorContext,
+    ErrorSeverity,
+    ErrorType,
+    log_best_effort_failure,
+    log_structured_exception,
+)
 from app.services.data import SimpleDataService
 from app.services.data.parquet_manager import ParquetManager
 from app.services.data.sftp_sync_service import SFTPSyncService
@@ -28,6 +35,56 @@ from app.services.events.data_sync_events import (
 )
 
 router = APIRouter(prefix="/data", tags=["数据管理"])
+
+
+def _build_data_error_context(
+    *,
+    user_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    **additional_data,
+) -> ErrorContext:
+    """构建 data 路由统一错误上下文。"""
+    return ErrorContext(
+        user_id=user_id,
+        task_id=task_id,
+        additional_data=additional_data or None,
+    )
+
+
+
+def _mark_task_failed_after_submit_error(
+    task_repository,
+    *,
+    task_id: str,
+    submit_error: Exception,
+    context: ErrorContext,
+) -> None:
+    """在数据任务提交失败后尽力回写 FAILED 状态。"""
+    from app.models.task_models import TaskStatus
+
+    try:
+        task_repository.update_task_status(
+            task_id=task_id,
+            status=TaskStatus.FAILED,
+            error_message=f"任务提交失败: {submit_error}",
+        )
+    except Exception as update_error:
+        log_best_effort_failure(
+            "数据任务提交失败后回写 FAILED 状态也失败",
+            error=update_error,
+            context={
+                "task_id": task_id,
+                "submit_error": str(submit_error),
+                "error_context": {
+                    "user_id": context.user_id,
+                    "task_id": context.task_id,
+                    "model_id": context.model_id,
+                    "stock_code": context.stock_code,
+                    "request_id": context.request_id,
+                    "additional_data": context.additional_data,
+                },
+            },
+        )
 
 
 # Qlib预计算相关接口
@@ -52,7 +109,7 @@ async def trigger_qlib_precompute(
     """
     from app.api.v1.dependencies import execute_qlib_precompute_task_simple
     from app.core.database import SessionLocal
-    from app.models.task_models import TaskStatus, TaskType
+    from app.models.task_models import TaskType
     from app.repositories.task_repository import TaskRepository
     from app.services.tasks.process_executor import get_process_executor
 
@@ -87,22 +144,30 @@ async def trigger_qlib_precompute(
             process_executor = get_process_executor()
 
             # 提交任务到进程池
-            future = process_executor.submit(
-                execute_qlib_precompute_task_simple, task.task_id
-            )
+            process_executor.submit(execute_qlib_precompute_task_simple, task.task_id)
 
             logger.info(f"Qlib预计算任务已提交到进程池: {task.task_id}")
         except Exception as submit_error:
-            logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
-            # 如果提交失败，标记任务为失败
-            try:
-                task_repository.update_task_status(
-                    task_id=task.task_id,
-                    status=TaskStatus.FAILED,
-                    error_message=f"任务提交失败: {str(submit_error)}",
-                )
-            except:
-                pass
+            submit_context = _build_data_error_context(
+                user_id=user_id,
+                task_id=task.task_id,
+                operation="qlib_precompute_submit",
+                route="trigger_qlib_precompute",
+                stock_codes=request.stock_codes or [],
+            )
+            log_structured_exception(
+                "将 Qlib 预计算任务提交到进程池时出错",
+                error=submit_error,
+                error_type=ErrorType.TASK_ERROR,
+                severity=ErrorSeverity.HIGH,
+                context=submit_context,
+            )
+            _mark_task_failed_after_submit_error(
+                task_repository,
+                task_id=task.task_id,
+                submit_error=submit_error,
+                context=submit_context,
+            )
 
         # 转换为前端期望的格式
         task_data = {
@@ -625,14 +690,7 @@ async def sync_remote_data(
     """
     start_time = datetime.now()
 
-    # 立即输出日志，确保能看到请求到达
-    print("=" * 60)
-    print("收到同步远端数据请求 - API端点被调用")
-    print(f"请求参数: stock_codes={'已提供' if request.stock_codes else '未提供（将同步所有股票）'}")
-    if request.stock_codes:
-        print(f"要同步的股票数量: {len(request.stock_codes)}")
-    print("=" * 60)
-
+    # 立即记录结构化日志，避免使用 print。
     logger.info("=" * 60)
     logger.info("收到同步远端数据请求 - API端点被调用")
     logger.info(f"请求参数: stock_codes={'已提供' if request.stock_codes else '未提供（将同步所有股票）'}")
