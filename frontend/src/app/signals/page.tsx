@@ -717,20 +717,28 @@ export default function SignalsPage() {
             ) : (
               filteredRows.map((row, idx) => {
                 // 合并所有策略的信号（移动端简化显示）
-                const signals = selectedStrategyNames.map(name => row[name]).filter(Boolean);
-                if (signals.length === 0) return null;
-                
-                return signals.map((sig, sidx) => (
-                  <MobileSignalCard 
+                const signals = selectedStrategyNames
+                  .map(name => ({ name, value: row.per_strategy?.[name] || null }))
+                  .filter(
+                    (entry): entry is {
+                      name: string;
+                      value: NonNullable<typeof entry['value']>;
+                    } => entry.value !== null
+                  );
+                if (signals.length === 0) {
+                  return null;
+                }
+
+                return signals.map(({ name, value }, sidx) => (
+                  <MobileSignalCard
                     key={`${idx}-${sidx}`}
                     signal={{
                       stock_code: row.stock_code,
-                      stock_name: row.stock_name,
-                      signal: sig.signal,
-                      price: sig.price,
-                      change_percent: sig.change_pct,
-                      signal_time: sig.signal_time,
-                      strategy: selectedStrategyNames[sidx],
+                      stock_name: row.stock_name || undefined,
+                      signal: value.latest_signal,
+                      price: value.price ?? 0,
+                      signal_time: value.signal_date || '',
+                      strategy: name,
                     }}
                   />
                 ));

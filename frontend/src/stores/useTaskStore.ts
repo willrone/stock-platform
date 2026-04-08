@@ -18,6 +18,7 @@ export interface Task {
   status: 'created' | 'running' | 'completed' | 'failed';
   progress: number;
   stock_codes: string[];
+  description?: string;
   model_id: string;
   created_at: string;
   completed_at?: string;

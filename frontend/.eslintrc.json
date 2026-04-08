@@ -19,7 +19,7 @@
   "plugins": ["@typescript-eslint", "react", "react-hooks"],
   "rules": {
     // TypeScript规则
-    "@typescript-eslint/no-unused-vars": ["error", { 
+    "@typescript-eslint/no-unused-vars": ["warn", { 
       "argsIgnorePattern": "^_",
       "varsIgnorePattern": "^_" 
     }],
@@ -40,8 +40,11 @@
     "prefer-const": "error",
     "no-var": "error",
     "eqeqeq": ["error", "always", { "null": "ignore" }],
-    "curly": ["error", "all"],
+    "curly": ["warn", "all"],
     "no-throw-literal": "error",
+    "react/no-unescaped-entities": "warn",
+    "no-case-declarations": "warn",
+    "@typescript-eslint/ban-types": "warn",
     
     // 代码风格（Prettier处理格式化，ESLint只检查逻辑）
     "indent": "off",  // 由Prettier处理

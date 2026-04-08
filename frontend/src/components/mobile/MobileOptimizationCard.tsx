@@ -19,7 +19,7 @@ interface OptimizationTask {
   progress?: number;
   model_id?: string;
   best_score?: number;
-  created_at: string;
+  created_at?: string;
   search_space?: any;
 }
 
@@ -62,7 +62,10 @@ export const MobileOptimizationCard: React.FC<MobileOptimizationCardProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) {
+      return '-';
+    }
     const date = new Date(dateString);
     return date.toLocaleDateString('zh-CN', {
       month: 'short',

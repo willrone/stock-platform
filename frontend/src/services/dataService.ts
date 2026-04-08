@@ -131,6 +131,7 @@ export interface MultiLatestSignalPerStrategyItem {
 
 export interface MultiLatestSignalRow {
   stock_code: string;
+  stock_name?: string | null;
   per_strategy: {
     [strategyName: string]: MultiLatestSignalPerStrategyItem | null;
   };

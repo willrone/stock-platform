@@ -173,7 +173,7 @@ export default function PredictionsPage() {
   };
 
   if (loading) {
-    return <LoadingSpinner message="加载中..." />;
+    return <LoadingSpinner text="加载中..." />;
   }
 
   return (

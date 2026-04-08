@@ -193,7 +193,7 @@ export default function SettingsPage() {
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   label="系统名称"
@@ -201,7 +201,7 @@ export default function SettingsPage() {
                   onChange={(e) => setGeneralSettings({ ...generalSettings, systemName: e.target.value })}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>语言</InputLabel>
                   <Select
@@ -214,7 +214,7 @@ export default function SettingsPage() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>时区</InputLabel>
                   <Select
@@ -228,7 +228,7 @@ export default function SettingsPage() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>日期格式</InputLabel>
                   <Select
@@ -268,7 +268,7 @@ export default function SettingsPage() {
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <TextField
                     fullWidth
@@ -281,7 +281,7 @@ export default function SettingsPage() {
                   </IconButton>
                 </Box>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -462,7 +462,7 @@ export default function SettingsPage() {
             </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -473,7 +473,7 @@ export default function SettingsPage() {
                   inputProps={{ min: 1, max: 16 }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -484,7 +484,7 @@ export default function SettingsPage() {
                   inputProps={{ min: 10, max: 1000 }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>日志级别</InputLabel>
                   <Select

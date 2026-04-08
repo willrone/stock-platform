@@ -58,7 +58,7 @@ const TIME_RANGES: TimeRange[] = [
 ];
 
 export default function EquityCurveChart({
-  taskId,
+  taskId: _taskId,
   data,
   benchmarkData,
   loading = false,
@@ -189,7 +189,7 @@ export default function EquityCurveChart({
       series.push({
         name: '组合收益率',
         type: 'line',
-        data: filteredData.returns.map(r => r * 100), // 转换为百分比
+        data: filteredData.returns.map((r: number) => r * 100), // 转换为百分比
         lineStyle: {
           color: '#10b981',
           width: 2,
@@ -209,7 +209,7 @@ export default function EquityCurveChart({
         series.push({
           name: '基准收益率',
           type: 'line',
-          data: filteredBenchmarkData.returns.map(r => r * 100),
+          data: filteredBenchmarkData.returns.map((r: number) => r * 100),
           lineStyle: {
             color: '#f59e0b',
             width: 2,
@@ -315,9 +315,9 @@ export default function EquityCurveChart({
               return min - range * 0.1;
             }
           } else {
-            const allReturns = filteredData.returns.map(r => r * 100);
+            const allReturns = filteredData.returns.map((r: number) => r * 100);
             if (showBenchmark && filteredBenchmarkData) {
-              allReturns.push(...filteredBenchmarkData.returns.map(r => r * 100));
+              allReturns.push(...filteredBenchmarkData.returns.map((r: number) => r * 100));
             }
             if (allReturns.length > 0) {
               const min = Math.min(...allReturns);
@@ -341,9 +341,9 @@ export default function EquityCurveChart({
               return max + range * 0.1;
             }
           } else {
-            const allReturns = filteredData.returns.map(r => r * 100);
+            const allReturns = filteredData.returns.map((r: number) => r * 100);
             if (showBenchmark && filteredBenchmarkData) {
-              allReturns.push(...filteredBenchmarkData.returns.map(r => r * 100));
+              allReturns.push(...filteredBenchmarkData.returns.map((r: number) => r * 100));
             }
             if (allReturns.length > 0) {
               const min = Math.min(...allReturns);
