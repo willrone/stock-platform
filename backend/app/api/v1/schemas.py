@@ -3,6 +3,7 @@ API请求和响应模型定义
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -228,3 +229,192 @@ class RebuildTaskRequest(BaseModel):
     """任务重建请求"""
     task_name: Optional[str] = Field(None, description="新任务名称，默认为 [重建] {原名}")
     config_override: Optional[Dict[str, Any]] = Field(None, description="配置覆盖，深度合并到原 config")
+
+
+class TaskPredictionDTO(BaseModel):
+    """任务预测结果 DTO"""
+
+    stock_code: str
+    predicted_direction: int
+    predicted_return: float = 0.0
+    confidence_score: float
+    confidence_interval: Dict[str, float] = Field(default_factory=dict)
+    risk_assessment: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskResultsDTO(BaseModel):
+    """任务聚合结果 DTO"""
+
+    total_stocks: int
+    successful_predictions: int
+    average_confidence: float
+    predictions: List[TaskPredictionDTO] = Field(default_factory=list)
+    backtest_results: Optional[Any] = None
+
+
+class TaskSummaryDTO(BaseModel):
+    """任务摘要 DTO"""
+
+    task_id: str
+    task_name: str
+    task_type: Optional[str] = None
+    status: str
+    progress: float
+    stock_codes: List[str] = Field(default_factory=list)
+    model_id: str = ""
+    created_at: str
+    completed_at: Optional[str] = None
+    error_message: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    original_task_id: Optional[str] = None
+
+
+class TaskDetailDTO(TaskSummaryDTO):
+    """任务详情 DTO"""
+
+    results: TaskResultsDTO
+    backtest_results: Optional[Any] = None
+    result: Optional[Any] = None
+    optimization_info: Optional[Dict[str, Any]] = None
+
+
+class TaskListDTO(BaseModel):
+    """任务列表 DTO"""
+
+    tasks: List[TaskSummaryDTO]
+    total: int
+    limit: int
+    offset: int
+
+
+class TaskMutationDTO(TaskSummaryDTO):
+    """任务变更 DTO"""
+
+
+
+def normalize_api_value(value: Any) -> Any:
+    """归一化枚举等 API 值。"""
+
+    if isinstance(value, Enum):
+        return value.value
+    if hasattr(value, "value"):
+        return value.value
+    return value
+
+
+
+def to_iso_datetime(value: Optional[datetime]) -> Optional[str]:
+    """将 datetime 转为 ISO 字符串。"""
+
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+
+def build_task_summary_dto(
+    task: Any,
+    *,
+    config: Optional[Dict[str, Any]] = None,
+    model_id: str = "",
+    stock_codes: Optional[List[str]] = None,
+    original_task_id: Optional[str] = None,
+) -> TaskSummaryDTO:
+    """构建任务摘要 DTO。"""
+
+    task_config = config if config is not None else getattr(task, "config", None)
+    normalized_stock_codes = stock_codes if isinstance(stock_codes, list) else []
+    return TaskSummaryDTO(
+        task_id=str(getattr(task, "task_id", "")),
+        task_name=str(getattr(task, "task_name", "")),
+        task_type=normalize_api_value(getattr(task, "task_type", None)),
+        status=str(normalize_api_value(getattr(task, "status", ""))),
+        progress=float(getattr(task, "progress", 0.0) or 0.0),
+        stock_codes=normalized_stock_codes,
+        model_id=model_id,
+        created_at=to_iso_datetime(getattr(task, "created_at", None))
+        or datetime.now().isoformat(),
+        completed_at=to_iso_datetime(getattr(task, "completed_at", None)),
+        error_message=getattr(task, "error_message", None),
+        config=task_config,
+        original_task_id=original_task_id,
+    )
+
+
+
+def build_task_list_dto(
+    tasks: List[Any], total: int, limit: int, offset: int
+) -> TaskListDTO:
+    """构建任务列表 DTO。"""
+
+    task_items = []
+    for task in tasks:
+        config = getattr(task, "config", None) or {}
+        stock_codes = config.get("stock_codes", [])
+        model_id = config.get("model_id", "")
+        task_items.append(
+            build_task_summary_dto(
+                task,
+                config=config,
+                model_id=model_id,
+                stock_codes=stock_codes if isinstance(stock_codes, list) else [],
+            )
+        )
+    return TaskListDTO(tasks=task_items, total=total, limit=limit, offset=offset)
+
+
+
+def build_task_mutation_dto(
+    task: Any,
+    *,
+    config: Optional[Dict[str, Any]] = None,
+    stock_codes: Optional[List[str]] = None,
+    model_id: str = "",
+    original_task_id: Optional[str] = None,
+) -> TaskMutationDTO:
+    """构建任务变更响应 DTO。"""
+
+    summary = build_task_summary_dto(
+        task,
+        config=config,
+        model_id=model_id,
+        stock_codes=stock_codes,
+        original_task_id=original_task_id,
+    )
+    return TaskMutationDTO(**summary.model_dump())
+
+
+
+def build_task_detail_dto(
+    task: Any,
+    *,
+    config: Dict[str, Any],
+    stock_codes: List[str],
+    model_id: str,
+    predictions: List[Dict[str, Any]],
+    average_confidence: float,
+    backtest_results: Any,
+    optimization_info: Optional[Dict[str, Any]],
+) -> TaskDetailDTO:
+    """构建任务详情 DTO。"""
+
+    summary = build_task_summary_dto(
+        task,
+        config=config,
+        model_id=model_id,
+        stock_codes=stock_codes,
+    )
+    results = TaskResultsDTO(
+        total_stocks=len(stock_codes),
+        successful_predictions=len(predictions),
+        average_confidence=average_confidence,
+        predictions=[TaskPredictionDTO(**item) for item in predictions],
+        backtest_results=backtest_results,
+    )
+    return TaskDetailDTO(
+        **summary.model_dump(),
+        results=results,
+        backtest_results=backtest_results,
+        result=backtest_results,
+        optimization_info=optimization_info,
+    )

@@ -11,64 +11,9 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-export interface Task {
-  task_id: string;
-  task_name: string;
-  task_type?: string; // 添加任务类型字段
-  status: 'created' | 'running' | 'completed' | 'failed';
-  progress: number;
-  stock_codes: string[];
-  description?: string;
-  model_id: string;
-  created_at: string;
-  completed_at?: string;
-  error_message?: string;
-  result?: any; // 添加原始结果字段
-  backtest_results?: any; // 添加顶层回测结果字段
-  config?: {
-    backtest_config?: {
-      strategy_name?: string;
-      strategy_config?: Record<string, any>;
-      start_date?: string;
-      end_date?: string;
-      initial_cash?: number;
-      commission_rate?: number;
-      slippage_rate?: number;
-    };
-    prediction_config?: any;
-    optimization_config?: any;
-    stock_codes?: string[];
-    model_id?: string;
-    [key: string]: any;
-  };
-  results?: {
-    total_stocks: number;
-    successful_predictions: number;
-    average_confidence: number;
-    backtest_results?: any;
-    predictions: Array<{
-      stock_code: string;
-      predicted_direction: number;
-      predicted_return?: number;
-      confidence_score: number;
-      confidence_interval?: {
-        lower: number;
-        upper: number;
-      };
-      risk_assessment?: {
-        value_at_risk: number;
-        volatility: number;
-      };
-    }>;
-  };
-  optimization_info?: {
-    n_trials: number;
-    completed_trials: number;
-    running_trials?: number;
-    pruned_trials?: number;
-    failed_trials?: number;
-  };
-}
+import type { Task } from '../types/task';
+
+export type { Task } from '../types/task';
 
 interface TaskState {
   // 任务数据

@@ -22,6 +22,9 @@ from app.api.v1.schemas import (
     RebuildTaskRequest,
     StandardResponse,
     TaskCreateRequest,
+    build_task_detail_dto,
+    build_task_list_dto,
+    build_task_mutation_dto,
 )
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -117,25 +120,18 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             except:
                 pass
 
-        # 转换为前端期望的格式
-        task_data = {
-            "task_id": task.task_id,
-            "task_name": task.task_name,
-            "task_type": task.task_type,
-            "status": task.status,
-            "progress": task.progress,
-            "stock_codes": request.stock_codes,
-            "model_id": config.get("model_id", ""),
-            "created_at": task.created_at.isoformat()
-            if task.created_at
-            else datetime.now().isoformat(),
-            "completed_at": task.completed_at.isoformat()
-            if task.completed_at
-            else None,
-            "error_message": task.error_message,
-        }
+        task_data = build_task_mutation_dto(
+            task,
+            config=config,
+            stock_codes=request.stock_codes,
+            model_id=config.get("model_id", ""),
+        )
 
-        return StandardResponse(success=True, message="任务创建成功", data=task_data)
+        return StandardResponse(
+            success=True,
+            message="任务创建成功",
+            data=task_data.model_dump(),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -180,46 +176,12 @@ async def list_tasks(
         )
         total = len(total_tasks)
 
-        # 转换为前端期望的格式
-        task_list = []
-        for task in tasks:
-            config = task.config or {}
-            stock_codes = config.get("stock_codes", [])
-            model_id = config.get("model_id", "")
-
-            # 处理 task_type：可能是字符串或枚举对象
-            task_type_value = None
-            if task.task_type:
-                if hasattr(task.task_type, 'value'):
-                    # 如果是枚举对象，获取其值
-                    task_type_value = task.task_type.value
-                else:
-                    # 如果已经是字符串，直接使用
-                    task_type_value = task.task_type
-            
-            task_data = {
-                "task_id": task.task_id,
-                "task_name": task.task_name,
-                "task_type": task_type_value,  # 添加任务类型字段
-                "status": task.status,
-                "progress": task.progress,
-                "stock_codes": stock_codes if isinstance(stock_codes, list) else [],
-                "model_id": model_id,
-                "created_at": task.created_at.isoformat()
-                if task.created_at
-                else datetime.now().isoformat(),
-                "completed_at": task.completed_at.isoformat()
-                if task.completed_at
-                else None,
-                "error_message": task.error_message,
-                "config": config,  # 添加完整配置，方便前端使用
-            }
-            task_list.append(task_data)
+        task_list = build_task_list_dto(tasks, total=total, limit=limit, offset=offset)
 
         return StandardResponse(
             success=True,
             message="任务列表获取成功",
-            data={"tasks": task_list, "total": total, "limit": limit, "offset": offset},
+            data=task_list.model_dump(),
         )
     except Exception as e:
         logger.error(f"获取任务列表失败: {e}", exc_info=True)
@@ -714,18 +676,19 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
             except:
                 pass
 
-        task_data = {
-            "task_id": new_task.task_id,
-            "task_name": new_task.task_name,
-            "task_type": new_task.task_type,
-            "status": new_task.status,
-            "progress": new_task.progress,
-            "config": merged_config,
-            "original_task_id": task_id,
-            "created_at": new_task.created_at.isoformat() if new_task.created_at else datetime.now().isoformat(),
-        }
+        task_data = build_task_mutation_dto(
+            new_task,
+            config=merged_config,
+            stock_codes=merged_config.get("stock_codes", []),
+            model_id=merged_config.get("model_id", ""),
+            original_task_id=task_id,
+        )
 
-        return StandardResponse(success=True, message="任务重建成功", data=task_data)
+        return StandardResponse(
+            success=True,
+            message="任务重建成功",
+            data=task_data.model_dump(),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -876,46 +839,27 @@ async def get_task_detail(task_id: str):
                 "failed_trials": result.get("failed_trials", 0),
             }
 
-        # 构建任务详情（含 config，供回测结果页策略配置卡片等使用）
-        task_detail = {
-            "task_id": task.task_id,
-            "task_name": task.task_name,
-            "task_type": task.task_type,
-            "status": task.status,
-            "progress": task.progress,
-            "stock_codes": stock_codes if isinstance(stock_codes, list) else [],
-            "model_id": model_id,
-            "created_at": task.created_at.isoformat()
-            if task.created_at
-            else datetime.now().isoformat(),
-            "completed_at": task.completed_at.isoformat()
-            if task.completed_at
-            else None,
-            "error_message": task.error_message,
-            "config": config,
-            "results": {
-                "total_stocks": len(stock_codes)
-                if isinstance(stock_codes, list)
-                else 0,
-                "successful_predictions": len(prediction_results),
-                "average_confidence": average_confidence,
-                "predictions": predictions,
-                "backtest_results": backtest_results,
-            },
-            "backtest_results": backtest_results
-            if backtest_results is not None
-            else None,
-            "result": backtest_results if backtest_results is not None else None,
-            "optimization_info": optimization_info,
-        }
+        task_detail = build_task_detail_dto(
+            task,
+            config=config,
+            stock_codes=stock_codes if isinstance(stock_codes, list) else [],
+            model_id=model_id,
+            predictions=predictions,
+            average_confidence=average_confidence,
+            backtest_results=backtest_results,
+            optimization_info=optimization_info,
+        )
 
-        # 添加调试日志
         if backtest_results is not None:
             logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}")
             if isinstance(backtest_results, dict):
                 logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20]}")
 
-        return StandardResponse(success=True, message="任务详情获取成功", data=task_detail)
+        return StandardResponse(
+            success=True,
+            message="任务详情获取成功",
+            data=task_detail.model_dump(),
+        )
 
     except HTTPException:
         raise
@@ -995,14 +939,13 @@ async def stop_task(task_id: str):
             task_id=task_id, status=TaskStatus.CANCELLED
         )
 
-        task_data = {
-            "task_id": task.task_id,
-            "task_name": task.task_name,
-            "status": task.status,
-            "progress": task.progress,
-        }
+        task_data = build_task_mutation_dto(task)
 
-        return StandardResponse(success=True, message="任务已停止", data=task_data)
+        return StandardResponse(
+            success=True,
+            message="任务已停止",
+            data=task_data.model_dump(),
+        )
 
     except HTTPException:
         raise
@@ -1053,14 +996,13 @@ async def retry_task(task_id: str):
                 status_code=500, detail=f"重新提交任务失败: {str(submit_error)}"
             )
 
-        task_data = {
-            "task_id": task.task_id,
-            "task_name": task.task_name,
-            "status": task.status,
-            "progress": task.progress,
-        }
+        task_data = build_task_mutation_dto(task)
 
-        return StandardResponse(success=True, message="任务已重新创建", data=task_data)
+        return StandardResponse(
+            success=True,
+            message="任务已重新创建",
+            data=task_data.model_dump(),
+        )
 
     except HTTPException:
         raise

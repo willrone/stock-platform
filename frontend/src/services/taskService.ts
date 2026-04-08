@@ -9,59 +9,9 @@
  */
 
 import { apiRequest } from './api';
-import { Task } from '../stores/useTaskStore';
+import type { CreateTaskRequest, PredictionResult, Task, TaskListResponse } from '../types/task';
 
-// 任务创建请求
-export interface CreateTaskRequest {
-  task_name: string;
-  task_type?: 'prediction' | 'backtest';
-  stock_codes: string[];
-  model_id?: string;
-  prediction_config?: {
-    horizon?: 'intraday' | 'short_term' | 'medium_term';
-    confidence_level?: number;
-    risk_assessment?: boolean;
-  };
-  backtest_config?: {
-    strategy_name?: string;
-    start_date: string;
-    end_date: string;
-    initial_cash?: number;
-    commission_rate?: number;
-    slippage_rate?: number;
-    strategy_config?: Record<string, any>;
-    enable_performance_profiling?: boolean;
-  };
-}
-
-// 任务列表响应
-export interface TaskListResponse {
-  tasks: Task[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-// 预测结果
-export interface PredictionResult {
-  stock_code: string;
-  predicted_direction: number;
-  predicted_return: number;
-  confidence_score: number;
-  confidence_interval: {
-    lower: number;
-    upper: number;
-  };
-  risk_assessment: {
-    value_at_risk: number;
-    volatility: number;
-    max_drawdown: number;
-    sharpe_ratio: number;
-  };
-  technical_indicators?: {
-    [key: string]: number | string;
-  };
-}
+export type { CreateTaskRequest, PredictionResult, Task, TaskListResponse } from '../types/task';
 
 // 任务服务类
 export class TaskService {

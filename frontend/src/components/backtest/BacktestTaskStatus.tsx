@@ -57,6 +57,12 @@ export default function BacktestTaskStatus({
         icon: <Clock size={16} />,
         description: '任务已创建，等待执行',
       },
+      queued: {
+        color: 'default' as const,
+        text: '排队中',
+        icon: <Clock size={16} />,
+        description: '任务正在排队，等待执行资源',
+      },
       running: {
         color: 'primary' as const,
         text: '运行中',
@@ -74,6 +80,18 @@ export default function BacktestTaskStatus({
         text: '执行失败',
         icon: <AlertTriangle size={16} />,
         description: '回测执行失败，请检查配置或重新运行',
+      },
+      cancelled: {
+        color: 'warning' as const,
+        text: '已取消',
+        icon: <AlertTriangle size={16} />,
+        description: '任务已被手动取消',
+      },
+      paused: {
+        color: 'warning' as const,
+        text: '已暂停',
+        icon: <Pause size={16} />,
+        description: '任务当前处于暂停状态',
       },
     };
 

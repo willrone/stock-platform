@@ -679,9 +679,12 @@ export default function TaskDetailPage() {
   const getStatusChip = (status: Task['status']) => {
     const statusConfig = {
       created: { color: 'default' as const, text: '已创建' },
+      queued: { color: 'default' as const, text: '排队中' },
       running: { color: 'primary' as const, text: '运行中' },
       completed: { color: 'success' as const, text: '已完成' },
       failed: { color: 'error' as const, text: '失败' },
+      cancelled: { color: 'warning' as const, text: '已取消' },
+      paused: { color: 'warning' as const, text: '已暂停' },
     };
 
     const config = statusConfig[status] || statusConfig.created;

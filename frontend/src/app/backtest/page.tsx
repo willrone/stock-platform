@@ -139,10 +139,12 @@ export default function BacktestPage() {
   const getStatusChip = (status: Task['status']) => {
     const statusConfig = {
       created: { label: '已创建', color: 'default' as const, icon: Clock },
+      queued: { label: '排队中', color: 'default' as const, icon: Clock },
       running: { label: '运行中', color: 'primary' as const, icon: Activity },
       completed: { label: '已完成', color: 'success' as const, icon: CheckCircle },
       failed: { label: '失败', color: 'error' as const, icon: XCircle },
       cancelled: { label: '已取消', color: 'warning' as const, icon: AlertTriangle },
+      paused: { label: '已暂停', color: 'warning' as const, icon: AlertTriangle },
     };
 
     const config = statusConfig[status] || statusConfig.created;
