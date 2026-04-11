@@ -208,8 +208,9 @@ class LightGBMAdapter(BaseModelAdapter):
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
-                "loss": "huber",  # 使用Huber损失，对异常值更鲁棒
-                "huber_delta": hyperparameters.get("huber_delta", 0.1),  # Huber损失的delta参数
+                # qlib.contrib.model.gbdt.LGBModel 仅支持 loss in {"mse", "binary"}
+                # 这里使用 mse；如需更鲁棒的损失，需走自定义 LightGBM 训练器而不是 Qlib 默认适配器。
+                "loss": "mse",
                 "learning_rate": hyperparameters.get("learning_rate", 0.1),
                 "num_leaves": hyperparameters.get("num_leaves", 31),
                 "max_depth": hyperparameters.get("max_depth", -1),
@@ -223,7 +224,7 @@ class LightGBMAdapter(BaseModelAdapter):
             },
         }
 
-        # 添加epoch数配置（LightGBM使用num_iterations或n_estimators）
+        # 训练轮数需要映射到 qlib LGBModel.__init__(num_boost_round=...)
         num_iterations = None
         if "num_iterations" in hyperparameters:
             num_iterations = hyperparameters["num_iterations"]
@@ -233,7 +234,7 @@ class LightGBMAdapter(BaseModelAdapter):
             num_iterations = hyperparameters["epochs"]
 
         if num_iterations:
-            config["kwargs"]["num_iterations"] = num_iterations
+            config["kwargs"]["num_boost_round"] = num_iterations
 
         return config
 

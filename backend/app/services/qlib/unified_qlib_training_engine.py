@@ -1095,6 +1095,8 @@ class UnifiedQlibTrainingEngine:
                 class CustomDataFrame(pd.DataFrame):
                     """自定义DataFrame，确保label和feature列返回正确的对象"""
 
+                    _metadata = ["_label_series_obj", "_feature_series_obj"]
+
                     def __init__(
                         self,
                         *args,
@@ -1103,8 +1105,8 @@ class UnifiedQlibTrainingEngine:
                         **kwargs,
                     ):
                         super().__init__(*args, **kwargs)
-                        self._label_series_obj = label_series_obj
-                        self._feature_series_obj = feature_series_obj
+                        object.__setattr__(self, "_label_series_obj", label_series_obj)
+                        object.__setattr__(self, "_feature_series_obj", feature_series_obj)
 
                     def __getitem__(self, key):
                         # 如果访问label列，返回我们的LabelSeries对象

@@ -119,6 +119,17 @@ class QlibDataAdapter:
         existing_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
         df_renamed = df.rename(columns=existing_mapping)
 
+        # 重命名后可能产生重复列（例如 RSI -> RSI14，而原始数据已存在 RSI14）。
+        # Pandas 在按列名取值时会返回 DataFrame 而不是 Series，后续 dtype/填充逻辑会报错。
+        if df_renamed.columns.duplicated().any():
+            duplicate_columns = df_renamed.columns[
+                df_renamed.columns.duplicated(keep=False)
+            ].tolist()
+            logger.warning(
+                f"列名标准化后发现重复列，保留最后一个: {duplicate_columns}"
+            )
+            df_renamed = df_renamed.loc[:, ~df_renamed.columns.duplicated(keep="last")]
+
         # 确保基础OHLCV列存在
         required_base_cols = ["$open", "$high", "$low", "$close", "$volume"]
         missing_base_cols = [
@@ -292,12 +303,8 @@ class QlibDataAdapter:
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
             "kwargs": {
-                "loss": "huber",
-                "huber_delta": (
-                    hyperparameters.get("huber_delta", 0.1)
-                    if hyperparameters
-                    else 0.1
-                ),
+                # qlib 默认 LGBModel 不支持 huber，仅支持 mse/binary
+                "loss": "mse",
                 "colsample_bytree": 0.8879,
                 "learning_rate": 0.0421,
                 "subsample": 0.8789,

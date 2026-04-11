@@ -235,6 +235,16 @@ async def get_qlib_status():
         # 获取缓存统计
         cache_stats = await provider.get_cache_stats()
 
+        # Alpha158Calculator 当前以 alpha_names / alpha_fields 暴露因子信息。
+        # 兼容旧字段 alpha_expressions，避免状态接口因属性名漂移而失败。
+        alpha_names = getattr(provider.alpha_calculator, "alpha_names", None)
+        if alpha_names is None:
+            alpha_expressions = getattr(provider.alpha_calculator, "alpha_expressions", None)
+            if isinstance(alpha_expressions, dict):
+                alpha_names = list(alpha_expressions.keys())
+            else:
+                alpha_names = []
+
         return StandardResponse(
             success=True,
             message="Qlib状态获取成功",
@@ -244,7 +254,7 @@ async def get_qlib_status():
                 "qlib_error": qlib_error,
                 "cache_stats": cache_stats,
                 "supported_models": ["lightgbm", "xgboost", "mlp", "linear"],
-                "alpha_factors_count": len(provider.alpha_calculator.alpha_expressions),
+                "alpha_factors_count": len(alpha_names),
             },
         )
 
@@ -259,7 +269,16 @@ async def list_alpha_factors():
     try:
         provider = get_qlib_provider()
 
-        factors = provider.alpha_calculator.alpha_expressions
+        alpha_calculator = provider.alpha_calculator
+        factors = getattr(alpha_calculator, "alpha_expressions", None)
+        if not isinstance(factors, dict):
+            alpha_names = getattr(alpha_calculator, "alpha_names", []) or []
+            alpha_fields = getattr(alpha_calculator, "alpha_fields", []) or []
+            factors = {
+                name: alpha_fields[idx] if idx < len(alpha_fields) else None
+                for idx, name in enumerate(alpha_names)
+            }
+
         factor_info = []
 
         for factor_name, expression in factors.items():
