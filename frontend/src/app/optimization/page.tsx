@@ -10,15 +10,24 @@
 
 'use client';
 
+import dynamic from 'next/dynamic';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
 import { OptimizationService, OptimizationTask } from '../../services/optimizationService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import CreateOptimizationTaskForm from '../../components/optimization/CreateOptimizationTaskForm';
-import OptimizationTaskList from '../../components/optimization/OptimizationTaskList';
-import OptimizationTaskDetail from '../../components/optimization/OptimizationTaskDetail';
+const CreateOptimizationTaskForm = dynamic(
+  () => import('../../components/optimization/CreateOptimizationTaskForm'),
+  { ssr: false }
+);
+const OptimizationTaskList = dynamic(() => import('../../components/optimization/OptimizationTaskList'), {
+  ssr: false,
+});
+const OptimizationTaskDetail = dynamic(
+  () => import('../../components/optimization/OptimizationTaskDetail'),
+  { ssr: false }
+);
 
-export default function OptimizationPage() {
+function OptimizationPage() {
   const [activeTab, setActiveTab] = useState('list');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<OptimizationTask[]>([]);
@@ -108,3 +117,5 @@ export default function OptimizationPage() {
     </Box>
   );
 }
+
+export default dynamic(() => Promise.resolve(OptimizationPage), { ssr: false });

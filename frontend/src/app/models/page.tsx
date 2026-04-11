@@ -6,6 +6,7 @@
 
 'use client';
 
+import dynamic from 'next/dynamic';
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -24,16 +25,28 @@ import { DataService } from '../../services/dataService';
 import { useDataStore } from '../../stores/useDataStore';
 import type { Model } from '../../types/model';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { TrainingReportModal } from '../../components/models/TrainingReportModal';
-import { ModelListTable } from '../../components/models/ModelListTable';
-import { LiveTrainingModal } from '../../components/models/LiveTrainingModal';
-import { CreateModelForm } from '../../components/models/CreateModelForm';
+const TrainingReportModal = dynamic(
+  () => import('../../components/models/TrainingReportModal').then(mod => mod.TrainingReportModal),
+  { ssr: false }
+);
+const ModelListTable = dynamic(
+  () => import('../../components/models/ModelListTable').then(mod => mod.ModelListTable),
+  { ssr: false }
+);
+const LiveTrainingModal = dynamic(
+  () => import('../../components/models/LiveTrainingModal').then(mod => mod.LiveTrainingModal),
+  { ssr: false }
+);
+const CreateModelForm = dynamic(
+  () => import('../../components/models/CreateModelForm').then(mod => mod.CreateModelForm),
+  { ssr: false }
+);
 import {
   getTrainingProgressWebSocket,
   cleanupTrainingProgressWebSocket,
 } from '../../services/TrainingProgressWebSocket';
 
-export default function ModelsPage() {
+function ModelsPage() {
   const { models, setModels } = useDataStore();
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -505,3 +518,5 @@ export default function ModelsPage() {
     </Box>
   );
 }
+
+export default dynamic(() => Promise.resolve(ModelsPage), { ssr: false });
