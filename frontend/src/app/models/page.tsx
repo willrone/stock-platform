@@ -58,6 +58,7 @@ function ModelsPage() {
   const [liveTrainingModelId, setLiveTrainingModelId] = useState<string | null>(null);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [stoppingTrainingModelId, setStoppingTrainingModelId] = useState<string | null>(null);
 
   // WebSocket连接状态
   const [, setWsConnected] = useState(false);
@@ -150,6 +151,9 @@ function ModelsPage() {
         delete updated[data.model_id];
         return updated;
       });
+      setStoppingTrainingModelId(current =>
+        current === data.model_id ? null : current
+      );
     } else if (data.type === 'model:training:failed') {
       // 训练失败，更新状态
       const updatedModels = models.map(
@@ -164,6 +168,25 @@ function ModelsPage() {
         delete updated[data.model_id];
         return updated;
       });
+      setStoppingTrainingModelId(current =>
+        current === data.model_id ? null : current
+      );
+    } else if (data.type === 'model:training:cancelled') {
+      const updatedModels = models.map(
+        (model: Model): Model =>
+          model.model_id === data.model_id
+            ? { ...model, status: 'cancelled', training_stage: 'cancelled' }
+            : model
+      );
+      setModels(updatedModels);
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        delete updated[data.model_id];
+        return updated;
+      });
+      setStoppingTrainingModelId(current =>
+        current === data.model_id ? null : current
+      );
     }
   };
 
@@ -182,6 +205,8 @@ function ModelsPage() {
         return 'warning';
       case 'failed':
         return 'error';
+      case 'cancelled':
+        return 'default';
       default:
         return 'default';
     }
@@ -195,6 +220,7 @@ function ModelsPage() {
       deployed: '已部署',
       training: '训练中',
       failed: '失败',
+      cancelled: '已取消',
     };
     return statusMap[status] || status;
   };
@@ -211,6 +237,7 @@ function ModelsPage() {
       saving: '保存模型',
       completed: '训练完成',
       failed: '训练失败',
+      cancelled: '训练已取消',
       hyperparameter_tuning: '超参数调优',
     };
     return stageMap[stage] || stage;
@@ -232,6 +259,31 @@ function ModelsPage() {
   const showDeleteConfirm = (modelId: string) => {
     setDeletingModelId(modelId);
     setIsDeleteModalOpen(true);
+  };
+
+  const handleStopTraining = async (modelId: string) => {
+    setStoppingTrainingModelId(modelId);
+    try {
+      await DataService.cancelModelTraining(modelId);
+      setModels(
+        models.map(model =>
+          model.model_id === modelId
+            ? { ...model, status: 'cancelled', training_stage: 'cancelled' }
+            : model
+        )
+      );
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        delete updated[modelId];
+        return updated;
+      });
+      alert('停止训练请求已发送');
+    } catch (error: any) {
+      console.error('停止训练失败:', error);
+      alert(error?.message || '停止训练失败，请稍后重试');
+    } finally {
+      setStoppingTrainingModelId(current => (current === modelId ? null : current));
+    }
   };
 
   // 删除模型
@@ -510,6 +562,8 @@ function ModelsPage() {
       <LiveTrainingModal
         isOpen={isLiveTrainingOpen}
         onClose={() => setIsLiveTrainingOpen(false)}
+        onStopTraining={handleStopTraining}
+        stopping={stoppingTrainingModelId === liveTrainingModelId}
         modelId={liveTrainingModelId}
         models={models}
         trainingProgress={trainingProgress}

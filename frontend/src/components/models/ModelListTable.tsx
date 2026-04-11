@@ -193,12 +193,21 @@ export function ModelListTable({
                     </Button>
                   )}
                   <Tooltip
-                    title={model.status === 'training' ? '取消训练并删除该模型' : '删除模型'}
+                    title={
+                      model.status === 'training'
+                        ? '删除模型记录（不会停止后台训练）'
+                        : '删除模型'
+                    }
                   >
                     <span>
                       <IconButton
                         size="small"
                         color="error"
+                        aria-label={
+                          model.status === 'training'
+                            ? '删除模型记录（不会停止后台训练）'
+                            : '删除模型'
+                        }
                         onClick={() => onDeleteModel(model.model_id)}
                         disabled={deleting}
                       >

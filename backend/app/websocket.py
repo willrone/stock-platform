@@ -446,6 +446,19 @@ async def notify_model_training_failed(model_id: str, error: str):
     )
 
 
+async def notify_model_training_cancelled(model_id: str, message: str = "训练已取消"):
+    """通知模型训练取消"""
+    await manager.send_to_task_subscribers(
+        model_id,
+        {
+            "type": "model:training:cancelled",
+            "model_id": model_id,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
 # 导出主要组件
 __all__ = [
     "manager",
@@ -460,4 +473,5 @@ __all__ = [
     "notify_model_training_progress",
     "notify_model_training_completed",
     "notify_model_training_failed",
+    "notify_model_training_cancelled",
 ]

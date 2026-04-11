@@ -24,6 +24,8 @@ import type { Model } from '../../types/model';
 interface LiveTrainingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onStopTraining: (modelId: string) => void;
+  stopping: boolean;
   modelId: string | null;
   models: Model[];
   trainingProgress: Record<string, any>;
@@ -33,6 +35,8 @@ interface LiveTrainingModalProps {
 export function LiveTrainingModal({
   isOpen,
   onClose,
+  onStopTraining,
+  stopping,
   modelId,
   models,
   trainingProgress,
@@ -184,12 +188,10 @@ export function LiveTrainingModal({
           <Button
             color="error"
             variant="outlined"
-            onClick={() => {
-              // TODO: 实现停止训练功能
-              alert('停止训练功能开发中...');
-            }}
+            onClick={() => onStopTraining(modelId)}
+            disabled={stopping}
           >
-            停止训练
+            {stopping ? '停止中...' : '停止训练'}
           </Button>
         )}
       </DialogActions>

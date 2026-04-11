@@ -3,11 +3,12 @@
 """
 
 import asyncio
+import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from loguru import logger
@@ -26,6 +27,7 @@ from app.services.models.hyperparameter_tuning import (
 from app.services.models.lineage_tracker import lineage_tracker
 from app.services.models.model_lifecycle_manager import model_lifecycle_manager
 from app.websocket import (
+    notify_model_training_cancelled,
     notify_model_training_completed,
     notify_model_training_failed,
     notify_model_training_progress,
@@ -75,6 +77,40 @@ TRAINING_AVAILABLE = DEEP_TRAINING_AVAILABLE or ML_TRAINING_AVAILABLE
 _deep_training_service: Optional[DeepModelTrainingService] = None
 _ml_training_service: Optional[MLModelTrainingService] = None
 _model_storage: Optional[ModelStorage] = None
+
+
+class TrainingCancelledError(Exception):
+    """训练任务被用户取消。"""
+
+
+_active_training_jobs: Dict[str, Dict[str, object]] = {}
+_active_training_jobs_lock = threading.Lock()
+
+
+def _register_training_job(
+    model_id: str, future: Future, cancel_event: threading.Event
+) -> None:
+    with _active_training_jobs_lock:
+        _active_training_jobs[model_id] = {
+            "future": future,
+            "cancel_event": cancel_event,
+        }
+
+
+def _pop_training_job(model_id: str) -> Optional[Dict[str, object]]:
+    with _active_training_jobs_lock:
+        return _active_training_jobs.pop(model_id, None)
+
+
+def _get_training_job(model_id: str) -> Optional[Dict[str, object]]:
+    with _active_training_jobs_lock:
+        return _active_training_jobs.get(model_id)
+
+
+def _is_training_cancel_requested(model_id: str) -> bool:
+    training_job = _get_training_job(model_id)
+    cancel_event = training_job.get("cancel_event") if training_job else None
+    return bool(cancel_event and cancel_event.is_set())
 
 
 def get_deep_training_service() -> DeepModelTrainingService:
@@ -282,6 +318,9 @@ async def train_model_task(
                 message: str,
                 metrics: dict = None,
             ):
+                if _is_training_cancel_requested(model_id):
+                    raise TrainingCancelledError("训练已取消")
+
                 # 如果提供了主事件循环，在主循环中发送 WebSocket 通知
                 if main_loop:
                     asyncio.run_coroutine_threadsafe(
@@ -463,6 +502,8 @@ async def train_model_task(
                         trial_params.append(params)
 
                 for trial_id, params in enumerate(trial_params):
+                    if _is_training_cancel_requested(model_id):
+                        raise TrainingCancelledError("训练已取消")
                     try:
                         logger.info(
                             f"超参数试验 {trial_id + 1}/{len(trial_params)}: {params}"
@@ -549,6 +590,9 @@ async def train_model_task(
                 config=config,
                 progress_callback=progress_callback,
             )
+
+            if _is_training_cancel_requested(model_id):
+                raise TrainingCancelledError("训练已取消")
 
             # 生成评估报告
             await progress_callback(model_id, 95.0, "generating_report", "生成评估报告")
@@ -637,6 +681,21 @@ async def train_model_task(
                 )
             logger.info(f"统一Qlib模型训练完成: {model_id}")
 
+        except TrainingCancelledError as e:
+            logger.info(f"统一Qlib模型训练已取消: {model_id}")
+            model_info.status = "cancelled"
+            model_info.training_stage = "cancelled"
+            model_info.performance_metrics = {
+                "status": "cancelled",
+                "message": str(e),
+            }
+            session.commit()
+            if main_loop:
+                asyncio.run_coroutine_threadsafe(
+                    notify_model_training_cancelled(model_id, str(e)), main_loop
+                )
+            else:
+                await notify_model_training_cancelled(model_id, str(e))
         except Exception as e:
             logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
             model_info.status = "failed"
@@ -660,6 +719,7 @@ async def train_model_task(
         else:
             await notify_model_training_failed(model_id, str(e))
     finally:
+        _pop_training_job(model_id)
         session.close()
 
 
@@ -1106,6 +1166,59 @@ async def delete_model(model_id: str):
         session.close()
 
 
+@router.post("/{model_id}/cancel-training", response_model=StandardResponse)
+async def cancel_model_training(model_id: str):
+    """取消模型训练。"""
+    session = SessionLocal()
+    try:
+        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        if not model:
+            raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
+
+        training_job = _get_training_job(model_id)
+        if model.status != "training" and not training_job:
+            raise HTTPException(status_code=400, detail="当前模型没有进行中的训练任务")
+
+        cancel_requested = False
+        if training_job:
+            cancel_event = training_job.get("cancel_event")
+            if cancel_event:
+                cancel_event.set()
+                cancel_requested = True
+
+            future = training_job.get("future")
+            if future and future.cancel():
+                logger.info(f"模型训练任务已在启动前取消: {model_id}")
+
+        model.status = "cancelled"
+        model.training_stage = "cancelled"
+        model.performance_metrics = {
+            "status": "cancelled",
+            "message": "训练已取消",
+        }
+        session.commit()
+
+        await notify_model_training_cancelled(model_id, "训练已取消")
+
+        return StandardResponse(
+            success=True,
+            message="已发送取消训练请求",
+            data={
+                "model_id": model_id,
+                "status": "cancelled",
+                "cancel_requested": bool(cancel_requested or training_job),
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"取消模型训练失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"取消模型训练失败: {str(e)}")
+    finally:
+        session.close()
+
+
 @router.post("/train", response_model=StandardResponse)
 async def create_training_task(request: ModelTrainingRequest):
     """创建模型训练任务"""
@@ -1178,7 +1291,8 @@ async def create_training_task(request: ModelTrainingRequest):
         # 使用线程池执行器在后台执行训练任务
         # 这样训练任务中的同步阻塞操作不会阻塞主事件循环，前端可以立即得到响应
         executor = get_train_executor()
-        executor.submit(
+        cancel_event = threading.Event()
+        future = executor.submit(
             _run_train_model_task_sync,
             model_id=model_id,
             model_name=request.model_name,
@@ -1193,6 +1307,8 @@ async def create_training_task(request: ModelTrainingRequest):
             selected_features=request.selected_features,
             main_loop=main_loop,  # 传递主事件循环
         )
+        _register_training_job(model_id, future, cancel_event)
+        future.add_done_callback(lambda _: _pop_training_job(model_id))
 
         return StandardResponse(
             success=True,

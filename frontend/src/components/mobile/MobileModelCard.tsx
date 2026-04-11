@@ -215,10 +215,19 @@ export const MobileModelCard: React.FC<MobileModelCardProps> = ({
             </Button>
           )}
 
-          <Tooltip title={model.status === 'training' ? '取消训练并删除' : '删除模型'}>
+          <Tooltip
+            title={
+              model.status === 'training' ? '删除模型记录（不会停止后台训练）' : '删除模型'
+            }
+          >
             <span>
               <IconButton
                 size="medium"
+                aria-label={
+                  model.status === 'training'
+                    ? '删除模型记录（不会停止后台训练）'
+                    : '删除模型'
+                }
                 onClick={() => onDeleteModel(model.model_id)}
                 disabled={deleting}
                 sx={{ 

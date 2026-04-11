@@ -455,7 +455,7 @@ def handle_exception(func):
     return wrapper
 
 
-async def handle_async_exception(func):
+def handle_async_exception(func):
     """装饰器：异步函数统一异常处理"""
 
     async def wrapper(*args, **kwargs):

@@ -356,6 +356,17 @@ export class DataService {
   }
 
   /**
+   * 取消模型训练
+   */
+  static async cancelModelTraining(modelId: string): Promise<{
+    model_id: string;
+    status: string;
+    cancel_requested: boolean;
+  }> {
+    return apiRequest.post(`/models/${modelId}/cancel-training`);
+  }
+
+  /**
    * 获取模型训练报告
    */
   static async getTrainingReport(modelId: string): Promise<any> {

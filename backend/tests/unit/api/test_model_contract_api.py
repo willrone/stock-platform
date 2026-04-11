@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from concurrent.futures import Future
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -190,3 +191,47 @@ class TestModelAndTrainingContractAPI:
         assert payload["status"] == "completed"
         assert payload["progress_percentage"] == 42.5
         assert payload["stage"] == "training"
+
+    @patch("app.api.v1.models.notify_model_training_progress", new_callable=MagicMock)
+    @patch("app.api.v1.models.SessionLocal")
+    def test_cancel_training_contract_marks_model_cancelled(
+        self,
+        mock_session_local,
+        mock_notify_progress,
+        client,
+        model_record,
+    ):
+        """/models/{id}/cancel-training 应标记取消请求并回写模型状态。"""
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+        model_record.status = "training"
+        model_record.training_stage = "training"
+
+        mock_query = MagicMock()
+        mock_query.filter.return_value.first.return_value = model_record
+        mock_session.query.return_value = mock_query
+
+        pending_future = Future()
+
+        from app.api.v1 import models as models_module
+
+        models_module._active_training_jobs[model_record.model_id] = {
+            "future": pending_future,
+            "cancel_event": models_module.threading.Event(),
+        }
+
+        try:
+            response = client.post(f"/models/{model_record.model_id}/cancel-training")
+        finally:
+            models_module._active_training_jobs.clear()
+
+        assert response.status_code == 200
+        payload = response.json()["data"]
+        assert payload["model_id"] == model_record.model_id
+        assert payload["status"] == "cancelled"
+        assert payload["cancel_requested"] is True
+        assert model_record.status == "cancelled"
+        assert model_record.training_stage == "cancelled"
+        assert model_record.performance_metrics["status"] == "cancelled"
+        mock_session.commit.assert_called()
+        assert pending_future.cancelled() is True

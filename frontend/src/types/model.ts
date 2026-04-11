@@ -7,7 +7,14 @@
  * - backend/app/api/v1/training_progress.py
  */
 
-export type ModelStatus = 'active' | 'inactive' | 'training' | 'ready' | 'failed';
+export type ModelStatus =
+  | 'active'
+  | 'inactive'
+  | 'training'
+  | 'ready'
+  | 'failed'
+  | 'cancelled'
+  | 'deployed';
 
 export interface ModelPerformanceMetrics {
   accuracy?: number;
