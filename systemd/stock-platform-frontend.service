@@ -1,0 +1,21 @@
+[Unit]
+Description=Stock Platform Frontend
+After=network.target stock-platform-backend.service
+Wants=stock-platform-backend.service
+
+[Service]
+Type=simple
+User=willrone
+Group=willrone
+WorkingDirectory=/home/willrone/Projects/stock-platform/frontend
+EnvironmentFile=-/home/willrone/Projects/stock-platform/frontend/.env.local
+Environment=NODE_ENV=production
+Environment=PORT=13000
+ExecStart=/usr/local/bin/npm run start -- --hostname 0.0.0.0 --port 13000
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/willrone/Projects/stock-platform/runtime/logs/frontend.service.log
+StandardError=append:/home/willrone/Projects/stock-platform/runtime/logs/frontend.service.log
+
+[Install]
+WantedBy=multi-user.target

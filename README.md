@@ -69,61 +69,127 @@ stock-prediction-platform/
 ### 环境要求
 
 - **Python**: 3.9+
-- **Node.js**: 18+ (可选，仅前端需要)
+- **Node.js**: 18+
+- **tmux**: 用于本地开发编排
 - **Git**: 最新版本
 
-### 🎯 超简单启动（推荐）⭐
+### 🎯 推荐开发启动方式（当前默认）
+
+当前仓库优先采用“本地原生进程 + tmux 编排”的开发流，而不是把安装、杀端口、启动全部塞进一个万能脚本里。
+
+统一入口说明见：`STARTUP.md`
+
+默认开发端口：
+- **Backend**: `127.0.0.1:18082`
+- **Frontend**: `127.0.0.1:13000`
+- **Metrics**: `127.0.0.1:19090`
+
+推荐命令：
 
 ```bash
 # 1. 克隆项目
 git clone <repository-url>
 cd stock-prediction-platform
 
-# 2. 一键启动（自动安装依赖并启动服务）
-./start.sh
+# 2. 检查环境
+make doctor
 
-# 3. 停止服务
+# 3. 安装依赖（首次执行）
+make setup
+
+# 4. 启动开发环境（tmux 会话）
+make dev
+# 或 ./start.sh
+
+# 5. 查看状态
+./status.sh
+
+# 6. 停止开发环境
 ./stop.sh
 ```
 
-**就这么简单！** 脚本会自动：
-- ✅ 创建Python虚拟环境
-- ✅ 安装最小化依赖（快速启动）
-- ✅ 配置环境变量
-- ✅ 启动后端和前端服务
-- ✅ 使用国内镜像源加速下载
-
-### 🔧 启动选项
-
-```bash
-# 仅启动后端服务（如果没有Node.js）
-./start.sh backend-only
-
-# 查看帮助
-./start.sh help
-```
+说明：
+- `make dev` / `./start.sh` 会创建 tmux 会话 `stock-platform-dev`
+- backend / frontend / worker 会拆到独立 tmux window
+- 不会自动 kill 8000/3000 等其他项目端口
+- 如果目标端口被占用，脚本会直接报错并显示占用者
 
 ### 📱 访问应用
 
 启动成功后访问：
-- **前端界面**: http://localhost:3000
-- **API文档**: http://localhost:8000/api/v1/docs
-- **API管理**: http://localhost:8000/api/v1/redoc
+- **前端界面**: http://127.0.0.1:13000
+- **API文档**: http://127.0.0.1:18082/api/v1/docs
+- **API管理**: http://127.0.0.1:18082/api/v1/redoc
 
-### 🐳 Docker启动（完整功能）
-
-如果需要完整功能（包括机器学习模型），可以使用Docker：
+### 🧰 常用开发命令
 
 ```bash
-# 快速启动（最小化依赖）
-./scripts/quick-start.sh
+# 环境检查
+make doctor
 
-# 完整启动
-./scripts/start.sh
+# 单独准备后端 / 前端
+make setup-backend
+make setup-frontend
 
-# 开发模式
-./scripts/start.sh dev
+# 启动开发环境
+make dev
+
+# 单独启动服务（前台）
+make dev-backend
+make dev-frontend
+
+# 查看运行状态
+./status.sh
+
+# 查看日志
+./scripts/logs.sh backend
+./scripts/logs.sh frontend
+./scripts/logs.sh all
+
+# 停止开发环境
+make stop
 ```
+
+### 🏭 生产态 / 常驻运行（systemd）
+
+如果你要在这台机器上做本地常驻运行，而不是临时开发，当前推荐路径是 systemd：
+
+```bash
+# 1. 准备依赖
+make setup
+
+# 2. 构建前端生产产物
+make prod-build
+
+# 3. 安装 systemd unit
+sudo ./scripts/install-systemd.sh
+
+# 4. 启动服务
+./scripts/prod-up.sh
+
+# 5. 查看状态
+./scripts/prod-status.sh
+```
+
+停止服务：
+
+```bash
+./scripts/prod-down.sh
+```
+
+说明：
+- backend 使用 `backend/.env`
+- frontend 使用 `frontend/.env.local`
+- frontend 的 systemd 服务运行 `npm run start`，所以 `prod-up` 前要先 `prod-build`
+- 当前 worker 仍是占位 unit，任务生命周期主要仍由 backend 承担
+
+### 🐳 Docker 启动（仅保留历史兼容）
+
+仓库里仍保留一些历史 Docker/简单启动脚本，但它们已经 deprecated，只作为兼容层存在，不再是推荐的开发或维护路径。
+
+请优先使用：
+- 开发态：`make dev`
+- 生产态：`make prod-build` + `./scripts/install-systemd.sh` + `./scripts/prod-up.sh`
 
 ### 🛠️ 手动启动（高级用户）
 
@@ -133,13 +199,16 @@ cd stock-prediction-platform
 cd backend
 
 # 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
+python3 -m venv .venv
+source .venv/bin/activate
 
-# 安装依赖（选择一种）
-pip install -r requirements-minimal.txt  # 快速启动
-pip install -r requirements.txt          # 完整功能
+# 安装依赖
+pip install -r requirements.txt
+
+# 建议开发端口
+export HOST=127.0.0.1
+export PORT=18082
+export METRICS_PORT=19090
 
 # 运行后端服务
 python run.py
@@ -154,8 +223,19 @@ cd frontend
 npm install
 
 # 启动开发服务器
-npm run dev
+npm run dev -- --hostname 127.0.0.1 --port 13000
 ```
+
+### ⚠️ 历史脚本说明
+
+以下脚本仍在仓库中，但已经被降级为兼容层：
+- `scripts/simple-start.sh`
+- `scripts/stop-simple.sh`
+- `scripts/quick-start.sh`
+- `scripts/start.sh`
+- `scripts/stop.sh`
+
+它们会输出 deprecated 提示，并引导到新的开发态或生产态入口。
 
 ## 🔧 开发指南
 

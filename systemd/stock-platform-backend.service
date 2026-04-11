@@ -1,0 +1,19 @@
+[Unit]
+Description=Stock Platform Backend
+After=network.target
+
+[Service]
+Type=simple
+User=willrone
+Group=willrone
+WorkingDirectory=/home/willrone/Projects/stock-platform/backend
+EnvironmentFile=/home/willrone/Projects/stock-platform/backend/.env
+Environment=ENVIRONMENT=production
+ExecStart=/home/willrone/Projects/stock-platform/backend/.venv/bin/python run.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/willrone/Projects/stock-platform/runtime/logs/backend.service.log
+StandardError=append:/home/willrone/Projects/stock-platform/runtime/logs/backend.service.log
+
+[Install]
+WantedBy=multi-user.target

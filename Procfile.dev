@@ -1,0 +1,3 @@
+backend: bash scripts/dev-backend.sh
+frontend: bash scripts/dev-frontend.sh
+worker: bash scripts/dev-worker.sh

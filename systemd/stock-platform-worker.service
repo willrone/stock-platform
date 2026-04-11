@@ -1,0 +1,15 @@
+[Unit]
+Description=Stock Platform Worker (reserved)
+After=network.target stock-platform-backend.service
+Wants=stock-platform-backend.service
+
+[Service]
+Type=oneshot
+User=willrone
+Group=willrone
+WorkingDirectory=/home/willrone/Projects/stock-platform
+ExecStart=/usr/bin/bash -lc 'echo "Worker not split yet; backend currently owns task lifecycle."'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
