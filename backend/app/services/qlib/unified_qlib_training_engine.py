@@ -634,15 +634,25 @@ class UnifiedQlibTrainingEngine:
         class DataFrameDatasetAdapter:
             """将DataFrame适配为qlib DatasetH格式"""
 
-            def __init__(self, train_data: pd.DataFrame, val_data: pd.DataFrame = None, prediction_horizon: int = 5):
+            def __init__(
+                self,
+                train_data: pd.DataFrame,
+                val_data: pd.DataFrame = None,
+                prediction_horizon: int = 5,
+                primary_segment: str = "train",
+            ):
                 self.train_data = train_data.copy()
                 self.val_data = val_data.copy() if val_data is not None else None
+                self.primary_segment = primary_segment
                 # qlib模型期望有segments属性，包含train和valid
                 self.segments = {"train": self.train_data}
                 if self.val_data is not None:
                     self.segments["valid"] = self.val_data
-                # 为了兼容性，也设置data属性为训练集
-                self.data = self.train_data
+                # data / __len__ 应反映当前适配器代表的主 segment，避免把验证集伪装成训练集
+                if self.primary_segment == "valid" and self.val_data is not None:
+                    self.data = self.val_data
+                else:
+                    self.data = self.train_data
 
                 # 处理训练集和验证集的标签
                 def _create_label_for_data(data, data_name, horizon):
@@ -728,431 +738,378 @@ class UnifiedQlibTrainingEngine:
 
             def prepare(
                 self,
-                key: str,
+                key: Union[List[str], Tuple[str], str, slice, pd.Index],
                 col_set: Union[List[str], str] = None,
                 data_key: str = None,
+                **kwargs,
             ):
-                """实现qlib DatasetH的prepare方法"""
+                """实现接近 qlib DatasetH 的 prepare 接口。"""
                 if col_set is None:
                     col_set = ["feature", "label"]
 
-                # 处理col_set可能是字符串的情况（Qlib的predict传入"feature"字符串）
+                original_col_set = col_set
                 if isinstance(col_set, str):
                     col_set = [col_set]
 
-                # 根据key选择对应的数据集
-                if key == "train":
-                    data = self.train_data
-                elif key == "valid" and self.val_data is not None:
-                    data = self.val_data
-                else:
-                    data = self.train_data
+                def _prepare_single(segment_key: str):
+                    # 根据key选择对应的数据集
+                    if segment_key == "train":
+                        data = self.train_data
+                    elif segment_key == "valid" and self.val_data is not None:
+                        data = self.val_data
+                    else:
+                        data = self.train_data
 
-                # 定义LabelSeries类（需要在方法开始处定义，以便在整个方法中可用）
-                class LabelSeries:
-                    """包装Series，使values返回2D数组以满足qlib的要求"""
+                    class LabelSeries:
+                        """包装Series，使values返回2D数组以满足qlib的要求"""
 
-                    def __init__(self, values_1d, values_2d, index):
-                        self._series = pd.Series(values_1d, index=index)
-                        self._values_2d = values_2d
-                        self._index = index
+                        def __init__(self, values_1d, values_2d, index):
+                            self._series = pd.Series(values_1d, index=index)
+                            self._values_2d = values_2d
+                            self._index = index
 
-                    @property
-                    def values(self):
-                        # 返回2D数组，满足qlib的检查: ndim == 2 and shape[1] == 1
-                        return self._values_2d
+                        @property
+                        def values(self):
+                            return self._values_2d
 
-                    @property
-                    def index(self):
-                        return self._index
+                        @property
+                        def index(self):
+                            return self._index
 
-                    def __len__(self):
-                        return len(self._series)
+                        def __len__(self):
+                            return len(self._series)
 
-                    def __getitem__(self, key):
-                        return self._series[key]
+                        def __getitem__(self, key):
+                            return self._series[key]
 
-                    def __iter__(self):
-                        return iter(self._series)
+                        def __iter__(self):
+                            return iter(self._series)
 
-                    def __array__(self, dtype=None):
-                        # 支持numpy数组转换
-                        return (
-                            self._values_2d
-                            if dtype is None
-                            else self._values_2d.astype(dtype)
-                        )
-
-                    def __getattr__(self, name):
-                        # 转发其他所有属性到内部的Series
-                        return getattr(self._series, name)
-
-                # 分离特征和标签
-                # 如果配置中指定了selected_features，则只使用选定的特征
-                all_feature_cols = [col for col in data.columns if col != "label"]
-                if config and config.selected_features:
-                    # 特征名称映射：将前端友好的名称转换为Qlib实际使用的名称
-                    def map_feature_name(feature_name: str) -> List[str]:
-                        """将前端特征名称映射到可能的Qlib特征名称"""
-                        # 基础特征映射（添加$前缀）
-                        base_mapping = {
-                            "open": ["$open", "open"],
-                            "high": ["$high", "high"],
-                            "low": ["$low", "low"],
-                            "close": ["$close", "close"],
-                            "volume": ["$volume", "volume"],
-                        }
-
-                        # 技术指标映射（大小写和下划线变体）
-                        indicator_mapping = {
-                            "ma_5": ["MA5", "ma_5", "MA_5"],
-                            "ma_10": ["MA10", "ma_10", "MA_10"],
-                            "ma_20": ["MA20", "ma_20", "MA_20"],
-                            "ma_60": ["MA60", "ma_60", "MA_60"],
-                            "sma": ["SMA", "sma"],
-                            "ema": ["EMA", "EMA20", "ema"],
-                            "rsi": ["RSI14", "RSI", "rsi", "rsi_14"],
-                            "macd": ["MACD", "macd"],
-                            "macd_signal": ["MACD_SIGNAL", "macd_signal", "MACD_SIGN"],
-                            "macd_histogram": [
-                                "MACD_HIST",
-                                "MACD_HISTOGRAM",
-                                "macd_histogram",
-                            ],
-                            "bb_upper": [
-                                "BOLL_UPPER",
-                                "BB_UPPER",
-                                "bb_upper",
-                                "bollinger_upper",
-                            ],
-                            "bb_middle": [
-                                "BOLL_MIDDLE",
-                                "BB_MIDDLE",
-                                "bb_middle",
-                                "bollinger_middle",
-                            ],
-                            "bb_lower": [
-                                "BOLL_LOWER",
-                                "BB_LOWER",
-                                "bb_lower",
-                                "bollinger_lower",
-                            ],
-                            "atr": ["ATR14", "ATR", "atr", "atr_14"],
-                            "vwap": ["VWAP", "vwap"],
-                            "obv": ["OBV", "obv"],
-                            "stoch": ["STOCH_K", "STOCH", "stoch", "stoch_k"],
-                            "kdj_k": ["KDJ_K", "kdj_k"],
-                            "kdj_d": ["KDJ_D", "kdj_d"],
-                            "kdj_j": ["KDJ_J", "kdj_j"],
-                            "williams_r": ["WILLIAMS_R", "williams_r", "WILLIAMS"],
-                            "cci": ["CCI20", "CCI", "cci"],
-                            "momentum": ["MOMENTUM", "momentum"],
-                            "roc": ["ROC", "roc"],
-                            "sar": ["SAR", "sar"],
-                            "adx": ["ADX", "adx"],
-                            "volume_rsi": ["VOLUME_RSI", "volume_rsi"],
-                        }
-
-                        # 基本面特征映射
-                        fundamental_mapping = {
-                            "price_change": ["RET1", "price_change", "PRICE_CHANGE"],
-                            "price_change_5d": [
-                                "RET5",
-                                "price_change_5d",
-                                "PRICE_CHANGE_5D",
-                            ],
-                            "price_change_20d": [
-                                "RET20",
-                                "price_change_20d",
-                                "PRICE_CHANGE_20D",
-                            ],
-                            "volume_change": [
-                                "VOLUME_RET1",
-                                "volume_change",
-                                "VOLUME_CHANGE",
-                            ],
-                            "volume_ma_ratio": ["VOLUME_MA_RATIO", "volume_ma_ratio"],
-                            "volatility_5d": [
-                                "VOLATILITY5",
-                                "volatility_5d",
-                                "VOLATILITY_5D",
-                            ],
-                            "volatility_20d": [
-                                "VOLATILITY20",
-                                "volatility_20d",
-                                "VOLATILITY_20D",
-                            ],
-                            "price_position": ["PRICE_POSITION", "price_position"],
-                        }
-
-                        # 合并所有映射
-                        all_mapping = {
-                            **base_mapping,
-                            **indicator_mapping,
-                            **fundamental_mapping,
-                        }
-
-                        # 查找映射
-                        if feature_name in all_mapping:
-                            return all_mapping[feature_name]
-                        # 如果特征名本身已经匹配，直接返回
-                        return [feature_name]
-
-                    # 将前端特征名称映射到实际特征名称
-                    mapped_features = []
-                    for user_feature in config.selected_features:
-                        possible_names = map_feature_name(user_feature)
-                        # 查找第一个在数据中存在的特征名称
-                        found = False
-                        for possible_name in possible_names:
-                            if possible_name in all_feature_cols:
-                                mapped_features.append(possible_name)
-                                found = True
-                                break
-                        if not found:
-                            logger.debug(
-                                f"特征 '{user_feature}' 未找到匹配项，尝试的变体: {possible_names}"
+                        def __array__(self, dtype=None):
+                            return (
+                                self._values_2d
+                                if dtype is None
+                                else self._values_2d.astype(dtype)
                             )
 
-                    # 只选择用户指定的特征，且这些特征在数据中存在
-                    feature_cols = [
-                        col for col in mapped_features if col in all_feature_cols
-                    ]
-                    if len(feature_cols) == 0:
-                        logger.warning(
-                            f"用户指定的特征都不存在，使用所有可用特征。指定特征: {config.selected_features}, 可用特征: {all_feature_cols[:20]}"
-                        )
-                        feature_cols = all_feature_cols
-                    else:
-                        missing_features = [
-                            col
-                            for col in config.selected_features
-                            if col
-                            not in [f for f in mapped_features if f in all_feature_cols]
+                        def __getattr__(self, name):
+                            return getattr(self._series, name)
+
+                    # 分离特征和标签
+                    all_feature_cols = [col for col in data.columns if col != "label"]
+                    if config and config.selected_features:
+                        def map_feature_name(feature_name: str) -> List[str]:
+                            """将前端特征名称映射到可能的Qlib特征名称"""
+                            base_mapping = {
+                                "open": ["$open", "open"],
+                                "high": ["$high", "high"],
+                                "low": ["$low", "low"],
+                                "close": ["$close", "close"],
+                                "volume": ["$volume", "volume"],
+                            }
+
+                            indicator_mapping = {
+                                "ma_5": ["MA5", "ma_5", "MA_5"],
+                                "ma_10": ["MA10", "ma_10", "MA_10"],
+                                "ma_20": ["MA20", "ma_20", "MA_20"],
+                                "ma_60": ["MA60", "ma_60", "MA_60"],
+                                "sma": ["SMA", "sma"],
+                                "ema": ["EMA", "EMA20", "ema"],
+                                "rsi": ["RSI14", "RSI", "rsi", "rsi_14"],
+                                "macd": ["MACD", "macd"],
+                                "macd_signal": ["MACD_SIGNAL", "macd_signal", "MACD_SIGN"],
+                                "macd_histogram": [
+                                    "MACD_HIST",
+                                    "MACD_HISTOGRAM",
+                                    "macd_histogram",
+                                ],
+                                "bb_upper": [
+                                    "BOLL_UPPER",
+                                    "BB_UPPER",
+                                    "bb_upper",
+                                    "bollinger_upper",
+                                ],
+                                "bb_middle": [
+                                    "BOLL_MIDDLE",
+                                    "BB_MIDDLE",
+                                    "bb_middle",
+                                    "bollinger_middle",
+                                ],
+                                "bb_lower": [
+                                    "BOLL_LOWER",
+                                    "BB_LOWER",
+                                    "bb_lower",
+                                    "bollinger_lower",
+                                ],
+                                "atr": ["ATR14", "ATR", "atr", "atr_14"],
+                                "vwap": ["VWAP", "vwap"],
+                                "obv": ["OBV", "obv"],
+                                "stoch": ["STOCH_K", "STOCH", "stoch", "stoch_k"],
+                                "kdj_k": ["KDJ_K", "kdj_k"],
+                                "kdj_d": ["KDJ_D", "kdj_d"],
+                                "kdj_j": ["KDJ_J", "kdj_j"],
+                                "williams_r": ["WILLIAMS_R", "williams_r", "WILLIAMS"],
+                                "cci": ["CCI20", "CCI", "cci"],
+                                "momentum": ["MOMENTUM", "momentum"],
+                                "roc": ["ROC", "roc"],
+                                "sar": ["SAR", "sar"],
+                                "adx": ["ADX", "adx"],
+                                "volume_rsi": ["VOLUME_RSI", "volume_rsi"],
+                            }
+
+                            fundamental_mapping = {
+                                "price_change": ["RET1", "price_change", "PRICE_CHANGE"],
+                                "price_change_5d": [
+                                    "RET5",
+                                    "price_change_5d",
+                                    "PRICE_CHANGE_5D",
+                                ],
+                                "price_change_20d": [
+                                    "RET20",
+                                    "price_change_20d",
+                                    "PRICE_CHANGE_20D",
+                                ],
+                                "volume_change": [
+                                    "VOLUME_RET1",
+                                    "volume_change",
+                                    "VOLUME_CHANGE",
+                                ],
+                                "volume_ma_ratio": ["VOLUME_MA_RATIO", "volume_ma_ratio"],
+                                "volatility_5d": [
+                                    "VOLATILITY5",
+                                    "volatility_5d",
+                                    "VOLATILITY_5D",
+                                ],
+                                "volatility_20d": [
+                                    "VOLATILITY20",
+                                    "volatility_20d",
+                                    "VOLATILITY_20D",
+                                ],
+                                "price_position": ["PRICE_POSITION", "price_position"],
+                            }
+
+                            all_mapping = {
+                                **base_mapping,
+                                **indicator_mapping,
+                                **fundamental_mapping,
+                            }
+
+                            if feature_name in all_mapping:
+                                return all_mapping[feature_name]
+                            return [feature_name]
+
+                        mapped_features = []
+                        for user_feature in config.selected_features:
+                            possible_names = map_feature_name(user_feature)
+                            found = False
+                            for possible_name in possible_names:
+                                if possible_name in all_feature_cols:
+                                    mapped_features.append(possible_name)
+                                    found = True
+                                    break
+                            if not found:
+                                logger.debug(
+                                    f"特征 '{user_feature}' 未找到匹配项，尝试的变体: {possible_names}"
+                                )
+
+                        feature_cols = [
+                            col for col in mapped_features if col in all_feature_cols
                         ]
-                        if missing_features:
-                            logger.warning(f"以下特征不存在，将被忽略: {missing_features[:10]}")
-                        logger.info(
-                            f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}"
-                        )
-                else:
-                    feature_cols = all_feature_cols
-
-                # 创建一个包装类，使Series的values返回2D数组
-                class FeatureSeries:
-                    """包装Series，使values返回2D数组"""
-
-                    def __init__(self, feature_array_2d, index):
-                        self._feature_array_2d = feature_array_2d
-                        self._index = index
-
-                    @property
-                    def values(self):
-                        # 返回2D数组，满足LightGBM的要求
-                        return self._feature_array_2d
-
-                    @property
-                    def index(self):
-                        return self._index
-
-                    def __len__(self):
-                        return len(self._feature_array_2d)
-
-                    def __getitem__(self, key):
-                        # 直接返回数组的对应行
-                        if isinstance(key, (int, np.integer)):
-                            return self._feature_array_2d[key]
-                        elif isinstance(key, slice):
-                            return self._feature_array_2d[key]
+                        if len(feature_cols) == 0:
+                            logger.warning(
+                                f"用户指定的特征都不存在，使用所有可用特征。指定特征: {config.selected_features}, 可用特征: {all_feature_cols[:20]}"
+                            )
+                            feature_cols = all_feature_cols
                         else:
-                            # 如果是索引标签，需要查找位置
-                            if hasattr(self._index, "get_loc"):
-                                loc = self._index.get_loc(key)
-                                return self._feature_array_2d[loc]
-                            return self._feature_array_2d[key]
-
-                    def __iter__(self):
-                        # 迭代返回每一行
-                        return iter(self._feature_array_2d)
-
-                    def __array__(self, dtype=None):
-                        return (
-                            self._feature_array_2d
-                            if dtype is None
-                            else self._feature_array_2d.astype(dtype)
-                        )
-
-                    def __getattr__(self, name):
-                        # 对于其他属性，尝试从数组获取
-                        if hasattr(self._feature_array_2d, name):
-                            return getattr(self._feature_array_2d, name)
-                        raise AttributeError(
-                            f"'{type(self).__name__}' object has no attribute '{name}'"
-                        )
-
-                # 先创建空的DataFrame，然后使用CustomDataFrame包装
-                result_base = pd.DataFrame(index=data.index)
-                feature_obj_final = None
-                label_obj_final = None
-
-                if "feature" in col_set:
-                    # qlib期望feature是一个Series，但values属性返回2D数组
-                    # LightGBM需要2D数组 shape (n_samples, n_features)
-                    if len(feature_cols) > 0:
-                        # 直接获取特征数据为2D数组
-                        feature_array = data[
-                            feature_cols
-                        ].values  # shape: (n_samples, n_features)
-                        feature_obj_final = FeatureSeries(feature_array, data.index)
-                        # 不直接赋值，而是使用占位符，在CustomDataFrame中处理
-                        result_base["feature"] = pd.Series(
-                            [None] * len(data.index), index=data.index
-                        )
+                            missing_features = [
+                                col
+                                for col in config.selected_features
+                                if col
+                                not in [f for f in mapped_features if f in all_feature_cols]
+                            ]
+                            if missing_features:
+                                logger.warning(f"以下特征不存在，将被忽略: {missing_features[:10]}")
+                            logger.info(
+                                f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}"
+                            )
                     else:
-                        # 空特征
-                        empty_array = np.zeros((len(data), 0))
-                        feature_obj_final = FeatureSeries(empty_array, data.index)
-                        result_base["feature"] = pd.Series(
-                            [None] * len(data.index), index=data.index
-                        )
+                        feature_cols = all_feature_cols
 
-                if "label" in col_set:
-                    if "label" in data.columns:
-                        label_series = data["label"]
-                        # 获取原始values
-                        label_values = (
-                            label_series.values
-                            if isinstance(label_series, pd.Series)
-                            else np.array(label_series)
-                        )
+                    class FeatureSeries:
+                        """包装Series，使values返回2D数组"""
 
-                        # qlib的gbdt期望: y.values.ndim == 2 and y.values.shape[1] == 1
-                        # 但pandas Series的values通常是1D的
-                        # 我们需要创建一个继承自Series的类，重写values属性
-                        if label_values.ndim == 1:
-                            # 1D -> 2D: (n,) -> (n, 1)
-                            label_values_2d = label_values.reshape(-1, 1)
-                            label_values_1d = label_values
-                        elif label_values.ndim == 2:
-                            if label_values.shape[1] == 1:
-                                label_values_2d = label_values
-                                label_values_1d = label_values.flatten()
+                        def __init__(self, feature_array_2d, index):
+                            self._feature_array_2d = feature_array_2d
+                            self._index = index
+
+                        @property
+                        def values(self):
+                            return self._feature_array_2d
+
+                        @property
+                        def index(self):
+                            return self._index
+
+                        def __len__(self):
+                            return len(self._feature_array_2d)
+
+                        def __getitem__(self, key):
+                            if isinstance(key, (int, np.integer)):
+                                return self._feature_array_2d[key]
+                            elif isinstance(key, slice):
+                                return self._feature_array_2d[key]
                             else:
-                                # 多列，取第一列
-                                label_values_2d = label_values[:, 0:1]
-                                label_values_1d = label_values[:, 0]
-                        else:
-                            # 其他维度，尝试flatten
-                            label_values_flat = np.array(label_values).flatten()
-                            label_values_2d = label_values_flat.reshape(-1, 1)
-                            label_values_1d = label_values_flat
+                                if hasattr(self._index, "get_loc"):
+                                    loc = self._index.get_loc(key)
+                                    return self._feature_array_2d[loc]
+                                return self._feature_array_2d[key]
 
-                        # 使用在方法开始处定义的LabelSeries类
-                        label_obj = LabelSeries(
-                            label_values_1d,
-                            label_values_2d,
-                            label_series.index
-                            if isinstance(label_series, pd.Series)
-                            else data.index,
+                        def __iter__(self):
+                            return iter(self._feature_array_2d)
+
+                        def __array__(self, dtype=None):
+                            return (
+                                self._feature_array_2d
+                                if dtype is None
+                                else self._feature_array_2d.astype(dtype)
+                            )
+
+                        def __getattr__(self, name):
+                            if hasattr(self._feature_array_2d, name):
+                                return getattr(self._feature_array_2d, name)
+                            raise AttributeError(
+                                f"'{type(self).__name__}' object has no attribute '{name}'"
+                            )
+
+                    result_base = pd.DataFrame(index=data.index)
+                    feature_obj_final = None
+                    label_obj_final = None
+
+                    if "feature" in col_set:
+                        if len(feature_cols) > 0:
+                            feature_array = data[feature_cols].values
+                            feature_obj_final = FeatureSeries(feature_array, data.index)
+                            result_base["feature"] = pd.Series(
+                                [None] * len(data.index), index=data.index
+                            )
+                        else:
+                            empty_array = np.zeros((len(data), 0))
+                            feature_obj_final = FeatureSeries(empty_array, data.index)
+                            result_base["feature"] = pd.Series(
+                                [None] * len(data.index), index=data.index
+                            )
+
+                    if "label" in col_set:
+                        if "label" in data.columns:
+                            label_series = data["label"]
+                            label_values = (
+                                label_series.values
+                                if isinstance(label_series, pd.Series)
+                                else np.array(label_series)
+                            )
+                            if label_values.ndim == 1:
+                                label_values_2d = label_values.reshape(-1, 1)
+                                label_values_1d = label_values
+                            elif label_values.ndim == 2:
+                                if label_values.shape[1] == 1:
+                                    label_values_2d = label_values
+                                    label_values_1d = label_values.flatten()
+                                else:
+                                    label_values_2d = label_values[:, 0:1]
+                                    label_values_1d = label_values[:, 0]
+                            else:
+                                label_values_flat = np.array(label_values).flatten()
+                                label_values_2d = label_values_flat.reshape(-1, 1)
+                                label_values_1d = label_values_flat
+
+                            label_obj = LabelSeries(
+                                label_values_1d,
+                                label_values_2d,
+                                label_series.index
+                                if isinstance(label_series, pd.Series)
+                                else data.index,
+                            )
+                        else:
+                            default_values_1d = np.zeros(len(data))
+                            default_values_2d = default_values_1d.reshape(-1, 1)
+                            label_obj = LabelSeries(
+                                default_values_1d, default_values_2d, data.index
+                            )
+
+                        label_obj_final = label_obj
+                        result_base["label"] = pd.Series(
+                            [None] * len(data.index), index=data.index
                         )
                     else:
-                        # 创建默认标签
                         default_values_1d = np.zeros(len(data))
                         default_values_2d = default_values_1d.reshape(-1, 1)
-
-                        label_obj = LabelSeries(
+                        label_obj_final = LabelSeries(
                             default_values_1d, default_values_2d, data.index
                         )
+                        result_base["label"] = pd.Series(
+                            [None] * len(data.index), index=data.index
+                        )
 
-                    # 保存label对象，不直接赋值给DataFrame
-                    label_obj_final = label_obj
-                    result_base["label"] = pd.Series(
-                        [None] * len(data.index), index=data.index
-                    )
-                else:
-                    # 创建默认标签
-                    default_values_1d = np.zeros(len(data))
-                    default_values_2d = default_values_1d.reshape(-1, 1)
-                    label_obj_final = LabelSeries(
-                        default_values_1d, default_values_2d, data.index
-                    )
-                    result_base["label"] = pd.Series(
-                        [None] * len(data.index), index=data.index
-                    )
+                    if "label" not in col_set:
+                        default_values_1d = np.zeros(len(data))
+                        default_values_2d = default_values_1d.reshape(-1, 1)
+                        label_obj_final = LabelSeries(
+                            default_values_1d, default_values_2d, data.index
+                        )
+                        result_base["label"] = pd.Series(
+                            [None] * len(data.index), index=data.index
+                        )
 
-                if "label" not in col_set:
-                    # 如果没有请求label，创建默认的
-                    default_values_1d = np.zeros(len(data))
-                    default_values_2d = default_values_1d.reshape(-1, 1)
-                    label_obj_final = LabelSeries(
-                        default_values_1d, default_values_2d, data.index
-                    )
-                    result_base["label"] = pd.Series(
-                        [None] * len(data.index), index=data.index
-                    )
+                    class CustomDataFrame(pd.DataFrame):
+                        """自定义DataFrame，确保label和feature列返回正确的对象"""
 
-                # 创建一个自定义的DataFrame类，重写__getitem__以返回自定义Series对象
-                class CustomDataFrame(pd.DataFrame):
-                    """自定义DataFrame，确保label和feature列返回正确的对象"""
+                        _metadata = ["_label_series_obj", "_feature_series_obj"]
 
-                    _metadata = ["_label_series_obj", "_feature_series_obj"]
+                        def __init__(
+                            self,
+                            *args,
+                            label_series_obj=None,
+                            feature_series_obj=None,
+                            **kwargs,
+                        ):
+                            super().__init__(*args, **kwargs)
+                            object.__setattr__(self, "_label_series_obj", label_series_obj)
+                            object.__setattr__(self, "_feature_series_obj", feature_series_obj)
 
-                    def __init__(
-                        self,
-                        *args,
-                        label_series_obj=None,
-                        feature_series_obj=None,
-                        **kwargs,
-                    ):
-                        super().__init__(*args, **kwargs)
-                        object.__setattr__(self, "_label_series_obj", label_series_obj)
-                        object.__setattr__(self, "_feature_series_obj", feature_series_obj)
+                        def __getitem__(self, key):
+                            if key == "label" and self._label_series_obj is not None:
+                                return self._label_series_obj
+                            if key == "feature" and self._feature_series_obj is not None:
+                                return self._feature_series_obj
+                            return super().__getitem__(key)
 
-                    def __getitem__(self, key):
-                        # 如果访问label列，返回我们的LabelSeries对象
-                        if key == "label" and self._label_series_obj is not None:
-                            return self._label_series_obj
-                        # 如果访问feature列，返回我们的FeatureSeries对象
-                        if key == "feature" and self._feature_series_obj is not None:
-                            return self._feature_series_obj
-                        # 其他情况使用默认行为
-                        return super().__getitem__(key)
-
-                # 如果只请求feature，直接返回FeatureSeries（Qlib的predict期望这样）
-                if col_set == ["feature"] or (
-                    isinstance(col_set, str) and col_set == "feature"
-                ):
-                    if feature_obj_final is not None:
-                        return feature_obj_final
-                    else:
-                        # 如果没有特征，返回空的FeatureSeries
+                    if original_col_set == "feature" or col_set == ["feature"]:
+                        if feature_obj_final is not None:
+                            return feature_obj_final
                         empty_array = np.zeros((len(data), 0))
                         return FeatureSeries(empty_array, data.index)
 
-                # 如果只请求label，直接返回LabelSeries
-                if col_set == ["label"] or (
-                    isinstance(col_set, str) and col_set == "label"
-                ):
-                    if label_obj_final is not None:
-                        return label_obj_final
-                    else:
-                        # 如果没有标签，返回空的LabelSeries
+                    if original_col_set == "label" or col_set == ["label"]:
+                        if label_obj_final is not None:
+                            return label_obj_final
                         default_values_1d = np.zeros(len(data))
                         default_values_2d = default_values_1d.reshape(-1, 1)
                         return LabelSeries(
                             default_values_1d, default_values_2d, data.index
                         )
 
-                # 如果请求多个列（feature和label），返回CustomDataFrame
-                if label_obj_final is not None or feature_obj_final is not None:
-                    custom_result = CustomDataFrame(
-                        result_base,
-                        label_series_obj=label_obj_final,
-                        feature_series_obj=feature_obj_final,
-                    )
-                    return custom_result
-                else:
+                    if label_obj_final is not None or feature_obj_final is not None:
+                        return CustomDataFrame(
+                            result_base,
+                            label_series_obj=label_obj_final,
+                            feature_series_obj=feature_obj_final,
+                        )
                     return result_base
+
+                if isinstance(key, (list, tuple)):
+                    return [_prepare_single(segment_key) for segment_key in key]
+
+                return _prepare_single(key)
 
             def __getattr__(self, name):
                 # 转发其他属性到DataFrame
@@ -1161,11 +1118,20 @@ class UnifiedQlibTrainingEngine:
         # 创建包含训练集和验证集的适配器
         prediction_horizon = config.prediction_horizon if config else 5
         combined_adapter = DataFrameDatasetAdapter(
-            train_data, val_data if len(val_data) > 0 else None, prediction_horizon
+            train_data,
+            val_data if len(val_data) > 0 else None,
+            prediction_horizon,
+            primary_segment="train",
         )
-        # 为了兼容现有代码，也返回单独的适配器引用
+        validation_adapter = DataFrameDatasetAdapter(
+            train_data,
+            val_data if len(val_data) > 0 else None,
+            prediction_horizon,
+            primary_segment="valid",
+        )
+        # 训练仍使用包含 train/valid segments 的主适配器；验证适配器只修正对外暴露的主 segment 语义
         train_dataset = combined_adapter
-        val_dataset = combined_adapter  # 使用同一个适配器，因为它已经包含了验证集
+        val_dataset = validation_adapter
 
         logger.info(
             f"数据分割完成 - 训练集: {len(train_data)}, 验证集: {len(val_data)}, segments={list(combined_adapter.segments.keys())}"
@@ -1248,377 +1214,155 @@ class UnifiedQlibTrainingEngine:
                         fit_params = list(model.fit.__code__.co_varnames)
                         logger.info(f"模型fit方法参数(通过co_varnames): {fit_params}")
 
-            # 对于支持验证集的模型，传入验证数据
-            if hasattr(model, "fit") and (
-                "valid_set" in fit_params
-                or "valid_data" in fit_params
-                or "validation_set" in fit_params
+            # 创建训练进度回调（主要用于非官方模型或回退场景）
+            async def training_progress_callback(
+                epoch, train_loss, val_loss=None, val_metrics=None
             ):
-                # 创建训练进度回调
-                async def training_progress_callback(
-                    epoch, train_loss, val_loss=None, val_metrics=None
-                ):
-                    nonlocal early_stopped, stopped_epoch, best_epoch, early_stopping_reason
+                nonlocal early_stopped, stopped_epoch, best_epoch, early_stopping_reason
 
-                    if progress_callback and model_id:
-                        # 计算训练进度（50-80%）
-                        # 使用实际的迭代次数而不是early_stopping_patience
-                        num_iterations = (
-                            config.hyperparameters.get("num_iterations")
-                            or config.hyperparameters.get("n_estimators")
-                            or config.early_stopping_patience
-                        )
-                        progress = 55.0 + (epoch / num_iterations) * 25.0
-                        progress = min(progress, 80.0)
-
-                        metrics = {"epoch": epoch, "train_loss": train_loss}
-                        if val_loss is not None:
-                            metrics["val_loss"] = val_loss
-                        if val_metrics:
-                            metrics.update(val_metrics)
-
-                        # 记录训练历史
-                        history_entry = {
-                            "epoch": epoch,
-                            "train_loss": round(train_loss, 4),
-                            "val_loss": round(val_loss, 4) if val_loss else None,
-                            "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                            "val_accuracy": 0.0,
-                            "learning_rate": config.hyperparameters.get(
-                                "learning_rate", 0.001
-                            ),
-                        }
-
-                        # 添加验证指标
-                        if val_metrics:
-                            for key, value in val_metrics.items():
-                                history_entry[f"val_{key}"] = round(value, 4)
-                                # 如果val_metrics中有accuracy，更新val_accuracy
-                                if key == "accuracy":
-                                    history_entry["val_accuracy"] = round(value, 4)
-
-                        training_history.append(history_entry)
-
-                        # 早停检查
-                        if early_stopping_manager and val_loss is not None:
-                            early_stop_metrics = {
-                                "val_loss": val_loss,
-                                "train_loss": train_loss,
-                            }
-                            if val_metrics:
-                                for key, value in val_metrics.items():
-                                    early_stop_metrics[f"val_{key}"] = value
-
-                            # 更新早停策略
-                            stop_results = early_stopping_manager.update(
-                                early_stop_metrics, epoch
-                            )
-
-                            # 检查是否应该停止
-                            if early_stopping_manager.should_stop(stop_results):
-                                early_stopped = True
-                                stopped_epoch = epoch
-
-                                # 确定停止原因
-                                if stop_results.get("overfitting_detector", False):
-                                    early_stopping_reason = "过拟合检测"
-                                elif stop_results.get("adaptive_strategy", False):
-                                    early_stopping_reason = "自适应早停"
-                                elif stop_results.get("val_loss", False):
-                                    early_stopping_reason = "验证损失早停"
-                                else:
-                                    early_stopping_reason = "早停策略触发"
-
-                                # 获取最佳轮次
-                                for (
-                                    strategy_name,
-                                    strategy,
-                                ) in early_stopping_manager.strategies.items():
-                                    if strategy.state.best_epoch > 0:
-                                        best_epoch = max(
-                                            best_epoch, strategy.state.best_epoch
-                                        )
-
-                                logger.info(
-                                    f"早停触发: {early_stopping_reason}, 停止轮次: {stopped_epoch}, 最佳轮次: {best_epoch}"
-                                )
-
-                                # 通知前端早停信息
-                                metrics["early_stopped"] = True
-                                metrics["early_stopping_reason"] = early_stopping_reason
-                                metrics["best_epoch"] = best_epoch
-
-                                return True  # 返回True表示应该停止训练
-
-                        # 使用实际的迭代次数显示
-                        num_iterations = (
-                            config.hyperparameters.get("num_iterations")
-                            or config.hyperparameters.get("n_estimators")
-                            or config.early_stopping_patience
-                        )
-                        await progress_callback(
-                            model_id,
-                            progress,
-                            "training",
-                            f"训练轮次 {epoch}/{num_iterations}",
-                            metrics,
-                        )
-
-                    return False  # 继续训练
-
-                # 尝试传入进度回调（如果模型支持）
-                try:
-                    if hasattr(model, "set_progress_callback"):
-                        model.set_progress_callback(training_progress_callback)
-
-                    # 如果支持早停回调，设置早停检查
-                    if (
-                        hasattr(model, "set_early_stopping_callback")
-                        and early_stopping_manager
-                    ):
-                        model.set_early_stopping_callback(lambda: early_stopped)
-
-                    # Qlib的LGBModel.fit()只接受一个dataset参数，验证集通过dataset.segments["valid"]传递
-                    # 如果train_dataset和val_dataset是同一个对象（包含segments），直接使用
-                    # 否则，使用train_dataset（它应该已经包含了valid segment）
-                    dataset_to_fit = train_dataset
-                    if (
-                        hasattr(train_dataset, "segments")
-                        and "valid" in train_dataset.segments
-                    ):
-                        logger.info(
-                            f"使用包含验证集的dataset进行训练，segments: {list(train_dataset.segments.keys())}"
-                        )
-                    else:
-                        logger.warning(f"dataset不包含验证集segment，仅使用训练集")
-
-                    model.fit(dataset_to_fit)
-
-                    # 训练完成后，尝试从模型获取真实训练历史（LightGBM等模型可能支持）
-                    try:
-                        # 尝试多种方式获取训练历史
-                        evals_result = None
-
-                        # 方式1: 直接从booster获取
-                        if hasattr(model, "booster") and hasattr(
-                            model.booster, "evals_result_"
-                        ):
-                            evals_result = model.booster.evals_result_
-                        # 方式2: 从model对象获取
-                        elif hasattr(model, "evals_result_"):
-                            evals_result = model.evals_result_
-                        # 方式3: 从model对象获取booster属性
-                        elif hasattr(model, "model") and hasattr(
-                            model.model, "booster"
-                        ):
-                            if hasattr(model.model.booster, "evals_result_"):
-                                evals_result = model.model.booster.evals_result_
-
-                        if evals_result:
-                            # 提取训练历史
-                            for eval_name, eval_results in evals_result.items():
-                                if (
-                                    "l2" in eval_results
-                                    or "rmse" in eval_results
-                                    or "train" in eval_name.lower()
-                                ):
-                                    # 获取损失值
-                                    loss_key = None
-                                    if "l2" in eval_results:
-                                        loss_key = "l2"
-                                    elif "rmse" in eval_results:
-                                        loss_key = "rmse"
-                                    elif "train" in eval_results:
-                                        # 尝试获取train相关的指标
-                                        for key in eval_results.keys():
-                                            if (
-                                                "loss" in key.lower()
-                                                or "l2" in key.lower()
-                                                or "rmse" in key.lower()
-                                            ):
-                                                loss_key = key
-                                                break
-
-                                    if loss_key and loss_key in eval_results:
-                                        losses = eval_results[loss_key]
-
-                                        # 更新训练历史为真实值
-                                        training_history.clear()
-                                        for epoch, loss in enumerate(losses, 1):
-                                            training_history.append(
-                                                {
-                                                    "epoch": epoch,
-                                                    "train_loss": round(loss, 4),
-                                                    "val_loss": None,
-                                                    "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                                                    "val_accuracy": 0.0,
-                                                    "learning_rate": config.hyperparameters.get(
-                                                        "learning_rate", 0.001
-                                                    ),
-                                                }
-                                            )
-
-                                        logger.info(
-                                            f"从模型获取到真实训练历史: {len(losses)} 轮 (来源: {eval_name}, 指标: {loss_key})"
-                                        )
-                                        break
-                    except Exception as e:
-                        logger.debug(f"无法从模型获取训练历史: {e}", exc_info=True)
-
-                except TypeError:
-                    # 如果模型不支持回调，使用模拟训练过程（但模型仍然真实训练）
-                    await self._simulate_training_with_early_stopping(
-                        model,
-                        train_dataset,
-                        val_dataset,
-                        config,
-                        early_stopping_manager,
-                        training_progress_callback,
-                    )
-                    # Qlib的LGBModel.fit()只接受一个dataset参数，验证集通过dataset.segments["valid"]传递
-                    dataset_to_fit = train_dataset
-                    if (
-                        hasattr(train_dataset, "segments")
-                        and "valid" in train_dataset.segments
-                    ):
-                        logger.info(
-                            f"使用包含验证集的dataset进行训练，segments: {list(train_dataset.segments.keys())}"
-                        )
-                    else:
-                        logger.warning(f"dataset不包含验证集segment，仅使用训练集")
-
-                    model.fit(dataset_to_fit)
-
-                    # 训练完成后，尝试从模型获取真实训练历史
-                    try:
-                        # 尝试多种方式获取训练历史
-                        evals_result = None
-
-                        # 方式1: 直接从booster获取
-                        if hasattr(model, "booster") and hasattr(
-                            model.booster, "evals_result_"
-                        ):
-                            evals_result = model.booster.evals_result_
-                        # 方式2: 从model对象获取
-                        elif hasattr(model, "evals_result_"):
-                            evals_result = model.evals_result_
-                        # 方式3: 从model对象获取booster属性
-                        elif hasattr(model, "model") and hasattr(
-                            model.model, "booster"
-                        ):
-                            if hasattr(model.model.booster, "evals_result_"):
-                                evals_result = model.model.booster.evals_result_
-
-                        if evals_result:
-                            # 提取训练历史
-                            for eval_name, eval_results in evals_result.items():
-                                if (
-                                    "l2" in eval_results
-                                    or "rmse" in eval_results
-                                    or "train" in eval_name.lower()
-                                ):
-                                    # 获取损失值
-                                    loss_key = None
-                                    if "l2" in eval_results:
-                                        loss_key = "l2"
-                                    elif "rmse" in eval_results:
-                                        loss_key = "rmse"
-                                    elif "train" in eval_results:
-                                        # 尝试获取train相关的指标
-                                        for key in eval_results.keys():
-                                            if (
-                                                "loss" in key.lower()
-                                                or "l2" in key.lower()
-                                                or "rmse" in key.lower()
-                                            ):
-                                                loss_key = key
-                                                break
-
-                                    if loss_key and loss_key in eval_results:
-                                        losses = eval_results[loss_key]
-
-                                        # 更新训练历史为真实值
-                                        training_history.clear()
-                                        for epoch, loss in enumerate(losses, 1):
-                                            training_history.append(
-                                                {
-                                                    "epoch": epoch,
-                                                    "train_loss": round(loss, 4),
-                                                    "val_loss": None,
-                                                    "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                                                    "val_accuracy": 0.0,
-                                                    "learning_rate": config.hyperparameters.get(
-                                                        "learning_rate", 0.001
-                                                    ),
-                                                }
-                                            )
-
-                                        logger.info(
-                                            f"从模型获取到真实训练历史: {len(losses)} 轮 (来源: {eval_name}, 指标: {loss_key})"
-                                        )
-                                        break
-                    except Exception as e:
-                        logger.debug(f"无法从模型获取训练历史: {e}", exc_info=True)
-            else:
-                # 对于不支持验证集的模型，正常训练
-                model.fit(train_dataset)
-
-                # 尝试从模型获取真实训练历史
-                try:
-                    if hasattr(model, "booster") and hasattr(
-                        model.booster, "evals_result_"
-                    ):
-                        evals_result = model.booster.evals_result_
-                        if evals_result:
-                            for eval_name, eval_results in evals_result.items():
-                                if "l2" in eval_results or "rmse" in eval_results:
-                                    loss_key = "l2" if "l2" in eval_results else "rmse"
-                                    losses = eval_results[loss_key]
-
-                                    # 使用真实训练历史
-                                    for epoch, loss in enumerate(losses, 1):
-                                        training_history.append(
-                                            {
-                                                "epoch": epoch,
-                                                "train_loss": round(loss, 4),
-                                                "val_loss": None,
-                                                "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
-                                                "val_accuracy": 0.0,
-                                                "learning_rate": config.hyperparameters.get(
-                                                    "learning_rate", 0.001
-                                                ),
-                                            }
-                                        )
-
-                                    logger.info(f"从模型获取到真实训练历史: {len(losses)} 轮")
-                                    break
-                except Exception as e:
-                    logger.debug(f"无法从模型获取训练历史: {e}")
-
-                # 如果没有获取到真实历史，生成模拟训练历史（使用实际的迭代次数）
-                if not training_history:
+                if progress_callback and model_id:
                     num_iterations = (
                         config.hyperparameters.get("num_iterations")
                         or config.hyperparameters.get("n_estimators")
+                        or config.hyperparameters.get("num_boost_round")
                         or config.early_stopping_patience
                     )
-                    for epoch in range(
-                        1, min(num_iterations, config.early_stopping_patience) + 1
-                    ):
-                        train_loss = 0.5 * (0.9**epoch) + 0.01
-                        val_loss = train_loss * 1.1 + 0.005
+                    progress = 55.0 + (epoch / max(num_iterations, 1)) * 25.0
+                    progress = min(progress, 80.0)
 
-                        history_entry = {
+                    metrics = {"epoch": epoch, "train_loss": train_loss}
+                    if val_loss is not None:
+                        metrics["val_loss"] = val_loss
+                    if val_metrics:
+                        metrics.update(val_metrics)
+
+                    await progress_callback(
+                        model_id,
+                        progress,
+                        "training",
+                        f"训练轮次 {epoch}/{num_iterations}",
+                        metrics,
+                    )
+
+                return False
+
+            # 优先按 Qlib 官方 fit 接口调用：dataset + num_boost_round + early_stopping_rounds + evals_result
+            dataset_to_fit = train_dataset
+            if hasattr(train_dataset, "segments") and "valid" in train_dataset.segments:
+                logger.info(
+                    f"使用包含验证集的dataset进行训练，segments: {list(train_dataset.segments.keys())}"
+                )
+            else:
+                logger.warning("dataset不包含验证集segment，仅使用训练集")
+
+            num_boost_round = (
+                config.hyperparameters.get("num_iterations")
+                or config.hyperparameters.get("n_estimators")
+                or config.hyperparameters.get("num_boost_round")
+            )
+            early_stopping_rounds = (
+                config.early_stopping_patience if config.enable_early_stopping else None
+            )
+            verbose_eval = config.hyperparameters.get("verbose_eval", 20)
+            evals_result = {}
+
+            fit_kwargs = {}
+            if "num_boost_round" in fit_params and num_boost_round is not None:
+                fit_kwargs["num_boost_round"] = num_boost_round
+            if "early_stopping_rounds" in fit_params and early_stopping_rounds is not None:
+                fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
+            if "verbose_eval" in fit_params:
+                fit_kwargs["verbose_eval"] = verbose_eval
+            if "evals_result" in fit_params:
+                fit_kwargs["evals_result"] = evals_result
+
+            logger.info(f"按Qlib官方接口调用 model.fit，参数: {fit_kwargs}")
+            model.fit(dataset_to_fit, **fit_kwargs)
+
+            # 优先使用官方 evals_result 重建训练历史
+            try:
+                if not evals_result:
+                    if hasattr(model, "evals_result_"):
+                        evals_result = model.evals_result_
+                    elif hasattr(model, "model") and hasattr(model.model, "best_iteration"):
+                        logger.debug("模型未直接暴露 evals_result，回退到 best_iteration 信息")
+
+                if evals_result:
+                    train_metrics = evals_result.get("train", {})
+                    valid_metrics = evals_result.get("valid", {})
+                    preferred_metric = None
+                    for candidate in ["l2", "rmse", "loss", "binary_logloss"]:
+                        if candidate in train_metrics or candidate in valid_metrics:
+                            preferred_metric = candidate
+                            break
+                    if preferred_metric is None:
+                        metric_keys = list(train_metrics.keys() or valid_metrics.keys())
+                        preferred_metric = metric_keys[0] if metric_keys else None
+
+                    if preferred_metric:
+                        train_losses = train_metrics.get(preferred_metric, [])
+                        valid_losses = valid_metrics.get(preferred_metric, [])
+                        max_epochs = max(len(train_losses), len(valid_losses))
+                        training_history.clear()
+                        for epoch in range(max_epochs):
+                            train_loss = train_losses[epoch] if epoch < len(train_losses) else None
+                            val_loss = valid_losses[epoch] if epoch < len(valid_losses) else None
+                            training_history.append(
+                                {
+                                    "epoch": int(epoch + 1),
+                                    "train_loss": float(round(train_loss, 4)) if train_loss is not None else None,
+                                    "val_loss": float(round(val_loss, 4)) if val_loss is not None else None,
+                                    "train_accuracy": 0.0,
+                                    "val_accuracy": 0.0,
+                                    "learning_rate": float(
+                                        config.hyperparameters.get("learning_rate", 0.001)
+                                    ),
+                                }
+                            )
+
+                        logger.info(
+                            f"从官方 evals_result 获取训练历史: {len(training_history)} 轮, metric={preferred_metric}"
+                        )
+            except Exception as e:
+                logger.debug(f"无法从官方 evals_result 获取训练历史: {e}", exc_info=True)
+
+            # 读取官方模型的真实 best_iteration / early stopping 结果
+            actual_best_iteration = None
+            if hasattr(model, "model") and hasattr(model.model, "best_iteration"):
+                actual_best_iteration = getattr(model.model, "best_iteration", None)
+            elif hasattr(model, "best_iteration"):
+                actual_best_iteration = getattr(model, "best_iteration", None)
+
+            if actual_best_iteration:
+                best_epoch = int(actual_best_iteration)
+                if num_boost_round and best_epoch < num_boost_round:
+                    early_stopped = True
+                    stopped_epoch = best_epoch
+                    early_stopping_reason = "Qlib/LightGBM官方早停"
+
+            # 如果没有拿到真实历史，才生成轻量回退历史
+            if not training_history:
+                fallback_epochs = (
+                    best_epoch
+                    or num_boost_round
+                    or config.hyperparameters.get("num_iterations")
+                    or config.hyperparameters.get("n_estimators")
+                    or config.early_stopping_patience
+                )
+                for epoch in range(1, max(int(fallback_epochs or 1), 1) + 1):
+                    await training_progress_callback(epoch, 0.0, 0.0)
+                    training_history.append(
+                        {
                             "epoch": epoch,
-                            "train_loss": round(train_loss, 4),
-                            "val_loss": round(val_loss, 4),
-                            "train_accuracy": 0.0,  # 暂时设为0，后续通过评估计算
+                            "train_loss": None,
+                            "val_loss": None,
+                            "train_accuracy": 0.0,
                             "val_accuracy": 0.0,
                             "learning_rate": config.hyperparameters.get(
                                 "learning_rate", 0.001
                             ),
                         }
-                        training_history.append(history_entry)
+                    )
 
             # 更新训练进度
             if progress_callback and model_id:
