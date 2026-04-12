@@ -4,12 +4,12 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from app.core.database import get_async_session
+from app.core.database import get_async_session_context
 from app.repositories.backtest_detailed_repository import BacktestDetailedRepository
 from app.services.backtest.utils.chart_cache_service import chart_cache_service
 
@@ -61,7 +61,7 @@ class CacheCleanupService:
         self.logger.info("开始执行缓存清理任务...")
 
         cleanup_results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "expired_cache_cleaned": 0,
             "old_data_cleaned": {},
             "errors": [],
@@ -107,7 +107,7 @@ class CacheCleanupService:
         try:
             self.logger.info(f"清理 {self.data_retention_days} 天前的回测详细数据...")
 
-            async for session in get_async_session():
+            async with get_async_session_context() as session:
                 repository = BacktestDetailedRepository(session)
                 cleanup_results = await repository.cleanup_old_data(
                     self.data_retention_days
@@ -135,7 +135,7 @@ class CacheCleanupService:
             cache_success = await chart_cache_service.invalidate_cache(task_id)
 
             # 2. 清理详细数据
-            async for session in get_async_session():
+            async with get_async_session_context() as session:
                 repository = BacktestDetailedRepository(session)
                 data_success = await repository.delete_task_data(task_id)
                 await session.commit()
@@ -160,7 +160,7 @@ class CacheCleanupService:
             cache_stats = await chart_cache_service.get_cache_statistics()
 
             # 获取数据库统计
-            async for session in get_async_session():
+            async with get_async_session_context() as session:
                 repository = BacktestDetailedRepository(session)
 
                 # 这里可以添加更多统计查询
@@ -195,7 +195,7 @@ class CacheCleanupService:
         self.logger.info("手动执行清理任务...")
 
         cleanup_results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "manual_trigger": True,
             "expired_cache_cleaned": 0,
             "old_data_cleaned": {},
@@ -211,7 +211,7 @@ class CacheCleanupService:
                 # 使用自定义保留天数或默认值
                 retention_days = custom_retention_days or self.data_retention_days
 
-                async for session in get_async_session():
+                async with get_async_session_context() as session:
                     repository = BacktestDetailedRepository(session)
                     old_data_results = await repository.cleanup_old_data(retention_days)
                     await session.commit()

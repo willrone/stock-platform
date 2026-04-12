@@ -462,7 +462,10 @@ def execute_backtest_task_simple(task_id: str):
 
                 async def save_detailed_data():
                     """异步保存详细数据"""
-                    from app.core.database import get_async_session, retry_db_operation
+                    from app.core.database import (
+                        get_async_session_context,
+                        retry_db_operation,
+                    )
                     from app.repositories.backtest_detailed_repository import (
                         BacktestDetailedRepository,
                     )
@@ -487,7 +490,7 @@ def execute_backtest_task_simple(task_id: str):
                         f"转换后的数据: trade_history={len(enhanced_result.trade_history)}, portfolio_history={len(enhanced_result.portfolio_history)}"
                     )
 
-                    async for session in get_async_session():
+                    async with get_async_session_context() as session:
                         try:
 
                             async def _save_data():
@@ -773,7 +776,6 @@ def execute_backtest_task_simple(task_id: str):
                             task_logger.error(
                                 f"保存回测详细数据失败: {task_id}, 错误: {e}", exc_info=True
                             )
-                        break
 
                 # 在新的事件循环中运行
                 loop = asyncio.new_event_loop()

@@ -5,14 +5,14 @@
 
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_async_session, retry_db_operation
+from app.core.database import get_async_session_context, retry_db_operation
 from app.models.backtest_detailed_models import BacktestChartCache
 
 
@@ -46,7 +46,7 @@ class ChartCacheService:
             self.logger.warning(f"不支持的图表类型: {chart_type}")
             return None
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
 
                 async def _get_cache():
@@ -91,8 +91,6 @@ class ChartCacheService:
                 self.logger.error(f"获取缓存数据失败: {e}", exc_info=True)
                 await session.rollback()
                 return None
-            finally:
-                break
 
     async def cache_chart_data(
         self,
@@ -107,7 +105,7 @@ class ChartCacheService:
             self.logger.warning(f"不支持的图表类型: {chart_type}")
             return False
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
 
                 async def _cache_data():
@@ -116,7 +114,7 @@ class ChartCacheService:
 
                     # 计算过期时间（避免闭包内同名赋值导致 UnboundLocalError）
                     hours = expiry_hours if expiry_hours is not None else self.DEFAULT_CACHE_EXPIRY_HOURS
-                    expires_at = datetime.utcnow() + timedelta(hours=hours)
+                    expires_at = datetime.now(UTC) + timedelta(hours=hours)
 
                     # 查找现有记录
                     stmt = select(BacktestChartCache).where(
@@ -133,7 +131,7 @@ class ChartCacheService:
                         existing_record.chart_data = chart_data
                         existing_record.data_hash = data_hash
                         existing_record.expires_at = expires_at
-                        existing_record.created_at = datetime.utcnow()
+                        existing_record.created_at = datetime.now(UTC)
                         self.logger.info(
                             f"更新缓存: task_id={task_id}, chart_type={chart_type}"
                         )
@@ -165,15 +163,13 @@ class ChartCacheService:
                 self.logger.error(f"缓存图表数据失败: {e}", exc_info=True)
                 await session.rollback()
                 return False
-            finally:
-                break  # 只使用第一个会话
 
     async def invalidate_cache(
         self, task_id: str, chart_type: Optional[str] = None
     ) -> bool:
         """使缓存失效"""
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
 
                 async def _invalidate():
@@ -213,13 +209,11 @@ class ChartCacheService:
                 self.logger.error(f"删除缓存失败: {e}", exc_info=True)
                 await session.rollback()
                 return False
-            finally:
-                break
 
     async def cleanup_expired_cache(self) -> int:
         """清理过期的缓存记录"""
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
 
                 async def _cleanup():
@@ -227,7 +221,7 @@ class ChartCacheService:
                     stmt = delete(BacktestChartCache).where(
                         and_(
                             BacktestChartCache.expires_at.isnot(None),
-                            BacktestChartCache.expires_at < datetime.utcnow(),
+                            BacktestChartCache.expires_at < datetime.now(UTC),
                         )
                     )
 
@@ -248,13 +242,11 @@ class ChartCacheService:
                 self.logger.error(f"清理过期缓存失败: {e}", exc_info=True)
                 await session.rollback()
                 return 0
-            finally:
-                break
 
     async def get_cache_statistics(self) -> Dict[str, Any]:
         """获取缓存统计信息"""
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
                 # 总缓存记录数
                 total_stmt = select(BacktestChartCache)
@@ -265,7 +257,7 @@ class ChartCacheService:
                 expired_stmt = select(BacktestChartCache).where(
                     and_(
                         BacktestChartCache.expires_at.isnot(None),
-                        BacktestChartCache.expires_at < datetime.utcnow(),
+                        BacktestChartCache.expires_at < datetime.now(UTC),
                     )
                 )
                 expired_result = await session.execute(expired_stmt)
@@ -293,13 +285,11 @@ class ChartCacheService:
             except Exception as e:
                 self.logger.error(f"获取缓存统计失败: {e}", exc_info=True)
                 return {}
-            finally:
-                break
 
     async def get_task_cache_info(self, task_id: str) -> Dict[str, Any]:
         """获取特定任务的缓存信息"""
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
                 stmt = select(BacktestChartCache).where(
                     BacktestChartCache.task_id == task_id
@@ -330,8 +320,6 @@ class ChartCacheService:
             except Exception as e:
                 self.logger.error(f"获取任务缓存信息失败: {e}", exc_info=True)
                 return {"task_id": task_id, "error": str(e)}
-            finally:
-                break
 
     def _calculate_data_hash(self, data: Dict[str, Any]) -> str:
         """计算数据的哈希值（优先 orjson 加速）"""
@@ -373,7 +361,7 @@ class ChartCacheService:
     ) -> bool:
         """检查缓存是否有效"""
 
-        async for session in get_async_session():
+        async with get_async_session_context() as session:
             try:
                 stmt = select(BacktestChartCache).where(
                     and_(
@@ -400,8 +388,6 @@ class ChartCacheService:
             except Exception as e:
                 self.logger.error(f"检查缓存有效性失败: {e}", exc_info=True)
                 return False
-            finally:
-                break
 
 
 # 全局缓存服务实例

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ...core.config import settings
-from ...core.database import get_async_session as get_db
+from ...core.database import get_async_session_context
 from ...models.task_models import ModelInfo, Task
 
 
@@ -54,7 +54,7 @@ class LineageTracker:
             bool: 记录是否成功
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._record_training_lineage_impl(
                     session,
                     model_id,
@@ -184,7 +184,7 @@ class LineageTracker:
             Dict: 血缘信息
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_model_lineage_impl(
                     session, model_id, include_ancestors, include_descendants
                 )
@@ -379,7 +379,7 @@ class LineageTracker:
             List[Dict]: 相似模型列表
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._find_similar_models_impl(
                     session, data_fingerprint, config_fingerprint, threshold
                 )
@@ -472,7 +472,7 @@ class LineageTracker:
             Dict: 血缘关系图数据
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_lineage_graph_impl(session, model_ids)
         else:
             return await self._get_lineage_graph_impl(db, model_ids)

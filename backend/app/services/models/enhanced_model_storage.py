@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ...core.config import settings
-from ...core.database import get_async_session as get_db
+from ...core.database import get_async_session_context
 from ...models.task_models import ModelInfo, ModelLifecycleEvent
 from .lineage_tracker import lineage_tracker
 from .model_lifecycle_manager import ModelStatus, model_lifecycle_manager
@@ -61,7 +61,7 @@ class EnhancedModelStorage:
             Dict: 创建结果
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._create_model_with_lineage_impl(
                     session,
                     model_info,
@@ -186,7 +186,7 @@ class EnhancedModelStorage:
             Dict: 搜索结果
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._search_models_impl(
                     session,
                     query,
@@ -357,7 +357,7 @@ class EnhancedModelStorage:
             Dict: 模型详情和血缘信息
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_model_with_lineage_impl(
                     session, model_id, include_ancestors, include_descendants
                 )
@@ -429,7 +429,7 @@ class EnhancedModelStorage:
             Dict: 对比结果
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._compare_models_impl(session, model_ids, metrics)
         else:
             return await self._compare_models_impl(db, model_ids, metrics)
@@ -556,7 +556,7 @@ class EnhancedModelStorage:
             List[Dict]: 推荐模型列表
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_model_recommendations_impl(
                     session, training_config, data_sources, limit
                 )

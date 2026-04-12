@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ...core.config import settings
-from ...core.database import get_async_session as get_db
+from ...core.database import get_async_session_context
 from ...models.task_models import ModelInfo, ModelLifecycleEvent
 
 
@@ -87,7 +87,7 @@ class ModelLifecycleManager:
             bool: 转换是否成功
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._transition_status_impl(
                     session, model_id, new_status, reason, metadata
                 )
@@ -191,7 +191,7 @@ class ModelLifecycleManager:
             List[Dict]: 生命周期事件列表
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_lifecycle_history_impl(session, model_id, limit)
         else:
             return await self._get_lifecycle_history_impl(db, model_id, limit)
@@ -243,7 +243,7 @@ class ModelLifecycleManager:
             List[Dict]: 模型列表
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_models_by_status_impl(session, status, limit)
         else:
             return await self._get_models_by_status_impl(db, status, limit)
@@ -293,7 +293,7 @@ class ModelLifecycleManager:
             int: 清理的模型数量
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._auto_cleanup_old_models_impl(session, days_threshold)
         else:
             return await self._auto_cleanup_old_models_impl(db, days_threshold)
@@ -351,7 +351,7 @@ class ModelLifecycleManager:
             Dict[str, int]: 状态统计
         """
         if db is None:
-            async for session in get_db():
+            async with get_async_session_context() as session:
                 return await self._get_status_statistics_impl(session)
         else:
             return await self._get_status_statistics_impl(db)
