@@ -90,6 +90,12 @@ interface TrainingReport {
     best_score?: number;
     best_hyperparameters?: Record<string, any> | null;
   };
+  early_stopping_info?: {
+    early_stopped?: boolean;
+    stopped_epoch?: number;
+    best_epoch?: number;
+    early_stopping_reason?: string | null;
+  };
   hyperparameters: Record<string, any>;
   training_data_info: {
     stock_codes: string[];
@@ -141,6 +147,7 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
         feature_importance: response.feature_importance,
         feature_correlation: response.feature_correlation,
         hyperparameter_tuning: response.hyperparameter_tuning,
+        early_stopping_info: response.early_stopping_info,
         hyperparameters: response.hyperparameters || {},
         training_data_info: response.training_data_info || {
           stock_codes: [],
@@ -202,6 +209,7 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
         feature_importance: report.feature_importance,
         feature_correlation: report.feature_correlation,
         hyperparameter_tuning: report.hyperparameter_tuning,
+        early_stopping_info: report.early_stopping_info,
         hyperparameters: report.hyperparameters,
         training_data_info: report.training_data_info,
         recommendations: report.recommendations,
@@ -325,7 +333,7 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                         <Zap size={16} color="#ed6c02" />
                         <Typography variant="caption" color="text.secondary">
-                          训练样本
+                          总样本数
                         </Typography>
                       </Box>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -335,6 +343,90 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                   </Card>
                 )}
               </Box>
+
+              {(report.training_summary?.train_samples ||
+                report.training_summary?.validation_samples ||
+                report.training_summary?.test_samples) && (
+                <Box
+                  sx={{
+                    mt: 2,
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 220px))' },
+                    gap: 2,
+                  }}
+                >
+                  {typeof report.training_summary?.train_samples === 'number' && (
+                    <Card variant="outlined">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          训练集样本
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {report.training_summary.train_samples.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {typeof report.training_summary?.validation_samples === 'number' && (
+                    <Card variant="outlined">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          验证集样本
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {report.training_summary.validation_samples.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {typeof report.training_summary?.test_samples === 'number' && (
+                    <Card variant="outlined">
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          测试集样本
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {report.training_summary.test_samples.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  )}
+                </Box>
+              )}
+
+              <Box sx={{ mt: 2 }}>
+              </Box>
+
+              {report.early_stopping_info && (
+                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+                  <Chip
+                    color={report.early_stopping_info.early_stopped ? 'warning' : 'success'}
+                    label={report.early_stopping_info.early_stopped ? '已触发早停' : '未触发早停'}
+                    size="small"
+                  />
+                  {typeof report.early_stopping_info.best_epoch === 'number' &&
+                    report.early_stopping_info.best_epoch > 0 && (
+                      <Chip
+                        variant="outlined"
+                        label={`最佳轮次: ${report.early_stopping_info.best_epoch}`}
+                        size="small"
+                      />
+                    )}
+                  {typeof report.early_stopping_info.stopped_epoch === 'number' &&
+                    report.early_stopping_info.stopped_epoch > 0 && (
+                      <Chip
+                        variant="outlined"
+                        label={`停止轮次: ${report.early_stopping_info.stopped_epoch}`}
+                        size="small"
+                      />
+                    )}
+                  {report.early_stopping_info.early_stopping_reason && (
+                    <Typography variant="body2" color="text.secondary">
+                      原因：{report.early_stopping_info.early_stopping_reason}
+                    </Typography>
+                  )}
+                </Box>
+              )}
             </Box>
 
             {/* 性能指标 */}

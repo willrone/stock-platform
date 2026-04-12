@@ -164,6 +164,55 @@ class TestModelAndTrainingContractAPI:
         assert payload["performance_metrics"]["accuracy"] == 0.9
         assert payload["training_data_info"]["stock_codes"] == ["000001.SZ"]
 
+    @patch("app.api.v1.models.SessionLocal")
+    def test_evaluation_report_contract_backfills_legacy_fields(
+        self,
+        mock_session_local,
+        client,
+        model_record,
+    ):
+        """/models/{id}/evaluation-report 会为旧报告补齐 early stopping 和样本统计。"""
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+
+        legacy_model = SimpleNamespace(**model_record.__dict__)
+        legacy_model.evaluation_report = {
+            "performance_metrics": {"accuracy": 0.9},
+            "training_summary": {
+                "total_samples": 386,
+                "train_samples": 193,
+                "validation_samples": 193,
+                "test_samples": 0,
+            },
+            "training_data_info": {
+                "stock_codes": ["000001.SZ"],
+                "start_date": "2024-01-01T00:00:00",
+                "end_date": "2024-12-31T00:00:00",
+            },
+        }
+
+        mock_session.query.return_value.filter.return_value.first.return_value = legacy_model
+
+        response = client.get("/models/model-1/evaluation-report")
+
+        assert response.status_code == 200
+        payload = response.json()["data"]
+        assert payload["training_data_info"] == {
+            "stock_codes": ["000001.SZ"],
+            "start_date": "2024-01-01T00:00:00",
+            "end_date": "2024-12-31T00:00:00",
+            "total_samples": 386,
+            "train_samples": 193,
+            "validation_samples": 193,
+            "test_samples": 0,
+        }
+        assert payload["early_stopping_info"] == {
+            "early_stopped": False,
+            "stopped_epoch": 0,
+            "best_epoch": 0,
+            "early_stopping_reason": None,
+        }
+
     @patch("app.api.v1.training_progress.SessionLocal")
     @patch("app.api.v1.training_progress._get_task_manager")
     def test_training_progress_contract_fallback_to_model(

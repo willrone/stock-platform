@@ -57,6 +57,13 @@ def _extract_stock_codes(model: Any) -> List[str]:
     return stock_codes if isinstance(stock_codes, list) else []
 
 
+def _extract_early_stopping_info(model: Any) -> Dict[str, Any]:
+    """从评估报告中提取早停信息。"""
+    evaluation_report = _safe_json_dict(getattr(model, "evaluation_report", None))
+    early_stopping_info = evaluation_report.get("early_stopping_info", {})
+    return early_stopping_info if isinstance(early_stopping_info, dict) else {}
+
+
 def _map_model_status_to_task_status(status: str) -> str:
     """将模型状态映射为旧训练任务状态。"""
     if status == "ready":
@@ -108,6 +115,7 @@ def build_model_detail_dto(model: Any) -> Dict[str, Any]:
             "training_data_period": _build_training_data_period(model),
             "hyperparameters": model.hyperparameters or {},
             "stock_codes": _extract_stock_codes(model),
+            "early_stopping_info": _extract_early_stopping_info(model),
         },
         "created_at": (
             created_at.isoformat() if created_at else datetime.now().isoformat()

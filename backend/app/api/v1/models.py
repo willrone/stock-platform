@@ -19,7 +19,10 @@ from app.api.v1.schemas import ModelTrainingRequest, StandardResponse
 from app.core.database import SessionLocal
 from app.models.task_models import ModelInfo
 from app.repositories.task_repository import ModelInfoRepository
-from app.services.models.evaluation_report import EvaluationReportGenerator
+from app.services.models.evaluation_report import (
+    EvaluationReportGenerator,
+    normalize_report_payload,
+)
 from app.services.models.hyperparameter_tuning import (
     HyperparameterSpace,
     SearchStrategy,
@@ -561,14 +564,28 @@ async def train_model_task(
                     )
 
             # 创建Qlib训练配置
-            # 从超参数中获取num_iterations或n_estimators，用于设置early_stopping_patience
-            num_iterations = (
+            # 早停轮数优先使用显式配置，否则采用较保守的默认值（不应等于总轮数，否则几乎不会提前停止）
+            num_iterations = int(
                 final_hyperparameters.get("num_iterations")
                 or final_hyperparameters.get("n_estimators")
                 or final_hyperparameters.get("epochs")
                 or 100
             )
-            early_stopping_patience = max(num_iterations, 10)  # 至少10，但应该使用实际的迭代次数
+            configured_early_stopping = (
+                final_hyperparameters.get("early_stopping_rounds")
+                or final_hyperparameters.get("early_stopping_patience")
+            )
+            if configured_early_stopping is not None:
+                early_stopping_patience = int(configured_early_stopping)
+            else:
+                early_stopping_patience = 10
+
+            if num_iterations > 1:
+                early_stopping_patience = max(
+                    1, min(early_stopping_patience, num_iterations - 1)
+                )
+            else:
+                early_stopping_patience = max(1, early_stopping_patience)
 
             config = QlibTrainingConfig(
                 model_type=qlib_model_type,
@@ -641,9 +658,19 @@ async def train_model_task(
                     "stock_codes": stock_codes,
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
+                    "total_samples": total_samples,
+                    "train_samples": train_samples,
+                    "validation_samples": validation_samples,
+                    "test_samples": test_samples,
                 },
                 feature_correlation=result.feature_correlation,
                 hyperparameter_tuning=tuning_summary,
+                early_stopping_info={
+                    "early_stopped": bool(getattr(result, "early_stopped", False)),
+                    "stopped_epoch": int(getattr(result, "stopped_epoch", 0) or 0),
+                    "best_epoch": int(getattr(result, "best_epoch", 0) or 0),
+                    "early_stopping_reason": getattr(result, "early_stopping_reason", None),
+                },
             )
 
             # 更新模型信息
@@ -811,7 +838,9 @@ async def get_model_evaluation_report(model_id: str):
             try:
                 import json
 
-                evaluation_report = json.loads(model.evaluation_report)
+                evaluation_report = normalize_report_payload(
+                    json.loads(model.evaluation_report)
+                )
                 logger.info(f"成功解析模型 {model_id} 的评估报告（从字符串）")
                 return StandardResponse(
                     success=True, message="评估报告获取成功", data=evaluation_report
@@ -822,7 +851,9 @@ async def get_model_evaluation_report(model_id: str):
 
         logger.info(f"成功获取模型 {model_id} 的评估报告")
         return StandardResponse(
-            success=True, message="评估报告获取成功", data=model.evaluation_report
+            success=True,
+            message="评估报告获取成功",
+            data=normalize_report_payload(model.evaluation_report),
         )
     except HTTPException:
         raise

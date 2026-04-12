@@ -17,6 +17,41 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 
+DEFAULT_EARLY_STOPPING_INFO = {
+    "early_stopped": False,
+    "stopped_epoch": 0,
+    "best_epoch": 0,
+    "early_stopping_reason": None,
+}
+
+
+def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
+    """兼容并补齐评估报告字段，保证前端/导出结构稳定。"""
+    if not isinstance(report, dict):
+        return report
+
+    normalized = dict(report)
+    training_summary = normalized.get("training_summary")
+    training_summary = training_summary if isinstance(training_summary, dict) else {}
+
+    training_data_info = normalized.get("training_data_info")
+    training_data_info = dict(training_data_info) if isinstance(training_data_info, dict) else {}
+    for field in ("total_samples", "train_samples", "validation_samples", "test_samples"):
+        if training_data_info.get(field) is None and training_summary.get(field) is not None:
+            training_data_info[field] = training_summary.get(field)
+    normalized["training_data_info"] = training_data_info
+
+    early_stopping_info = normalized.get("early_stopping_info")
+    if not isinstance(early_stopping_info, dict):
+        early_stopping_info = {}
+    normalized["early_stopping_info"] = {
+        **DEFAULT_EARLY_STOPPING_INFO,
+        **early_stopping_info,
+    }
+
+    return normalized
+
+
 @dataclass
 class TrainingSummary:
     """训练摘要"""
@@ -114,6 +149,9 @@ class ModelEvaluationReport:
     # 超参数调优摘要
     hyperparameter_tuning: Optional[Dict[str, Any]] = None
 
+    # 早停信息
+    early_stopping_info: Optional[Dict[str, Any]] = None
+
 
 class EvaluationReportGenerator:
     """评估报告生成器"""
@@ -136,6 +174,7 @@ class EvaluationReportGenerator:
         prediction_analysis: Optional[Dict[str, Any]] = None,
         feature_correlation: Optional[Dict[str, Any]] = None,
         hyperparameter_tuning: Optional[Dict[str, Any]] = None,
+        early_stopping_info: Optional[Dict[str, Any]] = None,
     ) -> ModelEvaluationReport:
         """生成评估报告"""
 
@@ -204,11 +243,11 @@ class EvaluationReportGenerator:
         for hist in training_history:
             history.append(
                 TrainingHistory(
-                    epoch=hist.get("epoch", 0),
-                    train_loss=hist.get("train_loss", 0.0),
-                    val_loss=hist.get("val_loss", 0.0),
-                    train_accuracy=hist.get("train_accuracy", 0.0),
-                    val_accuracy=hist.get("val_accuracy", 0.0),
+                    epoch=int(hist.get("epoch", 0) or 0),
+                    train_loss=(None if hist.get("train_loss") is None else float(hist.get("train_loss", 0.0))),
+                    val_loss=(None if hist.get("val_loss") is None else float(hist.get("val_loss", 0.0))),
+                    train_accuracy=float(hist.get("train_accuracy", 0.0) or 0.0),
+                    val_accuracy=float(hist.get("val_accuracy", 0.0) or 0.0),
                     timestamp=hist.get("timestamp", datetime.now().isoformat()),
                 )
             )
@@ -230,6 +269,7 @@ class EvaluationReportGenerator:
             training_history=history,
             hyperparameters=hyperparameters,
             hyperparameter_tuning=hyperparameter_tuning,
+            early_stopping_info=early_stopping_info,
             training_data_info=training_data_info,
             prediction_analysis=prediction_analysis,
             recommendations=recommendations,
@@ -271,24 +311,27 @@ class EvaluationReportGenerator:
 
     def to_dict(self, report: ModelEvaluationReport) -> Dict[str, Any]:
         """转换为字典"""
-        return {
-            "model_id": report.model_id,
-            "model_name": report.model_name,
-            "model_type": report.model_type,
-            "version": report.version,
-            "created_at": report.created_at,
-            "training_summary": asdict(report.training_summary),
-            "performance_metrics": asdict(report.performance_metrics),
-            "feature_importance": [asdict(f) for f in report.feature_importance],
-            "feature_correlation": report.feature_correlation,
-            "training_history": [asdict(h) for h in report.training_history],
-            "hyperparameters": report.hyperparameters,
-            "hyperparameter_tuning": report.hyperparameter_tuning,
-            "training_data_info": report.training_data_info,
-            "prediction_analysis": report.prediction_analysis,
-            "model_comparison": report.model_comparison,
-            "recommendations": report.recommendations,
-        }
+        return normalize_report_payload(
+            {
+                "model_id": report.model_id,
+                "model_name": report.model_name,
+                "model_type": report.model_type,
+                "version": report.version,
+                "created_at": report.created_at,
+                "training_summary": asdict(report.training_summary),
+                "performance_metrics": asdict(report.performance_metrics),
+                "feature_importance": [asdict(f) for f in report.feature_importance],
+                "feature_correlation": report.feature_correlation,
+                "training_history": [asdict(h) for h in report.training_history],
+                "hyperparameters": report.hyperparameters,
+                "hyperparameter_tuning": report.hyperparameter_tuning,
+                "early_stopping_info": report.early_stopping_info,
+                "training_data_info": report.training_data_info,
+                "prediction_analysis": report.prediction_analysis,
+                "model_comparison": report.model_comparison,
+                "recommendations": report.recommendations,
+            }
+        )
 
     def to_json(self, report: ModelEvaluationReport) -> str:
         """转换为JSON字符串"""
