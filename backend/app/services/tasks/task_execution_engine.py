@@ -6,7 +6,7 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
@@ -37,6 +37,11 @@ class TaskProgress:
     details: Optional[Dict[str, Any]] = None
 
 
+def utcnow() -> datetime:
+    """Return naive UTC datetime for runtime duration calculations."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class ProgressTracker:
     """进度跟踪器"""
 
@@ -50,19 +55,19 @@ class ProgressTracker:
         self.total_steps = total_steps
         self.current_step = 0
         self.progress_callback = progress_callback
-        self.start_time = datetime.utcnow()
-        self.step_start_time = datetime.utcnow()
+        self.start_time = utcnow()
+        self.step_start_time = utcnow()
         self.step_durations: List[float] = []
 
     def update_step(self, step_name: str, details: Optional[Dict[str, Any]] = None):
         """更新当前步骤"""
         if self.current_step > 0:
             # 记录上一步的耗时
-            step_duration = (datetime.utcnow() - self.step_start_time).total_seconds()
+            step_duration = (utcnow() - self.step_start_time).total_seconds()
             self.step_durations.append(step_duration)
 
         self.current_step += 1
-        self.step_start_time = datetime.utcnow()
+        self.step_start_time = utcnow()
 
         # 计算进度百分比
         progress_percentage = (self.current_step / self.total_steps) * 100
@@ -230,7 +235,7 @@ class PredictionTaskExecutor:
                     "horizon": horizon,
                     "confidence_level": confidence_level,
                     "execution_time": (
-                        datetime.utcnow() - context.start_time
+                        utcnow() - context.start_time
                     ).total_seconds(),
                 }
 
@@ -414,7 +419,7 @@ class BacktestTaskExecutor:
                     "profit_factor": backtest_report.get("profit_factor", 0),
                     "total_trades": backtest_report.get("total_trades", 0),
                     "execution_time": (
-                        datetime.utcnow() - context.start_time
+                        utcnow() - context.start_time
                     ).total_seconds(),
                     # 添加前端需要的图表数据
                     "equity_curve": equity_curve,
@@ -536,12 +541,12 @@ class BacktestTaskExecutor:
                     try:
                         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                     except ValueError:
-                        timestamp = datetime.utcnow()
+                        timestamp = utcnow()
                 elif hasattr(timestamp, 'to_pydatetime'):
                     # pandas Timestamp 转换为 Python datetime
                     timestamp = timestamp.to_pydatetime()
                 elif not isinstance(timestamp, datetime):
-                    timestamp = datetime.utcnow()
+                    timestamp = utcnow()
 
                 record = TradeRecord(
                     task_id=task_id,
@@ -656,7 +661,7 @@ class TrainingTaskExecutor:
                     "training_samples": random.randint(10000, 50000),
                     "validation_samples": random.randint(2000, 10000),
                     "execution_time": (
-                        datetime.utcnow() - context.start_time
+                        utcnow() - context.start_time
                     ).total_seconds(),
                 }
 

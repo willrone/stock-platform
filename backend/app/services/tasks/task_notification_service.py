@@ -5,7 +5,7 @@
 import asyncio
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
@@ -43,6 +43,10 @@ class TaskProgressNotification:
     current_step: str
     estimated_remaining_seconds: Optional[int] = None
     details: Optional[Dict[str, Any]] = None
+
+def utcnow() -> datetime:
+    """Return naive UTC datetime for runtime compatibility."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class TaskNotificationService:
@@ -84,7 +88,7 @@ class TaskNotificationService:
                 status=TaskStatus.CREATED.value,
                 progress=0.0,
                 user_id=user_id,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=utcnow().isoformat(),
                 result_summary={
                     "config_summary": self._summarize_config(task_type, config)
                 },
@@ -173,7 +177,7 @@ class TaskNotificationService:
                         "current_step": current_step,
                         "estimated_remaining_seconds": estimated_remaining_seconds,
                         "details": details,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": utcnow().isoformat(),
                     },
                 )
 
@@ -250,7 +254,7 @@ class TaskNotificationService:
                 "type": "system_notification",
                 "notification_type": notification_type,
                 "message": message,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
             if target_users:
@@ -286,7 +290,7 @@ class TaskNotificationService:
             # 发送WebSocket通知
             message_data = asdict(notification)
             message_data["notification_type"] = notification_type
-            message_data["timestamp"] = datetime.utcnow().isoformat()
+            message_data["timestamp"] = utcnow().isoformat()
 
             # 发送给任务订阅者
             subscribers = self.task_subscribers.get(notification.task_id, set())
@@ -329,7 +333,7 @@ class TaskNotificationService:
                 "duration": self._calculate_duration(notification),
                 "result_summary": notification.result_summary,
                 "error_message": notification.error_message,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
 
             # 发送给任务创建者

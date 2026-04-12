@@ -4,7 +4,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy import (
@@ -22,6 +22,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+
+
+def utcnow() -> datetime:
+    """Return naive UTC datetime for DB compatibility."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class BacktestDetailedResult(Base):
@@ -55,9 +60,9 @@ class BacktestDetailedResult(Base):
     # 滚动指标数据（JSON格式存储滚动夏普比率等）
     rolling_metrics = Column(JSON, nullable=True, comment="滚动指标数据")
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
 
     # 创建索引
@@ -102,7 +107,7 @@ class BacktestChartCache(Base):
     )
     chart_data = Column(JSON, nullable=False, comment="图表数据JSON")
     data_hash = Column(String(64), nullable=True, comment="数据哈希值，用于检测数据变化")
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     expires_at = Column(DateTime, nullable=True, comment="缓存过期时间")
 
     # 创建唯一索引和其他索引
@@ -127,7 +132,7 @@ class BacktestChartCache(Base):
         """检查缓存是否过期"""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return utcnow() > self.expires_at
 
 
 class PortfolioSnapshot(Base):
@@ -146,7 +151,7 @@ class PortfolioSnapshot(Base):
     drawdown = Column(Float, nullable=False, default=0.0, comment="回撤幅度")
     positions = Column(JSON, nullable=True, comment="持仓详情JSON")
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     # 创建索引
     __table_args__ = (
@@ -194,7 +199,7 @@ class TradeRecord(Base):
     # 技术指标（交易时的技术指标快照）
     technical_indicators = Column(JSON, nullable=True, comment="交易时的技术指标")
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     # 创建索引
     __table_args__ = (
@@ -242,7 +247,7 @@ class SignalRecord(Base):
     signal_metadata = Column(JSON, nullable=True, comment="元数据（JSON格式）")
     executed = Column(Boolean, nullable=False, default=False, comment="是否被执行")
     execution_reason = Column(Text, nullable=True, comment="执行原因：已执行时为空，未执行时记录未执行原因")
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     # 创建索引
     __table_args__ = (
@@ -303,9 +308,9 @@ class BacktestBenchmark(Base):
     information_ratio = Column(Float, nullable=True, comment="信息比率")
     excess_return = Column(Float, nullable=True, comment="超额收益")
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
 
     # 创建索引
@@ -397,9 +402,9 @@ class BacktestStatistics(Base):
     largest_position_size = Column(Float, nullable=True, comment="最大持仓金额")
 
     # 元数据
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
 
     # 创建索引

@@ -8,7 +8,7 @@ import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from queue import Empty, PriorityQueue
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -18,6 +18,10 @@ from loguru import logger
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import PerformanceLogger
 from app.models.task_models import Task, TaskStatus, TaskType
+
+def utcnow() -> datetime:
+    """Return naive UTC datetime for runtime compatibility."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class TaskPriority(Enum):
@@ -107,7 +111,7 @@ class TaskExecutor:
         context = TaskExecutionContext(
             task_id=queued_task.task_id,
             executor_id=self.executor_id,
-            start_time=datetime.utcnow(),
+            start_time=utcnow(),
             progress_callback=progress_callback,
             cancel_event=cancel_event,
         )
@@ -136,7 +140,7 @@ class TaskExecutor:
             result = handler(queued_task, context)
 
             # 记录性能指标
-            duration = (datetime.utcnow() - context.start_time).total_seconds()
+            duration = (utcnow() - context.start_time).total_seconds()
             PerformanceLogger.log_task_performance(
                 task_id=queued_task.task_id,
                 task_type=queued_task.task_type.value,
@@ -150,7 +154,7 @@ class TaskExecutor:
 
         except Exception as e:
             # 记录失败的性能指标
-            duration = (datetime.utcnow() - context.start_time).total_seconds()
+            duration = (utcnow() - context.start_time).total_seconds()
             PerformanceLogger.log_task_performance(
                 task_id=queued_task.task_id,
                 task_type=queued_task.task_type.value,
@@ -190,7 +194,7 @@ class TaskExecutor:
                 if context.estimated_end_time
                 else None,
                 "running_duration": (
-                    datetime.utcnow() - context.start_time
+                    utcnow() - context.start_time
                 ).total_seconds(),
             }
             running_tasks.append(task_info)
@@ -276,7 +280,7 @@ class TaskScheduler:
                 priority=priority,
                 config=config,
                 user_id=user_id,
-                created_at=datetime.utcnow(),
+                created_at=utcnow(),
                 estimated_duration=estimated_duration,
             )
 
@@ -498,4 +502,3 @@ class TaskQueueManager:
 
 
 # 全局任务队列管理器实例
-task_queue_manager = TaskQueueManager()

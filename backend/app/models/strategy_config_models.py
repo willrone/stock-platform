@@ -3,13 +3,18 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
+
+
+def utcnow() -> datetime:
+    """Return naive UTC datetime for DB compatibility."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class StrategyConfig(Base):
@@ -23,9 +28,9 @@ class StrategyConfig(Base):
     parameters = Column(JSON, nullable=False)  # 策略参数配置
     description = Column(Text, nullable=True)
     user_id = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
     )
 
     def to_dict(self) -> Dict[str, Any]:

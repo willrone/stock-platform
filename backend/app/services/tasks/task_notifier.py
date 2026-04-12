@@ -7,7 +7,7 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Dict, Optional
 
 from loguru import logger
@@ -21,6 +21,11 @@ from app.services.backtest.execution.backtest_progress_monitor import (
     backtest_progress_monitor,
 )
 from app.websocket import manager
+
+
+def utcnow() -> datetime:
+    """Return naive UTC datetime for consistent task timestamp handling."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class TaskNotifier:
@@ -80,7 +85,7 @@ class TaskNotifier:
 
                 # 获取最近更新的任务（运行中或刚完成的任务）
                 # 只检查最近1分钟内更新的任务
-                cutoff_time = datetime.utcnow() - timedelta(minutes=1)
+                cutoff_time = utcnow() - timedelta(minutes=1)
 
                 # 获取所有运行中的任务
                 running_tasks = task_repository.get_tasks_by_status(TaskStatus.RUNNING)
@@ -106,7 +111,7 @@ class TaskNotifier:
                     if not progress_changed and not time_changed:
                         continue
 
-                    self._last_check_time[task.task_id] = datetime.utcnow()
+                    self._last_check_time[task.task_id] = utcnow()
                     self._last_progress[task.task_id] = task.progress
 
                     await self._notify_task_update(task)
@@ -148,7 +153,7 @@ class TaskNotifier:
                     "task_id": task.task_id,
                     "overall_progress": task.progress,
                     "status": task.status,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow().isoformat(),
                 }
 
                 # 根据任务状态添加信息
@@ -234,7 +239,7 @@ class TaskNotifier:
     @staticmethod
     def _reset_progress_for_new_run(progress_data: BacktestProgressData) -> None:
         """重置回测进度监控器详细字段（仅用于新运行起点）。"""
-        now = datetime.utcnow()
+        now = utcnow()
         progress_data.start_time = now
         progress_data.overall_progress = 0.0
         progress_data.current_stage = "initializing"
@@ -347,7 +352,7 @@ class TaskNotifier:
                     "task_id": task.task_id,
                     "status": task.status,
                     "progress": task.progress,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
                 logger.debug(f"已发送任务进度更新: {task.task_id}, 进度: {task.progress}%")
@@ -364,7 +369,7 @@ class TaskNotifier:
                     if task.completed_at
                     else None,
                     "results": task.result,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
                 logger.debug(f"已发送任务完成通知: {task.task_id}")
@@ -378,7 +383,7 @@ class TaskNotifier:
                     "status": task.status,
                     "error": task.error_message,
                     "error_message": task.error_message,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
                 logger.debug(f"已发送任务失败通知: {task.task_id}, 错误: {task.error_message}")
@@ -390,7 +395,7 @@ class TaskNotifier:
                     "task_name": task.task_name,
                     "status": task.status,
                     "progress": task.progress,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
                 logger.debug(

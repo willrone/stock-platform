@@ -4,7 +4,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +12,11 @@ from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, 
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
+
+
+def utcnow() -> datetime:
+    """Return naive UTC datetime for DB compatibility."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class TaskType(Enum):
@@ -48,7 +53,7 @@ class Task(Base):
     status = Column(String(50), nullable=False, default=TaskStatus.CREATED.value)
     user_id = Column(String(255), nullable=True)
     config = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     progress = Column(Float, nullable=False, default=0.0)
@@ -93,7 +98,7 @@ class PredictionResult(Base):
     model_id = Column(String(255), nullable=False)
     features_used = Column(JSON, nullable=True)
     risk_metrics = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     def to_dict(self):
         return {
@@ -139,7 +144,7 @@ class BacktestResult(Base):
     profit_factor = Column(Float, nullable=False)
     total_trades = Column(Integer, nullable=False)
     trade_history = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     def to_dict(self):
         return {
@@ -191,9 +196,9 @@ class ModelInfo(Base):
     training_progress = Column(Float, nullable=True, default=0.0)  # 训练进度 0-100
     training_stage = Column(String(100), nullable=True)  # 当前训练阶段
     evaluation_report = Column(JSON, nullable=True)  # 评估报告
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
     deployed_at = Column(DateTime, nullable=True)
 
@@ -236,7 +241,7 @@ class ModelLifecycleEvent(Base):
     to_status = Column(String(50), nullable=False)
     reason = Column(Text, nullable=True)
     event_metadata = Column(JSON, nullable=True)  # 附加元数据
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     def to_dict(self):
         return {
