@@ -7,7 +7,7 @@ API依赖注入和共享函数
 
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import Header, Request
 from loguru import logger
@@ -72,6 +72,20 @@ try:
     logger.info("任务队列管理器已启动")
 except Exception as e:
     logger.warning(f"任务队列管理器启动失败: {e}")
+
+
+def _resolve_backtest_config_value(
+    config: dict[str, Any],
+    strategy_config: dict[str, Any],
+    key: str,
+    default: Any,
+) -> Any:
+    """Resolve runtime backtest parameters from top-level config first, then strategy_config."""
+    if key in config:
+        return config[key]
+    if key in strategy_config:
+        return strategy_config[key]
+    return default
 
 
 def get_task_repository():
@@ -429,8 +443,46 @@ def execute_backtest_task_simple(task_id: str):
         # 创建回测配置
         backtest_config = BacktestConfig(
             initial_cash=initial_cash,
-            commission_rate=config.get("commission_rate", 0.0003),
-            slippage_rate=config.get("slippage_rate", 0.0001),
+            commission_rate=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "commission_rate", 0.0003
+                )
+            ),
+            slippage_rate=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "slippage_rate", 0.0001
+                )
+            ),
+            max_position_size=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "max_position_size", 0.2
+                )
+            ),
+            cash_reserve_ratio=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "cash_reserve_ratio", 0.05
+                )
+            ),
+            board_lot_size=int(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "board_lot_size", 100
+                )
+            ),
+            stop_loss_pct=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "stop_loss_pct", 0.05
+                )
+            ),
+            take_profit_pct=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "take_profit_pct", 0.15
+                )
+            ),
+            rebalance_frequency=str(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "rebalance_frequency", "daily"
+                )
+            ),
         )
 
         # 执行回测

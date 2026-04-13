@@ -4,7 +4,7 @@
 
 import os
 from datetime import datetime
-from typing import Dict
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -51,6 +51,16 @@ def _parse_bool_env(var_name: str, default: bool = False) -> bool:
         return default
     return val.strip().lower() in {"1", "true", "yes", "y", "on"}
 
+
+def _resolve_backtest_config_value(
+    strategy_config: Dict[str, object],
+    key: str,
+    default: Any,
+) -> Any:
+    """Resolve runtime backtest parameters from normalized strategy_config."""
+    if key in strategy_config:
+        return strategy_config[key]
+    return default
 
 
 def _coerce_numeric_value(
@@ -672,8 +682,46 @@ async def run_backtest(request: BacktestRequest):
         # 创建回测配置
         backtest_config = BacktestConfig(
             initial_cash=request.initial_cash,
-            commission_rate=strategy_config.get("commission_rate", 0.0003),
-            slippage_rate=strategy_config.get("slippage_rate", 0.0001),
+            commission_rate=float(
+                _resolve_backtest_config_value(
+                    strategy_config, "commission_rate", 0.0003
+                )
+            ),
+            slippage_rate=float(
+                _resolve_backtest_config_value(
+                    strategy_config, "slippage_rate", 0.0001
+                )
+            ),
+            max_position_size=float(
+                _resolve_backtest_config_value(
+                    strategy_config, "max_position_size", 0.2
+                )
+            ),
+            cash_reserve_ratio=float(
+                _resolve_backtest_config_value(
+                    strategy_config, "cash_reserve_ratio", 0.05
+                )
+            ),
+            board_lot_size=int(
+                _resolve_backtest_config_value(
+                    strategy_config, "board_lot_size", 100
+                )
+            ),
+            stop_loss_pct=float(
+                _resolve_backtest_config_value(
+                    strategy_config, "stop_loss_pct", 0.05
+                )
+            ),
+            take_profit_pct=float(
+                _resolve_backtest_config_value(
+                    strategy_config, "take_profit_pct", 0.15
+                )
+            ),
+            rebalance_frequency=str(
+                _resolve_backtest_config_value(
+                    strategy_config, "rebalance_frequency", "daily"
+                )
+            ),
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）
