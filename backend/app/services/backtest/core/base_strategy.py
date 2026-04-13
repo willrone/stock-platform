@@ -79,14 +79,35 @@ class BaseStrategy(ABC):
         """计算技术指标"""
         pass
 
+    async def prepare_backtest_data(
+        self,
+        stock_data: Dict[str, pd.DataFrame],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> None:
+        """可选异步预热钩子。
+
+        供需要在回测前批量拉取/计算外部依赖数据的策略使用；
+        默认 no-op，保持既有策略零改动。
+        """
+        return None
+
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
         """
         [性能优化] 在回测开始前，利用向量化计算一次性生成全量信号序列。
-        
+
         返回一个 Series，索引与 data.index 一致，值为信号类型或强度。
         默认返回 None，由子类实现以开启极速模式。
         """
         return None
+
+    def get_trade_mode(self) -> Optional[str]:
+        """返回策略偏好的交易执行模式。默认使用逐信号执行。"""
+        return None
+
+    def get_trade_mode_config(self) -> Dict[str, object]:
+        """返回策略自带的交易执行模式默认配置。"""
+        return {}
 
     def _extract_indicators_from_precomputed(
         self, data: pd.DataFrame, indicator_mapping: Dict[str, str]

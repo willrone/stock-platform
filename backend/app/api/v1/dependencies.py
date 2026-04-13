@@ -112,6 +112,30 @@ def _parse_bool_env(var_name: str, default: bool = False) -> bool:
     return val.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _normalize_task_backtest_strategy_config(config: dict | None) -> tuple[str, dict]:
+    """规范化任务回测配置，补齐模型驱动回测所需的 strategy_config.model_id。"""
+    normalized = dict(config or {})
+    strategy_name = str(normalized.get("strategy_name", "default_strategy") or "default_strategy")
+    strategy_config = dict(normalized.get("strategy_config") or {})
+
+    model_id = normalized.get("model_id")
+    if model_id:
+        strategy_config.setdefault("model_id", model_id)
+        normalized_name = strategy_name.lower()
+        if normalized_name in {"model", "signal", "model_signal"}:
+            strategy_name = "model_signal"
+        elif normalized_name in {
+            "topk_dropout",
+            "model_topk_dropout",
+            "official_topk_dropout",
+            "model_ranking",
+            "ranking",
+        }:
+            strategy_name = "model_topk_dropout"
+
+    return strategy_name, strategy_config
+
+
 # 简化的任务执行函数（用于进程池执行）
 # 注意：此函数在独立进程中执行，不能使用全局变量或单例
 def execute_prediction_task_simple(task_id: str):
@@ -295,11 +319,12 @@ def execute_backtest_task_simple(task_id: str):
 
         # 解析任务配置
         config = task.config or {}
+        strategy_name, strategy_config = _normalize_task_backtest_strategy_config(config)
         task_logger.info(f"任务配置: {config}")
         task_logger.info(f"配置键: {list(config.keys())}")
-        task_logger.info(f"策略配置 (strategy_config): {config.get('strategy_config', {})}")
-        task_logger.info(f"策略配置类型: {type(config.get('strategy_config', {}))}")
-        task_logger.info(f"策略配置是否为空: {not config.get('strategy_config', {})}")
+        task_logger.info(f"策略配置 (strategy_config): {strategy_config}")
+        task_logger.info(f"策略配置类型: {type(strategy_config)}")
+        task_logger.info(f"策略配置是否为空: {not strategy_config}")
 
         # 检查是否有系统字段被意外包含在配置中
         system_fields = [
@@ -325,7 +350,6 @@ def execute_backtest_task_simple(task_id: str):
             task_logger.warning(f"配置中发现系统字段: {found_system_fields}")
 
         stock_codes = config.get("stock_codes", [])
-        strategy_name = config.get("strategy_name", "default_strategy")
         start_date_str = config.get("start_date")
         end_date_str = config.get("end_date")
         initial_cash = config.get("initial_cash", 100000.0)
@@ -422,7 +446,7 @@ def execute_backtest_task_simple(task_id: str):
                     stock_codes=stock_codes,
                     start_date=start_date,
                     end_date=end_date,
-                    strategy_config=config.get("strategy_config", {}),
+                    strategy_config=strategy_config,
                     backtest_config=backtest_config,
                     task_id=task_id,
                 )

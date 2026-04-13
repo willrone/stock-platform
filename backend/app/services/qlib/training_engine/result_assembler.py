@@ -58,6 +58,7 @@ class QlibTrainingResultAssembler:
         validation_samples: int,
         feature_correlation: Dict[str, Any],
         early_stopping_info: Dict[str, Any],
+        signal_quality: Dict[str, Any],
     ) -> Any:
         """构建 QlibTrainingResult。"""
         return self.result_cls(
@@ -76,4 +77,5 @@ class QlibTrainingResultAssembler:
             best_epoch=early_stopping_info["best_epoch"],
             early_stopping_reason=early_stopping_info["early_stopping_reason"],
             feature_correlation=feature_correlation,
+            signal_quality=signal_quality,
         )

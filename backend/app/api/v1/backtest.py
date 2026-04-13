@@ -4,6 +4,7 @@
 
 import os
 from datetime import datetime
+from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -19,6 +20,28 @@ from app.core.error_handler import (
 from app.services.backtest import BacktestConfig, BacktestExecutor
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
+
+
+def _normalize_backtest_strategy_request(request: BacktestRequest) -> tuple[str, Dict[str, object]]:
+    """规范化回测策略请求，补齐模型驱动回测配置。"""
+    strategy_name = request.strategy_name
+    strategy_config = dict(request.strategy_config or {})
+
+    if request.model_id:
+        strategy_config.setdefault("model_id", request.model_id)
+        normalized_name = strategy_name.lower()
+        if normalized_name in {"model", "signal", "model_signal"}:
+            strategy_name = "model_signal"
+        elif normalized_name in {
+            "topk_dropout",
+            "model_topk_dropout",
+            "official_topk_dropout",
+            "model_ranking",
+            "ranking",
+        }:
+            strategy_name = "model_topk_dropout"
+
+    return strategy_name, strategy_config
 
 
 def _parse_bool_env(var_name: str, default: bool = False) -> bool:
@@ -614,12 +637,14 @@ async def run_backtest(request: BacktestRequest):
     }
     """
     try:
+        normalized_strategy_name, strategy_config = _normalize_backtest_strategy_request(request)
+
         # 检测是否为组合策略
-        is_portfolio = request.strategy_name.lower() == "portfolio" or (
-            request.strategy_config and "strategies" in request.strategy_config
+        is_portfolio = normalized_strategy_name.lower() == "portfolio" or (
+            strategy_config and "strategies" in strategy_config
         )
 
-        strategy_display = "组合策略" if is_portfolio else request.strategy_name
+        strategy_display = "组合策略" if is_portfolio else normalized_strategy_name
         logger.info(
             f"开始回测: 策略={strategy_display}, 股票={request.stock_codes}, 期间={request.start_date} - {request.end_date}"
         )
@@ -636,9 +661,8 @@ async def run_backtest(request: BacktestRequest):
         )
 
         # 验证参数
-        strategy_config = request.strategy_config or {}
         executor.validate_backtest_parameters(
-            strategy_name=request.strategy_name,
+            strategy_name=normalized_strategy_name,
             stock_codes=request.stock_codes,
             start_date=request.start_date,
             end_date=request.end_date,
@@ -659,22 +683,17 @@ async def run_backtest(request: BacktestRequest):
         import asyncio
 
         def _run_backtest_in_thread():
-            """在独立线程中运行回测，避免阻塞FastAPI事件循环"""
-            import nest_asyncio
-            nest_asyncio.apply()
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(executor.run_backtest(
-                    strategy_name=request.strategy_name,
+            """在独立线程中运行回测，避免阻塞FastAPI事件循环。"""
+            return asyncio.run(
+                executor.run_backtest(
+                    strategy_name=normalized_strategy_name,
                     stock_codes=request.stock_codes,
                     start_date=request.start_date,
                     end_date=request.end_date,
                     strategy_config=strategy_config,
                     backtest_config=backtest_config,
-                ))
-            finally:
-                loop.close()
+                )
+            )
 
         backtest_report = await asyncio.to_thread(_run_backtest_in_thread)
 
@@ -746,7 +765,7 @@ async def run_backtest(request: BacktestRequest):
 
         result = {
             "strategy_name": backtest_report.get(
-                "strategy_name", request.strategy_name
+                "strategy_name", normalized_strategy_name
             ),
             "is_portfolio": is_portfolio,
             "portfolio_info": portfolio_info,

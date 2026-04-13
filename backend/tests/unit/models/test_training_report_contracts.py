@@ -77,6 +77,18 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
             "best_epoch": 27,
             "early_stopping_reason": "Qlib/LightGBM官方早停",
         },
+        signal_quality={
+            "ic": 0.0123,
+            "icir": 0.87,
+            "rank_ic": 0.0189,
+            "rank_icir": 1.02,
+            "long_short_ann_return": 0.15,
+            "long_short_ann_sharpe": 1.1,
+            "long_avg_ann_return": 0.08,
+            "long_avg_ann_sharpe": 0.72,
+            "sample_count": 97,
+            "analysis_scope": "validation",
+        },
     )
 
     payload = generator.to_dict(report)
@@ -84,6 +96,18 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
     assert payload["training_summary"]["train_samples"] == 388
     assert payload["training_summary"]["validation_samples"] == 97
     assert payload["training_summary"]["total_samples"] == 485
+    assert payload["signal_quality"] == {
+        "ic": 0.0123,
+        "icir": 0.87,
+        "rank_ic": 0.0189,
+        "rank_icir": 1.02,
+        "long_short_ann_return": 0.15,
+        "long_short_ann_sharpe": 1.1,
+        "long_avg_ann_return": 0.08,
+        "long_avg_ann_sharpe": 0.72,
+        "sample_count": 97,
+        "analysis_scope": "validation",
+    }
     assert payload["training_data_info"]["train_samples"] == 388
     assert payload["training_data_info"]["validation_samples"] == 97
     assert payload["training_data_info"]["total_samples"] == 485
@@ -164,4 +188,16 @@ def test_normalize_report_payload_backfills_legacy_fields() -> None:
         "stopped_epoch": 0,
         "best_epoch": 0,
         "early_stopping_reason": None,
+    }
+    assert payload["signal_quality"] == {
+        "ic": None,
+        "icir": None,
+        "rank_ic": None,
+        "rank_icir": None,
+        "long_short_ann_return": None,
+        "long_short_ann_sharpe": None,
+        "long_avg_ann_return": None,
+        "long_avg_ann_sharpe": None,
+        "sample_count": 0,
+        "analysis_scope": None,
     }

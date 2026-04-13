@@ -25,6 +25,7 @@ from ..reporting import BacktestReportBuildInput, BacktestReportBuilder
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
 from .data_loader import DataLoader
+from .trade_modes import TradeModeExecutionContext, get_trade_mode_executor
 
 # 性能监控（可选导入，避免依赖问题）
 try:
@@ -299,6 +300,16 @@ class BacktestExecutor:
             _t_sub = time.perf_counter()
             self._build_date_index(stock_data)
             perf_breakdown["precompute_sub_build_date_index_s"] = time.perf_counter() - _t_sub
+
+            # ✅ 策略异步预热（如模型预测序列）
+            _t_sub = time.perf_counter()
+            await self._prepare_strategy_backtest_data(
+                strategy,
+                stock_data,
+                start_date,
+                end_date,
+            )
+            perf_breakdown["precompute_sub_strategy_prepare_s"] = time.perf_counter() - _t_sub
 
             # ✅ 信号向量化预计算
             _t_sub = time.perf_counter()
@@ -629,6 +640,35 @@ class BacktestExecutor:
             except Exception:
                 pass
 
+    async def _prepare_strategy_backtest_data(
+        self,
+        strategy: BaseStrategy,
+        stock_data: Dict[str, pd.DataFrame],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> None:
+        """递归执行策略的异步预热逻辑（如模型预测序列准备）。"""
+        try:
+            from ..core.strategy_portfolio import StrategyPortfolio
+
+            if isinstance(strategy, StrategyPortfolio):
+                for sub in strategy.strategies:
+                    await self._prepare_strategy_backtest_data(
+                        sub,
+                        stock_data,
+                        start_date,
+                        end_date,
+                    )
+                return
+        except Exception:
+            pass
+
+        prepare_hook = getattr(strategy, "prepare_backtest_data", None)
+        if prepare_hook is None:
+            return
+
+        await prepare_hook(stock_data, start_date, end_date)
+
     def _precompute_strategy_signals(
         self,
         strategy: BaseStrategy,
@@ -958,6 +998,45 @@ class BacktestExecutor:
             'signal': signal,
         }
 
+    def _determine_price_lookup_codes(
+        self,
+        *,
+        strategy: BaseStrategy,
+        portfolio_manager: PortfolioManager,
+        aligned_arrays: Dict[str, Any],
+        date_index: int,
+    ) -> set[str]:
+        """Determine which symbols need prices for the current date.
+
+        Ranking trade modes such as topk_dropout need the full cross-section even
+        after the portfolio already holds topk names; otherwise new entrants never
+        receive prices and cannot compete into the ranking.
+        """
+        from .vectorized_loop import get_portfolio_stocks
+
+        codes = aligned_arrays.get("stock_codes") or []
+        sig_mat = aligned_arrays.get("signal")
+
+        need_codes = set(get_portfolio_stocks(portfolio_manager))
+        if isinstance(sig_mat, np.ndarray):
+            sig_idx = np.nonzero(sig_mat[:, date_index])[0]
+            for j in sig_idx.tolist():
+                need_codes.add(codes[j])
+
+        trade_mode = None
+        try:
+            trade_mode = strategy.get_trade_mode()
+        except Exception:
+            trade_mode = None
+
+        if trade_mode == "topk_dropout":
+            return set(codes)
+
+        if not need_codes:
+            return set(codes)
+
+        return need_codes
+
 
     def _precompute_signals_multiprocess(
         self,
@@ -1217,26 +1296,22 @@ class BacktestExecutor:
 
                 if aligned_arrays is not None:
                     # Phase 3 优化：使用向量化价格查找
-                    from .vectorized_loop import vectorized_price_lookup, get_portfolio_stocks
+                    from .vectorized_loop import vectorized_price_lookup
                     
                     codes = aligned_arrays.get("stock_codes")
                     code_to_i = aligned_arrays.get("code_to_i")
                     close_mat = aligned_arrays.get("close")
                     valid_mat = aligned_arrays.get("valid")
-                    sig_mat = aligned_arrays.get("signal")
 
-                    # 收集需要价格的股票（持仓 + 有信号的股票）
-                    need_codes = set(get_portfolio_stocks(portfolio_manager))
-                    
-                    if isinstance(sig_mat, np.ndarray):
-                        sig_idx = np.nonzero(sig_mat[:, i])[0]
-                        for j in sig_idx.tolist():
-                            need_codes.add(codes[j])
-
-                    # BUGFIX: 如果没有预计算信号且持仓为空，需要为所有股票获取价格
-                    # 否则无法生成信号（因为 generate_signals 需要当前价格）
-                    if not need_codes:
-                        need_codes = set(codes)
+                    # 收集需要价格的股票。
+                    # 对 ranking trade mode，必须包含全股票池，否则新候选股在持仓建立后
+                    # 永远拿不到价格，无法进入 TopK 竞争。
+                    need_codes = self._determine_price_lookup_codes(
+                        strategy=strategy,
+                        portfolio_manager=portfolio_manager,
+                        aligned_arrays=aligned_arrays,
+                        date_index=i,
+                    )
 
                     if need_codes:
                         # 批量查找价格（向量化）
@@ -1387,8 +1462,9 @@ class BacktestExecutor:
                             return [signal] if not isinstance(signal, list) else signal
                     return None
 
-                # PERF OPTIMIZATION: 禁用per-day并行，因为信号已经预计算，串行更快
-                if False and self.enable_parallel and len(stock_data) > 3:
+                # 只有在 aligned/precomputed 路径未拿到信号时，才走逐股票生成回退路径。
+                # 否则会把同一天同一股票的信号重复加入 all_signals，导致 signal_records 计数膨胀。
+                if not all_signals and False and self.enable_parallel and len(stock_data) > 3:
                     # 并行生成多股票信号
                     # PERF: avoid per-day ThreadPoolExecutor creation and avoid per-stock futures.
                     # We batch stocks into coarse tasks to reduce scheduling overhead.
@@ -1589,7 +1665,7 @@ class BacktestExecutor:
                                 parallel_time=parallel_time,
                                 worker_count=self.max_workers,
                             )
-                else:
+                elif not all_signals:
                     gen_time_max = 0.0
                     # 顺序生成信号（股票数量少或禁用并行）
                     for stock_code, data in stock_data.items():
@@ -1711,41 +1787,6 @@ class BacktestExecutor:
                         pass
 
                 _ml_signal_extract += time.perf_counter() - _t_ml
-                total_signals += len(all_signals)
-
-                # PERF优化：收集信号记录到内存，循环结束后批量写入数据库
-                _t_ml = time.perf_counter()
-                if task_id and all_signals:
-                    try:
-                        import uuid
-
-                        # 使用传入的backtest_id或生成一个（只生成一次）
-                        if _current_backtest_id is None:
-                            _current_backtest_id = backtest_id or (
-                                f"bt_{task_id[:8]}"
-                                if task_id
-                                else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                            )
-
-                        # 收集信号记录到内存列表（不再每天写数据库）
-                        for signal in all_signals:
-                            signal_data = {
-                                "signal_id": f"sig_{uuid.uuid4().hex[:12]}",
-                                "stock_code": signal.stock_code,
-                                "stock_name": None,
-                                "signal_type": signal.signal_type.name,
-                                "timestamp": signal.timestamp,
-                                "price": signal.price,
-                                "strength": signal.strength,
-                                "reason": signal.reason,
-                                "metadata": signal.metadata,
-                                "executed": False,
-                            }
-                            _batch_signals_data.append(signal_data)
-                    except Exception as e:
-                        logger.warning(f"保存信号记录时出错: {e}")
-
-                _ml_batch_collect += time.perf_counter() - _t_ml
                 _t_ml = time.perf_counter()
                 # 执行交易信号（性能监控）
                 trade_start_time = (
@@ -1757,28 +1798,57 @@ class BacktestExecutor:
 
                 # ===== trade execution mode =====
                 trade_mode = None
+                trade_mode_config: Dict[str, Any] = {}
                 topk_limit: int | None = None  # for post-trade sanity checks
                 try:
-                    trade_mode = (strategy_config or {}).get("trade_mode")
+                    if strategy is not None:
+                        trade_mode = strategy.get_trade_mode()
+                        trade_mode_config.update(strategy.get_trade_mode_config() or {})
                 except Exception:
                     trade_mode = None
+                    trade_mode_config = {}
+
+                try:
+                    trade_mode_config.update(strategy_config or {})
+                    trade_mode = (strategy_config or {}).get("trade_mode", trade_mode)
+                except Exception:
+                    pass
+
+                mode_executor = get_trade_mode_executor(trade_mode)
 
                 # --- debug aid: log which trade path is used (only when needed) ---
                 try:
                     if current_date.strftime("%Y-%m-%d") in ("2023-05-19", "2023-05-22", "2023-05-23"):
                         logger.info(
                             f"[trade_path] date={current_date.strftime('%Y-%m-%d')} trade_mode={trade_mode} "
-                            f"signals={len(all_signals)} strategy_config_keys={list((strategy_config or {}).keys())}"
+                            f"signals={len(all_signals)} strategy_config_keys={list((trade_mode_config or {}).keys())}"
                         )
                 except Exception:
                     pass
 
-                if trade_mode == "topk_buffer":
+                if mode_executor is not None:
+                    mode_result = mode_executor.execute(
+                        TradeModeExecutionContext(
+                            current_date=current_date,
+                            all_signals=all_signals,
+                            current_prices=current_prices,
+                            portfolio_manager=portfolio_manager,
+                            strategy=strategy,
+                            strategy_config=trade_mode_config,
+                            stock_universe=list(stock_data.keys()),
+                        )
+                    )
+                    executed_trade_signals = mode_result.executed_trade_signals
+                    unexecuted_signals = mode_result.unexecuted_signals
+                    trades_this_day = mode_result.trades_this_day
+                    if trade_mode_config.get("topk") is not None:
+                        topk_limit = int(trade_mode_config["topk"])
+                elif trade_mode == "topk_buffer":
                     # Daily TopK selection + buffer zone + max changes/day
-                    k = int((strategy_config or {}).get("topk", 10))
+                    k = int(trade_mode_config.get("topk", 10))
                     topk_limit = k
-                    buffer_n = int((strategy_config or {}).get("buffer", 20))
-                    max_changes = int((strategy_config or {}).get("max_changes_per_day", 2))
+                    buffer_n = int(trade_mode_config.get("buffer", 20))
+                    max_changes = int(trade_mode_config.get("max_changes_per_day", 2))
                     trades_limit = max_changes
 
                     # Build ranking scores from signals (BUY strength positive, SELL negative)
@@ -1800,7 +1870,7 @@ class BacktestExecutor:
                         buffer_n=buffer_n,
                         max_changes=trades_limit,
                         strategy=strategy,
-                        debug=bool((strategy_config or {}).get("debug_topk_buffer", False)),
+                        debug=bool(trade_mode_config.get("debug_topk_buffer", False)),
                     )
 
                     # Debug: show what was executed on key dates / when trades happen
@@ -1880,6 +1950,46 @@ class BacktestExecutor:
                     )
 
                 _ml_trade_exec += time.perf_counter() - _t_ml
+
+                signals_for_recording = all_signals
+                try:
+                    if mode_executor is not None and getattr(mode_result, "signal_records", None):
+                        signals_for_recording = mode_result.signal_records
+                except Exception:
+                    pass
+                total_signals += len(signals_for_recording)
+
+                # PERF优化：收集信号记录到内存，循环结束后批量写入数据库
+                _t_ml = time.perf_counter()
+                if task_id and signals_for_recording:
+                    try:
+                        import uuid
+
+                        if _current_backtest_id is None:
+                            _current_backtest_id = backtest_id or (
+                                f"bt_{task_id[:8]}"
+                                if task_id
+                                else f"bt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            )
+
+                        for signal in signals_for_recording:
+                            signal_data = {
+                                "signal_id": f"sig_{uuid.uuid4().hex[:12]}",
+                                "stock_code": signal.stock_code,
+                                "stock_name": None,
+                                "signal_type": signal.signal_type.name,
+                                "timestamp": signal.timestamp,
+                                "price": signal.price,
+                                "strength": signal.strength,
+                                "reason": signal.reason,
+                                "metadata": signal.metadata,
+                                "executed": False,
+                            }
+                            _batch_signals_data.append(signal_data)
+                    except Exception as e:
+                        logger.warning(f"保存信号记录时出错: {e}")
+                _ml_batch_collect += time.perf_counter() - _t_ml
+
                 # PERF优化：收集未执行和已执行信号到内存，循环结束后批量写入
                 if task_id and unexecuted_signals:
                     _batch_unexecuted_signals.extend(unexecuted_signals)

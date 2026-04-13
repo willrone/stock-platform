@@ -157,6 +157,7 @@ class QlibTrainingResult:
     best_epoch: int = 0
     early_stopping_reason: Optional[str] = None
     feature_correlation: Optional[Dict[str, Any]] = None
+    signal_quality: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -176,6 +177,7 @@ class QlibTrainingResult:
             "best_epoch": self.best_epoch,
             "early_stopping_reason": self.early_stopping_reason,
             "feature_correlation": self.feature_correlation,
+            "signal_quality": self.signal_quality,
         }
 
 
@@ -1441,7 +1443,7 @@ class UnifiedQlibTrainingEngine:
         train_dataset: pd.DataFrame,
         val_dataset: pd.DataFrame,
         model_id: str = None,
-    ) -> Tuple[Dict[str, float], Dict[str, float]]:
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
         """评估模型性能并计算详细指标"""
         try:
             # 记录数据集信息
@@ -1488,16 +1490,242 @@ class UnifiedQlibTrainingEngine:
             validation_metrics = self._calculate_metrics(
                 val_dataset, val_pred, "验证集", model_id
             )
+            validation_signal_quality = self._calculate_signal_quality(
+                val_dataset, val_pred, "验证集"
+            )
 
             logger.info(
-                f"模型评估完成 - 训练准确率: {training_metrics.get('accuracy', 0.0):.4f}, 验证准确率: {validation_metrics.get('accuracy', 0.0):.4f}"
+                f"模型评估完成 - 训练准确率: {training_metrics.get('accuracy', 0.0):.4f}, 验证准确率: {validation_metrics.get('accuracy', 0.0):.4f}, RankIC: {validation_signal_quality.get('rank_ic')}"
             )
-            return training_metrics, validation_metrics
+            return training_metrics, validation_metrics, validation_signal_quality
 
         except Exception as e:
             logger.error(f"模型评估失败: {e}", exc_info=True)
             # 返回默认指标
-            return self._get_default_metrics(), self._get_default_metrics()
+            return self._get_default_metrics(), self._get_default_metrics(), {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "validation",
+            }
+
+    def _extract_evaluation_inputs(
+        self,
+        dataset: pd.DataFrame,
+        predictions,
+        dataset_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """统一提取评估所需的标签、预测值与索引。"""
+        try:
+            import numpy as np
+
+            y_true = None
+            y_index = None
+
+            segment = (
+                "train"
+                if "训练" in dataset_name
+                else "valid"
+                if "验证" in dataset_name
+                else "train"
+            )
+
+            if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
+                if hasattr(dataset, "segments") and segment in dataset.segments:
+                    segment_data = dataset.segments[segment]
+                    if isinstance(segment_data, pd.DataFrame) and "label" in segment_data.columns:
+                        label_series = segment_data["label"]
+                        if hasattr(label_series, "_series"):
+                            y_true = label_series._series.values
+                            y_index = label_series._series.index
+                        else:
+                            y_true = label_series.values
+                            y_index = label_series.index
+                elif "label" in dataset.data.columns:
+                    y_true = dataset.data["label"].values
+                    y_index = dataset.data.index
+                elif hasattr(dataset, "prepare"):
+                    try:
+                        prepared = dataset.prepare(segment, col_set=["label"])
+                        if isinstance(prepared, pd.DataFrame) and "label" in prepared.columns:
+                            label_col = prepared["label"]
+                            if hasattr(label_col, "_series"):
+                                y_true = label_col._series.values
+                                y_index = label_col._series.index
+                            elif hasattr(label_col, "values"):
+                                label_values = label_col.values
+                                y_true = label_values.flatten() if getattr(label_values, "ndim", 1) == 2 else label_values
+                                y_index = label_col.index
+                            else:
+                                y_true = np.array(label_col).flatten()
+                                y_index = prepared.index
+                    except Exception as e:
+                        logger.debug(f"通过prepare方法获取标签失败: {e}")
+
+            if y_true is None and isinstance(dataset, pd.DataFrame):
+                if "label" in dataset.columns:
+                    label_col = dataset["label"]
+                    if hasattr(label_col, "_series"):
+                        y_true = label_col._series.values
+                        y_index = label_col._series.index
+                    else:
+                        y_true = label_col.values
+                        y_index = label_col.index
+
+            if y_true is None:
+                logger.warning(f"数据集 {dataset_name} 中没有找到label列")
+                return None
+
+            if isinstance(predictions, pd.Series):
+                y_pred = predictions.values
+                pred_index = predictions.index
+            elif isinstance(predictions, np.ndarray):
+                y_pred = predictions.flatten() if predictions.ndim > 1 else predictions
+                pred_index = getattr(predictions, "index", None)
+            else:
+                y_pred = np.array(predictions).flatten()
+                pred_index = getattr(predictions, "index", None)
+
+            min_len = min(len(y_true), len(y_pred))
+            if min_len == 0:
+                logger.warning(f"数据集 {dataset_name} 为空")
+                return None
+
+            y_true = np.asarray(y_true[:min_len])
+            y_pred = np.asarray(y_pred[:min_len])
+            if y_index is not None:
+                y_index = y_index[:min_len]
+            elif pred_index is not None:
+                y_index = pred_index[:min_len]
+
+            valid_mask = ~(np.isnan(y_true) | np.isnan(y_pred))
+            if valid_mask.sum() == 0:
+                logger.warning(f"数据集 {dataset_name} 中没有有效数据")
+                return None
+
+            y_true = y_true[valid_mask]
+            y_pred = y_pred[valid_mask]
+            if y_index is not None:
+                y_index = y_index[valid_mask]
+
+            return {
+                "y_true": y_true,
+                "y_pred": y_pred,
+                "y_index": y_index,
+            }
+        except Exception as e:
+            logger.error(f"提取评估输入失败: {e}", exc_info=True)
+            return None
+
+    def _calculate_signal_quality(
+        self,
+        dataset: pd.DataFrame,
+        predictions,
+        dataset_name: str,
+    ) -> Dict[str, Any]:
+        """按 Qlib 官方思路计算信号质量指标。"""
+        evaluation_inputs = self._extract_evaluation_inputs(dataset, predictions, dataset_name)
+        default_result = {
+            "ic": None,
+            "icir": None,
+            "rank_ic": None,
+            "rank_icir": None,
+            "long_short_ann_return": None,
+            "long_short_ann_sharpe": None,
+            "long_avg_ann_return": None,
+            "long_avg_ann_sharpe": None,
+            "sample_count": 0,
+            "analysis_scope": "validation" if "验证" in dataset_name else "train",
+        }
+        if evaluation_inputs is None:
+            return default_result
+
+        import numpy as np
+        import pandas as pd
+
+        y_true = evaluation_inputs["y_true"]
+        y_pred = evaluation_inputs["y_pred"]
+        y_index = evaluation_inputs["y_index"]
+
+        df = pd.DataFrame({"pred": y_pred, "label": y_true})
+        if y_index is not None:
+            df.index = y_index
+
+        if isinstance(df.index, pd.MultiIndex):
+            date_level = "datetime" if "datetime" in (df.index.names or []) else df.index.names[-1]
+            grouped = df.groupby(level=date_level, group_keys=False)
+        else:
+            grouped = [("all", df)]
+
+        ic_values = []
+        ric_values = []
+        long_short_returns = []
+        long_avg_returns = []
+
+        for _, group in grouped:
+            group = group.dropna()
+            if group.empty:
+                continue
+
+            ic = group["pred"].corr(group["label"])
+            rank_ic = group["pred"].rank().corr(group["label"].rank())
+            if pd.notna(ic):
+                ic_values.append(float(ic))
+            if pd.notna(rank_ic):
+                ric_values.append(float(rank_ic))
+
+            quantile_n = max(1, int(len(group) * 0.2))
+            long_group = group.nlargest(quantile_n, columns="pred")
+            short_group = group.nsmallest(quantile_n, columns="pred")
+            long_return = long_group["label"].mean()
+            short_return = short_group["label"].mean()
+            avg_return = group["label"].mean()
+            if pd.notna(long_return) and pd.notna(short_return):
+                long_short_returns.append(float((long_return - short_return) / 2))
+            if pd.notna(avg_return):
+                long_avg_returns.append(float(avg_return))
+
+        def _safe_mean(values):
+            return float(np.mean(values)) if values else None
+
+        def _safe_ir(values):
+            if len(values) <= 1:
+                return None
+            std = float(np.std(values, ddof=1))
+            if std <= 0:
+                return None
+            return float(np.mean(values) / std)
+
+        def _safe_ann_return(values):
+            return float(np.mean(values) * 252) if values else None
+
+        def _safe_ann_sharpe(values):
+            if len(values) <= 1:
+                return None
+            std = float(np.std(values, ddof=1))
+            if std <= 0:
+                return None
+            return float(np.mean(values) / std * np.sqrt(252))
+
+        result = {
+            "ic": _safe_mean(ic_values),
+            "icir": _safe_ir(ic_values),
+            "rank_ic": _safe_mean(ric_values),
+            "rank_icir": _safe_ir(ric_values),
+            "long_short_ann_return": _safe_ann_return(long_short_returns),
+            "long_short_ann_sharpe": _safe_ann_sharpe(long_short_returns),
+            "long_avg_ann_return": _safe_ann_return(long_avg_returns),
+            "long_avg_ann_sharpe": _safe_ann_sharpe(long_avg_returns),
+            "sample_count": int(len(y_true)),
+            "analysis_scope": "validation" if "验证" in dataset_name else "train",
+        }
+        return result
 
     def _calculate_metrics(
         self,
@@ -1519,115 +1747,20 @@ class UnifiedQlibTrainingEngine:
                 recall_score,
             )
 
-            # 从数据集中获取真实标签
-            y_true = None
-
-            # 首先确定应该使用哪个segment
-            segment = (
-                "train"
-                if "训练" in dataset_name
-                else "valid"
-                if "验证" in dataset_name
-                else "train"
+            evaluation_inputs = self._extract_evaluation_inputs(
+                dataset, predictions, dataset_name
             )
-
-            # 尝试多种方式获取标签
-            if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
-                # DataFrameDatasetAdapter - 根据segment获取对应的数据
-                if hasattr(dataset, "segments") and segment in dataset.segments:
-                    segment_data = dataset.segments[segment]
-                    if (
-                        isinstance(segment_data, pd.DataFrame)
-                        and "label" in segment_data.columns
-                    ):
-                        label_series = segment_data["label"]
-                        # 如果是LabelSeries，获取其内部的Series
-                        if hasattr(label_series, "_series"):
-                            y_true = label_series._series.values
-                        else:
-                            y_true = label_series.values
-                        logger.debug(
-                            f"{dataset_name} 从segment {segment}获取标签，形状: {y_true.shape if hasattr(y_true, 'shape') else len(y_true)}"
-                        )
-                elif "label" in dataset.data.columns:
-                    y_true = dataset.data["label"].values
-                elif hasattr(dataset, "prepare"):
-                    # 尝试通过prepare方法获取
-                    try:
-                        prepared = dataset.prepare(segment, col_set=["label"])
-                        if (
-                            isinstance(prepared, pd.DataFrame)
-                            and "label" in prepared.columns
-                        ):
-                            label_col = prepared["label"]
-                            # 如果是LabelSeries，获取其内部的Series
-                            if hasattr(label_col, "_series"):
-                                y_true = label_col._series.values
-                            elif hasattr(label_col, "values"):
-                                label_values = label_col.values
-                                if label_values.ndim == 2:
-                                    y_true = label_values.flatten()
-                                else:
-                                    y_true = label_values
-                            else:
-                                y_true = np.array(label_col).flatten()
-                        logger.debug(
-                            f"{dataset_name} 通过prepare方法获取标签，形状: {y_true.shape if hasattr(y_true, 'shape') else len(y_true)}"
-                        )
-                    except Exception as e:
-                        logger.debug(f"通过prepare方法获取标签失败: {e}")
-
-            if y_true is None and isinstance(dataset, pd.DataFrame):
-                # 直接是DataFrame
-                if "label" in dataset.columns:
-                    label_col = dataset["label"]
-                    # 如果是LabelSeries，获取其内部的Series
-                    if hasattr(label_col, "_series"):
-                        y_true = label_col._series.values
-                    else:
-                        y_true = label_col.values
-
-            if y_true is None:
-                logger.warning(f"数据集 {dataset_name} 中没有找到label列，使用默认指标")
-                logger.warning(
-                    f"数据集类型: {type(dataset)}, 是否有data属性: {hasattr(dataset, 'data')}, 是否有segments属性: {hasattr(dataset, 'segments')}"
-                )
-                if hasattr(dataset, "segments"):
-                    logger.warning(
-                        f"可用segments: {list(dataset.segments.keys()) if hasattr(dataset.segments, 'keys') else 'N/A'}"
-                    )
+            if evaluation_inputs is None:
+                logger.warning(f"数据集 {dataset_name} 中没有有效评估输入，使用默认指标")
                 return self._get_default_metrics()
+
+            y_true = evaluation_inputs["y_true"]
+            y_pred = evaluation_inputs["y_pred"]
 
             # 记录标签统计信息
             logger.info(
                 f"{dataset_name} 标签统计 - 样本数: {len(y_true)}, 非零值: {np.count_nonzero(y_true)}, 零值: {np.sum(np.abs(y_true) < 1e-6)}, 范围: [{np.min(y_true):.6f}, {np.max(y_true):.6f}]"
             )
-
-            # 处理预测值
-            if isinstance(predictions, pd.Series):
-                y_pred = predictions.values
-            elif isinstance(predictions, np.ndarray):
-                y_pred = predictions.flatten() if predictions.ndim > 1 else predictions
-            else:
-                y_pred = np.array(predictions).flatten()
-
-            # 确保长度一致
-            min_len = min(len(y_true), len(y_pred))
-            if min_len == 0:
-                logger.warning(f"数据集 {dataset_name} 为空，使用默认指标")
-                return self._get_default_metrics()
-
-            y_true = y_true[:min_len]
-            y_pred = y_pred[:min_len]
-
-            # 移除NaN值
-            valid_mask = ~(np.isnan(y_true) | np.isnan(y_pred))
-            if valid_mask.sum() == 0:
-                logger.warning(f"数据集 {dataset_name} 中没有有效数据，使用默认指标")
-                return self._get_default_metrics()
-
-            y_true = y_true[valid_mask]
-            y_pred = y_pred[valid_mask]
 
             # 计算回归指标
             mse = float(mean_squared_error(y_true, y_pred))

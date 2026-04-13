@@ -671,6 +671,7 @@ async def train_model_task(
                     "best_epoch": int(getattr(result, "best_epoch", 0) or 0),
                     "early_stopping_reason": getattr(result, "early_stopping_reason", None),
                 },
+                signal_quality=getattr(result, "signal_quality", None),
             )
 
             # 更新模型信息

@@ -11,6 +11,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -264,3 +265,27 @@ async def test_run_backtest_with_task_id_falls_back_to_empty_signal_summary() ->
     assert result["total_signals"] == 9
     assert result["trading_days"] == 20
     assert result["signal_execution_summary"] == {}
+
+
+def test_topk_dropout_price_lookup_includes_non_held_candidates_without_precomputed_signal_matrix() -> None:
+    """Ranking rebalance must still load candidate prices even when only current holdings are in the portfolio."""
+    executor = BacktestExecutor(data_dir="/tmp", enable_parallel=False)
+    portfolio_manager = Mock()
+    portfolio_manager.positions = {"601398.SH": object(), "601288.SH": object()}
+
+    strategy = Mock()
+    strategy.get_trade_mode.return_value = "topk_dropout"
+
+    aligned_arrays = {
+        "stock_codes": ["600036.SH", "601288.SH", "601398.SH"],
+        "signal": np.zeros((3, 1), dtype=np.int8),
+    }
+
+    need_codes = executor._determine_price_lookup_codes(
+        strategy=strategy,
+        portfolio_manager=portfolio_manager,
+        aligned_arrays=aligned_arrays,
+        date_index=0,
+    )
+
+    assert need_codes == {"600036.SH", "601288.SH", "601398.SH"}

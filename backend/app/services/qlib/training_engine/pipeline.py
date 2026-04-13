@@ -129,7 +129,7 @@ class QlibTrainingPipeline:
         train_dataset: Any,
         val_dataset: Any,
         model_id: str,
-    ) -> Tuple[Dict[str, float], Dict[str, float]]:
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
         """评估训练后模型。"""
         return await self.engine._evaluate_model(
             model,

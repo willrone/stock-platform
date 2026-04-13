@@ -11,6 +11,11 @@ from .backtest_progress_monitor import (
     backtest_progress_monitor,
 )
 from .data_loader import DataLoader
+from .trade_modes import (
+    TradeModeExecutionContext,
+    TradeModeExecutionResult,
+    get_trade_mode_executor,
+)
 
 __all__ = [
     "BacktestExecutor",
@@ -18,4 +23,7 @@ __all__ = [
     "backtest_progress_monitor",
     "BacktestProgressData",
     "BacktestProgressStage",
+    "TradeModeExecutionContext",
+    "TradeModeExecutionResult",
+    "get_trade_mode_executor",
 ]

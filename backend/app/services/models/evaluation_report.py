@@ -24,6 +24,19 @@ DEFAULT_EARLY_STOPPING_INFO = {
     "early_stopping_reason": None,
 }
 
+DEFAULT_SIGNAL_QUALITY = {
+    "ic": None,
+    "icir": None,
+    "rank_ic": None,
+    "rank_icir": None,
+    "long_short_ann_return": None,
+    "long_short_ann_sharpe": None,
+    "long_avg_ann_return": None,
+    "long_avg_ann_sharpe": None,
+    "sample_count": 0,
+    "analysis_scope": None,
+}
+
 
 def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     """兼容并补齐评估报告字段，保证前端/导出结构稳定。"""
@@ -47,6 +60,14 @@ def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     normalized["early_stopping_info"] = {
         **DEFAULT_EARLY_STOPPING_INFO,
         **early_stopping_info,
+    }
+
+    signal_quality = normalized.get("signal_quality")
+    if not isinstance(signal_quality, dict):
+        signal_quality = {}
+    normalized["signal_quality"] = {
+        **DEFAULT_SIGNAL_QUALITY,
+        **signal_quality,
     }
 
     return normalized
@@ -152,6 +173,9 @@ class ModelEvaluationReport:
     # 早停信息
     early_stopping_info: Optional[Dict[str, Any]] = None
 
+    # 官方风格信号质量评估
+    signal_quality: Optional[Dict[str, Any]] = None
+
 
 class EvaluationReportGenerator:
     """评估报告生成器"""
@@ -175,6 +199,7 @@ class EvaluationReportGenerator:
         feature_correlation: Optional[Dict[str, Any]] = None,
         hyperparameter_tuning: Optional[Dict[str, Any]] = None,
         early_stopping_info: Optional[Dict[str, Any]] = None,
+        signal_quality: Optional[Dict[str, Any]] = None,
     ) -> ModelEvaluationReport:
         """生成评估报告"""
 
@@ -270,6 +295,7 @@ class EvaluationReportGenerator:
             hyperparameters=hyperparameters,
             hyperparameter_tuning=hyperparameter_tuning,
             early_stopping_info=early_stopping_info,
+            signal_quality=signal_quality,
             training_data_info=training_data_info,
             prediction_analysis=prediction_analysis,
             recommendations=recommendations,
@@ -326,6 +352,7 @@ class EvaluationReportGenerator:
                 "hyperparameters": report.hyperparameters,
                 "hyperparameter_tuning": report.hyperparameter_tuning,
                 "early_stopping_info": report.early_stopping_info,
+                "signal_quality": report.signal_quality,
                 "training_data_info": report.training_data_info,
                 "prediction_analysis": report.prediction_analysis,
                 "model_comparison": report.model_comparison,

@@ -27,6 +27,8 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy
 from .technical.rsi_optimized import RSIOptimizedStrategy
 from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
+from .model_prediction_strategy import ModelPredictionStrategy
+from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
 
 
 class StrategyFactory:
@@ -54,6 +56,15 @@ class StrategyFactory:
         "multi_factor": MultiFactorStrategy,
         # ML 集成策略
         "ml_ensemble_lgb_xgb_riskctl": MLEnsembleLgbXgbRiskCtlStrategy,
+        # 模型驱动信号策略
+        "model_signal": ModelPredictionStrategy,
+        "model": ModelPredictionStrategy,
+        "signal": ModelPredictionStrategy,
+        # 官方风格模型排序回测策略
+        "model_topk_dropout": ModelTopkDropoutStrategy,
+        "topk_dropout": ModelTopkDropoutStrategy,
+        "model_ranking": ModelTopkDropoutStrategy,
+        "ranking": ModelTopkDropoutStrategy,
     }
 
     @classmethod

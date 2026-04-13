@@ -775,12 +775,55 @@ class ModelInfoRepository:
             )
 
     def get_model_info(self, model_id: str) -> Optional[ModelInfo]:
-        """获取模型信息"""
+        """获取模型信息。
+
+        兼容三类查询：
+        1. model_id 精确匹配
+        2. model_name 精确匹配
+        3. 短别名模糊匹配（如 bank-core3 -> hermes-bank-core3-2024-*）
+        """
         try:
-            model_info = (
-                self.db.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+            direct_match = (
+                self.db.query(ModelInfo)
+                .filter(ModelInfo.model_id == model_id)
+                .first()
             )
-            return model_info
+            if direct_match:
+                return direct_match
+
+            exact_name_match = (
+                self.db.query(ModelInfo)
+                .filter(ModelInfo.model_name == model_id)
+                .order_by(desc(ModelInfo.updated_at), desc(ModelInfo.created_at))
+                .first()
+            )
+            if exact_name_match:
+                return exact_name_match
+
+            normalized_alias = (model_id or "").strip()
+            if not normalized_alias:
+                return None
+
+            alias_patterns = [
+                f"%{normalized_alias}%",
+                f"%-{normalized_alias}-%",
+            ]
+            alias_match = (
+                self.db.query(ModelInfo)
+                .filter(
+                    or_(
+                        ModelInfo.model_name.ilike(alias_patterns[0]),
+                        ModelInfo.model_name.ilike(alias_patterns[1]),
+                    )
+                )
+                .order_by(
+                    desc(ModelInfo.status == "ready"),
+                    desc(ModelInfo.updated_at),
+                    desc(ModelInfo.created_at),
+                )
+                .first()
+            )
+            return alias_match
         except Exception as e:
             raise TaskError(
                 message=f"获取模型信息失败: {str(e)}",

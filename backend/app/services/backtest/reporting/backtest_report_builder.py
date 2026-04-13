@@ -10,6 +10,10 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from app.core.config import settings
+from app.services.data.simple_data_service import SimpleDataService
+from app.services.data.stock_data_loader import StockDataLoader
+
 from ..core.portfolio_manager import PortfolioManager
 from ..models import BacktestConfig
 
@@ -40,6 +44,9 @@ class BacktestReportBuilder:
         report["portfolio_history"] = self._build_portfolio_history(payload)
         report["cost_statistics"] = self._build_cost_statistics(payload)
         report.update(self._build_excess_return_metrics(payload))
+        report["official_portfolio_analysis"] = self._build_official_portfolio_analysis(
+            payload
+        )
         report.update(self._calculate_additional_metrics(payload.portfolio_manager))
         return report
 
@@ -223,6 +230,13 @@ class BacktestReportBuilder:
         self, payload: BacktestReportBuildInput
     ) -> dict[str, Any]:
         """Build with-cost and without-cost excess return blocks."""
+        benchmark = self._extract_benchmark(payload.strategy_config)
+        official_metrics = self._calculate_official_excess_return_metrics(
+            payload, benchmark
+        )
+        if official_metrics is not None:
+            return official_metrics
+
         metrics_without_cost = (
             payload.portfolio_manager.get_performance_metrics_without_cost()
         )
@@ -239,17 +253,243 @@ class BacktestReportBuilder:
                 "max_drawdown": metrics_without_cost.get("max_drawdown", 0),
             },
             "excess_return_with_cost": {
-                "mean": self._estimate_mean_return(payload.performance_metrics),
-                "std": payload.performance_metrics.get("volatility", 0),
+                "mean": payload.performance_metrics.get("excess_return_mean_with_cost"),
+                "std": payload.performance_metrics.get("excess_return_std_with_cost"),
                 "annualized_return": payload.performance_metrics.get(
                     "annualized_return", 0
                 ),
                 "information_ratio": payload.performance_metrics.get(
-                    "sharpe_ratio", 0
+                    "information_ratio_with_cost"
                 ),
                 "max_drawdown": payload.performance_metrics.get("max_drawdown", 0),
             },
         }
+
+    def _build_official_portfolio_analysis(
+        self, payload: BacktestReportBuildInput
+    ) -> dict[str, Any]:
+        """Build a Qlib-style benchmark-relative portfolio analysis block."""
+        benchmark = self._extract_benchmark(payload.strategy_config)
+        excess_metrics = self._build_excess_return_metrics(payload)
+        return {
+            "benchmark": benchmark,
+            "excess_return_without_cost": excess_metrics["excess_return_without_cost"],
+            "excess_return_with_cost": excess_metrics["excess_return_with_cost"],
+        }
+
+    def _extract_benchmark(
+        self, strategy_config: Optional[dict[str, Any]]
+    ) -> Any:
+        """Extract benchmark config if present."""
+        if not isinstance(strategy_config, dict):
+            return None
+        return strategy_config.get("benchmark")
+
+    def _calculate_official_excess_return_metrics(
+        self,
+        payload: BacktestReportBuildInput,
+        benchmark: Any,
+    ) -> Optional[dict[str, Any]]:
+        """Calculate Qlib-style benchmark-relative excess return metrics."""
+        if benchmark is None:
+            return None
+
+        returns_with_cost, returns_without_cost = self._build_portfolio_return_series(
+            payload.portfolio_manager
+        )
+        if returns_with_cost is None or returns_without_cost is None:
+            return None
+
+        benchmark_returns = self._load_benchmark_return_series(
+            benchmark,
+            payload.start_date,
+            payload.end_date,
+        )
+        if benchmark_returns is None or benchmark_returns.empty:
+            logger.warning(f"无法为 official_portfolio_analysis 加载基准收益序列: {benchmark}")
+            return None
+
+        common_dates = (
+            returns_with_cost.index.intersection(returns_without_cost.index)
+            .intersection(benchmark_returns.index)
+            .sort_values()
+        )
+        if len(common_dates) == 0:
+            logger.warning(
+                f"组合收益与基准收益无共同日期，无法计算 official_portfolio_analysis: {benchmark}"
+            )
+            return None
+
+        excess_without_cost = returns_without_cost.loc[common_dates] - benchmark_returns.loc[
+            common_dates
+        ]
+        excess_with_cost = returns_with_cost.loc[common_dates] - benchmark_returns.loc[
+            common_dates
+        ]
+
+        return {
+            "excess_return_without_cost": self._run_qlib_risk_analysis(
+                excess_without_cost
+            ),
+            "excess_return_with_cost": self._run_qlib_risk_analysis(excess_with_cost),
+        }
+
+    def _build_portfolio_return_series(
+        self, portfolio_manager: PortfolioManager
+    ) -> tuple[Optional[pd.Series], Optional[pd.Series]]:
+        """Build daily return series with-cost and without-cost from portfolio history."""
+        portfolio_history = getattr(portfolio_manager, "portfolio_history", None)
+        if not portfolio_history:
+            return None, None
+
+        frame = pd.DataFrame(portfolio_history)
+        if frame.empty or "date" not in frame.columns or "portfolio_value" not in frame.columns:
+            return None, None
+
+        frame = frame.copy()
+        frame["date"] = pd.to_datetime(frame["date"]).dt.normalize()
+        frame = frame.sort_values("date").drop_duplicates(subset="date", keep="last")
+        frame = frame.set_index("date")
+
+        without_cost_column = (
+            "portfolio_value_without_cost"
+            if "portfolio_value_without_cost" in frame.columns
+            else "portfolio_value"
+        )
+        returns_with_cost = frame["portfolio_value"].astype(float).pct_change().dropna()
+        returns_without_cost = (
+            frame[without_cost_column].astype(float).pct_change().dropna()
+        )
+
+        if returns_with_cost.empty or returns_without_cost.empty:
+            return None, None
+
+        return returns_with_cost, returns_without_cost
+
+    def _load_benchmark_return_series(
+        self,
+        benchmark: Any,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Optional[pd.Series]:
+        """Load benchmark daily return series supporting Qlib-style codes."""
+        if isinstance(benchmark, pd.Series):
+            series = benchmark.copy()
+            series.index = pd.to_datetime(series.index).normalize()
+            return series.sort_index().dropna()
+
+        if isinstance(benchmark, (list, tuple)):
+            benchmark_frames: list[pd.Series] = []
+            for code in benchmark:
+                single = self._load_benchmark_return_series(code, start_date, end_date)
+                if single is not None and not single.empty:
+                    benchmark_frames.append(single)
+            if not benchmark_frames:
+                return None
+            combined = pd.concat(benchmark_frames, axis=1).dropna(how="all")
+            if combined.empty:
+                return None
+            return combined.mean(axis=1).dropna()
+
+        close_series = self._load_single_benchmark_close_series(
+            str(benchmark), start_date, end_date
+        )
+        if close_series is None or close_series.empty:
+            return None
+        returns = close_series.pct_change().dropna()
+        return returns.sort_index()
+
+    def _load_single_benchmark_close_series(
+        self,
+        benchmark: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Optional[pd.Series]:
+        """Load one benchmark close-price series from local parquet/JSON data."""
+        loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
+        data_service = SimpleDataService(data_path=settings.DATA_ROOT_PATH)
+
+        for candidate in self._benchmark_code_candidates(benchmark):
+            try:
+                benchmark_df = loader.load_stock_data(
+                    candidate,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                if not benchmark_df.empty and "close" in benchmark_df.columns:
+                    series = benchmark_df["close"].astype(float)
+                    series.index = pd.to_datetime(series.index).normalize()
+                    return series.sort_index().dropna()
+            except Exception as exc:
+                logger.debug(
+                    f"使用 StockDataLoader 加载 benchmark 失败，尝试下一个候选: {candidate}, {exc}"
+                )
+
+            try:
+                local_rows = data_service.load_from_local(candidate, start_date, end_date)
+                if local_rows:
+                    benchmark_df = pd.DataFrame(local_rows)
+                    if "date" in benchmark_df.columns and "close" in benchmark_df.columns:
+                        benchmark_df["date"] = pd.to_datetime(benchmark_df["date"])
+                        benchmark_df = benchmark_df.sort_values("date")
+                        series = benchmark_df.set_index("date")["close"].astype(float)
+                        series.index = pd.to_datetime(series.index).normalize()
+                        return series.sort_index().dropna()
+            except Exception as exc:
+                logger.debug(
+                    f"使用 SimpleDataService 加载 benchmark 失败，尝试下一个候选: {candidate}, {exc}"
+                )
+
+        return None
+
+    def _benchmark_code_candidates(self, benchmark: str) -> list[str]:
+        """Generate likely local-code candidates from Qlib/API benchmark formats."""
+        candidates = [benchmark]
+        if len(benchmark) == 8 and benchmark[:2] in {"SH", "SZ"} and benchmark[2:].isdigit():
+            candidates.append(f"{benchmark[2:]}.{benchmark[:2]}")
+        elif len(benchmark) == 9 and benchmark[6] == "." and benchmark[:6].isdigit():
+            exchange = benchmark[7:]
+            if exchange in {"SH", "SZ"}:
+                candidates.append(f"{exchange}{benchmark[:6]}")
+        return list(dict.fromkeys(candidates))
+
+    def _run_qlib_risk_analysis(self, excess_returns: pd.Series) -> dict[str, Any]:
+        """Run Qlib official risk_analysis and flatten the result to API schema."""
+        if excess_returns.empty:
+            return {
+                "mean": None,
+                "std": None,
+                "annualized_return": None,
+                "information_ratio": None,
+                "max_drawdown": None,
+            }
+
+        from qlib.contrib.evaluate import risk_analysis
+
+        analysis_df = risk_analysis(excess_returns, freq="day")
+        return {
+            "mean": self._to_optional_float(analysis_df.loc["mean", "risk"]),
+            "std": self._to_optional_float(analysis_df.loc["std", "risk"]),
+            "annualized_return": self._to_optional_float(
+                analysis_df.loc["annualized_return", "risk"]
+            ),
+            "information_ratio": self._to_optional_float(
+                analysis_df.loc["information_ratio", "risk"]
+            ),
+            "max_drawdown": self._to_optional_float(
+                analysis_df.loc["max_drawdown", "risk"]
+            ),
+        }
+
+    def _to_optional_float(self, value: Any) -> Optional[float]:
+        """Convert scalar values to optional floats while normalizing NaN/inf."""
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(numeric):
+            return None
+        return numeric
 
     def _estimate_mean_return(self, performance_metrics: dict[str, float]) -> float:
         """Estimate daily mean excess return from volatility for legacy schema."""

@@ -212,6 +212,18 @@ class TestModelAndTrainingContractAPI:
             "best_epoch": 0,
             "early_stopping_reason": None,
         }
+        assert payload["signal_quality"] == {
+            "ic": None,
+            "icir": None,
+            "rank_ic": None,
+            "rank_icir": None,
+            "long_short_ann_return": None,
+            "long_short_ann_sharpe": None,
+            "long_avg_ann_return": None,
+            "long_avg_ann_sharpe": None,
+            "sample_count": 0,
+            "analysis_scope": None,
+        }
 
     @patch("app.api.v1.training_progress.SessionLocal")
     @patch("app.api.v1.training_progress._get_task_manager")
