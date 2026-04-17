@@ -37,6 +37,8 @@ function createModel(overrides: Partial<TaskDetailPageModel> = {}): TaskDetailPa
     selectedStock: '',
     setSelectedStock: jest.fn(),
     backtestDetailedData: null,
+    backtestSummaryData: null,
+    backtestOverviewData: null,
     adaptedRiskData: null,
     adaptedPerformanceData: null,
     loadingBacktestData: false,

@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import BacktestOverview from '../BacktestOverview';
+import { BacktestDataAdapter } from '../../../services/backtestDataAdapter';
 
 const theme = createTheme();
 
@@ -44,18 +45,32 @@ function wrap(ui: React.ReactElement) {
 
 describe('BacktestOverview (#24 信号执行统计)', () => {
   it('无 signal_execution_summary 时不渲染信号执行统计卡片', () => {
-    render(wrap(<BacktestOverview backtestData={minimalBacktestData} />));
+    render(
+      wrap(<BacktestOverview backtestData={BacktestDataAdapter.adaptOverviewData(minimalBacktestData)} />)
+    );
     expect(screen.queryByText('信号执行统计')).not.toBeInTheDocument();
   });
 
   it('有 signal_execution_summary 时渲染信号执行统计卡片和 Top 拒绝原因', () => {
-    render(wrap(<BacktestOverview backtestData={backtestDataWithSignalSummary} />));
+    render(
+      wrap(
+        <BacktestOverview
+          backtestData={BacktestDataAdapter.adaptOverviewData(backtestDataWithSignalSummary)}
+        />
+      )
+    );
     expect(screen.getByText('信号执行统计')).toBeInTheDocument();
     expect(screen.getByText('Top 拒绝原因')).toBeInTheDocument();
   });
 
   it('渲染原始信号数、可执行/实际执行、执行率', () => {
-    render(wrap(<BacktestOverview backtestData={backtestDataWithSignalSummary} />));
+    render(
+      wrap(
+        <BacktestOverview
+          backtestData={BacktestDataAdapter.adaptOverviewData(backtestDataWithSignalSummary)}
+        />
+      )
+    );
     expect(screen.getByText('原始信号数')).toBeInTheDocument();
     expect(screen.getByText('120')).toBeInTheDocument();
     expect(screen.getByText(/可执行 \/ 实际执行/)).toBeInTheDocument();
@@ -64,7 +79,13 @@ describe('BacktestOverview (#24 信号执行统计)', () => {
   });
 
   it('渲染 Top 拒绝原因列表内容', () => {
-    render(wrap(<BacktestOverview backtestData={backtestDataWithSignalSummary} />));
+    render(
+      wrap(
+        <BacktestOverview
+          backtestData={BacktestDataAdapter.adaptOverviewData(backtestDataWithSignalSummary)}
+        />
+      )
+    );
     expect(screen.getByText('资金不足')).toBeInTheDocument();
     expect(screen.getByText('已持仓同类')).toBeInTheDocument();
     expect(screen.getByText('信号强度不足')).toBeInTheDocument();
@@ -80,7 +101,9 @@ describe('BacktestOverview (#24 信号执行统计)', () => {
         top_rejection_reasons: [{ reason: '测试拒绝', count: 5 }],
       },
     };
-    render(wrap(<BacktestOverview backtestData={dataOnlyReasons} />));
+    render(
+      wrap(<BacktestOverview backtestData={BacktestDataAdapter.adaptOverviewData(dataOnlyReasons)} />)
+    );
     expect(screen.getByText('信号执行统计')).toBeInTheDocument();
     expect(screen.getByText('Top 拒绝原因')).toBeInTheDocument();
     expect(screen.getByText('测试拒绝')).toBeInTheDocument();

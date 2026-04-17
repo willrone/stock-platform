@@ -3,7 +3,12 @@
  * 将后端返回的数据转换为前端组件需要的格式
  */
 
-import type { BacktestDetailedResult } from '../types/backtest';
+import type { Task } from '../types/task';
+import type {
+  BacktestDetailedResult,
+  BacktestOverviewData,
+  BacktestSummaryData,
+} from '../types/backtest';
 
 // 风险指标接口（前端组件需要的格式）
 export interface RiskMetrics {
@@ -118,8 +123,117 @@ export interface BenchmarkComparison {
   correlation: number;
 }
 
+export interface BacktestDetailedRiskViewModel {
+  riskMetrics: RiskMetrics;
+  returnDistribution: ReturnDistribution;
+  rollingMetrics: RollingMetrics;
+}
+
+export interface BacktestDetailedPerformanceViewModel {
+  monthlyPerformance: MonthlyPerformance[];
+  yearlyPerformance: YearlyPerformance[];
+  seasonalAnalysis: SeasonalAnalysis;
+  benchmarkComparison: BenchmarkComparison;
+}
+
 export class BacktestDataAdapter {
   private static readonly riskFreeRate = 0.03;
+
+  /**
+   * 从任务详情中提取回测 summary 原始数据。
+   */
+  static resolveTaskBacktestSummary(task: Task | null | undefined): BacktestSummaryData | null {
+    if (!task || task.task_type !== 'backtest') {
+      return null;
+    }
+
+    const rawSummary = task.result ?? task.results?.backtest_results ?? task.backtest_results;
+    if (!rawSummary || typeof rawSummary !== 'object' || Array.isArray(rawSummary)) {
+      return null;
+    }
+
+    return rawSummary as BacktestSummaryData;
+  }
+
+  /**
+   * 将回测 summary 原始数据收敛为 overview 组件使用的 view model。
+   */
+  static adaptOverviewData(
+    summary: BacktestSummaryData | null | undefined
+  ): BacktestOverviewData | null {
+    if (!summary) {
+      return null;
+    }
+
+    const tradeHistory = Array.isArray(summary.trade_history) ? summary.trade_history : [];
+    const winningTrades = typeof summary.winning_trades === 'number' ? summary.winning_trades : null;
+    const losingTrades = typeof summary.losing_trades === 'number' ? summary.losing_trades : null;
+
+    const derivedWinRate = (() => {
+      if (winningTrades !== null && losingTrades !== null && winningTrades + losingTrades > 0) {
+        return winningTrades / (winningTrades + losingTrades);
+      }
+
+      if (tradeHistory.length > 0) {
+        const sellTrades = tradeHistory.filter(trade => trade.action === 'SELL');
+        const wins = sellTrades.filter(trade => (trade.pnl ?? 0) > 0).length;
+        const losses = sellTrades.filter(trade => (trade.pnl ?? 0) < 0).length;
+        const total = wins + losses;
+        if (total > 0) {
+          return wins / total;
+        }
+      }
+
+      return typeof summary.win_rate === 'number' ? summary.win_rate : 0;
+    })();
+
+    return {
+      totalReturn: this.toPercent(summary.total_return),
+      annualizedReturn: this.toPercent(summary.annualized_return),
+      sharpeRatio: summary.sharpe_ratio ?? 0,
+      maxDrawdown: this.toPercent(summary.max_drawdown),
+      volatility: this.toPercent(summary.volatility),
+      winRate: derivedWinRate * 100,
+      totalTrades: summary.total_trades ?? 0,
+      profitFactor: summary.profit_factor ?? 0,
+      tradePnlMean: this.toPercent(summary.trade_pnl_mean),
+      tradePnlMedian: this.toPercent(summary.trade_pnl_median),
+      tradePnlStd: this.toPercent(summary.trade_pnl_std),
+      monthlyReturnMean: this.toPercent(summary.monthly_return_mean),
+      monthlyReturnStd: this.toPercent(summary.monthly_return_std),
+      positiveMonths: summary.positive_months ?? 0,
+      negativeMonths: summary.negative_months ?? 0,
+      stocksTraded: summary.stocks_traded ?? 0,
+      signalExecutionSummary: summary.signal_execution_summary,
+    };
+  }
+
+  /**
+   * 组合风险分析 view model。
+   */
+  static adaptDetailedRiskViewModel(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): BacktestDetailedRiskViewModel {
+    return {
+      riskMetrics: this.adaptRiskMetrics(detailedResult),
+      returnDistribution: this.generateReturnDistribution(detailedResult),
+      rollingMetrics: this.generateRollingMetrics(detailedResult),
+    };
+  }
+
+  /**
+   * 组合绩效分析 view model。
+   */
+  static adaptDetailedPerformanceViewModel(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): BacktestDetailedPerformanceViewModel {
+    return {
+      monthlyPerformance: this.adaptMonthlyPerformance(detailedResult),
+      yearlyPerformance: this.generateYearlyPerformance(detailedResult),
+      seasonalAnalysis: this.generateSeasonalAnalysis(detailedResult),
+      benchmarkComparison: this.generateBenchmarkComparison(detailedResult),
+    };
+  }
 
   /**
    * 将后端数据转换为风险指标格式
@@ -440,6 +554,10 @@ export class BacktestDataAdapter {
   }
 
   // 辅助方法
+  private static toPercent(value: number | null | undefined): number {
+    return (value ?? 0) * 100;
+  }
+
   private static calculateCompoundReturn(returns: number[]): number {
     if (!returns.length) {
       return 0;

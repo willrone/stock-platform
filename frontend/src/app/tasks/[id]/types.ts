@@ -1,5 +1,14 @@
 import type React from 'react';
 
+import type {
+  BacktestDetailedResult,
+  BacktestOverviewData,
+  BacktestSummaryData,
+} from '../../../types/backtest';
+import type {
+  BacktestDetailedPerformanceViewModel,
+  BacktestDetailedRiskViewModel,
+} from '../../../services/backtestDataAdapter';
 import type { PredictionResult, Task } from '../../../types/task';
 import type { StrategyConfigInfo } from './taskDetailUtils';
 
@@ -11,9 +20,11 @@ export interface TaskDetailPageModel {
   refreshing: boolean;
   selectedStock: string;
   setSelectedStock: React.Dispatch<React.SetStateAction<string>>;
-  backtestDetailedData: any;
-  adaptedRiskData: any;
-  adaptedPerformanceData: any;
+  backtestDetailedData: BacktestDetailedResult | null;
+  backtestSummaryData: BacktestSummaryData | null;
+  backtestOverviewData: BacktestOverviewData | null;
+  adaptedRiskData: BacktestDetailedRiskViewModel | null;
+  adaptedPerformanceData: BacktestDetailedPerformanceViewModel | null;
   loadingBacktestData: boolean;
   selectedBacktestTab: string;
   setSelectedBacktestTab: React.Dispatch<React.SetStateAction<string>>;

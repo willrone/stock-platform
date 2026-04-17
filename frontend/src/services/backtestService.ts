@@ -26,6 +26,70 @@ export type {
   TradeStatistics,
 } from '../types/backtest';
 
+export interface PortfolioSnapshotsResponse {
+  snapshots: PortfolioSnapshot[];
+  total_count: number;
+}
+
+export interface TradeRecordsQueryOptions {
+  stockCode?: string;
+  action?: 'BUY' | 'SELL';
+  startDate?: string;
+  endDate?: string;
+  offset?: number;
+  limit?: number;
+  orderBy?: string;
+  orderDesc?: boolean;
+}
+
+export interface SignalRecordsQueryOptions {
+  stockCode?: string;
+  signalType?: 'BUY' | 'SELL';
+  startDate?: string;
+  endDate?: string;
+  executed?: boolean;
+  offset?: number;
+  limit?: number;
+  orderBy?: string;
+  orderDesc?: boolean;
+}
+
+export interface PaginatedResponse {
+  pagination: {
+    offset: number;
+    limit: number;
+    count: number;
+  };
+}
+
+export interface TradeRecordsResponse extends PaginatedResponse {
+  trades: TradeRecord[];
+}
+
+export interface SignalRecordsResponse extends PaginatedResponse {
+  signals: SignalRecord[];
+}
+
+type QueryParamValue = string | number | boolean;
+type QueryParams = Record<string, QueryParamValue | undefined>;
+
+interface ApiErrorLike {
+  status?: number;
+  response?: {
+    status?: number;
+  };
+  message?: string;
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const candidate = error as ApiErrorLike;
+  return (
+    candidate.response?.status === 404 ||
+    candidate.status === 404 ||
+    candidate.message?.includes('404') === true
+  );
+}
+
 export class BacktestService {
   /**
    * 获取回测详细结果
@@ -42,11 +106,8 @@ export class BacktestService {
     startDate?: string,
     endDate?: string,
     limit: number = 100
-  ): Promise<{
-    snapshots: PortfolioSnapshot[];
-    total_count: number;
-  }> {
-    const params: any = { limit };
+  ): Promise<PortfolioSnapshotsResponse> {
+    const params: QueryParams = { limit };
     if (startDate) {
       params.start_date = startDate;
     }
@@ -62,25 +123,9 @@ export class BacktestService {
    */
   static async getTradeRecords(
     taskId: string,
-    options: {
-      stockCode?: string;
-      action?: 'BUY' | 'SELL';
-      startDate?: string;
-      endDate?: string;
-      offset?: number;
-      limit?: number;
-      orderBy?: string;
-      orderDesc?: boolean;
-    } = {}
-  ): Promise<{
-    trades: TradeRecord[];
-    pagination: {
-      offset: number;
-      limit: number;
-      count: number;
-    };
-  }> {
-    const params: any = {
+    options: TradeRecordsQueryOptions = {}
+  ): Promise<TradeRecordsResponse> {
+    const params: QueryParams = {
       offset: options.offset || 0,
       limit: options.limit || 50,
       order_by: options.orderBy || 'timestamp',
@@ -115,26 +160,9 @@ export class BacktestService {
    */
   static async getSignalRecords(
     taskId: string,
-    options: {
-      stockCode?: string;
-      signalType?: 'BUY' | 'SELL';
-      startDate?: string;
-      endDate?: string;
-      executed?: boolean;
-      offset?: number;
-      limit?: number;
-      orderBy?: string;
-      orderDesc?: boolean;
-    } = {}
-  ): Promise<{
-    signals: SignalRecord[];
-    pagination: {
-      offset: number;
-      limit: number;
-      count: number;
-    };
-  }> {
-    const params: any = {
+    options: SignalRecordsQueryOptions = {}
+  ): Promise<SignalRecordsResponse> {
+    const params: QueryParams = {
       offset: options.offset || 0,
       limit: options.limit || 50,
       order_by: options.orderBy || 'timestamp',
@@ -185,7 +213,7 @@ export class BacktestService {
   static async cacheChartData(
     taskId: string,
     chartType: string,
-    chartData: Record<string, any>,
+    chartData: Record<string, unknown>,
     expiryHours: number = 24
   ): Promise<{ task_id: string; chart_type: string }> {
     return apiRequest.post(`/backtest-detailed/${taskId}/cache-chart`, {
@@ -201,16 +229,12 @@ export class BacktestService {
   static async getCachedChartData(
     taskId: string,
     chartType: string
-  ): Promise<Record<string, any> | null> {
+  ): Promise<Record<string, unknown> | null> {
     try {
       return await apiRequest.get(`/backtest-detailed/${taskId}/cached-chart/${chartType}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 检查是否是404错误（缓存不存在）
-      if (
-        error.response?.status === 404 ||
-        error.status === 404 ||
-        error.message?.includes('404')
-      ) {
+      if (isNotFoundError(error)) {
         console.log(`[BacktestService] 缓存不存在: taskId=${taskId}, chartType=${chartType}`);
         return null; // 缓存不存在
       }

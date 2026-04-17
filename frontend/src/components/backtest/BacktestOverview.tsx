@@ -28,101 +28,34 @@ import {
   Info,
 } from 'lucide-react';
 
+import type { BacktestOverviewData } from '../../types/backtest';
+
 interface BacktestOverviewProps {
-  backtestData: any;
+  backtestData: BacktestOverviewData | null;
   loading?: boolean;
 }
 
-interface BacktestMetrics {
-  totalReturn: number;
-  annualizedReturn: number;
-  sharpeRatio: number;
-  maxDrawdown: number;
-  volatility: number;
-  winRate: number;
-  totalTrades: number;
-  profitFactor: number;
-  // 新增：交易分布与时间分段的概要统计（如果后端提供则展示）
-  tradePnlMean: number;
-  tradePnlMedian: number;
-  tradePnlStd: number;
-  monthlyReturnMean: number;
-  monthlyReturnStd: number;
-  positiveMonths: number;
-  negativeMonths: number;
-  stocksTraded: number;
-}
+const EMPTY_BACKTEST_OVERVIEW_DATA: BacktestOverviewData = {
+  totalReturn: 0,
+  annualizedReturn: 0,
+  sharpeRatio: 0,
+  maxDrawdown: 0,
+  volatility: 0,
+  winRate: 0,
+  totalTrades: 0,
+  profitFactor: 0,
+  tradePnlMean: 0,
+  tradePnlMedian: 0,
+  tradePnlStd: 0,
+  monthlyReturnMean: 0,
+  monthlyReturnStd: 0,
+  positiveMonths: 0,
+  negativeMonths: 0,
+  stocksTraded: 0,
+};
 
 export default function BacktestOverview({ backtestData, loading = false }: BacktestOverviewProps) {
-  // 处理回测数据，提取关键指标
-  const processMetrics = (): BacktestMetrics => {
-    if (!backtestData) {
-      return {
-        totalReturn: 0,
-        annualizedReturn: 0,
-        sharpeRatio: 0,
-        maxDrawdown: 0,
-        volatility: 0,
-        winRate: 0,
-        totalTrades: 0,
-        profitFactor: 0,
-        tradePnlMean: 0,
-        tradePnlMedian: 0,
-        tradePnlStd: 0,
-        monthlyReturnMean: 0,
-        monthlyReturnStd: 0,
-        positiveMonths: 0,
-        negativeMonths: 0,
-        stocksTraded: 0,
-      };
-    }
-
-    const additional = backtestData || {};
-    const tradeHistory = Array.isArray(backtestData?.trade_history)
-      ? backtestData.trade_history
-      : [];
-    const winningTrades =
-      typeof backtestData?.winning_trades === 'number' ? backtestData.winning_trades : null;
-    const losingTrades =
-      typeof backtestData?.losing_trades === 'number' ? backtestData.losing_trades : null;
-
-    const derivedWinRate = (() => {
-      if (winningTrades !== null && losingTrades !== null && winningTrades + losingTrades > 0) {
-        return winningTrades / (winningTrades + losingTrades);
-      }
-      if (tradeHistory.length > 0) {
-        const sellTrades = tradeHistory.filter((trade: any) => trade?.action === 'SELL');
-        const wins = sellTrades.filter((trade: any) => (trade?.pnl ?? 0) > 0).length;
-        const losses = sellTrades.filter((trade: any) => (trade?.pnl ?? 0) < 0).length;
-        const total = wins + losses;
-        if (total > 0) {
-          return wins / total;
-        }
-      }
-      return typeof backtestData?.win_rate === 'number' ? backtestData.win_rate : 0;
-    })();
-
-    return {
-      totalReturn: (backtestData.total_return || 0) * 100,
-      annualizedReturn: (backtestData.annualized_return || 0) * 100,
-      sharpeRatio: backtestData.sharpe_ratio || 0,
-      maxDrawdown: (backtestData.max_drawdown || 0) * 100,
-      volatility: (backtestData.volatility || 0) * 100,
-      winRate: derivedWinRate * 100,
-      totalTrades: backtestData.total_trades || 0,
-      profitFactor: backtestData.profit_factor || 0,
-      tradePnlMean: (additional.trade_pnl_mean || 0) * 100,
-      tradePnlMedian: (additional.trade_pnl_median || 0) * 100,
-      tradePnlStd: (additional.trade_pnl_std || 0) * 100,
-      monthlyReturnMean: (additional.monthly_return_mean || 0) * 100,
-      monthlyReturnStd: (additional.monthly_return_std || 0) * 100,
-      positiveMonths: additional.positive_months || 0,
-      negativeMonths: additional.negative_months || 0,
-      stocksTraded: additional.stocks_traded || 0,
-    };
-  };
-
-  const metrics = processMetrics();
+  const metrics = backtestData ?? EMPTY_BACKTEST_OVERVIEW_DATA;
 
   // 获取收益率颜色
   const getReturnColor = (value: number): string => {
@@ -551,11 +484,11 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
         </Card>
       )}
 
-      {/* 工单#24：信号执行统计（来自 task.result.signal_execution_summary） */}
-      {backtestData?.signal_execution_summary &&
-        (backtestData.signal_execution_summary.raw_signal_count !== undefined ||
-          (backtestData.signal_execution_summary.top_rejection_reasons &&
-            backtestData.signal_execution_summary.top_rejection_reasons.length > 0)) && (
+      {/* 工单#24：信号执行统计（adapter 收敛后的 overview view model） */}
+      {backtestData?.signalExecutionSummary &&
+        (backtestData.signalExecutionSummary.raw_signal_count !== undefined ||
+          (backtestData.signalExecutionSummary.top_rejection_reasons &&
+            backtestData.signalExecutionSummary.top_rejection_reasons.length > 0)) && (
         <Card>
           <CardHeader title="信号执行统计" />
           <CardContent>
@@ -571,14 +504,14 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                 mb: 2,
               }}
             >
-              {backtestData.signal_execution_summary.raw_signal_count !== undefined && (
+              {backtestData.signalExecutionSummary.raw_signal_count !== undefined && (
                 <>
                   <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
                       原始信号数
                     </Typography>
                     <Typography variant="h6" fontWeight={600}>
-                      {backtestData.signal_execution_summary.raw_signal_count}
+                      {backtestData.signalExecutionSummary.raw_signal_count}
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center' }}>
@@ -586,8 +519,8 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                       可执行 / 实际执行
                     </Typography>
                     <Typography variant="h6" fontWeight={600}>
-                      {backtestData.signal_execution_summary.actionable_signal_count} /{' '}
-                      {backtestData.signal_execution_summary.executed_signal_count}
+                      {backtestData.signalExecutionSummary.actionable_signal_count} /{' '}
+                      {backtestData.signalExecutionSummary.executed_signal_count}
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center' }}>
@@ -595,10 +528,7 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                       旧口径执行率
                     </Typography>
                     <Typography variant="h6" fontWeight={600} color="success.main">
-                      {(
-                        (backtestData.signal_execution_summary.execution_rate ?? 0) * 100
-                      ).toFixed(1)}
-                      %
+                      {((backtestData.signalExecutionSummary.execution_rate ?? 0) * 100).toFixed(1)}%
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center' }}>
@@ -607,28 +537,26 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                     </Typography>
                     <Typography variant="h6" fontWeight={600} color="success.main">
                       {(
-                        (backtestData.signal_execution_summary
-                          .execution_rate_actionable ?? 0) * 100
-                      ).toFixed(1)}
-                      %
+                        (backtestData.signalExecutionSummary.execution_rate_actionable ?? 0) * 100
+                      ).toFixed(1)}%
                     </Typography>
                   </Box>
                 </>
               )}
             </Box>
-            {backtestData.signal_execution_summary.top_rejection_reasons &&
-              backtestData.signal_execution_summary.top_rejection_reasons.length > 0 && (
+            {backtestData.signalExecutionSummary.top_rejection_reasons &&
+              backtestData.signalExecutionSummary.top_rejection_reasons.length > 0 && (
                 <Box>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Top 拒绝原因
                   </Typography>
                   <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                    {backtestData.signal_execution_summary.top_rejection_reasons
+                    {backtestData.signalExecutionSummary.top_rejection_reasons
                       .slice(0, 6)
-                      .map((r: { reason: string; count: number }, i: number) => (
-                        <Box component="li" key={i} sx={{ py: 0.25 }}>
+                      .map((rejectionReason, index) => (
+                        <Box component="li" key={`${rejectionReason.reason}-${index}`} sx={{ py: 0.25 }}>
                           <Typography variant="body2" component="span">
-                            {r.reason}
+                            {rejectionReason.reason}
                           </Typography>
                           <Typography
                             variant="body2"
@@ -636,7 +564,7 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
                             color="text.secondary"
                             sx={{ ml: 1 }}
                           >
-                            ({r.count})
+                            ({rejectionReason.count})
                           </Typography>
                         </Box>
                       ))}

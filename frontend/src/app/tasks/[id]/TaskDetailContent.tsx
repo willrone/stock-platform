@@ -277,19 +277,11 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                         </Card>
                       )}
                       <BacktestOverview
-                        backtestData={
-                          currentTask.result ||
-                          currentTask.results?.backtest_results ||
-                          currentTask.backtest_results
-                        }
+                        backtestData={model.backtestOverviewData}
                         loading={model.loadingBacktestData}
                       />
                       <CostAnalysis
-                        backtestData={
-                          currentTask.result ||
-                          currentTask.results?.backtest_results ||
-                          currentTask.backtest_results
-                        }
+                        backtestData={model.backtestSummaryData}
                         loading={model.loadingBacktestData}
                       />
                     </Box>
@@ -301,11 +293,7 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                         taskId={model.taskId}
                         stockCode={model.selectedStock || currentTask.stock_codes?.[0]}
                         stockCodes={currentTask.stock_codes || []}
-                        backtestData={
-                          currentTask.results?.backtest_results ||
-                          currentTask.backtest_results ||
-                          (currentTask.task_type === 'backtest' ? currentTask.result : null)
-                        }
+                        backtestData={model.backtestSummaryData}
                       />
                     </Box>
                   )}
@@ -342,7 +330,7 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                               gap: 0.5,
                             }}
                           >
-                            {model.backtestDetailedData.monthly_returns.map((monthData: any) => (
+                            {model.backtestDetailedData.monthly_returns.map(monthData => (
                               <Box
                                 key={`${monthData.year}-${monthData.month}`}
                                 sx={{
@@ -614,11 +602,7 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                       {model.selectedPredictionTab === 'backtest' && currentTask.task_type === 'backtest' && (
                         <BacktestChart
                           stockCode={model.selectedStock || currentTask.stock_codes?.[0] || ''}
-                          backtestData={
-                            currentTask.results?.backtest_results ||
-                            currentTask.backtest_results ||
-                            (currentTask.task_type === 'backtest' ? currentTask.result : null)
-                          }
+                          backtestData={model.backtestSummaryData}
                         />
                       )}
 

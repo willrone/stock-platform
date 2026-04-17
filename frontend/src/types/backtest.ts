@@ -38,6 +38,83 @@ export interface BacktestResult {
   };
 }
 
+export interface BacktestReportTradeRecord {
+  trade_id?: string;
+  stock_code?: string;
+  action?: 'BUY' | 'SELL' | string;
+  quantity?: number;
+  price?: number;
+  timestamp?: string;
+  commission?: number;
+  slippage_cost?: number;
+  pnl?: number;
+}
+
+export interface SignalExecutionSummary {
+  execution_rate?: number;
+  execution_rate_actionable?: number;
+  raw_signal_count?: number;
+  actionable_signal_count?: number;
+  executed_signal_count?: number;
+  top_rejection_reasons?: Array<{
+    reason: string;
+    count: number;
+  }>;
+}
+
+export interface BacktestSummaryData {
+  strategy_name?: string;
+  stock_codes?: string[];
+  start_date?: string;
+  end_date?: string;
+  initial_cash?: number;
+  final_value?: number;
+  total_return?: number;
+  annualized_return?: number;
+  volatility?: number;
+  sharpe_ratio?: number;
+  max_drawdown?: number;
+  total_trades?: number;
+  win_rate?: number;
+  profit_factor?: number;
+  winning_trades?: number;
+  losing_trades?: number;
+  trade_pnl_mean?: number;
+  trade_pnl_median?: number;
+  trade_pnl_std?: number;
+  monthly_return_mean?: number;
+  monthly_return_std?: number;
+  positive_months?: number;
+  negative_months?: number;
+  stocks_traded?: number;
+  signal_execution_summary?: SignalExecutionSummary;
+  trade_history?: BacktestReportTradeRecord[];
+  portfolio_history?: Array<Record<string, unknown>>;
+  excess_return_with_cost?: Record<string, unknown>;
+  excess_return_without_cost?: Record<string, unknown>;
+  cost_statistics?: Record<string, unknown>;
+}
+
+export interface BacktestOverviewData {
+  totalReturn: number;
+  annualizedReturn: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+  volatility: number;
+  winRate: number;
+  totalTrades: number;
+  profitFactor: number;
+  tradePnlMean: number;
+  tradePnlMedian: number;
+  tradePnlStd: number;
+  monthlyReturnMean: number;
+  monthlyReturnStd: number;
+  positiveMonths: number;
+  negativeMonths: number;
+  stocksTraded: number;
+  signalExecutionSummary?: SignalExecutionSummary;
+}
+
 export interface BacktestDetailedResult {
   task_id: string;
   backtest_id: string;

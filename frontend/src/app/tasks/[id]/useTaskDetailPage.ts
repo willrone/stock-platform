@@ -2,12 +2,21 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { SaveStrategyConfigDialog } from '../../../components/backtest/SaveStrategyConfigDialog';
-import { BacktestDataAdapter } from '../../../services/backtestDataAdapter';
+import {
+  BacktestDataAdapter,
+  type BacktestDetailedPerformanceViewModel,
+  type BacktestDetailedRiskViewModel,
+} from '../../../services/backtestDataAdapter';
 import { BacktestService } from '../../../services/backtestService';
 import { StrategyConfigService } from '../../../services/strategyConfigService';
 import { TaskService, type PredictionResult } from '../../../services/taskService';
 import { wsService } from '../../../services/websocket';
 import { useTaskStore, type Task } from '../../../stores/useTaskStore';
+import type {
+  BacktestDetailedResult,
+  BacktestOverviewData,
+  BacktestSummaryData,
+} from '../../../types/backtest';
 import { getStrategyConfig } from './taskDetailUtils';
 import type { TaskDetailPageModel } from './types';
 
@@ -23,9 +32,10 @@ export function useTaskDetailPage(): TaskDetailPageModel {
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStock, setSelectedStock] = useState('');
-  const [backtestDetailedData, setBacktestDetailedData] = useState<any>(null);
-  const [adaptedRiskData, setAdaptedRiskData] = useState<any>(null);
-  const [adaptedPerformanceData, setAdaptedPerformanceData] = useState<any>(null);
+  const [backtestDetailedData, setBacktestDetailedData] = useState<BacktestDetailedResult | null>(null);
+  const [adaptedRiskData, setAdaptedRiskData] = useState<BacktestDetailedRiskViewModel | null>(null);
+  const [adaptedPerformanceData, setAdaptedPerformanceData] =
+    useState<BacktestDetailedPerformanceViewModel | null>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
   const [selectedBacktestTab, setSelectedBacktestTab] = useState('overview');
   const [selectedPredictionTab, setSelectedPredictionTab] = useState('chart');
@@ -51,21 +61,10 @@ export function useTaskDetailPage(): TaskDetailPageModel {
       const detailedResult = await BacktestService.getDetailedResult(taskId);
       setBacktestDetailedData(detailedResult);
 
-      const riskMetrics = BacktestDataAdapter.adaptRiskMetrics(detailedResult);
-      const returnDistribution = BacktestDataAdapter.generateReturnDistribution(detailedResult);
-      const rollingMetrics = BacktestDataAdapter.generateRollingMetrics(detailedResult);
-      setAdaptedRiskData({ riskMetrics, returnDistribution, rollingMetrics });
-
-      const monthlyPerformance = BacktestDataAdapter.adaptMonthlyPerformance(detailedResult);
-      const yearlyPerformance = BacktestDataAdapter.generateYearlyPerformance(detailedResult);
-      const seasonalAnalysis = BacktestDataAdapter.generateSeasonalAnalysis(detailedResult);
-      const benchmarkComparison = BacktestDataAdapter.generateBenchmarkComparison(detailedResult);
-      setAdaptedPerformanceData({
-        monthlyPerformance,
-        yearlyPerformance,
-        seasonalAnalysis,
-        benchmarkComparison,
-      });
+      setAdaptedRiskData(BacktestDataAdapter.adaptDetailedRiskViewModel(detailedResult));
+      setAdaptedPerformanceData(
+        BacktestDataAdapter.adaptDetailedPerformanceViewModel(detailedResult)
+      );
     } catch (_error) {
       setBacktestDetailedData(null);
       setAdaptedRiskData(null);
@@ -150,7 +149,7 @@ export function useTaskDetailPage(): TaskDetailPageModel {
       }
     };
 
-    const handleTaskCompleted = async (data: { task_id: string; results: any }) => {
+    const handleTaskCompleted = async (data: { task_id: string; results: unknown }) => {
       if (data.task_id !== taskId) {
         return;
       }
@@ -226,10 +225,11 @@ export function useTaskDetailPage(): TaskDetailPageModel {
     try {
       await TaskService.deleteTask(taskId, deleteForce);
       router.push('/tasks');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '';
       if (
-        error.message?.includes('正在运行中') ||
-        error.message?.includes('运行中') ||
+        message.includes('正在运行中') ||
+        message.includes('运行中') ||
         currentTask?.status === 'running'
       ) {
         setDeleteForce(true);
@@ -255,6 +255,14 @@ export function useTaskDetailPage(): TaskDetailPageModel {
   };
 
   const strategyConfigInfo = useMemo(() => getStrategyConfig(currentTask), [currentTask]);
+  const backtestSummaryData = useMemo<BacktestSummaryData | null>(
+    () => BacktestDataAdapter.resolveTaskBacktestSummary(currentTask),
+    [currentTask]
+  );
+  const backtestOverviewData = useMemo<BacktestOverviewData | null>(
+    () => BacktestDataAdapter.adaptOverviewData(backtestSummaryData),
+    [backtestSummaryData]
+  );
 
   const handleSaveConfig = async (
     configName: string,
@@ -294,6 +302,8 @@ export function useTaskDetailPage(): TaskDetailPageModel {
     selectedStock,
     setSelectedStock,
     backtestDetailedData,
+    backtestSummaryData,
+    backtestOverviewData,
     adaptedRiskData,
     adaptedPerformanceData,
     loadingBacktestData,
