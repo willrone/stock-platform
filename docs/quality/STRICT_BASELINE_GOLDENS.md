@@ -11,7 +11,9 @@
 - Manifest：`backend/tests/golden/strict_baseline/manifest.json`
 - 单策略 golden：`backend/tests/golden/strict_baseline/strategies/*.json`
 - 导出脚本：`backend/tests/scripts/export_strict_baseline_goldens.py`
-- 校验脚本：`backend/tests/scripts/verify_strict_baseline_golden.py`
+- 底层校验脚本：`backend/tests/scripts/verify_strict_baseline_golden.py`
+- 统一 regression runner：`backend/tests/scripts/run_strict_baseline_regression.py`
+- 统一命令入口：`backend/scripts/quality.sh baseline`
 
 ## 任务 ID 映射表
 
@@ -87,23 +89,56 @@ cd backend
 python tests/scripts/verify_strict_baseline_golden.py
 ```
 
-### 3. 校验某个回测任务是否与 baseline 一致
+### 3. 使用统一 regression runner（推荐）
 
 ```bash
 cd backend
-python tests/scripts/verify_strict_baseline_golden.py \
-  --task-id 34ab0a39-d54b-4127-ab09-77ef03619dc1
+./scripts/quality.sh baseline
+```
+
+默认会读取 `backend/tests/golden/strict_baseline/manifest.json`，对 manifest 中 15 个策略逐一比对，并在 `backend/reports/quality/<timestamp>/strict-baseline/` 下输出：
+
+- `summary.json`：机读汇总
+- `summary.md`：人工可读摘要
+- `junit.xml`：CI 可消费的 JUnit 结果
+- `strict-baseline.txt`：控制台原始输出
+
+### 4. 校验某个 rerun 任务是否与 baseline 一致
+
+```bash
+cd backend
+STRICT_BASELINE_TASK_ID=34ab0a39-d54b-4127-ab09-77ef03619dc1 \
+./scripts/quality.sh baseline
+```
+
+如果该 task_id 不在 manifest 的 source task 映射里，需要额外指定策略名：
+
+```bash
+cd backend
+STRICT_BASELINE_TASK_ID=<task_id> \
+STRICT_BASELINE_STRATEGY=<strategy_name> \
+./scripts/quality.sh baseline
 ```
 
 如需只看配置/指标，不比较哈希指纹：
 
 ```bash
 cd backend
-python tests/scripts/verify_strict_baseline_golden.py \
-  --task-id <task_id> \
-  --strategy <strategy_name> \
-  --no-strict-hashes
+STRICT_BASELINE_TASK_ID=<task_id> \
+STRICT_BASELINE_STRATEGY=<strategy_name> \
+STRICT_BASELINE_NO_STRICT_HASHES=1 \
+./scripts/quality.sh baseline
 ```
+
+## Runner 行为与 CI 接线位点
+
+- `run_strict_baseline_regression.py` 会复用现有 golden 与 tolerance policy，不创建第二套阈值规则。
+- 退出码约定：
+  - `0`：全部通过
+  - `1`：出现 baseline drift / mismatch
+- `junit.xml` 中每个策略对应一个 `testcase`，任一漂移会写入 `failure` 节点，方便接到 CI。
+- 当前仓库里的 strict-baseline 依赖本地 `backend/data/app.db` 中已固化的 baseline/rerun 任务；如果外部 CI 环境没有这份数据，应先挂载同版本 SQLite 工件，或在本机 / 自托管 runner 上执行 `./scripts/quality.sh baseline`。
+- 因此，本单先交付“统一 runner + 统一命令入口 + CI 可消费输出”；是否把它直接接入 `.github/workflows/test.yml`，应取决于 CI 环境能否稳定提供对应 SQLite 基线数据。
 
 ## 本次基线口径
 

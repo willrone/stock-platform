@@ -8,6 +8,11 @@ MODE="${1:-snapshot}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 SNAPSHOT_DIR="${QUALITY_SNAPSHOT_DIR:-$ROOT_DIR/reports/quality/$TIMESTAMP}"
 PYTEST_TARGET="${PYTEST_TARGET:-tests/unit/infrastructure/test_basic_infrastructure.py}"
+STRICT_BASELINE_MANIFEST_PATH="${STRICT_BASELINE_MANIFEST_PATH:-$ROOT_DIR/tests/golden/strict_baseline/manifest.json}"
+STRICT_BASELINE_TASK_ID="${STRICT_BASELINE_TASK_ID:-}"
+STRICT_BASELINE_STRATEGY="${STRICT_BASELINE_STRATEGY:-}"
+STRICT_BASELINE_DB_PATH="${STRICT_BASELINE_DB_PATH:-}"
+STRICT_BASELINE_NO_STRICT_HASHES="${STRICT_BASELINE_NO_STRICT_HASHES:-0}"
 
 mkdir -p "$SNAPSHOT_DIR"
 
@@ -72,6 +77,36 @@ EOF
   fi
 }
 
+run_strict_baseline() {
+  local output_dir="$SNAPSHOT_DIR/strict-baseline"
+  local -a command_args
+
+  mkdir -p "$output_dir"
+  command_args=(
+    tests/scripts/run_strict_baseline_regression.py
+    --manifest-path "$STRICT_BASELINE_MANIFEST_PATH"
+    --summary-json "$output_dir/summary.json"
+    --summary-md "$output_dir/summary.md"
+    --junit-xml "$output_dir/junit.xml"
+  )
+
+  if [ -n "$STRICT_BASELINE_DB_PATH" ]; then
+    command_args+=(--db-path "$STRICT_BASELINE_DB_PATH")
+  fi
+  if [ -n "$STRICT_BASELINE_TASK_ID" ]; then
+    command_args+=(--task-id "$STRICT_BASELINE_TASK_ID")
+  fi
+  if [ -n "$STRICT_BASELINE_STRATEGY" ]; then
+    command_args+=(--strategy "$STRICT_BASELINE_STRATEGY")
+  fi
+  if [ "$STRICT_BASELINE_NO_STRICT_HASHES" = "1" ]; then
+    command_args+=(--no-strict-hashes)
+  fi
+
+  run_and_capture strict-baseline "$VENV_DIR/bin/python" "${command_args[@]}"
+  log "strict-baseline 输出目录: $output_dir"
+}
+
 main() {
   set -e
   case "$MODE" in
@@ -99,8 +134,12 @@ main() {
       ensure_quality_deps
       run_snapshot
       ;;
+    baseline|strict-baseline)
+      ensure_venv
+      run_strict_baseline
+      ;;
     *)
-      echo "用法: $0 [install|pytest|flake8|mypy|snapshot]" >&2
+      echo "用法: $0 [install|pytest|flake8|mypy|snapshot|baseline]" >&2
       exit 2
       ;;
   esac
