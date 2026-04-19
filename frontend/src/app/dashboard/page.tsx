@@ -59,24 +59,23 @@ export default function DashboardPage() {
       try {
         setLoading(true);
 
-        // 加载最近任务
-        const tasksResult = await TaskService.getTasks(undefined, 5, 0);
+        // 并行请求：最近任务 + 统计数据
+        const [tasksResult, statsResult] = await Promise.all([
+          TaskService.getTasks(undefined, 5, 0),
+          TaskService.getTaskStats(),
+        ]);
+
         setRecentTasks(tasksResult.tasks);
 
-        // 加载所有任务以计算统计数据
-        const allTasksResult = await TaskService.getTasks(undefined, 1000, 0);
-        const allTasks = allTasksResult.tasks;
-
-        // 计算统计数据
-        const stats = {
-          totalTasks: allTasks.length,
-          runningTasks: allTasks.filter(t => t.status === 'running').length,
-          completedTasks: allTasks.filter(t => t.status === 'completed').length,
-          failedTasks: allTasks.filter(t => t.status === 'failed').length,
+        // 使用后端统计接口的数据
+        setSystemStats({
+          totalTasks: statsResult.total,
+          runningTasks: statsResult.running,
+          completedTasks: statsResult.completed,
+          failedTasks: statsResult.failed,
           dataFiles: 156, // 模拟数据
           systemHealth: 'good' as const,
-        };
-        setSystemStats(stats);
+        });
       } catch (error) {
         console.error('加载仪表板数据失败:', error);
       } finally {

@@ -226,19 +226,20 @@ async def list_tasks(
             except ValueError:
                 logger.warning(f"无效的任务状态: {status}")
 
-        # 获取任务列表
+        # 获取任务列表（排除 result 大字段，列表页不需要）
         tasks = task_repository.get_tasks_by_user(
             user_id=user_id,
             limit=limit,
             offset=offset,
             status_filter=status_filter,
+            exclude_result=True,
         )
 
-        # 获取总数
-        total_tasks = task_repository.get_tasks_by_user(
-            user_id=user_id, limit=10000, offset=0, status_filter=status_filter
+        # 使用 COUNT(*) 高效获取总数
+        total = task_repository.count_tasks_by_user(
+            user_id=user_id,
+            status_filter=status_filter,
         )
-        total = len(total_tasks)
 
         task_list = build_task_list_dto(tasks, total=total, limit=limit, offset=offset)
 

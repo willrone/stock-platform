@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from sqlalchemy import and_, asc, desc, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import AuditLogger
@@ -140,10 +140,18 @@ class TaskRepository:
         offset: int = 0,
         status_filter: Optional[TaskStatus] = None,
         task_type_filter: Optional[TaskType] = None,
+        exclude_result: bool = False,
     ) -> List[Task]:
-        """获取用户的任务列表"""
+        """获取用户的任务列表
+
+        Args:
+            exclude_result: 如果为 True，不加载 result 列（列表查询时可显著减少 I/O）。
+        """
         try:
             query = self.db.query(Task).filter(Task.user_id == user_id)
+
+            if exclude_result:
+                query = query.options(defer(Task.result))
 
             if status_filter:
                 query = query.filter(Task.status == status_filter.value)
@@ -159,6 +167,32 @@ class TaskRepository:
         except Exception as e:
             raise TaskError(
                 message=f"获取用户任务列表失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
+                context=ErrorContext(user_id=user_id),
+                original_exception=e,
+            )
+
+    def count_tasks_by_user(
+        self,
+        user_id: str,
+        status_filter: Optional[TaskStatus] = None,
+        task_type_filter: Optional[TaskType] = None,
+    ) -> int:
+        """使用 COUNT(*) 高效获取用户任务总数"""
+        try:
+            query = self.db.query(func.count(Task.task_id)).filter(Task.user_id == user_id)
+
+            if status_filter:
+                query = query.filter(Task.status == status_filter.value)
+
+            if task_type_filter:
+                query = query.filter(Task.task_type == task_type_filter.value)
+
+            return query.scalar() or 0
+
+        except Exception as e:
+            raise TaskError(
+                message=f"获取用户任务总数失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
                 context=ErrorContext(user_id=user_id),
                 original_exception=e,
@@ -467,42 +501,65 @@ class TaskRepository:
     def get_task_statistics(
         self, user_id: Optional[str] = None, days: int = 30
     ) -> Dict[str, Any]:
-        """获取任务统计信息"""
+        """获取任务统计信息（使用 SQL 聚合，不加载完整 ORM 对象）"""
         try:
             cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-            query = self.db.query(Task).filter(Task.created_at >= cutoff_date)
-            if user_id:
-                query = query.filter(Task.user_id == user_id)
+            def _base_filter(q):
+                q = q.filter(Task.created_at >= cutoff_date)
+                if user_id:
+                    q = q.filter(Task.user_id == user_id)
+                return q
 
-            tasks = query.all()
+            # 按状态分组计数
+            status_rows = (
+                _base_filter(
+                    self.db.query(Task.status, func.count(Task.task_id))
+                )
+                .group_by(Task.status)
+                .all()
+            )
+            status_counts = {status: count for status, count in status_rows}
 
-            # 统计各种状态的任务数量
-            status_counts = {}
-            type_counts = {}
+            # 按类型分组计数
+            type_rows = (
+                _base_filter(
+                    self.db.query(Task.task_type, func.count(Task.task_id))
+                )
+                .group_by(Task.task_type)
+                .all()
+            )
+            type_counts = {task_type: count for task_type, count in type_rows}
 
-            for task in tasks:
-                status_counts[task.status] = status_counts.get(task.status, 0) + 1
-                type_counts[task.task_type] = type_counts.get(task.task_type, 0) + 1
+            total_tasks = sum(status_counts.values())
 
-            # 计算平均执行时间
-            completed_tasks = [t for t in tasks if t.completed_at and t.started_at]
+            # 计算平均执行时间（仅已完成的任务）
             avg_duration = 0
-            if completed_tasks:
+            completed_with_times = (
+                _base_filter(
+                    self.db.query(Task.started_at, Task.completed_at)
+                )
+                .filter(
+                    Task.started_at.isnot(None),
+                    Task.completed_at.isnot(None),
+                )
+                .all()
+            )
+            if completed_with_times:
                 durations = [
-                    (t.completed_at - t.started_at).total_seconds()
-                    for t in completed_tasks
+                    (c.completed_at - c.started_at).total_seconds()
+                    for c in completed_with_times
                 ]
                 avg_duration = sum(durations) / len(durations)
 
             return {
-                "total_tasks": len(tasks),
+                "total_tasks": total_tasks,
                 "status_counts": status_counts,
                 "type_counts": type_counts,
                 "avg_duration_seconds": avg_duration,
                 "success_rate": (
                     status_counts.get(TaskStatus.COMPLETED.value, 0)
-                    / max(len(tasks), 1)
+                    / max(total_tasks, 1)
                 ),
                 "period_days": days,
             }
