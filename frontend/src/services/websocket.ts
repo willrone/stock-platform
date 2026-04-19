@@ -46,7 +46,9 @@ export class WebSocketService {
 
     // 优先使用环境变量配置
     if (process.env.NEXT_PUBLIC_WS_URL) {
-      wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+      // 确保 URL 以 /ws 结尾（环境变量可能只配了 host:port）
+      const base = process.env.NEXT_PUBLIC_WS_URL.replace(/\/ws\/?$/, '');
+      wsUrl = `${base}/ws`;
     } else if (typeof window !== 'undefined') {
       // 客户端：根据当前页面地址推断后端WebSocket地址
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
