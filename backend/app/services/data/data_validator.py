@@ -123,20 +123,7 @@ class DataValidator:
                 issues.extend(result["issues"])
                 records_modified += result["modified_count"]
 
-            except (Exception, ValueError) as e:
-                logger.error(
-                    f"验证规则 {rule.value} 执行失败：{e}",
-                    extra={"error_type": "DOMAIN", "error_code": "VALIDATION_RULE_FAILED"}
-                )
-                issues.append(
-                    {
-                        "rule": rule.value,
-                        "severity": "error",
-                        "message": f"验证规则执行失败：{str(e)}",
-                        "affected_records": 0,
-                        "details": {"original_error": str(e)},
-                    }
-                )
+            except Exception as e:
                 logger.error(f"验证规则 {rule.value} 执行失败: {e}")
                 issues.append(
                     {

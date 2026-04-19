@@ -170,7 +170,6 @@ class TopkDropoutTradeModeExecutor:
 
         topk = int(context.strategy_config.get("topk", 10))
         n_drop = int(context.strategy_config.get("n_drop", 2))
-        hold_thresh = max(0, int(context.strategy_config.get("hold_thresh", 0) or 0))
         if topk <= 0 or n_drop <= 0:
             return _build_execution_result(
                 executed_trade_signals,
@@ -225,12 +224,8 @@ class TopkDropoutTradeModeExecutor:
             holdings,
             key=lambda code: rank_index.get(code, len(ranked) + len(holdings)),
         )
-        hold_buffer_cutoff = topk + hold_thresh
         sell_candidates = [
-            code
-            for code in reversed(held_sorted_best_to_worst)
-            if code in tradeable_codes
-            and rank_index.get(code, len(ranked) + len(holdings)) >= hold_buffer_cutoff
+            code for code in reversed(held_sorted_best_to_worst) if code in tradeable_codes
         ][:n_drop]
         buy_candidates = [code for code, _ in ranked if code not in holdings_set][:n_drop]
 

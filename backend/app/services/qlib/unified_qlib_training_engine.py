@@ -115,15 +115,6 @@ class QlibTrainingConfig:
     early_stopping_min_delta: float = 0.001
     enable_overfitting_detection: bool = True
     enable_adaptive_patience: bool = True
-    # 标签处理配置
-    label_definition: str = "future_return"  # future_return | future_excess_return_cs
-    label_normalization: str = "none"  # none | cs_rank_norm
-    # 工作流模式配置
-    workflow_mode: str = "enhanced_local"  # enhanced_local | official_replication
-    official_dataset: Optional[str] = None  # alpha158 | alpha360
-    official_market: Optional[str] = None  # csi300 | csi500
-    official_benchmark: Optional[str] = None
-    official_segments: Optional[Dict[str, tuple[str, str]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -142,13 +133,6 @@ class QlibTrainingConfig:
             "early_stopping_min_delta": self.early_stopping_min_delta,
             "enable_overfitting_detection": self.enable_overfitting_detection,
             "enable_adaptive_patience": self.enable_adaptive_patience,
-            "label_definition": self.label_definition,
-            "label_normalization": self.label_normalization,
-            "workflow_mode": self.workflow_mode,
-            "official_dataset": self.official_dataset,
-            "official_market": self.official_market,
-            "official_benchmark": self.official_benchmark,
-            "official_segments": self.official_segments,
         }
 
 
@@ -174,7 +158,6 @@ class QlibTrainingResult:
     early_stopping_reason: Optional[str] = None
     feature_correlation: Optional[Dict[str, Any]] = None
     signal_quality: Optional[Dict[str, Any]] = None
-    segment_evaluation: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -195,7 +178,6 @@ class QlibTrainingResult:
             "early_stopping_reason": self.early_stopping_reason,
             "feature_correlation": self.feature_correlation,
             "signal_quality": self.signal_quality,
-            "segment_evaluation": self.segment_evaluation,
         }
 
 
@@ -522,75 +504,6 @@ class UnifiedQlibTrainingEngine:
             logger.error(f"处理股票 {stock_code} 数据时发生错误: {e}")
             return stock_data
 
-    def _apply_label_definition(
-        self,
-        data: pd.DataFrame,
-        definition: str,
-        data_name: str,
-    ) -> pd.DataFrame:
-        """Apply optional label definition transforms for ranking-oriented experiments."""
-        if data is None or "label" not in data.columns:
-            return data
-
-        label_definition = (definition or "future_return").lower()
-        if label_definition in {"", "future_return", "raw_return", "none"}:
-            return data
-
-        transformed = data.copy()
-        if label_definition == "future_excess_return_cs":
-            if not isinstance(transformed.index, pd.MultiIndex):
-                logger.warning(f"{data_name} 不是 MultiIndex，跳过 future_excess_return_cs")
-                return transformed
-            index_names = list(transformed.index.names or [])
-            if "datetime" in index_names:
-                date_level = "datetime"
-            else:
-                date_level = transformed.index.names[-1]
-            transformed["label"] = transformed["label"] - transformed.groupby(
-                level=date_level
-            )["label"].transform("mean")
-            logger.info(
-                f"{data_name} 已应用 future_excess_return_cs，标签范围=[{transformed['label'].min():.6f}, {transformed['label'].max():.6f}]"
-            )
-            return transformed
-
-        logger.warning(f"未知标签定义方法 {definition}，保持原始 future return")
-        return transformed
-
-    def _apply_label_normalization(
-        self,
-        data: pd.DataFrame,
-        method: str,
-        data_name: str,
-    ) -> pd.DataFrame:
-        """Apply optional label normalization inspired by Qlib processors."""
-        if data is None or "label" not in data.columns:
-            return data
-
-        normalization = (method or "none").lower()
-        if normalization in {"", "none", "raw", "off"}:
-            return data
-
-        normalized = data.copy()
-        if normalization == "cs_rank_norm":
-            if not isinstance(normalized.index, pd.MultiIndex):
-                logger.warning(f"{data_name} 不是 MultiIndex，跳过 cs_rank_norm")
-                return normalized
-            index_names = list(normalized.index.names or [])
-            if "datetime" in index_names:
-                date_level = "datetime"
-            else:
-                date_level = normalized.index.names[-1]
-            ranked = normalized.groupby(level=date_level, group_keys=False)["label"].rank(pct=True)
-            normalized["label"] = (ranked - 0.5) * 3.46
-            logger.info(
-                f"{data_name} 已应用 cs_rank_norm，标签范围=[{normalized['label'].min():.6f}, {normalized['label'].max():.6f}]"
-            )
-            return normalized
-
-        logger.warning(f"未知标签归一化方法 {method}，保持原始 label")
-        return normalized
-
     async def _prepare_training_datasets(
         self,
         dataset: pd.DataFrame,
@@ -700,22 +613,6 @@ class UnifiedQlibTrainingEngine:
             if val_data is not None and "label" in val_data.columns:
                 val_data = outlier_handler.handle_label_outliers(val_data, label_col="label")
             logger.info("标签异常值处理完成")
-
-        label_definition = "future_return"
-        label_normalization = "none"
-        if config is not None:
-            label_definition = getattr(config, "label_definition", None) or config.hyperparameters.get(
-                "label_definition", "future_return"
-            )
-            label_normalization = getattr(config, "label_normalization", None) or config.hyperparameters.get(
-                "label_normalization", "none"
-            )
-        train_data = self._apply_label_definition(train_data, label_definition, "训练集")
-        if val_data is not None:
-            val_data = self._apply_label_definition(val_data, label_definition, "验证集")
-        train_data = self._apply_label_normalization(train_data, label_normalization, "训练集")
-        if val_data is not None:
-            val_data = self._apply_label_normalization(val_data, label_normalization, "验证集")
 
         # 特征标准化（时间序列安全）
         feature_scaler = RobustFeatureScaler()
@@ -1352,11 +1249,10 @@ class UnifiedQlibTrainingEngine:
                 return False
 
             # 优先按 Qlib 官方 fit 接口调用：dataset + num_boost_round + early_stopping_rounds + evals_result
-            dataset_to_fit = getattr(train_dataset, "dataset", train_dataset)
-            dataset_segments = getattr(dataset_to_fit, "segments", None)
-            if dataset_segments and "valid" in dataset_segments:
+            dataset_to_fit = train_dataset
+            if hasattr(train_dataset, "segments") and "valid" in train_dataset.segments:
                 logger.info(
-                    f"使用包含验证集的dataset进行训练，segments: {list(dataset_segments.keys())}"
+                    f"使用包含验证集的dataset进行训练，segments: {list(train_dataset.segments.keys())}"
                 )
             else:
                 logger.warning("dataset不包含验证集segment，仅使用训练集")
@@ -1547,176 +1443,77 @@ class UnifiedQlibTrainingEngine:
         train_dataset: pd.DataFrame,
         val_dataset: pd.DataFrame,
         model_id: str = None,
-        test_dataset: pd.DataFrame | None = None,
-    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any], Dict[str, Any]]:
-        """评估模型性能并计算详细指标。"""
-        default_signal_quality = {
-            "ic": None,
-            "icir": None,
-            "rank_ic": None,
-            "rank_icir": None,
-            "long_short_ann_return": None,
-            "long_short_ann_sharpe": None,
-            "long_avg_ann_return": None,
-            "long_avg_ann_sharpe": None,
-            "sample_count": 0,
-            "analysis_scope": "validation",
-        }
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
+        """评估模型性能并计算详细指标"""
         try:
-            for dataset_name, current_dataset in (
-                ("训练集", train_dataset),
-                ("验证集", val_dataset),
-                ("测试集", test_dataset),
+            # 记录数据集信息
+            if hasattr(train_dataset, "data") and isinstance(
+                train_dataset.data, pd.DataFrame
             ):
-                if current_dataset is None:
-                    continue
-                if hasattr(current_dataset, "data") and isinstance(current_dataset.data, pd.DataFrame):
-                    logger.info(
-                        f"{dataset_name}数据维度: {current_dataset.data.shape}, 列: {list(current_dataset.data.columns[:10]) if len(current_dataset.data.columns) > 0 else 'N/A'}"
-                    )
-                elif isinstance(current_dataset, pd.DataFrame):
-                    logger.info(
-                        f"{dataset_name}数据维度: {current_dataset.shape}, 列: {list(current_dataset.columns[:10]) if len(current_dataset.columns) > 0 else 'N/A'}"
-                    )
-
-            segment_evaluation: Dict[str, Any] = {}
-
-            def evaluate_segment(dataset_key: str, dataset_name: str, current_dataset: Any) -> tuple[Dict[str, float], Dict[str, Any]]:
-                segment = getattr(current_dataset, "primary_segment", dataset_key)
-                predict_dataset = getattr(current_dataset, "dataset", current_dataset)
-                predictions = model.predict(predict_dataset, segment=segment)
                 logger.info(
-                    f"{dataset_name}预测结果: 类型={type(predictions)}, 形状={predictions.shape if hasattr(predictions, 'shape') else len(predictions) if hasattr(predictions, '__len__') else 'N/A'}"
+                    f"训练集数据维度: {train_dataset.data.shape}, 列: {list(train_dataset.data.columns[:10]) if len(train_dataset.data.columns) > 0 else 'N/A'}"
                 )
-                metrics = self._calculate_metrics(current_dataset, predictions, dataset_name, model_id)
-                signal_quality = self._calculate_signal_quality(current_dataset, predictions, dataset_name)
-                segment_evaluation[dataset_key] = {
-                    "dataset_samples": len(current_dataset) if hasattr(current_dataset, "__len__") else 0,
-                    "evaluated_samples": signal_quality.get("sample_count", 0),
-                    "performance_metrics": metrics,
-                    "signal_quality": signal_quality,
-                }
-                return metrics, signal_quality
-
-            training_metrics, train_signal_quality = evaluate_segment("train", "训练集", train_dataset)
-            validation_metrics, validation_signal_quality = evaluate_segment("validation", "验证集", val_dataset)
-
-            if test_dataset is not None:
-                _, test_signal_quality = evaluate_segment("test", "测试集", test_dataset)
+            elif isinstance(train_dataset, pd.DataFrame):
                 logger.info(
-                    f"测试集信号质量 - RankIC: {test_signal_quality.get('rank_ic')}, IC: {test_signal_quality.get('ic')}"
+                    f"训练集数据维度: {train_dataset.shape}, 列: {list(train_dataset.columns[:10]) if len(train_dataset.columns) > 0 else 'N/A'}"
                 )
+
+            if hasattr(val_dataset, "data") and isinstance(
+                val_dataset.data, pd.DataFrame
+            ):
+                logger.info(
+                    f"验证集数据维度: {val_dataset.data.shape}, 列: {list(val_dataset.data.columns[:10]) if len(val_dataset.data.columns) > 0 else 'N/A'}"
+                )
+            elif isinstance(val_dataset, pd.DataFrame):
+                logger.info(
+                    f"验证集数据维度: {val_dataset.shape}, 列: {list(val_dataset.columns[:10]) if len(val_dataset.columns) > 0 else 'N/A'}"
+                )
+
+            # 训练集预测 - 使用正确的segment
+            train_pred = model.predict(train_dataset, segment="train")
+            logger.info(
+                f"训练集预测结果: 类型={type(train_pred)}, 形状={train_pred.shape if hasattr(train_pred, 'shape') else len(train_pred) if hasattr(train_pred, '__len__') else 'N/A'}"
+            )
+
+            # 验证集预测 - 使用正确的segment
+            val_pred = model.predict(val_dataset, segment="valid")
+            logger.info(
+                f"验证集预测结果: 类型={type(val_pred)}, 形状={val_pred.shape if hasattr(val_pred, 'shape') else len(val_pred) if hasattr(val_pred, '__len__') else 'N/A'}"
+            )
+
+            # 计算训练集指标（使用真实标签）
+            training_metrics = self._calculate_metrics(
+                train_dataset, train_pred, "训练集", model_id
+            )
+
+            # 计算验证集指标（使用真实标签）
+            validation_metrics = self._calculate_metrics(
+                val_dataset, val_pred, "验证集", model_id
+            )
+            validation_signal_quality = self._calculate_signal_quality(
+                val_dataset, val_pred, "验证集"
+            )
 
             logger.info(
-                f"模型评估完成 - 训练准确率: {training_metrics.get('accuracy', 0.0):.4f}, 验证准确率: {validation_metrics.get('accuracy', 0.0):.4f}, 验证RankIC: {validation_signal_quality.get('rank_ic')}, 训练RankIC: {train_signal_quality.get('rank_ic')}"
+                f"模型评估完成 - 训练准确率: {training_metrics.get('accuracy', 0.0):.4f}, 验证准确率: {validation_metrics.get('accuracy', 0.0):.4f}, RankIC: {validation_signal_quality.get('rank_ic')}"
             )
-            return training_metrics, validation_metrics, validation_signal_quality, segment_evaluation
+            return training_metrics, validation_metrics, validation_signal_quality
 
         except Exception as e:
             logger.error(f"模型评估失败: {e}", exc_info=True)
-            return self._get_default_metrics(), self._get_default_metrics(), default_signal_quality, {
-                "train": {
-                    "dataset_samples": len(train_dataset) if hasattr(train_dataset, "__len__") else 0,
-                    "evaluated_samples": 0,
-                    "performance_metrics": self._get_default_metrics(),
-                    "signal_quality": {**default_signal_quality, "analysis_scope": "train"},
-                },
-                "validation": {
-                    "dataset_samples": len(val_dataset) if hasattr(val_dataset, "__len__") else 0,
-                    "evaluated_samples": 0,
-                    "performance_metrics": self._get_default_metrics(),
-                    "signal_quality": default_signal_quality,
-                },
-                **(
-                    {
-                        "test": {
-                            "dataset_samples": len(test_dataset) if test_dataset is not None and hasattr(test_dataset, "__len__") else 0,
-                            "evaluated_samples": 0,
-                            "performance_metrics": self._get_default_metrics(),
-                            "signal_quality": {**default_signal_quality, "analysis_scope": "test"},
-                        }
-                    }
-                    if test_dataset is not None
-                    else {}
-                ),
+            # 返回默认指标
+            return self._get_default_metrics(), self._get_default_metrics(), {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "validation",
             }
-
-    def _extract_label_series(self, prepared: Any) -> Optional[pd.Series]:
-        """从 Qlib/Dataset adapter 返回的数据中尽量提取标签列。"""
-        if prepared is None:
-            return None
-
-        if isinstance(prepared, pd.Series):
-            return prepared
-
-        if isinstance(prepared, pd.DataFrame):
-            if "label" in prepared.columns:
-                label_col = prepared["label"]
-                if isinstance(label_col, pd.Series):
-                    return label_col
-            if isinstance(prepared.columns, pd.MultiIndex):
-                label_columns = [col for col in prepared.columns if col[0] == "label"]
-                if label_columns:
-                    label_col = prepared[label_columns[0]]
-                    if isinstance(label_col, pd.Series):
-                        return label_col
-            if prepared.shape[1] == 1:
-                label_col = prepared.iloc[:, 0]
-                if isinstance(label_col, pd.Series):
-                    return label_col
-
-        if hasattr(prepared, "_series"):
-            label_series = prepared._series
-            if isinstance(label_series, pd.Series):
-                return label_series
-
-        return None
-
-    def _extract_labels_from_dataset(self, dataset: Any, segment: str) -> tuple[Optional[np.ndarray], Optional[pd.Index]]:
-        y_true = None
-        y_index = None
-
-        if hasattr(dataset, "dataset") and hasattr(dataset, "primary_segment"):
-            base_dataset = dataset.dataset
-            segment = getattr(dataset, "primary_segment", segment) or segment
-            if hasattr(base_dataset, "prepare"):
-                try:
-                    label_series = self._extract_label_series(
-                        base_dataset.prepare(segment, col_set="label")
-                    )
-                    if label_series is not None:
-                        return label_series.values, label_series.index
-                except Exception as e:
-                    logger.debug(f"从官方Dataset adapter提取标签失败: {e}")
-
-        if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
-            if hasattr(dataset, "segments") and segment in dataset.segments:
-                segment_data = dataset.segments[segment]
-                if isinstance(segment_data, pd.DataFrame) and "label" in segment_data.columns:
-                    label_series = segment_data["label"]
-                    if hasattr(label_series, "_series"):
-                        return label_series._series.values, label_series._series.index
-                    return label_series.values, label_series.index
-            elif "label" in dataset.data.columns:
-                return dataset.data["label"].values, dataset.data.index
-
-        if hasattr(dataset, "prepare"):
-            try:
-                label_series = self._extract_label_series(
-                    dataset.prepare(segment, col_set="label")
-                )
-                if label_series is not None:
-                    return label_series.values, label_series.index
-            except Exception as e:
-                logger.debug(f"通过prepare方法获取标签失败: {e}")
-
-        if isinstance(dataset, pd.DataFrame) and "label" in dataset.columns:
-            label_col = dataset["label"]
-            if hasattr(label_col, "_series"):
-                return label_col._series.values, label_col._series.index
-            return label_col.values, label_col.index
-
-        return y_true, y_index
 
     def _extract_evaluation_inputs(
         self,
@@ -1728,6 +1525,9 @@ class UnifiedQlibTrainingEngine:
         try:
             import numpy as np
 
+            y_true = None
+            y_index = None
+
             segment = (
                 "train"
                 if "训练" in dataset_name
@@ -1736,7 +1536,47 @@ class UnifiedQlibTrainingEngine:
                 else "train"
             )
 
-            y_true, y_index = self._extract_labels_from_dataset(dataset, segment)
+            if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
+                if hasattr(dataset, "segments") and segment in dataset.segments:
+                    segment_data = dataset.segments[segment]
+                    if isinstance(segment_data, pd.DataFrame) and "label" in segment_data.columns:
+                        label_series = segment_data["label"]
+                        if hasattr(label_series, "_series"):
+                            y_true = label_series._series.values
+                            y_index = label_series._series.index
+                        else:
+                            y_true = label_series.values
+                            y_index = label_series.index
+                elif "label" in dataset.data.columns:
+                    y_true = dataset.data["label"].values
+                    y_index = dataset.data.index
+                elif hasattr(dataset, "prepare"):
+                    try:
+                        prepared = dataset.prepare(segment, col_set=["label"])
+                        if isinstance(prepared, pd.DataFrame) and "label" in prepared.columns:
+                            label_col = prepared["label"]
+                            if hasattr(label_col, "_series"):
+                                y_true = label_col._series.values
+                                y_index = label_col._series.index
+                            elif hasattr(label_col, "values"):
+                                label_values = label_col.values
+                                y_true = label_values.flatten() if getattr(label_values, "ndim", 1) == 2 else label_values
+                                y_index = label_col.index
+                            else:
+                                y_true = np.array(label_col).flatten()
+                                y_index = prepared.index
+                    except Exception as e:
+                        logger.debug(f"通过prepare方法获取标签失败: {e}")
+
+            if y_true is None and isinstance(dataset, pd.DataFrame):
+                if "label" in dataset.columns:
+                    label_col = dataset["label"]
+                    if hasattr(label_col, "_series"):
+                        y_true = label_col._series.values
+                        y_index = label_col._series.index
+                    else:
+                        y_true = label_col.values
+                        y_index = label_col.index
 
             if y_true is None:
                 logger.warning(f"数据集 {dataset_name} 中没有找到label列")
@@ -1783,14 +1623,6 @@ class UnifiedQlibTrainingEngine:
             logger.error(f"提取评估输入失败: {e}", exc_info=True)
             return None
 
-    @staticmethod
-    def _infer_analysis_scope(dataset_name: str) -> str:
-        if "测试" in dataset_name:
-            return "test"
-        if "验证" in dataset_name:
-            return "validation"
-        return "train"
-
     def _calculate_signal_quality(
         self,
         dataset: pd.DataFrame,
@@ -1798,7 +1630,6 @@ class UnifiedQlibTrainingEngine:
         dataset_name: str,
     ) -> Dict[str, Any]:
         """按 Qlib 官方思路计算信号质量指标。"""
-        analysis_scope = self._infer_analysis_scope(dataset_name)
         evaluation_inputs = self._extract_evaluation_inputs(dataset, predictions, dataset_name)
         default_result = {
             "ic": None,
@@ -1810,7 +1641,7 @@ class UnifiedQlibTrainingEngine:
             "long_avg_ann_return": None,
             "long_avg_ann_sharpe": None,
             "sample_count": 0,
-            "analysis_scope": analysis_scope,
+            "analysis_scope": "validation" if "验证" in dataset_name else "train",
         }
         if evaluation_inputs is None:
             return default_result
@@ -1892,7 +1723,7 @@ class UnifiedQlibTrainingEngine:
             "long_avg_ann_return": _safe_ann_return(long_avg_returns),
             "long_avg_ann_sharpe": _safe_ann_sharpe(long_avg_returns),
             "sample_count": int(len(y_true)),
-            "analysis_scope": analysis_scope,
+            "analysis_scope": "validation" if "验证" in dataset_name else "train",
         }
         return result
 

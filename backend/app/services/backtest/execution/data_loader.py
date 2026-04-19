@@ -32,12 +32,11 @@ class DataLoader:
         try:
             if data is None or data.empty:
                 return False
+            if len(data) < min_rows:
+                return False
             # coverage ratio: rows / expected business days (rough)
             total_days = (end_date.date() - start_date.date()).days + 1
             expected = max(1, total_days * 5 // 7)
-            effective_min_rows = min(min_rows, max(1, int(expected * min_coverage_ratio)))
-            if len(data) < effective_min_rows:
-                return False
             coverage = len(data) / expected
             return coverage >= min_coverage_ratio
         except Exception:

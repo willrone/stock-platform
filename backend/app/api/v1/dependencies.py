@@ -19,9 +19,6 @@ from app.repositories.task_repository import (
     PredictionResultRepository,
     TaskRepository,
 )
-from app.services.backtest.utils.official_style_params import (
-    apply_official_style_topk_dropout_params,
-)
 from app.services.tasks import TaskQueueManager
 
 
@@ -135,10 +132,10 @@ def _normalize_task_backtest_strategy_config(config: dict | None) -> tuple[str, 
     strategy_name = str(normalized.get("strategy_name", "default_strategy") or "default_strategy")
     strategy_config = dict(normalized.get("strategy_config") or {})
 
-    normalized_name = strategy_name.lower()
     model_id = normalized.get("model_id")
     if model_id:
         strategy_config.setdefault("model_id", model_id)
+        normalized_name = strategy_name.lower()
         if normalized_name in {"model", "signal", "model_signal"}:
             strategy_name = "model_signal"
         elif normalized_name in {
@@ -149,12 +146,6 @@ def _normalize_task_backtest_strategy_config(config: dict | None) -> tuple[str, 
             "ranking",
         }:
             strategy_name = "model_topk_dropout"
-
-    strategy_config = apply_official_style_topk_dropout_params(
-        strategy_name=strategy_name,
-        stock_codes=normalized.get("stock_codes") or [],
-        strategy_config=strategy_config,
-    )
 
     return strategy_name, strategy_config
 
@@ -456,29 +447,6 @@ def execute_backtest_task_simple(task_id: str):
                 _resolve_backtest_config_value(
                     config, strategy_config, "commission_rate", 0.0003
                 )
-            ),
-            open_cost=float(
-                _resolve_backtest_config_value(
-                    config,
-                    strategy_config,
-                    "open_cost",
-                    _resolve_backtest_config_value(
-                        config, strategy_config, "commission_rate", 0.0003
-                    ),
-                )
-            ),
-            close_cost=float(
-                _resolve_backtest_config_value(
-                    config,
-                    strategy_config,
-                    "close_cost",
-                    _resolve_backtest_config_value(
-                        config, strategy_config, "commission_rate", 0.0003
-                    ),
-                )
-            ),
-            min_cost=float(
-                _resolve_backtest_config_value(config, strategy_config, "min_cost", 0.0)
             ),
             slippage_rate=float(
                 _resolve_backtest_config_value(

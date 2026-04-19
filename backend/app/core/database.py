@@ -109,26 +109,6 @@ SessionLocal = sessionmaker(
 )
 
 
-def ensure_sqlite_task_updated_at_column_sync(connection) -> None:
-    """Backfill legacy SQLite task tables with an updated_at heartbeat column."""
-    tables = connection.execute(
-        text("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'")
-    ).fetchall()
-    if not tables:
-        return
-
-    columns = [row[1] for row in connection.execute(text("PRAGMA table_info(tasks)")).fetchall()]
-    if "updated_at" in columns:
-        return
-
-    connection.execute(text("ALTER TABLE tasks ADD COLUMN updated_at DATETIME"))
-    connection.execute(
-        text(
-            "UPDATE tasks SET updated_at = COALESCE(completed_at, started_at, created_at) WHERE updated_at IS NULL"
-        )
-    )
-
-
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """获取异步数据库会话（异步生成器，用于依赖注入）"""
     async with AsyncSessionLocal() as session:
@@ -287,7 +267,6 @@ async def init_db() -> None:
     # 创建所有表
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(ensure_sqlite_task_updated_at_column_sync)
 
         # 如果是 SQLite，启用 WAL 模式
         # 注意：WAL 模式已经在连接时通过事件监听器配置，这里只是确保设置正确

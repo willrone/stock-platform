@@ -113,18 +113,6 @@ class ModelTrainingRequest(BaseModel):
         default="random_search", description="超参数搜索策略"
     )
     hyperparameter_search_trials: int = Field(default=10, description="超参数搜索试验次数")
-    workflow_mode: str = Field(
-        default="enhanced_local",
-        description="训练工作流模式: enhanced_local 或 official_replication",
-    )
-    official_dataset: Optional[str] = Field(
-        default=None,
-        description="官方复刻模式使用的数据集: alpha158 或 alpha360",
-    )
-    official_market: Optional[str] = Field(
-        default=None,
-        description="官方复刻模式使用的市场: csi300 或 csi500",
-    )
 
 
 class RemoteDataSyncRequest(BaseModel):

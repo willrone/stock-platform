@@ -23,7 +23,6 @@ from app.models.task_models import (
     TaskStatus,
     TaskType,
     TrainingTaskConfig,
-    utcnow as task_utcnow,
 )
 
 
@@ -90,8 +89,7 @@ class TaskRepository:
                 config=config,
                 status=TaskStatus.CREATED.value,
                 progress=0.0,
-                created_at=task_utcnow(),
-                updated_at=task_utcnow(),
+                created_at=datetime.utcnow(),
             )
 
             self.db.add(task)
@@ -189,16 +187,10 @@ class TaskRepository:
     ) -> List[Task]:
         """获取最近更新的任务列表"""
         try:
-            # 优先使用 updated_at 作为任务心跳时间，回退到 completed_at / started_at
+            # 使用completed_at或started_at来判断最近更新的任务
             tasks = (
                 self.db.query(Task)
-                .filter(
-                    or_(
-                        Task.updated_at >= since,
-                        Task.completed_at >= since,
-                        Task.started_at >= since,
-                    )
-                )
+                .filter(or_(Task.completed_at >= since, Task.started_at >= since))
                 .filter(
                     Task.status.in_(
                         [
@@ -247,7 +239,6 @@ class TaskRepository:
 
             old_status = task.status
             task.status = status.value
-            task.updated_at = task_utcnow()
 
             if progress is not None:
                 task.progress = progress
@@ -264,13 +255,13 @@ class TaskRepository:
 
             # 更新时间戳
             if status == TaskStatus.RUNNING and not task.started_at:
-                task.started_at = task_utcnow()
+                task.started_at = datetime.utcnow()
             elif status in [
                 TaskStatus.COMPLETED,
                 TaskStatus.FAILED,
                 TaskStatus.CANCELLED,
             ]:
-                task.completed_at = task_utcnow()
+                task.completed_at = datetime.utcnow()
 
             self.db.commit()
             self.db.refresh(task)
@@ -312,7 +303,6 @@ class TaskRepository:
 
             old_progress = task.progress
             task.progress = progress
-            task.updated_at = task_utcnow()
 
             self.db.commit()
             self.db.refresh(task)
