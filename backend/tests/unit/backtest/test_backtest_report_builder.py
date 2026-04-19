@@ -243,6 +243,28 @@ def test_attach_signal_execution_summary_fills_missing_defaults() -> None:
     }
 
 
+def test_build_report_serializes_official_style_cost_fields(
+    build_input: BacktestReportBuildInput,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Builder should expose open/close/min cost fields for official-style friction configs."""
+    builder = BacktestReportBuilder()
+    monkeypatch.setattr(
+        builder,
+        "_load_benchmark_return_series",
+        lambda benchmark, start_date, end_date: None,
+    )
+    build_input.config.open_cost = 0.0005
+    build_input.config.close_cost = 0.0015
+    build_input.config.min_cost = 5.0
+
+    report = builder.build_report(build_input)
+
+    assert report["backtest_config"]["open_cost"] == 0.0005
+    assert report["backtest_config"]["close_cost"] == 0.0015
+    assert report["backtest_config"]["min_cost"] == 5.0
+
+
 def test_benchmark_code_candidates_support_qlib_and_local_formats() -> None:
     """Builder should translate between SH000300 and 000300.SH style benchmark codes."""
     builder = BacktestReportBuilder()

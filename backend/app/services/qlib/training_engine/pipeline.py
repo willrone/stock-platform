@@ -9,6 +9,14 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 import pandas as pd
 from loguru import logger
 
+from app.services.data.official_qlib_data_builder import OfficialQlibDataBuilder
+from app.services.qlib.official_workflow import (
+    OfficialDataset,
+    OfficialMarket,
+    create_official_dataset_adapter,
+    build_official_lightgbm_workflow_config,
+)
+
 
 ProgressCallback = Callable[
     [str, float, str, str, Optional[Dict[str, Any]]], Awaitable[None]
@@ -57,8 +65,22 @@ class QlibTrainingPipeline:
         """初始化训练引擎。"""
         await self.engine.initialize()
 
-    async def prepare_dataset(self, request: TrainingRequest) -> pd.DataFrame:
+    async def prepare_dataset(self, request: TrainingRequest) -> Any:
         """准备 Qlib 数据集。"""
+        workflow_mode = getattr(request.config, "workflow_mode", "enhanced_local")
+        if workflow_mode == "official_replication":
+            workflow = build_official_lightgbm_workflow_config(
+                dataset=OfficialDataset(getattr(request.config, "official_dataset", "alpha158") or "alpha158"),
+                market=OfficialMarket(getattr(request.config, "official_market", "csi300") or "csi300"),
+            )
+            builder = OfficialQlibDataBuilder()
+            builder.prepare_stocks(request.stock_codes)
+            return create_official_dataset_adapter(
+                workflow,
+                stock_codes=request.stock_codes,
+                provider_uri=builder.official_qlib_data_path,
+            )
+
         return await self.engine.data_provider.prepare_qlib_dataset(
             stock_codes=request.stock_codes,
             start_date=request.start_date,
@@ -68,9 +90,19 @@ class QlibTrainingPipeline:
         )
 
     @staticmethod
-    def log_dataset_overview(dataset: pd.DataFrame) -> None:
+    def log_dataset_overview(dataset: Any) -> None:
         """记录数据集维度和质量摘要。"""
         logger.info("========== 数据集维度信息 ==========")
+        if hasattr(dataset, "workflow_config") and hasattr(dataset, "segment_lengths"):
+            logger.info(f"数据集形状: {dataset.shape}")
+            logger.info(f"样本数: {dataset.shape[0]}")
+            logger.info(f"特征数: {dataset.shape[1] if len(dataset.shape) > 1 else 0}")
+            logger.info(f"官方数据集: {dataset.workflow_config.dataset.value}")
+            logger.info(f"官方市场: {dataset.workflow_config.market}")
+            logger.info(f"显式切分: {dataset.segment_lengths}")
+            logger.info("=====================================")
+            return
+
         logger.info(f"数据集形状: {dataset.shape}")
         logger.info(f"样本数: {dataset.shape[0]}")
         logger.info(f"特征数: {dataset.shape[1] if len(dataset.shape) > 1 else 0}")
@@ -92,19 +124,38 @@ class QlibTrainingPipeline:
         """构建模型配置。"""
         return await self.engine._create_qlib_model_config(config)
 
-    def analyze_feature_correlations(self, dataset: pd.DataFrame) -> Dict[str, Any]:
+    def analyze_feature_correlations(self, dataset: Any) -> Dict[str, Any]:
         """分析特征相关性。"""
+        if hasattr(dataset, "workflow_config") and hasattr(dataset, "segment_lengths"):
+            return {
+                "mode": "official_replication",
+                "dataset": dataset.workflow_config.dataset.value,
+                "market": dataset.workflow_config.market,
+                "feature_count": dataset.workflow_config.feature_count,
+                "segment_lengths": dataset.segment_lengths,
+            }
         return self.engine._analyze_feature_correlations(dataset)
 
     async def prepare_training_datasets(
-        self, dataset: pd.DataFrame, validation_split: float, config: Any
+        self, dataset: Any, validation_split: float, config: Any
     ) -> Tuple[Any, Any]:
         """准备训练/验证数据集。"""
+        if hasattr(dataset, "workflow_config") and hasattr(dataset, "for_segment"):
+            return dataset.for_segment("train"), dataset.for_segment("valid")
         return await self.engine._prepare_training_datasets(
             dataset,
             validation_split,
             config,
         )
+
+    @staticmethod
+    def prepare_test_dataset(dataset: Any) -> Any | None:
+        """为支持显式 test 段的数据集构建测试视图。"""
+        if hasattr(dataset, "workflow_config") and hasattr(dataset, "for_segment"):
+            segment_lengths = getattr(dataset, "segment_lengths", {}) or {}
+            if segment_lengths.get("test", 0) > 0:
+                return dataset.for_segment("test")
+        return None
 
     async def train(
         self,
@@ -129,13 +180,15 @@ class QlibTrainingPipeline:
         train_dataset: Any,
         val_dataset: Any,
         model_id: str,
-    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
+        test_dataset: Any | None = None,
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any], Dict[str, Any]]:
         """评估训练后模型。"""
         return await self.engine._evaluate_model(
             model,
             train_dataset,
             val_dataset,
             model_id,
+            test_dataset=test_dataset,
         )
 
     async def extract_feature_importance(self, model: Any, model_type: Any) -> Dict[str, float]:

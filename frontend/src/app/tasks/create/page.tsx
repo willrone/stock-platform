@@ -69,7 +69,7 @@ export default function CreateTaskPage() {
     strategies: PortfolioStrategyItem[];
     integration_method: string;
   } | null>(null);
-  const [strategyType, setStrategyType] = useState<'single' | 'portfolio'>('single');
+  const [strategyType, setStrategyType] = useState<'single' | 'portfolio' | 'model'>('single');
   const [savedConfigs, setSavedConfigs] = useState<StrategyConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [configFormKey, setConfigFormKey] = useState(0);
@@ -140,6 +140,22 @@ export default function CreateTaskPage() {
   }, [taskType]);
 
   useEffect(() => {
+    const typeParam = searchParams.get('type');
+    const modeParam = searchParams.get('mode');
+    const modelIdParam = searchParams.get('model_id');
+
+    if (typeParam === 'backtest') {
+      setTaskType('backtest');
+      if (modeParam === 'model') {
+        setStrategyType('model');
+        updateFormData('strategy_name', 'model_signal');
+      }
+    }
+
+    if (modelIdParam) {
+      updateFormData('model_id', modelIdParam);
+    }
+
     const rebuildTaskId = searchParams.get("rebuild");
     if (!rebuildTaskId) return;
 
@@ -182,7 +198,15 @@ export default function CreateTaskPage() {
         }));
 
         // 预填策略配置
-        if (bc.strategy_name === "portfolio" && bc.strategy_config) {
+        if ((bc.model_id || bc.strategy_name === 'model_signal') && data.task_type === 'backtest') {
+          setStrategyType('model');
+          setFormData(prev => ({
+            ...prev,
+            model_id: bc.model_id || prev.model_id,
+            horizon: bc.strategy_config?.horizon || prev.horizon,
+            strategy_name: 'model_signal',
+          }));
+        } else if (bc.strategy_name === "portfolio" && bc.strategy_config) {
           setStrategyType("portfolio");
           setPortfolioConfig({
             strategies: bc.strategy_config.strategies || [],
@@ -213,6 +237,17 @@ export default function CreateTaskPage() {
 
     loadRebuildTask();
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!formData.model_id || models.length === 0) {
+      return;
+    }
+
+    const model = models.find(item => item.model_id === formData.model_id) || null;
+    if (model) {
+      setSelectedModel(model);
+    }
+  }, [formData.model_id, models, setSelectedModel]);
 
   // 加载已保存的配置列表
   useEffect(() => {
@@ -288,6 +323,9 @@ export default function CreateTaskPage() {
       }
     } else {
       // backtest
+      if (strategyType === 'model' && !formData.model_id) {
+        newErrors.model_id = '请选择用于回测的模型';
+      }
       if (!formData.start_date) {
         newErrors.start_date = '请选择回测开始日期';
       }
@@ -328,7 +366,14 @@ export default function CreateTaskPage() {
             }
           : {
               backtest_config: {
-                strategy_name: strategyType === 'portfolio' ? 'portfolio' : formData.strategy_name,
+                strategy_name:
+                  strategyType === 'portfolio'
+                    ? 'portfolio'
+                    : strategyType === 'model'
+                      ? 'model_signal'
+                      : formData.strategy_name,
+                backtest_mode: strategyType === 'model' ? 'model' : 'strategy',
+                model_id: strategyType === 'model' ? formData.model_id : undefined,
                 start_date: formData.start_date,
                 end_date: formData.end_date,
                 initial_cash: formData.initial_cash,
@@ -342,7 +387,11 @@ export default function CreateTaskPage() {
                           integration_method: portfolioConfig.integration_method,
                         }
                       : {}
-                    : strategyConfig,
+                    : strategyType === 'model'
+                      ? {
+                          horizon: formData.horizon,
+                        }
+                      : strategyConfig,
                 enable_performance_profiling: formData.enable_performance_profiling,
               },
             }),
@@ -557,10 +606,12 @@ export default function CreateTaskPage() {
                     value={strategyType}
                     label="策略类型"
                     onChange={e => {
-                      const newType = e.target.value as 'single' | 'portfolio';
+                      const newType = e.target.value as 'single' | 'portfolio' | 'model';
                       setStrategyType(newType);
                       if (newType === 'portfolio') {
                         updateFormData('strategy_name', 'portfolio');
+                      } else if (newType === 'model') {
+                        updateFormData('strategy_name', 'model_signal');
                       } else if (availableStrategies.length > 0) {
                         updateFormData('strategy_name', availableStrategies[0].key);
                       }
@@ -568,8 +619,9 @@ export default function CreateTaskPage() {
                   >
                     <MenuItem value="single">单策略</MenuItem>
                     <MenuItem value="portfolio">组合策略</MenuItem>
+                    <MenuItem value="model">模型驱动</MenuItem>
                   </Select>
-                  <FormHelperText>选择使用单个策略或多个策略的组合</FormHelperText>
+                  <FormHelperText>选择技术策略、组合策略，或直接用训练好的模型生成交易信号</FormHelperText>
                 </FormControl>
 
                 {strategyType === 'single' ? (
@@ -631,7 +683,7 @@ export default function CreateTaskPage() {
                         return null;
                       })()}
                   </>
-                ) : (
+                ) : strategyType === 'portfolio' ? (
                   <>
                     <FormControl fullWidth disabled={loadingConfigs || savedConfigs.length === 0}>
                       <InputLabel>已保存组合配置</InputLabel>
@@ -676,6 +728,54 @@ export default function CreateTaskPage() {
                         maxStrategies: 10,
                       }}
                     />
+                  </>
+                ) : (
+                  <>
+                    <FormControl fullWidth required error={!!errors.model_id}>
+                      <InputLabel>回测模型</InputLabel>
+                      <Select
+                        value={formData.model_id}
+                        label="回测模型"
+                        onChange={e => {
+                          const modelId = e.target.value;
+                          updateFormData('model_id', modelId);
+                          const model = models.find(m => m.model_id === modelId);
+                          setSelectedModel(model || null);
+                        }}
+                      >
+                        {models
+                          .filter(model => model.status === 'ready' || model.status === 'active')
+                          .map(model => (
+                            <MenuItem key={model.model_id} value={model.model_id}>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {model.model_name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
+                                </Typography>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                      </Select>
+                      <FormHelperText>
+                        {errors.model_id || '使用训练好的模型生成买卖信号并执行回测'}
+                      </FormHelperText>
+                    </FormControl>
+
+                    <FormControl fullWidth>
+                      <InputLabel>信号时间维度</InputLabel>
+                      <Select
+                        value={formData.horizon}
+                        label="信号时间维度"
+                        onChange={e => updateFormData('horizon', e.target.value)}
+                      >
+                        <MenuItem value="intraday">日内</MenuItem>
+                        <MenuItem value="short_term">短期</MenuItem>
+                        <MenuItem value="medium_term">中期</MenuItem>
+                      </Select>
+                      <FormHelperText>该参数会透传给 model_signal 策略配置</FormHelperText>
+                    </FormControl>
                   </>
                 )}
 

@@ -192,3 +192,59 @@ async def test_run_backtest_propagates_runtime_portfolio_constraints() -> None:
     assert runtime_cfg.cash_reserve_ratio == 0.2
     assert runtime_cfg.board_lot_size == 200
     assert response.success is True
+
+
+@pytest.mark.asyncio
+async def test_run_backtest_propagates_official_style_cost_fields() -> None:
+    request = BacktestRequest(
+        strategy_name="model_topk_dropout",
+        model_id="bank-core3",
+        stock_codes=["000001.SZ", "000002.SZ"],
+        start_date="2024-01-01T00:00:00",
+        end_date="2024-02-15T00:00:00",
+        initial_cash=100000.0,
+        strategy_config={
+            "topk": 2,
+            "n_drop": 1,
+            "benchmark": "SH000300",
+            "commission_rate": 0.001,
+            "slippage_rate": 0.0005,
+            "open_cost": 0.0005,
+            "close_cost": 0.0015,
+            "min_cost": 5.0,
+        },
+    )
+
+    executor = MagicMock()
+    executor.validate_backtest_parameters = MagicMock(return_value=True)
+    executor.run_backtest = AsyncMock(
+        return_value={
+            "strategy_name": "model_topk_dropout",
+            "start_date": "2024-01-01T00:00:00",
+            "end_date": "2024-02-15T00:00:00",
+            "initial_cash": 100000.0,
+            "final_value": 108000.0,
+            "total_return": 0.08,
+            "annualized_return": 0.24,
+            "volatility": 0.12,
+            "sharpe_ratio": 1.1,
+            "max_drawdown": -0.05,
+            "total_trades": 4,
+            "win_rate": 0.5,
+            "profit_factor": 1.4,
+            "portfolio_history": [],
+            "trade_history": [],
+        }
+    )
+
+    with patch("app.api.v1.backtest.BacktestExecutor", return_value=executor), patch(
+        "app.api.v1.backtest.BacktestConfig",
+        side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+    ):
+        response = await run_backtest(request)
+
+    runtime_cfg = executor.run_backtest.await_args.kwargs["backtest_config"]
+    assert runtime_cfg.open_cost == 0.0005
+    assert runtime_cfg.close_cost == 0.0015
+    assert runtime_cfg.min_cost == 5.0
+    assert response.success is True

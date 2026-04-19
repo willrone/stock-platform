@@ -58,7 +58,10 @@ class BacktestConfig:
     """回测配置"""
 
     initial_cash: float = 100000.0
-    commission_rate: float = 0.001  # 手续费率
+    commission_rate: float = 0.001  # 兼容旧配置的统一手续费率
+    open_cost: Optional[float] = None  # 买入费率（官方 Qlib 风格）
+    close_cost: Optional[float] = None  # 卖出费率（官方 Qlib 风格）
+    min_cost: float = 0.0  # 单笔最小手续费
     slippage_rate: float = 0.001  # 滑点率
     max_position_size: float = 0.2  # 最大单股持仓比例
     cash_reserve_ratio: float = 0.05  # 预留现金比例

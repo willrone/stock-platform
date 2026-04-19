@@ -18,6 +18,7 @@ _evaluation_report = module_from_spec(_EVALUATION_REPORT_SPEC)
 _EVALUATION_REPORT_SPEC.loader.exec_module(_evaluation_report)
 EvaluationReportGenerator = _evaluation_report.EvaluationReportGenerator
 normalize_report_payload = _evaluation_report.normalize_report_payload
+build_official_record_summary = _evaluation_report.build_official_record_summary
 
 _MODEL_DTO_PATH = Path(__file__).resolve().parents[3] / "app" / "api" / "v1" / "model_dto.py"
 _MODEL_DTO_SPEC = spec_from_file_location("stock_platform_model_dto", _MODEL_DTO_PATH)
@@ -89,6 +90,26 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
             "sample_count": 97,
             "analysis_scope": "validation",
         },
+        segment_evaluation={
+            "train": {
+                "dataset_samples": 388,
+                "evaluated_samples": 388,
+                "performance_metrics": {"accuracy": 0.63},
+                "signal_quality": {"rank_ic": 0.022, "sample_count": 388, "analysis_scope": "train"},
+            },
+            "validation": {
+                "dataset_samples": 97,
+                "evaluated_samples": 97,
+                "performance_metrics": {"accuracy": 0.61},
+                "signal_quality": {"rank_ic": 0.0189, "sample_count": 97, "analysis_scope": "validation"},
+            },
+            "test": {
+                "dataset_samples": 44,
+                "evaluated_samples": 40,
+                "performance_metrics": {"accuracy": 0.59},
+                "signal_quality": {"rank_ic": 0.015, "sample_count": 40, "analysis_scope": "test"},
+            },
+        },
     )
 
     payload = generator.to_dict(report)
@@ -112,6 +133,36 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
     assert payload["training_data_info"]["validation_samples"] == 97
     assert payload["training_data_info"]["total_samples"] == 485
     assert payload["training_data_info"]["test_samples"] == 0
+    assert payload["segment_evaluation"]["train"]["dataset_samples"] == 388
+    assert payload["segment_evaluation"]["validation"]["evaluated_samples"] == 97
+    assert payload["segment_evaluation"]["test"]["signal_quality"]["analysis_scope"] == "test"
+    assert payload["portfolio_bridge_summary"] == {
+        "model_id": None,
+        "task_count": 0,
+        "tasks": [],
+        "best_by_total_return": None,
+        "best_by_sharpe": None,
+        "smallest_drawdown": None,
+    }
+    assert payload["official_record_summary"] == {
+        "signal_record": {
+            "train": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+            "validation": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+            "test": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+        },
+        "sig_ana_record": {
+            "train": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "train"},
+            "validation": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "validation"},
+            "test": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "test"},
+        },
+        "port_ana_record": {
+            "task_count": 0,
+            "best_by_total_return": None,
+            "best_by_sharpe": None,
+            "smallest_drawdown": None,
+            "tasks": [],
+        },
+    }
     assert payload["early_stopping_info"] == {
         "early_stopped": True,
         "stopped_epoch": 37,
@@ -200,4 +251,93 @@ def test_normalize_report_payload_backfills_legacy_fields() -> None:
         "long_avg_ann_sharpe": None,
         "sample_count": 0,
         "analysis_scope": None,
+    }
+    assert payload["segment_evaluation"]["train"]["dataset_samples"] == 160
+    assert payload["segment_evaluation"]["validation"]["dataset_samples"] == 40
+    assert payload["segment_evaluation"]["validation"]["signal_quality"]["analysis_scope"] is None
+    assert payload["segment_evaluation"]["test"]["dataset_samples"] == 0
+    assert payload["portfolio_bridge_summary"] == {
+        "model_id": None,
+        "task_count": 0,
+        "tasks": [],
+        "best_by_total_return": None,
+        "best_by_sharpe": None,
+        "smallest_drawdown": None,
+    }
+    assert payload["official_record_summary"] == {
+        "signal_record": {
+            "train": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+            "validation": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+            "test": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+        },
+        "sig_ana_record": {
+            "train": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "train"},
+            "validation": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "validation"},
+            "test": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "test"},
+        },
+        "port_ana_record": {
+            "task_count": 0,
+            "best_by_total_return": None,
+            "best_by_sharpe": None,
+            "smallest_drawdown": None,
+            "tasks": [],
+        },
+    }
+
+
+
+def test_build_official_record_summary_reuses_segment_and_portfolio_bridge_data() -> None:
+    summary = build_official_record_summary(
+        {
+            "training_summary": {
+                "train_samples": 388,
+                "validation_samples": 97,
+                "test_samples": 44,
+            },
+            "signal_quality": {
+                "rank_ic": 0.0189,
+                "sample_count": 97,
+                "analysis_scope": "validation",
+            },
+            "segment_evaluation": {
+                "train": {
+                    "dataset_samples": 388,
+                    "evaluated_samples": 388,
+                    "signal_quality": {"rank_ic": 0.022, "sample_count": 388, "analysis_scope": "train"},
+                },
+                "validation": {
+                    "dataset_samples": 97,
+                    "evaluated_samples": 97,
+                    "signal_quality": {"rank_ic": 0.0189, "sample_count": 97, "analysis_scope": "validation"},
+                },
+                "test": {
+                    "dataset_samples": 44,
+                    "evaluated_samples": 40,
+                    "signal_quality": {"rank_ic": 0.015, "sample_count": 40, "analysis_scope": "test"},
+                },
+            },
+            "portfolio_bridge_summary": {
+                "task_count": 2,
+                "best_by_total_return": {"task_id": "task-a", "total_return": 0.11},
+                "best_by_sharpe": {"task_id": "task-b", "sharpe_ratio": 1.8},
+                "smallest_drawdown": {"task_id": "task-c", "max_drawdown": -0.03},
+                "tasks": [{"task_id": "task-a"}],
+            },
+        }
+    )
+
+    assert summary["signal_record"]["train"] == {
+        "dataset_samples": 388,
+        "evaluated_samples": 388,
+        "has_signal_quality": True,
+        "analysis_scope": "train",
+    }
+    assert summary["sig_ana_record"]["validation"]["rank_ic"] == 0.0189
+    assert summary["sig_ana_record"]["test"]["sample_count"] == 40
+    assert summary["port_ana_record"] == {
+        "task_count": 2,
+        "best_by_total_return": {"task_id": "task-a", "total_return": 0.11},
+        "best_by_sharpe": {"task_id": "task-b", "sharpe_ratio": 1.8},
+        "smallest_drawdown": {"task_id": "task-c", "max_drawdown": -0.03},
+        "tasks": [{"task_id": "task-a"}],
     }

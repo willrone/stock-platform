@@ -78,6 +78,8 @@ export interface CreateTaskRequest {
   };
   backtest_config?: {
     strategy_name?: string;
+    backtest_mode?: 'strategy' | 'model';
+    model_id?: string;
     start_date: string;
     end_date: string;
     initial_cash?: number;

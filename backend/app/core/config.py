@@ -57,6 +57,7 @@ class Settings(BaseSettings):
 
     # Qlib 配置
     QLIB_DATA_PATH: str = "../data/qlib_data"
+    OFFICIAL_QLIB_DATA_PATH: str = "../data/qlib_official_data"
     QLIB_CACHE_PATH: str = "../data/qlib_cache"
     # 性能：如果 all_stocks.parquet 很大且经常 miss，会带来大量 I/O 与日志；默认关闭
     QLIB_USE_ALL_STOCKS_FILE: bool = False  # 默认关闭从 all_stocks.parquet 走合并文件路径
@@ -110,6 +111,7 @@ class Settings(BaseSettings):
             "PARQUET_DATA_PATH",
             "MODEL_STORAGE_PATH",
             "QLIB_DATA_PATH",
+            "OFFICIAL_QLIB_DATA_PATH",
             "QLIB_CACHE_PATH",
         ]
         for field in path_fields:

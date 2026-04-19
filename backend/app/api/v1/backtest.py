@@ -18,6 +18,9 @@ from app.core.error_handler import (
     log_structured_exception,
 )
 from app.services.backtest import BacktestConfig, BacktestExecutor
+from app.services.backtest.utils.official_style_params import (
+    apply_official_style_topk_dropout_params,
+)
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
 
@@ -27,9 +30,9 @@ def _normalize_backtest_strategy_request(request: BacktestRequest) -> tuple[str,
     strategy_name = request.strategy_name
     strategy_config = dict(request.strategy_config or {})
 
+    normalized_name = strategy_name.lower()
     if request.model_id:
         strategy_config.setdefault("model_id", request.model_id)
-        normalized_name = strategy_name.lower()
         if normalized_name in {"model", "signal", "model_signal"}:
             strategy_name = "model_signal"
         elif normalized_name in {
@@ -40,6 +43,12 @@ def _normalize_backtest_strategy_request(request: BacktestRequest) -> tuple[str,
             "ranking",
         }:
             strategy_name = "model_topk_dropout"
+
+    strategy_config = apply_official_style_topk_dropout_params(
+        strategy_name=strategy_name,
+        stock_codes=request.stock_codes,
+        strategy_config=strategy_config,
+    )
 
     return strategy_name, strategy_config
 
@@ -686,6 +695,23 @@ async def run_backtest(request: BacktestRequest):
                 _resolve_backtest_config_value(
                     strategy_config, "commission_rate", 0.0003
                 )
+            ),
+            open_cost=float(
+                _resolve_backtest_config_value(
+                    strategy_config,
+                    "open_cost",
+                    _resolve_backtest_config_value(strategy_config, "commission_rate", 0.0003),
+                )
+            ),
+            close_cost=float(
+                _resolve_backtest_config_value(
+                    strategy_config,
+                    "close_cost",
+                    _resolve_backtest_config_value(strategy_config, "commission_rate", 0.0003),
+                )
+            ),
+            min_cost=float(
+                _resolve_backtest_config_value(strategy_config, "min_cost", 0.0)
             ),
             slippage_rate=float(
                 _resolve_backtest_config_value(

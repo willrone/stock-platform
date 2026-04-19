@@ -8,6 +8,7 @@
 
 import dynamic from 'next/dynamic';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -47,6 +48,7 @@ import {
 } from '../../services/TrainingProgressWebSocket';
 
 function ModelsPage() {
+  const router = useRouter();
   const { models, setModels } = useDataStore();
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -286,6 +288,10 @@ function ModelsPage() {
     }
   };
 
+  const handleCreateBacktest = (modelId: string) => {
+    router.push(`/tasks/create?type=backtest&mode=model&model_id=${encodeURIComponent(modelId)}`);
+  };
+
   // 删除模型
   const handleDeleteModel = async () => {
     if (!deletingModelId) {
@@ -478,6 +484,7 @@ function ModelsPage() {
               getStageText={getStageText}
               onShowTrainingReport={showTrainingReport}
               onShowLiveTraining={showLiveTrainingDetails}
+              onCreateBacktest={handleCreateBacktest}
               onDeleteModel={showDeleteConfirm}
               deleting={deleting}
             />

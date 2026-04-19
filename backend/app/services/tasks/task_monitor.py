@@ -20,6 +20,11 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def sqlite_datetime_string(value: datetime) -> str:
+    """Match SQLite's default DATETIME serialization format used by SQLAlchemy."""
+    return value.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
 class TaskMonitor:
     """任务监控器"""
 
@@ -40,17 +45,26 @@ class TaskMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
+            task_columns = {
+                row[1] for row in cursor.execute("PRAGMA table_info(tasks)").fetchall()
+            }
+            freshness_expr = (
+                "COALESCE(updated_at, started_at, created_at)"
+                if "updated_at" in task_columns
+                else "COALESCE(started_at, created_at)"
+            )
+
             # 计算超时时间点
             timeout_time = utcnow() - timedelta(minutes=timeout_minutes)
-            timeout_str = timeout_time.isoformat()
+            timeout_str = sqlite_datetime_string(timeout_time)
 
             # 查询运行中但超时的任务
             cursor.execute(
-                """
+                f"""
                 SELECT task_id, task_name, task_type, status, created_at, started_at, progress
                 FROM tasks 
                 WHERE status IN ('running', 'queued') 
-                AND (started_at IS NULL OR started_at < ?)
+                AND {freshness_expr} < ?
                 ORDER BY created_at DESC
             """,
                 (timeout_str,),
@@ -195,7 +209,7 @@ class TaskMonitor:
                 status_counts[status] = count
 
             # 统计最近24小时的任务
-            yesterday = (utcnow() - timedelta(days=1)).isoformat()
+            yesterday = sqlite_datetime_string(utcnow() - timedelta(days=1))
             cursor.execute(
                 """
                 SELECT COUNT(*) as count

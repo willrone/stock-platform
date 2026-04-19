@@ -19,7 +19,7 @@ import {
   Typography,
   IconButton,
 } from '@mui/material';
-import { Trash2 } from 'lucide-react';
+import { BarChart3, Trash2 } from 'lucide-react';
 import type { Model } from '../../types/model';
 import { MobileModelCard } from '../mobile/MobileModelCard';
 
@@ -33,6 +33,7 @@ interface ModelListTableProps {
   getStageText: (stage: string) => string;
   onShowTrainingReport: (modelId: string) => void;
   onShowLiveTraining: (modelId: string) => void;
+  onCreateBacktest: (modelId: string) => void;
   onDeleteModel: (modelId: string) => void;
   deleting: boolean;
 }
@@ -45,6 +46,7 @@ export function ModelListTable({
   getStageText,
   onShowTrainingReport,
   onShowLiveTraining,
+  onCreateBacktest,
   onDeleteModel,
   deleting,
 }: ModelListTableProps) {
@@ -62,6 +64,7 @@ export function ModelListTable({
             getStageText={getStageText}
             onShowTrainingReport={onShowTrainingReport}
             onShowLiveTraining={onShowLiveTraining}
+            onCreateBacktest={onCreateBacktest}
             onDeleteModel={onDeleteModel}
             deleting={deleting}
           />
@@ -183,14 +186,25 @@ export function ModelListTable({
               <TableCell>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   {model.status === 'ready' && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      onClick={() => onShowTrainingReport(model.model_id)}
-                    >
-                      查看报告
-                    </Button>
+                    <>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        startIcon={<BarChart3 size={16} />}
+                        onClick={() => onCreateBacktest(model.model_id)}
+                      >
+                        发起回测
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => onShowTrainingReport(model.model_id)}
+                      >
+                        查看报告
+                      </Button>
+                    </>
                   )}
                   <Tooltip
                     title={

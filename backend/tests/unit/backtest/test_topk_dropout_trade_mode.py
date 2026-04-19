@@ -153,3 +153,117 @@ def test_topk_dropout_trade_mode_does_not_trade_without_ranking_signals() -> Non
     assert result.executed_trade_signals == []
     assert result.unexecuted_signals == []
     assert portfolio_manager.positions == {}
+
+
+def test_topk_dropout_trade_mode_respects_hold_threshold_buffer() -> None:
+    executor = get_trade_mode_executor("topk_dropout")
+    portfolio_manager = PortfolioManager(
+        BacktestConfig(
+            initial_cash=100000.0,
+            commission_rate=0.0,
+            slippage_rate=0.0,
+            max_position_size=0.6,
+            cash_reserve_ratio=0.0,
+            board_lot_size=100,
+        )
+    )
+    strategy = _AlwaysValidStrategy()
+
+    day_one = datetime(2024, 1, 2)
+    day_two = datetime(2024, 1, 3)
+    prices = {"AAA": 10.0, "BBB": 20.0, "CCC": 30.0, "DDD": 40.0}
+
+    executor.execute(
+        TradeModeExecutionContext(
+            current_date=day_one,
+            all_signals=[
+                _build_signal(day_one, "AAA", 0.90, prices["AAA"]),
+                _build_signal(day_one, "BBB", 0.80, prices["BBB"]),
+                _build_signal(day_one, "CCC", 0.10, prices["CCC"]),
+                _build_signal(day_one, "DDD", 0.05, prices["DDD"]),
+            ],
+            current_prices=prices,
+            portfolio_manager=portfolio_manager,
+            strategy=strategy,
+            strategy_config={"topk": 2, "n_drop": 1, "hold_thresh": 1},
+            stock_universe=["AAA", "BBB", "CCC", "DDD"],
+        )
+    )
+    assert set(portfolio_manager.positions.keys()) == {"AAA", "BBB"}
+
+    buffered_result = executor.execute(
+        TradeModeExecutionContext(
+            current_date=day_two,
+            all_signals=[
+                _build_signal(day_two, "BBB", 0.95, prices["BBB"]),
+                _build_signal(day_two, "CCC", 0.90, prices["CCC"]),
+                _build_signal(day_two, "AAA", 0.85, prices["AAA"]),
+                _build_signal(day_two, "DDD", 0.10, prices["DDD"]),
+            ],
+            current_prices=prices,
+            portfolio_manager=portfolio_manager,
+            strategy=strategy,
+            strategy_config={"topk": 2, "n_drop": 1, "hold_thresh": 1},
+            stock_universe=["AAA", "BBB", "CCC", "DDD"],
+        )
+    )
+
+    assert buffered_result.trades_this_day == 0
+    assert set(portfolio_manager.positions.keys()) == {"AAA", "BBB"}
+
+
+def test_topk_dropout_trade_mode_rebalances_once_holding_falls_beyond_buffer() -> None:
+    executor = get_trade_mode_executor("topk_dropout")
+    portfolio_manager = PortfolioManager(
+        BacktestConfig(
+            initial_cash=100000.0,
+            commission_rate=0.0,
+            slippage_rate=0.0,
+            max_position_size=0.6,
+            cash_reserve_ratio=0.0,
+            board_lot_size=100,
+        )
+    )
+    strategy = _AlwaysValidStrategy()
+
+    day_one = datetime(2024, 1, 2)
+    day_two = datetime(2024, 1, 3)
+    prices = {"AAA": 10.0, "BBB": 20.0, "CCC": 30.0, "DDD": 40.0}
+
+    executor.execute(
+        TradeModeExecutionContext(
+            current_date=day_one,
+            all_signals=[
+                _build_signal(day_one, "AAA", 0.90, prices["AAA"]),
+                _build_signal(day_one, "BBB", 0.80, prices["BBB"]),
+                _build_signal(day_one, "CCC", 0.10, prices["CCC"]),
+                _build_signal(day_one, "DDD", 0.05, prices["DDD"]),
+            ],
+            current_prices=prices,
+            portfolio_manager=portfolio_manager,
+            strategy=strategy,
+            strategy_config={"topk": 2, "n_drop": 1, "hold_thresh": 1},
+            stock_universe=["AAA", "BBB", "CCC", "DDD"],
+        )
+    )
+    assert set(portfolio_manager.positions.keys()) == {"AAA", "BBB"}
+
+    rebalance_result = executor.execute(
+        TradeModeExecutionContext(
+            current_date=day_two,
+            all_signals=[
+                _build_signal(day_two, "BBB", 0.95, prices["BBB"]),
+                _build_signal(day_two, "CCC", 0.90, prices["CCC"]),
+                _build_signal(day_two, "DDD", 0.85, prices["DDD"]),
+                _build_signal(day_two, "AAA", 0.10, prices["AAA"]),
+            ],
+            current_prices=prices,
+            portfolio_manager=portfolio_manager,
+            strategy=strategy,
+            strategy_config={"topk": 2, "n_drop": 1, "hold_thresh": 1},
+            stock_universe=["AAA", "BBB", "CCC", "DDD"],
+        )
+    )
+
+    assert rebalance_result.trades_this_day == 2
+    assert set(portfolio_manager.positions.keys()) == {"BBB", "CCC"}

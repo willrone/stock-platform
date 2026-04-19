@@ -224,6 +224,9 @@ class TestModelAndTrainingContractAPI:
             "sample_count": 0,
             "analysis_scope": None,
         }
+        assert payload["segment_evaluation"]["train"]["dataset_samples"] == 193
+        assert payload["segment_evaluation"]["validation"]["dataset_samples"] == 193
+        assert payload["segment_evaluation"]["test"]["dataset_samples"] == 0
 
     @patch("app.api.v1.training_progress.SessionLocal")
     @patch("app.api.v1.training_progress._get_task_manager")
@@ -252,6 +255,111 @@ class TestModelAndTrainingContractAPI:
         assert payload["status"] == "completed"
         assert payload["progress_percentage"] == 42.5
         assert payload["stage"] == "training"
+
+    @patch("app.api.v1.models.get_train_executor")
+    @patch("app.api.v1.models.SessionLocal")
+    def test_train_contract_propagates_official_workflow_preset(
+        self,
+        mock_session_local,
+        mock_get_train_executor,
+        client,
+    ):
+        """/models/train 应把 official replication 预设透传到后台训练配置。"""
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+
+        captured = {}
+
+        class DummyExecutor:
+            def submit(self, fn, **kwargs):
+                captured["fn"] = fn
+                captured["kwargs"] = kwargs
+                future = Future()
+                future.set_result(None)
+                return future
+
+        mock_get_train_executor.return_value = DummyExecutor()
+
+        response = client.post(
+            "/models/train",
+            json={
+                "model_name": "official-alpha158-smoke",
+                "model_type": "lightgbm",
+                "stock_codes": ["600036.SH", "601288.SH", "601398.SH"],
+                "start_date": "2024-01-01",
+                "end_date": "2024-12-31",
+                "hyperparameters": {"learning_rate": 0.1},
+                "workflow_mode": "official_replication",
+                "official_dataset": "alpha158",
+                "official_market": "csi300",
+            },
+        )
+
+        assert response.status_code == 200
+        submit_kwargs = captured["kwargs"]
+        assert submit_kwargs["workflow_mode"] == "official_replication"
+        assert submit_kwargs["official_dataset"] == "alpha158"
+        assert submit_kwargs["official_market"] == "csi300"
+        added_model = mock_session.add.call_args.args[0]
+        assert added_model.hyperparameters["workflow_mode"] == "official_replication"
+        assert added_model.hyperparameters["official_dataset"] == "alpha158"
+        assert added_model.hyperparameters["official_market"] == "csi300"
+
+    @patch("app.api.v1.models.get_train_executor")
+    @patch("app.api.v1.models.SessionLocal")
+    def test_train_contract_persists_alpha360_official_market_defaults(
+        self,
+        mock_session_local,
+        mock_get_train_executor,
+        client,
+    ):
+        """alpha360 official preset 应写入 benchmark 与 segments，防止只锁住 alpha158。"""
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+
+        captured = {}
+
+        class DummyExecutor:
+            def submit(self, fn, **kwargs):
+                captured["fn"] = fn
+                captured["kwargs"] = kwargs
+                future = Future()
+                future.set_result(None)
+                return future
+
+        mock_get_train_executor.return_value = DummyExecutor()
+
+        response = client.post(
+            "/models/train",
+            json={
+                "model_name": "official-alpha360-smoke",
+                "model_type": "lightgbm",
+                "stock_codes": ["600036.SH", "601288.SH", "601398.SH"],
+                "start_date": "2024-01-01",
+                "end_date": "2024-12-31",
+                "hyperparameters": {"learning_rate": 0.05},
+                "workflow_mode": "official_replication",
+                "official_dataset": "alpha360",
+                "official_market": "csi500",
+            },
+        )
+
+        assert response.status_code == 200
+        submit_kwargs = captured["kwargs"]
+        assert submit_kwargs["workflow_mode"] == "official_replication"
+        assert submit_kwargs["official_dataset"] == "alpha360"
+        assert submit_kwargs["official_market"] == "csi500"
+
+        added_model = mock_session.add.call_args.args[0]
+        assert added_model.hyperparameters["workflow_mode"] == "official_replication"
+        assert added_model.hyperparameters["official_dataset"] == "alpha360"
+        assert added_model.hyperparameters["official_market"] == "csi500"
+        assert added_model.hyperparameters["official_benchmark"] == "SH000905"
+        assert added_model.hyperparameters["official_segments"] == {
+            "train": ["2008-01-01", "2014-12-31"],
+            "valid": ["2015-01-01", "2016-12-31"],
+            "test": ["2017-01-01", "2020-08-01"],
+        }
 
     @patch("app.api.v1.models.notify_model_training_progress", new_callable=MagicMock)
     @patch("app.api.v1.models.SessionLocal")

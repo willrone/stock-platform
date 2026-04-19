@@ -103,6 +103,55 @@ interface TrainingReport {
     end_date: string;
   };
   recommendations?: string[];
+  cost_vs_gross_gap_summary?: {
+    task_count?: number;
+    largest_cost_gap?: {
+      task_id?: string;
+      task_name?: string;
+      window_label?: string;
+      gross_minus_net_value_gap?: number;
+    };
+    best_gross_return?: {
+      task_id?: string;
+      task_name?: string;
+      window_label?: string;
+      total_return_without_cost?: number;
+    };
+    best_net_return?: {
+      task_id?: string;
+      task_name?: string;
+      window_label?: string;
+      total_return?: number;
+    };
+  };
+  per_stock_ranking_preference?: {
+    stocks?: Array<{
+      stock_code: string;
+      task_mentions?: number;
+      positive_task_count?: number;
+      negative_task_count?: number;
+      total_pnl?: number;
+      signal_count?: number;
+    }>;
+    best_overall?: {
+      stock_code: string;
+      total_pnl?: number;
+      signal_count?: number;
+    };
+    worst_overall?: {
+      stock_code: string;
+      total_pnl?: number;
+      signal_count?: number;
+    };
+  };
+  ranking_overlap_summary?: {
+    available?: boolean;
+    windows?: Array<Record<string, any>>;
+  };
+  event_replay_summary?: {
+    available?: boolean;
+    events?: Array<Record<string, any>>;
+  };
   // 兼容旧格式
   training_duration?: number;
   total_epochs?: number;
@@ -155,6 +204,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
           end_date: '',
         },
         recommendations: response.recommendations,
+        cost_vs_gross_gap_summary: response.cost_vs_gross_gap_summary,
+        per_stock_ranking_preference: response.per_stock_ranking_preference,
+        ranking_overlap_summary: response.ranking_overlap_summary,
+        event_replay_summary: response.event_replay_summary,
         // 兼容字段
         training_duration:
           response.training_summary?.training_duration || response.training_duration,
@@ -190,6 +243,23 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
     }
   };
 
+  const formatPercent = (value?: number | null) => {
+    if (value === undefined || value === null || Number.isNaN(value)) {
+      return 'N/A';
+    }
+    return `${(value * 100).toFixed(2)}%`;
+  };
+
+  const formatCurrency = (value?: number | null) => {
+    if (value === undefined || value === null || Number.isNaN(value)) {
+      return 'N/A';
+    }
+    return `¥${value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
   const downloadReport = () => {
     if (!report) {
       return;
@@ -213,6 +283,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
         hyperparameters: report.hyperparameters,
         training_data_info: report.training_data_info,
         recommendations: report.recommendations,
+        cost_vs_gross_gap_summary: report.cost_vs_gross_gap_summary,
+        per_stock_ranking_preference: report.per_stock_ranking_preference,
+        ranking_overlap_summary: report.ranking_overlap_summary,
+        event_replay_summary: report.event_replay_summary,
       };
 
       // 转换为JSON字符串
@@ -252,6 +326,10 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
         .slice(0, 15)
     : [];
   const highCorrelationPairs = report?.feature_correlation?.high_correlation_pairs || [];
+  const hasBridgeInsights = Boolean(
+    report?.cost_vs_gross_gap_summary || report?.per_stock_ranking_preference
+  );
+  const highlightedStocks = report?.per_stock_ranking_preference?.stocks?.slice(0, 5) || [];
 
   return (
     <Dialog open={isOpen} onClose={onClose} maxWidth="xl" fullWidth scroll="paper">
@@ -984,6 +1062,152 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                     </CardContent>
                   </Card>
                 )}
+              </Box>
+            )}
+
+            {/* 正式任务桥接洞察 */}
+            {hasBridgeInsights && (
+              <Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2,
+                    mb: 2,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                    正式任务桥接洞察
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip
+                      size="small"
+                      color={report.ranking_overlap_summary?.available ? 'success' : 'default'}
+                      label={report.ranking_overlap_summary?.available ? '日频重合度已上线' : '日频重合度待上线'}
+                    />
+                    <Chip
+                      size="small"
+                      color={report.event_replay_summary?.available ? 'success' : 'default'}
+                      label={report.event_replay_summary?.available ? '事件回放已上线' : '事件回放待上线'}
+                    />
+                  </Box>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+                    gap: 2,
+                  }}
+                >
+                  <Card>
+                    <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        成本 vs gross gap
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        已汇总正式任务窗口：
+                        {report.cost_vs_gross_gap_summary?.task_count ?? 0}
+                      </Typography>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          最大成本吞噬窗口
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.cost_vs_gross_gap_summary?.largest_cost_gap?.task_name || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {report.cost_vs_gross_gap_summary?.largest_cost_gap?.window_label || '未记录窗口'}
+                        </Typography>
+                        <Typography variant="body2">
+                          成本吃掉：
+                          {formatCurrency(
+                            report.cost_vs_gross_gap_summary?.largest_cost_gap
+                              ?.gross_minus_net_value_gap
+                          )}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          最佳 gross 收益窗口
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.cost_vs_gross_gap_summary?.best_gross_return?.task_name || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2">
+                          {formatPercent(
+                            report.cost_vs_gross_gap_summary?.best_gross_return
+                              ?.total_return_without_cost
+                          )}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          最佳 net 收益窗口
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.cost_vs_gross_gap_summary?.best_net_return?.task_name || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2">
+                          {formatPercent(
+                            report.cost_vs_gross_gap_summary?.best_net_return?.total_return
+                          )}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        个股偏好 / 个股贡献
+                      </Typography>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          最佳贡献股票
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.per_stock_ranking_preference?.best_overall?.stock_code || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2">
+                          累计 PnL：
+                          {formatCurrency(report.per_stock_ranking_preference?.best_overall?.total_pnl)}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          最差拖累股票
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {report.per_stock_ranking_preference?.worst_overall?.stock_code || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2">
+                          累计 PnL：
+                          {formatCurrency(
+                            report.per_stock_ranking_preference?.worst_overall?.total_pnl
+                          )}
+                        </Typography>
+                      </Box>
+                      {highlightedStocks.length > 0 && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                            高频出现股票
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {highlightedStocks.map(stock => (
+                              <Chip
+                                key={stock.stock_code}
+                                size="small"
+                                label={`${stock.stock_code} · ${stock.signal_count ?? 0} signals`}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Box>
               </Box>
             )}
 

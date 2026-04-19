@@ -174,7 +174,11 @@ class PortfolioManager:
 
         # 计算实际成本
         total_cost = quantity * price
-        commission = total_cost * self.config.commission_rate
+        open_cost_rate = getattr(self.config, "open_cost", None)
+        if open_cost_rate is None:
+            open_cost_rate = self.config.commission_rate
+        min_cost = max(0.0, float(getattr(self.config, "min_cost", 0.0) or 0.0))
+        commission = max(total_cost * float(open_cost_rate), min_cost) if total_cost > 0 else 0.0
         slippage_cost = quantity * slippage_cost_per_share
         total_cost_with_commission = total_cost + commission
 
@@ -296,7 +300,11 @@ class PortfolioManager:
         # 卖出全部持仓（含成本）
         quantity = position.quantity
         total_proceeds = quantity * price
-        commission = total_proceeds * self.config.commission_rate
+        close_cost_rate = getattr(self.config, "close_cost", None)
+        if close_cost_rate is None:
+            close_cost_rate = self.config.commission_rate
+        min_cost = max(0.0, float(getattr(self.config, "min_cost", 0.0) or 0.0))
+        commission = max(total_proceeds * float(close_cost_rate), min_cost) if total_proceeds > 0 else 0.0
         slippage_cost = quantity * slippage_cost_per_share
         net_proceeds = total_proceeds - commission
 

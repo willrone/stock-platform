@@ -139,6 +139,9 @@ class BacktestReportBuilder:
             "end_date": payload.end_date.isoformat(),
             "initial_cash": payload.config.initial_cash,
             "commission_rate": payload.config.commission_rate,
+            "open_cost": getattr(payload.config, "open_cost", None),
+            "close_cost": getattr(payload.config, "close_cost", None),
+            "min_cost": getattr(payload.config, "min_cost", 0.0),
             "slippage_rate": payload.config.slippage_rate,
             "max_position_size": payload.config.max_position_size,
         }

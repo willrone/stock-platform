@@ -21,14 +21,22 @@ from app.models.task_models import ModelInfo
 from app.repositories.task_repository import ModelInfoRepository
 from app.services.models.evaluation_report import (
     EvaluationReportGenerator,
+    build_bridge_extension_summaries,
+    build_official_record_summary,
     normalize_report_payload,
 )
+from app.services.models.portfolio_bridge import build_portfolio_bridge_summary
 from app.services.models.hyperparameter_tuning import (
     HyperparameterSpace,
     SearchStrategy,
 )
 from app.services.models.lineage_tracker import lineage_tracker
 from app.services.models.model_lifecycle_manager import model_lifecycle_manager
+from app.services.qlib.official_workflow import (
+    OfficialDataset,
+    OfficialMarket,
+    build_official_lightgbm_workflow_config,
+)
 from app.websocket import (
     notify_model_training_cancelled,
     notify_model_training_completed,
@@ -222,6 +230,9 @@ def _run_train_model_task_sync(
     hyperparameter_search_strategy: str = "random_search",
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
+    workflow_mode: str = "enhanced_local",
+    official_dataset: Optional[str] = None,
+    official_market: Optional[str] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
 ):
     """
@@ -246,6 +257,9 @@ def _run_train_model_task_sync(
                     hyperparameter_search_strategy=hyperparameter_search_strategy,
                     hyperparameter_search_trials=hyperparameter_search_trials,
                     selected_features=selected_features,
+                    workflow_mode=workflow_mode,
+                    official_dataset=official_dataset,
+                    official_market=official_market,
                     main_loop=main_loop,  # 传递主事件循环
                 )
             )
@@ -281,6 +295,9 @@ async def train_model_task(
     hyperparameter_search_strategy: str = "random_search",
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
+    workflow_mode: str = "enhanced_local",
+    official_dataset: Optional[str] = None,
+    official_market: Optional[str] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
 ):
     """后台训练任务 - 使用统一Qlib训练引擎"""
@@ -367,6 +384,29 @@ async def train_model_task(
             # 合并超参数，确保num_iterations被正确传递
             final_hyperparameters = hyperparameters.copy()
 
+            workflow_mode = (workflow_mode or final_hyperparameters.get("workflow_mode") or "enhanced_local").lower()
+            official_dataset = official_dataset or final_hyperparameters.get("official_dataset")
+            official_market = official_market or final_hyperparameters.get("official_market")
+            official_preset = None
+            if workflow_mode == "official_replication":
+                official_dataset_enum = OfficialDataset((official_dataset or "alpha158").lower())
+                official_market_enum = OfficialMarket((official_market or "csi300").lower())
+                official_preset = build_official_lightgbm_workflow_config(
+                    dataset=official_dataset_enum,
+                    market=official_market_enum,
+                )
+                official_dataset = official_preset.dataset.value
+                official_market = official_preset.market
+                final_hyperparameters["workflow_mode"] = workflow_mode
+                final_hyperparameters["official_dataset"] = official_dataset
+                final_hyperparameters["official_market"] = official_market
+                final_hyperparameters["official_benchmark"] = official_preset.benchmark
+                final_hyperparameters["official_segments"] = {
+                    "train": list(official_preset.segments.train),
+                    "valid": list(official_preset.segments.valid),
+                    "test": list(official_preset.segments.test),
+                }
+
             # 如果超参数中有num_iterations或epochs，确保传递到模型配置
             if (
                 "num_iterations" not in final_hyperparameters
@@ -409,12 +449,28 @@ async def train_model_task(
 
                 # 定义训练函数
                 async def train_with_params(params):
+                    merged_hyperparameters = {**hyperparameters, **params}
                     config = QlibTrainingConfig(
                         model_type=qlib_model_type,
-                        hyperparameters={**hyperparameters, **params},
+                        hyperparameters=merged_hyperparameters,
                         validation_split=0.2,
                         use_alpha_factors=True,
                         selected_features=selected_features,
+                        label_definition=merged_hyperparameters.get("label_definition", "future_return"),
+                        label_normalization=merged_hyperparameters.get("label_normalization", "none"),
+                        workflow_mode=workflow_mode,
+                        official_dataset=official_dataset,
+                        official_market=official_market,
+                        official_benchmark=official_preset.benchmark if official_preset else None,
+                        official_segments=(
+                            {
+                                "train": official_preset.segments.train,
+                                "valid": official_preset.segments.valid,
+                                "test": official_preset.segments.test,
+                            }
+                            if official_preset
+                            else None
+                        ),
                     )
 
                     try:
@@ -595,6 +651,21 @@ async def train_model_task(
                 use_alpha_factors=True,
                 cache_features=True,
                 selected_features=selected_features,  # 传递用户选择的特征
+                label_definition=final_hyperparameters.get("label_definition", "future_return"),
+                label_normalization=final_hyperparameters.get("label_normalization", "none"),
+                workflow_mode=workflow_mode,
+                official_dataset=official_dataset,
+                official_market=official_market,
+                official_benchmark=official_preset.benchmark if official_preset else None,
+                official_segments=(
+                    {
+                        "train": official_preset.segments.train,
+                        "valid": official_preset.segments.valid,
+                        "test": official_preset.segments.test,
+                    }
+                    if official_preset
+                    else None
+                ),
             )
 
             # 使用统一Qlib训练引擎训练模型
@@ -672,6 +743,7 @@ async def train_model_task(
                     "early_stopping_reason": getattr(result, "early_stopping_reason", None),
                 },
                 signal_quality=getattr(result, "signal_quality", None),
+                segment_evaluation=getattr(result, "segment_evaluation", None),
             )
 
             # 更新模型信息
@@ -842,6 +914,13 @@ async def get_model_evaluation_report(model_id: str):
                 evaluation_report = normalize_report_payload(
                     json.loads(model.evaluation_report)
                 )
+                evaluation_report["portfolio_bridge_summary"] = build_portfolio_bridge_summary(
+                    session, model_id
+                )
+                evaluation_report.update(build_bridge_extension_summaries(evaluation_report))
+                evaluation_report["official_record_summary"] = build_official_record_summary(
+                    evaluation_report
+                )
                 logger.info(f"成功解析模型 {model_id} 的评估报告（从字符串）")
                 return StandardResponse(
                     success=True, message="评估报告获取成功", data=evaluation_report
@@ -851,10 +930,18 @@ async def get_model_evaluation_report(model_id: str):
                 raise HTTPException(status_code=500, detail="评估报告格式错误")
 
         logger.info(f"成功获取模型 {model_id} 的评估报告")
+        evaluation_report = normalize_report_payload(model.evaluation_report)
+        evaluation_report["portfolio_bridge_summary"] = build_portfolio_bridge_summary(
+            session, model_id
+        )
+        evaluation_report.update(build_bridge_extension_summaries(evaluation_report))
+        evaluation_report["official_record_summary"] = build_official_record_summary(
+            evaluation_report
+        )
         return StandardResponse(
             success=True,
             message="评估报告获取成功",
-            data=normalize_report_payload(model.evaluation_report),
+            data=evaluation_report,
         )
     except HTTPException:
         raise
@@ -1295,6 +1382,46 @@ async def create_training_task(request: ModelTrainingRequest):
         except ValueError:
             raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式")
 
+        workflow_mode = (request.workflow_mode or "enhanced_local").lower()
+        if workflow_mode not in {"enhanced_local", "official_replication"}:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的 workflow_mode: {request.workflow_mode}",
+            )
+
+        official_preset = None
+        official_dataset = request.official_dataset
+        official_market = request.official_market
+        if workflow_mode == "official_replication":
+            if request.model_type != "lightgbm":
+                raise HTTPException(
+                    status_code=400,
+                    detail="official_replication 当前仅支持 lightgbm",
+                )
+            try:
+                official_dataset_enum = OfficialDataset((official_dataset or "alpha158").lower())
+                official_market_enum = OfficialMarket((official_market or "csi300").lower())
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=f"官方复刻配置非法: {exc}")
+            official_preset = build_official_lightgbm_workflow_config(
+                dataset=official_dataset_enum,
+                market=official_market_enum,
+            )
+            official_dataset = official_preset.dataset.value
+            official_market = official_preset.market
+
+        persisted_hyperparameters = dict(request.hyperparameters or {})
+        persisted_hyperparameters["workflow_mode"] = workflow_mode
+        if official_preset is not None:
+            persisted_hyperparameters["official_dataset"] = official_dataset
+            persisted_hyperparameters["official_market"] = official_market
+            persisted_hyperparameters["official_benchmark"] = official_preset.benchmark
+            persisted_hyperparameters["official_segments"] = {
+                "train": list(official_preset.segments.train),
+                "valid": list(official_preset.segments.valid),
+                "test": list(official_preset.segments.test),
+            }
+
         # 创建模型记录
         model_info = ModelInfo(
             model_id=model_id,
@@ -1304,7 +1431,7 @@ async def create_training_task(request: ModelTrainingRequest):
             file_path=str(model_file_path),
             training_data_start=start_date,
             training_data_end=end_date,
-            hyperparameters=request.hyperparameters or {},
+            hyperparameters=persisted_hyperparameters,
             status="training",
             parent_model_id=request.parent_model_id,
             created_at=datetime.utcnow(),
@@ -1337,6 +1464,9 @@ async def create_training_task(request: ModelTrainingRequest):
             hyperparameter_search_strategy=request.hyperparameter_search_strategy,
             hyperparameter_search_trials=request.hyperparameter_search_trials,
             selected_features=request.selected_features,
+            workflow_mode=workflow_mode,
+            official_dataset=official_dataset,
+            official_market=official_market,
             main_loop=main_loop,  # 传递主事件循环
         )
         _register_training_job(model_id, future, cancel_event)

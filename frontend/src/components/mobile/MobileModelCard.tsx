@@ -12,7 +12,7 @@ import {
   Button,
   Tooltip,
 } from '@mui/material';
-import { Trash2, FileText, Activity } from 'lucide-react';
+import { Trash2, FileText, Activity, BarChart3 } from 'lucide-react';
 import type { Model } from '../../types/model';
 
 interface MobileModelCardProps {
@@ -23,6 +23,7 @@ interface MobileModelCardProps {
   getStageText: (stage: string) => string;
   onShowTrainingReport: (modelId: string) => void;
   onShowLiveTraining: (modelId: string) => void;
+  onCreateBacktest: (modelId: string) => void;
   onDeleteModel: (modelId: string) => void;
   deleting: boolean;
 }
@@ -35,6 +36,7 @@ export const MobileModelCard: React.FC<MobileModelCardProps> = ({
   getStageText,
   onShowTrainingReport,
   onShowLiveTraining,
+  onCreateBacktest,
   onDeleteModel,
   deleting,
 }) => {
@@ -198,21 +200,38 @@ export const MobileModelCard: React.FC<MobileModelCardProps> = ({
           )}
 
           {model.status === 'ready' && (
-            <Button
-              variant="outlined"
-              size="medium"
-              startIcon={<FileText size={18} />}
-              onClick={() => onShowTrainingReport(model.model_id)}
-              sx={{ 
-                flex: '1 1 auto',
-                borderRadius: 2,
-                minHeight: 44,
-                textTransform: 'none',
-                fontWeight: 500,
-              }}
-            >
-              查看报告
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                size="medium"
+                startIcon={<BarChart3 size={18} />}
+                onClick={() => onCreateBacktest(model.model_id)}
+                sx={{ 
+                  flex: '1 1 auto',
+                  borderRadius: 2,
+                  minHeight: 44,
+                  textTransform: 'none',
+                  fontWeight: 500,
+                }}
+              >
+                发起回测
+              </Button>
+              <Button
+                variant="outlined"
+                size="medium"
+                startIcon={<FileText size={18} />}
+                onClick={() => onShowTrainingReport(model.model_id)}
+                sx={{ 
+                  flex: '1 1 auto',
+                  borderRadius: 2,
+                  minHeight: 44,
+                  textTransform: 'none',
+                  fontWeight: 500,
+                }}
+              >
+                查看报告
+              </Button>
+            </>
           )}
 
           <Tooltip

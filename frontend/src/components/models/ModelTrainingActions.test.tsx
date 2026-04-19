@@ -32,12 +32,13 @@ describe('model training action copy', () => {
         getStatusColor={() => 'warning'}
         getStatusText={status => status}
         getStageText={stage => stage}
-        onShowTrainingReport={jest.fn()}
-        onShowLiveTraining={jest.fn()}
-        onDeleteModel={jest.fn()}
-        deleting={false}
-      />
-    );
+      onShowTrainingReport={jest.fn()}
+      onShowLiveTraining={jest.fn()}
+      onCreateBacktest={jest.fn()}
+      onDeleteModel={jest.fn()}
+      deleting={false}
+    />
+);
 
     expect(
       screen.getAllByRole('button', { name: '删除模型记录（不会停止后台训练）' }).length

@@ -37,6 +37,153 @@ DEFAULT_SIGNAL_QUALITY = {
     "analysis_scope": None,
 }
 
+DEFAULT_PORTFOLIO_BRIDGE_SUMMARY = {
+    "model_id": None,
+    "task_count": 0,
+    "tasks": [],
+    "best_by_total_return": None,
+    "best_by_sharpe": None,
+    "smallest_drawdown": None,
+}
+
+DEFAULT_OFFICIAL_RECORD_SUMMARY = {
+    "signal_record": {
+        "train": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+        "validation": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+        "test": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+    },
+    "sig_ana_record": {
+        "train": {**DEFAULT_SIGNAL_QUALITY, "analysis_scope": "train"},
+        "validation": {**DEFAULT_SIGNAL_QUALITY, "analysis_scope": "validation"},
+        "test": {**DEFAULT_SIGNAL_QUALITY, "analysis_scope": "test"},
+    },
+    "port_ana_record": {
+        "task_count": 0,
+        "best_by_total_return": None,
+        "best_by_sharpe": None,
+        "smallest_drawdown": None,
+        "tasks": [],
+    },
+}
+
+DEFAULT_RANKING_OVERLAP_SUMMARY = {
+    "available": False,
+    "windows": [],
+}
+
+DEFAULT_EVENT_REPLAY_SUMMARY = {
+    "available": False,
+    "events": [],
+}
+
+DEFAULT_PER_STOCK_RANKING_PREFERENCE = {
+    "stocks": [],
+    "best_overall": None,
+    "worst_overall": None,
+}
+
+DEFAULT_COST_VS_GROSS_GAP_SUMMARY = {
+    "task_count": 0,
+    "tasks": [],
+    "largest_cost_gap": None,
+    "best_gross_return": None,
+    "best_net_return": None,
+}
+
+
+def _normalize_segment_entry(segment_entry: Any, fallback_samples: int = 0) -> Dict[str, Any]:
+    segment_entry = dict(segment_entry) if isinstance(segment_entry, dict) else {}
+    performance_metrics = segment_entry.get("performance_metrics")
+    performance_metrics = dict(performance_metrics) if isinstance(performance_metrics, dict) else {}
+    signal_quality = segment_entry.get("signal_quality")
+    signal_quality = {
+        **DEFAULT_SIGNAL_QUALITY,
+        **(signal_quality if isinstance(signal_quality, dict) else {}),
+    }
+    return {
+        "dataset_samples": int(segment_entry.get("dataset_samples") or fallback_samples or 0),
+        "evaluated_samples": int(segment_entry.get("evaluated_samples") or signal_quality.get("sample_count") or 0),
+        "performance_metrics": performance_metrics,
+        "signal_quality": signal_quality,
+    }
+
+
+def _build_signal_record_entry(segment_name: str, segment_entry: Dict[str, Any]) -> Dict[str, Any]:
+    signal_quality = segment_entry.get("signal_quality")
+    signal_quality = signal_quality if isinstance(signal_quality, dict) else {}
+    return {
+        "dataset_samples": int(segment_entry.get("dataset_samples") or 0),
+        "evaluated_samples": int(segment_entry.get("evaluated_samples") or signal_quality.get("sample_count") or 0),
+        "has_signal_quality": bool(signal_quality.get("sample_count") or signal_quality.get("rank_ic") is not None or signal_quality.get("ic") is not None),
+        "analysis_scope": signal_quality.get("analysis_scope") or segment_name,
+    }
+
+
+
+def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a Qlib-record-style summary from normalized report data."""
+    normalized = normalize_report_payload(report)
+    if not isinstance(normalized, dict):
+        return DEFAULT_OFFICIAL_RECORD_SUMMARY
+
+    segment_evaluation = normalized.get("segment_evaluation") or {}
+    portfolio_bridge_summary = normalized.get("portfolio_bridge_summary") or {}
+    validation_signal_quality = normalized.get("signal_quality") or {}
+
+    signal_record = {
+        "train": _build_signal_record_entry("train", segment_evaluation.get("train") or {}),
+        "validation": _build_signal_record_entry("validation", segment_evaluation.get("validation") or {}),
+        "test": _build_signal_record_entry("test", segment_evaluation.get("test") or {}),
+    }
+
+    sig_ana_record = {
+        "train": (segment_evaluation.get("train") or {}).get("signal_quality") or {**DEFAULT_SIGNAL_QUALITY, "analysis_scope": "train"},
+        "validation": (segment_evaluation.get("validation") or {}).get("signal_quality") or validation_signal_quality or {**DEFAULT_SIGNAL_QUALITY, "analysis_scope": "validation"},
+        "test": (segment_evaluation.get("test") or {}).get("signal_quality") or {**DEFAULT_SIGNAL_QUALITY, "analysis_scope": "test"},
+    }
+
+    port_ana_record = {
+        "task_count": int(portfolio_bridge_summary.get("task_count") or 0),
+        "best_by_total_return": portfolio_bridge_summary.get("best_by_total_return"),
+        "best_by_sharpe": portfolio_bridge_summary.get("best_by_sharpe"),
+        "smallest_drawdown": portfolio_bridge_summary.get("smallest_drawdown"),
+        "tasks": portfolio_bridge_summary.get("tasks", []),
+    }
+
+    return {
+        "signal_record": signal_record,
+        "sig_ana_record": sig_ana_record,
+        "port_ana_record": port_ana_record,
+    }
+
+
+
+def build_bridge_extension_summaries(report: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = normalize_report_payload(report)
+    if not isinstance(normalized, dict):
+        return {
+            "ranking_overlap_summary": DEFAULT_RANKING_OVERLAP_SUMMARY,
+            "event_replay_summary": DEFAULT_EVENT_REPLAY_SUMMARY,
+            "per_stock_ranking_preference": DEFAULT_PER_STOCK_RANKING_PREFERENCE,
+            "cost_vs_gross_gap_summary": DEFAULT_COST_VS_GROSS_GAP_SUMMARY,
+        }
+
+    portfolio_bridge_summary = normalized.get("portfolio_bridge_summary") or {}
+    return {
+        "ranking_overlap_summary": normalized.get("ranking_overlap_summary")
+        if isinstance(normalized.get("ranking_overlap_summary"), dict)
+        else DEFAULT_RANKING_OVERLAP_SUMMARY,
+        "event_replay_summary": normalized.get("event_replay_summary")
+        if isinstance(normalized.get("event_replay_summary"), dict)
+        else DEFAULT_EVENT_REPLAY_SUMMARY,
+        "per_stock_ranking_preference": portfolio_bridge_summary.get("per_stock_contribution_rollup")
+        if isinstance(portfolio_bridge_summary.get("per_stock_contribution_rollup"), dict)
+        else DEFAULT_PER_STOCK_RANKING_PREFERENCE,
+        "cost_vs_gross_gap_summary": portfolio_bridge_summary.get("cost_vs_gross_gap_rollup")
+        if isinstance(portfolio_bridge_summary.get("cost_vs_gross_gap_rollup"), dict)
+        else DEFAULT_COST_VS_GROSS_GAP_SUMMARY,
+    }
+
 
 def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     """兼容并补齐评估报告字段，保证前端/导出结构稳定。"""
@@ -68,6 +215,76 @@ def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     normalized["signal_quality"] = {
         **DEFAULT_SIGNAL_QUALITY,
         **signal_quality,
+    }
+
+    segment_evaluation = normalized.get("segment_evaluation")
+    if not isinstance(segment_evaluation, dict):
+        segment_evaluation = {}
+    normalized["segment_evaluation"] = {
+        "train": _normalize_segment_entry(
+            segment_evaluation.get("train"),
+            fallback_samples=training_summary.get("train_samples", 0),
+        ),
+        "validation": _normalize_segment_entry(
+            segment_evaluation.get("validation")
+            or {
+                "performance_metrics": normalized.get("performance_metrics", {}),
+                "signal_quality": normalized["signal_quality"],
+            },
+            fallback_samples=training_summary.get("validation_samples", 0),
+        ),
+        "test": _normalize_segment_entry(
+            segment_evaluation.get("test"),
+            fallback_samples=training_summary.get("test_samples", 0),
+        ),
+    }
+
+    portfolio_bridge_summary = normalized.get("portfolio_bridge_summary")
+    if not isinstance(portfolio_bridge_summary, dict):
+        portfolio_bridge_summary = {}
+    normalized["portfolio_bridge_summary"] = {
+        **DEFAULT_PORTFOLIO_BRIDGE_SUMMARY,
+        **portfolio_bridge_summary,
+    }
+
+    official_record_summary = normalized.get("official_record_summary")
+    if not isinstance(official_record_summary, dict):
+        official_record_summary = {}
+    normalized["official_record_summary"] = {
+        **DEFAULT_OFFICIAL_RECORD_SUMMARY,
+        **official_record_summary,
+    }
+
+    ranking_overlap_summary = normalized.get("ranking_overlap_summary")
+    if not isinstance(ranking_overlap_summary, dict):
+        ranking_overlap_summary = {}
+    normalized["ranking_overlap_summary"] = {
+        **DEFAULT_RANKING_OVERLAP_SUMMARY,
+        **ranking_overlap_summary,
+    }
+
+    event_replay_summary = normalized.get("event_replay_summary")
+    if not isinstance(event_replay_summary, dict):
+        event_replay_summary = {}
+    normalized["event_replay_summary"] = {
+        **DEFAULT_EVENT_REPLAY_SUMMARY,
+        **event_replay_summary,
+    }
+
+    per_stock_ranking_preference = normalized.get("per_stock_ranking_preference")
+    if not isinstance(per_stock_ranking_preference, dict):
+        per_stock_ranking_preference = {}
+    normalized["per_stock_ranking_preference"] = {
+        **DEFAULT_PER_STOCK_RANKING_PREFERENCE,
+        **per_stock_ranking_preference,
+    }
+
+    cost_vs_gross_gap_summary = normalized.get("cost_vs_gross_gap_summary")
+    if not isinstance(cost_vs_gross_gap_summary, dict):
+        cost_vs_gross_gap_summary = {}
+    normalized["cost_vs_gross_gap_summary"] = {
+        **DEFAULT_COST_VS_GROSS_GAP_SUMMARY,
+        **cost_vs_gross_gap_summary,
     }
 
     return normalized
@@ -176,6 +393,9 @@ class ModelEvaluationReport:
     # 官方风格信号质量评估
     signal_quality: Optional[Dict[str, Any]] = None
 
+    # 分段评估（train / validation / test）
+    segment_evaluation: Optional[Dict[str, Any]] = None
+
 
 class EvaluationReportGenerator:
     """评估报告生成器"""
@@ -200,6 +420,7 @@ class EvaluationReportGenerator:
         hyperparameter_tuning: Optional[Dict[str, Any]] = None,
         early_stopping_info: Optional[Dict[str, Any]] = None,
         signal_quality: Optional[Dict[str, Any]] = None,
+        segment_evaluation: Optional[Dict[str, Any]] = None,
     ) -> ModelEvaluationReport:
         """生成评估报告"""
 
@@ -296,6 +517,7 @@ class EvaluationReportGenerator:
             hyperparameter_tuning=hyperparameter_tuning,
             early_stopping_info=early_stopping_info,
             signal_quality=signal_quality,
+            segment_evaluation=segment_evaluation,
             training_data_info=training_data_info,
             prediction_analysis=prediction_analysis,
             recommendations=recommendations,
@@ -353,6 +575,7 @@ class EvaluationReportGenerator:
                 "hyperparameter_tuning": report.hyperparameter_tuning,
                 "early_stopping_info": report.early_stopping_info,
                 "signal_quality": report.signal_quality,
+                "segment_evaluation": report.segment_evaluation,
                 "training_data_info": report.training_data_info,
                 "prediction_analysis": report.prediction_analysis,
                 "model_comparison": report.model_comparison,

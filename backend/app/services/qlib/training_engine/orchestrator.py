@@ -42,7 +42,7 @@ class QlibTrainingOrchestrator:
                 request,
                 dataset,
             )
-            train_dataset, val_dataset = await self._run_preprocessing_stage(
+            train_dataset, val_dataset, test_dataset = await self._run_preprocessing_stage(
                 request,
                 dataset,
             )
@@ -52,11 +52,12 @@ class QlibTrainingOrchestrator:
                 train_dataset,
                 val_dataset,
             )
-            training_metrics, validation_metrics, signal_quality = await self._run_evaluation_stage(
+            training_metrics, validation_metrics, signal_quality, segment_evaluation = await self._run_evaluation_stage(
                 request,
                 model,
                 train_dataset,
                 val_dataset,
+                test_dataset,
                 training_history,
             )
             feature_importance = await self._run_feature_importance_stage(request, model)
@@ -81,9 +82,11 @@ class QlibTrainingOrchestrator:
                 training_duration=training_duration,
                 train_samples=len(train_dataset),
                 validation_samples=len(val_dataset),
+                test_samples=len(test_dataset) if test_dataset is not None else 0,
                 feature_correlation=feature_correlation,
                 early_stopping_info=early_stopping_info,
                 signal_quality=signal_quality,
+                segment_evaluation=segment_evaluation,
             )
             self._log_training_success(
                 model_id=request.model_id,
@@ -139,7 +142,7 @@ class QlibTrainingOrchestrator:
         self,
         request: TrainingRequest,
         dataset: Any,
-    ) -> Tuple[Any, Any]:
+    ) -> Tuple[Any, Any, Any | None]:
         await self._notify_progress(
             request,
             35.0,
@@ -154,8 +157,9 @@ class QlibTrainingOrchestrator:
             request.config,
         )
         self.engine.performance_monitor.end_stage("prepare_training_datasets")
+        test_dataset = self.pipeline.prepare_test_dataset(dataset)
         logger.info(
-            f"数据集分割完成: 训练集样本数={len(train_dataset)}, 验证集样本数={len(val_dataset)}"
+            f"数据集分割完成: 训练集样本数={len(train_dataset)}, 验证集样本数={len(val_dataset)}, 测试集样本数={len(test_dataset) if test_dataset is not None else 0}"
         )
         if hasattr(train_dataset, "data"):
             logger.info(
@@ -165,7 +169,11 @@ class QlibTrainingOrchestrator:
             logger.info(
                 f"验证集数据形状: {val_dataset.data.shape}, 特征数={len(val_dataset.data.columns)}"
             )
-        return train_dataset, val_dataset
+        if test_dataset is not None and hasattr(test_dataset, "data"):
+            logger.info(
+                f"测试集数据形状: {test_dataset.data.shape}, 特征数={len(test_dataset.data.columns)}"
+            )
+        return train_dataset, val_dataset, test_dataset
 
     async def _run_training_stage(
         self,
@@ -197,15 +205,22 @@ class QlibTrainingOrchestrator:
         model: Any,
         train_dataset: Any,
         val_dataset: Any,
+        test_dataset: Any | None,
         training_history: Any,
-    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any], Dict[str, Any]]:
         await self._notify_progress(request, 85.0, "evaluating", "评估模型性能")
         self.engine.performance_monitor.start_stage("evaluate_model")
-        training_metrics, validation_metrics, signal_quality = await self.pipeline.evaluate(
+        (
+            training_metrics,
+            validation_metrics,
+            signal_quality,
+            segment_evaluation,
+        ) = await self.pipeline.evaluate(
             model,
             train_dataset,
             val_dataset,
             request.model_id,
+            test_dataset=test_dataset,
         )
         self.engine.performance_monitor.end_stage("evaluate_model")
         self.result_assembler.fill_accuracy_into_history(
@@ -213,18 +228,20 @@ class QlibTrainingOrchestrator:
             training_metrics.get("accuracy", 0.0),
             validation_metrics.get("accuracy", 0.0),
         )
+        evaluation_details = {"validation_accuracy": validation_metrics.get("accuracy", 0.0)}
+        test_segment = segment_evaluation.get("test") if isinstance(segment_evaluation, dict) else None
+        if isinstance(test_segment, dict):
+            test_metrics = test_segment.get("performance_metrics")
+            if isinstance(test_metrics, dict):
+                evaluation_details["test_accuracy"] = test_metrics.get("accuracy", 0.0)
         await self._notify_progress(
             request,
             90.0,
             "evaluating",
             "模型评估完成",
-            {
-                "validation_metrics": validation_metrics,
-                "training_metrics": training_metrics,
-                "signal_quality": signal_quality,
-            },
+            evaluation_details,
         )
-        return training_metrics, validation_metrics, signal_quality
+        return training_metrics, validation_metrics, signal_quality, segment_evaluation
 
     async def _run_feature_importance_stage(self, request: TrainingRequest, model: Any) -> Any:
         self.engine.performance_monitor.start_stage("extract_feature_importance")
