@@ -8,7 +8,9 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from sqlalchemy import and_, asc, desc, func, or_, delete as sql_delete
+from sqlalchemy import and_, asc
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import desc, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm.attributes import flag_modified

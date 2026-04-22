@@ -8,9 +8,10 @@ Phase 3 优化：Numba JIT 编译的向量化回测主循环
 4. 避免 Python 对象和 GIL 限制
 """
 
-from typing import Dict, List, Set, Tuple
-import numpy as np
 from datetime import datetime
+from typing import Dict, List, Set, Tuple
+
+import numpy as np
 
 try:
     from numba import njit, prange
@@ -304,8 +305,8 @@ def extract_signals_from_matrix(
     Returns:
         信号列表
     """
-    from ..models import TradingSignal, SignalType
-    
+    from ..models import SignalType, TradingSignal
+
     # 使用 Numba 加速提取
     if NUMBA_AVAILABLE:
         stock_indices, signal_types = extract_signals_vectorized(

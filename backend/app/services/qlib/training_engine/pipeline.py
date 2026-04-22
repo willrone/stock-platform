@@ -9,7 +9,6 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 import pandas as pd
 from loguru import logger
 
-
 ProgressCallback = Callable[
     [str, float, str, str, Optional[Dict[str, Any]]], Awaitable[None]
 ]

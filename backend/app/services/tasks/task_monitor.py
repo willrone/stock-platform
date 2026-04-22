@@ -6,7 +6,6 @@
 import logging
 import sqlite3
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List
 
 from app.core.database import SessionLocal
@@ -14,6 +13,7 @@ from app.models.task_models import TaskStatus
 from app.repositories.task_repository import TaskRepository
 
 logger = logging.getLogger(__name__)
+
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
@@ -36,6 +36,7 @@ class TaskMonitor:
         Returns:
             卡住的任务列表
         """
+        conn: sqlite3.Connection | None = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -47,12 +48,13 @@ class TaskMonitor:
             # 查询运行中但超时的任务
             cursor.execute(
                 """
-                SELECT task_id, task_name, task_type, status, created_at, started_at, progress
-                FROM tasks 
-                WHERE status IN ('running', 'queued') 
+                SELECT task_id, task_name, task_type, status,
+                       created_at, started_at, progress
+                FROM tasks
+                WHERE status IN ('running', 'queued')
                 AND (started_at IS NULL OR started_at < ?)
                 ORDER BY created_at DESC
-            """,
+                """,
                 (timeout_str,),
             )
 
@@ -85,7 +87,8 @@ class TaskMonitor:
             logger.error(f"获取卡住任务失败: {e}")
             return []
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
     def force_complete_task(self, task_id: str, status: str = "cancelled") -> bool:
         """
@@ -98,6 +101,7 @@ class TaskMonitor:
         Returns:
             是否成功
         """
+        session = None
         try:
             session = SessionLocal()
             task_repository = TaskRepository(session)
@@ -120,7 +124,8 @@ class TaskMonitor:
             logger.error(f"强制完成任务失败: {task_id}, 错误: {e}")
             return False
         finally:
-            session.close()
+            if session is not None:
+                session.close()
 
     def cleanup_stuck_tasks(
         self, timeout_minutes: int = 30, auto_fix: bool = False
@@ -170,13 +175,16 @@ class TaskMonitor:
                     )
             else:
                 logger.info(
-                    f"发现卡住任务: {task_id} ({task_name}) - {task['status']} - {task['progress']}%"
+                    "发现卡住任务: "
+                    f"{task_id} ({task_name}) - "
+                    f"{task['status']} - {task['progress']}%"
                 )
 
         return result
 
     def get_task_statistics(self) -> Dict[str, Any]:
         """获取任务统计信息"""
+        conn: sqlite3.Connection | None = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -185,9 +193,9 @@ class TaskMonitor:
             cursor.execute(
                 """
                 SELECT status, COUNT(*) as count
-                FROM tasks 
+                FROM tasks
                 GROUP BY status
-            """
+                """
             )
 
             status_counts = {}
@@ -199,9 +207,9 @@ class TaskMonitor:
             cursor.execute(
                 """
                 SELECT COUNT(*) as count
-                FROM tasks 
+                FROM tasks
                 WHERE created_at > ?
-            """,
+                """,
                 (yesterday,),
             )
 
@@ -217,7 +225,8 @@ class TaskMonitor:
             logger.error(f"获取任务统计失败: {e}")
             return {}
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
 
 # 全局任务监控器实例

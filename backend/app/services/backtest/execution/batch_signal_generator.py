@@ -38,7 +38,10 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
         df.attrs["from_precomputed"] = data_pack.get("from_precomputed", False)
 
         # 重建策略对象
-        from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
+        from ..strategies.strategy_factory import (
+            AdvancedStrategyFactory,
+            StrategyFactory,
+        )
 
         strategy_name = strategy_info.get("name")
         strategy_class_name = strategy_info.get("class_name")
@@ -290,8 +293,8 @@ class BatchSignalGenerator:
             signal_records: List[Dict[str, Any]] = []
 
             if enable_mp:
-                from concurrent.futures import ProcessPoolExecutor, as_completed
                 import multiprocessing as mp
+                from concurrent.futures import ProcessPoolExecutor, as_completed
 
                 # 选择 start method（优先 fork，避免 spawn 的序列化/重导入开销）
                 mp_ctx = None

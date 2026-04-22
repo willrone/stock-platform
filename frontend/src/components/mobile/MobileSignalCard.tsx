@@ -27,24 +27,24 @@ interface MobileSignalCardProps {
 export const MobileSignalCard: React.FC<MobileSignalCardProps> = ({ signal }) => {
   const getSignalColor = (sig: string): 'success' | 'error' | 'warning' | 'default' => {
     const s = sig.toLowerCase();
-    if (s.includes('buy') || s.includes('买入') || s === '1') return 'success';
-    if (s.includes('sell') || s.includes('卖出') || s === '-1') return 'error';
-    if (s.includes('hold') || s.includes('持有') || s === '0') return 'warning';
+    if (s.includes('buy') || s.includes('买入') || s === '1') {return 'success';}
+    if (s.includes('sell') || s.includes('卖出') || s === '-1') {return 'error';}
+    if (s.includes('hold') || s.includes('持有') || s === '0') {return 'warning';}
     return 'default';
   };
 
   const getSignalText = (sig: string) => {
     const s = sig.toLowerCase();
-    if (s.includes('buy') || s === '1') return '买入';
-    if (s.includes('sell') || s === '-1') return '卖出';
-    if (s.includes('hold') || s === '0') return '持有';
+    if (s.includes('buy') || s === '1') {return '买入';}
+    if (s.includes('sell') || s === '-1') {return '卖出';}
+    if (s.includes('hold') || s === '0') {return '持有';}
     return sig;
   };
 
   const getSignalIcon = (sig: string) => {
     const s = sig.toLowerCase();
-    if (s.includes('buy') || s === '1') return <TrendingUp size={18} />;
-    if (s.includes('sell') || s === '-1') return <TrendingDown size={18} />;
+    if (s.includes('buy') || s === '1') {return <TrendingUp size={18} />;}
+    if (s.includes('sell') || s === '-1') {return <TrendingDown size={18} />;}
     return null;
   };
 

@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/57</span>
+                <span class='fraction'>0/70</span>
             </div>
         
             
@@ -491,7 +491,9 @@
 <a name='L426'></a><a href='#L426'>426</a>
 <a name='L427'></a><a href='#L427'>427</a>
 <a name='L428'></a><a href='#L428'>428</a>
-<a name='L429'></a><a href='#L429'>429</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -505,6 +507,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -936,6 +940,7 @@ import React, { useState, useEffect } from <span class="cstat-no" title="stateme
 import {
   Card,
   CardContent,
+  CardHeader,
   Button,
   Select,
   MenuItem,
@@ -949,6 +954,7 @@ import {
   Slider,
   Alert,
   Paper,
+  Divider,
 } from <span class="cstat-no" title="statement not covered" >'@mui/material';</span>
 import { Plus, Trash2, Settings, TrendingUp, AlertCircle } from <span class="cstat-no" title="statement not covered" >'lucide-react';</span>
 import { StrategyConfigForm, StrategyParameter } from <span class="cstat-no" title="statement not covered" >'./StrategyConfigForm';</span>
@@ -1002,7 +1008,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
   // 计算归一化后的权重
   const calculateNormalizedWeights = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(i</span>tems: PortfolioStrategyItem[]): Record&lt;string, number&gt; =&gt; {</span>
     const totalWeight = <span class="cstat-no" title="statement not covered" >items.reduce(<span class="fstat-no" title="function not covered" >(s</span>um, item) =&gt; <span class="cstat-no" title="statement not covered" >sum + item.weight,</span> 0);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (totalWeight === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (totalWeight === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      return {};</span>
     }
     const normalized: Record&lt;string, number&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
@@ -1016,7 +1022,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   const getDefaultConfigForStrategy = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(s</span>trategyName: string) =&gt; {</span>
     const strategyInfo = <span class="cstat-no" title="statement not covered" >availableStrategies.find(<span class="fstat-no" title="function not covered" >s =&gt; <span class="cstat-no" title="statement not covered" >s</span>.key === strategyName);</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!strategyInfo?.parameters) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!strategyInfo?.parameters) {</span>
 <span class="cstat-no" title="statement not covered" >      return {};</span>
     }
     const defaults: Record&lt;string, any&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
@@ -1037,20 +1043,20 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
       const normWeight = <span class="cstat-no" title="statement not covered" >normalized[key] || 0;</span>
 &nbsp;
       // 检查最大权重限制
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (constraints.maxWeight &amp;&amp; normWeight &gt; constraints.maxWeight) {</span>
+<span class="cstat-no" title="statement not covered" >      if (constraints.maxWeight &amp;&amp; normWeight &gt; constraints.maxWeight) {</span>
 <span class="cstat-no" title="statement not covered" >        newErrors[key] = `权重不能超过 ${(constraints.maxWeight * 100).toFixed(0)}%`;</span>
       }
 &nbsp;
       // 检查权重非负
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (item.weight &lt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (item.weight &lt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        newErrors[key] = '权重不能为负';</span>
       }
     });
 &nbsp;
     // 检查总杠杆
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (constraints.grossLeverage) {</span>
+<span class="cstat-no" title="statement not covered" >    if (constraints.grossLeverage) {</span>
       const grossLeverage = <span class="cstat-no" title="statement not covered" >items.reduce(<span class="fstat-no" title="function not covered" >(s</span>um, item) =&gt; <span class="cstat-no" title="statement not covered" >sum + Math.abs(item.weight), 0</span>);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (grossLeverage &gt; constraints.grossLeverage) {</span>
+<span class="cstat-no" title="statement not covered" >      if (grossLeverage &gt; constraints.grossLeverage) {</span>
 <span class="cstat-no" title="statement not covered" >        newErrors['gross_leverage'] = `总杠杆不能超过 ${constraints.grossLeverage}`;</span>
       }
     }
@@ -1060,7 +1066,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // 添加策略
   const handleAddStrategy = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (strategies.length &gt;= (constraints.maxStrategies || 10)) {</span>
+<span class="cstat-no" title="statement not covered" >    if (strategies.length &gt;= (constraints.maxStrategies || 10)) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -1068,7 +1074,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 <span class="fstat-no" title="function not covered" >      s =&gt; <span class="cstat-no" title="statement not covered" >!</span>strategies.some(<span class="fstat-no" title="function not covered" >item =&gt; <span class="cstat-no" title="statement not covered" >i</span>tem.name === s.key)</span></span>
     );
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!firstAvailableStrategy) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!firstAvailableStrategy) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -1085,7 +1091,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // 删除策略
   const handleRemoveStrategy = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(i</span>ndex: number) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (strategies.length &lt;= (constraints.minStrategies || 1)) {</span>
+<span class="cstat-no" title="statement not covered" >    if (strategies.length &lt;= (constraints.minStrategies || 1)) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -1132,22 +1138,22 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // 缺失配置时回填默认参数
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (availableStrategies.length === 0 || strategies.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (availableStrategies.length === 0 || strategies.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
     let updated = <span class="cstat-no" title="statement not covered" >false;</span>
     const nextStrategies = <span class="cstat-no" title="statement not covered" >strategies.map(<span class="fstat-no" title="function not covered" >item =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (item.config &amp;&amp; Object.keys(item.config).length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (item.config &amp;&amp; Object.keys(item.config).length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        return item;</span>
       }
       const defaults = <span class="cstat-no" title="statement not covered" >getDefaultConfigForStrategy(item.name);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (Object.keys(defaults).length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (Object.keys(defaults).length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >        return item;</span>
       }
 <span class="cstat-no" title="statement not covered" >      updated = true;</span>
 <span class="cstat-no" title="statement not covered" >      return { ...item, config: defaults };</span>
     });
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (updated) {</span>
+<span class="cstat-no" title="statement not covered" >    if (updated) {</span>
 <span class="cstat-no" title="statement not covered" >      setStrategies(nextStrategies);</span>
 <span class="cstat-no" title="statement not covered" >      updateConfig(nextStrategies, integrationMethod);</span>
     }
@@ -1354,7 +1360,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

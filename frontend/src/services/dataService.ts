@@ -10,6 +10,7 @@
 
 import { apiRequest } from './api';
 import type {
+  PerformanceMetrics,
   LatestSignalsResponse,
   MultiLatestSignalsResponse,
   MultiSignalHistoryResponse,
@@ -42,9 +43,70 @@ export type {
 export type { BacktestRequest, BacktestResult } from '../types/backtest';
 export type { Model } from '../types/model';
 
+type JsonObject = Record<string, unknown>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LooseJsonValue = any;
+type LooseJsonObject = Record<string, LooseJsonValue>;
+type StockDataApiResponse = JsonObject & { data?: StockData['data'] };
+type PopularStock = {
+  code: string;
+  name: string;
+  market?: string;
+  change_percent: number;
+  volume: number;
+};
+type PopularStocksResponse = {
+  stocks: PopularStock[];
+  total: number;
+};
+type StrategyDefinition = {
+  key: string;
+  name: string;
+  description?: string;
+  category?: string;
+  parameters?: LooseJsonObject;
+};
+type TrainingReportResponse = LooseJsonObject & { data?: LooseJsonObject };
+type AvailableFeaturesResponse = {
+  features: string[];
+  feature_count: number;
+  feature_categories: {
+    base_features: string[];
+    indicator_features: string[];
+    fundamental_features: string[];
+    alpha_features: string[];
+  };
+  source: string;
+};
+type QlibPrecomputeTaskResponse = {
+  task_id: string;
+  task_name: string;
+  task_type: string;
+  status: string;
+  progress: number;
+  config: LooseJsonObject;
+  created_at: string;
+  completed_at?: string;
+  error_message?: string;
+};
+
+const dataLogger = {
+  debug: (...args: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      globalThis.console.log(...args);
+    }
+  },
+  warn: (...args: unknown[]) => {
+    globalThis.console.warn(...args);
+  },
+  error: (...args: unknown[]) => {
+    globalThis.console.error(...args);
+  },
+};
+
 // 数据服务类
 export class DataService {
-  private static serializeConfig(config?: Record<string, any>): string | undefined {
+  private static serializeConfig(config?: JsonObject): string | undefined {
     if (!config || Object.keys(config).length === 0) {
       return undefined;
     }
@@ -66,28 +128,32 @@ export class DataService {
     };
 
     try {
-      const response = await apiRequest.get<any>('/stocks/data', params);
+      const response = await apiRequest.get<StockDataApiResponse | StockData['data']>(
+        '/stocks/data',
+        params
+      );
 
-      console.log('[DataService] getStockData 响应:', response);
+      dataLogger.debug('[DataService] getStockData 响应:', response);
 
       // 转换为标准格式
       // response 是后端返回的 response_data: { stock_code, start_date, end_date, data_points, data: [...] }
       // 如果 response 为 null（后端返回 success=False 但 data 不为 null），则尝试从其他地方获取
-      let dataArray: any[] = [];
+      let dataArray: StockData['data'] = [];
 
       if (response) {
-        if (Array.isArray(response.data)) {
+        if (!Array.isArray(response) && Array.isArray(response.data)) {
           dataArray = response.data;
         } else if (Array.isArray(response)) {
           dataArray = response;
         }
       }
 
-      console.log(`[DataService] 解析后的数据数组长度: ${dataArray.length}`, {
+      dataLogger.debug(`[DataService] 解析后的数据数组长度: ${dataArray.length}`, {
         responseType: typeof response,
-        responseKeys: response ? Object.keys(response) : [],
-        hasData: !!response?.data,
-        dataIsArray: Array.isArray(response?.data),
+        responseKeys:
+          response && !Array.isArray(response) ? Object.keys(response) : [],
+        hasData: !Array.isArray(response) && !!response?.data,
+        dataIsArray: !Array.isArray(response) && Array.isArray(response?.data),
       });
 
       return {
@@ -95,12 +161,10 @@ export class DataService {
         data: dataArray,
         last_updated: new Date().toISOString(),
       };
-    } catch (error: any) {
-      console.error('[DataService] getStockData 失败:', error);
-      console.error('[DataService] 错误详情:', {
-        message: error?.message,
-        status: error?.status,
-        response: error?.response,
+    } catch (error: unknown) {
+      dataLogger.error('[DataService] getStockData 失败:', error);
+      dataLogger.error('[DataService] 错误详情:', {
+        message: error instanceof Error ? error.message : String(error),
       });
       // 返回空数据而不是抛出错误，让组件可以处理
       return {
@@ -119,7 +183,7 @@ export class DataService {
     startDate?: string,
     endDate?: string
   ): Promise<TechnicalIndicators> {
-    const params: any = {};
+    const params: Record<string, string> = {};
     if (startDate) {
       params.start_date = startDate;
     }
@@ -168,40 +232,30 @@ export class DataService {
    * 获取热门股票
    */
   static async getPopularStocks(): Promise<
-    Array<{
-      code: string;
-      name: string;
-      market?: string;
-      change_percent: number;
-      volume: number;
-    }>
+    PopularStock[]
   > {
     try {
-      console.log('[DataService] 开始调用 /stocks/popular API...');
-      const response = await apiRequest.get<{
-        stocks: Array<{
-          code: string;
-          name: string;
-          market?: string;
-          change_percent: number;
-          volume: number;
-        }>;
-        total: number;
-      }>('/stocks/popular');
+      dataLogger.debug('[DataService] 开始调用 /stocks/popular API...');
+      const response = await apiRequest.get<PopularStocksResponse | PopularStock[]>(
+        '/stocks/popular'
+      );
 
-      console.log('[DataService] API响应:', response);
-      console.log('[DataService] response类型:', typeof response);
-      console.log('[DataService] response是否为数组:', Array.isArray(response));
-      console.log('[DataService] response.stocks:', response?.stocks);
+      dataLogger.debug('[DataService] API响应:', response);
+      dataLogger.debug('[DataService] response类型:', typeof response);
+      dataLogger.debug('[DataService] response是否为数组:', Array.isArray(response));
+      dataLogger.debug(
+        '[DataService] response.stocks:',
+        Array.isArray(response) ? undefined : response?.stocks
+      );
 
       if (!response) {
-        console.warn('[DataService] 响应为空');
+        dataLogger.warn('[DataService] 响应为空');
         return [];
       }
 
       // 处理响应可能是数组的情况
       if (Array.isArray(response)) {
-        console.log('[DataService] 响应是数组，直接返回');
+        dataLogger.debug('[DataService] 响应是数组，直接返回');
         return response;
       }
 
@@ -209,18 +263,18 @@ export class DataService {
       if (response && typeof response === 'object' && 'stocks' in response) {
         const stocks = response.stocks;
         if (!stocks || !Array.isArray(stocks)) {
-          console.warn('[DataService] stocks字段不存在或不是数组:', stocks);
+          dataLogger.warn('[DataService] stocks字段不存在或不是数组:', stocks);
           return [];
         }
-        console.log(`[DataService] 成功获取 ${stocks.length} 只热门股票`);
+        dataLogger.debug(`[DataService] 成功获取 ${stocks.length} 只热门股票`);
         return stocks;
       }
 
-      console.warn('[DataService] 响应格式不符合预期:', response);
+      dataLogger.warn('[DataService] 响应格式不符合预期:', response);
       return [];
     } catch (error) {
-      console.error('[DataService] 获取热门股票列表失败:', error);
-      console.error(
+      dataLogger.error('[DataService] 获取热门股票列表失败:', error);
+      dataLogger.error(
         '[DataService] 错误详情:',
         error instanceof Error ? error.message : String(error)
       );
@@ -253,15 +307,9 @@ export class DataService {
    * 获取可用策略列表（用于策略信号页）
    */
   static async getAvailableStrategies(): Promise<
-    Array<{
-      key: string;
-      name: string;
-      description?: string;
-      category?: string;
-      parameters?: Record<string, any>;
-    }>
+    StrategyDefinition[]
   > {
-    const resp = await apiRequest.get<any>('/backtest/strategies');
+    const resp = await apiRequest.get<StrategyDefinition[] | null>('/backtest/strategies');
     // 后端返回的是 { key, name, ... } 数组
     return Array.isArray(resp) ? resp : resp ?? [];
   }
@@ -275,7 +323,7 @@ export class DataService {
     source?: 'local' | 'remote';
     limit?: number;
     offset?: number;
-    strategy_config?: Record<string, any>;
+    strategy_config?: Record<string, LooseJsonValue>;
   }): Promise<LatestSignalsResponse> {
     const { strategy_config, ...rest } = params;
     return apiRequest.get<LatestSignalsResponse>('/signals/latest', {
@@ -293,7 +341,7 @@ export class DataService {
     source?: 'local' | 'remote';
     limit?: number;
     offset?: number;
-    strategy_configs?: Record<string, any>;
+    strategy_configs?: Record<string, LooseJsonValue>;
   }): Promise<MultiLatestSignalsResponse> {
     const { strategy_configs, ...rest } = params;
     return apiRequest.get<MultiLatestSignalsResponse>('/signals/latest-multi', {
@@ -309,7 +357,7 @@ export class DataService {
     stock_code: string;
     strategy_name: string;
     days?: number;
-    strategy_config?: Record<string, any>;
+    strategy_config?: JsonObject;
   }): Promise<SignalHistoryResponse> {
     const { strategy_config, ...rest } = params;
     return apiRequest.get<SignalHistoryResponse>('/signals/history', {
@@ -325,7 +373,7 @@ export class DataService {
     stock_code: string;
     strategy_names: string[];
     days?: number;
-    strategy_configs?: Record<string, any>;
+    strategy_configs?: JsonObject;
   }): Promise<MultiSignalHistoryResponse> {
     const { strategy_configs, ...rest } = params;
     return apiRequest.get<MultiSignalHistoryResponse>('/signals/history-multi', {
@@ -369,8 +417,10 @@ export class DataService {
   /**
    * 获取模型训练报告
    */
-  static async getTrainingReport(modelId: string): Promise<any> {
-    const response = await apiRequest.get(`/models/${modelId}/evaluation-report`);
+  static async getTrainingReport(modelId: string): Promise<LooseJsonObject> {
+    const response = await apiRequest.get<TrainingReportResponse>(
+      `/models/${modelId}/evaluation-report`
+    );
     return response.data || response;
   }
 
@@ -381,17 +431,7 @@ export class DataService {
     stock_code?: string;
     start_date?: string;
     end_date?: string;
-  }): Promise<{
-    features: string[];
-    feature_count: number;
-    feature_categories: {
-      base_features: string[];
-      indicator_features: string[];
-      fundamental_features: string[];
-      alpha_features: string[];
-    };
-    source: string;
-  }> {
+  }): Promise<AvailableFeaturesResponse> {
     const queryParams = new URLSearchParams();
     if (params?.stock_code) {
       queryParams.append('stock_code', params.stock_code);
@@ -406,42 +446,16 @@ export class DataService {
     const url = `/models/available-features${
       queryParams.toString() ? '?' + queryParams.toString() : ''
     }`;
-    const response = await apiRequest.get<{
-      success: boolean;
-      message: string;
-      data: {
-        features: string[];
-        feature_count: number;
-        feature_categories: {
-          base_features: string[];
-          indicator_features: string[];
-          fundamental_features: string[];
-          alpha_features: string[];
-        };
-        source: string;
-      };
-    }>(url);
+    const response = await apiRequest.get<AvailableFeaturesResponse | { data: AvailableFeaturesResponse }>(
+      url
+    );
 
-    // 处理响应格式：可能是 { data: {...} } 或直接是 { success, data, ... }
-    if (response.data) {
+    // 处理响应格式：可能是 { data: {...} } 或直接是 payload
+    if ('data' in response && response.data) {
       return response.data;
-    } else if ((response as any).features) {
-      // 如果响应直接包含features字段
-      return response as any;
-    } else {
-      // 如果都没有，返回空数据
-      return {
-        features: [],
-        feature_count: 0,
-        feature_categories: {
-          base_features: [],
-          indicator_features: [],
-          fundamental_features: [],
-          alpha_features: [],
-        },
-        source: 'error',
-      };
     }
+
+    return 'data' in response ? response.data : response;
   }
 
   /**
@@ -453,7 +467,7 @@ export class DataService {
     stock_codes: string[];
     start_date: string;
     end_date: string;
-    hyperparameters?: Record<string, any>;
+    hyperparameters?: LooseJsonObject;
     selected_features?: string[];
     description?: string;
     parent_model_id?: string;
@@ -752,15 +766,7 @@ export class DataService {
   /**
    * 获取性能指标
    */
-  static async getPerformanceMetrics(serviceName?: string): Promise<{
-    services?: Record<string, any>;
-    summary?: {
-      total_services: number;
-      avg_response_time: number;
-      total_requests: number;
-      total_errors: number;
-    };
-  }> {
+  static async getPerformanceMetrics(serviceName?: string): Promise<PerformanceMetrics> {
     const params = serviceName ? { service_name: serviceName } : {};
     return apiRequest.get('/monitoring/metrics', params);
   }
@@ -768,7 +774,7 @@ export class DataService {
   /**
    * 获取系统概览
    */
-  static async getSystemOverview(): Promise<any> {
+  static async getSystemOverview(): Promise<LooseJsonObject> {
     return apiRequest.get('/monitoring/overview');
   }
 
@@ -792,7 +798,7 @@ export class DataService {
   /**
    * 获取数据质量检查结果
    */
-  static async getDataQuality(): Promise<any> {
+  static async getDataQuality(): Promise<LooseJsonObject> {
     return apiRequest.get('/monitoring/quality');
   }
 
@@ -806,7 +812,13 @@ export class DataService {
       medium: number;
       low: number;
     };
-    anomalies: Array<any>;
+    anomalies: Array<{
+      type: string;
+      severity: string;
+      description: string;
+      detected_at: string;
+      affected_component: string;
+    }>;
     detection_time: string;
   }> {
     return apiRequest.get('/monitoring/anomalies');
@@ -841,19 +853,9 @@ export class DataService {
     end_date?: string;
     batch_size?: number;
     max_workers?: number;
-  }): Promise<{
-    task_id: string;
-    task_name: string;
-    task_type: string;
-    status: string;
-    progress: number;
-    config: any;
-    created_at: string;
-    completed_at?: string;
-    error_message?: string;
-  }> {
+  }): Promise<QlibPrecomputeTaskResponse> {
     // 构建请求参数，即使params为空也传递一个对象（使用默认值）
-    const requestParams: any = {
+    const requestParams: JsonObject = {
       batch_size: params?.batch_size || 50,
     };
 
@@ -871,17 +873,10 @@ export class DataService {
     }
 
     // apiRequest.post返回的是data字段，直接返回
-    const taskData = await apiRequest.post<{
-      task_id: string;
-      task_name: string;
-      task_type: string;
-      status: string;
-      progress: number;
-      config: any;
-      created_at: string;
-      completed_at?: string;
-      error_message?: string;
-    }>('/data/qlib/precompute', requestParams);
+    const taskData = await apiRequest.post<QlibPrecomputeTaskResponse>(
+      '/data/qlib/precompute',
+      requestParams
+    );
 
     return taskData;
   }

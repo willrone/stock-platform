@@ -172,7 +172,7 @@ export default function BacktestPage() {
 
   // 处理删除任务
   const handleDeleteTask = async () => {
-    if (!selectedTask) return;
+    if (!selectedTask) {return;}
 
     try {
       await TaskService.deleteTask(selectedTask.task_id);

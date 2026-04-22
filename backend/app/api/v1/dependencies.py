@@ -575,8 +575,9 @@ def execute_backtest_task_simple(task_id: str):
                                 # 辅助函数：将numpy类型转换为Python原生类型
                                 def to_python_type(value):
                                     """将numpy/pandas类型转换为Python原生类型"""
-                                    import numpy as np
                                     from datetime import datetime
+
+                                    import numpy as np
                                     
                                     if isinstance(value, (np.integer, np.floating)):
                                         return value.item()

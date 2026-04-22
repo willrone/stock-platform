@@ -3,16 +3,18 @@
 实现任务创建、状态管理、进度跟踪和结果保存功能
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from loguru import logger
 
 from app.models.database import DatabaseManager, Task, TaskResult, TaskStatus
-from app.models.stock_simple import StockData
+
+StatusChangeCallback = Callable[[int, TaskStatus], None]
+ProgressCallback = Callable[[int, float], None]
+TaskExecutionFunc = Callable[[int, Callable[[float], None]], Awaitable[None]]
 
 
 @dataclass
@@ -86,16 +88,14 @@ class TaskManager:
     """任务管理器"""
 
     def __init__(self, db_manager: DatabaseManager):
-        from loguru import logger
-
         self.db_manager = db_manager
         self.logger = logger
 
         # 任务状态变更回调
-        self.status_change_callbacks = []
+        self.status_change_callbacks: List[StatusChangeCallback] = []
 
         # 进度更新回调
-        self.progress_callbacks = []
+        self.progress_callbacks: List[ProgressCallback] = []
 
     def create_task(self, request: TaskCreateRequest) -> int:
         """
@@ -138,10 +138,12 @@ class TaskManager:
             with self.db_manager.get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO tasks (name, description, stock_codes, indicators, models, 
-                                     parameters, status, progress, created_at)
+                    INSERT INTO tasks (
+                        name, description, stock_codes, indicators, models,
+                        parameters, status, progress, created_at
+                    )
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     (
                         task.name,
                         task.description,
@@ -156,6 +158,10 @@ class TaskManager:
                 )
                 task_id = cursor.lastrowid
                 conn.commit()
+
+            if task_id is None:
+                raise RuntimeError("创建任务后未返回 task_id")
+            task_id = int(task_id)
 
             self.logger.info(f"创建任务成功: ID={task_id}, 名称={task.name}")
 
@@ -292,8 +298,8 @@ class TaskManager:
         """
         try:
             # 构建查询条件
-            where_conditions = []
-            query_params = []
+            where_conditions: List[str] = []
+            query_params: List[Any] = []
 
             if query.status is not None:
                 where_conditions.append("t.status = ?")
@@ -317,7 +323,7 @@ class TaskManager:
                 where_clause = "WHERE " + " AND ".join(where_conditions)
 
             sql = f"""
-                SELECT 
+                SELECT
                     t.*,
                     COUNT(tr.id) as result_count
                 FROM tasks t
@@ -333,7 +339,7 @@ class TaskManager:
             rows = self.db_manager.fetch_all(sql, tuple(query_params))
 
             # 转换为TaskSummary对象
-            summaries = []
+            summaries: List[TaskSummary] = []
             for row in rows:
                 try:
                     stock_codes = json.loads(row["stock_codes"])
@@ -419,11 +425,13 @@ class TaskManager:
             # 保存到数据库
             with self.db_manager.get_connection() as conn:
                 cursor = conn.execute(
-                    """
-                    INSERT INTO task_results (task_id, stock_code, prediction_date, prediction_value,
-                                            confidence, model_name, indicators_used, backtest_metrics, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                    (
+                        "INSERT INTO task_results "
+                        "(task_id, stock_code, prediction_date, prediction_value, "
+                        "confidence, model_name, indicators_used, "
+                        "backtest_metrics, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ),
                     (
                         result.task_id,
                         result.stock_code,
@@ -461,15 +469,21 @@ class TaskManager:
         """
         try:
             if stock_code:
-                sql = "SELECT * FROM task_results WHERE task_id = ? AND stock_code = ? ORDER BY created_at DESC"
-                params = (task_id, stock_code)
+                sql = (
+                    "SELECT * FROM task_results WHERE task_id = ? "
+                    "AND stock_code = ? ORDER BY created_at DESC"
+                )
+                params: tuple[Any, ...] = (task_id, stock_code)
             else:
-                sql = "SELECT * FROM task_results WHERE task_id = ? ORDER BY created_at DESC"
+                sql = (
+                    "SELECT * FROM task_results WHERE task_id = ? "
+                    "ORDER BY created_at DESC"
+                )
                 params = (task_id,)
 
             rows = self.db_manager.fetch_all(sql, params)
 
-            results = []
+            results: List[TaskResult] = []
             for row in rows:
                 result = TaskResult(
                     id=row["id"],
@@ -499,7 +513,7 @@ class TaskManager:
             Dict[str, Any]: 统计信息
         """
         try:
-            stats = {
+            stats: Dict[str, Any] = {
                 "total_tasks": 0,
                 "pending_tasks": 0,
                 "running_tasks": 0,
@@ -540,14 +554,15 @@ class TaskManager:
             # 最近任务
             recent_query = TaskQuery(limit=5)
             recent_tasks = self.query_tasks(recent_query)
-            stats["recent_tasks"] = []
+            recent_task_payloads: List[Dict[str, Any]] = []
+            stats["recent_tasks"] = recent_task_payloads
             for task in recent_tasks:
                 try:
-                    stats["recent_tasks"].append(task.to_dict())
+                    recent_task_payloads.append(task.to_dict())
                 except Exception as e:
                     self.logger.warning(f"转换任务摘要失败: {e}")
                     # 创建简化版本
-                    stats["recent_tasks"].append(
+                    recent_task_payloads.append(
                         {
                             "id": task.id,
                             "name": task.name,
@@ -567,11 +582,11 @@ class TaskManager:
             self.logger.error(f"获取任务统计失败: {e}")
             return {}
 
-    def add_status_change_callback(self, callback):
+    def add_status_change_callback(self, callback: StatusChangeCallback) -> None:
         """添加状态变更回调"""
         self.status_change_callbacks.append(callback)
 
-    def add_progress_callback(self, callback):
+    def add_progress_callback(self, callback: ProgressCallback) -> None:
         """添加进度更新回调"""
         self.progress_callbacks.append(callback)
 
@@ -591,7 +606,9 @@ class TaskManager:
             except Exception as e:
                 self.logger.error(f"进度更新回调执行失败: {e}")
 
-    async def run_task_async(self, task_id: int, execution_func):
+    async def run_task_async(
+        self, task_id: int, execution_func: TaskExecutionFunc
+    ) -> None:
         """
         异步执行任务
 

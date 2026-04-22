@@ -21,7 +21,7 @@ from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..core.portfolio_manager_array import PortfolioManagerArray
 from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
-from ..reporting import BacktestReportBuildInput, BacktestReportBuilder
+from ..reporting import BacktestReportBuilder, BacktestReportBuildInput
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
 from .data_loader import DataLoader
@@ -60,7 +60,10 @@ def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Di
         df.attrs['stock_code'] = data_dict['stock_code']
 
         # 重建策略对象
-        from ..strategies.strategy_factory import StrategyFactory, AdvancedStrategyFactory
+        from ..strategies.strategy_factory import (
+            AdvancedStrategyFactory,
+            StrategyFactory,
+        )
 
         strategy_name = strategy_info['name']  # 使用策略名称（如 "MACD"）
         strategy_class_name = strategy_info['class_name']  # 类名（如 "MACDStrategy"）
@@ -1051,8 +1054,8 @@ class BacktestExecutor:
         2. 在子进程中重建策略对象
         3. 计算完成后将结果返回主进程
         """
-        from concurrent.futures import ProcessPoolExecutor
         import pickle
+        from concurrent.futures import ProcessPoolExecutor
 
         results = []
 
@@ -1404,7 +1407,7 @@ class BacktestExecutor:
                         signal = precomputed_signals.get((stock_code, date))
                         if signal is not None:
                             # 将信号类型转换为 TradingSignal 对象
-                            from ..models import TradingSignal, SignalType
+                            from ..models import SignalType, TradingSignal
                             if isinstance(signal, SignalType):
                                 # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
                                 current_price = 0.0

@@ -400,6 +400,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         返回 SignalType 序列，与其他策���保持一致。
         """
         import logging
+
         import xgboost as xgb
         logger = logging.getLogger(__name__)
         
@@ -590,6 +591,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             index: (stock_code, date)
         """
         import logging
+
         import xgboost as xgb
         logger = logging.getLogger(__name__)
         

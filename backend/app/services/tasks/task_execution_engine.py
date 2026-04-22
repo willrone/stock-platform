@@ -3,27 +3,20 @@
 """
 
 import asyncio
-import threading
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
-from app.core.logging_config import PerformanceLogger, set_log_context
-from app.models.task_models import (
-    BacktestTaskConfig,
-    PredictionTaskConfig,
-    TaskStatus,
-    TaskType,
-    TrainingTaskConfig,
-)
+from app.core.logging_config import set_log_context
+from app.models.task_models import TaskStatus, TaskType
 from app.repositories.task_repository import PredictionResultRepository, TaskRepository
 from app.services.prediction import PredictionConfig, PredictionEngine
 
-from .task_queue import QueuedTask, TaskExecutionContext, TaskPriority
+from .task_queue import QueuedTask, TaskExecutionContext
 
 
 @dataclass
@@ -40,6 +33,30 @@ class TaskProgress:
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime duration calculations."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _require_iso_datetime(raw_value: Any, field_name: str) -> datetime:
+    """Parse a required ISO datetime from task config."""
+    if not isinstance(raw_value, str) or not raw_value:
+        raise TaskError(
+            f"{field_name} 缺失或格式错误",
+            severity=ErrorSeverity.MEDIUM,
+        )
+    return datetime.fromisoformat(raw_value)
+
+
+def _parse_optional_iso_datetime(raw_value: Any) -> Optional[datetime]:
+    """Parse an optional ISO datetime from task config."""
+    if not isinstance(raw_value, str) or not raw_value:
+        return None
+    return datetime.fromisoformat(raw_value)
+
+
+class TaskExecutorProtocol(Protocol):
+    def execute(
+        self, queued_task: QueuedTask, context: TaskExecutionContext
+    ) -> Dict[str, Any]:
+        ...
 
 
 class ProgressTracker:
@@ -189,19 +206,19 @@ class PredictionTaskExecutor:
                         )
 
                         # 保存预测结果到数据库
-                        db_result = self.prediction_result_repository.save_prediction_result(
+                        self.prediction_result_repository.save_prediction_result(
                             task_id=task_id,
                             stock_code=stock_code,
                             prediction_date=prediction_result.prediction_date,
                             predicted_price=prediction_result.predicted_price,
                             predicted_direction=prediction_result.predicted_direction,
                             confidence_score=prediction_result.confidence_score,
-                            confidence_interval_lower=prediction_result.confidence_interval[
-                                0
-                            ],
-                            confidence_interval_upper=prediction_result.confidence_interval[
-                                1
-                            ],
+                            confidence_interval_lower=(
+                                prediction_result.confidence_interval[0]
+                            ),
+                            confidence_interval_upper=(
+                                prediction_result.confidence_interval[1]
+                            ),
                             model_id=prediction_result.model_id,
                             features_used=prediction_result.features_used,
                             risk_metrics=prediction_result.risk_metrics.to_dict(),
@@ -245,7 +262,9 @@ class PredictionTaskExecutor:
                 )
 
                 logger.info(
-                    f"预测任务完成: {task_id}, 成功: {len(prediction_results)}, 失败: {len(failed_stocks)}"
+                    "预测任务完成: "
+                    f"{task_id}, 成功: {len(prediction_results)}, "
+                    f"失败: {len(failed_stocks)}"
                 )
                 return task_result
 
@@ -288,8 +307,12 @@ class BacktestTaskExecutor:
                 config_dict = queued_task.config
                 strategy_name = config_dict.get("strategy_name", "default_strategy")
                 stock_codes = config_dict.get("stock_codes", [])
-                start_date = datetime.fromisoformat(config_dict.get("start_date"))
-                end_date = datetime.fromisoformat(config_dict.get("end_date"))
+                start_date = _require_iso_datetime(
+                    config_dict.get("start_date"), "start_date"
+                )
+                end_date = _require_iso_datetime(
+                    config_dict.get("end_date"), "end_date"
+                )
                 initial_cash = config_dict.get("initial_cash", 100000.0)
 
                 # 更新任务状态为运行中
@@ -346,7 +369,8 @@ class BacktestTaskExecutor:
                 executor = BacktestExecutor(
                     data_dir=str(settings.DATA_ROOT_PATH),
                     enable_performance_profiling=enable_perf,
-                    use_multiprocessing=False,  # 关闭多进程：DataFrame序列化开销远大于计算本身（2.27s vs 0.40s）
+                    use_multiprocessing=False,
+                    # 关闭多进程：DataFrame 序列化开销远大于计算本身
                     max_workers=6,  # 8核CPU，留2核给系统
                 )
 
@@ -359,14 +383,16 @@ class BacktestTaskExecutor:
                 )
 
                 # 执行回测（传入 task_id 以便将信号记录写入 signal_records 表）
-                backtest_report = executor.run_backtest(
-                    strategy_name=strategy_name,
-                    stock_codes=stock_codes,
-                    start_date=start_date,
-                    end_date=end_date,
-                    strategy_config=strategy_config,
-                    backtest_config=backtest_config,
-                    task_id=task_id,
+                backtest_report = asyncio.run(
+                    executor.run_backtest(
+                        strategy_name=strategy_name,
+                        stock_codes=stock_codes,
+                        start_date=start_date,
+                        end_date=end_date,
+                        strategy_config=strategy_config,
+                        backtest_config=backtest_config,
+                        task_id=task_id,
+                    )
                 )
 
                 # 步骤4: 计算回测结果
@@ -459,10 +485,13 @@ class BacktestTaskExecutor:
 
                 # 更新任务状态为完成
                 logger.info(
-                    f"保存回测结果: task_id={task_id}, result包含字段={list(task_result.keys())[:20]}"
+                    "保存回测结果: "
+                    f"task_id={task_id}, "
+                    f"result包含字段={list(task_result.keys())[:20]}"
                 )
                 logger.info(
-                    f"回测结果数据: equity_curve长度={len(task_result.get('equity_curve', []))}, "
+                    "回测结果数据: "
+                    f"equity_curve长度={len(task_result.get('equity_curve', []))}, "
                     f"drawdown_curve长度={len(task_result.get('drawdown_curve', []))}, "
                     f"dates长度={len(task_result.get('dates', []))}, "
                     f"portfolio存在={task_result.get('portfolio') is not None}, "
@@ -484,7 +513,8 @@ class BacktestTaskExecutor:
                 saved_task = self.task_repository.get_task_by_id(task_id)
                 if saved_task and saved_task.result:
                     logger.info(
-                        f"验证保存结果: task_id={task_id}, result类型={type(saved_task.result)}, "
+                        "验证保存结果: "
+                        f"task_id={task_id}, result类型={type(saved_task.result)}, "
                         f"result是否为None={saved_task.result is None}"
                     )
                     if isinstance(saved_task.result, dict):
@@ -523,8 +553,9 @@ class BacktestTaskExecutor:
     ) -> None:
         """将交易记录写入 trade_records 表（供前端详细页面使用）"""
         try:
-            from app.models.backtest_detailed_models import TradeRecord
             from uuid import uuid4
+
+            from app.models.backtest_detailed_models import TradeRecord
 
             trade_history = backtest_report.get("trade_history", [])
             if not trade_history:
@@ -539,7 +570,9 @@ class BacktestTaskExecutor:
                 timestamp = trade.get("timestamp")
                 if isinstance(timestamp, str):
                     try:
-                        timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        timestamp = datetime.fromisoformat(
+                            timestamp.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         timestamp = utcnow()
                 elif hasattr(timestamp, 'to_pydatetime'):
@@ -552,7 +585,9 @@ class BacktestTaskExecutor:
                     task_id=task_id,
                     backtest_id=backtest_id,
                     trade_id=f"trade_{task_id[:8]}_{idx:06d}",
-                    stock_code=trade.get("stock_code", stock_codes[0] if stock_codes else "UNKNOWN"),
+                    stock_code=trade.get(
+                        "stock_code", stock_codes[0] if stock_codes else "UNKNOWN"
+                    ),
                     stock_name=trade.get("stock_name"),
                     action=trade.get("action", "BUY"),
                     quantity=trade.get("quantity", 0),
@@ -570,7 +605,9 @@ class BacktestTaskExecutor:
                 self.task_repository.db.add_all(records_to_add)
                 self.task_repository.db.commit()
                 logger.info(
-                    f"成功写入 {len(records_to_add)} 条交易记录到 trade_records 表: task_id={task_id}"
+                    "成功写入 "
+                    f"{len(records_to_add)} 条交易记录到 trade_records 表: "
+                    f"task_id={task_id}"
                 )
 
         except Exception as e:
@@ -597,8 +634,12 @@ class TrainingTaskExecutor:
                 model_name = config_dict.get("model_name", "default_model")
                 model_type = config_dict.get("model_type", "xgboost")
                 stock_codes = config_dict.get("stock_codes", [])
-                start_date = datetime.fromisoformat(config_dict.get("start_date"))
-                end_date = datetime.fromisoformat(config_dict.get("end_date"))
+                start_date = _require_iso_datetime(
+                    config_dict.get("start_date"), "start_date"
+                )
+                end_date = _require_iso_datetime(
+                    config_dict.get("end_date"), "end_date"
+                )
 
                 # 更新任务状态为运行中
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
@@ -669,7 +710,9 @@ class TrainingTaskExecutor:
                 progress_tracker.update_step(
                     "保存模型",
                     {
-                        "accuracy": f"{task_result['performance_metrics']['accuracy']:.3f}"
+                        "accuracy": (
+                            f"{task_result['performance_metrics']['accuracy']:.3f}"
+                        )
                     },
                 )
 
@@ -679,7 +722,9 @@ class TrainingTaskExecutor:
                 )
 
                 logger.info(
-                    f"训练任务完成: {task_id}, 模型: {model_name}, 准确率: {task_result['performance_metrics']['accuracy']:.3f}"
+                    "训练任务完成: "
+                    f"{task_id}, 模型: {model_name}, "
+                    f"准确率: {task_result['performance_metrics']['accuracy']:.3f}"
                 )
                 return task_result
 
@@ -716,14 +761,14 @@ class TaskExecutionEngine:
         self.task_repository = task_repository
 
         # 创建各类型任务执行器
-        self.executors = {
+        self.executors: Dict[TaskType, TaskExecutorProtocol] = {
             TaskType.PREDICTION: PredictionTaskExecutor(
                 prediction_engine, task_repository, prediction_result_repository
             ),
             TaskType.BACKTEST: BacktestTaskExecutor(task_repository),
             TaskType.TRAINING: TrainingTaskExecutor(task_repository),
-            TaskType.HYPERPARAMETER_OPTIMIZATION: HyperparameterOptimizationTaskExecutor(
-                task_repository
+            TaskType.HYPERPARAMETER_OPTIMIZATION: (
+                HyperparameterOptimizationTaskExecutor(task_repository)
             ),
             TaskType.QLIB_PRECOMPUTE: QlibPrecomputeTaskExecutor(task_repository),
         }
@@ -869,11 +914,13 @@ class TaskExecutionEngine:
 
             elif task_type == TaskType.BACKTEST:
                 stock_count = len(config.get("stock_codes", []))
-                start_date = datetime.fromisoformat(config.get("start_date"))
-                end_date = datetime.fromisoformat(config.get("end_date"))
+                start_date = _require_iso_datetime(
+                    config.get("start_date"), "start_date"
+                )
+                end_date = _require_iso_datetime(config.get("end_date"), "end_date")
                 days = (end_date - start_date).days
                 # 回测时间与股票数量和时间跨度相关
-                return min(stock_count * days * 0.1 + 60, 3600)  # 最多1小时
+                return int(min(stock_count * days * 0.1 + 60, 3600))  # 最多1小时
 
             elif task_type == TaskType.TRAINING:
                 stock_count = len(config.get("stock_codes", []))
@@ -911,9 +958,6 @@ class QlibPrecomputeTaskExecutor:
 
     def execute(self, queued_task: QueuedTask, context: TaskExecutionContext):
         """执行Qlib预计算任务"""
-        # 确保在独立进程中类型可用
-        from typing import Any, Dict, Optional
-
         task_id = queued_task.task_id
 
         with set_log_context(task_id=task_id, user_id=queued_task.user_id):
@@ -925,12 +969,8 @@ class QlibPrecomputeTaskExecutor:
                 end_date_str = config_dict.get("end_date")  # 可选
 
                 # 解析日期
-                start_date = None
-                end_date = None
-                if start_date_str:
-                    start_date = datetime.fromisoformat(start_date_str)
-                if end_date_str:
-                    end_date = datetime.fromisoformat(end_date_str)
+                start_date = _parse_optional_iso_datetime(start_date_str)
+                end_date = _parse_optional_iso_datetime(end_date_str)
 
                 # 更新任务状态为运行中
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
@@ -942,9 +982,6 @@ class QlibPrecomputeTaskExecutor:
                     if context.progress_callback:
                         context.progress_callback(progress, message)
 
-                # 导入预计算服务（确保在独立进程中正确导入）
-                from typing import Any, Dict  # 确保类型可用
-
                 from app.services.data.offline_factor_precompute import (
                     OfflineFactorPrecomputeService,
                 )
@@ -952,13 +989,11 @@ class QlibPrecomputeTaskExecutor:
                 # 创建预计算服务
                 precompute_service = OfflineFactorPrecomputeService(
                     batch_size=config_dict.get("batch_size", 50),
-                    max_workers=config_dict.get("max_workers"),
+                    max_workers=int(config_dict.get("max_workers") or 4),
                     progress_callback=progress_callback,
                 )
 
                 # 执行预计算（异步）
-                import asyncio
-
                 result = asyncio.run(
                     precompute_service.precompute_all_stocks(
                         stock_codes=stock_codes,
@@ -1075,7 +1110,8 @@ class HyperparameterOptimizationTaskExecutor:
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
 
                 # 创建进度回调
-                # 注意：StrategyHyperparameterOptimizer 的 progress_callback 签名已扩展，包含 trial 统计信息
+                # StrategyHyperparameterOptimizer 的 progress_callback
+                # 签名已扩展，包含 trial 统计信息
                 def progress_callback(
                     trial_num,
                     n_trials,

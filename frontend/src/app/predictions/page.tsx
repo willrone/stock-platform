@@ -163,8 +163,8 @@ export default function PredictionsPage() {
 
   // 获取置信度颜色
   const getConfidenceColor = (score: number) => {
-    if (score >= 0.8) return '#4caf50';
-    if (score >= 0.6) return '#ff9800';
+    if (score >= 0.8) {return '#4caf50';}
+    if (score >= 0.6) {return '#ff9800';}
     return '#f44336';
   };
 

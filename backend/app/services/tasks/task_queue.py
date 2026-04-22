@@ -2,22 +2,21 @@
 任务队列和调度器 - 处理任务的排队、调度和执行管理
 """
 
-import asyncio
-import json
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from queue import Empty, PriorityQueue
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import PerformanceLogger
-from app.models.task_models import Task, TaskStatus, TaskType
+from app.models.task_models import TaskType
+
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
@@ -289,7 +288,9 @@ class TaskScheduler:
             self.stats["queue_size"] = self.task_queue.qsize()
 
             logger.info(
-                f"任务加入队列: {task_id}, 优先级: {priority.name}, 队列大小: {self.stats['queue_size']}"
+                "任务加入队列: "
+                f"{task_id}, 优先级: {priority.name}, "
+                f"队列大小: {self.stats['queue_size']}"
             )
             return True
 
@@ -356,7 +357,7 @@ class TaskScheduler:
         def monitor():
             try:
                 # 等待任务完成或超时
-                result = future.result(timeout=self.task_timeout_seconds)
+                future.result(timeout=self.task_timeout_seconds)
                 self.stats["total_executed"] += 1
                 logger.info(f"任务执行成功: {queued_task.task_id}")
 

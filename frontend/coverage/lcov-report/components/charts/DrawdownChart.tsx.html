@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">5% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/80</span>
+                <span class='fraction'>4/80</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/30</span>
+                <span class='fraction'>0/46</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">5.19% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/77</span>
+                <span class='fraction'>4/77</span>
             </div>
         
             
@@ -544,8 +544,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -560,7 +560,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -569,7 +569,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1018,8 +1018,8 @@
 &nbsp;
 'use client';
 &nbsp;
-import React, { useEffect, useRef, useState } from <span class="cstat-no" title="statement not covered" >'react';</span>
-import * as echarts from <span class="cstat-no" title="statement not covered" >'echarts';</span>
+import React, { useEffect, useRef, useState } from 'react';
+import * as echarts from 'echarts';
 import {
   Card,
   CardContent,
@@ -1034,7 +1034,7 @@ import {
   FormControlLabel,
   CircularProgress,
   IconButton,
-} from <span class="cstat-no" title="statement not covered" >'@mui/material';</span>
+} from '@mui/material';
 import {
   TrendingDown,
   Info,
@@ -1043,7 +1043,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-} from <span class="cstat-no" title="statement not covered" >'lucide-react';</span>
+} from 'lucide-react';
 &nbsp;
 interface DrawdownChartProps {
   taskId: string;
@@ -1070,19 +1070,19 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 找到最大回撤期间的索引
   const getMaxDrawdownPeriod = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!data.dates.length || !data.maxDrawdownDate) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!data.dates.length || !data.maxDrawdownDate) {</span>
 <span class="cstat-no" title="statement not covered" >      return { startIndex: -1, endIndex: -1 };</span>
     }
 &nbsp;
     const maxDrawdownIndex = <span class="cstat-no" title="statement not covered" >data.dates.findIndex(<span class="fstat-no" title="function not covered" >date =&gt; <span class="cstat-no" title="statement not covered" >d</span>ate === data.maxDrawdownDate)</span>;</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (maxDrawdownIndex === -1) {</span>
+<span class="cstat-no" title="statement not covered" >    if (maxDrawdownIndex === -1) {</span>
 <span class="cstat-no" title="statement not covered" >      return { startIndex: -1, endIndex: -1 };</span>
     }
 &nbsp;
     // 向前找到回撤开始点（回撤为0的点）
     let startIndex = <span class="cstat-no" title="statement not covered" >maxDrawdownIndex;</span>
 <span class="cstat-no" title="statement not covered" >    for (let i = <span class="cstat-no" title="statement not covered" >maxDrawdownIndex - 1; i</span> &gt;= 0; i--) {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (Math.abs(data.drawdowns[i]) &lt; 0.001) {</span>
+<span class="cstat-no" title="statement not covered" >      if (Math.abs(data.drawdowns[i]) &lt; 0.001) {</span>
         // 接近0
 <span class="cstat-no" title="statement not covered" >        startIndex = i;</span>
 <span class="cstat-no" title="statement not covered" >        break;</span>
@@ -1092,7 +1092,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     // 向后找到回撤结束点（回撤恢复到接近0的点）
     let endIndex = <span class="cstat-no" title="statement not covered" >maxDrawdownIndex;</span>
 <span class="cstat-no" title="statement not covered" >    for (let i = <span class="cstat-no" title="statement not covered" >maxDrawdownIndex + 1; i</span> &lt; data.drawdowns.length; i++) {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (Math.abs(data.drawdowns[i]) &lt; 0.001) {</span>
+<span class="cstat-no" title="statement not covered" >      if (Math.abs(data.drawdowns[i]) &lt; 0.001) {</span>
         // 接近0
 <span class="cstat-no" title="statement not covered" >        endIndex = i;</span>
 <span class="cstat-no" title="statement not covered" >        break;</span>
@@ -1104,12 +1104,12 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 初始化和更新图表
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!chartRef.current || loading || !data.dates.length) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!chartRef.current || loading || !data.dates.length) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
     // 销毁现有图表实例
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (chartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (chartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >      chartInstance.current.dispose();</span>
     }
 &nbsp;
@@ -1143,7 +1143,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     const markAreas: any[] = <span class="cstat-no" title="statement not covered" >[];</span>
     const markLines: any[] = <span class="cstat-no" title="statement not covered" >[];</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (showMaxDrawdownPeriod &amp;&amp; startIndex !== -1 &amp;&amp; endIndex !== -1) {</span>
+<span class="cstat-no" title="statement not covered" >    if (showMaxDrawdownPeriod &amp;&amp; startIndex !== -1 &amp;&amp; endIndex !== -1) {</span>
       // 标注最大回撤期间
 <span class="cstat-no" title="statement not covered" >      markAreas.push({</span>
         name: '最大回撤期间',
@@ -1273,7 +1273,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
     // 响应式调整
     const handleResize = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (chartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (chartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        chartInstance.current.resize();</span>
       }
     };
@@ -1282,7 +1282,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >      window.removeEventListener('resize', handleResize);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (chartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (chartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        chartInstance.current.dispose();</span>
       }
     };
@@ -1290,7 +1290,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 图表操作函数
   const handleZoomIn = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (chartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (chartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >      chartInstance.current.dispatchAction({</span>
         type: 'dataZoom',
         start: 25,
@@ -1300,7 +1300,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
   };
 &nbsp;
   const handleZoomOut = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (chartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (chartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >      chartInstance.current.dispatchAction({</span>
         type: 'dataZoom',
         start: 0,
@@ -1310,7 +1310,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
   };
 &nbsp;
   const handleReset = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (chartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (chartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >      chartInstance.current.dispatchAction({</span>
         type: 'restore',
       });
@@ -1320,19 +1320,19 @@ export default function <span class="cstat-no" title="statement not covered" ><s
   // 获取回撤评级
   const getDrawdownRating = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(m</span>axDrawdown: number) =&gt; {</span>
     const absDrawdown = <span class="cstat-no" title="statement not covered" >Math.abs(maxDrawdown);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (absDrawdown &lt;= 5) {</span>
+<span class="cstat-no" title="statement not covered" >    if (absDrawdown &lt;= 5) {</span>
 <span class="cstat-no" title="statement not covered" >      return { text: '优秀', color: 'success' as const };</span>
     }
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (absDrawdown &lt;= 10) {</span>
+<span class="cstat-no" title="statement not covered" >    if (absDrawdown &lt;= 10) {</span>
 <span class="cstat-no" title="statement not covered" >      return { text: '良好', color: 'primary' as const };</span>
     }
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (absDrawdown &lt;= 20) {</span>
+<span class="cstat-no" title="statement not covered" >    if (absDrawdown &lt;= 20) {</span>
 <span class="cstat-no" title="statement not covered" >      return { text: '一般', color: 'warning' as const };</span>
     }
 <span class="cstat-no" title="statement not covered" >    return { text: '较差', color: 'error' as const };</span>
   };
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (loading) {</span>
+<span class="cstat-no" title="statement not covered" >  if (loading) {</span>
     return (
       &lt;Card&gt;
         &lt;CardContent&gt;
@@ -1492,7 +1492,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

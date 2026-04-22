@@ -4,6 +4,7 @@
 """
 import hashlib
 import importlib
+import importlib.metadata
 import json
 import pickle
 import platform
@@ -14,7 +15,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import importlib.metadata
 from loguru import logger
 from packaging import version
 

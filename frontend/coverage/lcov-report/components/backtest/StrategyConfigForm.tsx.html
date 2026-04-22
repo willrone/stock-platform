@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/98</span>
+                <span class='fraction'>0/118</span>
             </div>
         
             
@@ -976,7 +976,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
     const strategyChanged = <span class="cstat-no" title="statement not covered" >prevStrategyRef.current !== strategyName;</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (strategyChanged || !isMountedRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (strategyChanged || !isMountedRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      prevStrategyRef.current = strategyName;</span>
 <span class="cstat-no" title="statement not covered" >      isMountedRef.current = true;</span>
 &nbsp;
@@ -994,7 +994,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
       }
 &nbsp;
       // 通知父组件初始值（使用微任务避免在渲染期间调用）
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (onChangeRef.current &amp;&amp; Object.keys(initialValues).length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (onChangeRef.current &amp;&amp; Object.keys(initialValues).length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        Promise.resolve().then(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >          onChangeRef.current?.(initialValues);</span>
         });
@@ -1008,7 +1008,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
   const handleValueChange = <span class="cstat-no" title="statement not covered" >React.useCallback(</span>
 <span class="fstat-no" title="function not covered" >    (k</span>ey: string, value: any) =&gt; {
       const param = <span class="cstat-no" title="statement not covered" >parameters[key];</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (!param) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!param) {</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
@@ -1017,29 +1017,29 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 <span class="cstat-no" title="statement not covered" >      if (param.type === 'int') {</span>
 <span class="cstat-no" title="statement not covered" >        validatedValue =</span>
           typeof value === 'number' ? Math.round(value) : parseInt(String(value), 10);
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (isNaN(validatedValue)) {</span>
+<span class="cstat-no" title="statement not covered" >        if (isNaN(validatedValue)) {</span>
 <span class="cstat-no" title="statement not covered" >          setErrors(<span class="fstat-no" title="function not covered" >prev =&gt; (<span class="cstat-no" title="statement not covered" >{</span> ...prev, [key]: '请输入有效的整数' }));</span></span>
 <span class="cstat-no" title="statement not covered" >          return;</span>
         }
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (param.min !== undefined &amp;&amp; validatedValue &lt; param.min) {</span>
+<span class="cstat-no" title="statement not covered" >        if (param.min !== undefined &amp;&amp; validatedValue &lt; param.min) {</span>
 <span class="cstat-no" title="statement not covered" >          validatedValue = param.min;</span>
         }
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (param.max !== undefined &amp;&amp; validatedValue &gt; param.max) {</span>
+<span class="cstat-no" title="statement not covered" >        if (param.max !== undefined &amp;&amp; validatedValue &gt; param.max) {</span>
 <span class="cstat-no" title="statement not covered" >          validatedValue = param.max;</span>
         }
       } else <span class="cstat-no" title="statement not covered" >if (param.type === 'float') {</span>
 <span class="cstat-no" title="statement not covered" >        validatedValue = typeof value === 'number' ? value : parseFloat(String(value));</span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (isNaN(validatedValue)) {</span>
+<span class="cstat-no" title="statement not covered" >        if (isNaN(validatedValue)) {</span>
 <span class="cstat-no" title="statement not covered" >          setErrors(<span class="fstat-no" title="function not covered" >prev =&gt; (<span class="cstat-no" title="statement not covered" >{</span> ...prev, [key]: '请输入有效的数字' }));</span></span>
 <span class="cstat-no" title="statement not covered" >          return;</span>
         }
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (param.min !== undefined &amp;&amp; validatedValue &lt; param.min) {</span>
+<span class="cstat-no" title="statement not covered" >        if (param.min !== undefined &amp;&amp; validatedValue &lt; param.min) {</span>
 <span class="cstat-no" title="statement not covered" >          validatedValue = param.min;</span>
         }
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (param.max !== undefined &amp;&amp; validatedValue &gt; param.max) {</span>
+<span class="cstat-no" title="statement not covered" >        if (param.max !== undefined &amp;&amp; validatedValue &gt; param.max) {</span>
 <span class="cstat-no" title="statement not covered" >          validatedValue = param.max;</span>
         }
-      } else <span class="cstat-no" title="statement not covered" ><span class="missing-if-branch" title="if path not taken" >I</span>if (param.type === 'json') {</span>
+      } else <span class="cstat-no" title="statement not covered" >if (param.type === 'json') {</span>
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          validatedValue = typeof value === 'string' ? JSON.parse(value) : value;</span>
         } catch (e) {
@@ -1056,12 +1056,12 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      setValues(<span class="fstat-no" title="function not covered" >prev =&gt; {</span></span>
         // 避免不必要的更新
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (prev[key] === validatedValue) {</span>
+<span class="cstat-no" title="statement not covered" >        if (prev[key] === validatedValue) {</span>
 <span class="cstat-no" title="statement not covered" >          return prev;</span>
         }
         const newValues = <span class="cstat-no" title="statement not covered" >{ ...prev, [key]: validatedValue };</span>
         // 调用onChange，使用ref避免闭包问题
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (onChangeRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >        if (onChangeRef.current) {</span>
           // 使用微任务，确保在状态更新后调用
 <span class="cstat-no" title="statement not covered" >          Promise.resolve().then(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >            onChangeRef.current?.(newValues);</span>
@@ -1082,7 +1082,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 <span class="cstat-no" title="statement not covered" >    setValues(defaults);</span>
 <span class="cstat-no" title="statement not covered" >    setErrors({});</span>
     // 通知父组件
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (onChangeRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (onChangeRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      Promise.resolve().then(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >        onChangeRef.current?.(defaults);</span>
       });
@@ -1116,7 +1116,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 <span class="cstat-no" title="statement not covered" >                    param.type === 'int'</span>
                       ? parseInt(e.target.value, 10)
                       : parseFloat(e.target.value);
-<span class="cstat-no" title="statement not covered" >                  <span class="missing-if-branch" title="if path not taken" >I</span>if (!isNaN(numVal)) {</span>
+<span class="cstat-no" title="statement not covered" >                  if (!isNaN(numVal)) {</span>
 <span class="cstat-no" title="statement not covered" >                    handleValueChange(key, numVal);</span>
                   }
                 }}
@@ -1135,14 +1135,14 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
                     value={safeValue}
                     onChange={<span class="fstat-no" title="function not covered" >(e</span>, val) =&gt; {
                       const numVal = <span class="cstat-no" title="statement not covered" >Number(val);</span>
-<span class="cstat-no" title="statement not covered" >                      <span class="missing-if-branch" title="if path not taken" >I</span>if (!isNaN(numVal)) {</span>
+<span class="cstat-no" title="statement not covered" >                      if (!isNaN(numVal)) {</span>
                         const finalValue = <span class="cstat-no" title="statement not covered" >param.type === 'int' ? Math.round(numVal) : numVal;</span>
 <span class="cstat-no" title="statement not covered" >                        setValues(<span class="fstat-no" title="function not covered" >prev =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >                          <span class="missing-if-branch" title="if path not taken" >I</span>if (prev[key] === finalValue) {</span>
+<span class="cstat-no" title="statement not covered" >                          if (prev[key] === finalValue) {</span>
 <span class="cstat-no" title="statement not covered" >                            return prev;</span>
                           }
                           const newValues = <span class="cstat-no" title="statement not covered" >{ ...prev, [key]: finalValue };</span>
-<span class="cstat-no" title="statement not covered" >                          <span class="missing-if-branch" title="if path not taken" >I</span>if (onChangeRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >                          if (onChangeRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >                            Promise.resolve().then(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >                              onChangeRef.current?.(newValues);</span>
                             });
@@ -1176,7 +1176,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
         return &lt;Switch checked={value} onChange={<span class="fstat-no" title="function not covered" >e =&gt; <span class="cstat-no" title="statement not covered" >h</span>andleValueChange(key, e.target.checked)} /&gt;;</span>
 &nbsp;
       case 'string':
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (param.options &amp;&amp; param.options.length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >        if (param.options &amp;&amp; param.options.length &gt; 0) {</span>
           return (
             &lt;FormControl fullWidth error={!!error}&gt;
               &lt;InputLabel&gt;{key}&lt;/InputLabel&gt;
@@ -1226,7 +1226,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
     }
   };
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (Object.keys(parameters).length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >  if (Object.keys(parameters).length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >    return null;</span>
   }
 &nbsp;
@@ -1273,7 +1273,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
                   label="选择已保存的配置"
                   onChange={<span class="fstat-no" title="function not covered" >e =&gt; {</span>
                     const configId = <span class="cstat-no" title="statement not covered" >e.target.value;</span>
-<span class="cstat-no" title="statement not covered" >                    <span class="missing-if-branch" title="if path not taken" >I</span>if (configId &amp;&amp; onLoadConfig) {</span>
+<span class="cstat-no" title="statement not covered" >                    if (configId &amp;&amp; onLoadConfig) {</span>
 <span class="cstat-no" title="statement not covered" >                      onLoadConfig(configId);</span>
                     }
                   }}
@@ -1330,7 +1330,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

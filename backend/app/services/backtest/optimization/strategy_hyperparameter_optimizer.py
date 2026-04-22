@@ -20,7 +20,7 @@ from loguru import logger
 
 try:
     import optuna
-    from optuna.pruners import MedianPruner, HyperbandPruner
+    from optuna.pruners import HyperbandPruner, MedianPruner
     from optuna.samplers import NSGAIISampler, TPESampler
     from optuna.storages import RDBStorage
 except ImportError as e:

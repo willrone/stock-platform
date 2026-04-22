@@ -5,10 +5,10 @@
 参考QuantConnect的信号融合算法。
 """
 
+import logging
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-import logging
 
 from ..models import SignalType, TradingSignal
 

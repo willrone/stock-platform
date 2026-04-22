@@ -12,10 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import retry_db_operation
-from app.services.backtest.utils.rejection_reason_classifier import (
-    aggregate_rejection_reasons,
-    is_actionable_rejection,
-)
 from app.models.backtest_detailed_models import (
     BacktestBenchmark,
     BacktestChartCache,
@@ -24,6 +20,10 @@ from app.models.backtest_detailed_models import (
     PortfolioSnapshot,
     SignalRecord,
     TradeRecord,
+)
+from app.services.backtest.utils.rejection_reason_classifier import (
+    aggregate_rejection_reasons,
+    is_actionable_rejection,
 )
 
 

@@ -5,7 +5,6 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
 from typing import Optional
 
 from app.services.tasks.task_monitor import task_monitor
@@ -45,7 +44,9 @@ class TaskCleanupService:
         self.is_running = True
         self.cleanup_task = asyncio.create_task(self._cleanup_loop())
         logger.info(
-            f"任务清理服务已启动，清理间隔: {self.cleanup_interval_minutes}分钟，任务超时: {self.task_timeout_minutes}分钟"
+            "任务清理服务已启动，清理间隔: "
+            f"{self.cleanup_interval_minutes}分钟，任务超时: "
+            f"{self.task_timeout_minutes}分钟"
         )
 
     async def stop(self):
@@ -102,7 +103,9 @@ class TaskCleanupService:
                 # 仅记录，不自动清理
                 for task in stuck_tasks:
                     logger.warning(
-                        f"发现卡住任务: {task['task_id']} ({task['task_name']}) - {task['status']} - {task['progress']}%"
+                        "发现卡住任务: "
+                        f"{task['task_id']} ({task['task_name']}) - "
+                        f"{task['status']} - {task['progress']}%"
                     )
 
         except Exception as e:
@@ -118,7 +121,9 @@ class TaskCleanupService:
             )
 
             logger.info(
-                f"手动清理完成: 处理 {result['total_stuck']} 个任务，修复 {len(result['fixed_tasks'])} 个"
+                "手动清理完成: "
+                f"处理 {result['total_stuck']} 个任务，"
+                f"修复 {len(result['fixed_tasks'])} 个"
             )
             return result
 

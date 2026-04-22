@@ -192,7 +192,9 @@ class TaskNotifier:
             progress_data = backtest_progress_monitor.get_progress_data(task.task_id)
             if not progress_data:
                 await self._start_backtest_progress(task.task_id)
-                progress_data = backtest_progress_monitor.get_progress_data(task.task_id)
+                progress_data = backtest_progress_monitor.get_progress_data(
+                    task.task_id
+                )
 
             if progress_data and self._should_reset_for_new_run(
                 task.progress, progress_data
@@ -399,7 +401,9 @@ class TaskNotifier:
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
                 logger.debug(
-                    f"已发送任务状态更新: {task.task_id}, 状态: {task.status}, 进度: {task.progress}%"
+                    "已发送任务状态更新: "
+                    f"{task.task_id}, 状态: {task.status}, "
+                    f"进度: {task.progress}%"
                 )
 
         except Exception as e:

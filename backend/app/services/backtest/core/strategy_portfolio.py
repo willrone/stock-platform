@@ -197,8 +197,8 @@ class StrategyPortfolio(BaseStrategy):
         Returns:
             整合后的信号列表
         """
-        import time
         import logging
+        import time
         logger = logging.getLogger(__name__)
 
         # 性能优化：优先使用预计算信号

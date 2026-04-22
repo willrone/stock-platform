@@ -542,9 +542,8 @@ async def check_deployment_compatibility(
 async def get_system_info():
     """获取当前系统信息"""
     try:
-        import platform
-
         import importlib.metadata
+        import platform
 
         # 获取已安装的包
         installed_packages = {}

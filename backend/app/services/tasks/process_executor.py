@@ -6,9 +6,7 @@
 """
 
 import asyncio
-import os
 from concurrent.futures import Future, ProcessPoolExecutor
-from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
 from loguru import logger
@@ -65,13 +63,12 @@ class ProcessTaskExecutor:
                 for future in concurrent.futures.as_completed([]):
                     try:
                         future.cancel()
-                    except:
-                        pass
+                    except Exception:
+                        continue
 
             # 关闭进程池
             if wait:
-                # 等待任务完成，但设置超时
-                actual_timeout = timeout or 30.0
+                # 等待任务完成
                 self.executor.shutdown(wait=True)
             else:
                 # 不等待，立即关闭
@@ -81,8 +78,8 @@ class ProcessTaskExecutor:
             # 强制关闭
             try:
                 self.executor.shutdown(wait=False)
-            except:
-                pass
+            except Exception:
+                logger.debug("进程池已不可用，跳过二次关闭")
 
         logger.info("进程池执行器已关闭")
 

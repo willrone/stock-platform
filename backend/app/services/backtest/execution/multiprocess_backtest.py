@@ -58,7 +58,10 @@ def _worker_backtest(
         trading_dates = [pd.to_datetime(d) for d in trading_dates_list]
         
         # 2. 重建策略
-        from ..strategies.strategy_factory import StrategyFactory, AdvancedStrategyFactory
+        from ..strategies.strategy_factory import (
+            AdvancedStrategyFactory,
+            StrategyFactory,
+        )
         
         strategy_name = strategy_info['name']
         strategy_config = strategy_info['config']
@@ -257,6 +260,7 @@ def run_multiprocess_backtest(
     data_load_start = time.perf_counter()
     
     from .data_loader import DataLoader
+
     # 使用传入的数据目录或默认绝对路径
     if data_dir is None:
         data_dir = "/Users/ronghui/Documents/GitHub/willrone/data"

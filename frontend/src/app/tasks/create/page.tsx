@@ -157,14 +157,14 @@ export default function CreateTaskPage() {
     }
 
     const rebuildTaskId = searchParams.get("rebuild");
-    if (!rebuildTaskId) return;
+    if (!rebuildTaskId) {return;}
 
     const loadRebuildTask = async () => {
       try {
         const response = await fetch("/api/v1/tasks/" + rebuildTaskId);
         const resp = await response.json();
         const data = resp.data || resp;
-        if (!data || !data.task_id) return;
+        if (!data || !data.task_id) {return;}
 
         setIsRebuild(true);
         setRebuildTaskName(data.task_name || "");

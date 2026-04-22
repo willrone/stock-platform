@@ -2,15 +2,12 @@
 任务状态通知服务 - 集成WebSocket实现任务状态的实时推送
 """
 
-import asyncio
-import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
-from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.models.task_models import TaskStatus, TaskType
 from app.services.infrastructure import WebSocketMessage, websocket_manager
 
@@ -43,6 +40,7 @@ class TaskProgressNotification:
     current_step: str
     estimated_remaining_seconds: Optional[int] = None
     details: Optional[Dict[str, Any]] = None
+
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
@@ -169,16 +167,11 @@ class TaskNotificationService:
             # 发送给订阅该任务的用户
             subscribers = self.task_subscribers.get(task_id, set())
             if subscribers:
+                notification_data = asdict(notification)
+                notification_data["timestamp"] = utcnow().isoformat()
                 message = WebSocketMessage(
                     type="task_progress",
-                    data={
-                        "task_id": task_id,
-                        "progress": progress,
-                        "current_step": current_step,
-                        "estimated_remaining_seconds": estimated_remaining_seconds,
-                        "details": details,
-                        "timestamp": utcnow().isoformat(),
-                    },
+                    data=notification_data,
                 )
 
                 # 发送给所有订阅用户
@@ -189,7 +182,9 @@ class TaskNotificationService:
 
                 self.notification_stats["progress_notifications"] += 1
                 logger.debug(
-                    f"任务进度通知已发送: {task_id}, 进度: {progress:.1f}%, 订阅者: {len(subscribers)}"
+                    "任务进度通知已发送: "
+                    f"{task_id}, 进度: {progress:.1f}%, "
+                    f"订阅者: {len(subscribers)}"
                 )
 
         except Exception as e:
@@ -272,7 +267,9 @@ class TaskNotificationService:
                 )
 
             logger.info(
-                f"系统通知已发送: {message}, 目标用户: {len(target_users) if target_users else '所有用户'}"
+                "系统通知已发送: "
+                f"{message}, 目标用户: "
+                f"{len(target_users) if target_users else '所有用户'}"
             )
 
         except Exception as e:
@@ -377,7 +374,10 @@ class TaskNotificationService:
             summary = {
                 "strategy": config.get("strategy_name", "unknown"),
                 "stock_count": len(config.get("stock_codes", [])),
-                "period": f"{config.get('start_date', '')} - {config.get('end_date', '')}",
+                "period": (
+                    f"{config.get('start_date', '')} - "
+                    f"{config.get('end_date', '')}"
+                ),
             }
         elif task_type == TaskType.TRAINING:
             summary = {

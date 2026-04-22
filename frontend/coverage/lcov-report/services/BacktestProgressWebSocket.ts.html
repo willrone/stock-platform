@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/39</span>
+                <span class='fraction'>0/54</span>
             </div>
         
             
@@ -1090,7 +1090,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
     // 清理URL末尾的斜杠，并确保不包含多余的/ws前缀
 <span class="cstat-no" title="statement not covered" >    baseUrl = baseUrl.replace(/\/+$/, ''); /</span>/ 移除末尾斜杠
     // 如果URL末尾是/ws，移除它（避免重复）
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (baseUrl.endsWith('/ws')) {</span>
+<span class="cstat-no" title="statement not covered" >    if (baseUrl.endsWith('/ws')) {</span>
 <span class="cstat-no" title="statement not covered" >      baseUrl = baseUrl.slice(0, -3);</span>
     }
 <span class="cstat-no" title="statement not covered" >    this.wsUrl = baseUrl;</span>
@@ -1108,12 +1108,12 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
    */
 <span class="fstat-no" title="function not covered" >  connect(): Promise&lt;void&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    return new Promise(<span class="fstat-no" title="function not covered" >(r</span>esolve, reject) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ws?.readyState === WebSocket.OPEN) {</span>
+<span class="cstat-no" title="statement not covered" >      if (this.ws?.readyState === WebSocket.OPEN) {</span>
 <span class="cstat-no" title="statement not covered" >        resolve();</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (this.isConnecting) {</span>
+<span class="cstat-no" title="statement not covered" >      if (this.isConnecting) {</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
@@ -1162,7 +1162,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
 <span class="cstat-no" title="statement not covered" >          this.callbacks.onConnection?.(false);</span>
 &nbsp;
           // 自动重连（如果不是手动断开）
-<span class="cstat-no" title="statement not covered" >          <span class="missing-if-branch" title="if path not taken" >I</span>if (!this.isManuallyDisconnected &amp;&amp; this.reconnectAttempts &lt; this.maxReconnectAttempts) {</span>
+<span class="cstat-no" title="statement not covered" >          if (!this.isManuallyDisconnected &amp;&amp; this.reconnectAttempts &lt; this.maxReconnectAttempts) {</span>
 <span class="cstat-no" title="statement not covered" >            this.scheduleReconnect();</span>
           }
         };
@@ -1187,7 +1187,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
 <span class="cstat-no" title="statement not covered" >    this.isManuallyDisconnected = true;</span>
 <span class="cstat-no" title="statement not covered" >    this.stopHeartbeat();</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ws) {</span>
+<span class="cstat-no" title="statement not covered" >    if (this.ws) {</span>
 <span class="cstat-no" title="statement not covered" >      this.ws.close();</span>
 <span class="cstat-no" title="statement not covered" >      this.ws = null;</span>
     }
@@ -1288,7 +1288,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
 <span class="cstat-no" title="statement not covered" >    this.stopHeartbeat();</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    this.heartbeatInterval = setInterval(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ws?.readyState === WebSocket.OPEN) {</span>
+<span class="cstat-no" title="statement not covered" >      if (this.ws?.readyState === WebSocket.OPEN) {</span>
 <span class="cstat-no" title="statement not covered" >        this.sendMessage({ type: 'ping' });</span>
       }
     }, 30000); // 30秒心跳
@@ -1298,7 +1298,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
    * 停止心跳
    */
 <span class="fstat-no" title="function not covered" >  private stopHeartbeat(): void </span>{
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (this.heartbeatInterval) {</span>
+<span class="cstat-no" title="statement not covered" >    if (this.heartbeatInterval) {</span>
 <span class="cstat-no" title="statement not covered" >      clearInterval(this.heartbeatInterval);</span>
 <span class="cstat-no" title="statement not covered" >      this.heartbeatInterval = null;</span>
     }
@@ -1314,7 +1314,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
 <span class="cstat-no" title="statement not covered" >    console.log(`${delay}ms后尝试重连回测WebSocket (第${this.reconnectAttempts}次)`);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    setTimeout(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (!this.isManuallyDisconnected) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!this.isManuallyDisconnected) {</span>
 <span class="cstat-no" title="statement not covered" >        this.connect().catch(<span class="fstat-no" title="function not covered" >error =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >          console.error('回测WebSocket重连失败:', error);</span>
         });
@@ -1334,7 +1334,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
    * 创建或获取WebSocket连接
    */
 <span class="fstat-no" title="function not covered" >  getConnection(t</span>askId: string): BacktestProgressWebSocket {
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!this.connections.has(taskId)) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!this.connections.has(taskId)) {</span>
       const connection = <span class="cstat-no" title="statement not covered" >new BacktestProgressWebSocket(taskId);</span>
 <span class="cstat-no" title="statement not covered" >      this.connections.set(taskId, connection);</span>
     }
@@ -1350,7 +1350,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
   ): Promise&lt;BacktestProgressWebSocket&gt; {
     const connection = <span class="cstat-no" title="statement not covered" >this.getConnection(taskId);</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (callbacks) {</span>
+<span class="cstat-no" title="statement not covered" >    if (callbacks) {</span>
 <span class="cstat-no" title="statement not covered" >      connection.setCallbacks(callbacks);</span>
     }
 &nbsp;
@@ -1363,7 +1363,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
    */
 <span class="fstat-no" title="function not covered" >  disconnect(t</span>askId: string): void {
     const connection = <span class="cstat-no" title="statement not covered" >this.connections.get(taskId);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (connection) {</span>
+<span class="cstat-no" title="statement not covered" >    if (connection) {</span>
 <span class="cstat-no" title="statement not covered" >      connection.disconnect();</span>
 <span class="cstat-no" title="statement not covered" >      this.connections.delete(taskId);</span>
     }
@@ -1385,7 +1385,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
 <span class="fstat-no" title="function not covered" >  getActiveConnectionCount(): number {</span>
     let count = <span class="cstat-no" title="statement not covered" >0;</span>
 <span class="cstat-no" title="statement not covered" >    this.connections.forEach(<span class="fstat-no" title="function not covered" >conn =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (conn.isConnected()) {</span>
+<span class="cstat-no" title="statement not covered" >      if (conn.isConnected()) {</span>
 <span class="cstat-no" title="statement not covered" >        count++;</span>
       }
     });
@@ -1398,7 +1398,7 @@ export class <span class="cstat-no" title="statement not covered" >BacktestProgr
 <span class="fstat-no" title="function not covered" >  getConnectedTaskIds(): string[] {</span>
     const connectedIds: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
 <span class="cstat-no" title="statement not covered" >    this.connections.forEach(<span class="fstat-no" title="function not covered" >(c</span>onn, taskId) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (conn.isConnected()) {</span>
+<span class="cstat-no" title="statement not covered" >      if (conn.isConnected()) {</span>
 <span class="cstat-no" title="statement not covered" >        connectedIds.push(taskId);</span>
       }
     });
@@ -1413,7 +1413,7 @@ let globalWebSocketManager: BacktestProgressWebSocketManager | null = <span clas
  * 获取全局WebSocket管理器实例
  */
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >getBacktestProgressWebSocketManager(</span></span>): BacktestProgressWebSocketManager {
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (!globalWebSocketManager) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!globalWebSocketManager) {</span>
 <span class="cstat-no" title="statement not covered" >    globalWebSocketManager = new BacktestProgressWebSocketManager();</span>
   }
 <span class="cstat-no" title="statement not covered" >  return globalWebSocketManager;</span>
@@ -1423,7 +1423,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
  * 清理全局WebSocket管理器实例
  */
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >cleanupBacktestProgressWebSocket(</span></span>): void {
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (globalWebSocketManager) {</span>
+<span class="cstat-no" title="statement not covered" >  if (globalWebSocketManager) {</span>
 <span class="cstat-no" title="statement not covered" >    globalWebSocketManager.disconnectAll();</span>
 <span class="cstat-no" title="statement not covered" >    globalWebSocketManager = null;</span>
   }
@@ -1435,7 +1435,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../prettify.js"></script>
         <script>

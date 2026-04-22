@@ -1055,7 +1055,7 @@ class PredictionEngine:
     def _calculate_prediction_confidence_interval(self, predicted_return: float, volatility: float, confidence_level: float) -> tuple:
         """计算预测置信区间"""
         from scipy import stats
-        
+
         # 计算Z分数
         z_score = stats.norm.ppf((1 + confidence_level) / 2)
         

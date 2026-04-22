@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-
 DEFAULT_EARLY_STOPPING_INFO = {
     "early_stopped": False,
     "stopped_epoch": 0,
@@ -36,6 +35,119 @@ DEFAULT_SIGNAL_QUALITY = {
     "sample_count": 0,
     "analysis_scope": None,
 }
+
+SEGMENT_NAMES = ("train", "validation", "test")
+
+
+def _default_portfolio_bridge_summary(model_id: Optional[str] = None) -> Dict[str, Any]:
+    return {
+        "model_id": None,
+        "task_count": 0,
+        "tasks": [],
+        "best_by_total_return": None,
+        "best_by_sharpe": None,
+        "smallest_drawdown": None,
+    }
+
+
+def _normalize_signal_quality(
+    signal_quality: Optional[Dict[str, Any]], analysis_scope: Optional[str] = None
+) -> Dict[str, Any]:
+    normalized = dict(signal_quality) if isinstance(signal_quality, dict) else {}
+    merged = {
+        **DEFAULT_SIGNAL_QUALITY,
+        **normalized,
+    }
+    if merged.get("analysis_scope") is None and analysis_scope is not None:
+        merged["analysis_scope"] = analysis_scope
+    return merged
+
+
+def _normalize_segment_evaluation(
+    segment_evaluation: Optional[Dict[str, Any]], training_summary: Dict[str, Any]
+) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+    source = segment_evaluation if isinstance(segment_evaluation, dict) else {}
+
+    for segment_name in SEGMENT_NAMES:
+        segment_payload = source.get(segment_name)
+        segment_payload = segment_payload if isinstance(segment_payload, dict) else {}
+        dataset_samples = int(
+            segment_payload.get(
+                "dataset_samples", training_summary.get(f"{segment_name}_samples", 0) or 0
+            )
+            or 0
+        )
+        evaluated_samples = int(
+            segment_payload.get("evaluated_samples", segment_payload.get("dataset_samples", 0))
+            or 0
+        )
+        performance_metrics = segment_payload.get("performance_metrics")
+        performance_metrics = (
+            dict(performance_metrics) if isinstance(performance_metrics, dict) else {}
+        )
+
+        normalized[segment_name] = {
+            "dataset_samples": dataset_samples,
+            "evaluated_samples": evaluated_samples,
+            "performance_metrics": performance_metrics,
+            "signal_quality": _normalize_signal_quality(
+                segment_payload.get("signal_quality"), analysis_scope=None
+            ),
+        }
+
+    return normalized
+
+
+def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    segment_evaluation = report.get("segment_evaluation")
+    segment_evaluation = segment_evaluation if isinstance(segment_evaluation, dict) else {}
+
+    signal_record: Dict[str, Dict[str, Any]] = {}
+    sig_ana_record: Dict[str, Dict[str, Any]] = {}
+
+    for segment_name in SEGMENT_NAMES:
+        segment_payload = segment_evaluation.get(segment_name)
+        segment_payload = segment_payload if isinstance(segment_payload, dict) else {}
+        raw_signal_quality = segment_payload.get("signal_quality")
+        signal_quality = (
+            _normalize_signal_quality(raw_signal_quality, analysis_scope=segment_name)
+            if isinstance(raw_signal_quality, dict)
+            else _normalize_signal_quality(None, analysis_scope=segment_name)
+        )
+        has_signal_quality = isinstance(raw_signal_quality, dict) and any(
+            value is not None for key, value in signal_quality.items() if key != "analysis_scope"
+        )
+
+        signal_record_item = {
+            "dataset_samples": int(segment_payload.get("dataset_samples", 0) or 0),
+            "evaluated_samples": int(segment_payload.get("evaluated_samples", 0) or 0),
+            "has_signal_quality": has_signal_quality,
+        }
+        if has_signal_quality and signal_quality.get("analysis_scope") is not None:
+            signal_record_item["analysis_scope"] = signal_quality["analysis_scope"]
+
+        signal_record[segment_name] = signal_record_item
+        sig_ana_record[segment_name] = signal_quality
+
+    portfolio_bridge_summary = report.get("portfolio_bridge_summary")
+    portfolio_bridge_summary = (
+        dict(portfolio_bridge_summary)
+        if isinstance(portfolio_bridge_summary, dict)
+        else _default_portfolio_bridge_summary(report.get("model_id"))
+    )
+
+    return {
+        "signal_record": signal_record,
+        "sig_ana_record": sig_ana_record,
+        "port_ana_record": {
+            "task_count": int(portfolio_bridge_summary.get("task_count", 0) or 0),
+            "best_by_total_return": portfolio_bridge_summary.get("best_by_total_return"),
+            "best_by_sharpe": portfolio_bridge_summary.get("best_by_sharpe"),
+            "smallest_drawdown": portfolio_bridge_summary.get("smallest_drawdown"),
+            "tasks": list(portfolio_bridge_summary.get("tasks") or []),
+        },
+    }
 
 
 def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
@@ -65,10 +177,29 @@ def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     signal_quality = normalized.get("signal_quality")
     if not isinstance(signal_quality, dict):
         signal_quality = {}
-    normalized["signal_quality"] = {
-        **DEFAULT_SIGNAL_QUALITY,
-        **signal_quality,
-    }
+    normalized["signal_quality"] = _normalize_signal_quality(signal_quality)
+
+    source_segment_evaluation = normalized.get("segment_evaluation")
+    normalized["segment_evaluation"] = _normalize_segment_evaluation(
+        source_segment_evaluation, training_summary
+    )
+
+    portfolio_bridge_summary = normalized.get("portfolio_bridge_summary")
+    if not isinstance(portfolio_bridge_summary, dict):
+        portfolio_bridge_summary = _default_portfolio_bridge_summary(
+            normalized.get("model_id")
+        )
+    normalized["portfolio_bridge_summary"] = portfolio_bridge_summary
+
+    official_record_summary = normalized.get("official_record_summary")
+    if not isinstance(official_record_summary, dict):
+        official_record_summary = build_official_record_summary(
+            {
+                "model_id": normalized.get("model_id"),
+                "portfolio_bridge_summary": portfolio_bridge_summary,
+            }
+        )
+    normalized["official_record_summary"] = official_record_summary
 
     return normalized
 
@@ -176,6 +307,12 @@ class ModelEvaluationReport:
     # 官方风格信号质量评估
     signal_quality: Optional[Dict[str, Any]] = None
 
+    # 分段评估信息
+    segment_evaluation: Optional[Dict[str, Any]] = None
+
+    # 与正式任务桥接后的摘要
+    portfolio_bridge_summary: Optional[Dict[str, Any]] = None
+
 
 class EvaluationReportGenerator:
     """评估报告生成器"""
@@ -200,6 +337,8 @@ class EvaluationReportGenerator:
         hyperparameter_tuning: Optional[Dict[str, Any]] = None,
         early_stopping_info: Optional[Dict[str, Any]] = None,
         signal_quality: Optional[Dict[str, Any]] = None,
+        segment_evaluation: Optional[Dict[str, Any]] = None,
+        portfolio_bridge_summary: Optional[Dict[str, Any]] = None,
     ) -> ModelEvaluationReport:
         """生成评估报告"""
 
@@ -296,6 +435,8 @@ class EvaluationReportGenerator:
             hyperparameter_tuning=hyperparameter_tuning,
             early_stopping_info=early_stopping_info,
             signal_quality=signal_quality,
+            segment_evaluation=segment_evaluation,
+            portfolio_bridge_summary=portfolio_bridge_summary,
             training_data_info=training_data_info,
             prediction_analysis=prediction_analysis,
             recommendations=recommendations,
@@ -353,6 +494,8 @@ class EvaluationReportGenerator:
                 "hyperparameter_tuning": report.hyperparameter_tuning,
                 "early_stopping_info": report.early_stopping_info,
                 "signal_quality": report.signal_quality,
+                "segment_evaluation": report.segment_evaluation,
+                "portfolio_bridge_summary": report.portfolio_bridge_summary,
                 "training_data_info": report.training_data_info,
                 "prediction_analysis": report.prediction_analysis,
                 "model_comparison": report.model_comparison,

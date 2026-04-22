@@ -10,6 +10,9 @@ from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
 from ..core.strategy_portfolio import StrategyPortfolio
+from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
+from .model_prediction_strategy import ModelPredictionStrategy
+from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
 from .strategies import (  # 技术分析策略; 统计套利策略; 因子投资策略
     BollingerBandStrategy,
     CCIStrategy,
@@ -26,9 +29,6 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 )
 from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy
 from .technical.rsi_optimized import RSIOptimizedStrategy
-from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
-from .model_prediction_strategy import ModelPredictionStrategy
-from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
 
 
 class StrategyFactory:

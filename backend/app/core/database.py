@@ -10,6 +10,7 @@ from typing import Any, AsyncGenerator, Callable, TypeVar
 
 from loguru import logger
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -94,6 +95,34 @@ if "sqlite" in settings.database_url_sync.lower():
     @event.listens_for(sync_engine, "connect")
     def set_sqlite_pragma_sync(dbapi_conn, connection_record):
         _configure_sqlite_connection(dbapi_conn, connection_record)
+
+
+def ensure_sqlite_task_updated_at_column_sync(connection: Connection) -> None:
+    """Ensure the SQLite tasks table has a populated updated_at column."""
+    if connection.dialect.name != "sqlite":
+        return
+
+    table_exists = connection.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'"
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    columns = {
+        row[1] for row in connection.exec_driver_sql("PRAGMA table_info(tasks)").fetchall()
+    }
+    if "updated_at" not in columns:
+        connection.exec_driver_sql("ALTER TABLE tasks ADD COLUMN updated_at DATETIME")
+
+    connection.execute(
+        text(
+            """
+            UPDATE tasks
+            SET updated_at = COALESCE(updated_at, completed_at, started_at, created_at)
+            WHERE updated_at IS NULL
+            """
+        )
+    )
 
 
 # 会话工厂

@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/61</span>
+                <span class='fraction'>0/78</span>
             </div>
         
             
@@ -967,11 +967,11 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >    console.log('[OptimizationVisualization] selectedTab:', selectedTab);</span>
 &nbsp;
     // 如果不在历史Tab，不初始化
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (selectedTab !== 'history') {</span>
+<span class="cstat-no" title="statement not covered" >    if (selectedTab !== 'history') {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (</span>
+<span class="cstat-no" title="statement not covered" >    if (</span>
       !historyChartRef.current ||
       !result.optimization_history ||
       result.optimization_history.length === 0
@@ -981,7 +981,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     }
 &nbsp;
     const initChart = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (!historyChartRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!historyChartRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >        console.log('[OptimizationVisualization] historyChartRef.current 为空');</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
@@ -990,7 +990,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       const rect = <span class="cstat-no" title="statement not covered" >historyChartRef.current.getBoundingClientRect();</span>
 <span class="cstat-no" title="statement not covered" >      console.log('[OptimizationVisualization] 容器尺寸:', rect.width, rect.height);</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (rect.width === 0 || rect.height === 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (rect.width === 0 || rect.height === 0) {</span>
         // 如果容器还没有尺寸，延迟重试
 <span class="cstat-no" title="statement not covered" >        console.log('[OptimizationVisualization] 容器尺寸为0，延迟重试');</span>
 <span class="cstat-no" title="statement not covered" >        setTimeout(initChart, 100);</span>
@@ -998,7 +998,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       }
 &nbsp;
       // 如果已有图表实例，先销毁
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (historyChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (historyChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        historyChartInstance.current.dispose();</span>
 <span class="cstat-no" title="statement not covered" >        historyChartInstance.current = null;</span>
       }
@@ -1013,7 +1013,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      console.log('[OptimizationVisualization] completedTrials:', completedTrials.length);</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (completedTrials.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (completedTrials.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >        console.warn('[OptimizationVisualization] 没有完成的试验数据');</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
@@ -1026,7 +1026,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       // 计算最佳得分曲线
       let bestScore = <span class="cstat-no" title="statement not covered" >-Infinity;</span>
       const bestScores = <span class="cstat-no" title="statement not covered" >completedTrials.map(<span class="fstat-no" title="function not covered" >t =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (t.score! &gt; bestScore) {</span>
+<span class="cstat-no" title="statement not covered" >        if (t.score! &gt; bestScore) {</span>
 <span class="cstat-no" title="statement not covered" >          bestScore = t.score!;</span>
         }
 <span class="cstat-no" title="statement not covered" >        return [t.trial_number, bestScore];</span>
@@ -1086,7 +1086,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
       // 响应式调整
       const handleResize = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (historyChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >        if (historyChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >          historyChartInstance.current.resize();</span>
         }
       };
@@ -1103,7 +1103,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >      clearTimeout(timer);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (historyChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (historyChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        historyChartInstance.current.dispose();</span>
 <span class="cstat-no" title="statement not covered" >        historyChartInstance.current = null;</span>
       }
@@ -1119,11 +1119,11 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >    console.log('[OptimizationVisualization] selectedTab:', selectedTab);</span>
 &nbsp;
     // 如果不在重要性Tab，不初始化
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (selectedTab !== 'importance') {</span>
+<span class="cstat-no" title="statement not covered" >    if (selectedTab !== 'importance') {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (</span>
+<span class="cstat-no" title="statement not covered" >    if (</span>
       !importanceChartRef.current ||
       !result.param_importance ||
       Object.keys(result.param_importance).length === 0
@@ -1133,7 +1133,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     }
 &nbsp;
     const initChart = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (!importanceChartRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!importanceChartRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >        console.log('[OptimizationVisualization] importanceChartRef.current 为空');</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
@@ -1142,7 +1142,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       const rect = <span class="cstat-no" title="statement not covered" >importanceChartRef.current.getBoundingClientRect();</span>
 <span class="cstat-no" title="statement not covered" >      console.log('[OptimizationVisualization] 重要性容器尺寸:', rect.width, rect.height);</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (rect.width === 0 || rect.height === 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (rect.width === 0 || rect.height === 0) {</span>
         // 如果容器还没有尺寸，延迟重试
 <span class="cstat-no" title="statement not covered" >        console.log('[OptimizationVisualization] 重要性容器尺寸为0，延迟重试');</span>
 <span class="cstat-no" title="statement not covered" >        setTimeout(initChart, 100);</span>
@@ -1150,7 +1150,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       }
 &nbsp;
       // 如果已有图表实例，先销毁
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (importanceChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (importanceChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        importanceChartInstance.current.dispose();</span>
 <span class="cstat-no" title="statement not covered" >        importanceChartInstance.current = null;</span>
       }
@@ -1207,7 +1207,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
       // 响应式调整
       const handleResize = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (importanceChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >        if (importanceChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >          importanceChartInstance.current.resize();</span>
         }
       };
@@ -1224,7 +1224,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >      clearTimeout(timer);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (importanceChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (importanceChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        importanceChartInstance.current.dispose();</span>
 <span class="cstat-no" title="statement not covered" >        importanceChartInstance.current = null;</span>
       }
@@ -1232,7 +1232,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
   }, [result.param_importance, selectedTab]);
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (paretoChartRef.current &amp;&amp; result.pareto_front &amp;&amp; result.pareto_front.length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (paretoChartRef.current &amp;&amp; result.pareto_front &amp;&amp; result.pareto_front.length &gt; 0) {</span>
       const chart = <span class="cstat-no" title="statement not covered" >echarts.init(paretoChartRef.current);</span>
 &nbsp;
       const paretoData = <span class="cstat-no" title="statement not covered" >result.pareto_front.map(<span class="fstat-no" title="function not covered" >p =&gt; <span class="cstat-no" title="statement not covered" >p</span>.objectives)</span>;</span>
@@ -1375,7 +1375,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

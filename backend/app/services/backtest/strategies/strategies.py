@@ -14,8 +14,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import talib
 import pandas as pd
+import talib
 from loguru import logger
 from scipy import stats
 from scipy.optimize import minimize

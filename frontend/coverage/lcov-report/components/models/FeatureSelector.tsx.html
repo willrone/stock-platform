@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/107</span>
+                <span class='fraction'>0/121</span>
             </div>
         
             
@@ -2112,7 +2112,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // Alpha因子分组和过滤
   const groupedAlphaFactors = <span class="cstat-no" title="statement not covered" >useMemo(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (featureCategories.alpha_features.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (featureCategories.alpha_features.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      return {};</span>
     }
 &nbsp;
@@ -2144,7 +2144,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
   // 检查某个类别的因子是否全部被选择
   const isCategoryFullySelected = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(c</span>ategory: string): boolean =&gt; {</span>
     const categoryFactors = <span class="cstat-no" title="statement not covered" >groupedAlphaFactors[category] || [];</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (categoryFactors.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (categoryFactors.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
 <span class="cstat-no" title="statement not covered" >    return categoryFactors.every(<span class="fstat-no" title="function not covered" >f =&gt; <span class="cstat-no" title="statement not covered" >s</span>electedFeatures.includes(f));</span></span>
@@ -2153,7 +2153,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
   // 检查某个类别的因子是否部分被选择
   const isCategoryPartiallySelected = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(c</span>ategory: string): boolean =&gt; {</span>
     const categoryFactors = <span class="cstat-no" title="statement not covered" >groupedAlphaFactors[category] || [];</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (categoryFactors.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (categoryFactors.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
     const selectedCount = <span class="cstat-no" title="statement not covered" >categoryFactors.filter(<span class="fstat-no" title="function not covered" >f =&gt; <span class="cstat-no" title="statement not covered" >s</span>electedFeatures.includes(f)).l</span>ength;</span>
@@ -2162,12 +2162,12 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // 应用配置
   const handleApplyConfig = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!selectedConfigId) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!selectedConfigId) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
     const config = <span class="cstat-no" title="statement not covered" >getConfigById(selectedConfigId);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!config) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!config) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -2186,12 +2186,12 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // 保存当前选择为配置
   const handleSaveConfig = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!saveConfigName.trim()) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!saveConfigName.trim()) {</span>
 <span class="cstat-no" title="statement not covered" >      alert('请输入配置名称');</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (selectedFeatures.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (selectedFeatures.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      alert('请先选择一些特征');</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
@@ -2211,13 +2211,13 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
   // 删除自定义配置
   const handleDeleteConfig = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(c</span>onfigId: string) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!confirm('确定要删除这个配置吗？')) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!confirm('确定要删除这个配置吗？')) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (deleteCustomConfig(configId)) {</span>
+<span class="cstat-no" title="statement not covered" >    if (deleteCustomConfig(configId)) {</span>
 <span class="cstat-no" title="statement not covered" >      setConfigs(getAllConfigs());</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (selectedConfigId === configId) {</span>
+<span class="cstat-no" title="statement not covered" >      if (selectedConfigId === configId) {</span>
 <span class="cstat-no" title="statement not covered" >        setSelectedConfigId('');</span>
       }
     }
@@ -2358,7 +2358,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             checked={useAllFeatures}
             onChange={<span class="fstat-no" title="function not covered" >e =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >              onUseAllFeaturesChange(e.target.checked);</span>
-<span class="cstat-no" title="statement not covered" >              <span class="missing-if-branch" title="if path not taken" >I</span>if (e.target.checked) {</span>
+<span class="cstat-no" title="statement not covered" >              if (e.target.checked) {</span>
 <span class="cstat-no" title="statement not covered" >                onFeaturesChange([]);</span>
               }
             }}
@@ -2605,13 +2605,13 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
                               ];
                               const indexA = <span class="cstat-no" title="statement not covered" >order.indexOf(a);</span>
                               const indexB = <span class="cstat-no" title="statement not covered" >order.indexOf(b);</span>
-<span class="cstat-no" title="statement not covered" >                              <span class="missing-if-branch" title="if path not taken" >I</span>if (indexA !== -1 &amp;&amp; indexB !== -1) {</span>
+<span class="cstat-no" title="statement not covered" >                              if (indexA !== -1 &amp;&amp; indexB !== -1) {</span>
 <span class="cstat-no" title="statement not covered" >                                return indexA - indexB;</span>
                               }
-<span class="cstat-no" title="statement not covered" >                              <span class="missing-if-branch" title="if path not taken" >I</span>if (indexA !== -1) {</span>
+<span class="cstat-no" title="statement not covered" >                              if (indexA !== -1) {</span>
 <span class="cstat-no" title="statement not covered" >                                return -1;</span>
                               }
-<span class="cstat-no" title="statement not covered" >                              <span class="missing-if-branch" title="if path not taken" >I</span>if (indexB !== -1) {</span>
+<span class="cstat-no" title="statement not covered" >                              if (indexB !== -1) {</span>
 <span class="cstat-no" title="statement not covered" >                                return 1;</span>
                               }
 <span class="cstat-no" title="statement not covered" >                              return a.localeCompare(b);</span>
@@ -2794,7 +2794,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
