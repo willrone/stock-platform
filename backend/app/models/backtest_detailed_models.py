@@ -3,9 +3,7 @@
 用于存储可视化所需的扩展数据
 """
 
-import uuid
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional
 
 from sqlalchemy import (
     JSON,
@@ -13,13 +11,11 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
-    ForeignKey,
     Index,
     Integer,
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -61,9 +57,7 @@ class BacktestDetailedResult(Base):
     rolling_metrics = Column(JSON, nullable=True, comment="滚动指标数据")
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     # 创建索引
     __table_args__ = (
@@ -106,7 +100,9 @@ class BacktestChartCache(Base):
         comment="图表类型：equity_curve, drawdown_curve, monthly_heatmap等",
     )
     chart_data = Column(JSON, nullable=False, comment="图表数据JSON")
-    data_hash = Column(String(64), nullable=True, comment="数据哈希值，用于检测数据变化")
+    data_hash = Column(
+        String(64), nullable=True, comment="数据哈希值，用于检测数据变化"
+    )
     created_at = Column(DateTime, nullable=False, default=utcnow)
     expires_at = Column(DateTime, nullable=True, comment="缓存过期时间")
 
@@ -164,9 +160,9 @@ class PortfolioSnapshot(Base):
             "id": self.id,
             "task_id": self.task_id,
             "backtest_id": self.backtest_id,
-            "snapshot_date": self.snapshot_date.isoformat()
-            if self.snapshot_date
-            else None,
+            "snapshot_date": (
+                self.snapshot_date.isoformat() if self.snapshot_date else None
+            ),
             "portfolio_value": self.portfolio_value,
             "cash": self.cash,
             "positions_count": self.positions_count,
@@ -246,7 +242,9 @@ class SignalRecord(Base):
     reason = Column(Text, nullable=True, comment="信号原因")
     signal_metadata = Column(JSON, nullable=True, comment="元数据（JSON格式）")
     executed = Column(Boolean, nullable=False, default=False, comment="是否被执行")
-    execution_reason = Column(Text, nullable=True, comment="执行原因：已执行时为空，未执行时记录未执行原因")
+    execution_reason = Column(
+        Text, nullable=True, comment="执行原因：已执行时为空，未执行时记录未执行原因"
+    )
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     # 创建索引
@@ -257,7 +255,9 @@ class SignalRecord(Base):
         Index("idx_signal_stock_time", "stock_code", "timestamp"),
         Index("idx_signal_type", "signal_type"),
         Index("idx_signal_executed", "executed"),
-        Index("idx_signal_task_stock_type", "task_id", "stock_code", "signal_type"),  # 复合索引，加速按任务+股票+信号类型查询
+        Index(
+            "idx_signal_task_stock_type", "task_id", "stock_code", "signal_type"
+        ),  # 复合索引，加速按任务+股票+信号类型查询
     )
 
     def to_dict(self):
@@ -296,7 +296,9 @@ class BacktestBenchmark(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     task_id = Column(String(50), nullable=False, index=True)
     backtest_id = Column(String(50), nullable=False, index=True)
-    benchmark_symbol = Column(String(20), nullable=False, comment="基准代码，如000300.SH")
+    benchmark_symbol = Column(
+        String(20), nullable=False, comment="基准代码，如000300.SH"
+    )
     benchmark_name = Column(String(100), nullable=False, comment="基准名称，如沪深300")
     benchmark_data = Column(JSON, nullable=False, comment="基准历史数据")
 
@@ -309,9 +311,7 @@ class BacktestBenchmark(Base):
     excess_return = Column(Float, nullable=True, comment="超额收益")
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     # 创建索引
     __table_args__ = (
@@ -391,7 +391,9 @@ class BacktestStatistics(Base):
     # ========== 股票分布统计 ==========
     unique_stocks_signaled = Column(Integer, default=0, comment="产生信号的股票数")
     unique_stocks_traded = Column(Integer, default=0, comment="实际交易的股票数")
-    most_signaled_stock = Column(String(20), nullable=True, comment="信号最多的股票代码")
+    most_signaled_stock = Column(
+        String(20), nullable=True, comment="信号最多的股票代码"
+    )
     most_traded_stock = Column(String(20), nullable=True, comment="交易最多的股票代码")
 
     # ========== 性能指标统计 ==========
@@ -403,9 +405,7 @@ class BacktestStatistics(Base):
 
     # 元数据
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     # 创建索引
     __table_args__ = (
@@ -450,18 +450,20 @@ class BacktestStatistics(Base):
                 "min_stock_return": self.min_stock_return,
             },
             "time_range": {
-                "first_signal_date": self.first_signal_date.isoformat()
-                if self.first_signal_date
-                else None,
-                "last_signal_date": self.last_signal_date.isoformat()
-                if self.last_signal_date
-                else None,
-                "first_trade_date": self.first_trade_date.isoformat()
-                if self.first_trade_date
-                else None,
-                "last_trade_date": self.last_trade_date.isoformat()
-                if self.last_trade_date
-                else None,
+                "first_signal_date": (
+                    self.first_signal_date.isoformat()
+                    if self.first_signal_date
+                    else None
+                ),
+                "last_signal_date": (
+                    self.last_signal_date.isoformat() if self.last_signal_date else None
+                ),
+                "first_trade_date": (
+                    self.first_trade_date.isoformat() if self.first_trade_date else None
+                ),
+                "last_trade_date": (
+                    self.last_trade_date.isoformat() if self.last_trade_date else None
+                ),
                 "trading_days": self.trading_days,
             },
             "stock_distribution": {

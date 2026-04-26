@@ -2,11 +2,11 @@
 智能任务调度器
 基于资源使用情况和任务优先级进行智能调度
 """
+
 import asyncio
 import heapq
-import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
@@ -88,13 +88,13 @@ class ScheduledTask:
             "priority": self.priority.name,
             "resource_requirement": self.resource_requirement.to_dict(),
             "created_at": self.created_at.isoformat(),
-            "scheduled_at": self.scheduled_at.isoformat()
-            if self.scheduled_at
-            else None,
+            "scheduled_at": (
+                self.scheduled_at.isoformat() if self.scheduled_at else None
+            ),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "status": self.status.value,
             "retry_count": self.retry_count,
             "max_retries": self.max_retries,
@@ -317,7 +317,9 @@ class TaskScheduler:
             else:
                 task.status = TaskStatus.FAILED
                 task.completed_at = datetime.now()
-                logger.error(f"任务重试次数已用完，标记为失败: {task.name} (ID: {task.task_id})")
+                logger.error(
+                    f"任务重试次数已用完，标记为失败: {task.name} (ID: {task.task_id})"
+                )
                 await self._notify_callbacks("task_failed", task)
 
         finally:

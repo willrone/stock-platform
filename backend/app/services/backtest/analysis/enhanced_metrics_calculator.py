@@ -3,8 +3,7 @@
 提供更多专业的金融风险和绩效指标计算
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -242,12 +241,12 @@ class EnhancedMetricsCalculator:
             "avg_drawdown": float(avg_drawdown),
             "calmar_ratio": float(calmar_ratio),
             "max_drawdown_recovery_days": recovery_days or 0,
-            "avg_drawdown_duration": float(np.mean(drawdown_durations))
-            if drawdown_durations
-            else 0,
-            "max_drawdown_duration": max(drawdown_durations)
-            if drawdown_durations
-            else 0,
+            "avg_drawdown_duration": (
+                float(np.mean(drawdown_durations)) if drawdown_durations else 0
+            ),
+            "max_drawdown_duration": (
+                max(drawdown_durations) if drawdown_durations else 0
+            ),
         }
 
     def _calculate_drawdown_durations(self, drawdown: pd.Series) -> List[int]:
@@ -400,7 +399,9 @@ class EnhancedMetricsCalculator:
         """计算滚动指标"""
 
         if len(returns) < window:
-            logger.warning(f"数据长度 {len(returns)} 小于滚动窗口 {window}，跳过滚动指标计算")
+            logger.warning(
+                f"数据长度 {len(returns)} 小于滚动窗口 {window}，跳过滚动指标计算"
+            )
             return {}
 
         # 滚动夏普比率
@@ -420,21 +421,21 @@ class EnhancedMetricsCalculator:
         rolling_max_dd = rolling_drawdown.rolling(window).min()
 
         return {
-            "rolling_sharpe_mean": float(rolling_sharpe.mean())
-            if not rolling_sharpe.empty
-            else 0,
-            "rolling_sharpe_std": float(rolling_sharpe.std())
-            if not rolling_sharpe.empty
-            else 0,
-            "rolling_volatility_mean": float(rolling_volatility.mean())
-            if not rolling_volatility.empty
-            else 0,
-            "rolling_volatility_std": float(rolling_volatility.std())
-            if not rolling_volatility.empty
-            else 0,
-            "rolling_max_drawdown_mean": float(rolling_max_dd.mean())
-            if not rolling_max_dd.empty
-            else 0,
+            "rolling_sharpe_mean": (
+                float(rolling_sharpe.mean()) if not rolling_sharpe.empty else 0
+            ),
+            "rolling_sharpe_std": (
+                float(rolling_sharpe.std()) if not rolling_sharpe.empty else 0
+            ),
+            "rolling_volatility_mean": (
+                float(rolling_volatility.mean()) if not rolling_volatility.empty else 0
+            ),
+            "rolling_volatility_std": (
+                float(rolling_volatility.std()) if not rolling_volatility.empty else 0
+            ),
+            "rolling_max_drawdown_mean": (
+                float(rolling_max_dd.mean()) if not rolling_max_dd.empty else 0
+            ),
         }
 
     async def calculate_benchmark_comparison(
@@ -470,7 +471,6 @@ class EnhancedMetricsCalculator:
             end_date = max(dates)
 
             # 尝试从本地加载基准数据
-            benchmark_data = None
             loader = StockDataLoader(data_root=settings.DATA_ROOT_PATH)
             benchmark_df = loader.load_stock_data(
                 benchmark_symbol, start_date=start_date, end_date=end_date
@@ -587,7 +587,9 @@ class EnhancedMetricsCalculator:
                 "excess_return": total_excess_return,
                 "upside_capture": up_capture,
                 "downside_capture": down_capture,
-                "benchmark_data": benchmark_df["close"].to_dict(),  # 保存基准数据用于前端展示
+                "benchmark_data": benchmark_df[
+                    "close"
+                ].to_dict(),  # 保存基准数据用于前端展示
             }
 
         except Exception as e:
@@ -677,7 +679,7 @@ class EnhancedMetricsCalculator:
                         stock_performance[stock_code]["win_count"] += 1
 
             # 计算每只股票的胜率
-            for stock_code, perf in stock_performance.items():
+            for _stock_code, perf in stock_performance.items():
                 perf["win_rate"] = (
                     perf["win_count"] / perf["trade_count"]
                     if perf["trade_count"] > 0

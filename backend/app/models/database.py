@@ -54,9 +54,9 @@ class Task:
             "progress": self.progress,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "error_message": self.error_message,
         }
 
@@ -82,18 +82,18 @@ class TaskResult:
             "id": self.id,
             "task_id": self.task_id,
             "stock_code": self.stock_code,
-            "prediction_date": self.prediction_date.isoformat()
-            if self.prediction_date
-            else None,
+            "prediction_date": (
+                self.prediction_date.isoformat() if self.prediction_date else None
+            ),
             "prediction_value": self.prediction_value,
             "confidence": self.confidence,
             "model_name": self.model_name,
-            "indicators_used": json.loads(self.indicators_used)
-            if self.indicators_used
-            else [],
-            "backtest_metrics": json.loads(self.backtest_metrics)
-            if self.backtest_metrics
-            else {},
+            "indicators_used": (
+                json.loads(self.indicators_used) if self.indicators_used else []
+            ),
+            "backtest_metrics": (
+                json.loads(self.backtest_metrics) if self.backtest_metrics else {}
+            ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -122,12 +122,12 @@ class ModelMetadata:
             "model_type": self.model_type,
             "version": self.version,
             "parameters": json.loads(self.parameters) if self.parameters else {},
-            "training_data_info": json.loads(self.training_data_info)
-            if self.training_data_info
-            else {},
-            "performance_metrics": json.loads(self.performance_metrics)
-            if self.performance_metrics
-            else {},
+            "training_data_info": (
+                json.loads(self.training_data_info) if self.training_data_info else {}
+            ),
+            "performance_metrics": (
+                json.loads(self.performance_metrics) if self.performance_metrics else {}
+            ),
             "file_path": self.file_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

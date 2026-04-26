@@ -2,13 +2,14 @@
 统一错误处理和恢复机制
 实现系统恢复和重试机制
 """
+
 import asyncio
-import json
+import logging
 import time
 import traceback
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from loguru import logger
 
@@ -123,9 +124,9 @@ class SystemErrorHandler:
         # 注册默认恢复策略
         self.recovery_strategies[ErrorCategory.DATABASE] = self._recover_database_error
         self.recovery_strategies[ErrorCategory.NETWORK] = self._recover_network_error
-        self.recovery_strategies[
-            ErrorCategory.EXTERNAL_API
-        ] = self._recover_external_api_error
+        self.recovery_strategies[ErrorCategory.EXTERNAL_API] = (
+            self._recover_external_api_error
+        )
 
     async def handle_error(
         self,
@@ -204,7 +205,9 @@ class SystemErrorHandler:
                     return result
 
                 except Exception as retry_error:
-                    logger.warning(f"重试失败: 第 {attempt + 1} 次, 错误: {retry_error}")
+                    logger.warning(
+                        f"重试失败: 第 {attempt + 1} 次, 错误: {retry_error}"
+                    )
                     if attempt == max_retries - 1:
                         # 最后一次重试失败
                         logger.error(f"所有重试均失败: {category.value}")
@@ -387,9 +390,11 @@ class SystemErrorHandler:
                 circuit_breaker_status[key] = {
                     "state": circuit["state"],
                     "failure_count": circuit["failure_count"],
-                    "last_failure_time": circuit["last_failure_time"].isoformat()
-                    if circuit["last_failure_time"]
-                    else None,
+                    "last_failure_time": (
+                        circuit["last_failure_time"].isoformat()
+                        if circuit["last_failure_time"]
+                        else None
+                    ),
                 }
 
             return {

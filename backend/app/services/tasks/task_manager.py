@@ -76,9 +76,9 @@ class TaskSummary:
             "progress": self.progress,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "stock_count": self.stock_count,
             "result_count": self.result_count,
         }
@@ -352,17 +352,23 @@ class TaskManager:
                     name=row["name"],
                     status=TaskStatus(row["status"]),
                     progress=row["progress"],
-                    created_at=row["created_at"]
-                    if isinstance(row["created_at"], datetime)
-                    else datetime.fromisoformat(str(row["created_at"])),
-                    started_at=row["started_at"]
-                    if row["started_at"] is None
-                    or isinstance(row["started_at"], datetime)
-                    else datetime.fromisoformat(str(row["started_at"])),
-                    completed_at=row["completed_at"]
-                    if row["completed_at"] is None
-                    or isinstance(row["completed_at"], datetime)
-                    else datetime.fromisoformat(str(row["completed_at"])),
+                    created_at=(
+                        row["created_at"]
+                        if isinstance(row["created_at"], datetime)
+                        else datetime.fromisoformat(str(row["created_at"]))
+                    ),
+                    started_at=(
+                        row["started_at"]
+                        if row["started_at"] is None
+                        or isinstance(row["started_at"], datetime)
+                        else datetime.fromisoformat(str(row["started_at"]))
+                    ),
+                    completed_at=(
+                        row["completed_at"]
+                        if row["completed_at"] is None
+                        or isinstance(row["completed_at"], datetime)
+                        else datetime.fromisoformat(str(row["completed_at"]))
+                    ),
                     stock_count=stock_count,
                     result_count=row["result_count"],
                 )
@@ -568,9 +574,11 @@ class TaskManager:
                             "name": task.name,
                             "status": task.status.value,
                             "progress": task.progress,
-                            "created_at": task.created_at.isoformat()
-                            if hasattr(task.created_at, "isoformat")
-                            else str(task.created_at),
+                            "created_at": (
+                                task.created_at.isoformat()
+                                if hasattr(task.created_at, "isoformat")
+                                else str(task.created_at)
+                            ),
                             "stock_count": task.stock_count,
                             "result_count": task.result_count,
                         }

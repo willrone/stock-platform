@@ -109,7 +109,9 @@ def _run_backtest_patch_stack(
         )
     )
     stack.enter_context(
-        patch.object(executor.data_loader, "load_multiple_stocks", return_value=stock_data)
+        patch.object(
+            executor.data_loader, "load_multiple_stocks", return_value=stock_data
+        )
     )
     stack.enter_context(
         patch.object(executor, "_get_trading_calendar", return_value=trading_dates)
@@ -123,7 +125,9 @@ def _run_backtest_patch_stack(
         patch.object(executor, "_build_aligned_arrays", return_value={})
     )
     stack.enter_context(
-        patch.object(executor, "_execute_backtest_loop", AsyncMock(return_value=loop_result))
+        patch.object(
+            executor, "_execute_backtest_loop", AsyncMock(return_value=loop_result)
+        )
     )
     stack.enter_context(
         patch.object(
@@ -133,16 +137,23 @@ def _run_backtest_patch_stack(
         )
     )
     stack.enter_context(
-        patch.object(executor_module, "PortfolioManagerArray", return_value=portfolio_manager)
+        patch.object(
+            executor_module, "PortfolioManagerArray", return_value=portfolio_manager
+        )
     )
 
     if progress_monitor is not None:
         stack.enter_context(
             patch.object(executor_module, "backtest_progress_monitor", progress_monitor)
         )
-        stack.enter_context(patch("app.core.database.SessionLocal", return_value=MagicMock()))
         stack.enter_context(
-            patch("app.repositories.task_repository.TaskRepository", return_value=task_repo)
+            patch("app.core.database.SessionLocal", return_value=MagicMock())
+        )
+        stack.enter_context(
+            patch(
+                "app.repositories.task_repository.TaskRepository",
+                return_value=task_repo,
+            )
         )
         stack.enter_context(
             patch(
@@ -267,7 +278,9 @@ async def test_run_backtest_with_task_id_falls_back_to_empty_signal_summary() ->
     assert result["signal_execution_summary"] == {}
 
 
-def test_topk_dropout_price_lookup_includes_non_held_candidates_without_precomputed_signal_matrix() -> None:
+def test_topk_dropout_price_lookup_includes_non_held_candidates_without_precomputed_signal_matrix() -> (
+    None
+):
     """Ranking rebalance must still load candidate prices even when only current holdings are in the portfolio."""
     executor = BacktestExecutor(data_dir="/tmp", enable_parallel=False)
     portfolio_manager = Mock()

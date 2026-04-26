@@ -6,7 +6,7 @@ Qlib 性能监控模块
 
 import datetime
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 import psutil
@@ -109,7 +109,7 @@ class PerformanceMonitor:
             logger.info(f"  {stage_name}:")
             logger.info(f"    耗时: {metrics['duration']:.2f}秒")
             logger.info(f"    内存: {metrics['memory_usage_mb']:.2f}MB")
-            logger.info(f"    CPU: {metrics['cpu_usage_percent']:.1f}%")
+            logger.info("    CPU: {metrics['cpu_usage_percent']:.1f}%")
 
         logger.info("=" * 60)
 
@@ -131,16 +131,15 @@ class BenchmarkRunner:
         monitor.start_stage(test_name)
 
         # 执行测试函数
-        result = None
         error = None
 
         try:
             if hasattr(func, "__await__"):
                 # 异步函数
-                result = await func(*args, **kwargs)
+                await func(*args, **kwargs)
             else:
                 # 同步函数
-                result = func(*args, **kwargs)
+                func(*args, **kwargs)
         except Exception as e:
             error = str(e)
             logger.error(f"基准测试执行失败: {error}")

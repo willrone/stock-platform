@@ -2,13 +2,14 @@
 技术指标影响分析器
 分析RSI、MACD等指标对预测的影响，提供指标重要性排序
 """
+
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -63,9 +64,9 @@ class IndicatorImportance:
             "indicator_type": self.indicator_type.value,
             "importance_score": self.importance_score,
             "analysis_method": self.analysis_method.value,
-            "confidence_interval": list(self.confidence_interval)
-            if self.confidence_interval
-            else None,
+            "confidence_interval": (
+                list(self.confidence_interval) if self.confidence_interval else None
+            ),
             "p_value": self.p_value,
             "additional_metrics": self.additional_metrics,
         }

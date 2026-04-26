@@ -48,7 +48,11 @@ function TabPanel(props: TabPanelProps) {
 export default function SettingsPage() {
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
     open: false,
     message: '',
     severity: 'success',
@@ -169,8 +173,12 @@ export default function SettingsPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <Settings size={32} className="text-blue-600" />
         <Box>
-          <Typography variant="h4" fontWeight="bold">系统设置</Typography>
-          <Typography variant="body2" color="text.secondary">配置系统参数和偏好设置</Typography>
+          <Typography variant="h4" fontWeight="bold">
+            系统设置
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            配置系统参数和偏好设置
+          </Typography>
         </Box>
       </Box>
 
@@ -187,7 +195,9 @@ export default function SettingsPage() {
         {/* 通用设置 */}
         <TabPanel value={tabValue} index={0}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>通用设置</Typography>
+            <Typography variant="h6" gutterBottom>
+              通用设置
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               配置系统的基本参数
             </Typography>
@@ -198,7 +208,9 @@ export default function SettingsPage() {
                   fullWidth
                   label="系统名称"
                   value={generalSettings.systemName}
-                  onChange={(e) => setGeneralSettings({ ...generalSettings, systemName: e.target.value })}
+                  onChange={e =>
+                    setGeneralSettings({ ...generalSettings, systemName: e.target.value })
+                  }
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -207,7 +219,9 @@ export default function SettingsPage() {
                   <Select
                     value={generalSettings.language}
                     label="语言"
-                    onChange={(e) => setGeneralSettings({ ...generalSettings, language: e.target.value })}
+                    onChange={e =>
+                      setGeneralSettings({ ...generalSettings, language: e.target.value })
+                    }
                   >
                     <MenuItem value="zh-CN">简体中文</MenuItem>
                     <MenuItem value="en-US">English</MenuItem>
@@ -220,7 +234,9 @@ export default function SettingsPage() {
                   <Select
                     value={generalSettings.timezone}
                     label="时区"
-                    onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
+                    onChange={e =>
+                      setGeneralSettings({ ...generalSettings, timezone: e.target.value })
+                    }
                   >
                     <MenuItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</MenuItem>
                     <MenuItem value="Asia/Hong_Kong">Asia/Hong_Kong (UTC+8)</MenuItem>
@@ -234,7 +250,9 @@ export default function SettingsPage() {
                   <Select
                     value={generalSettings.dateFormat}
                     label="日期格式"
-                    onChange={(e) => setGeneralSettings({ ...generalSettings, dateFormat: e.target.value })}
+                    onChange={e =>
+                      setGeneralSettings({ ...generalSettings, dateFormat: e.target.value })
+                    }
                   >
                     <MenuItem value="YYYY-MM-DD">YYYY-MM-DD</MenuItem>
                     <MenuItem value="DD/MM/YYYY">DD/MM/YYYY</MenuItem>
@@ -262,7 +280,9 @@ export default function SettingsPage() {
         {/* 数据设置 */}
         <TabPanel value={tabValue} index={1}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>数据设置</Typography>
+            <Typography variant="h6" gutterBottom>
+              数据设置
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               配置数据服务和缓存参数
             </Typography>
@@ -274,7 +294,9 @@ export default function SettingsPage() {
                     fullWidth
                     label="数据服务地址"
                     value={dataSettings.dataServiceUrl}
-                    onChange={(e) => setDataSettings({ ...dataSettings, dataServiceUrl: e.target.value })}
+                    onChange={e =>
+                      setDataSettings({ ...dataSettings, dataServiceUrl: e.target.value })
+                    }
                   />
                   <IconButton onClick={handleTestConnection} disabled={loading} color="primary">
                     <RefreshCw size={20} />
@@ -287,7 +309,9 @@ export default function SettingsPage() {
                   type="number"
                   label="同步间隔（分钟）"
                   value={dataSettings.syncInterval}
-                  onChange={(e) => setDataSettings({ ...dataSettings, syncInterval: parseInt(e.target.value) })}
+                  onChange={e =>
+                    setDataSettings({ ...dataSettings, syncInterval: parseInt(e.target.value) })
+                  }
                 />
               </Grid>
             </Grid>
@@ -297,13 +321,15 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={dataSettings.autoSync}
-                    onChange={(e) => setDataSettings({ ...dataSettings, autoSync: e.target.checked })}
+                    onChange={e => setDataSettings({ ...dataSettings, autoSync: e.target.checked })}
                   />
                 }
                 label={
                   <Box>
                     <Typography>自动同步</Typography>
-                    <Typography variant="caption" color="text.secondary">定期从远端同步股票数据</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      定期从远端同步股票数据
+                    </Typography>
                   </Box>
                 }
               />
@@ -314,13 +340,17 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={dataSettings.cacheEnabled}
-                    onChange={(e) => setDataSettings({ ...dataSettings, cacheEnabled: e.target.checked })}
+                    onChange={e =>
+                      setDataSettings({ ...dataSettings, cacheEnabled: e.target.checked })
+                    }
                   />
                 }
                 label={
                   <Box>
                     <Typography>启用缓存</Typography>
-                    <Typography variant="caption" color="text.secondary">缓存查询结果以提高性能</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      缓存查询结果以提高性能
+                    </Typography>
                   </Box>
                 }
               />
@@ -332,7 +362,9 @@ export default function SettingsPage() {
                   type="number"
                   label="缓存过期时间（秒）"
                   value={dataSettings.cacheTTL}
-                  onChange={(e) => setDataSettings({ ...dataSettings, cacheTTL: parseInt(e.target.value) })}
+                  onChange={e =>
+                    setDataSettings({ ...dataSettings, cacheTTL: parseInt(e.target.value) })
+                  }
                   sx={{ width: 200 }}
                 />
               </Box>
@@ -356,7 +388,9 @@ export default function SettingsPage() {
         {/* 通知设置 */}
         <TabPanel value={tabValue} index={2}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>通知设置</Typography>
+            <Typography variant="h6" gutterBottom>
+              通知设置
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               配置系统通知和提醒
             </Typography>
@@ -366,13 +400,20 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={notificationSettings.emailEnabled}
-                    onChange={(e) => setNotificationSettings({ ...notificationSettings, emailEnabled: e.target.checked })}
+                    onChange={e =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        emailEnabled: e.target.checked,
+                      })
+                    }
                   />
                 }
                 label={
                   <Box>
                     <Typography>邮件通知</Typography>
-                    <Typography variant="caption" color="text.secondary">通过邮件接收系统通知</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      通过邮件接收系统通知
+                    </Typography>
                   </Box>
                 }
               />
@@ -384,7 +425,12 @@ export default function SettingsPage() {
                     label="邮箱地址"
                     placeholder="your@email.com"
                     value={notificationSettings.emailAddress}
-                    onChange={(e) => setNotificationSettings({ ...notificationSettings, emailAddress: e.target.value })}
+                    onChange={e =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        emailAddress: e.target.value,
+                      })
+                    }
                     sx={{ width: 300 }}
                   />
                 </Box>
@@ -396,13 +442,20 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={notificationSettings.taskCompleteNotify}
-                    onChange={(e) => setNotificationSettings({ ...notificationSettings, taskCompleteNotify: e.target.checked })}
+                    onChange={e =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        taskCompleteNotify: e.target.checked,
+                      })
+                    }
                   />
                 }
                 label={
                   <Box>
                     <Typography>任务完成通知</Typography>
-                    <Typography variant="caption" color="text.secondary">任务完成时发送通知</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      任务完成时发送通知
+                    </Typography>
                   </Box>
                 }
               />
@@ -411,13 +464,20 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={notificationSettings.taskFailNotify}
-                    onChange={(e) => setNotificationSettings({ ...notificationSettings, taskFailNotify: e.target.checked })}
+                    onChange={e =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        taskFailNotify: e.target.checked,
+                      })
+                    }
                   />
                 }
                 label={
                   <Box>
                     <Typography>任务失败通知</Typography>
-                    <Typography variant="caption" color="text.secondary">任务失败时发送通知</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      任务失败时发送通知
+                    </Typography>
                   </Box>
                 }
               />
@@ -426,13 +486,20 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={notificationSettings.dailyReport}
-                    onChange={(e) => setNotificationSettings({ ...notificationSettings, dailyReport: e.target.checked })}
+                    onChange={e =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        dailyReport: e.target.checked,
+                      })
+                    }
                   />
                 }
                 label={
                   <Box>
                     <Typography>每日报告</Typography>
-                    <Typography variant="caption" color="text.secondary">每天发送系统运行报告</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      每天发送系统运行报告
+                    </Typography>
                   </Box>
                 }
               />
@@ -456,7 +523,9 @@ export default function SettingsPage() {
         {/* 性能设置 */}
         <TabPanel value={tabValue} index={3}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>性能设置</Typography>
+            <Typography variant="h6" gutterBottom>
+              性能设置
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               配置系统性能参数
             </Typography>
@@ -468,7 +537,12 @@ export default function SettingsPage() {
                   type="number"
                   label="最大工作进程数"
                   value={performanceSettings.maxWorkers}
-                  onChange={(e) => setPerformanceSettings({ ...performanceSettings, maxWorkers: parseInt(e.target.value) })}
+                  onChange={e =>
+                    setPerformanceSettings({
+                      ...performanceSettings,
+                      maxWorkers: parseInt(e.target.value),
+                    })
+                  }
                   helperText="建议设置为 CPU 核心数"
                   inputProps={{ min: 1, max: 16 }}
                 />
@@ -479,7 +553,12 @@ export default function SettingsPage() {
                   type="number"
                   label="批处理大小"
                   value={performanceSettings.batchSize}
-                  onChange={(e) => setPerformanceSettings({ ...performanceSettings, batchSize: parseInt(e.target.value) })}
+                  onChange={e =>
+                    setPerformanceSettings({
+                      ...performanceSettings,
+                      batchSize: parseInt(e.target.value),
+                    })
+                  }
                   helperText="每批处理的股票数量"
                   inputProps={{ min: 10, max: 1000 }}
                 />
@@ -490,7 +569,9 @@ export default function SettingsPage() {
                   <Select
                     value={performanceSettings.logLevel}
                     label="日志级别"
-                    onChange={(e) => setPerformanceSettings({ ...performanceSettings, logLevel: e.target.value })}
+                    onChange={e =>
+                      setPerformanceSettings({ ...performanceSettings, logLevel: e.target.value })
+                    }
                   >
                     <MenuItem value="DEBUG">DEBUG</MenuItem>
                     <MenuItem value="INFO">INFO</MenuItem>
@@ -506,13 +587,20 @@ export default function SettingsPage() {
                 control={
                   <Switch
                     checked={performanceSettings.enableProfiling}
-                    onChange={(e) => setPerformanceSettings({ ...performanceSettings, enableProfiling: e.target.checked })}
+                    onChange={e =>
+                      setPerformanceSettings({
+                        ...performanceSettings,
+                        enableProfiling: e.target.checked,
+                      })
+                    }
                   />
                 }
                 label={
                   <Box>
                     <Typography>性能分析</Typography>
-                    <Typography variant="caption" color="text.secondary">启用性能分析（会影响执行速度）</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      启用性能分析（会影响执行速度）
+                    </Typography>
                   </Box>
                 }
               />

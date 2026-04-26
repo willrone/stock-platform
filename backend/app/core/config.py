@@ -5,7 +5,7 @@
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 获取 backend 目录的绝对路径（config.py 所在目录的父级的父级）
@@ -59,7 +59,9 @@ class Settings(BaseSettings):
     QLIB_DATA_PATH: str = "../data/qlib_data"
     QLIB_CACHE_PATH: str = "../data/qlib_cache"
     # 性能：如果 all_stocks.parquet 很大且经常 miss，会带来大量 I/O 与日志；默认关闭
-    QLIB_USE_ALL_STOCKS_FILE: bool = False  # 默认关闭从 all_stocks.parquet 走合并文件路径
+    QLIB_USE_ALL_STOCKS_FILE: bool = (
+        False  # 默认关闭从 all_stocks.parquet 走合并文件路径
+    )
 
     # 性能：组合快照 sanity 日志会在持仓数较大时刷屏；默认关闭
     ENABLE_PORTFOLIO_SNAPSHOT_SANITY_LOG: bool = False

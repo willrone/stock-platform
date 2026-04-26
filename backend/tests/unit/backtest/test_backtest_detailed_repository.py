@@ -4,7 +4,6 @@
 """
 
 import asyncio
-from datetime import datetime
 from typing import AsyncGenerator
 
 import pytest
@@ -335,15 +334,80 @@ class TestBacktestDetailedRepository:
         task_id = "task-actionable-p0"
         backtest_id = "bt-actionable-p0"
         signals_data = [
-            {"signal_id": "e1", "stock_code": "000001.SZ", "signal_type": "BUY", "timestamp": "2024-01-01T09:00:00", "price": 10.0, "strength": 0.9, "executed": True, "execution_reason": None},
-            {"signal_id": "r1", "stock_code": "000002.SZ", "signal_type": "BUY", "timestamp": "2024-01-02T09:00:00", "price": 20.0, "strength": 0.8, "executed": False, "execution_reason": "无持仓"},
-            {"signal_id": "r2", "stock_code": "000003.SZ", "signal_type": "SELL", "timestamp": "2024-01-03T09:00:00", "price": 15.0, "strength": 0.7, "executed": False, "execution_reason": "可买数量不足"},
-            {"signal_id": "r3", "stock_code": "000004.SZ", "signal_type": "BUY", "timestamp": "2024-01-04T09:00:00", "price": 12.0, "strength": 0.6, "executed": False, "execution_reason": "资金不足"},
-            {"signal_id": "r4", "stock_code": "000005.SZ", "signal_type": "BUY", "timestamp": "2024-01-05T09:00:00", "price": 8.0, "strength": 0.5, "executed": False, "execution_reason": "最大持仓限制"},
-            {"signal_id": "r5", "stock_code": "000006.SZ", "signal_type": "SELL", "timestamp": "2024-01-06T09:00:00", "price": 18.0, "strength": 0.3, "executed": False, "execution_reason": "强度过低"},
-            {"signal_id": "r6", "stock_code": "000007.SZ", "signal_type": "BUY", "timestamp": "2024-01-07T09:00:00", "price": 11.0, "strength": 0.85, "executed": False, "execution_reason": "执行失败（撮合失败）"},
+            {
+                "signal_id": "e1",
+                "stock_code": "000001.SZ",
+                "signal_type": "BUY",
+                "timestamp": "2024-01-01T09:00:00",
+                "price": 10.0,
+                "strength": 0.9,
+                "executed": True,
+                "execution_reason": None,
+            },
+            {
+                "signal_id": "r1",
+                "stock_code": "000002.SZ",
+                "signal_type": "BUY",
+                "timestamp": "2024-01-02T09:00:00",
+                "price": 20.0,
+                "strength": 0.8,
+                "executed": False,
+                "execution_reason": "无持仓",
+            },
+            {
+                "signal_id": "r2",
+                "stock_code": "000003.SZ",
+                "signal_type": "SELL",
+                "timestamp": "2024-01-03T09:00:00",
+                "price": 15.0,
+                "strength": 0.7,
+                "executed": False,
+                "execution_reason": "可买数量不足",
+            },
+            {
+                "signal_id": "r3",
+                "stock_code": "000004.SZ",
+                "signal_type": "BUY",
+                "timestamp": "2024-01-04T09:00:00",
+                "price": 12.0,
+                "strength": 0.6,
+                "executed": False,
+                "execution_reason": "资金不足",
+            },
+            {
+                "signal_id": "r4",
+                "stock_code": "000005.SZ",
+                "signal_type": "BUY",
+                "timestamp": "2024-01-05T09:00:00",
+                "price": 8.0,
+                "strength": 0.5,
+                "executed": False,
+                "execution_reason": "最大持仓限制",
+            },
+            {
+                "signal_id": "r5",
+                "stock_code": "000006.SZ",
+                "signal_type": "SELL",
+                "timestamp": "2024-01-06T09:00:00",
+                "price": 18.0,
+                "strength": 0.3,
+                "executed": False,
+                "execution_reason": "强度过低",
+            },
+            {
+                "signal_id": "r6",
+                "stock_code": "000007.SZ",
+                "signal_type": "BUY",
+                "timestamp": "2024-01-07T09:00:00",
+                "price": 11.0,
+                "strength": 0.85,
+                "executed": False,
+                "execution_reason": "执行失败（撮合失败）",
+            },
         ]
-        await repo.batch_save_signal_records(task_id=task_id, backtest_id=backtest_id, signals_data=signals_data)
+        await repo.batch_save_signal_records(
+            task_id=task_id, backtest_id=backtest_id, signals_data=signals_data
+        )
         await db_session.commit()
 
         stats = await repo.get_signal_statistics(task_id)
@@ -351,4 +415,6 @@ class TestBacktestDetailedRepository:
         # actionable = 1 executed + 1 matching_failed; 5 pre-exec blockers excluded
         assert stats["actionable_signal_count"] == 2
         assert stats["executed_signal_count"] == 1
-        assert stats["execution_rate_actionable"] == pytest.approx(1 / 2, rel=0.01)  # 1/2
+        assert stats["execution_rate_actionable"] == pytest.approx(
+            1 / 2, rel=0.01
+        )  # 1/2

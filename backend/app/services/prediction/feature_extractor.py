@@ -3,8 +3,8 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -366,7 +366,9 @@ class FeatureExtractor:
             if self.cache and config.cache_enabled:
                 self.cache.set(cache_key, features)
 
-            logger.info(f"特征提取完成: {stock_code}, 特征数量: {len(features.columns)}")
+            logger.info(
+                f"特征提取完成: {stock_code}, 特征数量: {len(features.columns)}"
+            )
             return features
 
         except Exception as e:
@@ -385,7 +387,8 @@ class FeatureExtractor:
 
         if missing_columns:
             raise DataError(
-                message=f"缺少必需的数据列: {missing_columns}", severity=ErrorSeverity.HIGH
+                message=f"缺少必需的数据列: {missing_columns}",
+                severity=ErrorSeverity.HIGH,
             )
 
         if len(data) < 50:
@@ -408,12 +411,7 @@ class FeatureExtractor:
         """提取技术指标特征"""
         features = pd.DataFrame(index=data.index)
 
-        high, low, close, open_price = (
-            data["high"],
-            data["low"],
-            data["close"],
-            data["open"],
-        )
+        high, low, close = data["high"], data["low"], data["close"]
 
         for indicator in config.technical_indicators:
             try:
@@ -476,10 +474,10 @@ class FeatureExtractor:
 
                 elif indicator.startswith("willr_"):
                     window = int(indicator.split("_")[1])
-                    features[
-                        indicator
-                    ] = self.technical_indicators.calculate_williams_r(
-                        high, low, close, window
+                    features[indicator] = (
+                        self.technical_indicators.calculate_williams_r(
+                            high, low, close, window
+                        )
                     )
 
             except Exception as e:

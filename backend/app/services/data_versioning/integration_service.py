@@ -2,23 +2,19 @@
 数据版本控制集成服务
 复用现有存储基础设施，添加版本控制接口
 """
+
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from loguru import logger
 
-from app.services.data.parquet_manager import ParquetManager
 from app.services.data_versioning.lineage_tracker import (
-    DataLineageTracker,
     NodeType,
-    TransformationType,
     data_lineage_tracker,
 )
 from app.services.data_versioning.version_manager import (
     DataType,
-    DataVersionManager,
-    VersionStatus,
     data_version_manager,
 )
 from app.services.events.data_sync_events import (
@@ -219,7 +215,7 @@ class DataVersioningIntegrationService:
     ) -> List[str]:
         """使用版本ID追踪模型训练"""
         # 在血缘追踪器中记录模型训练
-        lineage_ids = self.lineage_tracker.track_model_training(
+        _ = self.lineage_tracker.track_model_training(
             training_data_ids=training_data_version_ids,
             feature_ids=feature_version_ids,
             model_id=model_id,

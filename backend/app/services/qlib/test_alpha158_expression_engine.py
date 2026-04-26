@@ -3,6 +3,7 @@ Alpha158表达式引擎单元测试
 
 测试表达式引擎能否正确计算所有158个Alpha158因子
 """
+
 import os
 import sys
 import unittest
@@ -105,7 +106,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
             # 暂时允许返回None，记录警告
             import warnings
 
-            warnings.warn("Std函数表达式返回None，需要进一步修复")
+            warnings.warn("Std函数表达式返回None，需要进一步修复", stacklevel=2)
 
     def test_idxmax_idxmin(self):
         """测试IdxMax和IdxMin函数"""
@@ -260,7 +261,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
             f"真实数据测试：所有158个因子都应该能计算出来，但失败了{fail_count}个。失败的因子: {zero_cols}",
         )
 
-        print(f"\n真实数据测试统计:")
+        print("\n真实数据测试统计:")
         print(f"  数据形状: {data.shape}")
         print(f"  总因子数: {len(factors.columns)}")
         print(f"  成功因子数: {len(factors.columns) - fail_count}")

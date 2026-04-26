@@ -2,11 +2,9 @@
 回测执行器 - 完整的回测流程执行和结果分析
 """
 
-import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from functools import partial
+from concurrent.futures import as_completed
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -14,13 +12,12 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
-from app.models.task_models import BacktestResult
+from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..core.portfolio_manager_array import PortfolioManagerArray
-from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
+from ..models import BacktestConfig, SignalType, TradingSignal
 from ..reporting import BacktestReportBuilder, BacktestReportBuildInput
 from ..strategies.strategy_factory import AdvancedStrategyFactory, StrategyFactory
 from .backtest_progress_monitor import backtest_progress_monitor
@@ -41,7 +38,9 @@ except ImportError:
     PerformanceContext = None
 
 
-def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Dict], Optional[str]]:
+def _multiprocess_precompute_worker(
+    task: Tuple,
+) -> Tuple[bool, str, Optional[Dict], Optional[str]]:
     """
     多进程预计算 worker 函数（模块级，可被 pickle 序列化）。
 
@@ -55,9 +54,9 @@ def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Di
 
     try:
         # 重建 DataFrame
-        df = pd.DataFrame(data_dict['values'], columns=data_dict['columns'])
-        df.index = pd.to_datetime(data_dict['index'])
-        df.attrs['stock_code'] = data_dict['stock_code']
+        df = pd.DataFrame(data_dict["values"], columns=data_dict["columns"])
+        df.index = pd.to_datetime(data_dict["index"])
+        df.attrs["stock_code"] = data_dict["stock_code"]
 
         # 重建策略对象
         from ..strategies.strategy_factory import (
@@ -65,9 +64,9 @@ def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Di
             StrategyFactory,
         )
 
-        strategy_name = strategy_info['name']  # 使用策略名称（如 "MACD"）
-        strategy_class_name = strategy_info['class_name']  # 类名（如 "MACDStrategy"）
-        strategy_config = strategy_info['config']
+        strategy_name = strategy_info["name"]  # 使用策略名称（如 "MACD"）
+        strategy_class_name = strategy_info["class_name"]  # 类名（如 "MACDStrategy"）
+        strategy_config = strategy_info["config"]
 
         # 尝试从工厂创建策略（尝试多种名称格式）
         strategy = None
@@ -75,8 +74,8 @@ def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Di
             strategy_name,  # 原始名称
             strategy_name.lower(),  # 小写
             strategy_class_name,  # 类名
-            strategy_class_name.replace('Strategy', ''),  # 去掉 Strategy 后缀
-            strategy_class_name.replace('Strategy', '').lower(),  # 去掉后缀并小写
+            strategy_class_name.replace("Strategy", ""),  # 去掉 Strategy 后缀
+            strategy_class_name.replace("Strategy", "").lower(),  # 去掉后缀并小写
         ]
 
         for name in names_to_try:
@@ -86,12 +85,19 @@ def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Di
                 strategy = StrategyFactory.create_strategy(name, strategy_config)
             except Exception:
                 try:
-                    strategy = AdvancedStrategyFactory.create_strategy(name, strategy_config)
+                    strategy = AdvancedStrategyFactory.create_strategy(
+                        name, strategy_config
+                    )
                 except Exception:
                     pass
 
         if strategy is None:
-            return (False, stock_code, None, f"无法创建策略 {strategy_name} (尝试了: {names_to_try})")
+            return (
+                False,
+                stock_code,
+                None,
+                f"无法创建策略 {strategy_name} (尝试了: {names_to_try})",
+            )
 
         # 执行向量化预计算
         signals = strategy.precompute_all_signals(df)
@@ -99,8 +105,8 @@ def _multiprocess_precompute_worker(task: Tuple) -> Tuple[bool, str, Optional[Di
         if signals is not None:
             # 将 Series 转换为可序列化格式
             signals_dict = {
-                'values': signals.tolist(),
-                'index': [str(idx) for idx in signals.index],
+                "values": signals.tolist(),
+                "index": [str(idx) for idx in signals.index],
             }
             return (True, stock_code, signals_dict, None)
         else:
@@ -136,7 +142,9 @@ class BacktestExecutor:
         import os
 
         if max_workers is None:
-            max_workers = min(os.cpu_count() or 4, 8)  # 最多8个线程，避免过多线程导致开销
+            max_workers = min(
+                os.cpu_count() or 4, 8
+            )  # 最多8个线程，避免过多线程导致开销
 
         self.enable_parallel = enable_parallel
         self.max_workers = max_workers
@@ -160,7 +168,9 @@ class BacktestExecutor:
 
         if enable_parallel:
             mode = "多进程" if use_multiprocessing else "多线程"
-            logger.info(f"回测执行器已启用并行化（{mode}），最大工作进程/线程数: {max_workers}")
+            logger.info(
+                f"回测执行器已启用并行化（{mode}），最大工作进程/线程数: {max_workers}"
+            )
 
         if self.enable_performance_profiling:
             logger.info("回测执行器已启用性能分析")
@@ -287,8 +297,12 @@ class BacktestExecutor:
             # Phase 1: 数据加载后创建组合管理器（使用实际加载的股票列表）
             actual_stock_codes = list(stock_data.keys())
             if self.use_array_portfolio:
-                portfolio_manager = PortfolioManagerArray(backtest_config, actual_stock_codes)
-                logger.info(f"✅ Phase 1: 使用数组化持仓管理器 (stocks={len(actual_stock_codes)})")
+                portfolio_manager = PortfolioManagerArray(
+                    backtest_config, actual_stock_codes
+                )
+                logger.info(
+                    f"✅ Phase 1: 使用数组化持仓管理器 (stocks={len(actual_stock_codes)})"
+                )
             else:
                 portfolio_manager = PortfolioManager(backtest_config)
                 logger.info(f"使用传统持仓管理器 (stocks={len(actual_stock_codes)})")
@@ -302,7 +316,9 @@ class BacktestExecutor:
             # ✅ 日期预索引
             _t_sub = time.perf_counter()
             self._build_date_index(stock_data)
-            perf_breakdown["precompute_sub_build_date_index_s"] = time.perf_counter() - _t_sub
+            perf_breakdown["precompute_sub_build_date_index_s"] = (
+                time.perf_counter() - _t_sub
+            )
 
             # ✅ 策略异步预热（如模型预测序列）
             _t_sub = time.perf_counter()
@@ -312,18 +328,26 @@ class BacktestExecutor:
                 start_date,
                 end_date,
             )
-            perf_breakdown["precompute_sub_strategy_prepare_s"] = time.perf_counter() - _t_sub
+            perf_breakdown["precompute_sub_strategy_prepare_s"] = (
+                time.perf_counter() - _t_sub
+            )
 
             # ✅ 信号向量化预计算
             _t_sub = time.perf_counter()
             self._precompute_strategy_signals(strategy, stock_data)
-            perf_breakdown["precompute_sub_strategy_signals_s"] = time.perf_counter() - _t_sub
-            
+            perf_breakdown["precompute_sub_strategy_signals_s"] = (
+                time.perf_counter() - _t_sub
+            )
+
             # ✅ 信号提取优化
             _t_sub = time.perf_counter()
-            precomputed_signals = self._extract_precomputed_signals_to_dict(strategy, stock_data)
-            perf_breakdown["precompute_sub_extract_signals_s"] = time.perf_counter() - _t_sub
-            
+            precomputed_signals = self._extract_precomputed_signals_to_dict(
+                strategy, stock_data
+            )
+            perf_breakdown["precompute_sub_extract_signals_s"] = (
+                time.perf_counter() - _t_sub
+            )
+
             # 🔍 调试日志：检查预计算信号
             logger.info(f"🔍 预计算信号字典大小: {len(precomputed_signals)}")
             if precomputed_signals:
@@ -393,7 +417,9 @@ class BacktestExecutor:
             _t0 = time.perf_counter()
             # Phase1 预备：将 close/valid/signal 对齐成 ndarray，减少主循环 DataFrame/dict 访问
             _t1 = time.perf_counter()
-            aligned_arrays = self._build_aligned_arrays(strategy, stock_data, trading_dates, perf_breakdown=perf_breakdown)
+            aligned_arrays = self._build_aligned_arrays(
+                strategy, stock_data, trading_dates, perf_breakdown=perf_breakdown
+            )
             perf_breakdown["align_arrays_s"] = time.perf_counter() - _t1
 
             backtest_results = await self._execute_backtest_loop(
@@ -553,7 +579,7 @@ class BacktestExecutor:
                 # 保存性能报告到文件（如果提供了task_id）
                 if task_id:
                     try:
-                        import os
+                        pass
 
                         performance_dir = Path("backend/data/performance_reports")
                         performance_dir.mkdir(parents=True, exist_ok=True)
@@ -607,7 +633,9 @@ class BacktestExecutor:
             all_dates.update(data.index.tolist())
 
         # 过滤日期范围并排序
-        trading_dates = np.sort(np.array([date for date in all_dates if start_date <= date <= end_date])).tolist()
+        trading_dates = np.sort(
+            np.array([date for date in all_dates if start_date <= date <= end_date])
+        ).tolist()
 
         return trading_dates
 
@@ -682,7 +710,9 @@ class BacktestExecutor:
             from ..core.strategy_portfolio import StrategyPortfolio
 
             if isinstance(strategy, StrategyPortfolio):
-                logger.info(f"🚀 Portfolio策略检测到，递归预计算 {len(strategy.strategies)} 个子策略")
+                logger.info(
+                    f"🚀 Portfolio策略检测到，递归预计算 {len(strategy.strategies)} 个子策略"
+                )
                 for sub in strategy.strategies:
                     self._precompute_strategy_signals(sub, stock_data)
                 return
@@ -696,7 +726,7 @@ class BacktestExecutor:
         # 并行预计算（按股票维度），显著降低整体 wall-time
         # 注：使用 ProcessPoolExecutor 可突破 GIL 限制，但需要序列化数据
         # 这里使用混合策略：CPU 密集型任务用多进程，I/O 密集型用多线程
-        use_multiprocessing = getattr(self, 'use_multiprocessing', False)
+        getattr(self, "use_multiprocessing", False)
 
         _stock_times = []  # 收集每只股票的预计算耗时
 
@@ -704,6 +734,7 @@ class BacktestExecutor:
             stock_code, data = item
             try:
                 import time as _time
+
                 _t = _time.perf_counter()
                 all_sigs = strategy.precompute_all_signals(data)
                 _elapsed = _time.perf_counter() - _t
@@ -759,43 +790,48 @@ class BacktestExecutor:
     ) -> Dict[Tuple[str, datetime], Any]:
         """
         [性能优化] 将预计算的信号从 DataFrame.attrs 提取到扁平字典。
-        
+
         这样在回测循环中可以直接用 (stock_code, date) 查找信号，
         避免每次都访问 attrs 字典和 id(strategy) 查找。
-        
+
         Returns:
             Dict[(stock_code, date), signal]: 扁平的信号字典
         """
         signal_dict = {}
-        
+
         try:
             from ..core.strategy_portfolio import StrategyPortfolio
             from ..models import TradingSignal
-            
+
             if isinstance(strategy, StrategyPortfolio):
-                logger.info(f"🔄 Portfolio策略信号整合开始: {len(strategy.strategies)} 个子策略")
-                
+                logger.info(
+                    f"🔄 Portfolio策略信号整合开始: {len(strategy.strategies)} 个子策略"
+                )
+
                 # 1. 递归提取所有子策略的信号
                 all_sub_signals: Dict[Tuple[str, datetime], Any] = {}
                 for sub in strategy.strategies:
-                    sub_signals = self._extract_precomputed_signals_to_dict(sub, stock_data)
+                    sub_signals = self._extract_precomputed_signals_to_dict(
+                        sub, stock_data
+                    )
                     all_sub_signals.update(sub_signals)
-                
+
                 logger.info(f"📊 子策略信号总数: {len(all_sub_signals)}")
-                
+
                 # 2. 按日期分组子策略信号
                 from collections import defaultdict
+
                 signals_by_date: Dict[datetime, List[TradingSignal]] = defaultdict(list)
-                
+
                 for (stock_code, date), signal_type in all_sub_signals.items():
                     # 构造 TradingSignal 对象
-                    from ..models import SignalType
+
                     if signal_type == SignalType.BUY or signal_type == SignalType.SELL:
                         # 获取价格
                         try:
                             df = stock_data.get(stock_code)
                             if df is not None and date in df.index:
-                                price = float(df.loc[date, 'close'])
+                                price = float(df.loc[date, "close"])
                                 signal = TradingSignal(
                                     timestamp=date,
                                     stock_code=stock_code,
@@ -803,46 +839,49 @@ class BacktestExecutor:
                                     strength=1.0,
                                     price=price,
                                     reason="precomputed",
-                                    metadata={}
+                                    metadata={},
                                 )
                                 signals_by_date[date].append(signal)
                         except Exception as e:
                             logger.warning(f"构造信号失败 {stock_code} @ {date}: {e}")
-                
+
                 # 3. 对每个日期的信号进行整合
                 integrated_count = 0
-                for date, signals in signals_by_date.items():
+                for _date, signals in signals_by_date.items():
                     if signals:
                         # 调用 Portfolio 的信号整合器
                         integrated = strategy.integrator.integrate(
-                            signals, 
-                            strategy.weights,
-                            consistency_threshold=0.6
+                            signals, strategy.weights, consistency_threshold=0.6
                         )
-                        
+
                         # 将整合后的信号添加到字典
                         for sig in integrated:
-                            signal_dict[(sig.stock_code, sig.timestamp)] = sig.signal_type
+                            signal_dict[(sig.stock_code, sig.timestamp)] = (
+                                sig.signal_type
+                            )
                             integrated_count += 1
-                
-                logger.info(f"✅ Portfolio策略信号整合完成: {integrated_count} 个整合信号")
+
+                logger.info(
+                    f"✅ Portfolio策略信号整合完成: {integrated_count} 个整合信号"
+                )
                 return signal_dict
-                
+
         except Exception as e:
             logger.warning(f"Portfolio策略信号提取失败: {e}")
             import traceback
+
             logger.warning(traceback.format_exc())
-        
+
         # 提取单个策略的信号
         # 使用 strategy.name 作为稳定的 key，避免多进程环境下 id() 变化
         strategy_key = strategy.name
         extracted_count = 0
-        
+
         for stock_code, data in stock_data.items():
             try:
                 precomputed = data.attrs.get("_precomputed_signals", {})
                 signals = precomputed.get(strategy_key)
-                
+
                 if signals is not None:
                     # signals 可能是 pd.Series 或 dict
                     if isinstance(signals, pd.Series):
@@ -857,12 +896,12 @@ class BacktestExecutor:
                                 extracted_count += 1
             except Exception as e:
                 logger.warning(f"提取股票 {stock_code} 的信号失败: {e}")
-        
+
         if extracted_count > 0:
             logger.info(
                 f"✅ 策略 {strategy.name} 信号提取完成: {extracted_count} 个信号"
             )
-        
+
         return signal_dict
 
     def _build_aligned_arrays(
@@ -873,7 +912,7 @@ class BacktestExecutor:
         perf_breakdown: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
         """[Phase3] 将数据/信号对齐到 ndarray，减少主循环 DataFrame/字典访问。
-        
+
         优化点：
         1. 使用 numpy 的 searchsorted 加速日期查找
         2. 批量填充数组，减少循环
@@ -894,20 +933,20 @@ class BacktestExecutor:
         T = len(trading_dates)
         N = len(stock_codes)
 
-        dates64 = np.array(trading_dates, dtype='datetime64[ns]')
+        dates64 = np.array(trading_dates, dtype="datetime64[ns]")
 
         # 预分配数组（Phase 3 优化：使用连续内存）
-        close = np.full((N, T), np.nan, dtype=np.float64, order='C')
-        open_ = np.full((N, T), np.nan, dtype=np.float64, order='C')
-        valid = np.zeros((N, T), dtype=bool, order='C')
-        signal = np.zeros((N, T), dtype=np.int8, order='C')
+        close = np.full((N, T), np.nan, dtype=np.float64, order="C")
+        open_ = np.full((N, T), np.nan, dtype=np.float64, order="C")
+        valid = np.zeros((N, T), dtype=bool, order="C")
+        signal = np.zeros((N, T), dtype=np.int8, order="C")
         _align_alloc_s = time.perf_counter() - _t_align_alloc
 
         # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
         strategy_key = strategy.name  # 使用 strategy.name 作为稳定的 key
 
         # Phase 4 优化：将 trading_dates 转为 datetime64 数组，用于 searchsorted
-        _td_ns = np.array(trading_dates, dtype='datetime64[ns]')
+        _td_ns = np.array(trading_dates, dtype="datetime64[ns]")
 
         _t_align_price = time.perf_counter()
         _acc_align_signal = 0.0
@@ -917,7 +956,7 @@ class BacktestExecutor:
             # Phase 4 优化：纯 numpy searchsorted 替代 pandas reindex
             # 完全绕过 pandas，避免 attrs 复制和 DataFrame 开销
             try:
-                df_idx_ns = df.index.values.astype('datetime64[ns]')
+                df_idx_ns = df.index.values.astype("datetime64[ns]")
                 # searchsorted 找到 trading_dates 在股票日期中的插入位置
                 pos = np.searchsorted(df_idx_ns, _td_ns)
                 # 限制索引范围
@@ -927,23 +966,23 @@ class BacktestExecutor:
                 match_mask = df_idx_ns[pos_clipped] == _td_ns
 
                 # 直接从 numpy 数组填充（绕过 pandas）
-                close_vals = df['close'].values
+                close_vals = df["close"].values
                 close[i, match_mask] = close_vals[pos_clipped[match_mask]]
                 valid[i, :] = match_mask
 
-                if 'open' in df.columns:
-                    open_vals = df['open'].values
+                if "open" in df.columns:
+                    open_vals = df["open"].values
                     open_[i, match_mask] = open_vals[pos_clipped[match_mask]]
 
             except Exception as e:
                 # fallback: pandas reindex（慢速路径）
                 logger.warning(f"股票 {code} numpy对齐失败，回退到pandas: {e}")
                 try:
-                    s_close = df['close'].reindex(trading_dates)
+                    s_close = df["close"].reindex(trading_dates)
                     close_values = s_close.values
                     close[i, :] = close_values
-                    if 'open' in df.columns:
-                        open_[i, :] = df['open'].reindex(trading_dates).values
+                    if "open" in df.columns:
+                        open_[i, :] = df["open"].reindex(trading_dates).values
                     valid[i, :] = ~np.isnan(close_values)
                 except Exception as e2:
                     logger.warning(f"股票 {code} pandas对齐也失败: {e2}")
@@ -951,11 +990,15 @@ class BacktestExecutor:
             _t_align_sig_one = time.perf_counter()
             # 信号对齐：同样用 searchsorted 替代 reindex
             try:
-                pre = df.attrs.get('_precomputed_signals', {}) if hasattr(df, 'attrs') else {}
+                pre = (
+                    df.attrs.get("_precomputed_signals", {})
+                    if hasattr(df, "attrs")
+                    else {}
+                )
                 sig_ser = pre.get(strategy_key)
                 if isinstance(sig_ser, pd.Series):
                     # Phase 4: numpy searchsorted 对齐信号
-                    sig_idx_ns = sig_ser.index.values.astype('datetime64[ns]')
+                    sig_idx_ns = sig_ser.index.values.astype("datetime64[ns]")
                     sig_pos = np.searchsorted(sig_idx_ns, _td_ns)
                     sig_n = len(sig_idx_ns)
                     sig_pos_clipped = np.clip(sig_pos, 0, max(sig_n - 1, 0))
@@ -983,22 +1026,22 @@ class BacktestExecutor:
         _align_signal_s = _acc_align_signal
 
         if perf_breakdown is not None:
-            perf_breakdown['align_sub_alloc_arrays_s'] = _align_alloc_s
-            perf_breakdown['align_sub_price_reindex_s'] = _align_price_s
-            perf_breakdown['align_sub_signal_reindex_s'] = _align_signal_s
+            perf_breakdown["align_sub_alloc_arrays_s"] = _align_alloc_s
+            perf_breakdown["align_sub_price_reindex_s"] = _align_price_s
+            perf_breakdown["align_sub_signal_reindex_s"] = _align_signal_s
             logger.info(
                 f"📊 align_arrays 细粒度: alloc={_align_alloc_s:.2f}s, "
-                f"price_reindex={_align_price_s:.2f}s, signal_reindex={_align_signal_s:.2f}s"
+                "price_reindex={_align_price_s:.2f}s, signal_reindex={_align_signal_s:.2f}s"
             )
 
         return {
-            'stock_codes': stock_codes,
-            'code_to_i': {c: idx for idx, c in enumerate(stock_codes)},
-            'dates': dates64,
-            'close': close,
-            'open': open_,
-            'valid': valid,
-            'signal': signal,
+            "stock_codes": stock_codes,
+            "code_to_i": {c: idx for idx, c in enumerate(stock_codes)},
+            "dates": dates64,
+            "close": close,
+            "open": open_,
+            "valid": valid,
+            "signal": signal,
         }
 
     def _determine_price_lookup_codes(
@@ -1040,7 +1083,6 @@ class BacktestExecutor:
 
         return need_codes
 
-
     def _precompute_signals_multiprocess(
         self,
         strategy: BaseStrategy,
@@ -1054,7 +1096,6 @@ class BacktestExecutor:
         2. 在子进程中重建策略对象
         3. 计算完成后将结果返回主进程
         """
-        import pickle
         from concurrent.futures import ProcessPoolExecutor
 
         results = []
@@ -1065,16 +1106,16 @@ class BacktestExecutor:
             try:
                 # 序列化策略配置（而非策略对象本身）
                 strategy_info = {
-                    'name': strategy.name,
-                    'class_name': strategy.__class__.__name__,
-                    'config': getattr(strategy, 'config', {}),
+                    "name": strategy.name,
+                    "class_name": strategy.__class__.__name__,
+                    "config": getattr(strategy, "config", {}),
                 }
                 # 将 DataFrame 转换为字典格式（可序列化）
                 data_dict = {
-                    'values': data.to_dict('list'),
-                    'index': list(data.index),
-                    'columns': list(data.columns),
-                    'stock_code': data.attrs.get('stock_code', stock_code),
+                    "values": data.to_dict("list"),
+                    "index": list(data.index),
+                    "columns": list(data.columns),
+                    "stock_code": data.attrs.get("stock_code", stock_code),
                 }
                 tasks.append((stock_code, data_dict, strategy_info))
             except Exception as e:
@@ -1088,9 +1129,8 @@ class BacktestExecutor:
         try:
             with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {
-                    executor.submit(
-                        _multiprocess_precompute_worker, task
-                    ): task[0] for task in tasks
+                    executor.submit(_multiprocess_precompute_worker, task): task[0]
+                    for task in tasks
                 }
 
                 for future in as_completed(futures):
@@ -1102,12 +1142,16 @@ class BacktestExecutor:
                             original_data = stock_data[code]
                             # 重建 Series
                             signals = pd.Series(
-                                signals_dict['values'],
-                                index=pd.to_datetime(signals_dict['index']),
-                                dtype=object
+                                signals_dict["values"],
+                                index=pd.to_datetime(signals_dict["index"]),
+                                dtype=object,
                             )
-                            cache = original_data.attrs.setdefault("_precomputed_signals", {})
-                            cache[strategy.name] = signals  # 使用 strategy.name 作为稳定的 key
+                            cache = original_data.attrs.setdefault(
+                                "_precomputed_signals", {}
+                            )
+                            cache[strategy.name] = (
+                                signals  # 使用 strategy.name 作为稳定的 key
+                            )
                             results.append((True, code, None))
                         else:
                             results.append((False, code, err))
@@ -1170,7 +1214,6 @@ class BacktestExecutor:
                 return True
             try:
                 from app.core.database import SessionLocal
-                from app.models.task_models import TaskStatus
                 from app.repositories.task_repository import TaskRepository
 
                 session = SessionLocal()
@@ -1181,7 +1224,9 @@ class BacktestExecutor:
                         logger.warning(f"任务不存在，停止回测执行: {task_id}")
                         return False
                     if not _is_task_running(task.status):
-                        logger.warning(f"任务状态为 {task.status}，停止回测执行: {task_id}")
+                        logger.warning(
+                            f"任务状态为 {task.status}，停止回测执行: {task_id}"
+                        )
                         return False
                     return True
                 finally:
@@ -1213,11 +1258,15 @@ class BacktestExecutor:
             """
             if not task_id:
                 return
-            total_count = len(signals_data) + len(executed_signals) + len(unexecuted_signals)
+            total_count = (
+                len(signals_data) + len(executed_signals) + len(unexecuted_signals)
+            )
             if total_count == 0:
                 return
 
-            logger.info(f"🔄 流式写入数据库: 信号={len(signals_data)}, 已执行={len(executed_signals)}, 未执行={len(unexecuted_signals)}")
+            logger.info(
+                f"🔄 流式写入数据库: 信号={len(signals_data)}, 已执行={len(executed_signals)}, 未执行={len(unexecuted_signals)}"
+            )
 
             try:
                 from app.core.database import get_async_session_context
@@ -1230,14 +1279,22 @@ class BacktestExecutor:
                 executed_set = set()
                 for sig in executed_signals:
                     ts = sig["timestamp"]
-                    date_str = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    date_str = (
+                        ts.strftime("%Y-%m-%d")
+                        if hasattr(ts, "strftime")
+                        else str(ts)[:10]
+                    )
                     executed_set.add((sig["stock_code"], sig["signal_type"], date_str))
 
                 # 构建未执行信号的原因查找字典
                 unexecuted_map = {}
                 for sig in unexecuted_signals:
                     ts = sig["timestamp"]
-                    date_str = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    date_str = (
+                        ts.strftime("%Y-%m-%d")
+                        if hasattr(ts, "strftime")
+                        else str(ts)[:10]
+                    )
                     key = (sig["stock_code"], sig["signal_type"], date_str)
                     unexecuted_map[key] = sig.get("execution_reason", "未执行")
 
@@ -1246,7 +1303,11 @@ class BacktestExecutor:
                 matched_unexec = 0
                 for sig_data in signals_data:
                     ts = sig_data["timestamp"]
-                    date_str = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    date_str = (
+                        ts.strftime("%Y-%m-%d")
+                        if hasattr(ts, "strftime")
+                        else str(ts)[:10]
+                    )
                     key = (sig_data["stock_code"], sig_data["signal_type"], date_str)
 
                     if key in executed_set:
@@ -1283,6 +1344,7 @@ class BacktestExecutor:
                         logger.warning(f"流式写入数据库失败: {e}")
             except Exception as e:
                 logger.warning(f"流式写入数据库时出错: {e}")
+
         # ========== END PERF优化 ==========
 
         for i, current_date in enumerate(trading_dates):
@@ -1299,8 +1361,8 @@ class BacktestExecutor:
 
                 if aligned_arrays is not None:
                     # Phase 3 优化：使用向量化价格查找
-                    from .vectorized_loop import vectorized_price_lookup
-                    
+                    pass
+
                     codes = aligned_arrays.get("stock_codes")
                     code_to_i = aligned_arrays.get("code_to_i")
                     close_mat = aligned_arrays.get("close")
@@ -1319,7 +1381,11 @@ class BacktestExecutor:
                     if need_codes:
                         # 批量查找价格（向量化）
                         for c in need_codes:
-                            j = code_to_i.get(c) if isinstance(code_to_i, dict) else None
+                            j = (
+                                code_to_i.get(c)
+                                if isinstance(code_to_i, dict)
+                                else None
+                            )
                             if j is not None and bool(valid_mat[j, i]):
                                 current_prices[c] = float(close_mat[j, i])
 
@@ -1332,11 +1398,15 @@ class BacktestExecutor:
                             if date_to_idx is not None and current_date in date_to_idx:
                                 idx = date_to_idx[current_date]
                                 # 使用 .values 直接访问底层数组
-                                current_prices[stock_code] = float(data['close'].values[idx])
+                                current_prices[stock_code] = float(
+                                    data["close"].values[idx]
+                                )
                             elif current_date in data.index:
                                 # Fallback: 使用 iloc（比 loc 快）
                                 idx = data.index.get_loc(current_date)
-                                current_prices[stock_code] = float(data['close'].values[idx])
+                                current_prices[stock_code] = float(
+                                    data["close"].values[idx]
+                                )
                         except Exception:
                             pass
 
@@ -1392,12 +1462,11 @@ class BacktestExecutor:
 
                 # ��分 profiling：把"切片"和"生成信号"拆开计时（变量已在循环开头初始化）
 
-                
                 # 辅助函数：快速查找预计算信号
                 def get_precomputed_signal_fast(stock_code: str, date: datetime):
                     """
                     [优化 1] 从预计算字典中快速查找信号，避免 DataFrame 拷贝
-                    
+
                     优化点：
                     1. 优先使用 aligned_arrays 的 numpy 数组（O(1) 查找）
                     2. 使用 .values 直接访问底层数组，避免创建 Series 对象
@@ -1408,18 +1477,23 @@ class BacktestExecutor:
                         if signal is not None:
                             # 将信号类型转换为 TradingSignal 对象
                             from ..models import SignalType, TradingSignal
+
                             if isinstance(signal, SignalType):
                                 # [优化 1] 获取当前价格 - 避免 DataFrame 拷贝
                                 current_price = 0.0
-                                
+
                                 try:
                                     # 方法 1: 优先使用 aligned_arrays（最快，O(1) 查找）
                                     if aligned_arrays is not None:
                                         code_to_i = aligned_arrays.get("code_to_i")
                                         close_mat = aligned_arrays.get("close")
                                         dates = aligned_arrays.get("dates")
-                                        
-                                        if code_to_i is not None and close_mat is not None and dates is not None:
+
+                                        if (
+                                            code_to_i is not None
+                                            and close_mat is not None
+                                            and dates is not None
+                                        ):
                                             stock_idx = code_to_i.get(stock_code)
                                             if stock_idx is not None:
                                                 # 找到日期索引
@@ -1430,44 +1504,58 @@ class BacktestExecutor:
                                                 if len(matches) > 0:
                                                     date_idx = int(matches[0])
                                                     # 直接从 numpy 数组读取，无 pandas 开销
-                                                    price_val = close_mat[stock_idx, date_idx]
+                                                    price_val = close_mat[
+                                                        stock_idx, date_idx
+                                                    ]
                                                     if not np.isnan(price_val):
                                                         current_price = float(price_val)
-                                    
+
                                     # 方法 2: 如果 aligned_arrays 不可用，使用优化的 DataFrame 访问
                                     if current_price == 0.0:
                                         data = stock_data.get(stock_code)
                                         if data is not None:
                                             # 使用缓存的 date_to_idx 映射（避免重复 get_loc）
                                             date_to_idx = data.attrs.get("_date_to_idx")
-                                            if date_to_idx is not None and date in date_to_idx:
+                                            if (
+                                                date_to_idx is not None
+                                                and date in date_to_idx
+                                            ):
                                                 idx = date_to_idx[date]
                                                 # 使用 .values 直接访问底层数组，避免创建 Series
-                                                close_values = data['close'].values
+                                                close_values = data["close"].values
                                                 current_price = float(close_values[idx])
                                             elif date in data.index:
                                                 # Fallback: 使用 iloc（比 loc 快，但仍会触发一些开销）
                                                 idx = data.index.get_loc(date)
-                                                current_price = float(data['close'].values[idx])
-                                
-                                except Exception as e:
+                                                current_price = float(
+                                                    data["close"].values[idx]
+                                                )
+
+                                except Exception:
                                     # 静默失败，使用默认价格 0.0
                                     pass
-                                
-                                return [TradingSignal(
-                                    signal_type=signal,
-                                    stock_code=stock_code,
-                                    timestamp=date,
-                                    price=current_price,
-                                    strength=1.0,
-                                    reason=f"Precomputed signal"
-                                )]
+
+                                return [
+                                    TradingSignal(
+                                        signal_type=signal,
+                                        stock_code=stock_code,
+                                        timestamp=date,
+                                        price=current_price,
+                                        strength=1.0,
+                                        reason="Precomputed signal",
+                                    )
+                                ]
                             return [signal] if not isinstance(signal, list) else signal
                     return None
 
                 # 只有在 aligned/precomputed 路径未拿到信号时，才走逐股票生成回退路径。
                 # 否则会把同一天同一股票的信号重复加入 all_signals，导致 signal_records 计数膨胀。
-                if not all_signals and False and self.enable_parallel and len(stock_data) > 3:
+                if (
+                    not all_signals
+                    and False
+                    and self.enable_parallel
+                    and len(stock_data) > 3
+                ):
                     # 并行生成多股票信号
                     # PERF: avoid per-day ThreadPoolExecutor creation and avoid per-stock futures.
                     # We batch stocks into coarse tasks to reduce scheduling overhead.
@@ -1477,7 +1565,10 @@ class BacktestExecutor:
                     import threading
 
                     # Initialize worker context once (first trading day)
-                    if not hasattr(self, "_signal_worker_ctx") or self._signal_worker_ctx is None:
+                    if (
+                        not hasattr(self, "_signal_worker_ctx")
+                        or self._signal_worker_ctx is None
+                    ):
                         items = list(stock_data.items())
 
                         # Greedy balance chunks by estimated per-stock compute cost.
@@ -1502,7 +1593,9 @@ class BacktestExecutor:
                                 )
                                 # warmup skip (executor only calls strategy when idx>=20)
                                 effective_days = max(0, avail_days - 20)
-                                cost = float(effective_days) * (1.0 + 0.10 * missing_ratio)
+                                cost = float(effective_days) * (
+                                    1.0 + 0.10 * missing_ratio
+                                )
                                 scored.append((cost, code, df))
                             except Exception:
                                 scored.append((0.0, code, df))
@@ -1510,25 +1603,35 @@ class BacktestExecutor:
                         scored.sort(reverse=True)
 
                         worker_n = max(1, int(self.max_workers or 1))
-                        buckets = [([], 0.0) for _ in range(worker_n)]  # ([(code,df)], total_cost)
+                        buckets = [
+                            ([], 0.0) for _ in range(worker_n)
+                        ]  # ([(code,df)], total_cost)
                         for cost, code, df in scored:
                             # pick bucket with smallest total_cost
                             bi = min(range(worker_n), key=lambda x: buckets[x][1])
                             buckets[bi][0].append((code, df))
                             buckets[bi] = (buckets[bi][0], buckets[bi][1] + float(cost))
 
-                        chunks: List[List[Tuple[str, pd.DataFrame]]] = [b[0] for b in buckets]
+                        chunks: List[List[Tuple[str, pd.DataFrame]]] = [
+                            b[0] for b in buckets
+                        ]
 
                         shared = {"date": None, "error": None}
-                        results: List[Tuple[List[TradingSignal], float, float, float]] = [
-                            ([], 0.0, 0.0, 0.0) for _ in range(worker_n)
-                        ]
+                        results: List[
+                            Tuple[List[TradingSignal], float, float, float]
+                        ] = [([], 0.0, 0.0, 0.0) for _ in range(worker_n)]
 
                         barrier_start = threading.Barrier(worker_n + 1)
                         barrier_end = threading.Barrier(worker_n + 1)
 
-                        def _worker(idx: int):
-                            nonlocal chunks, shared, results
+                        def _worker(
+                            idx: int,
+                            barrier_start=barrier_start,
+                            shared=shared,
+                            barrier_end=barrier_end,
+                            chunks=chunks,
+                            results=results,
+                        ):
                             while True:
                                 try:
                                     barrier_start.wait()
@@ -1562,7 +1665,8 @@ class BacktestExecutor:
                                             idx_map = None
                                         current_idx = (
                                             int(idx_map.get(cd))
-                                            if isinstance(idx_map, dict) and cd in idx_map
+                                            if isinstance(idx_map, dict)
+                                            and cd in idx_map
                                             else int(data.index.get_loc(cd))
                                         )
                                         try:
@@ -1578,7 +1682,9 @@ class BacktestExecutor:
 
                                         t1 = time.perf_counter()
                                         # 优先使用预计算信号
-                                        sigs = get_precomputed_signal_fast(stock_code, cd)
+                                        sigs = get_precomputed_signal_fast(
+                                            stock_code, cd
+                                        )
                                         if sigs is None:
                                             # Fallback: 调用策略生成
                                             sigs = strategy.generate_signals(data, cd)
@@ -1603,7 +1709,12 @@ class BacktestExecutor:
 
                                         batch_signals.extend(sigs)
 
-                                    results[idx] = (batch_signals, slice_sum, gen_sum, gen_max)
+                                    results[idx] = (
+                                        batch_signals,
+                                        slice_sum,
+                                        gen_sum,
+                                        gen_max,
+                                    )
                                 except Exception as e:
                                     shared["error"] = e
                                     results[idx] = ([], slice_sum, gen_sum, gen_max)
@@ -1615,7 +1726,9 @@ class BacktestExecutor:
 
                         threads = []
                         for wi in range(worker_n):
-                            t = threading.Thread(target=_worker, args=(wi,), daemon=True)
+                            t = threading.Thread(
+                                target=_worker, args=(wi,), daemon=True
+                            )
                             t.start()
                             threads.append(t)
 
@@ -1631,7 +1744,9 @@ class BacktestExecutor:
                     ctx = self._signal_worker_ctx
 
                     sequential_start = (
-                        time.perf_counter() if self.enable_performance_profiling else None
+                        time.perf_counter()
+                        if self.enable_performance_profiling
+                        else None
                     )
 
                     gen_time_max = 0.0
@@ -1650,7 +1765,7 @@ class BacktestExecutor:
                     if err is not None:
                         raise err
 
-                    for (signals, slice_sum, gen_sum, gen_max) in ctx["results"]:
+                    for signals, slice_sum, gen_sum, gen_max in ctx["results"]:
                         all_signals.extend(signals)
                         slice_time_total += float(slice_sum)
                         gen_time_total += float(gen_sum)
@@ -1660,7 +1775,9 @@ class BacktestExecutor:
                     # 记录并行化效率（估算顺序执行时间）
                     if self.enable_performance_profiling and sequential_start:
                         parallel_time = time.perf_counter() - sequential_start
-                        estimated_sequential_time = parallel_time * len(stock_data) / max(1, self.max_workers)
+                        estimated_sequential_time = (
+                            parallel_time * len(stock_data) / max(1, self.max_workers)
+                        )
                         if i == 0:
                             self.performance_profiler.record_parallel_efficiency(
                                 operation_name="signal_generation",
@@ -1684,9 +1801,11 @@ class BacktestExecutor:
                             current_idx = (
                                 int(idx_map.get(current_date))
                                 if isinstance(idx_map, dict) and current_date in idx_map
-                                else int(data.index.get_loc(current_date))
-                                if current_date in data.index
-                                else -1
+                                else (
+                                    int(data.index.get_loc(current_date))
+                                    if current_date in data.index
+                                    else -1
+                                )
                             )
                             # Provide fast-path hint for strategies (avoid repeated get_loc)
                             try:
@@ -1700,20 +1819,26 @@ class BacktestExecutor:
                                 try:
                                     t1 = time.perf_counter()
                                     # 优先使用预计算信号
-                                    signals = get_precomputed_signal_fast(stock_code, current_date)
-                                    
+                                    signals = get_precomputed_signal_fast(
+                                        stock_code, current_date
+                                    )
+
                                     # 调试日志
                                     if current_idx == 20:  # 只在第一次打印
-                                        logger.info(f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals else '无'}")
-                                    
+                                        logger.info(
+                                            f"🔍 调试: stock={stock_code}, date={current_date}, precomputed_signals={'有' if signals else '无'}"
+                                        )
+
                                     if signals is None:
                                         # Fallback: 调用策略生成
-                                        signals = strategy.generate_signals(data, current_date)
-                                    
+                                        signals = strategy.generate_signals(
+                                            data, current_date
+                                        )
+
                                     # 调试日志：记录信号内容
                                     if signals and current_idx == 20:
                                         logger.info(f"🔍 信号内容: {signals}")
-                                    
+
                                     _dur = time.perf_counter() - t1
                                     gen_time_total += _dur
                                     if _dur > gen_time_max:
@@ -1724,7 +1849,11 @@ class BacktestExecutor:
                                     continue
 
                 # 记录信号生成时间
-                if self.enable_performance_profiling and signal_start_time and self.performance_profiler:
+                if (
+                    self.enable_performance_profiling
+                    and signal_start_time
+                    and self.performance_profiler
+                ):
                     signal_duration = time.perf_counter() - signal_start_time
                     signal_generation_times.append(signal_duration)
 
@@ -1773,7 +1902,11 @@ class BacktestExecutor:
                                 break
                         if perf_sig is not None:
                             md = perf_sig.metadata or {}
-                            pp = md.get("portfolio_perf") if isinstance(md, dict) else None
+                            pp = (
+                                md.get("portfolio_perf")
+                                if isinstance(md, dict)
+                                else None
+                            )
                             if isinstance(pp, dict):
                                 sub = pp.get("sub_strategy_times")
                                 if isinstance(sub, dict):
@@ -1802,7 +1935,6 @@ class BacktestExecutor:
                 # ===== trade execution mode =====
                 trade_mode = None
                 trade_mode_config: Dict[str, Any] = {}
-                topk_limit: int | None = None  # for post-trade sanity checks
                 try:
                     if strategy is not None:
                         trade_mode = strategy.get_trade_mode()
@@ -1821,7 +1953,11 @@ class BacktestExecutor:
 
                 # --- debug aid: log which trade path is used (only when needed) ---
                 try:
-                    if current_date.strftime("%Y-%m-%d") in ("2023-05-19", "2023-05-22", "2023-05-23"):
+                    if current_date.strftime("%Y-%m-%d") in (
+                        "2023-05-19",
+                        "2023-05-22",
+                        "2023-05-23",
+                    ):
                         logger.info(
                             f"[trade_path] date={current_date.strftime('%Y-%m-%d')} trade_mode={trade_mode} "
                             f"signals={len(all_signals)} strategy_config_keys={list((trade_mode_config or {}).keys())}"
@@ -1845,11 +1981,10 @@ class BacktestExecutor:
                     unexecuted_signals = mode_result.unexecuted_signals
                     trades_this_day = mode_result.trades_this_day
                     if trade_mode_config.get("topk") is not None:
-                        topk_limit = int(trade_mode_config["topk"])
+                        int(trade_mode_config["topk"])
                 elif trade_mode == "topk_buffer":
                     # Daily TopK selection + buffer zone + max changes/day
                     k = int(trade_mode_config.get("topk", 10))
-                    topk_limit = k
                     buffer_n = int(trade_mode_config.get("buffer", 20))
                     max_changes = int(trade_mode_config.get("max_changes_per_day", 2))
                     trades_limit = max_changes
@@ -1859,26 +1994,36 @@ class BacktestExecutor:
                     for sig in all_signals:
                         s = float(sig.strength or 0.0)
                         if sig.signal_type == SignalType.BUY:
-                            scores[sig.stock_code] = max(scores.get(sig.stock_code, 0.0), s)
+                            scores[sig.stock_code] = max(
+                                scores.get(sig.stock_code, 0.0), s
+                            )
                         elif sig.signal_type == SignalType.SELL:
-                            scores[sig.stock_code] = min(scores.get(sig.stock_code, 0.0), -s)
+                            scores[sig.stock_code] = min(
+                                scores.get(sig.stock_code, 0.0), -s
+                            )
 
                     # Rebalance according to TopK+buffer rules
-                    executed_trade_signals, unexecuted_signals, trades_this_day = self._rebalance_topk_buffer(
-                        portfolio_manager=portfolio_manager,
-                        current_prices=current_prices,
-                        current_date=current_date,
-                        scores=scores,
-                        topk=k,
-                        buffer_n=buffer_n,
-                        max_changes=trades_limit,
-                        strategy=strategy,
-                        debug=bool(trade_mode_config.get("debug_topk_buffer", False)),
+                    executed_trade_signals, unexecuted_signals, trades_this_day = (
+                        self._rebalance_topk_buffer(
+                            portfolio_manager=portfolio_manager,
+                            current_prices=current_prices,
+                            current_date=current_date,
+                            scores=scores,
+                            topk=k,
+                            buffer_n=buffer_n,
+                            max_changes=trades_limit,
+                            strategy=strategy,
+                            debug=bool(
+                                trade_mode_config.get("debug_topk_buffer", False)
+                            ),
+                        )
                     )
 
                     # Debug: show what was executed on key dates / when trades happen
                     try:
-                        if trades_this_day > 0 or current_date.strftime("%Y-%m-%d") in ("2023-05-22",):
+                        if trades_this_day > 0 or current_date.strftime("%Y-%m-%d") in (
+                            "2023-05-22",
+                        ):
                             logger.info(
                                 f"[trade_exec][topk_buffer] date={current_date.strftime('%Y-%m-%d')} trades_this_day={trades_this_day} "
                                 f"executed={len(executed_trade_signals)} unexecuted={len(unexecuted_signals)} holdings_after={len(portfolio_manager.positions)}"
@@ -1902,7 +2047,8 @@ class BacktestExecutor:
                                     "stock_code": signal.stock_code,
                                     "timestamp": signal.timestamp,
                                     "signal_type": signal.signal_type.name,
-                                    "execution_reason": validation_reason or "信号验证失败",
+                                    "execution_reason": validation_reason
+                                    or "信号验证失败",
                                 }
                             )
                             continue
@@ -1941,7 +2087,8 @@ class BacktestExecutor:
                                     "stock_code": signal.stock_code,
                                     "timestamp": signal.timestamp,
                                     "signal_type": signal.signal_type.name,
-                                    "execution_reason": failure_reason or "执行失败（未知原因）",
+                                    "execution_reason": failure_reason
+                                    or "执行失败（未知原因）",
                                 }
                             )
 
@@ -1956,7 +2103,9 @@ class BacktestExecutor:
 
                 signals_for_recording = all_signals
                 try:
-                    if mode_executor is not None and getattr(mode_result, "signal_records", None):
+                    if mode_executor is not None and getattr(
+                        mode_result, "signal_records", None
+                    ):
                         signals_for_recording = mode_result.signal_records
                 except Exception:
                     pass
@@ -2002,7 +2151,15 @@ class BacktestExecutor:
 
                 _t_ml = time.perf_counter()
                 # PERF优化A：流式增量写入 - 每积累1000条记录就写入一次数据库
-                if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) >= _BATCH_FLUSH_THRESHOLD:
+                if (
+                    task_id
+                    and (
+                        len(_batch_signals_data)
+                        + len(_batch_executed_signals)
+                        + len(_batch_unexecuted_signals)
+                    )
+                    >= _BATCH_FLUSH_THRESHOLD
+                ):
                     await _flush_batch_to_db(
                         signals_data=_batch_signals_data,
                         executed_signals=_batch_executed_signals,
@@ -2089,15 +2246,17 @@ class BacktestExecutor:
                             if not isinstance(progress_data, dict):
                                 progress_data = {}
 
-                            progress_data.update({
-                                "processed_days": i + 1,
-                                "total_days": len(trading_dates),
-                                "current_date": current_date.strftime("%Y-%m-%d"),
-                                "total_signals": total_signals,
-                                "total_trades": executed_trades,
-                                "portfolio_value": portfolio_value,
-                                "last_updated": datetime.utcnow().isoformat(),
-                            })
+                            progress_data.update(
+                                {
+                                    "processed_days": i + 1,
+                                    "total_days": len(trading_dates),
+                                    "current_date": current_date.strftime("%Y-%m-%d"),
+                                    "total_signals": total_signals,
+                                    "total_trades": executed_trades,
+                                    "portfolio_value": portfolio_value,
+                                    "last_updated": datetime.utcnow().isoformat(),
+                                }
+                            )
                             result_data["progress_data"] = progress_data
 
                             task_repo.update_task_status(
@@ -2139,7 +2298,9 @@ class BacktestExecutor:
                     portfolio_value = portfolio_manager.get_portfolio_value(
                         current_prices
                     )
-                    logger.debug(f"回测进度: {progress:.1f}%, 组合价值: {portfolio_value:.2f}")
+                    logger.debug(
+                        f"回测进度: {progress:.1f}%, 组合价值: {portfolio_value:.2f}"
+                    )
 
             except Exception as e:
                 error_msg = f"回测循环错误，日期: {current_date}, 错误: {e}"
@@ -2160,22 +2321,38 @@ class BacktestExecutor:
             perf_breakdown["mainloop_sub_batch_collect_s"] = _ml_batch_collect
             perf_breakdown["mainloop_sub_batch_flush_s"] = _ml_batch_flush
             perf_breakdown["mainloop_sub_progress_update_s"] = _ml_progress_update
-            _ml_total = (_ml_price_lookup + _ml_signal_extract + _ml_trade_exec +
-                        _ml_portfolio_snap + _ml_batch_collect + _ml_batch_flush +
-                        _ml_progress_update)
+            _ml_total = (
+                _ml_price_lookup
+                + _ml_signal_extract
+                + _ml_trade_exec
+                + _ml_portfolio_snap
+                + _ml_batch_collect
+                + _ml_batch_flush
+                + _ml_progress_update
+            )
             perf_breakdown["mainloop_sub_accounted_s"] = _ml_total
             logger.info(
                 f"📊 main_loop 细粒度: price={_ml_price_lookup:.1f}s, "
-                f"signal={_ml_signal_extract:.1f}s, trade={_ml_trade_exec:.1f}s, "
-                f"snap={_ml_portfolio_snap:.1f}s, batch_collect={_ml_batch_collect:.1f}s, "
-                f"flush={_ml_batch_flush:.1f}s, progress={_ml_progress_update:.1f}s, "
-                f"accounted={_ml_total:.1f}s"
+                "signal={_ml_signal_extract:.1f}s, trade={_ml_trade_exec:.1f}s, "
+                "snap={_ml_portfolio_snap:.1f}s, batch_collect={_ml_batch_collect:.1f}s, "
+                "flush={_ml_batch_flush:.1f}s, progress={_ml_progress_update:.1f}s, "
+                "accounted={_ml_total:.1f}s"
             )
 
         # ========== PERF优化：循环结束后写入剩余数据 ==========
         # 写入流式写入未处理完的剩余数据
-        if task_id and (len(_batch_signals_data) + len(_batch_executed_signals) + len(_batch_unexecuted_signals)) > 0:
-            logger.info(f"🔄 写入剩余数据: 信号={len(_batch_signals_data)}, 已执行={len(_batch_executed_signals)}, 未执行={len(_batch_unexecuted_signals)}")
+        if (
+            task_id
+            and (
+                len(_batch_signals_data)
+                + len(_batch_executed_signals)
+                + len(_batch_unexecuted_signals)
+            )
+            > 0
+        ):
+            logger.info(
+                f"🔄 写入剩余数据: 信号={len(_batch_signals_data)}, 已执行={len(_batch_executed_signals)}, 未执行={len(_batch_unexecuted_signals)}"
+            )
             await _flush_batch_to_db(
                 signals_data=_batch_signals_data,
                 executed_signals=_batch_executed_signals,
@@ -2190,9 +2367,9 @@ class BacktestExecutor:
             await backtest_progress_monitor.update_execution_progress(
                 task_id=task_id,
                 processed_days=len(trading_dates),
-                current_date=trading_dates[-1].strftime("%Y-%m-%d")
-                if trading_dates
-                else None,
+                current_date=(
+                    trading_dates[-1].strftime("%Y-%m-%d") if trading_dates else None
+                ),
                 signals_generated=0,
                 trades_executed=0,
                 portfolio_value=final_portfolio_value,
@@ -2263,7 +2440,7 @@ class BacktestExecutor:
         buffer_set = set(buffer_list)
 
         holdings = list(portfolio_manager.positions.keys())
-        holdings_set = set(holdings)
+        set(holdings)
 
         # Keep holdings inside buffer zone
         kept = [c for c in holdings if c in buffer_set]
@@ -2299,7 +2476,11 @@ class BacktestExecutor:
 
         if debug:
             try:
-                nonzero = sum(1 for _, s in scores.items() if isinstance(s, (int, float)) and s != 0)
+                nonzero = sum(
+                    1
+                    for _, s in scores.items()
+                    if isinstance(s, (int, float)) and s != 0
+                )
                 logger.info(
                     f"[topk_buffer] {current_date.date()} holdings={len(holdings)} nonzero_scores={nonzero} "
                     f"topk={topk} buffer={buffer_n} max_changes={max_changes} "
@@ -2321,7 +2502,7 @@ class BacktestExecutor:
                 signal_type=SignalType.SELL,
                 strength=1.0,
                 price=float(current_prices.get(code, 0.0) or 0.0),
-                reason=f"topk_buffer rebalance sell (out of buffer/topk)",
+                reason="topk_buffer rebalance sell (out of buffer/topk)",
                 metadata={"trade_mode": "topk_buffer"},
             )
             if strategy is not None:
@@ -2341,12 +2522,18 @@ class BacktestExecutor:
                     )
                     continue
 
-            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            trade, failure_reason = portfolio_manager.execute_signal(
+                sig, current_prices
+            )
             if trade:
                 successful_sells += 1
                 trades_this_day += 1
                 executed_trade_signals.append(
-                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                    }
                 )
             else:
                 unexecuted_signals.append(
@@ -2413,11 +2600,17 @@ class BacktestExecutor:
                     )
                     continue
 
-            trade, failure_reason = portfolio_manager.execute_signal(sig, current_prices)
+            trade, failure_reason = portfolio_manager.execute_signal(
+                sig, current_prices
+            )
             if trade:
                 trades_this_day += 1
                 executed_trade_signals.append(
-                    {"stock_code": code, "timestamp": current_date, "signal_type": sig.signal_type.name}
+                    {
+                        "stock_code": code,
+                        "timestamp": current_date,
+                        "signal_type": sig.signal_type.name,
+                    }
                 )
             else:
                 unexecuted_signals.append(
@@ -2500,9 +2693,9 @@ class BacktestExecutor:
                     return getattr(trade, attr, None)
 
                 for trade in portfolio_manager.trades:
-                    stock_code = get_trade_attr(trade, 'stock_code')
-                    action = get_trade_attr(trade, 'action')
-                    pnl = get_trade_attr(trade, 'pnl') or 0.0
+                    stock_code = get_trade_attr(trade, "stock_code")
+                    action = get_trade_attr(trade, "action")
+                    pnl = get_trade_attr(trade, "pnl") or 0.0
 
                     stock_stats = stock_performance.setdefault(
                         stock_code,
@@ -2527,22 +2720,25 @@ class BacktestExecutor:
                 additional_metrics.update(
                     {
                         "stock_performance_detail": stock_perf_list,
-                        "best_performing_stock": max(
-                            stock_perf_list, key=lambda x: x["total_pnl"]
-                        )
-                        if stock_perf_list
-                        else None,
-                        "worst_performing_stock": min(
-                            stock_perf_list, key=lambda x: x["total_pnl"]
-                        )
-                        if stock_perf_list
-                        else None,
+                        "best_performing_stock": (
+                            max(stock_perf_list, key=lambda x: x["total_pnl"])
+                            if stock_perf_list
+                            else None
+                        ),
+                        "worst_performing_stock": (
+                            min(stock_perf_list, key=lambda x: x["total_pnl"])
+                            if stock_perf_list
+                            else None
+                        ),
                         "stocks_traded": len(stock_perf_list),
                     }
                 )
 
                 # 单笔交易分布的整体特征（便于前端画直方图/统计）
-                pnls = [float(get_trade_attr(t, 'pnl') or 0.0) for t in portfolio_manager.trades]
+                pnls = [
+                    float(get_trade_attr(t, "pnl") or 0.0)
+                    for t in portfolio_manager.trades
+                ]
                 if pnls:
                     pnl_series = pd.Series(pnls)
                     additional_metrics.update(
@@ -2578,7 +2774,9 @@ class BacktestExecutor:
 
             # 验证股票代码
             if not stock_codes or len(stock_codes) == 0:
-                raise TaskError(message="股票代码列表不能为空", severity=ErrorSeverity.MEDIUM)
+                raise TaskError(
+                    message="股票代码列表不能为空", severity=ErrorSeverity.MEDIUM
+                )
 
             if len(stock_codes) > 1000:
                 raise TaskError(
@@ -2588,7 +2786,9 @@ class BacktestExecutor:
 
             # 验证日期范围
             if start_date >= end_date:
-                raise TaskError(message="开始日期必须早于结束日期", severity=ErrorSeverity.MEDIUM)
+                raise TaskError(
+                    message="开始日期必须早于结束日期", severity=ErrorSeverity.MEDIUM
+                )
 
             date_range = (end_date - start_date).days
             if date_range < 30:
@@ -2605,7 +2805,9 @@ class BacktestExecutor:
 
             # 验证策略配置
             if not isinstance(strategy_config, dict):
-                raise TaskError(message="策略配置必须是字典格式", severity=ErrorSeverity.MEDIUM)
+                raise TaskError(
+                    message="策略配置必须是字典格式", severity=ErrorSeverity.MEDIUM
+                )
 
             return True
 
@@ -2666,15 +2868,16 @@ class BacktestExecutor:
                 )
 
                 cash_reserve_ratio = float(
-                    getattr(portfolio_manager.config, "cash_reserve_ratio", 0.05)
-                    or 0.0
+                    getattr(portfolio_manager.config, "cash_reserve_ratio", 0.05) or 0.0
                 )
                 cash_reserve_ratio = min(max(cash_reserve_ratio, 0.0), 0.99)
                 reserve_cash = portfolio_manager.cash * (1 - cash_reserve_ratio)
-                reserve_pct = f"{cash_reserve_ratio:.0%}"
+                reserve_pct = "{cash_reserve_ratio:.0%}"
                 board_lot_size = max(
                     1,
-                    int(getattr(portfolio_manager.config, "board_lot_size", 100) or 100),
+                    int(
+                        getattr(portfolio_manager.config, "board_lot_size", 100) or 100
+                    ),
                 )
 
                 available_cash_for_stock = max_position_value - current_position_value
@@ -2690,9 +2893,10 @@ class BacktestExecutor:
                         return f"可用资金不足: 需要保留{reserve_pct}现金，可用资金 {portfolio_manager.cash:.2f}"
 
                 # 计算购买数量（按配置的最小交易单位取整）
-                quantity = int(
-                    available_cash_for_stock / current_price / board_lot_size
-                ) * board_lot_size
+                quantity = (
+                    int(available_cash_for_stock / current_price / board_lot_size)
+                    * board_lot_size
+                )
                 if quantity <= 0:
                     return f"可买数量不足: 可用资金 {available_cash_for_stock:.2f}，价格 {current_price:.2f}，无法买入{board_lot_size}股"
 

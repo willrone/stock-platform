@@ -2,8 +2,8 @@
 SHAP解释性库集成
 实现模型预测解释功能，支持全局和局部解释性分析
 """
+
 import json
-import pickle
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -46,12 +46,16 @@ class ShapValues:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "values": self.values.tolist()
-            if isinstance(self.values, np.ndarray)
-            else self.values,
-            "base_value": float(self.base_value)
-            if isinstance(self.base_value, (int, float, np.number))
-            else self.base_value.tolist(),
+            "values": (
+                self.values.tolist()
+                if isinstance(self.values, np.ndarray)
+                else self.values
+            ),
+            "base_value": (
+                float(self.base_value)
+                if isinstance(self.base_value, (int, float, np.number))
+                else self.base_value.tolist()
+            ),
             "data": self.data.tolist() if self.data is not None else None,
             "feature_names": self.feature_names,
         }

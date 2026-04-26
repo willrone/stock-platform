@@ -140,7 +140,9 @@ class TaskNotificationService:
             if new_status in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value]:
                 await self._send_task_completion_notification(notification)
 
-            logger.info(f"任务状态变化通知已发送: {task_id}, {old_status} -> {new_status}")
+            logger.info(
+                f"任务状态变化通知已发送: {task_id}, {old_status} -> {new_status}"
+            )
 
         except Exception as e:
             logger.error(f"发送任务状态变化通知失败: {task_id}, 错误: {e}")
@@ -338,7 +340,9 @@ class TaskNotificationService:
                 notification.user_id, completion_type, completion_message
             )
 
-            logger.info(f"任务完成通知已发送: {notification.task_id}, 状态: {notification.status}")
+            logger.info(
+                f"任务完成通知已发送: {notification.task_id}, 状态: {notification.status}"
+            )
 
         except Exception as e:
             logger.error(f"发送任务完成通知失败: {notification.task_id}, 错误: {e}")
@@ -375,8 +379,7 @@ class TaskNotificationService:
                 "strategy": config.get("strategy_name", "unknown"),
                 "stock_count": len(config.get("stock_codes", [])),
                 "period": (
-                    f"{config.get('start_date', '')} - "
-                    f"{config.get('end_date', '')}"
+                    f"{config.get('start_date', '')} - " f"{config.get('end_date', '')}"
                 ),
             }
         elif task_type == TaskType.TRAINING:
@@ -403,14 +406,14 @@ class TaskNotificationService:
 
         # 回测任务结果
         if "total_return" in result:
-            summary["total_return"] = f"{result['total_return']:.2%}"
-            summary["sharpe_ratio"] = f"{result.get('sharpe_ratio', 0):.2f}"
+            summary["total_return"] = "{result['total_return']:.2%}"
+            summary["sharpe_ratio"] = "{result.get('sharpe_ratio', 0):.2f}"
 
         # 训练任务结果
         if "performance_metrics" in result:
-            metrics = result["performance_metrics"]
-            summary["accuracy"] = f"{metrics.get('accuracy', 0):.3f}"
-            summary["mse"] = f"{metrics.get('mse', 0):.4f}"
+            _ = result["performance_metrics"]
+            summary["accuracy"] = "{metrics.get('accuracy', 0):.3f}"
+            summary["mse"] = "{metrics.get('mse', 0):.4f}"
 
         return summary
 

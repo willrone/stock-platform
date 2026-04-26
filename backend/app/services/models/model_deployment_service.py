@@ -8,16 +8,16 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, ModelError
-from app.core.logging_config import AuditLogger, PerformanceLogger
+from app.core.logging_config import AuditLogger
 
-from .model_storage import ModelMetadata, ModelStatus, ModelStorage, ModelType
+from .model_storage import ModelMetadata, ModelStatus, ModelStorage
 
 
 class DeploymentStatus(Enum):
@@ -279,7 +279,9 @@ class ModelEvaluator:
                     all_data.append(stock_data)
 
             if not all_data:
-                raise ModelError(message="无法加载测试数据", severity=ErrorSeverity.HIGH)
+                raise ModelError(
+                    message="无法加载测试数据", severity=ErrorSeverity.HIGH
+                )
 
             # 合并数据
             test_data = pd.concat(all_data, axis=0)
@@ -395,7 +397,7 @@ class ModelEvaluator:
 
                     score = r2_score(y, y_pred)
                     window_scores.append(score)
-                except:
+                except Exception:
                     continue
 
             if window_scores:
@@ -854,7 +856,8 @@ class ModelDeploymentService:
             deployment_record = self.deployments.get(deployment_id)
             if not deployment_record:
                 raise ModelError(
-                    message=f"部署记录不存在: {deployment_id}", severity=ErrorSeverity.MEDIUM
+                    message=f"部署记录不存在: {deployment_id}",
+                    severity=ErrorSeverity.MEDIUM,
                 )
 
             if deployment_record.status != DeploymentStatus.DEPLOYED:

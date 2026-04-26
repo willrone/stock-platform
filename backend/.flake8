@@ -2,7 +2,8 @@
 # 最大行长度（与black保持一致）
 max-line-length = 88
 # 最大复杂度
-max-complexity = 10
+# 先把阈值调到 20，保留真正过重的热点，避免 10 这个过严阈值淹没更高优先级问题。
+max-complexity = 20
 # 排除的目录和文件
 exclude =
     .*,
@@ -41,3 +42,12 @@ select =
 # 统计信息
 statistics = True
 count = True
+
+# 按文件忽略
+per-file-ignores =
+    */__init__.py:F401
+    app/api/v1/*.py:B008
+    app/services/models/model_training.py:E402
+    app/services/qlib/enhanced_qlib_provider.py:E402
+    app/services/qlib/test_alpha158_expression_engine.py:E402
+    tests/*.py:E402

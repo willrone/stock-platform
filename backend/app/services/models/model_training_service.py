@@ -3,19 +3,16 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import joblib
 import numpy as np
 import pandas as pd
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, ModelError
-from app.core.logging_config import PerformanceLogger
 
-from ..prediction.feature_extractor import FeatureConfig, FeatureExtractor
 from .model_storage import ModelMetadata, ModelStatus, ModelStorage, ModelType
 
 
@@ -251,7 +248,9 @@ class ModelTrainingService:
             # 清理模型名称，移除不允许的文件名字符
             import re
 
-            safe_model_name = re.sub(r'[<>:"/\\|?*]', "_", model_name)  # 替换不允许的字符为下划线
+            safe_model_name = re.sub(
+                r'[<>:"/\\|?*]', "_", model_name
+            )  # 替换不允许的字符为下划线
             safe_model_name = re.sub(r"\s+", "_", safe_model_name)  # 替换空格为下划线
 
             # 生成模型ID
@@ -435,7 +434,9 @@ class ModelTrainingService:
             n_samples = 1000
             n_features = 10
             feature_names = [f"feature_{i}" for i in range(n_features)]
-            X = pd.DataFrame(np.random.randn(n_samples, n_features), columns=feature_names)
+            X = pd.DataFrame(
+                np.random.randn(n_samples, n_features), columns=feature_names
+            )
             y = pd.Series(np.random.randn(n_samples), name="target")
             return X, y
 
@@ -444,11 +445,15 @@ class ModelTrainingService:
 
         # 确定特征列
         if config.feature_columns:
-            feature_cols = [col for col in config.feature_columns if col in combined_data.columns]
+            feature_cols = [
+                col for col in config.feature_columns if col in combined_data.columns
+            ]
         else:
             # 排除非特征列
             exclude_cols = ["stock_code", "date", config.target_column, "target"]
-            feature_cols = [col for col in combined_data.columns if col not in exclude_cols]
+            feature_cols = [
+                col for col in combined_data.columns if col not in exclude_cols
+            ]
 
         if not feature_cols:
             raise ValueError("没有可用的特征列")
@@ -457,7 +462,11 @@ class ModelTrainingService:
         X = combined_data[feature_cols].copy()
 
         # 确定目标列
-        target_col = config.target_column if config.target_column in combined_data.columns else "close"
+        target_col = (
+            config.target_column
+            if config.target_column in combined_data.columns
+            else "close"
+        )
         if target_col not in combined_data.columns:
             # 如果目标列不存在，计算收益率作为目标
             if "close" in combined_data.columns:
@@ -564,7 +573,9 @@ class ModelTrainingService:
                 "mae": float(mae),
                 "r2": float(r2),
                 "rmse": rmse,
-                "accuracy": float(accuracy_metric),  # 使用方向准确率或R²（取较大值，且R²负值设为0）
+                "accuracy": float(
+                    accuracy_metric
+                ),  # 使用方向准确率或R²（取较大值，且R²负值设为0）
                 "direction_accuracy": float(direction_accuracy),  # 方向准确率
             }
 

@@ -5,9 +5,7 @@ Prometheus指标收集模块
 """
 
 import time
-from typing import Any, Dict
 
-from fastapi import Request, Response
 from fastapi.responses import Response as FastAPIResponse
 from loguru import logger
 from prometheus_client import (
@@ -74,7 +72,11 @@ class MetricsCollector:
     def _setup_app_info(self):
         """设置应用程序信息"""
         app_info.info(
-            {"version": "1.0.0", "name": "股票预测平台", "description": "基于AI的股票预测和回测分析平台"}
+            {
+                "version": "1.0.0",
+                "name": "股票预测平台",
+                "description": "基于AI的股票预测和回测分析平台",
+            }
         )
 
     def record_request(
@@ -180,7 +182,9 @@ class MetricsCollector:
         # 匹配UUID、数字ID等
         endpoint = re.sub(r"/[0-9a-f-]{36}", "/{id}", endpoint)  # UUID
         endpoint = re.sub(r"/\d+", "/{id}", endpoint)  # 数字ID
-        endpoint = re.sub(r"/[A-Z0-9]{6,}\.SZ|SH", "/{stock_code}", endpoint)  # 股票代码
+        endpoint = re.sub(
+            r"/[A-Z0-9]{6,}\.SZ|SH", "/{stock_code}", endpoint
+        )  # 股票代码
 
         return endpoint
 
@@ -231,7 +235,7 @@ class MetricsMiddleware:
 
         try:
             await self.app(scope, receive, send_wrapper)
-        except Exception as e:
+        except Exception:
             status_code = 500
             metrics_collector.record_error("internal_error", path)
             raise

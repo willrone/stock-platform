@@ -489,91 +489,99 @@ export default function BacktestOverview({ backtestData, loading = false }: Back
         (backtestData.signalExecutionSummary.raw_signal_count !== undefined ||
           (backtestData.signalExecutionSummary.top_rejection_reasons &&
             backtestData.signalExecutionSummary.top_rejection_reasons.length > 0)) && (
-        <Card>
-          <CardHeader title="信号执行统计" />
-          <CardContent>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, 1fr)',
-                  md: 'repeat(4, 1fr)',
-                },
-                gap: 2,
-                mb: 2,
-              }}
-            >
-              {backtestData.signalExecutionSummary.raw_signal_count !== undefined && (
-                <>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      原始信号数
+          <Card>
+            <CardHeader title="信号执行统计" />
+            <CardContent>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(2, 1fr)',
+                    md: 'repeat(4, 1fr)',
+                  },
+                  gap: 2,
+                  mb: 2,
+                }}
+              >
+                {backtestData.signalExecutionSummary.raw_signal_count !== undefined && (
+                  <>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        原始信号数
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600}>
+                        {backtestData.signalExecutionSummary.raw_signal_count}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        可执行 / 实际执行
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600}>
+                        {backtestData.signalExecutionSummary.actionable_signal_count} /{' '}
+                        {backtestData.signalExecutionSummary.executed_signal_count}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        旧口径执行率
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="success.main">
+                        {((backtestData.signalExecutionSummary.execution_rate ?? 0) * 100).toFixed(
+                          1
+                        )}
+                        %
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        可执行口径执行率
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="success.main">
+                        {(
+                          (backtestData.signalExecutionSummary.execution_rate_actionable ?? 0) * 100
+                        ).toFixed(1)}
+                        %
+                      </Typography>
+                    </Box>
+                  </>
+                )}
+              </Box>
+              {backtestData.signalExecutionSummary.top_rejection_reasons &&
+                backtestData.signalExecutionSummary.top_rejection_reasons.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Top 拒绝原因
                     </Typography>
-                    <Typography variant="h6" fontWeight={600}>
-                      {backtestData.signalExecutionSummary.raw_signal_count}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      可执行 / 实际执行
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600}>
-                      {backtestData.signalExecutionSummary.actionable_signal_count} /{' '}
-                      {backtestData.signalExecutionSummary.executed_signal_count}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      旧口径执行率
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} color="success.main">
-                      {((backtestData.signalExecutionSummary.execution_rate ?? 0) * 100).toFixed(1)}%
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      可执行口径执行率
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} color="success.main">
-                      {(
-                        (backtestData.signalExecutionSummary.execution_rate_actionable ?? 0) * 100
-                      ).toFixed(1)}%
-                    </Typography>
-                  </Box>
-                </>
-              )}
-            </Box>
-            {backtestData.signalExecutionSummary.top_rejection_reasons &&
-              backtestData.signalExecutionSummary.top_rejection_reasons.length > 0 && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Top 拒绝原因
-                  </Typography>
-                  <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                    {backtestData.signalExecutionSummary.top_rejection_reasons
-                      .slice(0, 6)
-                      .map((rejectionReason, index) => (
-                        <Box component="li" key={`${rejectionReason.reason}-${index}`} sx={{ py: 0.25 }}>
-                          <Typography variant="body2" component="span">
-                            {rejectionReason.reason}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            component="span"
-                            color="text.secondary"
-                            sx={{ ml: 1 }}
+                    <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                      {backtestData.signalExecutionSummary.top_rejection_reasons
+                        .slice(0, 6)
+                        .map((rejectionReason, index) => (
+                          <Box
+                            component="li"
+                            key={`${rejectionReason.reason}-${index}`}
+                            sx={{ py: 0.25 }}
                           >
-                            ({rejectionReason.count})
-                          </Typography>
-                        </Box>
-                      ))}
+                            <Typography variant="body2" component="span">
+                              {rejectionReason.reason}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              component="span"
+                              color="text.secondary"
+                              sx={{ ml: 1 }}
+                            >
+                              ({rejectionReason.count})
+                            </Typography>
+                          </Box>
+                        ))}
+                    </Box>
                   </Box>
-                </Box>
-              )}
-          </CardContent>
-        </Card>
-      )}
+                )}
+            </CardContent>
+          </Card>
+        )}
 
       {/* 风险评估总结 */}
       <Card>

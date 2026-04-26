@@ -158,10 +158,7 @@ const createApiInstance = (): AxiosInstance => {
             apiLogger.error('权限不足');
             break;
           case 404:
-            apiLogger.error(
-              '请求的资源不存在:',
-              `${error.config?.baseURL}${error.config?.url}`
-            );
+            apiLogger.error('请求的资源不存在:', `${error.config?.baseURL}${error.config?.url}`);
             break;
           case 429:
             apiLogger.error('请求过于频繁，请稍后再试');

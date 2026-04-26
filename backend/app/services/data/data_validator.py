@@ -4,7 +4,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -342,9 +342,9 @@ class DataValidator:
                         "message": "发现较大的日期间隔",
                         "affected_records": large_gaps.sum(),
                         "details": {
-                            "max_gap_days": date_diff.max().days
-                            if date_diff.max()
-                            else 0
+                            "max_gap_days": (
+                                date_diff.max().days if date_diff.max() else 0
+                            )
                         },
                     }
                 )
@@ -509,9 +509,9 @@ class DataValidator:
         return {
             "is_valid": result.is_valid,
             "quality_score": result.quality_score,
-            "records_processed": len(result.cleaned_data)
-            if result.cleaned_data is not None
-            else 0,
+            "records_processed": (
+                len(result.cleaned_data) if result.cleaned_data is not None else 0
+            ),
             "records_removed": result.records_removed,
             "records_modified": result.records_modified,
             "issues_by_severity": {

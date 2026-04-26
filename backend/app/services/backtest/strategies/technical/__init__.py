@@ -10,4 +10,9 @@ from .rsi_optimized import RSIOptimizedStrategy
 # 向后兼容：RSIStrategy 指向优化版
 RSIStrategy = RSIOptimizedStrategy
 
-__all__ = ["MovingAverageStrategy", "RSIStrategy", "RSIOptimizedStrategy", "MACDStrategy"]
+__all__ = [
+    "MovingAverageStrategy",
+    "RSIStrategy",
+    "RSIOptimizedStrategy",
+    "MACDStrategy",
+]

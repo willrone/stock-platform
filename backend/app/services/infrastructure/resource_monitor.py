@@ -2,8 +2,8 @@
 资源监控服务
 监控系统资源使用情况，包括CPU、内存、GPU等
 """
+
 import asyncio
-import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional

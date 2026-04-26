@@ -2,8 +2,7 @@
 任务管理路由
 """
 
-import asyncio
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 import pandas as pd
@@ -65,7 +64,6 @@ def _build_route_error_context(
     )
 
 
-
 def _mark_task_failed_after_submit_error(
     task_repository: TaskRepository,
     *,
@@ -100,7 +98,9 @@ def _mark_task_failed_after_submit_error(
 
 
 @router.post("", response_model=StandardResponse)
-async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_current_user)):
+async def create_task(
+    request: TaskCreateRequest, user_id: str = Depends(get_current_user)
+):
     """创建任务（支持预测和回测）"""
     session = SessionLocal()
     try:
@@ -124,7 +124,9 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             }
         else:  # BACKTEST
             if not request.backtest_config:
-                raise HTTPException(status_code=400, detail="回测任务需要提供backtest_config")
+                raise HTTPException(
+                    status_code=400, detail="回测任务需要提供backtest_config"
+                )
 
             # 兼容前端/调用方使用 backtest_config 内的 strategy_type / strategy_params 字段。
             # 后端执行器期望字段：
@@ -135,9 +137,15 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             # - strategy_type -> strategy_name
             # - strategy_params -> strategy_config
             backtest_config = dict(request.backtest_config or {})
-            if "strategy_type" in backtest_config and "strategy_name" not in backtest_config:
+            if (
+                "strategy_type" in backtest_config
+                and "strategy_name" not in backtest_config
+            ):
                 backtest_config["strategy_name"] = backtest_config["strategy_type"]
-            if "strategy_params" in backtest_config and "strategy_config" not in backtest_config:
+            if (
+                "strategy_params" in backtest_config
+                and "strategy_config" not in backtest_config
+            ):
                 backtest_config["strategy_config"] = backtest_config["strategy_params"]
 
             config = {"stock_codes": request.stock_codes, **backtest_config}
@@ -524,10 +532,14 @@ async def compare_backtest_results(request: BacktestCompareRequest):
                 raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
             if task.task_type != "backtest":
-                raise HTTPException(status_code=400, detail=f"任务 {task_id} 不是回测任务")
+                raise HTTPException(
+                    status_code=400, detail=f"任务 {task_id} 不是回测任务"
+                )
 
             if not task.result:
-                raise HTTPException(status_code=404, detail=f"任务 {task_id} 没有回测结果")
+                raise HTTPException(
+                    status_code=404, detail=f"任务 {task_id} 没有回测结果"
+                )
 
             # 转换结果数据
             raw_result = task.result
@@ -621,9 +633,9 @@ async def export_backtest_report(task_id: str, export_request: BacktestExportReq
             data={
                 "download_url": f"/api/v1/files/download/{os.path.basename(report_path)}",
                 "file_name": os.path.basename(report_path),
-                "file_size": os.path.getsize(report_path)
-                if os.path.exists(report_path)
-                else 0,
+                "file_size": (
+                    os.path.getsize(report_path) if os.path.exists(report_path) else 0
+                ),
             },
         )
 
@@ -655,7 +667,9 @@ async def get_task_stats(user_id: str = Depends(get_current_user)):
             "success_rate": stats.get("success_rate", 0.0),
         }
 
-        return StandardResponse(success=True, message="任务统计获取成功", data=task_stats)
+        return StandardResponse(
+            success=True, message="任务统计获取成功", data=task_stats
+        )
 
     except Exception as e:
         logger.error(f"获取任务统计失败: {e}", exc_info=True)
@@ -665,7 +679,9 @@ async def get_task_stats(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/{task_id}/rebuild", response_model=StandardResponse)
-async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str = Depends(get_current_user)):
+async def rebuild_task(
+    task_id: str, request: RebuildTaskRequest, user_id: str = Depends(get_current_user)
+):
     """基于已有任务重建新任务"""
     session = SessionLocal()
     try:
@@ -695,6 +711,7 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
 
         # 确定 TaskType 枚举
         from app.models.task_models import TaskType as TaskTypeEnum
+
         type_map = {
             "backtest": TaskTypeEnum.BACKTEST,
             "prediction": TaskTypeEnum.PREDICTION,
@@ -703,7 +720,9 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
         }
         task_type_enum = type_map.get(task_type)
         if not task_type_enum:
-            raise HTTPException(status_code=400, detail=f"不支持重建的任务类型: {task_type}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持重建的任务类型: {task_type}"
+            )
 
         # 创建新任务
         new_task = task_repository.create_task(
@@ -718,7 +737,9 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
             process_executor = get_process_executor()
 
             if task_type == "prediction":
-                process_executor.submit(execute_prediction_task_simple, new_task.task_id)
+                process_executor.submit(
+                    execute_prediction_task_simple, new_task.task_id
+                )
             elif task_type == "backtest":
                 process_executor.submit(execute_backtest_task_simple, new_task.task_id)
             elif task_type == "hyperparameter_optimization":
@@ -732,7 +753,9 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
                     execute_qlib_precompute_task_simple, new_task.task_id
                 )
 
-            logger.info(f"重建任务已提交: {new_task.task_id}, 原任务: {task_id}, 类型: {task_type}")
+            logger.info(
+                f"重建任务已提交: {new_task.task_id}, 原任务: {task_id}, 类型: {task_type}"
+            )
         except Exception as submit_error:
             submit_context = _build_route_error_context(
                 user_id=user_id,
@@ -827,9 +850,11 @@ async def get_task_detail(task_id: str):
                         context={
                             "task_id": task_id,
                             "stock_code": result.stock_code,
-                            "prediction_date": result.prediction_date.isoformat()
-                            if hasattr(result.prediction_date, "isoformat")
-                            else str(result.prediction_date),
+                            "prediction_date": (
+                                result.prediction_date.isoformat()
+                                if hasattr(result.prediction_date, "isoformat")
+                                else str(result.prediction_date)
+                            ),
                         },
                     )
                 latest_prices[result.stock_code] = latest_price
@@ -942,7 +967,9 @@ async def get_task_detail(task_id: str):
         )
 
         if backtest_results is not None:
-            logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}")
+            logger.info(
+                f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}"
+            )
             if isinstance(backtest_results, dict):
                 logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20]}")
 
@@ -1004,7 +1031,8 @@ async def delete_task(
         # 检查是否是数据库约束错误
         if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
             raise HTTPException(
-                status_code=409, detail=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。"
+                status_code=409,
+                detail="删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。",
             )
         else:
             raise HTTPException(status_code=500, detail=f"删除任务失败: {error_msg}")
@@ -1023,7 +1051,9 @@ async def stop_task(task_id: str):
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         if task.status not in [TaskStatus.RUNNING.value, TaskStatus.QUEUED.value]:
-            raise HTTPException(status_code=400, detail=f"任务状态为 {task.status}，无法停止")
+            raise HTTPException(
+                status_code=400, detail=f"任务状态为 {task.status}，无法停止"
+            )
 
         # 更新任务状态为已取消
         task = task_repository.update_task_status(
@@ -1058,7 +1088,9 @@ async def retry_task(task_id: str):
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         if task.status not in [TaskStatus.FAILED.value, TaskStatus.CANCELLED.value]:
-            raise HTTPException(status_code=400, detail=f"任务状态为 {task.status}，无法重试")
+            raise HTTPException(
+                status_code=400, detail=f"任务状态为 {task.status}，无法重试"
+            )
 
         # 重置任务状态
         task = task_repository.update_task_status(
@@ -1070,11 +1102,11 @@ async def retry_task(task_id: str):
             process_executor = get_process_executor()
 
             if task.task_type == "prediction":
-                future = process_executor.submit(
+                _ = process_executor.submit(
                     execute_prediction_task_simple, task_id
                 )
             elif task.task_type == "backtest":
-                future = process_executor.submit(execute_backtest_task_simple, task_id)
+                process_executor.submit(execute_backtest_task_simple, task_id)
             else:
                 raise HTTPException(
                     status_code=400, detail=f"不支持的任务类型: {task.task_type}"
@@ -1129,9 +1161,7 @@ async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False)
 
         message = f"处理完成：发现 {result['total_stuck']} 个卡住任务"
         if auto_fix:
-            message += (
-                f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
-            )
+            message += f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
 
         return StandardResponse(success=True, message=message, data=result)
 
@@ -1158,7 +1188,9 @@ async def force_complete_task(task_id: str, status: str = "cancelled"):
                 data={"task_id": task_id, "status": status},
             )
         else:
-            raise HTTPException(status_code=404, detail=f"任务不存在或处理失败: {task_id}")
+            raise HTTPException(
+                status_code=404, detail=f"任务不存在或处理失败: {task_id}"
+            )
 
     except HTTPException:
         raise

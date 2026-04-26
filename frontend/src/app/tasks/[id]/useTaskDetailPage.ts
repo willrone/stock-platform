@@ -32,8 +32,12 @@ export function useTaskDetailPage(): TaskDetailPageModel {
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStock, setSelectedStock] = useState('');
-  const [backtestDetailedData, setBacktestDetailedData] = useState<BacktestDetailedResult | null>(null);
-  const [adaptedRiskData, setAdaptedRiskData] = useState<BacktestDetailedRiskViewModel | null>(null);
+  const [backtestDetailedData, setBacktestDetailedData] = useState<BacktestDetailedResult | null>(
+    null
+  );
+  const [adaptedRiskData, setAdaptedRiskData] = useState<BacktestDetailedRiskViewModel | null>(
+    null
+  );
   const [adaptedPerformanceData, setAdaptedPerformanceData] =
     useState<BacktestDetailedPerformanceViewModel | null>(null);
   const [loadingBacktestData, setLoadingBacktestData] = useState(false);
@@ -264,10 +268,7 @@ export function useTaskDetailPage(): TaskDetailPageModel {
     [backtestSummaryData]
   );
 
-  const handleSaveConfig = async (
-    configName: string,
-    description: string
-  ): Promise<void> => {
+  const handleSaveConfig = async (configName: string, description: string): Promise<void> => {
     if (!strategyConfigInfo) {
       throw new Error('无法获取策略配置信息');
     }

@@ -2,9 +2,9 @@
 部署策略管理器
 支持蓝绿部署、金丝雀发布和自动回滚机制
 """
+
 import asyncio
 import hashlib
-import json
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -136,9 +136,9 @@ class DeploymentRecord:
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "error_message": self.error_message,
             "rollback_info": self.rollback_info,
         }
@@ -258,7 +258,10 @@ class DeploymentManager:
 
             model_path = Path(env.model_path)
             if not model_path.exists():
-                return {"healthy": False, "message": f"模型文件不存在: {env.model_path}"}
+                return {
+                    "healthy": False,
+                    "message": f"模型文件不存在: {env.model_path}",
+                }
 
             return {"healthy": True, "message": "模型文件存在"}
 
@@ -501,7 +504,9 @@ class DeploymentManager:
             if config.health_check_enabled:
                 health_results = await self._run_health_checks(env, config)
                 if not health_results.get("overall_healthy", False):
-                    raise RuntimeError(f"实例 {env_name} 健康检查失败: {health_results}")
+                    raise RuntimeError(
+                        f"实例 {env_name} 健康检查失败: {health_results}"
+                    )
 
             env.status = DeploymentStatus.ACTIVE
 

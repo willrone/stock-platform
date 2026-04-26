@@ -4,15 +4,13 @@
 提供详细的回测进度跟踪和WebSocket实时推送功能
 """
 
-import asyncio
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
 from app.services.infrastructure.websocket_manager import (
-    WebSocketMessage,
     websocket_manager,
 )
 
@@ -393,12 +391,14 @@ class BacktestProgressMonitor:
             "total_days": progress_data.total_trading_days,
             "current_date": progress_data.current_date,
             "processing_speed": progress_data.processing_speed,
-            "estimated_completion": progress_data.estimated_completion.isoformat()
-            if progress_data.estimated_completion
-            else None,
-            "elapsed_time": str(progress_data.elapsed_time)
-            if progress_data.elapsed_time
-            else None,
+            "estimated_completion": (
+                progress_data.estimated_completion.isoformat()
+                if progress_data.estimated_completion
+                else None
+            ),
+            "elapsed_time": (
+                str(progress_data.elapsed_time) if progress_data.elapsed_time else None
+            ),
             "portfolio_value": progress_data.current_portfolio_value,
             "signals_generated": progress_data.total_signals_generated,
             "trades_executed": progress_data.total_trades_executed,
@@ -414,9 +414,9 @@ class BacktestProgressMonitor:
                 "description": stage.stage_description,
                 "progress": stage.progress,
                 "status": stage.status,
-                "start_time": stage.start_time.isoformat()
-                if stage.start_time
-                else None,
+                "start_time": (
+                    stage.start_time.isoformat() if stage.start_time else None
+                ),
                 "end_time": stage.end_time.isoformat() if stage.end_time else None,
                 "details": stage.details,
             }

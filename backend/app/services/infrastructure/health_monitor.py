@@ -2,12 +2,12 @@
 健康检查和性能测试服务
 提供部署后的自动验证和性能基准测试
 """
+
 import asyncio
-import json
 import statistics
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -103,9 +103,9 @@ class PerformanceTestResult:
             "test_type": self.test_type.value,
             "duration_seconds": self.duration_seconds,
             "metrics": self.metrics.to_dict(),
-            "baseline_metrics": self.baseline_metrics.to_dict()
-            if self.baseline_metrics
-            else None,
+            "baseline_metrics": (
+                self.baseline_metrics.to_dict() if self.baseline_metrics else None
+            ),
             "passed": self.passed,
             "message": self.message,
             "timestamp": self.timestamp.isoformat(),
@@ -505,7 +505,11 @@ class HealthMonitor:
         # 模型文件检查
         async def model_file_check(model_path: str = None, **kwargs) -> Dict[str, Any]:
             if not model_path:
-                return {"status": "unhealthy", "message": "未提供模型路径", "details": {}}
+                return {
+                    "status": "unhealthy",
+                    "message": "未提供模型路径",
+                    "details": {},
+                }
 
             model_path = Path(model_path)
             if not model_path.exists():
@@ -526,7 +530,9 @@ class HealthMonitor:
                 },
             }
 
-        self.health_checker.register_check("model_file", model_file_check, "检查模型文件是否存在")
+        self.health_checker.register_check(
+            "model_file", model_file_check, "检查模型文件是否存在"
+        )
 
         # 模型加载检查
         async def model_load_check(model_path: str = None, **kwargs) -> Dict[str, Any]:
@@ -659,10 +665,10 @@ class HealthMonitor:
             await asyncio.sleep(0.01 + np.random.exponential(0.05))  # 模拟预测时间
 
             # 随机选择测试数据
-            sample_data = test_data[np.random.randint(0, len(test_data))]
+            test_data[np.random.randint(0, len(test_data))]
 
             # 模拟预测结果
-            prediction = np.random.random()
+            np.random.random()
 
             return (time.time() - start_time) * 1000  # 返回响应时间（毫秒）
 

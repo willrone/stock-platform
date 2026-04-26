@@ -8,7 +8,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 _EVALUATION_REPORT_PATH = (
-    Path(__file__).resolve().parents[3] / "app" / "services" / "models" / "evaluation_report.py"
+    Path(__file__).resolve().parents[3]
+    / "app"
+    / "services"
+    / "models"
+    / "evaluation_report.py"
 )
 _EVALUATION_REPORT_SPEC = spec_from_file_location(
     "stock_platform_evaluation_report", _EVALUATION_REPORT_PATH
@@ -20,7 +24,9 @@ EvaluationReportGenerator = _evaluation_report.EvaluationReportGenerator
 normalize_report_payload = _evaluation_report.normalize_report_payload
 build_official_record_summary = _evaluation_report.build_official_record_summary
 
-_MODEL_DTO_PATH = Path(__file__).resolve().parents[3] / "app" / "api" / "v1" / "model_dto.py"
+_MODEL_DTO_PATH = (
+    Path(__file__).resolve().parents[3] / "app" / "api" / "v1" / "model_dto.py"
+)
 _MODEL_DTO_SPEC = spec_from_file_location("stock_platform_model_dto", _MODEL_DTO_PATH)
 assert _MODEL_DTO_SPEC and _MODEL_DTO_SPEC.loader
 _model_dto = module_from_spec(_MODEL_DTO_SPEC)
@@ -95,19 +101,31 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
                 "dataset_samples": 388,
                 "evaluated_samples": 388,
                 "performance_metrics": {"accuracy": 0.63},
-                "signal_quality": {"rank_ic": 0.022, "sample_count": 388, "analysis_scope": "train"},
+                "signal_quality": {
+                    "rank_ic": 0.022,
+                    "sample_count": 388,
+                    "analysis_scope": "train",
+                },
             },
             "validation": {
                 "dataset_samples": 97,
                 "evaluated_samples": 97,
                 "performance_metrics": {"accuracy": 0.61},
-                "signal_quality": {"rank_ic": 0.0189, "sample_count": 97, "analysis_scope": "validation"},
+                "signal_quality": {
+                    "rank_ic": 0.0189,
+                    "sample_count": 97,
+                    "analysis_scope": "validation",
+                },
             },
             "test": {
                 "dataset_samples": 44,
                 "evaluated_samples": 40,
                 "performance_metrics": {"accuracy": 0.59},
-                "signal_quality": {"rank_ic": 0.015, "sample_count": 40, "analysis_scope": "test"},
+                "signal_quality": {
+                    "rank_ic": 0.015,
+                    "sample_count": 40,
+                    "analysis_scope": "test",
+                },
             },
         },
     )
@@ -135,7 +153,10 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
     assert payload["training_data_info"]["test_samples"] == 0
     assert payload["segment_evaluation"]["train"]["dataset_samples"] == 388
     assert payload["segment_evaluation"]["validation"]["evaluated_samples"] == 97
-    assert payload["segment_evaluation"]["test"]["signal_quality"]["analysis_scope"] == "test"
+    assert (
+        payload["segment_evaluation"]["test"]["signal_quality"]["analysis_scope"]
+        == "test"
+    )
     assert payload["portfolio_bridge_summary"] == {
         "model_id": None,
         "task_count": 0,
@@ -146,14 +167,59 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
     }
     assert payload["official_record_summary"] == {
         "signal_record": {
-            "train": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
-            "validation": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
-            "test": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+            "train": {
+                "dataset_samples": 0,
+                "evaluated_samples": 0,
+                "has_signal_quality": False,
+            },
+            "validation": {
+                "dataset_samples": 0,
+                "evaluated_samples": 0,
+                "has_signal_quality": False,
+            },
+            "test": {
+                "dataset_samples": 0,
+                "evaluated_samples": 0,
+                "has_signal_quality": False,
+            },
         },
         "sig_ana_record": {
-            "train": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "train"},
-            "validation": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "validation"},
-            "test": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "test"},
+            "train": {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "train",
+            },
+            "validation": {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "validation",
+            },
+            "test": {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "test",
+            },
         },
         "port_ana_record": {
             "task_count": 0,
@@ -173,7 +239,9 @@ def test_evaluation_report_preserves_sample_breakdown_and_early_stopping() -> No
     assert payload["training_history"][1]["val_loss"] is None
 
 
-def test_build_model_detail_dto_extracts_early_stopping_info_from_evaluation_report() -> None:
+def test_build_model_detail_dto_extracts_early_stopping_info_from_evaluation_report() -> (
+    None
+):
     model = SimpleNamespace(
         model_id="model-1",
         model_name="demo-model",
@@ -254,7 +322,10 @@ def test_normalize_report_payload_backfills_legacy_fields() -> None:
     }
     assert payload["segment_evaluation"]["train"]["dataset_samples"] == 160
     assert payload["segment_evaluation"]["validation"]["dataset_samples"] == 40
-    assert payload["segment_evaluation"]["validation"]["signal_quality"]["analysis_scope"] is None
+    assert (
+        payload["segment_evaluation"]["validation"]["signal_quality"]["analysis_scope"]
+        is None
+    )
     assert payload["segment_evaluation"]["test"]["dataset_samples"] == 0
     assert payload["portfolio_bridge_summary"] == {
         "model_id": None,
@@ -266,14 +337,59 @@ def test_normalize_report_payload_backfills_legacy_fields() -> None:
     }
     assert payload["official_record_summary"] == {
         "signal_record": {
-            "train": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
-            "validation": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
-            "test": {"dataset_samples": 0, "evaluated_samples": 0, "has_signal_quality": False},
+            "train": {
+                "dataset_samples": 0,
+                "evaluated_samples": 0,
+                "has_signal_quality": False,
+            },
+            "validation": {
+                "dataset_samples": 0,
+                "evaluated_samples": 0,
+                "has_signal_quality": False,
+            },
+            "test": {
+                "dataset_samples": 0,
+                "evaluated_samples": 0,
+                "has_signal_quality": False,
+            },
         },
         "sig_ana_record": {
-            "train": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "train"},
-            "validation": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "validation"},
-            "test": {"ic": None, "icir": None, "rank_ic": None, "rank_icir": None, "long_short_ann_return": None, "long_short_ann_sharpe": None, "long_avg_ann_return": None, "long_avg_ann_sharpe": None, "sample_count": 0, "analysis_scope": "test"},
+            "train": {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "train",
+            },
+            "validation": {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "validation",
+            },
+            "test": {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "test",
+            },
         },
         "port_ana_record": {
             "task_count": 0,
@@ -285,8 +401,9 @@ def test_normalize_report_payload_backfills_legacy_fields() -> None:
     }
 
 
-
-def test_build_official_record_summary_reuses_segment_and_portfolio_bridge_data() -> None:
+def test_build_official_record_summary_reuses_segment_and_portfolio_bridge_data() -> (
+    None
+):
     summary = build_official_record_summary(
         {
             "training_summary": {
@@ -303,17 +420,29 @@ def test_build_official_record_summary_reuses_segment_and_portfolio_bridge_data(
                 "train": {
                     "dataset_samples": 388,
                     "evaluated_samples": 388,
-                    "signal_quality": {"rank_ic": 0.022, "sample_count": 388, "analysis_scope": "train"},
+                    "signal_quality": {
+                        "rank_ic": 0.022,
+                        "sample_count": 388,
+                        "analysis_scope": "train",
+                    },
                 },
                 "validation": {
                     "dataset_samples": 97,
                     "evaluated_samples": 97,
-                    "signal_quality": {"rank_ic": 0.0189, "sample_count": 97, "analysis_scope": "validation"},
+                    "signal_quality": {
+                        "rank_ic": 0.0189,
+                        "sample_count": 97,
+                        "analysis_scope": "validation",
+                    },
                 },
                 "test": {
                     "dataset_samples": 44,
                     "evaluated_samples": 40,
-                    "signal_quality": {"rank_ic": 0.015, "sample_count": 40, "analysis_scope": "test"},
+                    "signal_quality": {
+                        "rank_ic": 0.015,
+                        "sample_count": 40,
+                        "analysis_scope": "test",
+                    },
                 },
             },
             "portfolio_bridge_summary": {

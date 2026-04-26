@@ -4,12 +4,11 @@
 基于多进程的并行超参数搜索，突破GIL限制，显著提升搜索速度
 """
 
-import logging
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
@@ -45,7 +44,9 @@ class ParallelHyperparameterSearch:
         if self.config.max_workers is None:
             self.config.max_workers = mp.cpu_count()
 
-        logger.info(f"并行超参数搜索器初始化完成，最大工作进程数: {self.config.max_workers}")
+        logger.info(
+            f"并行超参数搜索器初始化完成，最大工作进程数: {self.config.max_workers}"
+        )
 
     def parallel_random_search(
         self,
@@ -66,7 +67,9 @@ class ParallelHyperparameterSearch:
         Returns:
             最优超参数试验结果
         """
-        logger.info(f"开始并行随机搜索，试验次数: {n_trials}, 工作进程数: {self.config.max_workers}")
+        logger.info(
+            f"开始并行随机搜索，试验次数: {n_trials}, 工作进程数: {self.config.max_workers}"
+        )
 
         # 生成超参数组合
         trials_params = self._generate_random_trials(param_space, n_trials)
@@ -192,9 +195,9 @@ class ParallelHyperparameterSearch:
                                 completed=completed_trials,
                                 failed=failed_trials,
                                 best_score=best_score,
-                                best_params=best_trial.hyperparameters
-                                if best_trial
-                                else None,
+                                best_params=(
+                                    best_trial.hyperparameters if best_trial else None
+                                ),
                             )
                     else:
                         failed_trials += 1

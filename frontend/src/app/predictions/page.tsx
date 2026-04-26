@@ -163,8 +163,12 @@ export default function PredictionsPage() {
 
   // 获取置信度颜色
   const getConfidenceColor = (score: number) => {
-    if (score >= 0.8) {return '#4caf50';}
-    if (score >= 0.6) {return '#ff9800';}
+    if (score >= 0.8) {
+      return '#4caf50';
+    }
+    if (score >= 0.6) {
+      return '#ff9800';
+    }
     return '#f44336';
   };
 
@@ -195,7 +199,7 @@ export default function PredictionsPage() {
               <Select
                 value={selectedModel}
                 label="选择预测模型"
-                onChange={(e) => setSelectedModel(e.target.value)}
+                onChange={e => setSelectedModel(e.target.value)}
               >
                 {models.map((model: Model) => (
                   <MenuItem key={model.model_id} value={model.model_id}>
@@ -211,7 +215,7 @@ export default function PredictionsPage() {
               label="股票代码"
               placeholder="输入股票代码，多个用逗号分隔，如: 000001.SZ, 600000.SH"
               value={stockCodes}
-              onChange={(e) => setStockCodes(e.target.value)}
+              onChange={e => setStockCodes(e.target.value)}
               helperText="支持输入多个股票代码，用逗号或空格分隔"
             />
 
@@ -221,7 +225,7 @@ export default function PredictionsPage() {
               <Select
                 value={horizon}
                 label="预测周期"
-                onChange={(e) => setHorizon(e.target.value as any)}
+                onChange={e => setHorizon(e.target.value as any)}
               >
                 <MenuItem value="intraday">日内 (Intraday)</MenuItem>
                 <MenuItem value="short_term">短期 (1-5天)</MenuItem>
@@ -231,9 +235,7 @@ export default function PredictionsPage() {
 
             {/* 置信水平 */}
             <Box>
-              <Typography gutterBottom>
-                置信水平: {(confidenceLevel * 100).toFixed(0)}%
-              </Typography>
+              <Typography gutterBottom>置信水平: {(confidenceLevel * 100).toFixed(0)}%</Typography>
               <Slider
                 value={confidenceLevel}
                 onChange={(_, value) => setConfidenceLevel(value as number)}
@@ -300,14 +302,12 @@ export default function PredictionsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {predictions.map((prediction) => {
+                  {predictions.map(prediction => {
                     const direction = getDirectionDisplay(prediction.predicted_direction);
                     return (
                       <TableRow key={prediction.stock_code}>
                         <TableCell>
-                          <Typography fontWeight="bold">
-                            {prediction.stock_code}
-                          </Typography>
+                          <Typography fontWeight="bold">{prediction.stock_code}</Typography>
                         </TableCell>
                         <TableCell align="center">
                           <Chip
@@ -335,7 +335,14 @@ export default function PredictionsPage() {
                             : '-'}
                         </TableCell>
                         <TableCell align="center">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 1,
+                            }}
+                          >
                             <CircularProgress
                               variant="determinate"
                               value={prediction.confidence_score * 100}
@@ -364,17 +371,20 @@ export default function PredictionsPage() {
                             title={
                               <Box>
                                 <Typography variant="body2">
-                                  VaR: {prediction.risk_assessment.value_at_risk
+                                  VaR:{' '}
+                                  {prediction.risk_assessment.value_at_risk
                                     ? formatPercent(prediction.risk_assessment.value_at_risk)
                                     : 'N/A'}
                                 </Typography>
                                 <Typography variant="body2">
-                                  波动率: {prediction.risk_assessment.volatility
+                                  波动率:{' '}
+                                  {prediction.risk_assessment.volatility
                                     ? formatPercent(prediction.risk_assessment.volatility)
                                     : 'N/A'}
                                 </Typography>
                                 <Typography variant="body2">
-                                  最大回撤: {prediction.risk_assessment.max_drawdown
+                                  最大回撤:{' '}
+                                  {prediction.risk_assessment.max_drawdown
                                     ? formatPercent(prediction.risk_assessment.max_drawdown)
                                     : 'N/A'}
                                 </Typography>
@@ -402,8 +412,8 @@ export default function PredictionsPage() {
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography variant="body2">
                 <strong>说明：</strong>预测结果仅供参考，不构成投资建议。
-                置信度表示模型对预测结果的确信程度，置信区间表示预测值可能的波动范围。
-                风险评估包括 VaR（风险价值）、波动率和最大回撤等指标。
+                置信度表示模型对预测结果的确信程度，置信区间表示预测值可能的波动范围。 风险评估包括
+                VaR（风险价值）、波动率和最大回撤等指标。
               </Typography>
             </Alert>
           </CardContent>

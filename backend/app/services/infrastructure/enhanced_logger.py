@@ -7,11 +7,10 @@ import gzip
 import json
 import logging
 import logging.handlers
-import os
 import threading
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -325,7 +324,7 @@ class EnhancedLogger:
         **kwargs,
     ):
         """记录API请求日志"""
-        message = f"{method} {path} - {status_code} ({duration_ms:.2f}ms)"
+        message = "{method} {path} - {status_code} ({duration_ms:.2f}ms)"
 
         self._log_with_context(
             LogLevel.INFO,

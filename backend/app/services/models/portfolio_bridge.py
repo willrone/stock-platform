@@ -40,7 +40,9 @@ def _extract_model_id_from_task(task_config: Dict[str, Any]) -> str | None:
     candidates = [
         task_config.get("model_id"),
         (task_config.get("backtest_config") or {}).get("model_id"),
-        ((task_config.get("backtest_config") or {}).get("strategy_config") or {}).get("model_id"),
+        ((task_config.get("backtest_config") or {}).get("strategy_config") or {}).get(
+            "model_id"
+        ),
     ]
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
@@ -95,7 +97,11 @@ def _query_signal_summary(session: Any, task_id: str) -> Dict[str, Any]:
     executed_signal_count = sum(1 for row in rows if bool(row.executed))
     rejected_signal_count = raw_signal_count - executed_signal_count
     reason_counts = Counter(
-        (row.execution_reason or "EXECUTED") if bool(row.executed) else (row.execution_reason or "UNEXECUTED_NO_REASON")
+        (
+            (row.execution_reason or "EXECUTED")
+            if bool(row.executed)
+            else (row.execution_reason or "UNEXECUTED_NO_REASON")
+        )
         for row in rows
     )
     stock_counts = Counter(row.stock_code for row in rows)
@@ -134,15 +140,23 @@ def _normalize_datetime(value: Any) -> str | None:
 def _extract_cost_metrics(task_result: Dict[str, Any]) -> Dict[str, Any]:
     cost_statistics = _safe_json_dict(task_result.get("cost_statistics"))
     portfolio_history = task_result.get("portfolio_history")
-    last_snapshot = portfolio_history[-1] if isinstance(portfolio_history, list) and portfolio_history else {}
-    final_value = _safe_number(task_result.get("final_value")) or _safe_number(last_snapshot.get("portfolio_value"))
-    final_value_without_cost = _safe_number(task_result.get("final_value_without_cost")) or _safe_number(
-        last_snapshot.get("portfolio_value_without_cost")
+    last_snapshot = (
+        portfolio_history[-1]
+        if isinstance(portfolio_history, list) and portfolio_history
+        else {}
     )
-    total_return = _safe_number(task_result.get("total_return")) or _safe_number(last_snapshot.get("total_return"))
-    total_return_without_cost = _safe_number(task_result.get("total_return_without_cost")) or _safe_number(
-        last_snapshot.get("total_return_without_cost")
+    final_value = _safe_number(task_result.get("final_value")) or _safe_number(
+        last_snapshot.get("portfolio_value")
     )
+    final_value_without_cost = _safe_number(
+        task_result.get("final_value_without_cost")
+    ) or _safe_number(last_snapshot.get("portfolio_value_without_cost"))
+    total_return = _safe_number(task_result.get("total_return")) or _safe_number(
+        last_snapshot.get("total_return")
+    )
+    total_return_without_cost = _safe_number(
+        task_result.get("total_return_without_cost")
+    ) or _safe_number(last_snapshot.get("total_return_without_cost"))
     total_cost = _safe_number(cost_statistics.get("total_cost"))
     gross_minus_net_value_gap = (
         final_value_without_cost - final_value
@@ -166,7 +180,6 @@ def _extract_cost_metrics(task_result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-
 def _extract_monthly_return_summary(task_result: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "mean": _safe_number(task_result.get("monthly_return_mean")),
@@ -176,7 +189,6 @@ def _extract_monthly_return_summary(task_result: Dict[str, Any]) -> Dict[str, An
         "positive_months": int(task_result.get("positive_months") or 0),
         "negative_months": int(task_result.get("negative_months") or 0),
     }
-
 
 
 def _extract_stock_contribution_summary(task_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -196,16 +208,25 @@ def _extract_stock_contribution_summary(task_result: Dict[str, Any]) -> Dict[str
         )
     normalized_details.sort(key=lambda item: item["total_pnl"], reverse=True)
     best_stock = task_result.get("best_performing_stock")
-    best_stock = best_stock if isinstance(best_stock, dict) else (normalized_details[0] if normalized_details else None)
+    best_stock = (
+        best_stock
+        if isinstance(best_stock, dict)
+        else (normalized_details[0] if normalized_details else None)
+    )
     worst_stock = task_result.get("worst_performing_stock")
-    worst_stock = worst_stock if isinstance(worst_stock, dict) else (normalized_details[-1] if normalized_details else None)
+    worst_stock = (
+        worst_stock
+        if isinstance(worst_stock, dict)
+        else (normalized_details[-1] if normalized_details else None)
+    )
     return {
         "best_stock": best_stock,
         "worst_stock": worst_stock,
         "top_contributors": normalized_details[:3],
-        "bottom_contributors": sorted(normalized_details, key=lambda item: item["total_pnl"])[:3],
+        "bottom_contributors": sorted(
+            normalized_details, key=lambda item: item["total_pnl"]
+        )[:3],
     }
-
 
 
 def _default_bridge_summary(model_id: str) -> Dict[str, Any]:
@@ -231,7 +252,9 @@ def _default_bridge_summary(model_id: str) -> Dict[str, Any]:
     }
 
 
-def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int = 12) -> Dict[str, Any]:
+def build_portfolio_bridge_summary(
+    session: Any, model_id: str, max_tasks: int = 12
+) -> Dict[str, Any]:
     """Return compact formal-task portfolio summaries for a model."""
     if not model_id:
         return _default_bridge_summary(model_id)
@@ -306,7 +329,8 @@ def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int =
                 "status": row.status,
                 "created_at": _normalize_datetime(getattr(row, "created_at", None)),
                 "window_label": _infer_window_label(row.task_name, task_result),
-                "strategy_name": task_result.get("strategy_name") or (task_config.get("backtest_config") or {}).get("strategy_name"),
+                "strategy_name": task_result.get("strategy_name")
+                or (task_config.get("backtest_config") or {}).get("strategy_name"),
                 "period": {
                     "start_date": task_result.get("start_date"),
                     "end_date": task_result.get("end_date"),
@@ -326,12 +350,26 @@ def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int =
     summary["task_count"] = len(matched_tasks)
     summary["tasks"] = matched_tasks[:max_tasks]
 
-    valid_returns = [task for task in matched_tasks if task["portfolio_metrics"].get("total_return") is not None]
-    valid_sharpes = [task for task in matched_tasks if task["portfolio_metrics"].get("sharpe_ratio") is not None]
-    valid_drawdowns = [task for task in matched_tasks if task["portfolio_metrics"].get("max_drawdown") is not None]
+    valid_returns = [
+        task
+        for task in matched_tasks
+        if task["portfolio_metrics"].get("total_return") is not None
+    ]
+    valid_sharpes = [
+        task
+        for task in matched_tasks
+        if task["portfolio_metrics"].get("sharpe_ratio") is not None
+    ]
+    valid_drawdowns = [
+        task
+        for task in matched_tasks
+        if task["portfolio_metrics"].get("max_drawdown") is not None
+    ]
 
     if valid_returns:
-        best_return = max(valid_returns, key=lambda task: task["portfolio_metrics"]["total_return"])
+        best_return = max(
+            valid_returns, key=lambda task: task["portfolio_metrics"]["total_return"]
+        )
         summary["best_by_total_return"] = {
             "task_id": best_return["task_id"],
             "task_name": best_return["task_name"],
@@ -339,7 +377,9 @@ def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int =
             "total_return": best_return["portfolio_metrics"]["total_return"],
         }
     if valid_sharpes:
-        best_sharpe = max(valid_sharpes, key=lambda task: task["portfolio_metrics"]["sharpe_ratio"])
+        best_sharpe = max(
+            valid_sharpes, key=lambda task: task["portfolio_metrics"]["sharpe_ratio"]
+        )
         summary["best_by_sharpe"] = {
             "task_id": best_sharpe["task_id"],
             "task_name": best_sharpe["task_name"],
@@ -347,7 +387,9 @@ def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int =
             "sharpe_ratio": best_sharpe["portfolio_metrics"]["sharpe_ratio"],
         }
     if valid_drawdowns:
-        smallest_drawdown = max(valid_drawdowns, key=lambda task: task["portfolio_metrics"]["max_drawdown"])
+        smallest_drawdown = max(
+            valid_drawdowns, key=lambda task: task["portfolio_metrics"]["max_drawdown"]
+        )
         summary["smallest_drawdown"] = {
             "task_id": smallest_drawdown["task_id"],
             "task_name": smallest_drawdown["task_name"],
@@ -367,35 +409,48 @@ def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int =
             "task_name": task["task_name"],
             "window_label": task["window_label"],
             "total_cost": task["cost_metrics"].get("total_cost"),
-            "gross_minus_net_value_gap": task["cost_metrics"].get("gross_minus_net_value_gap"),
+            "gross_minus_net_value_gap": task["cost_metrics"].get(
+                "gross_minus_net_value_gap"
+            ),
             "total_return": task["portfolio_metrics"].get("total_return"),
-            "total_return_without_cost": task["cost_metrics"].get("total_return_without_cost"),
+            "total_return_without_cost": task["cost_metrics"].get(
+                "total_return_without_cost"
+            ),
         }
         for task in valid_cost_tasks[:max_tasks]
     ]
     if valid_cost_tasks:
         largest_cost_gap = max(
             valid_cost_tasks,
-            key=lambda task: task["cost_metrics"].get("gross_minus_net_value_gap") or float("-inf"),
+            key=lambda task: task["cost_metrics"].get("gross_minus_net_value_gap")
+            or float("-inf"),
         )
         summary["cost_vs_gross_gap_rollup"]["largest_cost_gap"] = {
             "task_id": largest_cost_gap["task_id"],
             "task_name": largest_cost_gap["task_name"],
             "window_label": largest_cost_gap["window_label"],
-            "gross_minus_net_value_gap": largest_cost_gap["cost_metrics"].get("gross_minus_net_value_gap"),
+            "gross_minus_net_value_gap": largest_cost_gap["cost_metrics"].get(
+                "gross_minus_net_value_gap"
+            ),
         }
         best_gross = max(
             valid_cost_tasks,
-            key=lambda task: task["cost_metrics"].get("total_return_without_cost") or float("-inf"),
+            key=lambda task: task["cost_metrics"].get("total_return_without_cost")
+            or float("-inf"),
         )
         summary["cost_vs_gross_gap_rollup"]["best_gross_return"] = {
             "task_id": best_gross["task_id"],
             "task_name": best_gross["task_name"],
             "window_label": best_gross["window_label"],
-            "total_return_without_cost": best_gross["cost_metrics"].get("total_return_without_cost"),
+            "total_return_without_cost": best_gross["cost_metrics"].get(
+                "total_return_without_cost"
+            ),
         }
         if valid_returns:
-            best_net = max(valid_returns, key=lambda task: task["portfolio_metrics"]["total_return"])
+            best_net = max(
+                valid_returns,
+                key=lambda task: task["portfolio_metrics"]["total_return"],
+            )
             summary["cost_vs_gross_gap_rollup"]["best_net_return"] = {
                 "task_id": best_net["task_id"],
                 "task_name": best_net["task_name"],
@@ -403,7 +458,9 @@ def build_portfolio_bridge_summary(session: Any, model_id: str, max_tasks: int =
                 "total_return": best_net["portfolio_metrics"].get("total_return"),
             }
 
-    aggregated_stocks = sorted(stock_rollup.values(), key=lambda item: item["total_pnl"], reverse=True)
+    aggregated_stocks = sorted(
+        stock_rollup.values(), key=lambda item: item["total_pnl"], reverse=True
+    )
     summary["per_stock_contribution_rollup"]["stocks"] = aggregated_stocks
     if aggregated_stocks:
         summary["per_stock_contribution_rollup"]["best_overall"] = aggregated_stocks[0]

@@ -88,12 +88,14 @@ class SyncResult:
             "end_time": self.end_time.isoformat(),
             "duration_seconds": self.duration.total_seconds(),
             "error_message": self.error_message,
-            "data_range": {
-                "start": self.data_range[0].isoformat(),
-                "end": self.data_range[1].isoformat(),
-            }
-            if self.data_range
-            else None,
+            "data_range": (
+                {
+                    "start": self.data_range[0].isoformat(),
+                    "end": self.data_range[1].isoformat(),
+                }
+                if self.data_range
+                else None
+            ),
         }
 
 
@@ -172,9 +174,11 @@ class SyncProgress:
             "failed_stocks": self.failed_stocks,
             "current_stock": self.current_stock,
             "progress_percentage": self.progress_percentage,
-            "estimated_remaining_time_seconds": self.estimated_remaining_time.total_seconds()
-            if self.estimated_remaining_time
-            else None,
+            "estimated_remaining_time_seconds": (
+                self.estimated_remaining_time.total_seconds()
+                if self.estimated_remaining_time
+                else None
+            ),
             "start_time": self.start_time.isoformat(),
             "status": self.status.value,
             "last_update": self.last_update.isoformat(),

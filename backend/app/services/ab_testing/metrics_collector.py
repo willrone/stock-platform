@@ -2,16 +2,16 @@
 业务指标收集器
 收集关键业务指标数据，支持实时指标计算
 """
+
 import asyncio
-import json
 import statistics
 import threading
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from loguru import logger
@@ -478,7 +478,9 @@ class BusinessMetricsCollector:
                 metric_definition
             )
 
-        logger.info(f"注册业务指标: {metric_definition.name} ({metric_definition.metric_id})")
+        logger.info(
+            f"注册业务指标: {metric_definition.name} ({metric_definition.metric_id})"
+        )
 
     def unregister_metric(self, metric_id: str):
         """注销指标定义"""

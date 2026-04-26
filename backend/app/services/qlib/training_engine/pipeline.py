@@ -137,10 +137,14 @@ class QlibTrainingPipeline:
             model_id,
         )
 
-    async def extract_feature_importance(self, model: Any, model_type: Any) -> Dict[str, float]:
+    async def extract_feature_importance(
+        self, model: Any, model_type: Any
+    ) -> Dict[str, float]:
         """提取特征重要性。"""
         return await self.engine._extract_feature_importance(model, model_type)
 
-    async def save_model(self, model: Any, model_id: str, model_config: Dict[str, Any]) -> str:
+    async def save_model(
+        self, model: Any, model_id: str, model_config: Dict[str, Any]
+    ) -> str:
         """落盘模型产物。"""
         return await self.engine._save_qlib_model(model, model_id, model_config)

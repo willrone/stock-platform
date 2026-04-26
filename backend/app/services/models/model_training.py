@@ -6,13 +6,12 @@
 以及LSTM、XGBoost等基线模型。
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -21,7 +20,6 @@ import torch.nn as nn
 import xgboost as xgb
 from loguru import logger
 from sklearn.metrics import accuracy_score, precision_score, recall_score
-from sklearn.model_selection import TimeSeriesSplit
 
 
 # 检测可用的计算设备
@@ -46,11 +44,7 @@ def get_device():
 
 try:
     import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    from qlib.config import REG_CN
 
     QLIB_AVAILABLE = True
 except ImportError as e:
@@ -92,7 +86,9 @@ except ImportError:
     TaskError = Exception
     ErrorSeverity = None
     ErrorContext = None
-    handle_async_exception = lambda func: func
+
+    def handle_async_exception(func):
+        return func
 
 # 导入其他依赖
 from ..data.simple_data_service import SimpleDataService
@@ -109,6 +105,7 @@ except ImportError:
     Informer = None
 
 try:
+    from .feature_engineering import DataPreprocessor
     from .model_evaluation import BacktestMetrics, ModelEvaluator, ModelVersionManager
 
     MODEL_EVALUATION_AVAILABLE = True
@@ -117,6 +114,7 @@ except ImportError:
     ModelEvaluator = None
     ModelVersionManager = None
     BacktestMetrics = None
+    DataPreprocessor = None
 
 try:
     from .advanced_training import (
@@ -377,7 +375,9 @@ class QlibDataProvider:
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
+        logger.info(
+            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
+        )
         return combined_features
 
     def _add_fundamental_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -439,7 +439,6 @@ class ModelTrainingService:
         data_service = SimpleDataService()
 
         # 使用QlibDataProvider作为数据提供器
-        from app.core.config import settings
 
         self.data_provider = QlibDataProvider(data_service)
         await self.data_provider.initialize_qlib()
@@ -611,7 +610,11 @@ class ModelTrainingService:
 
         # 填充缺失值（使用更合理的策略）
         # 对于价格类特征使用前向填充，对于其他特征使用中位数填充
-        price_cols = [col for col in feature_cols if col in ['open', 'high', 'low', 'close', 'volume']]
+        price_cols = [
+            col
+            for col in feature_cols
+            if col in ["open", "high", "low", "close", "volume"]
+        ]
         other_cols = [col for col in feature_cols if col not in price_cols]
 
         if price_cols:
@@ -619,7 +622,11 @@ class ModelTrainingService:
         if other_cols:
             for col in other_cols:
                 median_val = features_df[col].median()
-                features_df[col] = features_df[col].ffill().fillna(median_val if pd.notna(median_val) else 0)
+                features_df[col] = (
+                    features_df[col]
+                    .ffill()
+                    .fillna(median_val if pd.notna(median_val) else 0)
+                )
 
         # 为每只股票创建序列数据
         X_list, y_list = [], []
@@ -841,7 +848,7 @@ class ModelTrainingService:
 
                 if (epoch + 1) % 10 == 0:
                     logger.info(
-                        f"Epoch {epoch+1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
+                        "Epoch {epoch+1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
                     )
                     if device.type == "cuda":
                         logger.info(
@@ -925,14 +932,21 @@ class ModelTrainingService:
             "name": model_filename,
             "type": config.model_type.value,
             "version": "1.0",
-            "parameters": {k: str(v) if isinstance(v, ModelType) else v for k, v in config.__dict__.items()},
-            "performance_metrics": metrics.to_dict() if hasattr(metrics, 'to_dict') else {},
+            "parameters": {
+                k: str(v) if isinstance(v, ModelType) else v
+                for k, v in config.__dict__.items()
+            },
+            "performance_metrics": (
+                metrics.to_dict() if hasattr(metrics, "to_dict") else {}
+            ),
             "file_path": str(model_path),
             "created_at": datetime.now().isoformat(),
             "is_active": True,
         }
 
-        logger.info(f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}")
+        logger.info(
+            f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}"
+        )
 
         return str(model_path)
 
@@ -1070,7 +1084,9 @@ class ModelTrainingService:
             model_id, new_X, new_y, current_model
         )
 
-        logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}")
+        logger.info(
+            f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}"
+        )
         return updated_model, metrics
 
     @handle_async_exception
@@ -1124,9 +1140,11 @@ class ModelTrainingService:
                         "model_id": model_id,
                         "model_type": model_type,
                         "model_path": model_path,
-                        "metrics": metrics.__dict__
-                        if hasattr(metrics, "__dict__")
-                        else metrics,
+                        "metrics": (
+                            metrics.__dict__
+                            if hasattr(metrics, "__dict__")
+                            else metrics
+                        ),
                     }
                 )
 
@@ -1150,7 +1168,9 @@ class ModelTrainingService:
             "total_base_models": len(base_model_ids),
         }
 
-        logger.info(f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型")
+        logger.info(
+            f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型"
+        )
         return result
 
 

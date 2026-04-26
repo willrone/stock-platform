@@ -4,9 +4,7 @@
 协调特征计算、存储和管理
 """
 
-import asyncio
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -59,7 +57,9 @@ class FeaturePipeline:
         sync_type: str = "incremental",
     ):
         """数据同步完成回调"""
-        logger.info(f"收到数据同步完成通知: {stock_code}, 日期范围: {date_range}, 类型: {sync_type}")
+        logger.info(
+            f"收到数据同步完成通知: {stock_code}, 日期范围: {date_range}, 类型: {sync_type}"
+        )
 
         try:
             # 使相关缓存失效
@@ -100,7 +100,9 @@ class FeaturePipeline:
                 return cached_data
 
         # 计算特征
-        logger.info(f"开始计算特征: {len(stock_codes)} 只股票, {len(feature_names)} 个特征")
+        logger.info(
+            f"开始计算特征: {len(stock_codes)} 只股票, {len(feature_names)} 个特征"
+        )
 
         all_features = []
 
@@ -161,9 +163,11 @@ class FeaturePipeline:
         await self.feature_store.register_feature(
             feature_name=feature_name,
             feature_type=feature_type,
-            calculation_method=calculator.__name__
-            if hasattr(calculator, "__name__")
-            else str(calculator),
+            calculation_method=(
+                calculator.__name__
+                if hasattr(calculator, "__name__")
+                else str(calculator)
+            ),
             dependencies=dependencies or [],
             update_frequency=update_frequency,
             description=description,
@@ -394,7 +398,9 @@ class FeaturePipeline:
             )
 
             if not features_df.empty:
-                logger.info(f"增量特征计算完成: {stock_code}, {len(features_df)} 条记录")
+                logger.info(
+                    f"增量特征计算完成: {stock_code}, {len(features_df)} 条记录"
+                )
 
         except Exception as e:
             logger.error(f"增量特征计算失败 {stock_code}: {e}")

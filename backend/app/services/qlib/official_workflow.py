@@ -154,7 +154,9 @@ def build_official_lightgbm_workflow_config(
     )
 
 
-def _normalize_instruments_override(instruments_override: Optional[Sequence[str]]) -> Optional[list[str]]:
+def _normalize_instruments_override(
+    instruments_override: Optional[Sequence[str]],
+) -> Optional[list[str]]:
     if not instruments_override:
         return None
 
@@ -203,8 +205,10 @@ def build_official_dataset_config(
 
 
 def _count_rows(segment_data: Any) -> int:
-    if hasattr(segment_data, "shape") and getattr(segment_data, "shape"):
-        return int(segment_data.shape[0])
+    if hasattr(segment_data, "shape"):
+        shape = segment_data.shape
+        if shape:
+            return int(shape[0])
     if hasattr(segment_data, "__len__"):
         return int(len(segment_data))
     return 0
@@ -219,7 +223,9 @@ def create_official_dataset_adapter(
 ) -> OfficialDatasetAdapter:
     """Instantiate the official DatasetH and wrap it with lightweight metadata."""
 
-    dataset_config = build_official_dataset_config(workflow, instruments_override=stock_codes)
+    dataset_config = build_official_dataset_config(
+        workflow, instruments_override=stock_codes
+    )
     if provider_uri is not None:
         if qlib_initializer is None:
             import qlib
@@ -238,7 +244,9 @@ def create_official_dataset_adapter(
     dataset = dataset_factory(dataset_config)
     segment_lengths: dict[str, int] = {}
     for segment in ("train", "valid", "test"):
-        segment_lengths[segment] = _count_rows(dataset.prepare(segment, col_set="label"))
+        segment_lengths[segment] = _count_rows(
+            dataset.prepare(segment, col_set="label")
+        )
 
     return OfficialDatasetAdapter(
         dataset=dataset,

@@ -73,18 +73,12 @@ class BacktestReportBuilder:
                 "execution_rate_actionable", 0.0
             ),
             "raw_signal_count": signal_stats.get("raw_signal_count", 0),
-            "actionable_signal_count": signal_stats.get(
-                "actionable_signal_count", 0
-            ),
+            "actionable_signal_count": signal_stats.get("actionable_signal_count", 0),
             "executed_signal_count": signal_stats.get("executed_signal_count", 0),
-            "top_rejection_reasons": signal_stats.get(
-                "top_rejection_reasons", []
-            ),
+            "top_rejection_reasons": signal_stats.get("top_rejection_reasons", []),
         }
 
-    def _build_basic_report(
-        self, payload: BacktestReportBuildInput
-    ) -> dict[str, Any]:
+    def _build_basic_report(self, payload: BacktestReportBuildInput) -> dict[str, Any]:
         """Build strategy-level scalar fields for the report."""
         return {
             "strategy_name": payload.strategy_name,
@@ -114,9 +108,7 @@ class BacktestReportBuilder:
             return portfolio_history[-1]["portfolio_value"]
         return portfolio_manager.get_portfolio_value({})
 
-    def _build_metrics(
-        self, performance_metrics: dict[str, float]
-    ) -> dict[str, float]:
+    def _build_metrics(self, performance_metrics: dict[str, float]) -> dict[str, float]:
         """Build optimizer-facing metrics block."""
         return {
             "sharpe_ratio": performance_metrics.get("sharpe_ratio", 0),
@@ -164,7 +156,9 @@ class BacktestReportBuilder:
             "action": self._get_trade_attr(trade, "action"),
             "quantity": self._get_trade_attr(trade, "quantity"),
             "price": self._get_trade_attr(trade, "price"),
-            "timestamp": timestamp.isoformat() if hasattr(timestamp, "isoformat") else timestamp,
+            "timestamp": (
+                timestamp.isoformat() if hasattr(timestamp, "isoformat") else timestamp
+            ),
             "commission": self._get_trade_attr(trade, "commission"),
             "slippage_cost": self._get_trade_attr(trade, "slippage_cost", 0.0),
             "pnl": self._get_trade_attr(trade, "pnl"),
@@ -244,12 +238,8 @@ class BacktestReportBuilder:
             "excess_return_without_cost": {
                 "mean": metrics_without_cost.get("mean", 0),
                 "std": metrics_without_cost.get("std", 0),
-                "annualized_return": metrics_without_cost.get(
-                    "annualized_return", 0
-                ),
-                "information_ratio": metrics_without_cost.get(
-                    "information_ratio", 0
-                ),
+                "annualized_return": metrics_without_cost.get("annualized_return", 0),
+                "information_ratio": metrics_without_cost.get("information_ratio", 0),
                 "max_drawdown": metrics_without_cost.get("max_drawdown", 0),
             },
             "excess_return_with_cost": {
@@ -277,9 +267,7 @@ class BacktestReportBuilder:
             "excess_return_with_cost": excess_metrics["excess_return_with_cost"],
         }
 
-    def _extract_benchmark(
-        self, strategy_config: Optional[dict[str, Any]]
-    ) -> Any:
+    def _extract_benchmark(self, strategy_config: Optional[dict[str, Any]]) -> Any:
         """Extract benchmark config if present."""
         if not isinstance(strategy_config, dict):
             return None
@@ -306,7 +294,9 @@ class BacktestReportBuilder:
             payload.end_date,
         )
         if benchmark_returns is None or benchmark_returns.empty:
-            logger.warning(f"无法为 official_portfolio_analysis 加载基准收益序列: {benchmark}")
+            logger.warning(
+                f"无法为 official_portfolio_analysis 加载基准收益序列: {benchmark}"
+            )
             return None
 
         common_dates = (
@@ -320,12 +310,12 @@ class BacktestReportBuilder:
             )
             return None
 
-        excess_without_cost = returns_without_cost.loc[common_dates] - benchmark_returns.loc[
-            common_dates
-        ]
-        excess_with_cost = returns_with_cost.loc[common_dates] - benchmark_returns.loc[
-            common_dates
-        ]
+        excess_without_cost = (
+            returns_without_cost.loc[common_dates] - benchmark_returns.loc[common_dates]
+        )
+        excess_with_cost = (
+            returns_with_cost.loc[common_dates] - benchmark_returns.loc[common_dates]
+        )
 
         return {
             "excess_return_without_cost": self._run_qlib_risk_analysis(
@@ -343,7 +333,11 @@ class BacktestReportBuilder:
             return None, None
 
         frame = pd.DataFrame(portfolio_history)
-        if frame.empty or "date" not in frame.columns or "portfolio_value" not in frame.columns:
+        if (
+            frame.empty
+            or "date" not in frame.columns
+            or "portfolio_value" not in frame.columns
+        ):
             return None, None
 
         frame = frame.copy()
@@ -426,10 +420,15 @@ class BacktestReportBuilder:
                 )
 
             try:
-                local_rows = data_service.load_from_local(candidate, start_date, end_date)
+                local_rows = data_service.load_from_local(
+                    candidate, start_date, end_date
+                )
                 if local_rows:
                     benchmark_df = pd.DataFrame(local_rows)
-                    if "date" in benchmark_df.columns and "close" in benchmark_df.columns:
+                    if (
+                        "date" in benchmark_df.columns
+                        and "close" in benchmark_df.columns
+                    ):
                         benchmark_df["date"] = pd.to_datetime(benchmark_df["date"])
                         benchmark_df = benchmark_df.sort_values("date")
                         series = benchmark_df.set_index("date")["close"].astype(float)
@@ -445,7 +444,11 @@ class BacktestReportBuilder:
     def _benchmark_code_candidates(self, benchmark: str) -> list[str]:
         """Generate likely local-code candidates from Qlib/API benchmark formats."""
         candidates = [benchmark]
-        if len(benchmark) == 8 and benchmark[:2] in {"SH", "SZ"} and benchmark[2:].isdigit():
+        if (
+            len(benchmark) == 8
+            and benchmark[:2] in {"SH", "SZ"}
+            and benchmark[2:].isdigit()
+        ):
             candidates.append(f"{benchmark[2:]}.{benchmark[:2]}")
         elif len(benchmark) == 9 and benchmark[6] == "." and benchmark[:6].isdigit():
             exchange = benchmark[7:]
@@ -523,7 +526,9 @@ class BacktestReportBuilder:
                 snapshot["portfolio_value"]
                 for snapshot in portfolio_manager.portfolio_history
             ],
-            index=[snapshot["date"] for snapshot in portfolio_manager.portfolio_history],
+            index=[
+                snapshot["date"] for snapshot in portfolio_manager.portfolio_history
+            ],
         ).sort_index()
 
         additional_metrics: dict[str, Any] = {}
@@ -592,9 +597,7 @@ class BacktestReportBuilder:
             )
         return metrics
 
-    def _build_stock_performance(
-        self, trades: list[Any]
-    ) -> dict[str, dict[str, Any]]:
+    def _build_stock_performance(self, trades: list[Any]) -> dict[str, dict[str, Any]]:
         """Aggregate trade performance by stock code."""
         stock_performance: dict[str, dict[str, Any]] = {}
         for trade in trades:
@@ -614,9 +617,7 @@ class BacktestReportBuilder:
             stats["avg_pnl_per_trade"] = float(stats["total_pnl"]) / trade_count
         return stock_performance
 
-    def _get_trade_attr(
-        self, trade: Any, field_name: str, default: Any = None
-    ) -> Any:
+    def _get_trade_attr(self, trade: Any, field_name: str, default: Any = None) -> Any:
         """Read trade fields from either dict payloads or trade objects."""
         if isinstance(trade, dict):
             return trade.get(field_name, default)

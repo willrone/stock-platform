@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 from loguru import logger
 
 
@@ -112,7 +112,7 @@ class WebSocketManager:
                 del self.user_connections[user_id]
 
         # 清理任务订阅
-        for task_id, subscribers in self.task_subscriptions.items():
+        for _task_id, subscribers in self.task_subscriptions.items():
             subscribers.discard(connection_id)
 
         # 清理空的订阅集合
@@ -182,7 +182,9 @@ class WebSocketManager:
         if task_id in self.task_subscriptions:
             subscribers = list(self.task_subscriptions[task_id])
             await self._broadcast_to_connections(subscribers, message)
-            logger.info(f"任务状态通知已发送: {task_id}, 状态: {status}, 订阅者: {len(subscribers)}")
+            logger.info(
+                f"任务状态通知已发送: {task_id}, 状态: {status}, 订阅者: {len(subscribers)}"
+            )
 
     async def notify_user(self, user_id: str, message_type: str, data: Dict[str, Any]):
         """向特定用户发送通知"""
@@ -216,7 +218,9 @@ class WebSocketManager:
         # 发送给所有连接
         connections = list(self.active_connections.keys())
         await self._broadcast_to_connections(connections, alert_message)
-        logger.info(f"系统告警已广播: {alert_type}, 严重程度: {severity}, 接收者: {len(connections)}")
+        logger.info(
+            f"系统告警已广播: {alert_type}, 严重程度: {severity}, 接收者: {len(connections)}"
+        )
 
     async def _send_to_connection(self, connection_id: str, message: WebSocketMessage):
         """向单个连接发送消息"""

@@ -130,7 +130,9 @@ class TaskNotifier:
                 await self._notify_general_task_update(task)
 
         except Exception as e:
-            logger.error(f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True)
+            logger.error(
+                f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True
+            )
 
     async def _notify_backtest_update(self, task):
         """通知回测任务更新"""
@@ -174,7 +176,9 @@ class TaskNotifier:
             )
 
         except Exception as e:
-            logger.error(f"发送回测任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True)
+            logger.error(
+                f"发送回测任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True
+            )
             # 如果回测WebSocket通知失败，回退到通用通知
             await self._notify_general_task_update(task)
 
@@ -357,7 +361,9 @@ class TaskNotifier:
                     "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
-                logger.debug(f"已发送任务进度更新: {task.task_id}, 进度: {task.progress}%")
+                logger.debug(
+                    f"已发送任务进度更新: {task.task_id}, 进度: {task.progress}%"
+                )
 
             elif task.status == TaskStatus.COMPLETED.value:
                 # 已完成：发送完成消息
@@ -367,9 +373,9 @@ class TaskNotifier:
                     "task_name": task.task_name,
                     "status": task.status,
                     "progress": task.progress,
-                    "completed_at": task.completed_at.isoformat()
-                    if task.completed_at
-                    else None,
+                    "completed_at": (
+                        task.completed_at.isoformat() if task.completed_at else None
+                    ),
                     "results": task.result,
                     "timestamp": utcnow().isoformat(),
                 }
@@ -388,7 +394,9 @@ class TaskNotifier:
                     "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task.task_id, message)
-                logger.debug(f"已发送任务失败通知: {task.task_id}, 错误: {task.error_message}")
+                logger.debug(
+                    f"已发送任务失败通知: {task.task_id}, 错误: {task.error_message}"
+                )
             else:
                 # 其他状态：发送通用更新
                 message = {
@@ -407,7 +415,9 @@ class TaskNotifier:
                 )
 
         except Exception as e:
-            logger.error(f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True)
+            logger.error(
+                f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True
+            )
 
 
 # 全局任务通知器实例

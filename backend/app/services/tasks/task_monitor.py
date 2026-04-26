@@ -171,7 +171,11 @@ class TaskMonitor:
                     logger.info(f"自动修复任务: {task_id} ({task_name})")
                 else:
                     result["failed_tasks"].append(
-                        {"task_id": task_id, "task_name": task_name, "error": "修复失败"}
+                        {
+                            "task_id": task_id,
+                            "task_name": task_name,
+                            "error": "修复失败",
+                        }
                     )
             else:
                 logger.info(

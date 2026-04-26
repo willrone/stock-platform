@@ -9,9 +9,6 @@
 - 早停策略
 """
 
-import asyncio
-import json
-import math
 import random
 from datetime import datetime
 from enum import Enum
@@ -20,7 +17,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import optuna
 from loguru import logger
-from scipy.stats import randint, uniform
 from sklearn.model_selection import ParameterGrid
 
 
@@ -141,7 +137,9 @@ class HyperparameterOptimizer:
             # 缓存最佳参数
             self.best_params_cache[model_type] = result["best_params"]
 
-            logger.info(f"超参数优化完成: {model_type}, 最佳得分: {result['best_score']}")
+            logger.info(
+                f"超参数优化完成: {model_type}, 最佳得分: {result['best_score']}"
+            )
             return result
 
         except Exception as e:
@@ -209,9 +207,11 @@ class HyperparameterOptimizer:
                 optuna_objective,
                 n_trials=n_trials,
                 timeout=timeout,
-                callbacks=[self._create_early_stopping_callback(early_stopping_rounds)]
-                if early_stopping_rounds
-                else None,
+                callbacks=(
+                    [self._create_early_stopping_callback(early_stopping_rounds)]
+                    if early_stopping_rounds
+                    else None
+                ),
             )
 
             return {
@@ -541,9 +541,9 @@ class HyperparameterOptimizer:
                     {
                         "trial": trial,
                         "params": params,
-                        "score": float("-inf")
-                        if direction == "maximize"
-                        else float("inf"),
+                        "score": (
+                            float("-inf") if direction == "maximize" else float("inf")
+                        ),
                         "error": str(e),
                     }
                 )

@@ -15,14 +15,11 @@ from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import AuditLogger
 from app.models.task_models import (
     BacktestResult,
-    BacktestTaskConfig,
     ModelInfo,
     PredictionResult,
-    PredictionTaskConfig,
     Task,
     TaskStatus,
     TaskType,
-    TrainingTaskConfig,
 )
 
 
@@ -180,7 +177,9 @@ class TaskRepository:
     ) -> int:
         """使用 COUNT(*) 高效获取用户任务总数"""
         try:
-            query = self.db.query(func.count(Task.task_id)).filter(Task.user_id == user_id)
+            query = self.db.query(func.count(Task.task_id)).filter(
+                Task.user_id == user_id
+            )
 
             if status_filter:
                 query = query.filter(Task.status == status_filter.value)
@@ -257,7 +256,6 @@ class TaskRepository:
     ) -> "Task":
         """更新任务状态"""
         # 在方法内部确保 Any 可用（用于类型检查，但不影响运行时）
-        from typing import Any, Dict
 
         if result is not None and not isinstance(result, dict):
             raise TypeError(f"result must be a dict, got {type(result)}")
@@ -341,7 +339,9 @@ class TaskRepository:
             self.db.commit()
             self.db.refresh(task)
 
-            logger.debug(f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%")
+            logger.debug(
+                f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%"
+            )
             return task
 
         except TaskError:
@@ -451,7 +451,9 @@ class TaskRepository:
                         logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
 
                 if total_deleted > 0:
-                    logger.info(f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录")
+                    logger.info(
+                        f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录"
+                    )
                     self.db.flush()  # 刷新但先不提交，等主任务删除一起提交
             except Exception as e:
                 # 删除详细数据失败不影响主任务删除
@@ -483,7 +485,9 @@ class TaskRepository:
             error_msg = str(e)
             # 检查是否是数据库约束错误
             if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
-                logger.error(f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}")
+                logger.error(
+                    f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}"
+                )
                 raise TaskError(
                     message=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除。错误详情: {error_msg}",
                     severity=ErrorSeverity.HIGH,
@@ -513,9 +517,7 @@ class TaskRepository:
 
             # 按状态分组计数
             status_rows = (
-                _base_filter(
-                    self.db.query(Task.status, func.count(Task.task_id))
-                )
+                _base_filter(self.db.query(Task.status, func.count(Task.task_id)))
                 .group_by(Task.status)
                 .all()
             )
@@ -523,9 +525,7 @@ class TaskRepository:
 
             # 按类型分组计数
             type_rows = (
-                _base_filter(
-                    self.db.query(Task.task_type, func.count(Task.task_id))
-                )
+                _base_filter(self.db.query(Task.task_type, func.count(Task.task_id)))
                 .group_by(Task.task_type)
                 .all()
             )
@@ -536,9 +536,7 @@ class TaskRepository:
             # 计算平均执行时间（仅已完成的任务）
             avg_duration = 0
             completed_with_times = (
-                _base_filter(
-                    self.db.query(Task.started_at, Task.completed_at)
-                )
+                _base_filter(self.db.query(Task.started_at, Task.completed_at))
                 .filter(
                     Task.started_at.isnot(None),
                     Task.completed_at.isnot(None),
@@ -841,9 +839,7 @@ class ModelInfoRepository:
         """
         try:
             direct_match = (
-                self.db.query(ModelInfo)
-                .filter(ModelInfo.model_id == model_id)
-                .first()
+                self.db.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
             )
             if direct_match:
                 return direct_match

@@ -2,8 +2,7 @@
 图表数据生成器 - 为回测结果生成各种图表所需的数据
 """
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -129,9 +128,11 @@ class ChartDataGenerator:
         max_dd_idx = drawdown.idxmin()
         max_drawdown_info = {
             "max_drawdown": float(drawdown.min()),
-            "max_drawdown_date": df.loc[max_dd_idx, "date"].isoformat()
-            if pd.notna(df.loc[max_dd_idx, "date"])
-            else "",
+            "max_drawdown_date": (
+                df.loc[max_dd_idx, "date"].isoformat()
+                if pd.notna(df.loc[max_dd_idx, "date"])
+                else ""
+            ),
             "max_drawdown_value": float(values.iloc[max_dd_idx]),
         }
 
@@ -236,16 +237,18 @@ class ChartDataGenerator:
             ),
             "winning_trades": winning_trades,
             "losing_trades": losing_trades,
-            "win_rate": winning_trades / (winning_trades + losing_trades)
-            if (winning_trades + losing_trades) > 0
-            else 0,
+            "win_rate": (
+                winning_trades / (winning_trades + losing_trades)
+                if (winning_trades + losing_trades) > 0
+                else 0
+            ),
             "avg_profit": total_profit / winning_trades if winning_trades > 0 else 0,
             "avg_loss": total_loss / losing_trades if losing_trades > 0 else 0,
-            "profit_factor": total_profit / total_loss
-            if total_loss > 0
-            else float("inf")
-            if total_profit > 0
-            else 0,
+            "profit_factor": (
+                total_profit / total_loss
+                if total_loss > 0
+                else float("inf") if total_profit > 0 else 0
+            ),
         }
 
         return {"profit_distribution": profit_distribution, "trade_stats": trade_stats}
@@ -300,11 +303,11 @@ class ChartDataGenerator:
                     "stock_code": stock_code,
                     "total_pnl": float(stats["total_pnl"]),
                     "trade_count": stats["trade_count"],
-                    "avg_pnl_per_trade": float(
-                        stats["total_pnl"] / stats["trade_count"]
-                    )
-                    if stats["trade_count"] > 0
-                    else 0,
+                    "avg_pnl_per_trade": (
+                        float(stats["total_pnl"] / stats["trade_count"])
+                        if stats["trade_count"] > 0
+                        else 0
+                    ),
                 }
             )
 
@@ -336,7 +339,9 @@ class ChartDataGenerator:
 
         # 基础风险指标
         risk_metrics = {
-            "volatility": float(returns.std() * np.sqrt(252) * 100),  # 年化波动率（百分比）
+            "volatility": float(
+                returns.std() * np.sqrt(252) * 100
+            ),  # 年化波动率（百分比）
             "sharpe_ratio": float(backtest_result.get("sharpe_ratio", 0)),
             "max_drawdown": float(
                 backtest_result.get("max_drawdown", 0) * 100

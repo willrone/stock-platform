@@ -8,7 +8,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from ..models import SignalType, TradingSignal
 
@@ -66,8 +66,10 @@ class SignalIntegrator:
         Returns:
             整合后的信号列表
         """
-        logger.info(f"🔗 SignalIntegrator.integrate 被调用: 输入 {len(signals)} 个信号, 方法={self.method}")
-        
+        logger.info(
+            f"🔗 SignalIntegrator.integrate 被调用: 输入 {len(signals)} 个信号, 方法={self.method}"
+        )
+
         if not signals:
             logger.warning("⚠️ SignalIntegrator: 输入信号为空，返回空列表")
             return []
@@ -229,7 +231,7 @@ class SignalIntegrator:
                 # 修复：不再返回 None，而是选择最近的信号类型
                 logger.debug(
                     f"股票 {stock_code} 信号完全平局 (buy={buy_count}, sell={sell_count}, "
-                    f"buy_score={buy_score:.4f}, sell_score={sell_score:.4f}), "
+                    "buy_score={buy_score:.4f}, sell_score={sell_score:.4f}), "
                     f"选择最新信号类型"
                 )
                 # 使用最新的信号类型
@@ -250,7 +252,9 @@ class SignalIntegrator:
 
         # 生成最终信号
         reasons = [s.reason for s in signals]
-        integrated_reason = f"组合信号: {', '.join(set(reasons[:3]))}"  # 最多显示3个原因
+        integrated_reason = (
+            f"组合信号: {', '.join(set(reasons[:3]))}"  # 最多显示3个原因
+        )
 
         integrated_signal = TradingSignal(
             timestamp=integrated_timestamp,
@@ -353,7 +357,9 @@ class SignalIntegrator:
             ]
             scored.sort(reverse=True)
         elif self.method == "borda":
-            scored = [(borda_acc[c], strength_sum[c], vote_count[c], c) for c in candidates]
+            scored = [
+                (borda_acc[c], strength_sum[c], vote_count[c], c) for c in candidates
+            ]
             scored.sort(reverse=True)
         else:  # consensus_topk
             scored = [(vote_count[c], strength_sum[c], c) for c in candidates]
@@ -368,10 +374,18 @@ class SignalIntegrator:
         for item in top:
             if self.method == "consensus_topk":
                 votes, ssum, code = item
-                extra = {"votes": int(votes), "score": float(votes), "strength_sum": float(ssum)}
+                extra = {
+                    "votes": int(votes),
+                    "score": float(votes),
+                    "strength_sum": float(ssum),
+                }
             else:
                 score, ssum, votes, code = item
-                extra = {"votes": int(votes), "score": float(score), "strength_sum": float(ssum)}
+                extra = {
+                    "votes": int(votes),
+                    "score": float(score),
+                    "strength_sum": float(ssum),
+                }
 
             ref = last_seen.get(code)
             price = float(ref.price) if ref else 0.0

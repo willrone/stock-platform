@@ -108,9 +108,9 @@ def rsi_wilder(values: np.ndarray, period: int) -> np.ndarray:
     for i in range(period + 1, n):
         diff = values[i] - values[i - 1]
         g = diff if diff > 0 else 0.0
-        l = -diff if diff < 0 else 0.0
+        loss_value = -diff if diff < 0 else 0.0
         avg_gain = (avg_gain * (period - 1) + g) / period
-        avg_loss = (avg_loss * (period - 1) + l) / period
+        avg_loss = (avg_loss * (period - 1) + loss_value) / period
         if avg_loss == 0.0:
             out[i] = 100.0
         else:

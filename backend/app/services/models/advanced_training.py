@@ -5,22 +5,16 @@
 支持多模型组合、动态模型更新和增量数据训练。
 """
 
-import asyncio
-import json
 import pickle
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import Enum
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import xgboost as xgb
 from loguru import logger
-from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 # 从shared_types.py导入共享类型
@@ -70,7 +64,12 @@ except ImportError:
     TaskError = Exception
     ErrorSeverity = None
     ErrorContext = None
-    handle_async_exception = lambda func: func
+
+    def handle_async_exception(func):
+        return func
+
+if TYPE_CHECKING:
+    from .model_training import ModelTrainingService
 
 
 class EnsembleModelManager:
@@ -166,7 +165,9 @@ class EnsembleModelManager:
         with open(ensemble_path, "wb") as f:
             pickle.dump({"model": ensemble_model, "info": ensemble_info}, f)
 
-        logger.info(f"集成模型 {ensemble_id} 创建完成，准确率: {metrics['accuracy']:.4f}")
+        logger.info(
+            f"集成模型 {ensemble_id} 创建完成，准确率: {metrics['accuracy']:.4f}"
+        )
         return ensemble_info
 
     @handle_async_exception
@@ -193,9 +194,9 @@ class EnsembleModelManager:
                         {
                             "id": model_id,
                             "model": model,
-                            "type": "xgboost"
-                            if model_path.suffix == ".json"
-                            else "pytorch",
+                            "type": (
+                                "xgboost" if model_path.suffix == ".json" else "pytorch"
+                            ),
                         }
                     )
                     logger.info(f"成功加载模型: {model_id}")
@@ -224,7 +225,7 @@ class EnsembleModelManager:
         model_predictions = []
         model_weights = []
 
-        for i, model_info in enumerate(base_models):
+        for _i, model_info in enumerate(base_models):
             try:
                 predictions = await self._get_model_predictions(
                     model_info["model"], X_val, model_info["type"]
@@ -338,7 +339,7 @@ class EnsembleModelManager:
             meta_X_tensor = torch.FloatTensor(meta_X)
             y_val_tensor = torch.LongTensor(y_val)
 
-            for epoch in range(100):
+            for _epoch in range(100):
                 optimizer.zero_grad()
                 outputs = meta_model(meta_X_tensor)
                 loss = criterion(outputs, y_val_tensor)
@@ -584,7 +585,9 @@ class OnlineLearningManager:
                 logger.info(f"模型 {model_id} 性能下降，建议重新训练")
                 metrics["retrain_recommended"] = True
 
-            logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics['accuracy']:.4f}")
+            logger.info(
+                f"模型 {model_id} 在线更新完成，准确率: {metrics['accuracy']:.4f}"
+            )
             return updated_model, metrics
 
         else:

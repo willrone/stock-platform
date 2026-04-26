@@ -10,12 +10,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional, Union
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
-import numpy as np
 import pandas as pd
 import psutil
-import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
@@ -112,7 +110,9 @@ class ChunkedDataReader:
                 if len(df_chunk) > self.chunk_size:
                     df_chunk = df_chunk.iloc[: self.chunk_size]
 
-                logger.debug(f"读取数据块: {batch_start}-{batch_end}, 大小: {len(df_chunk)}")
+                logger.debug(
+                    f"读取数据块: {batch_start}-{batch_end}, 大小: {len(df_chunk)}"
+                )
                 yield df_chunk
 
                 # 让出控制权，避免阻塞

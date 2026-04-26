@@ -42,7 +42,9 @@ class BaseStrategy(ABC):
             pass
 
         # Fallback
-        return int(data.index.get_loc(current_date)) if current_date in data.index else -1
+        return (
+            int(data.index.get_loc(current_date)) if current_date in data.index else -1
+        )
 
     def get_cached_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """Calculate indicators once per (strategy instance, DataFrame).
@@ -72,12 +74,10 @@ class BaseStrategy(ABC):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成交易信号"""
-        pass
 
     @abstractmethod
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算技术指标"""
-        pass
 
     async def prepare_backtest_data(
         self,
@@ -129,7 +129,7 @@ class BaseStrategy(ABC):
 
         # 检查所有需要的指标是否都存在
         missing_indicators = []
-        for strategy_name, precomputed_name in indicator_mapping.items():
+        for _strategy_name, precomputed_name in indicator_mapping.items():
             if precomputed_name not in data.columns:
                 missing_indicators.append(precomputed_name)
 

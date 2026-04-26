@@ -16,7 +16,7 @@ from loguru import logger
 
 from app.core.config import settings
 
-from ..events.data_sync_events import DataSyncEventType, get_data_sync_event_manager
+from ..events.data_sync_events import get_data_sync_event_manager
 
 # 绑定日志类型为数据同步
 logger = logger.bind(log_type="data_sync")
@@ -68,7 +68,9 @@ class SFTPSyncService:
         self.remote_data_dir = remote_data_dir or settings.SFTP_REMOTE_DATA_DIR
 
         if not self.enabled:
-            logger.warning("SFTP同步未启用（SFTP_SYNC_ENABLED=false），远端同步接口将不可用")
+            logger.warning(
+                "SFTP同步未启用（SFTP_SYNC_ENABLED=false），远端同步接口将不可用"
+            )
 
         # Validate required fields only when enabled
         if self.enabled:
@@ -100,9 +102,9 @@ class SFTPSyncService:
         self.event_manager = get_data_sync_event_manager()
 
         # 缓存远端文件列表，避免重复查询
-        self._remote_files_cache: Optional[
-            Dict[str, str]
-        ] = None  # {stock_code: actual_file_path}
+        self._remote_files_cache: Optional[Dict[str, str]] = (
+            None  # {stock_code: actual_file_path}
+        )
 
         logger.info(
             f"SFTP同步服务初始化: {self.host}:{self.port}, 本地目录: {self.local_data_dir}, enabled={self.enabled}"
@@ -125,7 +127,7 @@ class SFTPSyncService:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
-            logger.debug(f"正在建立SSH连接...")
+            logger.debug("正在建立SSH连接...")
             connect_kwargs = dict(
                 hostname=self.host,
                 port=self.port,
@@ -139,7 +141,7 @@ class SFTPSyncService:
                 connect_kwargs["allow_agent"] = True
                 connect_kwargs["look_for_keys"] = True
             ssh.connect(**connect_kwargs)
-            logger.debug(f"SSH连接成功，正在打开SFTP通道...")
+            logger.debug("SSH连接成功，正在打开SFTP通道...")
             sftp = ssh.open_sftp()
             logger.info(f"成功连接到SFTP服务器: {self.host}")
             return ssh, sftp
@@ -187,14 +189,14 @@ class SFTPSyncService:
             logger.debug(f"临时文件路径: {temp_file}")
 
             # 下载股票列表文件
-            logger.info(f"正在下载股票列表文件...")
+            logger.info("正在下载股票列表文件...")
             start_time = datetime.now()
             sftp.get(self.remote_list_path, str(temp_file))
             download_time = (datetime.now() - start_time).total_seconds()
             logger.info(f"股票列表文件下载完成，耗时: {download_time:.2f}秒")
 
             # 读取parquet文件获取股票列表
-            logger.debug(f"正在读取parquet文件...")
+            logger.debug("正在读取parquet文件...")
             # 尝试使用 pyarrow 引擎，如果失败则使用 fastparquet
             try:
                 df = pd.read_parquet(temp_file, engine="pyarrow")
@@ -205,14 +207,16 @@ class SFTPSyncService:
                 except Exception as e2:
                     logger.error(f"使用 fastparquet 引擎也失败: {e2}")
                     raise
-            logger.debug(f"parquet文件读取完成，行数: {len(df)}, 列: {list(df.columns)}")
+            logger.debug(
+                f"parquet文件读取完成，行数: {len(df)}, 列: {list(df.columns)}"
+            )
 
             # 假设股票代码在'ts_code'列中
             if "ts_code" in df.columns:
                 stock_codes = df["ts_code"].unique().tolist()
             else:
                 # 如果没有ts_code列，尝试第一列
-                logger.warning(f"未找到ts_code列，使用第一列作为股票代码")
+                logger.warning("未找到ts_code列，使用第一列作为股票代码")
                 stock_codes = df.iloc[:, 0].unique().tolist()
 
             logger.info(f"成功获取股票列表: {len(stock_codes)} 只股票")
@@ -268,7 +272,9 @@ class SFTPSyncService:
                     if stock_code not in cache:
                         cache[stock_code] = full_path
                     else:
-                        logger.debug(f"股票代码 {stock_code} 已存在，跳过重复映射: {filename}")
+                        logger.debug(
+                            f"股票代码 {stock_code} 已存在，跳过重复映射: {filename}"
+                        )
                 else:
                     # 如果正则匹配失败，尝试其他格式
                     # 例如：600868_SH -> 600868.SH
@@ -357,7 +363,9 @@ class SFTPSyncService:
                 if file_match:
                     file_code, file_market = file_match.groups()
                     if file_code == code and file_market == market:
-                        logger.debug(f"[{stock_code}] 通过反向匹配找到文件: {cached_path}")
+                        logger.debug(
+                            f"[{stock_code}] 通过反向匹配找到文件: {cached_path}"
+                        )
                         return cached_path
 
         return None
@@ -403,7 +411,7 @@ class SFTPSyncService:
                 remote_file = self._find_remote_file(stock_code, sftp)
 
                 if remote_file is None:
-                    error_msg = f"远端文件不存在，已尝试多种格式和模糊匹配"
+                    error_msg = "远端文件不存在，已尝试多种格式和模糊匹配"
                     logger.warning(f"[{stock_code}] {error_msg}")
                     return False, 0, error_msg
 
@@ -413,7 +421,9 @@ class SFTPSyncService:
                         f"[{stock_code}] 重试 {attempt + 1}/{max_retries}: 正在同步 ({remote_file} -> {local_file})"
                     )
                 else:
-                    logger.debug(f"[{stock_code}] 正在同步: {remote_file} -> {local_file}")
+                    logger.debug(
+                        f"[{stock_code}] 正在同步: {remote_file} -> {local_file}"
+                    )
 
                 # 原子下载：先下到临时文件，再替换，避免覆盖/半文件
                 tmp_file = local_file.with_suffix(local_file.suffix + ".tmp")
@@ -444,12 +454,7 @@ class SFTPSyncService:
                 logger.debug(f"[{stock_code}] 成功同步, 大小: {file_size} 字节")
                 return True, file_size, ""
 
-            except (
-                ConnectionError,
-                paramiko.SSHException,
-                paramiko.socket.error,
-                OSError,
-            ) as e:
+            except (paramiko.SSHException, paramiko.socket.error, OSError) as e:
                 error_msg = f"连接错误: {type(e).__name__}: {str(e)}"
                 logger.warning(
                     f"[{stock_code}] 尝试 {attempt + 1}/{max_retries}: {error_msg}"
@@ -507,7 +512,9 @@ class SFTPSyncService:
             # 预构建文件缓存以提高效率
             logger.info("预构建远端文件缓存...")
             remote_files_cache = self._build_remote_files_cache(sftp)
-            logger.info(f"远端文件缓存构建完成，找到 {len(remote_files_cache)} 个可用的股票文件")
+            logger.info(
+                f"远端文件缓存构建完成，找到 {len(remote_files_cache)} 个可用的股票文件"
+            )
 
             # 获取股票列表
             if stock_codes is None:
@@ -536,11 +543,17 @@ class SFTPSyncService:
             ]
 
             if missing_stock_codes:
-                logger.info(f"远端服务器上缺少 {len(missing_stock_codes)} 个股票文件，将跳过这些文件")
-                logger.debug(f"缺少的股票代码示例（前20个）: {missing_stock_codes[:20]}")
+                logger.info(
+                    f"远端服务器上缺少 {len(missing_stock_codes)} 个股票文件，将跳过这些文件"
+                )
+                logger.debug(
+                    f"缺少的股票代码示例（前20个）: {missing_stock_codes[:20]}"
+                )
 
             original_count = len(stock_codes)
-            logger.info(f"实际可同步的股票数量: {len(available_stock_codes)}/{original_count}")
+            logger.info(
+                f"实际可同步的股票数量: {len(available_stock_codes)}/{original_count}"
+            )
 
             if not available_stock_codes:
                 logger.warning("远端服务器上没有可用的股票文件")
@@ -594,7 +607,9 @@ class SFTPSyncService:
 
                     # 如果连接错误，尝试重新连接
                     if not success and "连接" in error_msg.lower():
-                        logger.warning(f"[{stock_code}] 检测到连接问题，尝试重新连接...")
+                        logger.warning(
+                            f"[{stock_code}] 检测到连接问题，尝试重新连接..."
+                        )
                         try:
                             self._disconnect_sftp(ssh, sftp)
                             ssh, sftp = self._connect_sftp()
@@ -604,7 +619,9 @@ class SFTPSyncService:
                                 stock_code, sftp
                             )
                         except Exception as reconnect_error:
-                            logger.error(f"[{stock_code}] 重新连接失败: {reconnect_error}")
+                            logger.error(
+                                f"[{stock_code}] 重新连接失败: {reconnect_error}"
+                            )
                             error_msg = f"重新连接失败: {reconnect_error}"
 
                     file_duration = (datetime.now() - file_start_time).total_seconds()
@@ -712,9 +729,7 @@ class SFTPSyncService:
                 success_rate = (
                     (synced_files / total_files * 100) if total_files > 0 else 0
                 )
-                message = (
-                    f"同步完成: {synced_files}/{total_files} 成功 (成功率: {success_rate:.1f}%)"
-                )
+                message = f"同步完成: {synced_files}/{total_files} 成功 (成功率: {success_rate:.1f}%)"
 
             if failed_files:
                 message += f", {len(failed_files)} 失败"
@@ -726,7 +741,9 @@ class SFTPSyncService:
                     logger.warning(f"失败文件列表: {failed_files}")
 
             if "sync_missing_stock_codes" in locals() and sync_missing_stock_codes:
-                message += f", {len(sync_missing_stock_codes)} 个文件在远端不存在（已跳过）"
+                message += (
+                    f", {len(sync_missing_stock_codes)} 个文件在远端不存在（已跳过）"
+                )
                 logger.info(f"远端不存在的文件数量: {len(sync_missing_stock_codes)}")
 
             message += f", 总耗时: {total_duration:.1f}秒"
@@ -747,7 +764,9 @@ class SFTPSyncService:
             if failed_files:
                 logger.warning(f"失败的股票代码（前10个）: {failed_files[:10]}")
             if "sync_missing_stock_codes" in locals() and sync_missing_stock_codes:
-                logger.info(f"远端不存在的股票代码示例（前10个）: {sync_missing_stock_codes[:10]}")
+                logger.info(
+                    f"远端不存在的股票代码示例（前10个）: {sync_missing_stock_codes[:10]}"
+                )
             logger.info("=" * 60)
 
             return SyncResult(

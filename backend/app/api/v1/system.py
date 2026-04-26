@@ -25,7 +25,13 @@ async def get_api_version():
         "release_date": "2025-01-01",
         "api_name": "股票预测平台API",
         "description": "基于AI的股票预测和回测分析平台",
-        "features": ["股票数据获取", "技术指标计算", "机器学习预测", "策略回测", "任务管理"],
+        "features": [
+            "股票数据获取",
+            "技术指标计算",
+            "机器学习预测",
+            "策略回测",
+            "任务管理",
+        ],
         "endpoints": {
             "total": 15,
             "categories": {
@@ -37,10 +43,19 @@ async def get_api_version():
                 "系统状态": 3,
             },
         },
-        "changelog": {"1.0.0": ["初始版本发布", "实现基础API功能", "添加限流和错误处理", "完成API文档生成"]},
+        "changelog": {
+            "1.0.0": [
+                "初始版本发布",
+                "实现基础API功能",
+                "添加限流和错误处理",
+                "完成API文档生成",
+            ]
+        },
     }
 
-    return StandardResponse(success=True, message="API版本信息获取成功", data=version_info)
+    return StandardResponse(
+        success=True, message="API版本信息获取成功", data=version_info
+    )
 
 
 @router.get(
@@ -86,7 +101,9 @@ async def get_system_status(request: Request):
             "error_statistics": error_stats,
         }
 
-        return StandardResponse(success=True, message="系统状态获取成功", data=system_status)
+        return StandardResponse(
+            success=True, message="系统状态获取成功", data=system_status
+        )
 
     except Exception as e:
         logger.error(f"获取系统状态失败: {e}", exc_info=True)

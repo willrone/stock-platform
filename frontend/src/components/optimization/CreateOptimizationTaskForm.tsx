@@ -185,7 +185,11 @@ export default function CreateOptimizationTaskForm({
               default: param.default,
               enabled: true,
             };
-          } else if (param.type === 'categorical' && param.options && Array.isArray(param.options)) {
+          } else if (
+            param.type === 'categorical' &&
+            param.options &&
+            Array.isArray(param.options)
+          ) {
             defaultSpace[key] = {
               type: 'categorical',
               choices: param.options,
@@ -203,7 +207,12 @@ export default function CreateOptimizationTaskForm({
 
     // 未选择策略时，清空参数空间
     setParamSpace({});
-  }, [formData.optimization_mode, formData.strategy_name, formData.portfolio_strategies, strategies]);
+  }, [
+    formData.optimization_mode,
+    formData.strategy_name,
+    formData.portfolio_strategies,
+    strategies,
+  ]);
 
   const handleSubmit = async () => {
     const strategyValid =
@@ -211,7 +220,13 @@ export default function CreateOptimizationTaskForm({
         ? Boolean(formData.strategy_name)
         : (formData.portfolio_strategies?.length || 0) > 0;
 
-    if (!formData.task_name || !strategyValid || selectedStocks.length === 0 || !formData.start_date || !formData.end_date) {
+    if (
+      !formData.task_name ||
+      !strategyValid ||
+      selectedStocks.length === 0 ||
+      !formData.start_date ||
+      !formData.end_date
+    ) {
       alert('请填写所有必填字段');
       return;
     }
@@ -239,7 +254,8 @@ export default function CreateOptimizationTaskForm({
       const request: CreateOptimizationTaskRequest = {
         task_name: formData.task_name,
         // backend will route portfolio optimization by strategy_name="portfolio"
-        strategy_name: formData.optimization_mode === 'portfolio' ? 'portfolio' : formData.strategy_name,
+        strategy_name:
+          formData.optimization_mode === 'portfolio' ? 'portfolio' : formData.strategy_name,
         stock_codes: selectedStocks,
         start_date: startDate,
         end_date: endDate,
@@ -336,7 +352,8 @@ export default function CreateOptimizationTaskForm({
               <MenuItem value="portfolio">组合策略优化（自由搭配）</MenuItem>
             </Select>
             <FormHelperText>
-              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化权重与子策略参数（交易执行固定 topk_buffer）。
+              单策略：像以前一样选一个策略优化；组合策略：选择多个子策略并一起优化权重与子策略参数（交易执行固定
+              topk_buffer）。
             </FormHelperText>
           </FormControl>
 
@@ -437,7 +454,8 @@ export default function CreateOptimizationTaskForm({
             <Typography variant="body2" color="text.secondary">
               请先选择策略，系统将自动加载该策略的可优化参数
             </Typography>
-          ) : formData.optimization_mode === 'portfolio' && (formData.portfolio_strategies?.length || 0) === 0 ? (
+          ) : formData.optimization_mode === 'portfolio' &&
+            (formData.portfolio_strategies?.length || 0) === 0 ? (
             <Typography variant="body2" color="text.secondary">
               请先选择至少 1 个子策略，系统将自动展开组合策略的参数空间
             </Typography>

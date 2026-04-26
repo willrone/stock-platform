@@ -7,7 +7,7 @@ Qlib集成API接口
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
@@ -100,9 +100,9 @@ async def prepare_qlib_dataset(request: QlibDatasetRequest):
             data={
                 "dataset_shape": dataset.shape,
                 "columns": list(dataset.columns),
-                "index_levels": len(dataset.index.names)
-                if hasattr(dataset.index, "names")
-                else 1,
+                "index_levels": (
+                    len(dataset.index.names) if hasattr(dataset.index, "names") else 1
+                ),
                 "is_valid_format": is_valid,
                 "sample_data": dataset.head().to_dict() if not dataset.empty else {},
             },
@@ -149,9 +149,9 @@ async def calculate_alpha158_factors(request: AlphaFactorsRequest):
             data={
                 "factors_shape": alpha_factors.shape,
                 "factor_names": list(alpha_factors.columns),
-                "sample_factors": alpha_factors.head().to_dict()
-                if not alpha_factors.empty
-                else {},
+                "sample_factors": (
+                    alpha_factors.head().to_dict() if not alpha_factors.empty else {}
+                ),
                 "cache_used": request.use_cache,
             },
         )
@@ -196,7 +196,9 @@ async def get_cache_stats():
         provider = get_qlib_provider()
         stats = await provider.get_cache_stats()
 
-        return StandardResponse(success=True, message="缓存统计信息获取成功", data=stats)
+        return StandardResponse(
+            success=True, message="缓存统计信息获取成功", data=stats
+        )
 
     except Exception as e:
         logger.error(f"获取缓存统计失败: {e}", exc_info=True)
@@ -239,7 +241,9 @@ async def get_qlib_status():
         # 兼容旧字段 alpha_expressions，避免状态接口因属性名漂移而失败。
         alpha_names = getattr(provider.alpha_calculator, "alpha_names", None)
         if alpha_names is None:
-            alpha_expressions = getattr(provider.alpha_calculator, "alpha_expressions", None)
+            alpha_expressions = getattr(
+                provider.alpha_calculator, "alpha_expressions", None
+            )
             if isinstance(alpha_expressions, dict):
                 alpha_names = list(alpha_expressions.keys())
             else:
@@ -371,9 +375,13 @@ async def get_model_config_template(model_name: str):
 
         template = engine.get_model_config_template(model_name)
         if not template:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
-        return StandardResponse(success=True, message="模型配置模板获取成功", data=template)
+        return StandardResponse(
+            success=True, message="模型配置模板获取成功", data=template
+        )
 
     except HTTPException:
         raise
@@ -390,7 +398,9 @@ async def get_model_hyperparameters(model_name: str):
 
         hyperparameter_specs = engine.model_manager.get_hyperparameter_specs(model_name)
         if not hyperparameter_specs:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
         specs_data = []
         for spec in hyperparameter_specs:
@@ -478,7 +488,9 @@ async def get_training_tips(model_name: str):
 
         recommendations = engine.get_training_recommendations(model_name)
         if not recommendations:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
         return StandardResponse(
             success=True,

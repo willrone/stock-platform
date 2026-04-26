@@ -9,15 +9,13 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Union
 
 from loguru import logger
 
 # 检测可用的深度学习框架
 try:
-    import torch
-    import torch.nn as nn
+    pass
 
     PYTORCH_AVAILABLE = True
 except ImportError:
@@ -25,7 +23,7 @@ except ImportError:
     logger.warning("PyTorch不可用，深度学习模型将不可用")
 
 try:
-    import qlib
+    pass
 
     QLIB_AVAILABLE = True
 except ImportError:
@@ -58,7 +56,9 @@ class ModelMetadata:
     category: ModelCategory
     complexity: ModelComplexity
     description: str
-    supported_tasks: List[str]  # 支持的任务类型：regression, classification, forecasting
+    supported_tasks: List[
+        str
+    ]  # 支持的任务类型：regression, classification, forecasting
     min_samples: int  # 最小样本数要求
     recommended_features: int  # 推荐特征数
     training_time_estimate: str  # 训练时间估计
@@ -92,22 +92,18 @@ class BaseModelAdapter(ABC):
     @abstractmethod
     def get_metadata(self) -> ModelMetadata:
         """获取模型元数据"""
-        pass
 
     @abstractmethod
     def get_hyperparameter_specs(self) -> List[HyperparameterSpec]:
         """获取超参数规格"""
-        pass
 
     @abstractmethod
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
         """创建Qlib配置"""
-        pass
 
     @abstractmethod
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
-        pass
 
 
 class LightGBMAdapter(BaseModelAdapter):
@@ -250,7 +246,7 @@ class LightGBMAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -312,7 +308,7 @@ class LinearAdapter(BaseModelAdapter):
             if not (0.0001 <= alpha <= 1.0):
                 return False
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -405,7 +401,7 @@ class XGBoostAdapter(BaseModelAdapter):
             if not (0.01 <= lr <= 0.3):
                 return False
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -481,7 +477,7 @@ class MLPAdapter(BaseModelAdapter):
             if not (0.0001 <= lr <= 0.01):
                 return False
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -569,7 +565,7 @@ class TransformerAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -649,7 +645,7 @@ class InformerAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -794,7 +790,7 @@ class PatchTSTAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -987,10 +983,26 @@ class QlibModelManager:
     def _get_training_tips(self, model_name: str) -> List[str]:
         """获取训练提示"""
         tips_map = {
-            "lightgbm": ["适合大规模数据和高维特征", "建议使用特征工程提升效果", "可以通过调整num_leaves控制过拟合"],
-            "xgboost": ["在结构化数据上表现优异", "建议使用交叉验证选择参数", "注意调整正则化参数防止过拟合"],
-            "transformer": ["需要大量数据才能发挥优势", "建议使用GPU加速训练", "注意序列长度对内存的影响"],
-            "informer": ["专门用于长序列预测", "需要充足的GPU内存", "适合处理复杂的时间模式"],
+            "lightgbm": [
+                "适合大规模数据和高维特征",
+                "建议使用特征工程提升效果",
+                "可以通过调整num_leaves控制过拟合",
+            ],
+            "xgboost": [
+                "在结构化数据上表现优异",
+                "建议使用交叉验证选择参数",
+                "注意调整正则化参数防止过拟合",
+            ],
+            "transformer": [
+                "需要大量数据才能发挥优势",
+                "建议使用GPU加速训练",
+                "注意序列长度对内存的影响",
+            ],
+            "informer": [
+                "专门用于长序列预测",
+                "需要充足的GPU内存",
+                "适合处理复杂的时间模式",
+            ],
         }
 
         return tips_map.get(model_name, ["请参考模型文档进行配置"])

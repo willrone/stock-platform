@@ -2,11 +2,10 @@
 早停策略实现
 防止模型过拟合，提高训练效率
 """
-import json
+
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from loguru import logger
@@ -332,7 +331,9 @@ class AdaptiveEarlyStopping:
 
         # 检查是否应该停止
         if self.wait >= self.current_patience:
-            logger.info(f"自适应早停触发: 等待 {self.wait} 轮，容忍轮数 {self.current_patience}")
+            logger.info(
+                f"自适应早停触发: 等待 {self.wait} 轮，容忍轮数 {self.current_patience}"
+            )
             return True
 
         return False

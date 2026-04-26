@@ -3,9 +3,7 @@
 提供详细的月度、季度、年度绩效分析功能
 """
 
-from calendar import monthrange
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -261,12 +259,12 @@ class MonthlyAnalyzer:
             "worst_month": float(worst_month),
             "max_consecutive_positive": max_consecutive_positive,
             "max_consecutive_negative": max_consecutive_negative,
-            "avg_positive_return": float(np.mean(positive_months))
-            if positive_months
-            else 0,
-            "avg_negative_return": float(np.mean(negative_months))
-            if negative_months
-            else 0,
+            "avg_positive_return": (
+                float(np.mean(positive_months)) if positive_months else 0
+            ),
+            "avg_negative_return": (
+                float(np.mean(negative_months)) if negative_months else 0
+            ),
         }
 
     def _calculate_max_consecutive_months(self, returns: List[float], condition) -> int:
@@ -442,12 +440,16 @@ class MonthlyAnalyzer:
                         "date": date.strftime("%Y-%m"),
                         "annual_return": float(rolling_annual_return[date]),
                         "volatility": float(rolling_volatility[date]),
-                        "sharpe_ratio": float(rolling_sharpe[date])
-                        if pd.notna(rolling_sharpe[date])
-                        else 0,
-                        "max_drawdown": float(rolling_max_dd[date])
-                        if pd.notna(rolling_max_dd[date])
-                        else 0,
+                        "sharpe_ratio": (
+                            float(rolling_sharpe[date])
+                            if pd.notna(rolling_sharpe[date])
+                            else 0
+                        ),
+                        "max_drawdown": (
+                            float(rolling_max_dd[date])
+                            if pd.notna(rolling_max_dd[date])
+                            else 0
+                        ),
                     }
                     rolling_data.append(rolling_point)
 
@@ -473,5 +475,5 @@ class MonthlyAnalyzer:
             running_max = cumulative.expanding().max()
             drawdown = (cumulative - running_max) / running_max
             return drawdown.min()
-        except:
+        except Exception:
             return 0

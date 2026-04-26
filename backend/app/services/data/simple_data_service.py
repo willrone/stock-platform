@@ -57,8 +57,10 @@ class SimpleDataService:
         self.timeout = float(timeout or settings.REMOTE_DATA_SERVICE_TIMEOUT)
 
         # Local cache paths (used heavily by tests)
-        self.data_path = Path(data_path) if data_path is not None else Path(
-            getattr(settings, "DATA_ROOT_PATH", "data")
+        self.data_path = (
+            Path(data_path)
+            if data_path is not None
+            else Path(getattr(settings, "DATA_ROOT_PATH", "data"))
         )
         self.stocks_path = self.data_path / "stocks"
         self.stocks_path.mkdir(parents=True, exist_ok=True)
@@ -98,7 +100,11 @@ class SimpleDataService:
             response = await client.get(url, timeout=self.timeout)
             if response.status_code == 200:
                 return True, response, ""
-            return False, response, f"HTTP {response.status_code}: {response.text[:200]}"
+            return (
+                False,
+                response,
+                f"HTTP {response.status_code}: {response.text[:200]}",
+            )
         except httpx.TimeoutException as e:
             return False, None, f"连接超时: {str(e)}"
         except httpx.ConnectError as e:
@@ -144,7 +150,9 @@ class SimpleDataService:
                 error_message="无法连接到数据服务：所有连接尝试都失败",
             )
 
-        success, response, error_msg = await self._try_connect(working_url, "api/data/health")
+        success, response, error_msg = await self._try_connect(
+            working_url, "api/data/health"
+        )
         response_time = (datetime.now() - start_time).total_seconds() * 1000
 
         if success and response is not None:
@@ -197,7 +205,9 @@ class SimpleDataService:
                     elif isinstance(d, pd.Timestamp):
                         row["date"] = d.to_pydatetime().isoformat()
                 normalized.append(row)
-            path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
+            path.write_text(
+                json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             return True
         except Exception as e:
             logger.error(f"保存本地数据失败: {stock_code}, {e}")
@@ -207,8 +217,10 @@ class SimpleDataService:
         self, stock_code: str, start_date: datetime, end_date: datetime
     ) -> Optional[List[Dict[str, Any]]]:
         """Load raw dict rows from local JSON or Parquet file filtered by date range."""
-        logger.info(f"🔍 load_from_local called: {stock_code}, {start_date} to {end_date}")
-        
+        logger.info(
+            f"🔍 load_from_local called: {stock_code}, {start_date} to {end_date}"
+        )
+
         # First try JSON cache
         path = self.get_local_data_path(stock_code)
         logger.info(f"🔍 Checking JSON cache: {path}, exists={path.exists()}")
@@ -227,87 +239,117 @@ class SimpleDataService:
                     return out
             except Exception as e:
                 logger.error(f"加载本地JSON数据失败: {stock_code}, {e}")
-        
+
         # Then try Parquet file (real stock data)
         logger.info(f"🔍 Trying Parquet file for {stock_code}")
         parquet_data = self.load_from_parquet(stock_code, start_date, end_date)
         if parquet_data:
             logger.info(f"✅ Loaded {len(parquet_data)} rows from Parquet")
             return parquet_data
-        
+
         logger.warning(f"⚠️ No local data found for {stock_code}")
         return None
-    
+
     def load_from_parquet(
         self, stock_code: str, start_date: datetime, end_date: datetime
     ) -> Optional[List[Dict[str, Any]]]:
         """Load raw dict rows from local Parquet file filtered by date range."""
         # Try multiple parquet paths - include project root data folder
-        project_root = Path(__file__).parent.parent.parent.parent.parent  # backend/../ = willrone/
-        logger.info(f"load_from_parquet called: {stock_code}, project_root={project_root}")
+        project_root = Path(
+            __file__
+        ).parent.parent.parent.parent.parent  # backend/../ = willrone/
+        logger.info(
+            f"load_from_parquet called: {stock_code}, project_root={project_root}"
+        )
         parquet_paths = [
             # Project root data folder (where real stock data lives)
-            project_root / "data" / "parquet" / "stock_data" / f"{stock_code.replace('.', '_')}.parquet",
-            project_root / "data" / "parquet" / f"{stock_code.replace('.', '_')}.parquet",
+            project_root
+            / "data"
+            / "parquet"
+            / "stock_data"
+            / f"{stock_code.replace('.', '_')}.parquet",
+            project_root
+            / "data"
+            / "parquet"
+            / f"{stock_code.replace('.', '_')}.parquet",
             # Backend data folder
-            self.data_path / "parquet" / "stock_data" / f"{stock_code.replace('.', '_')}.parquet",
+            self.data_path
+            / "parquet"
+            / "stock_data"
+            / f"{stock_code.replace('.', '_')}.parquet",
             self.data_path / "parquet" / f"{stock_code.replace('.', '_')}.parquet",
             self.data_path / "parquet" / "stock_data" / f"{stock_code}.parquet",
             self.data_path / "parquet" / f"{stock_code}.parquet",
         ]
-        
+
         for parquet_path in parquet_paths:
-            logger.debug(f"Checking parquet path: {parquet_path}, exists={parquet_path.exists()}")
+            logger.debug(
+                f"Checking parquet path: {parquet_path}, exists={parquet_path.exists()}"
+            )
             if parquet_path.exists():
                 try:
                     df = pd.read_parquet(parquet_path)
-                    
+
                     # Normalize column names - handle different naming conventions
                     col_mapping = {
-                        'ts_code': 'stock_code',
-                        'trade_date': 'date',
+                        "ts_code": "stock_code",
+                        "trade_date": "date",
                     }
-                    df = df.rename(columns={k: v for k, v in col_mapping.items() if k in df.columns})
-                    
+                    df = df.rename(
+                        columns={
+                            k: v for k, v in col_mapping.items() if k in df.columns
+                        }
+                    )
+
                     # Ensure date column exists and is datetime
-                    if 'date' not in df.columns:
+                    if "date" not in df.columns:
                         logger.warning(f"Parquet文件缺少date列: {parquet_path}")
                         continue
-                    
-                    df['date'] = pd.to_datetime(df['date'])
-                    
+
+                    df["date"] = pd.to_datetime(df["date"])
+
                     # Filter by date range
-                    mask = (df['date'] >= pd.Timestamp(start_date)) & (df['date'] <= pd.Timestamp(end_date))
+                    mask = (df["date"] >= pd.Timestamp(start_date)) & (
+                        df["date"] <= pd.Timestamp(end_date)
+                    )
                     df_filtered = df[mask].copy()
-                    
+
                     if df_filtered.empty:
-                        logger.debug(f"Parquet文件在指定日期范围内无数据: {parquet_path}")
+                        logger.debug(
+                            f"Parquet文件在指定日期范围内无数据: {parquet_path}"
+                        )
                         continue
-                    
+
                     # Convert to list of dicts
                     out: List[Dict[str, Any]] = []
                     for _, row in df_filtered.iterrows():
                         item = {
                             "stock_code": stock_code,
-                            "date": row['date'].isoformat(),
-                            "open": float(row.get('open', 0)),
-                            "high": float(row.get('high', 0)),
-                            "low": float(row.get('low', 0)),
-                            "close": float(row.get('close', 0)),
-                            "volume": float(row.get('volume', 0)),
-                            "adj_close": float(row.get('adj_close', row.get('close', 0))),
+                            "date": row["date"].isoformat(),
+                            "open": float(row.get("open", 0)),
+                            "high": float(row.get("high", 0)),
+                            "low": float(row.get("low", 0)),
+                            "close": float(row.get("close", 0)),
+                            "volume": float(row.get("volume", 0)),
+                            "adj_close": float(
+                                row.get("adj_close", row.get("close", 0))
+                            ),
                         }
                         out.append(item)
-                    
-                    logger.info(f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录")
+
+                    logger.info(
+                        f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录"
+                    )
                     return out
                 except Exception as e:
                     logger.error(f"加载Parquet数据失败: {parquet_path}, {e}")
                     continue
-        
+
         return None
 
-    def check_local_data_exists(self, stock_code: str, start_date: datetime, end_date: datetime) -> bool:
+    def check_local_data_exists(
+        self, stock_code: str, start_date: datetime, end_date: datetime
+    ) -> bool:
         """Return True if local cache exists and fully covers the requested date range."""
         rows = self.load_from_local(stock_code, start_date, end_date)
         if not rows:
@@ -324,7 +366,7 @@ class SimpleDataService:
         # Check if the stock code looks valid (basic validation)
         if not self._is_valid_stock_code(stock_code):
             return []  # Return empty list for invalid stock codes
-            
+
         dates = pd.bdate_range(start_date.date(), end_date.date())
         base = 10.0 + (abs(hash(stock_code)) % 500) / 100.0
         out: List[Dict[str, Any]] = []
@@ -355,7 +397,7 @@ class SimpleDataService:
         # Basic pattern: should contain alphanumeric characters and possibly dots or underscores
         # but not contain words like "invalid", "none", "null", etc.
         lower_code = stock_code.lower()
-        if 'invalid' in lower_code or 'null' in lower_code or 'none' in lower_code:
+        if "invalid" in lower_code or "null" in lower_code or "none" in lower_code:
             return False
         # Stock codes typically have 4-8 characters, sometimes with exchange suffix
         # Common patterns: 6 digits for Chinese stocks, or symbols with exchange
@@ -430,7 +472,9 @@ class SimpleDataService:
             logger.error(f"从远端获取股票数据失败: {stock_code}, {e}")
             return None
 
-    def _dict_list_to_stock_data(self, dict_list: List[Dict[str, Any]]) -> List[StockData]:
+    def _dict_list_to_stock_data(
+        self, dict_list: List[Dict[str, Any]]
+    ) -> List[StockData]:
         """Convert list of dictionaries to list of StockData objects."""
         out: List[StockData] = []
         for item in dict_list:
@@ -444,7 +488,11 @@ class SimpleDataService:
                     low=float(item.get("low", 0)),
                     close=float(item.get("close", 0)),
                     volume=int(item.get("volume", 0)),
-                    adj_close=float(item.get("adj_close")) if item.get("adj_close") is not None else None,
+                    adj_close=(
+                        float(item.get("adj_close"))
+                        if item.get("adj_close") is not None
+                        else None
+                    ),
                 )
             )
         return out

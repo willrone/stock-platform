@@ -251,9 +251,7 @@ class PredictionTaskExecutor:
                     "model_id": model_id,
                     "horizon": horizon,
                     "confidence_level": confidence_level,
-                    "execution_time": (
-                        utcnow() - context.start_time
-                    ).total_seconds(),
+                    "execution_time": (utcnow() - context.start_time).total_seconds(),
                 }
 
                 # 更新任务状态为完成
@@ -444,9 +442,7 @@ class BacktestTaskExecutor:
                     "win_rate": backtest_report.get("win_rate", 0),
                     "profit_factor": backtest_report.get("profit_factor", 0),
                     "total_trades": backtest_report.get("total_trades", 0),
-                    "execution_time": (
-                        utcnow() - context.start_time
-                    ).total_seconds(),
+                    "execution_time": (utcnow() - context.start_time).total_seconds(),
                     # 添加前端需要的图表数据
                     "equity_curve": equity_curve,
                     "drawdown_curve": drawdown_curve,
@@ -480,7 +476,7 @@ class BacktestTaskExecutor:
                 final_value = backtest_report.get("final_value", initial_cash)
                 progress_tracker.update_step(
                     "完成回测任务",
-                    {"total_return": f"{total_return:.2%}", "final_value": final_value},
+                    {"total_return": "{total_return:.2%}", "final_value": final_value},
                 )
 
                 # 更新任务状态为完成
@@ -565,7 +561,7 @@ class BacktestTaskExecutor:
             backtest_id = str(uuid4())  # 生成一个 backtest_id
             records_to_add = []
 
-            for idx, trade in enumerate(trade_history):
+            for _idx, trade in enumerate(trade_history):
                 # 解析时间戳
                 timestamp = trade.get("timestamp")
                 if isinstance(timestamp, str):
@@ -575,7 +571,7 @@ class BacktestTaskExecutor:
                         )
                     except ValueError:
                         timestamp = utcnow()
-                elif hasattr(timestamp, 'to_pydatetime'):
+                elif hasattr(timestamp, "to_pydatetime"):
                     # pandas Timestamp 转换为 Python datetime
                     timestamp = timestamp.to_pydatetime()
                 elif not isinstance(timestamp, datetime):
@@ -584,7 +580,7 @@ class BacktestTaskExecutor:
                 record = TradeRecord(
                     task_id=task_id,
                     backtest_id=backtest_id,
-                    trade_id=f"trade_{task_id[:8]}_{idx:06d}",
+                    trade_id="trade_{task_id[:8]}_{idx:06d}",
                     stock_code=trade.get(
                         "stock_code", stock_codes[0] if stock_codes else "UNKNOWN"
                     ),
@@ -701,9 +697,7 @@ class TrainingTaskExecutor:
                     "hyperparameters": config_dict.get("hyperparameters", {}),
                     "training_samples": random.randint(10000, 50000),
                     "validation_samples": random.randint(2000, 10000),
-                    "execution_time": (
-                        utcnow() - context.start_time
-                    ).total_seconds(),
+                    "execution_time": (utcnow() - context.start_time).total_seconds(),
                 }
 
                 # 步骤6: 保存模型
@@ -711,7 +705,7 @@ class TrainingTaskExecutor:
                     "保存模型",
                     {
                         "accuracy": (
-                            f"{task_result['performance_metrics']['accuracy']:.3f}"
+                            "{task_result['performance_metrics']['accuracy']:.3f}"
                         )
                     },
                 )
@@ -778,7 +772,8 @@ class TaskExecutionEngine:
         executor = self.executors.get(task_type)
         if not executor:
             raise TaskError(
-                message=f"不支持的任务类型: {task_type.value}", severity=ErrorSeverity.HIGH
+                message=f"不支持的任务类型: {task_type.value}",
+                severity=ErrorSeverity.HIGH,
             )
 
         return executor.execute
@@ -1018,7 +1013,9 @@ class QlibPrecomputeTaskExecutor:
                         TaskStatus.FAILED,
                         error_message=result.get("message", "预计算失败"),
                     )
-                    logger.error(f"Qlib预计算任务失败: {task_id}, {result.get('message')}")
+                    logger.error(
+                        f"Qlib预计算任务失败: {task_id}, {result.get('message')}"
+                    )
 
                 return result
 
@@ -1129,7 +1126,7 @@ class HyperparameterOptimizationTaskExecutor:
                     progress = (trial_num / n_trials) * 100
                     message = f"Trial {trial_num}/{n_trials}"
                     if score is not None:
-                        message += f", Score: {score:.4f}"
+                        message += ", Score: {score:.4f}"
 
                     if context.progress_callback:
                         context.progress_callback(progress, message)
@@ -1164,9 +1161,7 @@ class HyperparameterOptimizationTaskExecutor:
                         StrategyHyperparameterOptimizer,
                     )
                 except ImportError as e:
-                    error_msg = (
-                        f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
-                    )
+                    error_msg = f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
                     logger.error(error_msg)
                     raise ValueError(error_msg) from e
 

@@ -39,7 +39,7 @@ try:
     from .model_training import TransformerModel
 
     DEEP_LEARNING_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     DEEP_LEARNING_AVAILABLE = False
     DeepModelTrainingService = None
     QlibDataProvider = None
@@ -91,7 +91,7 @@ try:
     )
 
     MODEL_EVALUATION_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     MODEL_EVALUATION_AVAILABLE = False
     ModelEvaluator = None
     EvaluationVersionManager = None
@@ -116,7 +116,7 @@ try:
     )
 
     ADVANCED_TRAINING_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     ADVANCED_TRAINING_AVAILABLE = False
     AdvancedTrainingService = None
     EnsembleModelManager = None
@@ -142,7 +142,7 @@ try:
     )
 
     MODERN_MODELS_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     MODERN_MODELS_AVAILABLE = False
     TimesNet = None
     TimesBlock = None

@@ -6,7 +6,7 @@
 def deep_merge(base: dict, override: dict) -> dict:
     """
     递归深度合并两个字典，override 覆盖 base。
-    
+
     规则：
     - 两个值都是 dict → 递归合并
     - 类型不同 → override 覆盖

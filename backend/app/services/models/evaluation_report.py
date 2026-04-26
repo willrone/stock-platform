@@ -14,8 +14,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from loguru import logger
-
 DEFAULT_EARLY_STOPPING_INFO = {
     "early_stopped": False,
     "stopped_epoch": 0,
@@ -74,12 +72,15 @@ def _normalize_segment_evaluation(
         segment_payload = segment_payload if isinstance(segment_payload, dict) else {}
         dataset_samples = int(
             segment_payload.get(
-                "dataset_samples", training_summary.get(f"{segment_name}_samples", 0) or 0
+                "dataset_samples",
+                training_summary.get(f"{segment_name}_samples", 0) or 0,
             )
             or 0
         )
         evaluated_samples = int(
-            segment_payload.get("evaluated_samples", segment_payload.get("dataset_samples", 0))
+            segment_payload.get(
+                "evaluated_samples", segment_payload.get("dataset_samples", 0)
+            )
             or 0
         )
         performance_metrics = segment_payload.get("performance_metrics")
@@ -101,7 +102,9 @@ def _normalize_segment_evaluation(
 
 def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
     segment_evaluation = report.get("segment_evaluation")
-    segment_evaluation = segment_evaluation if isinstance(segment_evaluation, dict) else {}
+    segment_evaluation = (
+        segment_evaluation if isinstance(segment_evaluation, dict) else {}
+    )
 
     signal_record: Dict[str, Dict[str, Any]] = {}
     sig_ana_record: Dict[str, Dict[str, Any]] = {}
@@ -116,7 +119,9 @@ def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
             else _normalize_signal_quality(None, analysis_scope=segment_name)
         )
         has_signal_quality = isinstance(raw_signal_quality, dict) and any(
-            value is not None for key, value in signal_quality.items() if key != "analysis_scope"
+            value is not None
+            for key, value in signal_quality.items()
+            if key != "analysis_scope"
         )
 
         signal_record_item = {
@@ -142,7 +147,9 @@ def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
         "sig_ana_record": sig_ana_record,
         "port_ana_record": {
             "task_count": int(portfolio_bridge_summary.get("task_count", 0) or 0),
-            "best_by_total_return": portfolio_bridge_summary.get("best_by_total_return"),
+            "best_by_total_return": portfolio_bridge_summary.get(
+                "best_by_total_return"
+            ),
             "best_by_sharpe": portfolio_bridge_summary.get("best_by_sharpe"),
             "smallest_drawdown": portfolio_bridge_summary.get("smallest_drawdown"),
             "tasks": list(portfolio_bridge_summary.get("tasks") or []),
@@ -160,9 +167,19 @@ def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     training_summary = training_summary if isinstance(training_summary, dict) else {}
 
     training_data_info = normalized.get("training_data_info")
-    training_data_info = dict(training_data_info) if isinstance(training_data_info, dict) else {}
-    for field in ("total_samples", "train_samples", "validation_samples", "test_samples"):
-        if training_data_info.get(field) is None and training_summary.get(field) is not None:
+    training_data_info = (
+        dict(training_data_info) if isinstance(training_data_info, dict) else {}
+    )
+    for field in (
+        "total_samples",
+        "train_samples",
+        "validation_samples",
+        "test_samples",
+    ):
+        if (
+            training_data_info.get(field) is None
+            and training_summary.get(field) is not None
+        ):
             training_data_info[field] = training_summary.get(field)
     normalized["training_data_info"] = training_data_info
 
@@ -408,8 +425,16 @@ class EvaluationReportGenerator:
             history.append(
                 TrainingHistory(
                     epoch=int(hist.get("epoch", 0) or 0),
-                    train_loss=(None if hist.get("train_loss") is None else float(hist.get("train_loss", 0.0))),
-                    val_loss=(None if hist.get("val_loss") is None else float(hist.get("val_loss", 0.0))),
+                    train_loss=(
+                        None
+                        if hist.get("train_loss") is None
+                        else float(hist.get("train_loss", 0.0))
+                    ),
+                    val_loss=(
+                        None
+                        if hist.get("val_loss") is None
+                        else float(hist.get("val_loss", 0.0))
+                    ),
                     train_accuracy=float(hist.get("train_accuracy", 0.0) or 0.0),
                     val_accuracy=float(hist.get("val_accuracy", 0.0) or 0.0),
                     timestamp=hist.get("timestamp", datetime.now().isoformat()),
@@ -453,13 +478,19 @@ class EvaluationReportGenerator:
 
         # 基于准确率的建议
         if metrics.accuracy < 0.6:
-            recommendations.append("模型准确率较低，建议：增加训练数据、调整模型架构或进行特征工程")
+            recommendations.append(
+                "模型准确率较低，建议：增加训练数据、调整模型架构或进行特征工程"
+            )
         elif metrics.accuracy < 0.75:
-            recommendations.append("模型准确率中等，可以通过超参数调优或集成学习提升性能")
+            recommendations.append(
+                "模型准确率中等，可以通过超参数调优或集成学习提升性能"
+            )
 
         # 基于过拟合的建议
         if metrics.precision > 0.9 and metrics.recall < 0.5:
-            recommendations.append("模型可能存在过拟合，建议增加正则化或使用更多训练数据")
+            recommendations.append(
+                "模型可能存在过拟合，建议增加正则化或使用更多训练数据"
+            )
 
         # 基于特征重要性的建议
         if features:
@@ -472,7 +503,9 @@ class EvaluationReportGenerator:
             recommendations.append("夏普比率较低，建议优化风险控制策略或调整预测阈值")
 
         if not recommendations:
-            recommendations.append("模型性能良好，可以尝试进一步优化超参数或使用集成方法")
+            recommendations.append(
+                "模型性能良好，可以尝试进一步优化超参数或使用集成方法"
+            )
 
         return recommendations
 

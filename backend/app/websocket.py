@@ -50,7 +50,7 @@ class ConnectionManager:
         self.active_connections.discard(websocket)
 
         # 清理任务订阅
-        for task_id, subscribers in self.task_subscriptions.items():
+        for _task_id, subscribers in self.task_subscriptions.items():
             subscribers.discard(websocket)
 
         # 清理系统状态订阅

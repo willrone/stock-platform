@@ -166,7 +166,8 @@ export class BacktestDataAdapter {
     }
 
     const tradeHistory = Array.isArray(summary.trade_history) ? summary.trade_history : [];
-    const winningTrades = typeof summary.winning_trades === 'number' ? summary.winning_trades : null;
+    const winningTrades =
+      typeof summary.winning_trades === 'number' ? summary.winning_trades : null;
     const losingTrades = typeof summary.losing_trades === 'number' ? summary.losing_trades : null;
 
     const derivedWinRate = (() => {
@@ -293,7 +294,9 @@ export class BacktestDataAdapter {
   /**
    * 生成收益分布数据
    */
-  static generateReturnDistribution(detailedResult: BacktestDetailedResult | null | undefined): ReturnDistribution {
+  static generateReturnDistribution(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): ReturnDistribution {
     if (!detailedResult) {
       // 返回默认值，避免页面崩溃
       return {
@@ -349,7 +352,9 @@ export class BacktestDataAdapter {
   /**
    * 生成滚动指标数据
    */
-  static generateRollingMetrics(detailedResult: BacktestDetailedResult | null | undefined): RollingMetrics {
+  static generateRollingMetrics(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): RollingMetrics {
     if (!detailedResult) {
       // 返回默认值，避免页面崩溃
       return {
@@ -382,7 +387,9 @@ export class BacktestDataAdapter {
   /**
    * 转换月度绩效数据
    */
-  static adaptMonthlyPerformance(detailedResult: BacktestDetailedResult | null | undefined): MonthlyPerformance[] {
+  static adaptMonthlyPerformance(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): MonthlyPerformance[] {
     if (!detailedResult || !detailedResult.monthly_returns) {
       return [];
     }
@@ -401,7 +408,9 @@ export class BacktestDataAdapter {
   /**
    * 生成年度绩效数据
    */
-  static generateYearlyPerformance(detailedResult: BacktestDetailedResult | null | undefined): YearlyPerformance[] {
+  static generateYearlyPerformance(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): YearlyPerformance[] {
     if (!detailedResult || !detailedResult.monthly_returns?.length) {
       return [];
     }
@@ -465,7 +474,9 @@ export class BacktestDataAdapter {
   /**
    * 生成季节性分析数据
    */
-  static generateSeasonalAnalysis(detailedResult: BacktestDetailedResult | null | undefined): SeasonalAnalysis {
+  static generateSeasonalAnalysis(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): SeasonalAnalysis {
     if (!detailedResult || !detailedResult.monthly_returns) {
       return this.getDefaultSeasonalAnalysis();
     }
@@ -516,7 +527,9 @@ export class BacktestDataAdapter {
   /**
    * 生成基准对比数据
    */
-  static generateBenchmarkComparison(detailedResult: BacktestDetailedResult | null | undefined): BenchmarkComparison {
+  static generateBenchmarkComparison(
+    detailedResult: BacktestDetailedResult | null | undefined
+  ): BenchmarkComparison {
     if (!detailedResult) {
       // 返回默认值，避免页面崩溃
       return {

@@ -46,20 +46,26 @@ class QlibTrainingOrchestrator:
                 request,
                 dataset,
             )
-            model, training_history, early_stopping_info = await self._run_training_stage(
-                request,
-                model_config,
-                train_dataset,
-                val_dataset,
+            model, training_history, early_stopping_info = (
+                await self._run_training_stage(
+                    request,
+                    model_config,
+                    train_dataset,
+                    val_dataset,
+                )
             )
-            training_metrics, validation_metrics, signal_quality = await self._run_evaluation_stage(
-                request,
-                model,
-                train_dataset,
-                val_dataset,
-                training_history,
+            training_metrics, validation_metrics, signal_quality = (
+                await self._run_evaluation_stage(
+                    request,
+                    model,
+                    train_dataset,
+                    val_dataset,
+                    training_history,
+                )
             )
-            feature_importance = await self._run_feature_importance_stage(request, model)
+            feature_importance = await self._run_feature_importance_stage(
+                request, model
+            )
             model_path = await self._run_save_stage(request, model, model_config)
             training_duration = await self._run_completion_stage(
                 request,
@@ -107,7 +113,9 @@ class QlibTrainingOrchestrator:
             "stock_count": len(request.stock_codes),
             "date_range": f"{request.start_date.strftime('%Y-%m-%d')} 至 {request.end_date.strftime('%Y-%m-%d')}",
         }
-        await self._notify_progress(request, 15.0, "preparing", "准备Qlib数据集", details)
+        await self._notify_progress(
+            request, 15.0, "preparing", "准备Qlib数据集", details
+        )
         self.engine.performance_monitor.start_stage("prepare_dataset")
         dataset = await self.pipeline.prepare_dataset(request)
         self.engine.performance_monitor.end_stage("prepare_dataset")
@@ -126,7 +134,9 @@ class QlibTrainingOrchestrator:
             "features_count": dataset.shape[1] if len(dataset.shape) > 1 else 0,
             "sample_count": dataset.shape[0],
         }
-        await self._notify_progress(request, 25.0, "configuring", "配置Qlib模型", details)
+        await self._notify_progress(
+            request, 25.0, "configuring", "配置Qlib模型", details
+        )
         self.engine.performance_monitor.start_stage("create_model_config")
         model_config = await self.pipeline.create_model_config(request.config)
         self.engine.performance_monitor.end_stage("create_model_config")
@@ -180,7 +190,9 @@ class QlibTrainingOrchestrator:
             "model_type": request.config.model_type.value,
             "early_stopping_enabled": request.config.enable_early_stopping,
         }
-        await self._notify_progress(request, 45.0, "training", "开始Qlib模型训练", details)
+        await self._notify_progress(
+            request, 45.0, "training", "开始Qlib模型训练", details
+        )
         self.engine.performance_monitor.start_stage("train_model")
         training_output = await self.pipeline.train(
             model_config,
@@ -201,11 +213,13 @@ class QlibTrainingOrchestrator:
     ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
         await self._notify_progress(request, 85.0, "evaluating", "评估模型性能")
         self.engine.performance_monitor.start_stage("evaluate_model")
-        training_metrics, validation_metrics, signal_quality = await self.pipeline.evaluate(
-            model,
-            train_dataset,
-            val_dataset,
-            request.model_id,
+        training_metrics, validation_metrics, signal_quality = (
+            await self.pipeline.evaluate(
+                model,
+                train_dataset,
+                val_dataset,
+                request.model_id,
+            )
         )
         self.engine.performance_monitor.end_stage("evaluate_model")
         self.result_assembler.fill_accuracy_into_history(
@@ -226,7 +240,9 @@ class QlibTrainingOrchestrator:
         )
         return training_metrics, validation_metrics, signal_quality
 
-    async def _run_feature_importance_stage(self, request: TrainingRequest, model: Any) -> Any:
+    async def _run_feature_importance_stage(
+        self, request: TrainingRequest, model: Any
+    ) -> Any:
         self.engine.performance_monitor.start_stage("extract_feature_importance")
         feature_importance = await self.pipeline.extract_feature_importance(
             model,
@@ -243,7 +259,9 @@ class QlibTrainingOrchestrator:
     ) -> str:
         await self._notify_progress(request, 95.0, "saving", "保存模型")
         self.engine.performance_monitor.start_stage("save_model")
-        model_path = await self.pipeline.save_model(model, request.model_id, model_config)
+        model_path = await self.pipeline.save_model(
+            model, request.model_id, model_config
+        )
         self.engine.performance_monitor.end_stage("save_model")
         return model_path
 
@@ -290,9 +308,13 @@ class QlibTrainingOrchestrator:
         )
 
     async def _handle_failure(self, request: TrainingRequest, exc: Exception) -> None:
-        logger.error(f"Qlib模型训练失败: {request.model_id}, 错误: {exc}", exc_info=True)
+        logger.error(
+            f"Qlib模型训练失败: {request.model_id}, 错误: {exc}", exc_info=True
+        )
         if request.progress_callback is not None:
-            await request.progress_callback(request.model_id, 0.0, "failed", f"训练失败: {str(exc)}")
+            await request.progress_callback(
+                request.model_id, 0.0, "failed", f"训练失败: {str(exc)}"
+            )
         self.engine.performance_monitor.end_stage("total_training")
         self.engine.performance_monitor.print_summary()
 

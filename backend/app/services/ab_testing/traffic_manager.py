@@ -2,16 +2,15 @@
 A/B测试流量分割管理器
 支持按比例分割用户流量，实现用户分组和标识
 """
+
 import hashlib
-import json
 import random
 import threading
-import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -332,9 +331,9 @@ class TrafficManager:
 
             # 只允许更新特定字段
             allowed_fields = ["description", "end_time", "target_sample_size", "tags"]
-            for field, value in updates.items():
-                if field in allowed_fields:
-                    setattr(experiment, field, value)
+            for field_name, value in updates.items():
+                if field_name in allowed_fields:
+                    setattr(experiment, field_name, value)
 
             logger.info(f"更新实验配置: {experiment_id}")
             return True
@@ -595,12 +594,12 @@ class TrafficManager:
             "status": experiment.status.value,
             "total_users": total_assignments,
             "variant_allocation": actual_allocation,
-            "start_time": experiment.start_time.isoformat()
-            if experiment.start_time
-            else None,
-            "end_time": experiment.end_time.isoformat()
-            if experiment.end_time
-            else None,
+            "start_time": (
+                experiment.start_time.isoformat() if experiment.start_time else None
+            ),
+            "end_time": (
+                experiment.end_time.isoformat() if experiment.end_time else None
+            ),
         }
 
     def delete_experiment(self, experiment_id: str) -> bool:

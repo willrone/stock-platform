@@ -2,10 +2,11 @@
 特征管理API路由
 添加特征计算和查询接口，支持技术指标配置管理
 """
-from datetime import date, datetime
+
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse
@@ -104,9 +105,9 @@ async def compute_features(request: FeatureComputeRequest):
                 results[stock_code] = {
                     "success": True,
                     "feature_count": len(feature_data) if feature_data else 0,
-                    "computed_features": list(feature_data.keys())
-                    if feature_data
-                    else [],
+                    "computed_features": (
+                        list(feature_data.keys()) if feature_data else []
+                    ),
                 }
 
             except Exception as e:
@@ -197,9 +198,11 @@ async def compute_technical_indicators(
         for column in indicators_data.columns:
             result_data[column] = {
                 "values": indicators_data[column].dropna().to_dict(),
-                "latest_value": float(indicators_data[column].dropna().iloc[-1])
-                if not indicators_data[column].dropna().empty
-                else None,
+                "latest_value": (
+                    float(indicators_data[column].dropna().iloc[-1])
+                    if not indicators_data[column].dropna().empty
+                    else None
+                ),
                 "data_points": len(indicators_data[column].dropna()),
             }
 
@@ -327,7 +330,9 @@ async def list_features(
 
 
 @router.get(
-    "/metadata/{feature_name}", response_model=StandardResponse, summary="获取特征元数据"
+    "/metadata/{feature_name}",
+    response_model=StandardResponse,
+    summary="获取特征元数据",
 )
 async def get_feature_metadata(feature_name: str):
     """获取特征元数据"""
@@ -355,19 +360,23 @@ async def get_feature_stats():
     try:
         stats = feature_store.get_stats()
 
-        return StandardResponse(success=True, message="成功获取特征统计信息", data=stats)
+        return StandardResponse(
+            success=True, message="成功获取特征统计信息", data=stats
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取特征统计失败: {str(e)}")
 
 
-@router.post("/indicators/config", response_model=StandardResponse, summary="配置技术指标")
+@router.post(
+    "/indicators/config", response_model=StandardResponse, summary="配置技术指标"
+)
 async def configure_technical_indicator(config: TechnicalIndicatorConfig):
     """配置技术指标参数"""
     try:
         # 验证指标类型
         try:
-            indicator_type = TechnicalIndicator(config.indicator_type)
+            TechnicalIndicator(config.indicator_type)
         except ValueError:
             raise HTTPException(
                 status_code=400, detail=f"无效的技术指标类型: {config.indicator_type}"
@@ -397,7 +406,9 @@ async def configure_technical_indicator(config: TechnicalIndicatorConfig):
         raise HTTPException(status_code=500, detail=f"配置技术指标失败: {str(e)}")
 
 
-@router.get("/indicators/config", response_model=StandardResponse, summary="获取技术指标配置")
+@router.get(
+    "/indicators/config", response_model=StandardResponse, summary="获取技术指标配置"
+)
 async def get_technical_indicator_configs(
     indicator_type: Optional[str] = Query(None, description="指标类型过滤"),
     enabled_only: bool = Query(True, description="只返回启用的配置"),
@@ -506,9 +517,9 @@ async def batch_compute_features(
                     "total_stocks": len(stock_codes),
                     "successful_count": successful_count,
                     "failed_count": failed_count,
-                    "success_rate": successful_count / len(stock_codes) * 100
-                    if stock_codes
-                    else 0,
+                    "success_rate": (
+                        successful_count / len(stock_codes) * 100 if stock_codes else 0
+                    ),
                     "parallel_execution": parallel,
                 },
             },
@@ -518,19 +529,25 @@ async def batch_compute_features(
         raise HTTPException(status_code=500, detail=f"批量计算特征失败: {str(e)}")
 
 
-@router.get("/pipeline/status", response_model=StandardResponse, summary="获取特征管道状态")
+@router.get(
+    "/pipeline/status", response_model=StandardResponse, summary="获取特征管道状态"
+)
 async def get_pipeline_status():
     """获取特征计算管道状态"""
     try:
         status = feature_pipeline.get_status()
 
-        return StandardResponse(success=True, message="成功获取特征管道状态", data=status)
+        return StandardResponse(
+            success=True, message="成功获取特征管道状态", data=status
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取管道状态失败: {str(e)}")
 
 
-@router.post("/pipeline/trigger", response_model=StandardResponse, summary="触发特征计算")
+@router.post(
+    "/pipeline/trigger", response_model=StandardResponse, summary="触发特征计算"
+)
 async def trigger_feature_computation(
     stock_code: str,
     feature_types: List[str] = Query([], description="特征类型列表"),

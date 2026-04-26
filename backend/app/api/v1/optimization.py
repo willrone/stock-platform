@@ -2,10 +2,8 @@
 超参优化任务 API
 """
 
-import asyncio
-import os
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -17,10 +15,6 @@ from app.core.database import get_async_session
 from app.models.task_models import TaskStatus, TaskType
 from app.repositories.async_task_repository import AsyncTaskRepository
 from app.services.tasks.process_executor import get_process_executor
-from app.services.tasks.task_execution_engine import (
-    HyperparameterOptimizationTaskExecutor,
-)
-from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext, TaskPriority
 
 router = APIRouter(prefix="/optimization", tags=["超参优化"])
 
@@ -79,7 +73,7 @@ async def create_optimization_task(
             process_executor = get_process_executor()
 
             # 使用进程池提交任务
-            future = process_executor.submit(
+            _ = process_executor.submit(
                 execute_optimization_task_simple, task.task_id
             )
 
@@ -100,13 +94,17 @@ async def create_optimization_task(
             "status": task.status,
             "progress": task.progress,
             "stock_codes": request.stock_codes,
-            "created_at": task.created_at.isoformat()
-            if task.created_at
-            else datetime.now().isoformat(),
+            "created_at": (
+                task.created_at.isoformat()
+                if task.created_at
+                else datetime.now().isoformat()
+            ),
             "error_message": task.error_message,
         }
 
-        return StandardResponse(success=True, message="超参优化任务创建成功", data=task_data)
+        return StandardResponse(
+            success=True, message="超参优化任务创建成功", data=task_data
+        )
 
     except Exception as e:
         logger.error(f"创建超参优化任务失败: {e}", exc_info=True)
@@ -149,9 +147,9 @@ async def list_optimization_tasks(
                 "strategy_name": optimization_config.get("strategy_name", ""),
                 "n_trials": optimization_config.get("n_trials", 0),
                 "created_at": task.created_at.isoformat() if task.created_at else None,
-                "completed_at": task.completed_at.isoformat()
-                if task.completed_at
-                else None,
+                "completed_at": (
+                    task.completed_at.isoformat() if task.completed_at else None
+                ),
                 "error_message": task.error_message,
             }
 
@@ -171,11 +169,15 @@ async def list_optimization_tasks(
 
     except Exception as e:
         logger.error(f"获取超参优化任务列表失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取超参优化任务列表失败: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"获取超参优化任务列表失败: {str(e)}"
+        )
 
 
 @router.get("/tasks/{task_id}", response_model=StandardResponse)
-async def get_optimization_task(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_optimization_task(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+):
     """获取超参优化任务详情"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -206,24 +208,30 @@ async def get_optimization_task(task_id: str, db: AsyncSession = Depends(get_asy
             ),
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
-            "completed_at": task.completed_at.isoformat()
-            if task.completed_at
-            else None,
+            "completed_at": (
+                task.completed_at.isoformat() if task.completed_at else None
+            ),
             "error_message": task.error_message,
             "result": task.result,
         }
 
-        return StandardResponse(success=True, message="获取超参优化任务详情成功", data=task_data)
+        return StandardResponse(
+            success=True, message="获取超参优化任务详情成功", data=task_data
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"获取超参优化任务详情失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取超参优化任务详情失败: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"获取超参优化任务详情失败: {str(e)}"
+        )
 
 
 @router.get("/tasks/{task_id}/status", response_model=StandardResponse)
-async def get_optimization_status(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_optimization_status(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+):
     """获取优化任务实时状态"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -259,7 +267,9 @@ async def get_optimization_status(task_id: str, db: AsyncSession = Depends(get_a
             f"running={status_data['running_trials']}, result_keys={list(result.keys())}"
         )
 
-        return StandardResponse(success=True, message="获取优化状态成功", data=status_data)
+        return StandardResponse(
+            success=True, message="获取优化状态成功", data=status_data
+        )
 
     except HTTPException:
         raise
@@ -269,7 +279,9 @@ async def get_optimization_status(task_id: str, db: AsyncSession = Depends(get_a
 
 
 @router.get("/tasks/{task_id}/param-importance", response_model=StandardResponse)
-async def get_param_importance(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_param_importance(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+):
     """获取参数重要性"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -314,7 +326,9 @@ async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_se
         if not pareto_front:
             raise HTTPException(status_code=400, detail="该任务不是多目标优化任务")
 
-        return StandardResponse(success=True, message="获取帕累托前沿成功", data=pareto_front)
+        return StandardResponse(
+            success=True, message="获取帕累托前沿成功", data=pareto_front
+        )
 
     except HTTPException:
         raise
@@ -327,7 +341,6 @@ def execute_optimization_task_simple(task_id: str):
     """
     简化的超参优化任务执行函数（进程池执行）
     """
-    import asyncio
     import os
     from datetime import datetime
 
@@ -399,7 +412,8 @@ def execute_optimization_task_simple(task_id: str):
 
         error_details = traceback.format_exc()
         task_logger.error(
-            f"超参优化任务执行失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}", exc_info=True
+            f"超参优化任务执行失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}",
+            exc_info=True,
         )
         task_logger.error(f"详细错误信息: {error_details}")
 

@@ -3,16 +3,12 @@
 实现LRU缓存机制和缓存失效策略
 """
 
-import asyncio
-import gc
 import threading
 import time
-import weakref
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 import psutil
 from loguru import logger
@@ -115,7 +111,7 @@ class LRUCache:
             import sys
 
             return sys.getsizeof(obj)
-        except:
+        except Exception:
             return 1024  # 默认1KB
 
     def _cleanup_expired(self):
@@ -148,7 +144,7 @@ class LRUCache:
             target_size = int(self.memory_limit_bytes * 0.7)  # 清理到70%
             evicted_count = 0
 
-            for key, entry in entries:
+            for key, _entry in entries:
                 if self._memory_usage <= target_size:
                     break
 

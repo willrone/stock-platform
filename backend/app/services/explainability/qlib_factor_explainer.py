@@ -2,13 +2,14 @@
 量化因子解释功能
 支持Qlib因子的解释性分析，实现因子贡献度可视化
 """
+
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -63,9 +64,9 @@ class FactorContribution:
             "contribution_score": self.contribution_score,
             "contribution_percentage": self.contribution_percentage,
             "statistical_significance": self.statistical_significance,
-            "confidence_interval": list(self.confidence_interval)
-            if self.confidence_interval
-            else None,
+            "confidence_interval": (
+                list(self.confidence_interval) if self.confidence_interval else None
+            ),
             "factor_value": self.factor_value,
             "normalized_value": self.normalized_value,
         }
@@ -137,7 +138,6 @@ class QlibFactorMapper:
         # 波动率因子
         "STD": FactorCategory.VOLATILITY,
         "BETA": FactorCategory.VOLATILITY,
-        "RSQR": FactorCategory.VOLATILITY,
         # 技术因子
         "RSI": FactorCategory.TECHNICAL,
         "PSY": FactorCategory.TECHNICAL,
@@ -522,23 +522,25 @@ class QlibFactorExplainer:
                 actual_return=actual_return,
                 factor_contributions=factor_contributions,
                 category_contributions=category_contributions,
-                explanation_level=ExplanationLevel.STOCK
-                if stock_code
-                else ExplanationLevel.PORTFOLIO,
+                explanation_level=(
+                    ExplanationLevel.STOCK if stock_code else ExplanationLevel.PORTFOLIO
+                ),
                 base_return=base_return,
                 total_attribution=total_attribution,
                 unexplained_variance=unexplained_variance,
                 created_at=datetime.now(),
                 metadata={
                     "num_factors": len(factor_contributions),
-                    "top_factor": factor_contributions[0].factor_name
-                    if factor_contributions
-                    else None,
-                    "attribution_coverage": abs(
-                        total_attribution / (prediction - base_return)
-                    )
-                    if prediction != base_return
-                    else 0,
+                    "top_factor": (
+                        factor_contributions[0].factor_name
+                        if factor_contributions
+                        else None
+                    ),
+                    "attribution_coverage": (
+                        abs(total_attribution / (prediction - base_return))
+                        if prediction != base_return
+                        else 0
+                    ),
                 },
             )
 

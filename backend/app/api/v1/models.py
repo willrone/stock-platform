@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from loguru import logger
 from sqlalchemy import or_
 
@@ -53,8 +53,6 @@ try:
     from app.services.models.model_training import (
         ModelTrainingService as DeepModelTrainingService,
     )
-    from app.services.models.model_training import ModelType as DeepModelType
-    from app.services.models.model_training import TrainingConfig as DeepTrainingConfig
 
     DEEP_TRAINING_AVAILABLE = True
 except ImportError as e:
@@ -64,10 +62,6 @@ try:
     from app.services.models.model_storage import ModelStorage
     from app.services.models.model_training_service import (
         ModelTrainingService as MLModelTrainingService,
-    )
-    from app.services.models.model_training_service import ModelType as MLModelType
-    from app.services.models.model_training_service import (
-        TrainingConfig as MLTrainingConfig,
     )
 
     ML_TRAINING_AVAILABLE = True
@@ -560,7 +554,10 @@ async def train_model_task(
                         "best_hyperparameters": None,
                     }
                     await progress_callback(
-                        model_id, 10.0, "hyperparameter_tuning", "超参数搜索完成，使用默认参数"
+                        model_id,
+                        10.0,
+                        "hyperparameter_tuning",
+                        "超参数搜索完成，使用默认参数",
                     )
 
             # 创建Qlib训练配置
@@ -571,10 +568,9 @@ async def train_model_task(
                 or final_hyperparameters.get("epochs")
                 or 100
             )
-            configured_early_stopping = (
-                final_hyperparameters.get("early_stopping_rounds")
-                or final_hyperparameters.get("early_stopping_patience")
-            )
+            configured_early_stopping = final_hyperparameters.get(
+                "early_stopping_rounds"
+            ) or final_hyperparameters.get("early_stopping_patience")
             if configured_early_stopping is not None:
                 early_stopping_patience = int(configured_early_stopping)
             else:
@@ -627,7 +623,9 @@ async def train_model_task(
                     hyperparameters.copy() if hyperparameters else {}
                 )
 
-            logger.info(f"生成评估报告 - 模型 {model_id}, 超参数: {final_hyperparameters}")
+            logger.info(
+                f"生成评估报告 - 模型 {model_id}, 超参数: {final_hyperparameters}"
+            )
 
             report = report_generator.generate_report(
                 model_id=model_id,
@@ -640,9 +638,9 @@ async def train_model_task(
                     "train_samples": train_samples,
                     "validation_samples": validation_samples,
                     "test_samples": test_samples,
-                    "epochs": len(result.training_history)
-                    if result.training_history
-                    else 0,
+                    "epochs": (
+                        len(result.training_history) if result.training_history else 0
+                    ),
                     "batch_size": final_hyperparameters.get("batch_size", 32),
                     "learning_rate": final_hyperparameters.get("learning_rate", 0.0),
                 },
@@ -669,7 +667,9 @@ async def train_model_task(
                     "early_stopped": bool(getattr(result, "early_stopped", False)),
                     "stopped_epoch": int(getattr(result, "stopped_epoch", 0) or 0),
                     "best_epoch": int(getattr(result, "best_epoch", 0) or 0),
-                    "early_stopping_reason": getattr(result, "early_stopping_reason", None),
+                    "early_stopping_reason": getattr(
+                        result, "early_stopping_reason", None
+                    ),
                 },
                 signal_quality=getattr(result, "signal_quality", None),
             )
@@ -788,7 +788,9 @@ async def get_model_versions(model_id: str):
             )
 
         return StandardResponse(
-            success=True, message="模型版本列表获取成功", data={"versions": version_list}
+            success=True,
+            message="模型版本列表获取成功",
+            data={"versions": version_list},
         )
     except HTTPException:
         raise
@@ -816,7 +818,9 @@ async def get_model_evaluation_report(model_id: str):
         # 检查评估报告是否存在
         if model.evaluation_report is None:
             logger.warning(f"模型 {model_id} 的评估报告为 None，状态: {model.status}")
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+            raise HTTPException(
+                status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
+            )
 
         # 检查评估报告是否为空字典
         if (
@@ -824,7 +828,9 @@ async def get_model_evaluation_report(model_id: str):
             and len(model.evaluation_report) == 0
         ):
             logger.warning(f"模型 {model_id} 的评估报告为空字典")
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+            raise HTTPException(
+                status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
+            )
 
         # 检查评估报告是否为空字符串
         if (
@@ -832,7 +838,9 @@ async def get_model_evaluation_report(model_id: str):
             and len(model.evaluation_report.strip()) == 0
         ):
             logger.warning(f"模型 {model_id} 的评估报告为空字符串")
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+            raise HTTPException(
+                status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
+            )
 
         # 如果评估报告是字符串，尝试解析为JSON
         if isinstance(model.evaluation_report, str):
@@ -885,7 +893,9 @@ async def list_models():
         session.close()
 
 
-@router.get("/available-features", response_model=StandardResponse, summary="获取可用特征列表")
+@router.get(
+    "/available-features", response_model=StandardResponse, summary="获取可用特征列表"
+)
 async def get_available_features(
     stock_code: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -898,7 +908,7 @@ async def get_available_features(
     否则返回所有可能支持的特征列表。
     """
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         from app.services.prediction.technical_indicators import (
             TechnicalIndicatorCalculator,
@@ -906,8 +916,6 @@ async def get_available_features(
         from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
 
         # 基础价格特征
-        base_features = ["open", "high", "low", "close", "volume"]
-
         # 技术指标特征
         indicator_calculator = TechnicalIndicatorCalculator()
         supported_indicators = indicator_calculator.get_supported_indicators_info()
@@ -959,7 +967,7 @@ async def get_available_features(
                     indicator_features.append(mapping)
 
         # 基本面特征
-        fundamental_features = [
+        _ = [
             "price_change",
             "price_change_5d",
             "price_change_20d",
@@ -973,7 +981,7 @@ async def get_available_features(
         # Alpha因子特征（如果启用）
         alpha_features = []
         # Alpha158因子通常有158个特征，这里列出一些常见的
-        alpha_features = [f"alpha_{i:03d}" for i in range(1, 159)]
+        alpha_features = ["alpha_{i:03d}" for i in range(1, 159)]
 
         # 如果提供了股票代码和日期，尝试获取实际可用的特征
         if stock_code and start_date and end_date:
@@ -1255,7 +1263,9 @@ async def cancel_model_training(model_id: str):
 async def create_training_task(request: ModelTrainingRequest):
     """创建模型训练任务"""
     if not TRAINING_AVAILABLE:
-        raise HTTPException(status_code=503, detail="模型训练服务不可用，请检查依赖安装")
+        raise HTTPException(
+            status_code=503, detail="模型训练服务不可用，请检查依赖安装"
+        )
 
     session = SessionLocal()
     try:
@@ -1293,7 +1303,9 @@ async def create_training_task(request: ModelTrainingRequest):
             start_date = datetime.fromisoformat(request.start_date)
             end_date = datetime.fromisoformat(request.end_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式")
+            raise HTTPException(
+                status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
 
         # 创建模型记录
         model_info = ModelInfo(
@@ -1370,17 +1382,23 @@ async def get_model_lifecycle(model_id: str):
         lifecycle_info = model_lifecycle_manager.get_model_lifecycle(model_id)
 
         if not lifecycle_info:
-            raise HTTPException(status_code=404, detail=f"模型生命周期信息不存在: {model_id}")
+            raise HTTPException(
+                status_code=404, detail=f"模型生命周期信息不存在: {model_id}"
+            )
 
         return StandardResponse(
-            success=True, message="模型生命周期信息获取成功", data=lifecycle_info.to_dict()
+            success=True,
+            message="模型生命周期信息获取成功",
+            data=lifecycle_info.to_dict(),
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"获取模型生命周期信息失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}"
+        )
 
 
 @router.get("/{model_id}/lineage", response_model=StandardResponse)
@@ -1390,7 +1408,9 @@ async def get_model_lineage(model_id: str):
         lineage_info = lineage_tracker.get_model_lineage(model_id)
 
         if not lineage_info:
-            raise HTTPException(status_code=404, detail=f"模型血缘信息不存在: {model_id}")
+            raise HTTPException(
+                status_code=404, detail=f"模型血缘信息不存在: {model_id}"
+            )
 
         return StandardResponse(
             success=True, message="模型血缘信息获取成功", data=lineage_info.to_dict()
@@ -1411,7 +1431,9 @@ async def get_model_dependencies(model_id: str):
         lineage_info = lineage_tracker.get_model_lineage(model_id)
 
         if not lineage_info:
-            raise HTTPException(status_code=404, detail=f"模型依赖信息不存在: {model_id}")
+            raise HTTPException(
+                status_code=404, detail=f"模型依赖信息不存在: {model_id}"
+            )
 
         # 提取依赖关系
         dependencies = {
@@ -1421,7 +1443,9 @@ async def get_model_dependencies(model_id: str):
             "config_dependencies": lineage_info.config_dependencies,
         }
 
-        return StandardResponse(success=True, message="模型依赖关系获取成功", data=dependencies)
+        return StandardResponse(
+            success=True, message="模型依赖关系获取成功", data=dependencies
+        )
 
     except HTTPException:
         raise
@@ -1492,7 +1516,9 @@ async def get_model_performance_history(model_id: str, time_range: str = "30d"):
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持的时间范围: {time_range}"
+            )
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
@@ -1574,7 +1600,7 @@ async def search_models(
                         import json
 
                         performance_metrics = json.loads(performance_metrics)
-                    except:
+                    except Exception:
                         performance_metrics = {}
 
                 accuracy = performance_metrics.get("accuracy", 0.0)
@@ -1597,7 +1623,7 @@ async def search_models(
                     import json
 
                     performance_metrics = json.loads(performance_metrics)
-                except:
+                except Exception:
                     performance_metrics = {}
 
             accuracy = performance_metrics.get("accuracy", 0.0)
@@ -1611,9 +1637,9 @@ async def search_models(
                 "version": model.version,
                 "accuracy": float(accuracy) if accuracy else 0.0,
                 "status": model.status,
-                "created_at": model.created_at.isoformat()
-                if model.created_at
-                else None,
+                "created_at": (
+                    model.created_at.isoformat() if model.created_at else None
+                ),
                 "performance_metrics": performance_metrics,
             }
             model_list.append(model_data)

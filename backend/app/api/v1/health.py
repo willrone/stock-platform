@@ -10,7 +10,10 @@ router = APIRouter(prefix="/health", tags=["健康检查"])
 
 
 @router.get(
-    "", response_model=StandardResponse, summary="健康检查", description="检查API服务运行状态"
+    "",
+    response_model=StandardResponse,
+    summary="健康检查",
+    description="检查API服务运行状态",
 )
 async def health_check():
     """

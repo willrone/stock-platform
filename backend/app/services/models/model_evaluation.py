@@ -9,21 +9,21 @@ import hashlib
 import json
 import pickle
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from sklearn.model_selection import TimeSeriesSplit
 
-from app.core.database import SessionLocal
 from app.core.logging import logger as app_logger
 
 logger = app_logger
+
+if TYPE_CHECKING:
+    from .model_storage import ModelStorage
 
 # 导入统一的错误处理机制
 try:
@@ -42,7 +42,9 @@ except ImportError:
     TaskError = Exception
     ErrorSeverity = None
     ErrorContext = None
-    handle_async_exception = lambda func: func
+
+    def handle_async_exception(func):
+        return func
 
 
 # 从shared_types.py导入共享类型
@@ -295,7 +297,7 @@ class ModelEvaluator:
         all_true_labels = []
         all_returns = []
 
-        for fold, (train_idx, test_idx) in enumerate(splits):
+        for fold, (_train_idx, test_idx) in enumerate(splits):
             logger.info(f"评估第 {fold + 1}/{len(splits)} 折")
 
             X_test = X[test_idx]
@@ -401,7 +403,9 @@ class ModelEvaluator:
             max_consecutive_losses=max_consecutive_losses,
         )
 
-        logger.info(f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}")
+        logger.info(
+            f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}"
+        )
         return metrics
 
 
@@ -504,7 +508,7 @@ class ModelVersionManager:
         # 生成版本号
         versions = self._load_versions()
         model_versions = versions.get(model_id, [])
-        version = f"v{len(model_versions) + 1:03d}"
+        version = "v{len(model_versions) + 1:03d}"
 
         # 保存模型文件
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

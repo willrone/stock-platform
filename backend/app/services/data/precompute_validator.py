@@ -7,7 +7,6 @@ from __future__ import annotations  # 延迟评估类型注解
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -52,7 +51,6 @@ class PrecomputeValidator:
 
     def __init__(self):
         """初始化验证器"""
-        pass
 
     def validate_precomputed_data(
         self,
@@ -159,9 +157,7 @@ class PrecomputeValidator:
             summary = (
                 "验证通过"
                 if is_valid
-                else "; ".join(summary_parts)
-                if summary_parts
-                else "未知问题"
+                else "; ".join(summary_parts) if summary_parts else "未知问题"
             )
 
             return ValidationResult(
@@ -218,7 +214,9 @@ class PrecomputeValidator:
 
                     # 检查异常大的值（可能是数据错误）
                     if qlib_data[col].max() > 1e6:
-                        issues.append(f"{col} 有异常大的值（最大值: {qlib_data[col].max()}）")
+                        issues.append(
+                            f"{col} 有异常大的值（最大值: {qlib_data[col].max()}）"
+                        )
 
             # 检查成交量
             if "$volume" in qlib_data.columns:
@@ -287,7 +285,9 @@ class PrecomputeValidator:
                     large_gaps = date_diffs[date_diffs > 30]
                     if len(large_gaps) > 0:
                         # 这可能是正常的（停牌等），只记录警告
-                        logger.debug(f"股票 {stock_code} 有 {len(large_gaps)} 个超过30天的日期间隔")
+                        logger.debug(
+                            f"股票 {stock_code} 有 {len(large_gaps)} 个超过30天的日期间隔"
+                        )
 
         except Exception as e:
             logger.warning(f"数据一致性检查出错: {e}")

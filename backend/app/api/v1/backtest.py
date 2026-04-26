@@ -3,7 +3,6 @@
 """
 
 import os
-from datetime import datetime
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
@@ -22,7 +21,9 @@ from app.services.backtest import BacktestConfig, BacktestExecutor
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
 
 
-def _normalize_backtest_strategy_request(request: BacktestRequest) -> tuple[str, Dict[str, object]]:
+def _normalize_backtest_strategy_request(
+    request: BacktestRequest,
+) -> tuple[str, Dict[str, object]]:
     """规范化回测策略请求，补齐模型驱动回测配置。"""
     strategy_name = request.strategy_name
     strategy_config = dict(request.strategy_config or {})
@@ -647,7 +648,9 @@ async def run_backtest(request: BacktestRequest):
     }
     """
     try:
-        normalized_strategy_name, strategy_config = _normalize_backtest_strategy_request(request)
+        normalized_strategy_name, strategy_config = (
+            _normalize_backtest_strategy_request(request)
+        )
 
         # 检测是否为组合策略
         is_portfolio = normalized_strategy_name.lower() == "portfolio" or (
@@ -688,9 +691,7 @@ async def run_backtest(request: BacktestRequest):
                 )
             ),
             slippage_rate=float(
-                _resolve_backtest_config_value(
-                    strategy_config, "slippage_rate", 0.0001
-                )
+                _resolve_backtest_config_value(strategy_config, "slippage_rate", 0.0001)
             ),
             max_position_size=float(
                 _resolve_backtest_config_value(
@@ -703,19 +704,13 @@ async def run_backtest(request: BacktestRequest):
                 )
             ),
             board_lot_size=int(
-                _resolve_backtest_config_value(
-                    strategy_config, "board_lot_size", 100
-                )
+                _resolve_backtest_config_value(strategy_config, "board_lot_size", 100)
             ),
             stop_loss_pct=float(
-                _resolve_backtest_config_value(
-                    strategy_config, "stop_loss_pct", 0.05
-                )
+                _resolve_backtest_config_value(strategy_config, "stop_loss_pct", 0.05)
             ),
             take_profit_pct=float(
-                _resolve_backtest_config_value(
-                    strategy_config, "take_profit_pct", 0.15
-                )
+                _resolve_backtest_config_value(strategy_config, "take_profit_pct", 0.15)
             ),
             rebalance_frequency=str(
                 _resolve_backtest_config_value(
@@ -806,9 +801,9 @@ async def run_backtest(request: BacktestRequest):
             # 尝试从回测报告中提取组合信息
             portfolio_info = {
                 "is_portfolio": True,
-                "strategies": strategy_config.get("strategies", [])
-                if strategy_config
-                else [],
+                "strategies": (
+                    strategy_config.get("strategies", []) if strategy_config else []
+                ),
             }
 
         result = {
@@ -991,7 +986,9 @@ async def get_portfolio_templates():
             },
         ]
 
-        return StandardResponse(success=True, message="获取策略组合模板成功", data=templates)
+        return StandardResponse(
+            success=True, message="获取策略组合模板成功", data=templates
+        )
     except Exception as e:
         logger.error(f"获取策略组合模板失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取策略组合模板失败: {str(e)}")

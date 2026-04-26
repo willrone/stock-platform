@@ -71,7 +71,14 @@ export default function BacktestPage() {
     if (task.result || task.backtest_results || task.results?.backtest_results) {
       const result = task.result || task.backtest_results || task.results?.backtest_results;
       if (result && typeof result === 'object') {
-        const backtestKeys = ['equity_curve', 'drawdown_curve', 'portfolio', 'risk_metrics', 'trade_history', 'dates'];
+        const backtestKeys = [
+          'equity_curve',
+          'drawdown_curve',
+          'portfolio',
+          'risk_metrics',
+          'trade_history',
+          'dates',
+        ];
         return backtestKeys.some(key => key in result);
       }
     }
@@ -172,7 +179,9 @@ export default function BacktestPage() {
 
   // 处理删除任务
   const handleDeleteTask = async () => {
-    if (!selectedTask) {return;}
+    if (!selectedTask) {
+      return;
+    }
 
     try {
       await TaskService.deleteTask(selectedTask.task_id);
@@ -192,8 +201,7 @@ export default function BacktestPage() {
 
   // 获取回测结果摘要
   const getBacktestSummary = (task: Task) => {
-    const backtestData =
-      task.results?.backtest_results || task.backtest_results || task.result;
+    const backtestData = task.results?.backtest_results || task.backtest_results || task.result;
     if (!backtestData) {
       return null;
     }
@@ -282,7 +290,7 @@ export default function BacktestPage() {
                   <MobileBacktestCard
                     key={task.task_id}
                     task={task}
-                    onDelete={(id) => {
+                    onDelete={id => {
                       setSelectedTask(backtestTasks.find(t => t.task_id === id) || null);
                       setIsDeleteOpen(true);
                     }}
@@ -292,123 +300,125 @@ export default function BacktestPage() {
 
               {/* 桌面端：表格 */}
               <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-              <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>任务名称</TableCell>
-                    <TableCell>策略</TableCell>
-                    <TableCell>股票数量</TableCell>
-                    <TableCell>回测期间</TableCell>
-                    <TableCell>状态</TableCell>
-                    <TableCell>进度</TableCell>
-                    <TableCell>创建时间</TableCell>
-                    <TableCell align="right">操作</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {backtestTasks.map(task => {
-                    const summary = getBacktestSummary(task);
-                    const strategyName =
-                      task.config?.strategy_name || task.config?.strategy_config?.strategy_name || '未知策略';
-                    const startDate = task.config?.start_date || '';
-                    const endDate = task.config?.end_date || '';
-
-                    return (
-                      <TableRow key={task.task_id} hover>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {task.task_name}
-                            </Typography>
-                            {task.description && (
-                              <Typography variant="caption" color="text.secondary">
-                                {task.description}
-                              </Typography>
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={strategyName} size="small" variant="outlined" />
-                        </TableCell>
-                        <TableCell>{task.stock_codes?.length || 0}</TableCell>
-                        <TableCell>
-                          {startDate && endDate ? (
-                            <Typography variant="caption">
-                              {startDate.split('T')[0]} ~ {endDate.split('T')[0]}
-                            </Typography>
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">
-                              -
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusChip(task.status)}</TableCell>
-                        <TableCell>
-                          {task.status === 'running' ? (
-                            <Box sx={{ width: 100 }}>
-                              <LinearProgress
-                                variant="determinate"
-                                value={task.progress || 0}
-                                sx={{ height: 8, borderRadius: 4 }}
-                              />
-                              <Typography variant="caption" color="text.secondary">
-                                {task.progress || 0}%
-                              </Typography>
-                            </Box>
-                          ) : task.status === 'completed' && summary ? (
-                            <Box>
-                              <Typography variant="caption" color="success.main">
-                                总收益: {(summary.totalReturn * 100).toFixed(2)}%
-                              </Typography>
-                              <br />
-                              <Typography variant="caption" color="text.secondary">
-                                夏普: {summary.sharpeRatio.toFixed(2)}
-                              </Typography>
-                            </Box>
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">
-                              -
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption">
-                            {formatDate(task.created_at)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleViewTask(task.task_id)}
-                              title="查看详情"
-                            >
-                              <Eye size={16} />
-                            </IconButton>
-                            {task.status !== 'running' && (
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => {
-                                  setSelectedTask(task);
-                                  setIsDeleteOpen(true);
-                                }}
-                                title="删除任务"
-                              >
-                                <Trash2 size={16} />
-                              </IconButton>
-                            )}
-                          </Box>
-                        </TableCell>
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>任务名称</TableCell>
+                        <TableCell>策略</TableCell>
+                        <TableCell>股票数量</TableCell>
+                        <TableCell>回测期间</TableCell>
+                        <TableCell>状态</TableCell>
+                        <TableCell>进度</TableCell>
+                        <TableCell>创建时间</TableCell>
+                        <TableCell align="right">操作</TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            </Box>
+                    </TableHead>
+                    <TableBody>
+                      {backtestTasks.map(task => {
+                        const summary = getBacktestSummary(task);
+                        const strategyName =
+                          task.config?.strategy_name ||
+                          task.config?.strategy_config?.strategy_name ||
+                          '未知策略';
+                        const startDate = task.config?.start_date || '';
+                        const endDate = task.config?.end_date || '';
+
+                        return (
+                          <TableRow key={task.task_id} hover>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {task.task_name}
+                                </Typography>
+                                {task.description && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {task.description}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={strategyName} size="small" variant="outlined" />
+                            </TableCell>
+                            <TableCell>{task.stock_codes?.length || 0}</TableCell>
+                            <TableCell>
+                              {startDate && endDate ? (
+                                <Typography variant="caption">
+                                  {startDate.split('T')[0]} ~ {endDate.split('T')[0]}
+                                </Typography>
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  -
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>{getStatusChip(task.status)}</TableCell>
+                            <TableCell>
+                              {task.status === 'running' ? (
+                                <Box sx={{ width: 100 }}>
+                                  <LinearProgress
+                                    variant="determinate"
+                                    value={task.progress || 0}
+                                    sx={{ height: 8, borderRadius: 4 }}
+                                  />
+                                  <Typography variant="caption" color="text.secondary">
+                                    {task.progress || 0}%
+                                  </Typography>
+                                </Box>
+                              ) : task.status === 'completed' && summary ? (
+                                <Box>
+                                  <Typography variant="caption" color="success.main">
+                                    总收益: {(summary.totalReturn * 100).toFixed(2)}%
+                                  </Typography>
+                                  <br />
+                                  <Typography variant="caption" color="text.secondary">
+                                    夏普: {summary.sharpeRatio.toFixed(2)}
+                                  </Typography>
+                                </Box>
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  -
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption">
+                                {formatDate(task.created_at)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={() => handleViewTask(task.task_id)}
+                                  title="查看详情"
+                                >
+                                  <Eye size={16} />
+                                </IconButton>
+                                {task.status !== 'running' && (
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => {
+                                      setSelectedTask(task);
+                                      setIsDeleteOpen(true);
+                                    }}
+                                    title="删除任务"
+                                  >
+                                    <Trash2 size={16} />
+                                  </IconButton>
+                                )}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
             </Box>
           )}
         </CardContent>

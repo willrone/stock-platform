@@ -3,7 +3,6 @@
 """
 
 import asyncio
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, TypeVar
@@ -20,8 +19,6 @@ from app.core.config import settings
 
 class Base(DeclarativeBase):
     """SQLAlchemy 基础模型类"""
-
-    pass
 
 
 # SQLite 连接配置，启用 WAL 模式以提高并发性能
@@ -50,12 +47,14 @@ async_engine = create_async_engine(
     echo=False,  # 关闭 SQL 语句日志，避免控制台刷屏
     future=True,
     # SQLite 特定配置
-    connect_args={
-        "check_same_thread": False,  # 允许多线程访问
-        "timeout": 5.0,  # 连接超时时间（秒）
-    }
-    if "sqlite" in settings.DATABASE_URL.lower()
-    else {},
+    connect_args=(
+        {
+            "check_same_thread": False,  # 允许多线程访问
+            "timeout": 5.0,  # 连接超时时间（秒）
+        }
+        if "sqlite" in settings.DATABASE_URL.lower()
+        else {}
+    ),
     pool_pre_ping=True,  # 连接前ping检查
 )
 
@@ -81,12 +80,14 @@ sync_engine = create_engine(
     pool_pre_ping=True,  # 连接前ping检查，确保连接有效
     pool_recycle=3600,  # 连接回收时间（秒），1小时
     # SQLite 特定配置
-    connect_args={
-        "check_same_thread": False,  # 允许多线程访问
-        "timeout": 5.0,  # 连接超时时间（秒）
-    }
-    if "sqlite" in settings.database_url_sync.lower()
-    else {},
+    connect_args=(
+        {
+            "check_same_thread": False,  # 允许多线程访问
+            "timeout": 5.0,  # 连接超时时间（秒）
+        }
+        if "sqlite" in settings.database_url_sync.lower()
+        else {}
+    ),
 )
 
 # 为同步引擎注册 SQLite 连接配置
@@ -109,7 +110,8 @@ def ensure_sqlite_task_updated_at_column_sync(connection: Connection) -> None:
         return
 
     columns = {
-        row[1] for row in connection.exec_driver_sql("PRAGMA table_info(tasks)").fetchall()
+        row[1]
+        for row in connection.exec_driver_sql("PRAGMA table_info(tasks)").fetchall()
     }
     if "updated_at" not in columns:
         connection.exec_driver_sql("ALTER TABLE tasks ADD COLUMN updated_at DATETIME")
@@ -207,11 +209,13 @@ async def retry_db_operation(
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
+                    logger.error(
+                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
+                    )
             else:
                 # 非锁定错误，直接抛出
                 raise
-        except Exception as e:
+        except Exception:
             # 其他异常，直接抛出
             raise
 
@@ -265,11 +269,13 @@ def retry_db_operation_sync(
                     time.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
+                    logger.error(
+                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
+                    )
             else:
                 # 非锁定错误，直接抛出
                 raise
-        except Exception as e:
+        except Exception:
             # 其他异常，直接抛出
             raise
 

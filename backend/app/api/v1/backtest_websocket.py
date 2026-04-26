@@ -4,10 +4,9 @@
 提供回测进度的实时WebSocket通信
 """
 
-import asyncio
 import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import websockets
 from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -20,7 +19,6 @@ from app.repositories.task_repository import TaskRepository
 from app.services.backtest.execution.backtest_progress_monitor import (
     backtest_progress_monitor,
 )
-from app.services.infrastructure.websocket_manager import websocket_manager
 
 router = APIRouter(prefix="/backtest", tags=["backtest-websocket"])
 
@@ -135,12 +133,14 @@ class BacktestWebSocketManager:
             "total_days": progress_data.total_trading_days,
             "current_date": progress_data.current_date,
             "processing_speed": progress_data.processing_speed,
-            "estimated_completion": progress_data.estimated_completion.isoformat()
-            if progress_data.estimated_completion
-            else None,
-            "elapsed_time": str(progress_data.elapsed_time)
-            if progress_data.elapsed_time
-            else None,
+            "estimated_completion": (
+                progress_data.estimated_completion.isoformat()
+                if progress_data.estimated_completion
+                else None
+            ),
+            "elapsed_time": (
+                str(progress_data.elapsed_time) if progress_data.elapsed_time else None
+            ),
             "portfolio_value": progress_data.current_portfolio_value,
             "signals_generated": progress_data.total_signals_generated,
             "trades_executed": progress_data.total_trades_executed,
@@ -152,9 +152,9 @@ class BacktestWebSocketManager:
                     "description": stage.stage_description,
                     "progress": stage.progress,
                     "status": stage.status,
-                    "start_time": stage.start_time.isoformat()
-                    if stage.start_time
-                    else None,
+                    "start_time": (
+                        stage.start_time.isoformat() if stage.start_time else None
+                    ),
                     "end_time": stage.end_time.isoformat() if stage.end_time else None,
                     "details": stage.details,
                 }
@@ -377,12 +377,16 @@ async def get_backtest_progress(task_id: str, session: Session = Depends(get_db)
                 "total_days": progress_data.total_trading_days,
                 "current_date": progress_data.current_date,
                 "processing_speed": progress_data.processing_speed,
-                "estimated_completion": progress_data.estimated_completion.isoformat()
-                if progress_data.estimated_completion
-                else None,
-                "elapsed_time": str(progress_data.elapsed_time)
-                if progress_data.elapsed_time
-                else None,
+                "estimated_completion": (
+                    progress_data.estimated_completion.isoformat()
+                    if progress_data.estimated_completion
+                    else None
+                ),
+                "elapsed_time": (
+                    str(progress_data.elapsed_time)
+                    if progress_data.elapsed_time
+                    else None
+                ),
                 "portfolio_value": progress_data.current_portfolio_value,
                 "signals_generated": progress_data.total_signals_generated,
                 "trades_executed": progress_data.total_trades_executed,
@@ -395,12 +399,12 @@ async def get_backtest_progress(task_id: str, session: Session = Depends(get_db)
                         "description": stage.stage_description,
                         "progress": stage.progress,
                         "status": stage.status,
-                        "start_time": stage.start_time.isoformat()
-                        if stage.start_time
-                        else None,
-                        "end_time": stage.end_time.isoformat()
-                        if stage.end_time
-                        else None,
+                        "start_time": (
+                            stage.start_time.isoformat() if stage.start_time else None
+                        ),
+                        "end_time": (
+                            stage.end_time.isoformat() if stage.end_time else None
+                        ),
                         "details": stage.details,
                     }
                     for stage in progress_data.stages

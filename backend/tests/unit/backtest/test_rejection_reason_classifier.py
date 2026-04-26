@@ -2,7 +2,6 @@
 拒绝原因分类器单元测试（工单#24）
 """
 
-import pytest
 
 from app.services.backtest.utils.rejection_reason_classifier import (
     REJECTION_CATEGORIES,
@@ -31,8 +30,13 @@ class TestClassifyRejectionReason:
 
     def test_position_limit(self):
         assert classify_rejection_reason("已达到最大持仓限制") == "position_limit"
-        assert classify_rejection_reason("超过topk持仓上限(topk=10)") == "position_limit"
-        assert classify_rejection_reason("股票代码不在universe中: 000001.SZ") == "position_limit"
+        assert (
+            classify_rejection_reason("超过topk持仓上限(topk=10)") == "position_limit"
+        )
+        assert (
+            classify_rejection_reason("股票代码不在universe中: 000001.SZ")
+            == "position_limit"
+        )
 
     def test_strength_too_low(self):
         assert classify_rejection_reason("信号验证失败") == "strength_too_low"
@@ -40,7 +44,9 @@ class TestClassifyRejectionReason:
 
     def test_matching_failed(self):
         assert classify_rejection_reason("执行失败（未知原因）") == "matching_failed"
-        assert classify_rejection_reason("执行异常: division by zero") == "matching_failed"
+        assert (
+            classify_rejection_reason("执行异常: division by zero") == "matching_failed"
+        )
 
     def test_none_or_empty(self):
         assert classify_rejection_reason(None) == "other"

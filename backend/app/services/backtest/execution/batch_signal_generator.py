@@ -20,7 +20,11 @@ from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
 
 
-def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict[str, Any]]) -> Tuple[bool, str, Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]], Optional[str]]:
+def _multiprocess_precompute_stock_signals(
+    task: Tuple[str, Dict[str, Any], Dict[str, Any]],
+) -> Tuple[
+    bool, str, Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]], Optional[str]
+]:
     """模块级 worker：为单只股票预计算信号（用于 ProcessPoolExecutor）。
 
     Returns:
@@ -63,13 +67,20 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
                 break
             except Exception:
                 try:
-                    strategy = AdvancedStrategyFactory.create_strategy(name, strategy_config)
+                    strategy = AdvancedStrategyFactory.create_strategy(
+                        name, strategy_config
+                    )
                     break
                 except Exception:
                     pass
 
         if strategy is None:
-            return (False, stock_code, None, f"无法创建策略 {strategy_name} (尝试了: {names_to_try})")
+            return (
+                False,
+                stock_code,
+                None,
+                f"无法创建策略 {strategy_name} (尝试了: {names_to_try})",
+            )
 
         sigs = strategy.precompute_all_signals(df)
         if sigs is None or len(sigs) == 0:
@@ -89,7 +100,11 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
             if v is None or v == 0 or v == SignalType.HOLD:
                 continue
             if isinstance(v, SignalType):
-                vv = 1.0 if v == SignalType.BUY else -1.0 if v == SignalType.SELL else 0.0
+                vv = (
+                    1.0
+                    if v == SignalType.BUY
+                    else -1.0 if v == SignalType.SELL else 0.0
+                )
             else:
                 try:
                     vv = float(v)
@@ -107,12 +122,25 @@ def _multiprocess_precompute_stock_signals(task: Tuple[str, Dict[str, Any], Dict
             out_close.append(np.float32(px))
 
         if not out_dates:
-            return (True, stock_code, (np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float32), np.empty(0, dtype=np.float32)), None)
+            return (
+                True,
+                stock_code,
+                (
+                    np.empty(0, dtype=np.int64),
+                    np.empty(0, dtype=np.float32),
+                    np.empty(0, dtype=np.float32),
+                ),
+                None,
+            )
 
         return (
             True,
             stock_code,
-            (np.asarray(out_dates, dtype=np.int64), np.asarray(out_vals, dtype=np.float32), np.asarray(out_close, dtype=np.float32)),
+            (
+                np.asarray(out_dates, dtype=np.int64),
+                np.asarray(out_vals, dtype=np.float32),
+                np.asarray(out_close, dtype=np.float32),
+            ),
             None,
         )
 
@@ -133,9 +161,9 @@ class BatchSignalGenerator:
         self._signal_index: Optional[Dict[Tuple[str, datetime], int]] = None
 
     def precompute_all_signals(
-        self, 
+        self,
         all_stocks_data: Dict[str, pd.DataFrame],
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
     ) -> bool:
         """
         预计算所有股票×所有日期的信号
@@ -150,13 +178,15 @@ class BatchSignalGenerator:
         try:
             start_time = pd.Timestamp.now()
             total_stocks = len(all_stocks_data)
-            
+
             logger.info(f"开始批量预计算信号: {total_stocks} 只股票")
 
             # 方法 1: 尝试策略自带的批量预计算
-            if hasattr(self.strategy, 'precompute_all_signals_batch'):
+            if hasattr(self.strategy, "precompute_all_signals_batch"):
                 logger.info("使用策略自带的批量预计算方法")
-                result = self._precompute_with_strategy_batch(all_stocks_data, progress_callback)
+                result = self._precompute_with_strategy_batch(
+                    all_stocks_data, progress_callback
+                )
                 if result:
                     elapsed = (pd.Timestamp.now() - start_time).total_seconds()
                     logger.info(f"批量预计算完成，耗时 {elapsed:.2f}s")
@@ -165,10 +195,12 @@ class BatchSignalGenerator:
             # 方法 2: 使用策略的单股票向量化方法
             logger.info("使用逐股票向量化预计算")
             result = self._precompute_per_stock(all_stocks_data, progress_callback)
-            
+
             if result:
                 elapsed = (pd.Timestamp.now() - start_time).total_seconds()
-                total_signals = len(self._signal_cache) if self._signal_cache is not None else 0
+                total_signals = (
+                    len(self._signal_cache) if self._signal_cache is not None else 0
+                )
                 logger.info(
                     f"批量预计算完成: {total_stocks} 只股票, "
                     f"{total_signals} 个信号, 耗时 {elapsed:.2f}s"
@@ -184,7 +216,7 @@ class BatchSignalGenerator:
     def _precompute_with_strategy_batch(
         self,
         all_stocks_data: Dict[str, pd.DataFrame],
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
     ) -> bool:
         """使用策略自带的批量预计算方法"""
         try:
@@ -192,16 +224,16 @@ class BatchSignalGenerator:
             dfs = []
             for stock_code, df in all_stocks_data.items():
                 df_copy = df.copy()
-                df_copy['stock_code'] = stock_code
+                df_copy["stock_code"] = stock_code
                 dfs.append(df_copy)
-            
+
             if not dfs:
                 return False
 
             # 合并所有数据
             combined_df = pd.concat(dfs, ignore_index=False)
-            combined_df.set_index(['stock_code', combined_df.index], inplace=True)
-            combined_df.index.names = ['stock_code', 'date']
+            combined_df.set_index(["stock_code", combined_df.index], inplace=True)
+            combined_df.index.names = ["stock_code", "date"]
 
             # 调用策略的批量方法
             signals_df = self.strategy.precompute_all_signals_batch(combined_df)
@@ -246,7 +278,11 @@ class BatchSignalGenerator:
                     # 仅传递数值列，避免 stock_code/行业等 object 列导致 numpy->float 转换失败
                     if len(df.columns) == 0:
                         continue
-                    non_numeric_cols = [c for c in df.columns if not np.issubdtype(df[c].dtype, np.number)]
+                    non_numeric_cols = [
+                        c
+                        for c in df.columns
+                        if not np.issubdtype(df[c].dtype, np.number)
+                    ]
                     if non_numeric_cols:
                         df_use = df.drop(columns=non_numeric_cols, errors="ignore")
                     else:
@@ -256,7 +292,9 @@ class BatchSignalGenerator:
                     if "close" not in df_use.columns and "close" in df.columns:
                         # 尝试转为数值
                         try:
-                            df_use = df_use.assign(close=pd.to_numeric(df["close"], errors="coerce"))
+                            df_use = df_use.assign(
+                                close=pd.to_numeric(df["close"], errors="coerce")
+                            )
                         except Exception:
                             pass
 
@@ -275,7 +313,9 @@ class BatchSignalGenerator:
                                 "columns": columns,
                                 "index_ns": np.asarray(index_ns, dtype=np.int64),
                                 "stock_code": df.attrs.get("stock_code", stock_code),
-                                "from_precomputed": df.attrs.get("from_precomputed", False),
+                                "from_precomputed": df.attrs.get(
+                                    "from_precomputed", False
+                                ),
                             },
                             {
                                 "name": getattr(self.strategy, "name", None),
@@ -305,9 +345,13 @@ class BatchSignalGenerator:
 
                 max_workers = min((mp.cpu_count() or 4), 8)
 
-                logger.info(f"🚀 批量预计算启用多进程: stocks={total_stocks}, workers={max_workers}")
+                logger.info(
+                    f"🚀 批量预计算启用多进程: stocks={total_stocks}, workers={max_workers}"
+                )
 
-                with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_ctx) as ex:
+                with ProcessPoolExecutor(
+                    max_workers=max_workers, mp_context=mp_ctx
+                ) as ex:
                     futures = {
                         ex.submit(_multiprocess_precompute_stock_signals, t): t[0]
                         for t in tasks
@@ -333,7 +377,11 @@ class BatchSignalGenerator:
                                     {
                                         "stock_code": stock_code,
                                         "date": pd.to_datetime(int(d_ns)),
-                                        "signal_type": SignalType.BUY if float(v) > 0 else SignalType.SELL,
+                                        "signal_type": (
+                                            SignalType.BUY
+                                            if float(v) > 0
+                                            else SignalType.SELL
+                                        ),
                                         "strength": float(abs(v)),
                                         "price": float(px),
                                     }
@@ -351,17 +399,27 @@ class BatchSignalGenerator:
                         continue
                     close = df.get("close")
                     for date, signal_value in signals_series.items():
-                        if signal_value is None or signal_value == 0 or signal_value == SignalType.HOLD:
+                        if (
+                            signal_value is None
+                            or signal_value == 0
+                            or signal_value == SignalType.HOLD
+                        ):
                             continue
                         signal_records.append(
                             {
                                 "stock_code": stock_code,
                                 "date": date,
                                 "signal_type": self._convert_signal_value(signal_value),
-                                "strength": abs(float(signal_value))
-                                if isinstance(signal_value, (int, float))
-                                else 1.0,
-                                "price": float(close.loc[date]) if close is not None and date in df.index else 0.0,
+                                "strength": (
+                                    abs(float(signal_value))
+                                    if isinstance(signal_value, (int, float))
+                                    else 1.0
+                                ),
+                                "price": (
+                                    float(close.loc[date])
+                                    if close is not None and date in df.index
+                                    else 0.0
+                                ),
                             }
                         )
 
@@ -403,7 +461,7 @@ class BatchSignalGenerator:
         """转换信号值为 SignalType"""
         if isinstance(value, SignalType):
             return value
-        
+
         if isinstance(value, (int, float)):
             if value > 0:
                 return SignalType.BUY
@@ -411,20 +469,18 @@ class BatchSignalGenerator:
                 return SignalType.SELL
             else:
                 return SignalType.HOLD
-        
+
         if isinstance(value, str):
             value_upper = value.upper()
-            if value_upper in ('BUY', 'LONG'):
+            if value_upper in ("BUY", "LONG"):
                 return SignalType.BUY
-            elif value_upper in ('SELL', 'SHORT'):
+            elif value_upper in ("SELL", "SHORT"):
                 return SignalType.SELL
-        
+
         return SignalType.HOLD
 
     def get_signals(
-        self, 
-        stock_code: str, 
-        current_date: datetime
+        self, stock_code: str, current_date: datetime
     ) -> List[TradingSignal]:
         """
         快速查询指定股票和日期的信号
@@ -452,30 +508,31 @@ class BatchSignalGenerator:
             if isinstance(signal_row, pd.DataFrame):
                 signals = []
                 for _, row in signal_row.iterrows():
-                    signals.append(self._create_trading_signal(stock_code, current_date, row))
+                    signals.append(
+                        self._create_trading_signal(stock_code, current_date, row)
+                    )
                 return signals
             else:
                 # 单个信号
-                return [self._create_trading_signal(stock_code, current_date, signal_row)]
+                return [
+                    self._create_trading_signal(stock_code, current_date, signal_row)
+                ]
 
         except Exception as e:
             logger.warning(f"获取信号失败 {stock_code} @ {current_date}: {e}")
             return []
 
     def _create_trading_signal(
-        self,
-        stock_code: str,
-        date: datetime,
-        signal_row: pd.Series
+        self, stock_code: str, date: datetime, signal_row: pd.Series
     ) -> TradingSignal:
         """从信号行创建 TradingSignal 对象"""
         return TradingSignal(
             stock_code=stock_code,
-            signal_type=signal_row['signal_type'],
-            strength=float(signal_row.get('strength', 1.0)),
-            price=float(signal_row.get('price', 0.0)),
+            signal_type=signal_row["signal_type"],
+            strength=float(signal_row.get("strength", 1.0)),
+            price=float(signal_row.get("price", 0.0)),
             timestamp=date,
-            reason=f"{self.strategy.name} 批量预计算"
+            reason=f"{self.strategy.name} 批量预计算",
         )
 
     def has_precomputed_signals(self) -> bool:
@@ -486,17 +543,21 @@ class BatchSignalGenerator:
         """获取统计信息"""
         if not self.has_precomputed_signals():
             return {
-                'total_signals': 0,
-                'buy_signals': 0,
-                'sell_signals': 0,
-                'stocks_count': 0
+                "total_signals": 0,
+                "buy_signals": 0,
+                "sell_signals": 0,
+                "stocks_count": 0,
             }
 
         stats = {
-            'total_signals': len(self._signal_cache),
-            'buy_signals': (self._signal_cache['signal_type'] == SignalType.BUY).sum(),
-            'sell_signals': (self._signal_cache['signal_type'] == SignalType.SELL).sum(),
-            'stocks_count': self._signal_cache.index.get_level_values('stock_code').nunique()
+            "total_signals": len(self._signal_cache),
+            "buy_signals": (self._signal_cache["signal_type"] == SignalType.BUY).sum(),
+            "sell_signals": (
+                self._signal_cache["signal_type"] == SignalType.SELL
+            ).sum(),
+            "stocks_count": self._signal_cache.index.get_level_values(
+                "stock_code"
+            ).nunique(),
         }
 
         return stats

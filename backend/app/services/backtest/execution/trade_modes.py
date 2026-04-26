@@ -33,7 +33,10 @@ class TradeModeExecutionResult:
 class TradeModeExecutor(Protocol):
     mode_name: str
 
-    def execute(self, context: TradeModeExecutionContext) -> TradeModeExecutionResult: ...
+    def execute(
+        self, context: TradeModeExecutionContext
+    ) -> TradeModeExecutionResult:
+        ...
 
 
 def _build_execution_result(
@@ -187,14 +190,18 @@ class TopkDropoutTradeModeExecutor:
                 signal_records,
             )
 
-        ranked = sorted(scores.items(), key=lambda item: (item[1], item[0]), reverse=True)
+        ranked = sorted(
+            scores.items(), key=lambda item: (item[1], item[0]), reverse=True
+        )
         holdings = list(context.portfolio_manager.positions.keys())
         holdings_set = set(holdings)
         tradeable_codes = set(scores.keys())
 
         # Initial build: directly fill the portfolio with topk ranked names.
         if len(holdings) < topk:
-            buy_candidates = [code for code, _ in ranked if code not in holdings_set][: topk - len(holdings)]
+            buy_candidates = [code for code, _ in ranked if code not in holdings_set][
+                : topk - len(holdings)
+            ]
             for code in buy_candidates:
                 signal = _build_rebalance_signal(
                     current_date=context.current_date,
@@ -225,9 +232,13 @@ class TopkDropoutTradeModeExecutor:
             key=lambda code: rank_index.get(code, len(ranked) + len(holdings)),
         )
         sell_candidates = [
-            code for code in reversed(held_sorted_best_to_worst) if code in tradeable_codes
+            code
+            for code in reversed(held_sorted_best_to_worst)
+            if code in tradeable_codes
         ][:n_drop]
-        buy_candidates = [code for code, _ in ranked if code not in holdings_set][:n_drop]
+        buy_candidates = [code for code, _ in ranked if code not in holdings_set][
+            :n_drop
+        ]
 
         successful_sells = 0
         for code in sell_candidates:

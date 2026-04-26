@@ -1,10 +1,11 @@
 """
 基础设施监控和调度API
 """
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import datetime, timedelta
+from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
 from app.services.infrastructure.compatibility_validator import compatibility_validator
@@ -15,12 +16,9 @@ from app.services.infrastructure.deployment_manager import (
 )
 from app.services.infrastructure.health_monitor import health_monitor
 from app.services.infrastructure.resource_monitor import (
-    ResourceThresholds,
     resource_monitor,
 )
 from app.services.infrastructure.task_scheduler import (
-    ResourceRequirement,
-    TaskPriority,
     task_scheduler,
 )
 
@@ -74,7 +72,9 @@ async def get_average_resources(
         return {"success": True, "data": avg_usage.to_dict()}
     except Exception as e:
         logger.error(f"获取平均资源使用情况失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取平均资源使用情况失败: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"获取平均资源使用情况失败: {str(e)}"
+        )
 
 
 @router.post("/resources/check-availability", summary="检查资源可用性")
@@ -630,7 +630,8 @@ async def get_available_health_checks():
 
 @router.get("/health/history", summary="获取健康检查历史")
 async def get_health_check_history(
-    check_name: Optional[str] = None, limit: int = Query(100, description="返回记录数量限制")
+    check_name: Optional[str] = None,
+    limit: int = Query(100, description="返回记录数量限制"),
 ):
     """获取健康检查历史"""
     try:
@@ -744,7 +745,10 @@ async def set_performance_baseline(
 
         return {
             "success": True,
-            "data": {"message": f"已设置 {test_name} 的性能基准", "baseline_metrics": metrics},
+            "data": {
+                "message": f"已设置 {test_name} 的性能基准",
+                "baseline_metrics": metrics,
+            },
         }
     except Exception as e:
         logger.error(f"设置性能基准失败: {e}")
@@ -753,7 +757,8 @@ async def set_performance_baseline(
 
 @router.get("/performance/history", summary="获取性能测试历史")
 async def get_performance_test_history(
-    test_name: Optional[str] = None, limit: int = Query(100, description="返回记录数量限制")
+    test_name: Optional[str] = None,
+    limit: int = Query(100, description="返回记录数量限制"),
 ):
     """获取性能测试历史"""
     try:
@@ -828,13 +833,17 @@ async def validate_deployment_readiness(
                     validation_results["recommendations"].append("优化模型性能后再部署")
             except Exception as e:
                 validation_results["performance_test"] = {"error": str(e)}
-                validation_results["recommendations"].append("性能测试失败，建议检查模型")
+                validation_results["recommendations"].append(
+                    "性能测试失败，建议检查模型"
+                )
 
         # 4. 生成部署建议
         if validation_results["overall_ready"]:
             validation_results["recommendations"].append("模型已准备就绪，可以安全部署")
             if compatibility_result.get("compatibility_level") == "warning":
-                validation_results["recommendations"].append("建议使用蓝绿部署或金丝雀发布策略")
+                validation_results["recommendations"].append(
+                    "建议使用蓝绿部署或金丝雀发布策略"
+                )
         else:
             validation_results["recommendations"].append("请解决所有问题后再尝试部署")
 

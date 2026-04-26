@@ -21,7 +21,9 @@ def derive_official_style_topk_dropout_params(pool_size: int) -> dict[str, int]:
 
     topk = min(pool_size - 1, max(2, ceil(pool_size * target_hold_ratio)))
     n_drop = max(1, ceil(topk * target_drop_ratio))
-    hold_thresh = 0 if pool_size <= 3 else max(1, min(2, ceil((pool_size - topk) * 0.15)))
+    hold_thresh = (
+        0 if pool_size <= 3 else max(1, min(2, ceil((pool_size - topk) * 0.15)))
+    )
 
     return {
         "topk": int(topk),

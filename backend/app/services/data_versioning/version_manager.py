@@ -2,6 +2,7 @@
 轻量级数据版本管理器
 基于文件哈希的版本标识，记录训练数据版本信息
 """
+
 import hashlib
 import json
 import shutil
@@ -10,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -741,7 +742,7 @@ class DataVersionManager:
         try:
             data = {
                 "versions": [v.to_dict() for v in self.versions.values()],
-                "lineages": [l.to_dict() for l in self.lineages.values()],
+                "lineages": [lineage.to_dict() for lineage in self.lineages.values()],
                 "snapshots": [s.to_dict() for s in self.snapshots.values()],
                 "last_updated": datetime.now().isoformat(),
             }

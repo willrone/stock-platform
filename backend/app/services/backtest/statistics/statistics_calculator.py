@@ -5,12 +5,10 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from sqlalchemy import and_, case, distinct, func, select
+from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import func as sql_func
 
 from app.models.backtest_detailed_models import (
     BacktestStatistics,
@@ -98,7 +96,9 @@ class StatisticsCalculator:
                 return new_stats
 
         except Exception as e:
-            self.logger.error(f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True)
+            self.logger.error(
+                f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True
+            )
             raise
 
     def _update_statistics_object(
@@ -187,7 +187,7 @@ class StatisticsCalculator:
                 and_(base_where, SignalRecord.signal_type == "SELL")
             )
             executed_stmt = select(func.count(SignalRecord.id)).where(
-                and_(base_where, SignalRecord.executed == True)
+                and_(base_where, SignalRecord.executed is True)
             )
             avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(
                 base_where
@@ -211,9 +211,9 @@ class StatisticsCalculator:
                 "sell_signals": sell_signals,
                 "executed_signals": executed_signals,
                 "unexecuted_signals": total_signals - executed_signals,
-                "execution_rate": executed_signals / total_signals
-                if total_signals > 0
-                else 0.0,
+                "execution_rate": (
+                    executed_signals / total_signals if total_signals > 0 else 0.0
+                ),
                 "avg_strength": float(avg_strength) if avg_strength else 0.0,
             }
         except Exception as e:
@@ -343,9 +343,9 @@ class StatisticsCalculator:
             return {
                 "total_stocks": len(stock_returns),
                 "profitable_stocks": profitable_count,
-                "avg_stock_return": sum(returns_list) / len(returns_list)
-                if returns_list
-                else 0.0,
+                "avg_stock_return": (
+                    sum(returns_list) / len(returns_list) if returns_list else 0.0
+                ),
                 "max_stock_return": max(returns_list) if returns_list else None,
                 "min_stock_return": min(returns_list) if returns_list else None,
             }
@@ -515,15 +515,15 @@ class StatisticsCalculator:
                     largest_position = position_size
 
             return {
-                "max_single_profit": float(max_profit)
-                if max_profit is not None
-                else None,
+                "max_single_profit": (
+                    float(max_profit) if max_profit is not None else None
+                ),
                 "max_single_loss": float(max_loss) if max_loss is not None else None,
                 "max_consecutive_wins": max_consecutive_wins,
                 "max_consecutive_losses": max_consecutive_losses,
-                "largest_position_size": float(largest_position)
-                if largest_position is not None
-                else None,
+                "largest_position_size": (
+                    float(largest_position) if largest_position is not None else None
+                ),
             }
         except Exception as e:
             self.logger.error(f"计算性能指标统计失败: {e}", exc_info=True)

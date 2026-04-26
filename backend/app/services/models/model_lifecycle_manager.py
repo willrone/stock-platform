@@ -8,7 +8,6 @@
 - 自动状态更新
 """
 
-import asyncio
 import json
 from datetime import datetime, timedelta
 from enum import Enum
@@ -17,9 +16,7 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...core.config import settings
 from ...core.database import get_async_session_context
 from ...models.task_models import ModelInfo, ModelLifecycleEvent
 
@@ -140,7 +137,9 @@ class ModelLifecycleManager:
 
             await db.commit()
 
-            logger.info(f"模型状态转换成功: {model_id} {current_status.value} -> {new_status}")
+            logger.info(
+                f"模型状态转换成功: {model_id} {current_status.value} -> {new_status}"
+            )
             return True
 
         except Exception as e:
@@ -216,9 +215,11 @@ class ModelLifecycleManager:
                     "from_status": event.from_status,
                     "to_status": event.to_status,
                     "reason": event.reason,
-                    "metadata": json.loads(event.event_metadata)
-                    if event.event_metadata
-                    else None,
+                    "metadata": (
+                        json.loads(event.event_metadata)
+                        if event.event_metadata
+                        else None
+                    ),
                     "created_at": event.created_at.isoformat(),
                 }
                 for event in events

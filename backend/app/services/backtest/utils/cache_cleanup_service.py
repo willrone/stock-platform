@@ -4,7 +4,7 @@
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -30,7 +30,9 @@ class CacheCleanupService:
             return
 
         self.is_running = True
-        self.logger.info(f"启动缓存清理调度器，清理间隔: {self.cleanup_interval_hours}小时")
+        self.logger.info(
+            f"启动缓存清理调度器，清理间隔: {self.cleanup_interval_hours}小时"
+        )
 
         try:
             while self.is_running:
@@ -161,7 +163,7 @@ class CacheCleanupService:
 
             # 获取数据库统计
             async with get_async_session_context() as session:
-                repository = BacktestDetailedRepository(session)
+                BacktestDetailedRepository(session)
 
                 # 这里可以添加更多统计查询
                 # 暂时返回基本信息

@@ -44,7 +44,9 @@ def _build_manager(kind: ManagerKind, config: BacktestConfig):
 
 
 @pytest.mark.parametrize("manager_kind", ["classic", "array"])
-def test_buy_quantity_respects_max_position_size_and_board_lot(manager_kind: ManagerKind) -> None:
+def test_buy_quantity_respects_max_position_size_and_board_lot(
+    manager_kind: ManagerKind,
+) -> None:
     config = BacktestConfig(
         initial_cash=10_000.0,
         commission_rate=0.0,
@@ -89,7 +91,9 @@ def test_cash_reserve_ratio_caps_buying_power(manager_kind: ManagerKind) -> None
 
 
 @pytest.mark.parametrize("manager_kind", ["classic", "array"])
-def test_buy_rejection_classifies_insufficient_buy_quantity(manager_kind: ManagerKind) -> None:
+def test_buy_rejection_classifies_insufficient_buy_quantity(
+    manager_kind: ManagerKind,
+) -> None:
     config = BacktestConfig(
         initial_cash=1_000.0,
         commission_rate=0.0,
@@ -108,7 +112,9 @@ def test_buy_rejection_classifies_insufficient_buy_quantity(manager_kind: Manage
 
 
 @pytest.mark.parametrize("manager_kind", ["classic", "array"])
-def test_buy_rejection_classifies_position_limit_after_existing_holding(manager_kind: ManagerKind) -> None:
+def test_buy_rejection_classifies_position_limit_after_existing_holding(
+    manager_kind: ManagerKind,
+) -> None:
     config = BacktestConfig(
         initial_cash=10_000.0,
         commission_rate=0.0,
@@ -135,7 +141,9 @@ def test_buy_rejection_classifies_position_limit_after_existing_holding(manager_
 
 
 @pytest.mark.parametrize("manager_kind", ["classic", "array"])
-def test_buy_rejection_classifies_affordability_gap_from_commission(manager_kind: ManagerKind) -> None:
+def test_buy_rejection_classifies_affordability_gap_from_commission(
+    manager_kind: ManagerKind,
+) -> None:
     config = BacktestConfig(
         initial_cash=10_000.0,
         commission_rate=0.01,
@@ -154,7 +162,9 @@ def test_buy_rejection_classifies_affordability_gap_from_commission(manager_kind
 
 
 @pytest.mark.parametrize("manager_kind", ["classic", "array"])
-def test_buy_success_keeps_array_and_classic_outputs_comparable(manager_kind: ManagerKind) -> None:
+def test_buy_success_keeps_array_and_classic_outputs_comparable(
+    manager_kind: ManagerKind,
+) -> None:
     config = BacktestConfig(
         initial_cash=20_000.0,
         commission_rate=0.001,

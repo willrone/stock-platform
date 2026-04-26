@@ -9,21 +9,15 @@
 - 性能对比分析
 """
 
-import asyncio
-import json
-import os
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
-from sqlalchemy import and_, desc, func, or_, select, update
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...core.config import settings
 from ...core.database import get_async_session_context
-from ...models.task_models import ModelInfo, ModelLifecycleEvent
+from ...models.task_models import ModelInfo
 from .lineage_tracker import lineage_tracker
 from .model_lifecycle_manager import ModelStatus, model_lifecycle_manager
 
@@ -463,9 +457,9 @@ class EnhancedModelStorage:
                     "model_name": model.model_name,
                     "model_type": model.model_type,
                     "status": model.status,
-                    "created_at": model.created_at.isoformat()
-                    if model.created_at
-                    else None,
+                    "created_at": (
+                        model.created_at.isoformat() if model.created_at else None
+                    ),
                     "performance_metrics": model.performance_metrics or {},
                 }
 
@@ -499,16 +493,17 @@ class EnhancedModelStorage:
                         "values": metric_values,
                         "best": metric_values[0] if metric_values else None,
                         "worst": metric_values[-1] if metric_values else None,
-                        "average": sum(v["value"] for v in metric_values)
-                        / len(metric_values)
-                        if metric_values
-                        else 0,
+                        "average": (
+                            sum(v["value"] for v in metric_values) / len(metric_values)
+                            if metric_values
+                            else 0
+                        ),
                     }
 
             # 生成摘要
             if comparison_data["metrics_comparison"]:
                 best_overall = {}
-                for metric, data in comparison_data["metrics_comparison"].items():
+                for _metric, data in comparison_data["metrics_comparison"].items():
                     if data["best"]:
                         model_id = data["best"]["model_id"]
                         if model_id not in best_overall:

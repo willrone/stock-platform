@@ -2,7 +2,7 @@
 告警和通知机制
 实现性能下降告警，支持邮件和WebSocket通知
 """
-import asyncio
+
 import json
 import smtplib
 import threading
@@ -13,15 +13,13 @@ from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
 from app.services.monitoring.drift_detector import DriftReport, DriftSeverity
 from app.services.monitoring.performance_monitor import (
     Alert,
-    AlertLevel,
-    PerformanceMetrics,
 )
 
 
@@ -493,7 +491,7 @@ class AlertNotificationManager:
 
     def _format_alert_content(self, alert: Alert) -> str:
         """格式化告警内容"""
-        content = f"""
+        content = """
 告警详情:
 - 告警ID: {alert.alert_id}
 - 规则名称: {alert.rule_name}
@@ -513,7 +511,7 @@ class AlertNotificationManager:
 
     def _format_drift_content(self, drift_report: DriftReport) -> str:
         """格式化漂移检测内容"""
-        content = f"""
+        content = """
 数据漂移检测报告:
 - 报告ID: {drift_report.report_id}
 - 模型: {drift_report.model_id} (版本: {drift_report.model_version})
@@ -583,9 +581,9 @@ class AlertNotificationManager:
                 "recent_24h_notifications": len(recent_records),
                 "channel_stats": dict(channel_stats),
                 "status_stats": dict(status_stats),
-                "success_rate": status_stats.get("sent", 0) / len(records)
-                if records
-                else 0,
+                "success_rate": (
+                    status_stats.get("sent", 0) / len(records) if records else 0
+                ),
             }
 
     def add_websocket_connection(self, websocket):

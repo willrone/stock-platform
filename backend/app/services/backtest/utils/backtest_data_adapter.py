@@ -3,8 +3,7 @@
 用于支持完整的可视化功能
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -19,7 +18,6 @@ from ..models.analysis_models import (
     EnhancedPositionAnalysis,
     ExtendedRiskMetrics,
     MonthlyReturnsAnalysis,
-    PositionAnalysis,
 )
 
 
@@ -204,9 +202,9 @@ class BacktestDataAdapter:
             extended_metrics["var_95"] = var_95
 
             # 最大回撤持续时间
-            extended_metrics[
-                "max_drawdown_duration"
-            ] = self._calculate_max_drawdown_duration(df["portfolio_value"])
+            extended_metrics["max_drawdown_duration"] = (
+                self._calculate_max_drawdown_duration(df["portfolio_value"])
+            )
 
             # 夏普比率（重新计算，使用无风险利率）
             sharpe_ratio = (
@@ -299,7 +297,9 @@ class BacktestDataAdapter:
                 logger.warning("PositionAnalyzer返回空结果")
                 return None
 
-            logger.info(f"PositionAnalyzer返回结果: keys={list(analysis_result.keys())}")
+            logger.info(
+                f"PositionAnalyzer返回结果: keys={list(analysis_result.keys())}"
+            )
 
             # 转换stock_performance为兼容格式（包含原有字段）
             stock_performance = analysis_result.get("stock_performance", [])
@@ -348,7 +348,9 @@ class BacktestDataAdapter:
                 concentration_risk=analysis_result.get("concentration_risk"),
             )
 
-            logger.info(f"持仓分析完成，共分析 {len(compatible_stock_performance)} 只股票")
+            logger.info(
+                f"持仓分析完成，共分析 {len(compatible_stock_performance)} 只股票"
+            )
             return enhanced_analysis
 
         except Exception as e:
@@ -438,9 +440,11 @@ class BacktestDataAdapter:
                 max_drawdown_date=max_dd_idx.isoformat() if max_dd_idx else None,
                 max_drawdown_start=max_dd_start.isoformat() if max_dd_start else None,
                 max_drawdown_end=max_dd_end.isoformat() if max_dd_end else None,
-                max_drawdown_duration=(max_dd_end - max_dd_start).days
-                if max_dd_start and max_dd_end
-                else 0,
+                max_drawdown_duration=(
+                    (max_dd_end - max_dd_start).days
+                    if max_dd_start and max_dd_end
+                    else 0
+                ),
                 drawdown_curve=drawdown_curve,
             )
 

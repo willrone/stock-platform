@@ -181,7 +181,7 @@ class BacktestPerformanceProfiler:
             f"阶段 {stage_name} 完成: "
             f"耗时={stage.duration:.2f}秒, "
             f"内存={stage.memory_after:.2f}MB, "
-            f"CPU={stage.cpu_avg:.1f}%"
+            "CPU={stage.cpu_avg:.1f}%"
         )
 
         if self.current_stage == stage_name:
@@ -235,7 +235,9 @@ class BacktestPerformanceProfiler:
         )
 
         logger.info(
-            f"并行化效率 {operation_name}: " f"加速比={speedup:.2f}x, " f"效率={efficiency:.1f}%"
+            f"并行化效率 {operation_name}: "
+            f"加速比={speedup:.2f}x, "
+            f"效率={efficiency:.1f}%"
         )
 
     def record_db_operation(
@@ -335,15 +337,15 @@ class BacktestPerformanceProfiler:
                 "total_signals": self.total_signals,
                 "total_trades": self.total_trades,
                 "total_trading_days": self.total_trading_days,
-                "signals_per_second": self.total_signals / total_time
-                if total_time > 0
-                else 0,
-                "trades_per_second": self.total_trades / total_time
-                if total_time > 0
-                else 0,
-                "days_per_second": self.total_trading_days / total_time
-                if total_time > 0
-                else 0,
+                "signals_per_second": (
+                    self.total_signals / total_time if total_time > 0 else 0
+                ),
+                "trades_per_second": (
+                    self.total_trades / total_time if total_time > 0 else 0
+                ),
+                "days_per_second": (
+                    self.total_trading_days / total_time if total_time > 0 else 0
+                ),
             },
             "stages": {
                 name: {
@@ -430,7 +432,7 @@ class BacktestPerformanceProfiler:
             print(
                 f"    内存: {stage_data['memory_after_mb']:.2f}MB (峰值: {stage_data['memory_peak_mb']:.2f}MB)"
             )
-            print(f"    CPU: {stage_data['cpu_avg_percent']:.1f}%")
+            print("    CPU: {stage_data['cpu_avg_percent']:.1f}%")
 
         if report["function_calls"]:
             print("\n最耗时的函数调用 (Top 10):")
@@ -471,6 +473,7 @@ class BacktestPerformanceProfiler:
         try:
             try:
                 import orjson
+
                 payload = orjson.dumps(
                     report,
                     option=orjson.OPT_INDENT_2,

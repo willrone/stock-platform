@@ -2,6 +2,7 @@
 训练进度API路由
 添加进度查询和报告接口，支持训练控制操作
 """
+
 import asyncio
 import json
 from datetime import datetime
@@ -49,7 +50,7 @@ class ConnectionManager:
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
             await websocket.send_text(message)
-        except:
+        except Exception:
             self.disconnect(websocket)
 
     async def broadcast(self, message: str):
@@ -57,7 +58,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
+            except Exception:
                 disconnected.append(connection)
 
         # 清理断开的连接
@@ -137,7 +138,9 @@ async def get_training_tasks(
         raise HTTPException(status_code=500, detail=f"获取训练任务失败: {str(e)}")
 
 
-@router.get("/tasks/{task_id}", response_model=StandardResponse, summary="获取训练任务详情")
+@router.get(
+    "/tasks/{task_id}", response_model=StandardResponse, summary="获取训练任务详情"
+)
 async def get_training_task(task_id: str):
     """获取训练任务详情"""
     try:
@@ -165,7 +168,9 @@ async def get_training_task(task_id: str):
             if lifecycle_info:
                 task_dict["model_lifecycle"] = lifecycle_info.to_dict()
 
-        return StandardResponse(success=True, message="成功获取训练任务详情", data=task_dict)
+        return StandardResponse(
+            success=True, message="成功获取训练任务详情", data=task_dict
+        )
 
     except HTTPException:
         raise
@@ -224,9 +229,7 @@ async def get_training_progress(task_id: str):
         session = SessionLocal()
         try:
             model = (
-                session.query(ModelInfo)
-                .filter(ModelInfo.model_id == task_id)
-                .first()
+                session.query(ModelInfo).filter(ModelInfo.model_id == task_id).first()
             )
             if not model:
                 raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
@@ -296,7 +299,9 @@ async def get_training_metrics(task_id: str):
                 "final_val_accuracy": val_acc_history[-1] if val_acc_history else None,
             }
 
-        return StandardResponse(success=True, message="成功获取训练指标", data=metrics_data)
+        return StandardResponse(
+            success=True, message="成功获取训练指标", data=metrics_data
+        )
 
     except HTTPException:
         raise
@@ -384,9 +389,9 @@ async def get_model_training_history(
                     "task_id": task.task_id,
                     "status": task.status,
                     "created_at": task.created_at.isoformat(),
-                    "completed_at": task.completed_at.isoformat()
-                    if task.completed_at
-                    else None,
+                    "completed_at": (
+                        task.completed_at.isoformat() if task.completed_at else None
+                    ),
                     "progress_percentage": task.progress_percentage,
                     "final_metrics": getattr(task, "final_metrics", {}),
                     "training_config": task.metadata.get("training_config", {}),
@@ -467,7 +472,9 @@ async def get_training_stats():
             ]
             stats["success_rate"] = len(successful_tasks) / len(completed_tasks) * 100
 
-        return StandardResponse(success=True, message="成功获取训练统计信息", data=stats)
+        return StandardResponse(
+            success=True, message="成功获取训练统计信息", data=stats
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取训练统计失败: {str(e)}")
@@ -608,7 +615,7 @@ async def websocket_training_progress(websocket: WebSocket, task_id: str):
         }
         try:
             await manager.send_personal_message(json.dumps(error_data), websocket)
-        except:
+        except Exception:
             pass
         manager.disconnect(websocket)
 
@@ -639,5 +646,5 @@ async def websocket_global_training_updates(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-    except Exception as e:
+    except Exception:
         manager.disconnect(websocket)

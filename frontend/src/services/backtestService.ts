@@ -424,9 +424,7 @@ export class BacktestService {
       };
     } catch (error: unknown) {
       backtestLogger.error('[BacktestService] 生成权益曲线数据失败:', error);
-      if (
-        isNotFoundError(error)
-      ) {
+      if (isNotFoundError(error)) {
         backtestLogger.warn('[BacktestService] 组合快照数据不存在，返回空数据');
         return {
           dates: [],
@@ -459,9 +457,8 @@ export class BacktestService {
 
       return {
         dates:
-          detailedResult.drawdown_analysis.drawdown_curve?.map(
-            (d: DrawdownCurvePoint) => d.date
-          ) || [],
+          detailedResult.drawdown_analysis.drawdown_curve?.map((d: DrawdownCurvePoint) => d.date) ||
+          [],
         drawdowns:
           detailedResult.drawdown_analysis.drawdown_curve?.map(
             (d: DrawdownCurvePoint) => d.drawdown

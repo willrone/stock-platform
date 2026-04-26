@@ -5,10 +5,9 @@
 支持多模态特征工程和时间序列数据处理。
 """
 
-import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -27,7 +26,9 @@ except ImportError:
     DataError = Exception
     ErrorSeverity = None
     ErrorContext = None
-    handle_async_exception = lambda func: func
+
+    def handle_async_exception(func):
+        return func
 
 # 导入数据服务和指标计算
 try:
@@ -41,11 +42,7 @@ except ImportError:
 # 导入Qlib相关模块
 try:
     import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    from qlib.config import REG_CN
 
     QLIB_AVAILABLE = True
 except ImportError:
@@ -269,13 +266,17 @@ class FeatureEngineer:
                 continue
 
         if not all_features:
-            raise DataError(message="没有成功处理任何股票数据", severity=ErrorSeverity.HIGH)
+            raise DataError(
+                message="没有成功处理任何股票数据", severity=ErrorSeverity.HIGH
+            )
 
         # 合并所有股票的特征
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
+        logger.info(
+            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
+        )
         return combined_features
 
 

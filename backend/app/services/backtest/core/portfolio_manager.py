@@ -142,7 +142,7 @@ class PortfolioManager:
         )
         cash_reserve_ratio = min(max(cash_reserve_ratio, 0.0), 0.99)
         reserve_cash = self.cash * (1 - cash_reserve_ratio)
-        reserve_pct = f"{cash_reserve_ratio:.0%}"
+        reserve_pct = "{cash_reserve_ratio:.0%}"
 
         current_position = self.positions.get(stock_code)
         current_position_value = (
@@ -162,10 +162,15 @@ class PortfolioManager:
                     f"已达到最大持仓限制: 当前持仓 {current_position_value:.2f} >= 最大持仓 {max_position_value:.2f}",
                 )
             else:
-                return None, f"可用资金不足: 需要保留{reserve_pct}现金，可用资金 {self.cash:.2f}"
+                return (
+                    None,
+                    f"可用资金不足: 需要保留{reserve_pct}现金，可用资金 {self.cash:.2f}",
+                )
 
         # 计算购买数量（按配置的最小交易单位取整）
-        quantity = int(available_cash_for_stock / price / board_lot_size) * board_lot_size
+        quantity = (
+            int(available_cash_for_stock / price / board_lot_size) * board_lot_size
+        )
         if quantity <= 0:
             return (
                 None,
@@ -254,7 +259,7 @@ class PortfolioManager:
         # 记录交易
         self.trade_counter += 1
         trade = Trade(
-            trade_id=f"T{self.trade_counter:06d}",
+            trade_id="T{self.trade_counter:06d}",
             stock_code=stock_code,
             action="BUY",
             quantity=quantity,
@@ -328,7 +333,7 @@ class PortfolioManager:
         # 记录交易
         self.trade_counter += 1
         trade = Trade(
-            trade_id=f"T{self.trade_counter:06d}",
+            trade_id="T{self.trade_counter:06d}",
             stock_code=stock_code,
             action="SELL",
             quantity=quantity,
@@ -362,7 +367,9 @@ class PortfolioManager:
         # 性能注意：大规模回测会极其频繁调用该函数；默认关闭该日志，避免刷屏/IO 成为瓶颈。
         try:
             if getattr(settings, "ENABLE_PORTFOLIO_SNAPSHOT_SANITY_LOG", False):
-                if len(self.positions) > 10:  # default topk is 10; for topk_buffer strategy
+                if (
+                    len(self.positions) > 10
+                ):  # default topk is 10; for topk_buffer strategy
                     logger.warning(
                         f"[portfolio_snapshot][sanity] positions_count={len(self.positions)} date={date.strftime('%Y-%m-%d')} "
                         f"holdings={sorted(list(self.positions.keys()))}"
@@ -436,7 +443,9 @@ class PortfolioManager:
         if self.equity_curve:
             values = [v for _, v in self.equity_curve]
         elif self.portfolio_history:
-            values = [snapshot["portfolio_value"] for snapshot in self.portfolio_history]
+            values = [
+                snapshot["portfolio_value"] for snapshot in self.portfolio_history
+            ]
         else:
             return {}
 
@@ -455,7 +464,9 @@ class PortfolioManager:
         if self.equity_curve:
             days = (self.equity_curve[-1][0] - self.equity_curve[0][0]).days
         else:
-            days = (self.portfolio_history[-1]["date"] - self.portfolio_history[0]["date"]).days
+            days = (
+                self.portfolio_history[-1]["date"] - self.portfolio_history[0]["date"]
+            ).days
         annualized_return = (
             (1 + total_return) ** (365 / max(days, 1)) - 1 if days > 0 else 0
         )

@@ -70,15 +70,15 @@ class ParquetManager:
     def get_file_path(self, stock_code: str, date: datetime) -> Path:
         """获取指定股票和日期的Parquet文件路径"""
         year = date.year
-        month = date.month
-        filename = f"{stock_code}_{year}-{month:02d}.parquet"
-        return self.base_path / stock_code / str(year) / f"{month:02d}" / filename
+        _ = date.month
+        filename = "{stock_code}_{year}-{month:02d}.parquet"
+        return self.base_path / stock_code / str(year) / "{month:02d}" / filename
 
     def get_directory_path(self, stock_code: str, date: datetime) -> Path:
         """获取指定股票和日期的目录路径"""
         year = date.year
-        month = date.month
-        return self.base_path / stock_code / str(year) / f"{month:02d}"
+        _ = date.month
+        return self.base_path / stock_code / str(year) / "{month:02d}"
 
     def ensure_directory(self, file_path: Path):
         """确保目录存在"""
@@ -129,7 +129,9 @@ class ParquetManager:
                 # 保存到Parquet文件
                 df_to_save.to_parquet(file_path, index=False, engine="pyarrow")
 
-                self.logger.info(f"保存股票数据到 {file_path}: {len(df_to_save)} 条记录")
+                self.logger.info(
+                    f"保存股票数据到 {file_path}: {len(df_to_save)} 条记录"
+                )
 
             return True
 
@@ -698,7 +700,6 @@ class ParquetManager:
                     last_sync_time = datetime.fromtimestamp(latest_file.stat().st_mtime)
             except Exception as e:
                 self.logger.warning(f"获取最新文件时间失败: {e}")
-                pass
 
             return ComprehensiveStats(
                 total_files=total_files,
@@ -860,9 +861,7 @@ class ParquetManager:
             total_deleted = len(deleted_files)
 
             if success:
-                message = (
-                    f"成功删除 {total_deleted} 个文件，释放空间 {freed_space / 1024 / 1024:.2f} MB"
-                )
+                message = f"成功删除 {total_deleted} 个文件，释放空间 {freed_space / 1024 / 1024:.2f} MB"
             else:
                 message = f"删除完成: 成功 {total_deleted}, 失败 {len(failed_files)}"
 
@@ -880,7 +879,7 @@ class ParquetManager:
             return DeletionResult(
                 success=False,
                 deleted_files=deleted_files,
-                failed_files=failed_files + [(f"批量操作", str(e))],
+                failed_files=failed_files + [("批量操作", str(e))],
                 total_deleted=len(deleted_files),
                 freed_space_bytes=freed_space,
                 message=f"批量删除失败: {str(e)}",
@@ -1085,7 +1084,7 @@ class ParquetManager:
     def _cleanup_empty_directories(self):
         """清理空目录"""
         try:
-            for root, dirs, files in os.walk(self.base_path, topdown=False):
+            for root, dirs, _files in os.walk(self.base_path, topdown=False):
                 for dir_name in dirs:
                     dir_path = Path(root) / dir_name
                     try:

@@ -39,7 +39,9 @@ class _FakeLoop:
         return None
 
 
-def test_execute_backtest_task_injects_top_level_model_id_into_strategy_config() -> None:
+def test_execute_backtest_task_injects_top_level_model_id_into_strategy_config() -> (
+    None
+):
     task = SimpleNamespace(
         task_id="task-model-driven-1",
         config={
@@ -73,15 +75,21 @@ def test_execute_backtest_task_injects_top_level_model_id_into_strategy_config()
         }
     )
 
-    with patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()), patch(
-        "app.api.v1.dependencies.TaskRepository", return_value=repository
-    ), patch("app.services.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.services.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
-    ), patch("nest_asyncio.apply", return_value=None), patch(
-        "asyncio.new_event_loop",
-        side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
-    ), patch("asyncio.set_event_loop", return_value=None):
+    with (
+        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
+        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.services.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
+        ),
+        patch("nest_asyncio.apply", return_value=None),
+        patch(
+            "asyncio.new_event_loop",
+            side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
+        ),
+        patch("asyncio.set_event_loop", return_value=None),
+    ):
         execute_backtest_task_simple("task-model-driven-1")
 
     run_kwargs = executor.run_backtest.await_args.kwargs
@@ -127,15 +135,21 @@ def test_execute_backtest_task_normalizes_model_topk_dropout_alias() -> None:
         }
     )
 
-    with patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()), patch(
-        "app.api.v1.dependencies.TaskRepository", return_value=repository
-    ), patch("app.services.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.services.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
-    ), patch("nest_asyncio.apply", return_value=None), patch(
-        "asyncio.new_event_loop",
-        side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
-    ), patch("asyncio.set_event_loop", return_value=None):
+    with (
+        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
+        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.services.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
+        ),
+        patch("nest_asyncio.apply", return_value=None),
+        patch(
+            "asyncio.new_event_loop",
+            side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
+        ),
+        patch("asyncio.set_event_loop", return_value=None),
+    ):
         execute_backtest_task_simple("task-model-ranking-1")
 
     run_kwargs = executor.run_backtest.await_args.kwargs
@@ -183,15 +197,21 @@ def test_execute_backtest_task_propagates_runtime_portfolio_constraints() -> Non
         }
     )
 
-    with patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()), patch(
-        "app.api.v1.dependencies.TaskRepository", return_value=repository
-    ), patch("app.services.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.services.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
-    ), patch("nest_asyncio.apply", return_value=None), patch(
-        "asyncio.new_event_loop",
-        side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
-    ), patch("asyncio.set_event_loop", return_value=None):
+    with (
+        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
+        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.services.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
+        ),
+        patch("nest_asyncio.apply", return_value=None),
+        patch(
+            "asyncio.new_event_loop",
+            side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
+        ),
+        patch("asyncio.set_event_loop", return_value=None),
+    ):
         execute_backtest_task_simple("task-model-ranking-constraints")
 
     run_kwargs = executor.run_backtest.await_args.kwargs
@@ -240,15 +260,21 @@ def test_execute_backtest_task_propagates_official_style_cost_fields() -> None:
         }
     )
 
-    with patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()), patch(
-        "app.api.v1.dependencies.TaskRepository", return_value=repository
-    ), patch("app.services.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.services.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
-    ), patch("nest_asyncio.apply", return_value=None), patch(
-        "asyncio.new_event_loop",
-        side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
-    ), patch("asyncio.set_event_loop", return_value=None):
+    with (
+        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
+        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.services.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: SimpleNamespace(**kwargs),
+        ),
+        patch("nest_asyncio.apply", return_value=None),
+        patch(
+            "asyncio.new_event_loop",
+            side_effect=[_FakeLoop(mode="run"), _FakeLoop(mode="skip")],
+        ),
+        patch("asyncio.set_event_loop", return_value=None),
+    ):
         execute_backtest_task_simple("task-model-ranking-official-costs")
 
     runtime_cfg = executor.run_backtest.await_args.kwargs["backtest_config"]

@@ -7,10 +7,9 @@ import asyncio
 import threading
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 import httpx
 import psutil
@@ -202,7 +201,7 @@ class HTTPConnectionPool:
 
         # 更新连接池利用率
         if pool_name in self._clients:
-            client = self._clients[pool_name]
+            self._clients[pool_name]
             # 这里需要根据httpx的实际API来获取连接信息
             # 由于httpx没有直接暴露连接池信息，我们使用估算值
             stats.pool_utilization = min(
@@ -359,9 +358,11 @@ class DatabaseConnectionPool:
                 "overflow": pool_status.overflow,
                 "checked_in": pool_status.checked_in,
                 "total_connections": pool_status.pool_size + pool_status.overflow,
-                "utilization": pool_status.checked_out / self.config.max_connections
-                if self.config.max_connections > 0
-                else 0,
+                "utilization": (
+                    pool_status.checked_out / self.config.max_connections
+                    if self.config.max_connections > 0
+                    else 0
+                ),
                 "stats": self.stats,
             }
 
@@ -440,29 +441,29 @@ class ConnectionPoolManager:
         }
 
         # HTTP连接池统计
-        for name, pool in self.http_pools.items():
-            stats["http_pools"][name] = await pool.get_pool_stats()
+        for name, http_pool in self.http_pools.items():
+            stats["http_pools"][name] = await http_pool.get_pool_stats()
 
         # 数据库连接池统计
-        for name, pool in self.db_pools.items():
-            stats["db_pools"][name] = pool.get_pool_info()
+        for name, db_pool in self.db_pools.items():
+            stats["db_pools"][name] = db_pool.get_pool_info()
 
         return stats
 
     async def close_all(self):
         """关闭所有连接池"""
         # 关闭HTTP连接池
-        for name, pool in self.http_pools.items():
+        for name, http_pool in self.http_pools.items():
             try:
-                await pool.close_all()
+                await http_pool.close_all()
                 logger.info(f"关闭HTTP连接池: {name}")
             except Exception as e:
                 logger.error(f"关闭HTTP连接池失败 {name}: {e}")
 
         # 关闭数据库连接池
-        for name, pool in self.db_pools.items():
+        for name, db_pool in self.db_pools.items():
             try:
-                await pool.close()
+                await db_pool.close()
                 logger.info(f"关闭数据库连接池: {name}")
             except Exception as e:
                 logger.error(f"关闭数据库连接池失败 {name}: {e}")

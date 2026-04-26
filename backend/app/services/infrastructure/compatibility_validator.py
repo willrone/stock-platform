@@ -2,18 +2,16 @@
 模型兼容性验证器
 检查模型依赖、环境兼容性和接口一致性
 """
+
 import hashlib
 import importlib
 import importlib.metadata
-import json
 import pickle
 import platform
-import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from packaging import version
@@ -239,7 +237,11 @@ class DependencyValidator:
 
         except Exception as e:
             logger.error(f"版本比较失败: {e}")
-            return {"compatible": False, "warning": False, "reason": f"版本格式错误: {e}"}
+            return {
+                "compatible": False,
+                "warning": False,
+                "reason": f"版本格式错误: {e}",
+            }
 
 
 class SystemValidator:
@@ -536,10 +538,10 @@ class ModelFormatValidator:
 
             if model_path.is_dir():
                 # SavedModel格式
-                model = tf.saved_model.load(str(model_path))
+                tf.saved_model.load(str(model_path))
             else:
                 # H5格式
-                model = tf.keras.models.load_model(str(model_path))
+                tf.keras.models.load_model(str(model_path))
 
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,
@@ -569,7 +571,7 @@ class ModelFormatValidator:
         try:
             import torch
 
-            model = torch.load(model_path, map_location="cpu")
+            _ = torch.load(model_path, map_location="cpu")
 
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,

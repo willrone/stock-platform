@@ -8,19 +8,16 @@
 - 性能预估
 """
 
-import asyncio
-import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 from scipy import stats
 from sklearn.feature_selection import mutual_info_regression
-from sklearn.preprocessing import StandardScaler
 
 
 class DataCharacteristic(Enum):
@@ -478,12 +475,14 @@ class AlgorithmSelector:
             return {
                 "target_correlations": target_correlations,
                 "high_correlation_pairs": high_corr_pairs,
-                "avg_target_correlation": np.mean(list(target_correlations.values()))
-                if target_correlations
-                else 0.0,
-                "max_target_correlation": max(target_correlations.values())
-                if target_correlations
-                else 0.0,
+                "avg_target_correlation": (
+                    np.mean(list(target_correlations.values()))
+                    if target_correlations
+                    else 0.0
+                ),
+                "max_target_correlation": (
+                    max(target_correlations.values()) if target_correlations else 0.0
+                ),
             }
 
         except Exception as e:

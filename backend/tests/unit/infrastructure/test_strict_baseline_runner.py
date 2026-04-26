@@ -47,7 +47,9 @@ def create_tasks_table(db_path: Path) -> None:
     connection.close()
 
 
-def insert_task(db_path: Path, task_id: str, result_overrides: dict | None = None) -> None:
+def insert_task(
+    db_path: Path, task_id: str, result_overrides: dict | None = None
+) -> None:
     """Insert one deterministic task row for runner tests."""
     config = {
         "strategy_name": "rsi",
@@ -150,10 +152,18 @@ def build_manifest_fixture(base_dir: Path, db_path: Path, task_id: str) -> Path:
                 "date_range": document["config_snapshot"]["date_range"],
                 "stock_count": document["config_snapshot"]["stock_universe"]["count"],
                 "final_value": document["metric_snapshot"]["top_level"]["final_value"],
-                "total_return": document["metric_snapshot"]["top_level"]["total_return"],
-                "annualized_return": document["metric_snapshot"]["top_level"]["annualized_return"],
-                "sharpe_ratio": document["metric_snapshot"]["top_level"]["sharpe_ratio"],
-                "max_drawdown": document["metric_snapshot"]["top_level"]["max_drawdown"],
+                "total_return": document["metric_snapshot"]["top_level"][
+                    "total_return"
+                ],
+                "annualized_return": document["metric_snapshot"]["top_level"][
+                    "annualized_return"
+                ],
+                "sharpe_ratio": document["metric_snapshot"]["top_level"][
+                    "sharpe_ratio"
+                ],
+                "max_drawdown": document["metric_snapshot"]["top_level"][
+                    "max_drawdown"
+                ],
             }
         ],
         "strategy_names": ["rsi"],
@@ -163,7 +173,9 @@ def build_manifest_fixture(base_dir: Path, db_path: Path, task_id: str) -> Path:
     return manifest_path
 
 
-def run_runner(db_path: Path, manifest_path: Path, output_dir: Path) -> subprocess.CompletedProcess:
+def run_runner(
+    db_path: Path, manifest_path: Path, output_dir: Path
+) -> subprocess.CompletedProcess:
     """Execute the regression runner script."""
     command = [
         sys.executable,

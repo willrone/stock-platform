@@ -4,13 +4,12 @@
 
 import json
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas import StandardResponse
 from app.core.database import AsyncSessionLocal
@@ -37,13 +36,15 @@ def clean_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
             cleaned[key] = clean_parameters(value)
         elif isinstance(value, list):
             cleaned[key] = [
-                item.item()
-                if hasattr(item, "item")
-                else item.tolist()
-                if hasattr(item, "tolist")
-                else clean_parameters(item)
-                if isinstance(item, dict)
-                else item
+                (
+                    item.item()
+                    if hasattr(item, "item")
+                    else (
+                        item.tolist()
+                        if hasattr(item, "tolist")
+                        else clean_parameters(item) if isinstance(item, dict) else item
+                    )
+                )
                 for item in value
             ]
         # 其他类型直接使用
@@ -137,11 +138,15 @@ async def create_strategy_config(request: StrategyConfigCreate):
         logger.info(
             f"收到保存配置请求: strategy_name={request.strategy_name}, config_name={request.config_name}"
         )
-        logger.debug(f"原始参数: {request.parameters}, 参数类型: {type(request.parameters)}")
+        logger.debug(
+            f"原始参数: {request.parameters}, 参数类型: {type(request.parameters)}"
+        )
 
         # 清理参数，确保JSON可序列化
         cleaned_parameters = clean_parameters(request.parameters)
-        logger.debug(f"清理后的参数: {cleaned_parameters}, 类型: {type(cleaned_parameters)}")
+        logger.debug(
+            f"清理后的参数: {cleaned_parameters}, 类型: {type(cleaned_parameters)}"
+        )
 
         # 验证参数可以JSON序列化
         try:
@@ -151,7 +156,9 @@ async def create_strategy_config(request: StrategyConfigCreate):
             logger.error(
                 f"参数无法JSON序列化: {str(e)}, 参数类型: {type(cleaned_parameters)}, 参数: {cleaned_parameters}"
             )
-            raise HTTPException(status_code=400, detail=f"参数包含无法序列化的数据类型: {str(e)}")
+            raise HTTPException(
+                status_code=400, detail=f"参数包含无法序列化的数据类型: {str(e)}"
+            )
 
         async with AsyncSessionLocal() as session:
             try:
@@ -218,12 +225,17 @@ async def create_strategy_config(request: StrategyConfigCreate):
                     and "does not exist" in error_str
                 ):
                     logger.error("策略配置表不存在，请运行数据库迁移")
-                    raise HTTPException(status_code=500, detail="数据库表不存在，请联系管理员运行数据库迁移")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="数据库表不存在，请联系管理员运行数据库迁移",
+                    )
                 raise
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"保存配置失败: {str(e)}, 错误类型: {type(e).__name__}", exc_info=True)
+        logger.error(
+            f"保存配置失败: {str(e)}, 错误类型: {type(e).__name__}", exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
 
 
@@ -250,9 +262,12 @@ async def update_strategy_config(config_id: str, request: StrategyConfigUpdate):
                 try:
                     json.dumps(cleaned_parameters)
                 except (TypeError, ValueError) as e:
-                    logger.error(f"参数无法JSON序列化: {str(e)}, 参数: {cleaned_parameters}")
+                    logger.error(
+                        f"参数无法JSON序列化: {str(e)}, 参数: {cleaned_parameters}"
+                    )
                     raise HTTPException(
-                        status_code=400, detail=f"参数包含无法序列化的数据类型: {str(e)}"
+                        status_code=400,
+                        detail=f"参数包含无法序列化的数据类型: {str(e)}",
                     )
                 config.parameters = cleaned_parameters
             if request.description is not None:

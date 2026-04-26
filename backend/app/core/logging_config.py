@@ -60,15 +60,21 @@ class StructuredFormatter:
         # 添加异常信息
         if record["exception"]:
             log_entry["exception"] = {
-                "type": record["exception"].type.__name__
-                if record["exception"].type
-                else None,
-                "value": str(record["exception"].value)
-                if record["exception"].value
-                else None,
-                "traceback": record["exception"].traceback
-                if record["exception"].traceback
-                else None,
+                "type": (
+                    record["exception"].type.__name__
+                    if record["exception"].type
+                    else None
+                ),
+                "value": (
+                    str(record["exception"].value)
+                    if record["exception"].value
+                    else None
+                ),
+                "traceback": (
+                    record["exception"].traceback
+                    if record["exception"].traceback
+                    else None
+                ),
             }
 
         return json.dumps(log_entry, ensure_ascii=False)
@@ -330,7 +336,9 @@ class PerformanceLogger:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        logger.info(f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data)
+        logger.info(
+            f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data
+        )
 
 
 class LogContext:

@@ -4,8 +4,7 @@
 """
 
 from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -176,12 +175,14 @@ class PositionAnalyzer:
                 "stock_name": stock_code,  # 可以后续从股票信息服务获取
                 # 收益指标
                 "total_return": float(stats["total_pnl"]),
-                "avg_return_per_trade": float(stats["total_pnl"] / total_trades)
-                if total_trades > 0
-                else 0,
-                "return_ratio": float(stats["total_pnl"] / stats["total_volume"])
-                if stats["total_volume"] > 0
-                else 0,
+                "avg_return_per_trade": (
+                    float(stats["total_pnl"] / total_trades) if total_trades > 0 else 0
+                ),
+                "return_ratio": (
+                    float(stats["total_pnl"] / stats["total_volume"])
+                    if stats["total_volume"] > 0
+                    else 0
+                ),
                 # 交易统计
                 "total_trades": total_trades,
                 "winning_trades": winning_trades,
@@ -193,9 +194,9 @@ class PositionAnalyzer:
                 "avg_loss": float(avg_loss),
                 "largest_win": float(largest_win),
                 "largest_loss": float(largest_loss),
-                "profit_factor": float(abs(avg_win / avg_loss))
-                if avg_loss != 0
-                else float("inf"),
+                "profit_factor": (
+                    float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
+                ),
                 # 持仓期分析
                 "avg_holding_period": int(avg_holding_period),
                 "max_holding_period": int(max_holding_period),
@@ -207,11 +208,11 @@ class PositionAnalyzer:
                 # 成本分析
                 "total_volume": float(stats["total_volume"]),
                 "total_commission": float(stats["total_commission"]),
-                "commission_ratio": float(
-                    stats["total_commission"] / stats["total_volume"]
-                )
-                if stats["total_volume"] > 0
-                else 0,
+                "commission_ratio": (
+                    float(stats["total_commission"] / stats["total_volume"])
+                    if stats["total_volume"] > 0
+                    else 0
+                ),
             }
 
             result.append(stock_analysis)
@@ -310,9 +311,9 @@ class PositionAnalyzer:
                 "weight_changes": weight_changes,
                 "concentration_metrics": concentration_metrics,
                 "position_history": all_positions[-50:],  # 最近50个持仓记录
-                "current_weights": weight_history[-1]["weights"]
-                if weight_history
-                else {},
+                "current_weights": (
+                    weight_history[-1]["weights"] if weight_history else {}
+                ),
             }
 
         except Exception as e:
@@ -578,13 +579,13 @@ class PositionAnalyzer:
             "median_interval_days": float(np.median(intervals)) if intervals else 0,
             "min_interval_days": min(intervals) if intervals else 0,
             "max_interval_days": max(intervals) if intervals else 0,
-            "avg_monthly_trades": float(np.mean(monthly_frequency))
-            if monthly_frequency
-            else 0,
+            "avg_monthly_trades": (
+                float(np.mean(monthly_frequency)) if monthly_frequency else 0
+            ),
             "max_monthly_trades": max(monthly_frequency) if monthly_frequency else 0,
-            "total_trading_days": (timestamps[-1] - timestamps[0]).days
-            if len(timestamps) >= 2
-            else 0,
+            "total_trading_days": (
+                (timestamps[-1] - timestamps[0]).days if len(timestamps) >= 2 else 0
+            ),
         }
 
     def _analyze_trading_success(self, trades: List[Dict]) -> Dict[str, Any]:
@@ -609,12 +610,16 @@ class PositionAnalyzer:
             "breakeven_trades": len(breakeven_trades),
             "win_rate": len(winning_trades) / total_trades if total_trades > 0 else 0,
             "loss_rate": len(losing_trades) / total_trades if total_trades > 0 else 0,
-            "avg_win_amount": float(np.mean([t["pnl"] for t in winning_trades]))
-            if winning_trades
-            else 0,
-            "avg_loss_amount": float(np.mean([t["pnl"] for t in losing_trades]))
-            if losing_trades
-            else 0,
+            "avg_win_amount": (
+                float(np.mean([t["pnl"] for t in winning_trades]))
+                if winning_trades
+                else 0
+            ),
+            "avg_loss_amount": (
+                float(np.mean([t["pnl"] for t in losing_trades]))
+                if losing_trades
+                else 0
+            ),
         }
 
     def _analyze_holding_periods(self, trade_history: List[Dict]) -> Dict[str, Any]:
@@ -635,7 +640,7 @@ class PositionAnalyzer:
         # 计算所有持仓期
         all_holding_periods = []
 
-        for stock_code, holdings in stock_holdings.items():
+        for _stock_code, holdings in stock_holdings.items():
             periods = self._calculate_holding_periods_for_stock(
                 holdings["buys"], holdings["sells"]
             )

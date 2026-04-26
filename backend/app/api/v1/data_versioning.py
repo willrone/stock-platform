@@ -2,7 +2,7 @@
 数据版本控制API路由
 提供数据版本管理和血缘追踪的API接口
 """
-from datetime import datetime
+
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse
 from app.services.data_versioning.integration_service import data_versioning_integration
-from app.services.data_versioning.lineage_tracker import NodeType, TransformationType
+from app.services.data_versioning.lineage_tracker import NodeType
 from app.services.data_versioning.version_manager import DataType, VersionStatus
 
 router = APIRouter(prefix="/data-versioning", tags=["数据版本控制"])
@@ -63,7 +63,9 @@ async def list_versions(
             try:
                 data_type_enum = DataType(data_type)
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"无效的数据类型: {data_type}")
+                raise HTTPException(
+                    status_code=400, detail=f"无效的数据类型: {data_type}"
+                )
 
         status_enum = None
         if status:
@@ -109,7 +111,9 @@ async def list_versions(
         raise HTTPException(status_code=500, detail=f"获取版本列表失败: {str(e)}")
 
 
-@router.get("/versions/{version_id}", response_model=StandardResponse, summary="获取版本详情")
+@router.get(
+    "/versions/{version_id}", response_model=StandardResponse, summary="获取版本详情"
+)
 async def get_version(version_id: str):
     """获取版本详情"""
     try:
@@ -147,7 +151,9 @@ async def create_version(request: CreateVersionRequest):
         try:
             data_type_enum = DataType(request.data_type)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"无效的数据类型: {request.data_type}")
+            raise HTTPException(
+                status_code=400, detail=f"无效的数据类型: {request.data_type}"
+            )
 
         version_id = data_versioning_integration.version_manager.create_version(
             file_path=request.file_path,
@@ -176,7 +182,9 @@ async def create_version(request: CreateVersionRequest):
         raise HTTPException(status_code=500, detail=f"创建版本失败: {str(e)}")
 
 
-@router.post("/versions/feature", response_model=StandardResponse, summary="创建特征版本")
+@router.post(
+    "/versions/feature", response_model=StandardResponse, summary="创建特征版本"
+)
 async def create_feature_version(request: CreateFeatureVersionRequest):
     """创建特征版本"""
     try:
@@ -221,7 +229,9 @@ async def compare_versions(version_id1: str, version_id2: str):
 
 
 @router.get(
-    "/stocks/{stock_code}/versions", response_model=StandardResponse, summary="获取股票数据版本"
+    "/stocks/{stock_code}/versions",
+    response_model=StandardResponse,
+    summary="获取股票数据版本",
 )
 async def get_stock_versions(stock_code: str):
     """获取股票的所有数据版本"""
@@ -243,7 +253,9 @@ async def get_stock_versions(stock_code: str):
 
 
 @router.get(
-    "/stocks/{stock_code}/lineage", response_model=StandardResponse, summary="获取股票特征血缘"
+    "/stocks/{stock_code}/lineage",
+    response_model=StandardResponse,
+    summary="获取股票特征血缘",
 )
 async def get_stock_feature_lineage(stock_code: str):
     """获取股票的特征血缘"""
@@ -253,7 +265,9 @@ async def get_stock_feature_lineage(stock_code: str):
         )
 
         return StandardResponse(
-            success=True, message=f"成功获取股票 {stock_code} 的特征血缘", data=lineage_info
+            success=True,
+            message=f"成功获取股票 {stock_code} 的特征血缘",
+            data=lineage_info,
         )
 
     except Exception as e:
@@ -276,7 +290,9 @@ async def search_lineage_nodes(
             try:
                 node_type_enum = NodeType(node_type)
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"无效的节点类型: {node_type}")
+                raise HTTPException(
+                    status_code=400, detail=f"无效的节点类型: {node_type}"
+                )
 
         tags_list = None
         if tags:
@@ -316,7 +332,9 @@ async def search_lineage_nodes(
 
 
 @router.get(
-    "/lineage/features/{feature_id}", response_model=StandardResponse, summary="获取特征血缘"
+    "/lineage/features/{feature_id}",
+    response_model=StandardResponse,
+    summary="获取特征血缘",
 )
 async def get_feature_lineage(feature_id: str):
     """获取特征血缘"""
@@ -337,7 +355,9 @@ async def get_feature_lineage(feature_id: str):
 
 
 @router.get(
-    "/lineage/models/{model_id}", response_model=StandardResponse, summary="获取模型血缘"
+    "/lineage/models/{model_id}",
+    response_model=StandardResponse,
+    summary="获取模型血缘",
 )
 async def get_model_lineage(model_id: str):
     """获取模型血缘"""
@@ -440,7 +460,9 @@ async def get_versioning_stats():
     try:
         stats = data_versioning_integration.get_data_versioning_stats()
 
-        return StandardResponse(success=True, message="成功获取版本控制统计信息", data=stats)
+        return StandardResponse(
+            success=True, message="成功获取版本控制统计信息", data=stats
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取统计信息失败: {str(e)}")

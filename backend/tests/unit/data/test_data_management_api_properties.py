@@ -3,34 +3,35 @@
 验证数据管理API端点调用真实服务的正确性属性
 """
 
-import pytest
-import asyncio
-import tempfile
 import shutil
+import tempfile
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-from hypothesis import given, strategies as st, settings
-from hypothesis.strategies import composite
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from fastapi.testclient import TestClient
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from hypothesis.strategies import composite
 
 from app.main import create_application
 from app.services.data.parquet_manager import ParquetManager
 
 # DataSyncEngine 已移除，使用占位符
 try:
-    from app.services.data.incremental_updater import IncrementalUpdater as DataSyncEngine
+    from app.services.data.incremental_updater import (
+        IncrementalUpdater as DataSyncEngine,
+    )
 except ImportError:
     DataSyncEngine = None
-from app.models.file_management import FileFilters, IntegrityStatus
-from app.models.sync_models import BatchSyncRequest, SyncMode
 
 
 @composite
 def stock_codes(draw):
     """生成股票代码"""
-    market = draw(st.sampled_from(['SZ', 'SH']))
-    code = draw(st.integers(min_value=1, max_value=999999))
-    return f"{code:06d}.{market}"
+    _ = draw(st.sampled_from(["SZ", "SH"]))
+    _ = draw(st.integers(min_value=1, max_value=999999))
+    return "{code:06d}.{market}"
 
 
 @composite
@@ -38,18 +39,26 @@ def file_filters(draw):
     """生成文件过滤条件"""
     return {
         "stock_code": draw(st.one_of(st.none(), stock_codes())),
-        "start_date": draw(st.one_of(st.none(), st.datetimes(
-            min_value=datetime(2020, 1, 1),
-            max_value=datetime.now()
-        ))),
-        "end_date": draw(st.one_of(st.none(), st.datetimes(
-            min_value=datetime(2020, 1, 1),
-            max_value=datetime.now()
-        ))),
-        "min_size": draw(st.one_of(st.none(), st.integers(min_value=1000, max_value=1000000))),
-        "max_size": draw(st.one_of(st.none(), st.integers(min_value=1000000, max_value=10000000))),
+        "start_date": draw(
+            st.one_of(
+                st.none(),
+                st.datetimes(min_value=datetime(2020, 1, 1), max_value=datetime.now()),
+            )
+        ),
+        "end_date": draw(
+            st.one_of(
+                st.none(),
+                st.datetimes(min_value=datetime(2020, 1, 1), max_value=datetime.now()),
+            )
+        ),
+        "min_size": draw(
+            st.one_of(st.none(), st.integers(min_value=1000, max_value=1000000))
+        ),
+        "max_size": draw(
+            st.one_of(st.none(), st.integers(min_value=1000000, max_value=10000000))
+        ),
         "limit": draw(st.integers(min_value=1, max_value=100)),
-        "offset": draw(st.integers(min_value=0, max_value=50))
+        "offset": draw(st.integers(min_value=0, max_value=50)),
     }
 
 
@@ -58,8 +67,10 @@ def sync_requests(draw):
     """生成同步请求"""
     codes = draw(st.lists(stock_codes(), min_size=1, max_size=5))
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=draw(st.integers(min_value=1, max_value=365)))
-    
+    start_date = end_date - timedelta(
+        days=draw(st.integers(min_value=1, max_value=365))
+    )
+
     return {
         "stock_codes": codes,
         "start_date": start_date,
@@ -67,36 +78,37 @@ def sync_requests(draw):
         "force_update": draw(st.booleans()),
         "sync_mode": draw(st.sampled_from(["incremental", "full"])),
         "max_concurrent": draw(st.integers(min_value=1, max_value=5)),
-        "retry_count": draw(st.integers(min_value=1, max_value=3))
+        "retry_count": draw(st.integers(min_value=1, max_value=3)),
     }
 
 
 class TestDataManagementAPIProperties:
     """数据管理API属性测试类"""
-    
+
     def setup_method(self):
         """测试前设置"""
         self.temp_dir = tempfile.mkdtemp()
-        
+
         # 创建测试应用，禁用限流中间件
         self.test_app = create_application()
         self.test_app.user_middleware = [
-            middleware for middleware in self.test_app.user_middleware
-            if 'RateLimitMiddleware' not in str(middleware.cls)
+            middleware
+            for middleware in self.test_app.user_middleware
+            if "RateLimitMiddleware" not in str(middleware.cls)
         ]
-        
+
         self.client = TestClient(self.test_app)
-        
+
         # 创建模拟服务
         self.mock_parquet_manager = MagicMock(spec=ParquetManager)
         self.mock_sync_engine = AsyncMock(spec=DataSyncEngine)
-    
+
     def teardown_method(self):
         """测试后清理"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         # 清理依赖覆盖
         self.test_app.dependency_overrides.clear()
-    
+
     @pytest.mark.asyncio
     @given(file_filters())
     @settings(max_examples=10, deadline=5000)
@@ -107,28 +119,30 @@ class TestDataManagementAPIProperties:
         **功能: data-management-implementation, 属性 1: API路由真实服务调用**
         **验证: 需求 1.4, 2.1**
         """
-        from app.models.file_management import DetailedFileInfo, IntegrityStatus
         from app.core.container import get_parquet_manager
-        
+        from app.models.file_management import DetailedFileInfo, IntegrityStatus
+
         # 模拟Parquet管理器返回
         mock_file_info = DetailedFileInfo(
             file_path=f"/data/{filters.get('stock_code', '000001.SZ')}/test.parquet",
-            stock_code=filters.get('stock_code', '000001.SZ'),
+            stock_code=filters.get("stock_code", "000001.SZ"),
             date_range=(datetime(2023, 1, 1), datetime(2023, 12, 31)),
             record_count=1000,
             file_size=1024000,
             last_modified=datetime.now(),
             integrity_status=IntegrityStatus.VALID,
             compression_ratio=0.3,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
-        
+
         # 配置模拟管理器
         self.mock_parquet_manager.get_detailed_file_list.return_value = [mock_file_info]
-        
+
         # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = lambda: self.mock_parquet_manager
-        
+        self.test_app.dependency_overrides[get_parquet_manager] = (
+            lambda: self.mock_parquet_manager
+        )
+
         # 构建查询参数
         params = {}
         for key, value in filters.items():
@@ -137,24 +151,24 @@ class TestDataManagementAPIProperties:
                     params[key] = value.isoformat()
                 else:
                     params[key] = value
-        
+
         response = self.client.get("/api/v1/data/files", params=params)
-        
+
         # 验证响应
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "files" in data["data"]
-        
+
         # 验证调用了真实服务
         self.mock_parquet_manager.get_detailed_file_list.assert_called_once()
-        
+
         # 验证过滤条件传递正确
         call_args = self.mock_parquet_manager.get_detailed_file_list.call_args[0][0]
-        assert call_args.stock_code == filters.get('stock_code')
-        assert call_args.limit == filters.get('limit', 100)
-        assert call_args.offset == filters.get('offset', 0)
-    
+        assert call_args.stock_code == filters.get("stock_code")
+        assert call_args.limit == filters.get("limit", 100)
+        assert call_args.offset == filters.get("offset", 0)
+
     @pytest.mark.asyncio
     async def test_data_stats_api_calls_real_parquet_manager(self):
         """
@@ -163,9 +177,9 @@ class TestDataManagementAPIProperties:
         **功能: data-management-implementation, 属性 1: API路由真实服务调用**
         **验证: 需求 5.1, 2.2**
         """
-        from app.models.file_management import ComprehensiveStats
         from app.core.container import get_parquet_manager
-        
+        from app.models.file_management import ComprehensiveStats
+
         # 模拟统计数据
         mock_stats = ComprehensiveStats(
             total_files=10,
@@ -177,17 +191,19 @@ class TestDataManagementAPIProperties:
             storage_efficiency=4.88,
             last_sync_time=datetime.now(),
             stocks_by_size=[("000001.SZ", 2048000), ("000002.SZ", 1536000)],
-            monthly_distribution={"2023-01": 1000, "2023-02": 1200}
+            monthly_distribution={"2023-01": 1000, "2023-02": 1200},
         )
-        
+
         # 配置模拟管理器
         self.mock_parquet_manager.get_comprehensive_stats.return_value = mock_stats
-        
+
         # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = lambda: self.mock_parquet_manager
-        
+        self.test_app.dependency_overrides[get_parquet_manager] = (
+            lambda: self.mock_parquet_manager
+        )
+
         response = self.client.get("/api/v1/data/stats")
-        
+
         # 验证响应
         assert response.status_code == 200
         data = response.json()
@@ -195,10 +211,10 @@ class TestDataManagementAPIProperties:
         assert "total_files" in data["data"]
         assert data["data"]["total_files"] == 10
         assert data["data"]["stock_count"] == 5
-        
+
         # 验证调用了真实服务
         self.mock_parquet_manager.get_comprehensive_stats.assert_called_once()
-    
+
     @pytest.mark.asyncio
     @given(sync_requests())
     @settings(max_examples=5, deadline=10000)
@@ -209,9 +225,9 @@ class TestDataManagementAPIProperties:
         **功能: data-management-implementation, 属性 1: API路由真实服务调用**
         **验证: 需求 1.5, 4.1**
         """
-        from app.models.sync_models import BatchSyncResult, SyncResult
         from app.core.container import get_data_sync_engine
-        
+        from app.models.sync_models import BatchSyncResult, SyncResult
+
         # 模拟同步结果
         mock_sync_results = [
             SyncResult(
@@ -220,11 +236,11 @@ class TestDataManagementAPIProperties:
                 records_synced=1000,
                 start_time=datetime.now(),
                 end_time=datetime.now(),
-                data_range=(sync_request["start_date"], sync_request["end_date"])
+                data_range=(sync_request["start_date"], sync_request["end_date"]),
             )
             for code in sync_request["stock_codes"]
         ]
-        
+
         mock_batch_result = BatchSyncResult(
             sync_id="test-sync-123",
             success=True,
@@ -233,35 +249,37 @@ class TestDataManagementAPIProperties:
             failed_syncs=[],
             start_time=datetime.now(),
             end_time=datetime.now(),
-            message="同步完成"
+            message="同步完成",
         )
-        
+
         # 配置模拟引擎
         self.mock_sync_engine.sync_stocks_batch.return_value = mock_batch_result
-        
+
         # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_data_sync_engine] = lambda: self.mock_sync_engine
-        
+        self.test_app.dependency_overrides[get_data_sync_engine] = (
+            lambda: self.mock_sync_engine
+        )
+
         # 构建请求数据
         request_data = {
             "stock_codes": sync_request["stock_codes"],
             "start_date": sync_request["start_date"].isoformat(),
             "end_date": sync_request["end_date"].isoformat(),
-            "force_update": sync_request["force_update"]
+            "force_update": sync_request["force_update"],
         }
-        
+
         response = self.client.post("/api/v1/data/sync", json=request_data)
-        
+
         # 验证响应
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "sync_id" in data["data"]
         assert data["data"]["total_stocks"] == len(sync_request["stock_codes"])
-        
+
         # 验证调用了真实服务
         self.mock_sync_engine.sync_stocks_batch.assert_called_once()
-    
+
     @pytest.mark.asyncio
     async def test_sync_progress_api_calls_real_sync_engine(self):
         """
@@ -270,9 +288,9 @@ class TestDataManagementAPIProperties:
         **功能: data-management-implementation, 属性 1: API路由真实服务调用**
         **验证: 需求 4.2, 5.3**
         """
-        from app.models.sync_models import SyncProgress, SyncStatus
         from app.core.container import get_data_sync_engine
-        
+        from app.models.sync_models import SyncProgress, SyncStatus
+
         sync_id = "test-sync-123"
         mock_progress = SyncProgress(
             sync_id=sync_id,
@@ -284,27 +302,29 @@ class TestDataManagementAPIProperties:
             estimated_remaining_time=timedelta(minutes=2),
             start_time=datetime.now(),
             status=SyncStatus.RUNNING,
-            last_update=datetime.now()
+            last_update=datetime.now(),
         )
-        
+
         # 配置模拟引擎
         self.mock_sync_engine.get_sync_progress.return_value = mock_progress
-        
+
         # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_data_sync_engine] = lambda: self.mock_sync_engine
-        
+        self.test_app.dependency_overrides[get_data_sync_engine] = (
+            lambda: self.mock_sync_engine
+        )
+
         response = self.client.get(f"/api/v1/data/sync/{sync_id}/progress")
-        
+
         # 验证响应
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert data["data"]["sync_id"] == sync_id
         assert data["data"]["progress_percentage"] == 80.0
-        
+
         # 验证调用了真实服务
         self.mock_sync_engine.get_sync_progress.assert_called_once_with(sync_id)
-    
+
     @pytest.mark.asyncio
     async def test_delete_files_api_calls_real_parquet_manager(self):
         """
@@ -313,41 +333,46 @@ class TestDataManagementAPIProperties:
         **功能: data-management-implementation, 属性 1: API路由真实服务调用**
         **验证: 需求 2.3**
         """
-        from app.models.file_management import DeletionResult
         from app.core.container import get_parquet_manager
-        
+        from app.models.file_management import DeletionResult
+
         file_paths = ["/data/000001.SZ/test1.parquet", "/data/000002.SZ/test2.parquet"]
-        
+
         mock_deletion_result = DeletionResult(
             success=True,
             deleted_files=file_paths,
             failed_files=[],
             total_deleted=2,
             freed_space_bytes=2048000,
-            message="删除成功"
+            message="删除成功",
         )
-        
+
         # 配置模拟管理器
-        self.mock_parquet_manager.delete_files_safely.return_value = mock_deletion_result
-        
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = lambda: self.mock_parquet_manager
-        
-        response = self.client.delete(
-            "/api/v1/data/files",
-            params={"file_paths": file_paths}
+        self.mock_parquet_manager.delete_files_safely.return_value = (
+            mock_deletion_result
         )
-        
+
+        # 使用FastAPI依赖覆盖
+        self.test_app.dependency_overrides[get_parquet_manager] = (
+            lambda: self.mock_parquet_manager
+        )
+
+        response = self.client.delete(
+            "/api/v1/data/files", params={"file_paths": file_paths}
+        )
+
         # 验证响应
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert data["data"]["total_deleted"] == 2
         assert data["data"]["freed_space_bytes"] == 2048000
-        
+
         # 验证调用了真实服务
-        self.mock_parquet_manager.delete_files_safely.assert_called_once_with(file_paths)
-    
+        self.mock_parquet_manager.delete_files_safely.assert_called_once_with(
+            file_paths
+        )
+
     @pytest.mark.asyncio
     async def test_api_error_handling_consistency(self):
         """
@@ -357,21 +382,25 @@ class TestDataManagementAPIProperties:
         **验证: 需求 6.1, 6.3**
         """
         from app.core.container import get_parquet_manager
-        
+
         # 配置模拟管理器抛出异常
-        self.mock_parquet_manager.get_comprehensive_stats.side_effect = Exception("服务异常")
-        
+        self.mock_parquet_manager.get_comprehensive_stats.side_effect = Exception(
+            "服务异常"
+        )
+
         # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = lambda: self.mock_parquet_manager
-        
+        self.test_app.dependency_overrides[get_parquet_manager] = (
+            lambda: self.mock_parquet_manager
+        )
+
         response = self.client.get("/api/v1/data/stats")
-        
+
         # 验证错误处理
         assert response.status_code == 500
         data = response.json()
         assert "detail" in data
         assert "服务异常" in data["detail"]
-    
+
     @pytest.mark.asyncio
     async def test_monitoring_endpoints_integration(self):
         """
@@ -387,31 +416,31 @@ class TestDataManagementAPIProperties:
         assert data["success"] is True
         assert "overall_healthy" in data["data"]
         assert "services" in data["data"]
-        
+
         # 测试性能指标端点
         response = self.client.get("/api/v1/monitoring/metrics")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        
+
         # 测试系统概览端点
         response = self.client.get("/api/v1/monitoring/overview")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        
+
         # 测试错误统计端点
         response = self.client.get("/api/v1/monitoring/errors")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        
+
         # 测试数据质量检查端点
         response = self.client.get("/api/v1/monitoring/quality")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        
+
         # 测试异常检测端点
         response = self.client.get("/api/v1/monitoring/anomalies")
         assert response.status_code == 200

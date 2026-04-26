@@ -77,9 +77,9 @@ class ComprehensiveStats:
             },
             "average_file_size": self.average_file_size,
             "storage_efficiency": self.storage_efficiency,
-            "last_sync_time": self.last_sync_time.isoformat()
-            if self.last_sync_time
-            else None,
+            "last_sync_time": (
+                self.last_sync_time.isoformat() if self.last_sync_time else None
+            ),
             "stocks_by_size": [
                 {"stock_code": code, "size": size} for code, size in self.stocks_by_size
             ],
@@ -125,9 +125,9 @@ class ValidationResult:
             "error_messages": self.error_messages,
             "record_count": self.record_count,
             "file_size": self.file_size,
-            "validation_time": self.validation_time.isoformat()
-            if self.validation_time
-            else None,
+            "validation_time": (
+                self.validation_time.isoformat() if self.validation_time else None
+            ),
         }
 
 

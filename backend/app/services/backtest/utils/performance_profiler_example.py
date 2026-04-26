@@ -5,7 +5,7 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from ..core.backtest_engine import BacktestConfig
 from ..execution.backtest_executor import BacktestExecutor
@@ -138,13 +138,13 @@ async def example_parallel_efficiency_analysis():
 
     # 顺序执行
     start = time.perf_counter()
-    results_sequential = [process_stock(code) for code in stock_codes]
+    [process_stock(code) for code in stock_codes]
     sequential_time = time.perf_counter() - start
 
     # 并行执行
     start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=4) as executor:
-        results_parallel = list(executor.map(process_stock, stock_codes))
+        list(executor.map(process_stock, stock_codes))
     parallel_time = time.perf_counter() - start
 
     # 记录并行化效率
@@ -159,7 +159,9 @@ async def example_parallel_efficiency_analysis():
     report = profiler.generate_report()
     print(f"顺序执行时间: {sequential_time:.2f}秒")
     print(f"并行执行时间: {parallel_time:.2f}秒")
-    print(f"加速比: {report['parallel_efficiency']['stock_processing']['speedup']:.2f}x")
+    print(
+        f"加速比: {report['parallel_efficiency']['stock_processing']['speedup']:.2f}x"
+    )
     print(
         f"效率: {report['parallel_efficiency']['stock_processing']['efficiency_percent']:.1f}%"
     )

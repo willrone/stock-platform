@@ -7,7 +7,7 @@ import asyncio
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -502,21 +502,6 @@ class TechnicalIndicatorCalculator:
                     result_dict[indicator].append(None)
 
         return result_dict
-        """计算移动平均线"""
-        if len(data) < period:
-            return [None] * len(data)
-
-        ma_values = []
-
-        for i in range(len(data)):
-            if i < period - 1:
-                ma_values.append(None)
-            else:
-                # 计算过去period天的平均收盘价
-                sum_close = sum(data[j].close for j in range(i - period + 1, i + 1))
-                ma_values.append(round(sum_close / period, 4))
-
-        return ma_values
 
     def calculate_rsi(
         self, data: List[StockData], period: int = 14
@@ -864,7 +849,9 @@ class TechnicalIndicatorCalculator:
                     )
                     results[stock_code] = indicators_result
 
-                    print(f"股票 {stock_code} 指标计算完成: {len(indicators_result)} 条记录")
+                    print(
+                        f"股票 {stock_code} 指标计算完成: {len(indicators_result)} 条记录"
+                    )
 
                 except Exception as e:
                     print(f"股票 {stock_code} 指标计算失败: {e}")
@@ -914,11 +901,17 @@ class TechnicalIndicatorCalculator:
             "VWAP": {"category": "成交量指标", "description": "成交量加权平均价格"},
             "OBV": {"category": "成交量指标", "description": "能量潮"},
             "AD_LINE": {"category": "成交量指标", "description": "累积/派发线"},
-            "VOLUME_RSI": {"category": "成交量指标", "description": "成交量相对强弱指数"},
+            "VOLUME_RSI": {
+                "category": "成交量指标",
+                "description": "成交量相对强弱指数",
+            },
             # 波动率指标
             "ATR": {"category": "波动率指标", "description": "平均真实波幅"},
             "VOLATILITY": {"category": "波动率指标", "description": "波动率"},
-            "HISTORICAL_VOLATILITY": {"category": "波动率指标", "description": "历史波动率"},
+            "HISTORICAL_VOLATILITY": {
+                "category": "波动率指标",
+                "description": "历史波动率",
+            },
             # 复合指标
             "KDJ": {"category": "复合指标", "description": "KDJ指标"},
         }

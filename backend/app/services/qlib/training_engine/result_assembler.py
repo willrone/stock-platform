@@ -12,19 +12,25 @@ class QlibTrainingResultAssembler:
         self.result_cls = result_cls
 
     @staticmethod
-    def normalize_training_output(training_output: Any) -> Tuple[Any, List[Dict[str, Any]], Dict[str, Any]]:
+    def normalize_training_output(
+        training_output: Any,
+    ) -> Tuple[Any, List[Dict[str, Any]], Dict[str, Any]]:
         """统一训练输出结构，兼容旧返回格式。"""
         if len(training_output) == 3:
             model, training_history, early_stopping_info = training_output
             return model, training_history, early_stopping_info
 
         model, training_history = training_output
-        return model, training_history, {
-            "early_stopped": False,
-            "stopped_epoch": 0,
-            "best_epoch": 0,
-            "early_stopping_reason": None,
-        }
+        return (
+            model,
+            training_history,
+            {
+                "early_stopped": False,
+                "stopped_epoch": 0,
+                "best_epoch": 0,
+                "early_stopping_reason": None,
+            },
+        )
 
     @staticmethod
     def fill_accuracy_into_history(

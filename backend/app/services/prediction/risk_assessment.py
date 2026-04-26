@@ -3,8 +3,8 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,6 @@ from loguru import logger
 from scipy import stats
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, PredictionError
-from app.models.task_models import RiskMetrics
 
 
 @dataclass
@@ -247,7 +246,7 @@ class RiskMetricsCalculator:
             lambda_param = 0.94
             ewma_var = clean_returns.ewm(alpha=1 - lambda_param).var().iloc[-1]
             metrics["garch_volatility"] = np.sqrt(ewma_var * 252)
-        except:
+        except Exception:
             metrics["garch_volatility"] = metrics["annualized_volatility"]
 
         return metrics
@@ -269,12 +268,12 @@ class RiskMetricsCalculator:
         metrics = {
             "max_drawdown": drawdown.min(),
             "current_drawdown": drawdown.iloc[-1],
-            "avg_drawdown": drawdown[drawdown < 0].mean()
-            if (drawdown < 0).any()
-            else 0,
-            "drawdown_duration": len(drawdown[drawdown < 0])
-            if (drawdown < 0).any()
-            else 0,
+            "avg_drawdown": (
+                drawdown[drawdown < 0].mean() if (drawdown < 0).any() else 0
+            ),
+            "drawdown_duration": (
+                len(drawdown[drawdown < 0]) if (drawdown < 0).any() else 0
+            ),
         }
 
         return metrics
@@ -369,7 +368,7 @@ class ScenarioAnalysis:
                 var = current_price * shocked_vol * z_score
                 var_results[f"var_{level}"] = var
 
-            results[f"vol_shock_{shock:+.0%}"] = var_results
+            results["vol_shock_{shock:+.0%}"] = var_results
 
         return results
 

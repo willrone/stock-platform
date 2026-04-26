@@ -8,8 +8,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text
 
 from app.core.database import Base
 
@@ -71,9 +70,9 @@ class Task(Base):
             "config": self.config,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "progress": self.progress,
             "result": self.result,
             "error_message": self.error_message,
@@ -105,9 +104,9 @@ class PredictionResult(Base):
             "id": self.id,
             "task_id": self.task_id,
             "stock_code": self.stock_code,
-            "prediction_date": self.prediction_date.isoformat()
-            if self.prediction_date
-            else None,
+            "prediction_date": (
+                self.prediction_date.isoformat() if self.prediction_date else None
+            ),
             "predicted_price": self.predicted_price,
             "predicted_direction": self.predicted_direction,
             "confidence_score": self.confidence_score,
@@ -197,9 +196,7 @@ class ModelInfo(Base):
     training_stage = Column(String(100), nullable=True)  # 当前训练阶段
     evaluation_report = Column(JSON, nullable=True)  # 评估报告
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     deployed_at = Column(DateTime, nullable=True)
 
     def to_dict(self):
@@ -211,12 +208,16 @@ class ModelInfo(Base):
             "parent_model_id": self.parent_model_id,
             "file_path": self.file_path,
             "training_data_period": {
-                "start": self.training_data_start.isoformat()
-                if self.training_data_start
-                else None,
-                "end": self.training_data_end.isoformat()
-                if self.training_data_end
-                else None,
+                "start": (
+                    self.training_data_start.isoformat()
+                    if self.training_data_start
+                    else None
+                ),
+                "end": (
+                    self.training_data_end.isoformat()
+                    if self.training_data_end
+                    else None
+                ),
             },
             "performance_metrics": self.performance_metrics,
             "hyperparameters": self.hyperparameters,

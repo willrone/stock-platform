@@ -6,11 +6,10 @@
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
-from sqlalchemy import and_, delete, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, delete, select
 
 from app.core.database import get_async_session_context, retry_db_operation
 from app.models.backtest_detailed_models import BacktestChartCache
@@ -113,7 +112,11 @@ class ChartCacheService:
                     data_hash = self._calculate_data_hash(chart_data)
 
                     # 计算过期时间（避免闭包内同名赋值导致 UnboundLocalError）
-                    hours = expiry_hours if expiry_hours is not None else self.DEFAULT_CACHE_EXPIRY_HOURS
+                    hours = (
+                        expiry_hours
+                        if expiry_hours is not None
+                        else self.DEFAULT_CACHE_EXPIRY_HOURS
+                    )
                     expires_at = datetime.now(UTC) + timedelta(hours=hours)
 
                     # 查找现有记录
@@ -235,7 +238,10 @@ class ChartCacheService:
                     return deleted_count
 
                 return await retry_db_operation(
-                    _cleanup, max_retries=3, retry_delay=0.1, operation_name="清理过期缓存"
+                    _cleanup,
+                    max_retries=3,
+                    retry_delay=0.1,
+                    operation_name="清理过期缓存",
                 )
 
             except Exception as e:
@@ -303,9 +309,11 @@ class ChartCacheService:
                         {
                             "chart_type": record.chart_type,
                             "created_at": record.created_at.isoformat(),
-                            "expires_at": record.expires_at.isoformat()
-                            if record.expires_at
-                            else None,
+                            "expires_at": (
+                                record.expires_at.isoformat()
+                                if record.expires_at
+                                else None
+                            ),
                             "is_expired": record.is_expired(),
                             "data_hash": record.data_hash,
                         }
@@ -326,6 +334,7 @@ class ChartCacheService:
         try:
             try:
                 import orjson
+
                 data_bytes = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
                 return hashlib.md5(data_bytes).hexdigest()
             except (ImportError, TypeError):

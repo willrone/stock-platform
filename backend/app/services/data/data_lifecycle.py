@@ -9,9 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from loguru import logger
-
-from app.models.database import DatabaseManager, TaskStatus
+from app.models.database import DatabaseManager
 
 from .parquet_manager import ParquetManager
 
@@ -199,7 +197,7 @@ class DataLifecycleManager:
                 # 统计普通任务
                 normal_tasks = self.db_manager.fetch_all(
                     """
-                    SELECT COUNT(*) as count FROM tasks 
+                    SELECT COUNT(*) as count FROM tasks
                     WHERE created_at < ? AND status NOT IN ('failed', 'cancelled')
                 """,
                     (task_cutoff,),
@@ -208,7 +206,7 @@ class DataLifecycleManager:
                 # 统计失败任务
                 failed_tasks = self.db_manager.fetch_all(
                     """
-                    SELECT COUNT(*) as count FROM tasks 
+                    SELECT COUNT(*) as count FROM tasks
                     WHERE created_at < ? AND status IN ('failed', 'cancelled')
                 """,
                     (failed_task_cutoff,),
@@ -221,11 +219,11 @@ class DataLifecycleManager:
                 # 实际删除
                 with self.db_manager.get_connection() as conn:
                     # 删除旧的普通任务及其结果
-                    cursor1 = conn.execute(
+                    _ = conn.execute(
                         """
-                        DELETE FROM task_results 
+                        DELETE FROM task_results
                         WHERE task_id IN (
-                            SELECT id FROM tasks 
+                            SELECT id FROM tasks
                             WHERE created_at < ? AND status NOT IN ('failed', 'cancelled')
                         )
                     """,
@@ -234,18 +232,18 @@ class DataLifecycleManager:
 
                     cursor2 = conn.execute(
                         """
-                        DELETE FROM tasks 
+                        DELETE FROM tasks
                         WHERE created_at < ? AND status NOT IN ('failed', 'cancelled')
                     """,
                         (task_cutoff,),
                     )
 
                     # 删除旧的失败任务及其结果
-                    cursor3 = conn.execute(
+                    _ = conn.execute(
                         """
-                        DELETE FROM task_results 
+                        DELETE FROM task_results
                         WHERE task_id IN (
-                            SELECT id FROM tasks 
+                            SELECT id FROM tasks
                             WHERE created_at < ? AND status IN ('failed', 'cancelled')
                         )
                     """,
@@ -254,7 +252,7 @@ class DataLifecycleManager:
 
                     cursor4 = conn.execute(
                         """
-                        DELETE FROM tasks 
+                        DELETE FROM tasks
                         WHERE created_at < ? AND status IN ('failed', 'cancelled')
                     """,
                         (failed_task_cutoff,),
@@ -391,7 +389,7 @@ class DataLifecycleManager:
     def _cleanup_empty_directories(self, root_path: Path):
         """清理空目录"""
         try:
-            for dirpath, dirnames, filenames in os.walk(root_path, topdown=False):
+            for dirpath, dirnames, _filenames in os.walk(root_path, topdown=False):
                 for dirname in dirnames:
                     dir_path = Path(dirpath) / dirname
                     try:

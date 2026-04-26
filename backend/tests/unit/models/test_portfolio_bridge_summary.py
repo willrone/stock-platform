@@ -78,89 +78,104 @@ def test_build_portfolio_bridge_summary_collects_task_and_signal_rollups() -> No
         )
         session.commit()
 
-        summary = build_portfolio_bridge_summary(session, 'model-official')
+        summary = build_portfolio_bridge_summary(session, "model-official")
 
-    assert summary['model_id'] == 'model-official'
-    assert summary['task_count'] == 1
-    assert len(summary['tasks']) == 1
-    task = summary['tasks'][0]
-    assert task['task_id'] == 'task-official-2024'
-    assert task['window_label'] == '2024-full'
-    assert task['portfolio_metrics']['total_return'] == 0.031
-    assert task['signal_summary']['raw_signal_count'] == 3
-    assert task['signal_summary']['executed_signal_count'] == 2
-    assert task['signal_summary']['rejected_signal_count'] == 1
-    assert task['signal_summary']['top_execution_reasons'][0] == {
-        'reason': 'EXECUTED',
-        'count': 2,
+    assert summary["model_id"] == "model-official"
+    assert summary["task_count"] == 1
+    assert len(summary["tasks"]) == 1
+    task = summary["tasks"][0]
+    assert task["task_id"] == "task-official-2024"
+    assert task["window_label"] == "2024-full"
+    assert task["portfolio_metrics"]["total_return"] == 0.031
+    assert task["signal_summary"]["raw_signal_count"] == 3
+    assert task["signal_summary"]["executed_signal_count"] == 2
+    assert task["signal_summary"]["rejected_signal_count"] == 1
+    assert task["signal_summary"]["top_execution_reasons"][0] == {
+        "reason": "EXECUTED",
+        "count": 2,
     }
-    assert task['signal_summary']['top_signal_stocks'][0] == {
-        'stock_code': '600036.SH',
-        'count': 2,
+    assert task["signal_summary"]["top_signal_stocks"][0] == {
+        "stock_code": "600036.SH",
+        "count": 2,
     }
-    assert task['cost_metrics'] == {
-        'total_cost': 3200.0,
-        'total_commission': 2100.0,
-        'total_slippage': 1100.0,
-        'cost_ratio': 0.0032,
-        'final_value_without_cost': 1034200.0,
-        'total_return_without_cost': 0.0342,
-        'gross_minus_net_value_gap': 3200.0,
-        'gross_minus_net_return_gap': pytest.approx(0.0032),
+    assert task["cost_metrics"] == {
+        "total_cost": 3200.0,
+        "total_commission": 2100.0,
+        "total_slippage": 1100.0,
+        "cost_ratio": 0.0032,
+        "final_value_without_cost": 1034200.0,
+        "total_return_without_cost": 0.0342,
+        "gross_minus_net_value_gap": 3200.0,
+        "gross_minus_net_return_gap": pytest.approx(0.0032),
     }
-    assert task['monthly_return_summary'] == {
-        'mean': 0.01,
-        'std': 0.02,
-        'best_month': 0.05,
-        'worst_month': -0.03,
-        'positive_months': 8,
-        'negative_months': 4,
+    assert task["monthly_return_summary"] == {
+        "mean": 0.01,
+        "std": 0.02,
+        "best_month": 0.05,
+        "worst_month": -0.03,
+        "positive_months": 8,
+        "negative_months": 4,
     }
-    assert task['stock_contribution_summary']['best_stock']['stock_code'] == '600036.SH'
-    assert task['stock_contribution_summary']['worst_stock']['stock_code'] == '601288.SH'
-    assert summary['cost_vs_gross_gap_rollup']['largest_cost_gap'] == {
-        'task_id': 'task-official-2024',
-        'task_name': 'hermes-qlib-costmodel-official-2024-full',
-        'window_label': '2024-full',
-        'gross_minus_net_value_gap': 3200.0,
+    assert task["stock_contribution_summary"]["best_stock"]["stock_code"] == "600036.SH"
+    assert (
+        task["stock_contribution_summary"]["worst_stock"]["stock_code"] == "601288.SH"
+    )
+    assert summary["cost_vs_gross_gap_rollup"]["largest_cost_gap"] == {
+        "task_id": "task-official-2024",
+        "task_name": "hermes-qlib-costmodel-official-2024-full",
+        "window_label": "2024-full",
+        "gross_minus_net_value_gap": 3200.0,
     }
-    assert summary['cost_vs_gross_gap_rollup']['best_gross_return']['total_return_without_cost'] == 0.0342
-    assert summary['per_stock_contribution_rollup']['best_overall']['stock_code'] == '600036.SH'
-    assert summary['per_stock_contribution_rollup']['worst_overall']['stock_code'] == '601288.SH'
-    assert summary['per_stock_contribution_rollup']['stocks'][0]['signal_count'] == 2
-    assert summary['best_by_total_return'] == {
-        'task_id': 'task-official-2024',
-        'task_name': 'hermes-qlib-costmodel-official-2024-full',
-        'window_label': '2024-full',
-        'total_return': 0.031,
+    assert (
+        summary["cost_vs_gross_gap_rollup"]["best_gross_return"][
+            "total_return_without_cost"
+        ]
+        == 0.0342
+    )
+    assert (
+        summary["per_stock_contribution_rollup"]["best_overall"]["stock_code"]
+        == "600036.SH"
+    )
+    assert (
+        summary["per_stock_contribution_rollup"]["worst_overall"]["stock_code"]
+        == "601288.SH"
+    )
+    assert summary["per_stock_contribution_rollup"]["stocks"][0]["signal_count"] == 2
+    assert summary["best_by_total_return"] == {
+        "task_id": "task-official-2024",
+        "task_name": "hermes-qlib-costmodel-official-2024-full",
+        "window_label": "2024-full",
+        "total_return": 0.031,
     }
-    assert summary['best_by_sharpe']['sharpe_ratio'] == 1.2
-    assert summary['smallest_drawdown']['max_drawdown'] == -0.08
+    assert summary["best_by_sharpe"]["sharpe_ratio"] == 1.2
+    assert summary["smallest_drawdown"]["max_drawdown"] == -0.08
 
 
-def test_build_portfolio_bridge_summary_returns_empty_shape_when_no_tasks_match() -> None:
+def test_build_portfolio_bridge_summary_returns_empty_shape_when_no_tasks_match() -> (
+    None
+):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     with Session(engine) as session:
         _seed_schema(session)
-        summary = build_portfolio_bridge_summary(session, 'missing-model')
+        summary = build_portfolio_bridge_summary(session, "missing-model")
 
     assert summary == {
-        'model_id': 'missing-model',
-        'task_count': 0,
-        'tasks': [],
-        'best_by_total_return': None,
-        'best_by_sharpe': None,
-        'smallest_drawdown': None,
-        'cost_vs_gross_gap_rollup': {
-            'task_count': 0,
-            'tasks': [],
-            'largest_cost_gap': None,
-            'best_gross_return': None,
-            'best_net_return': None,
+        "model_id": "missing-model",
+        "task_count": 0,
+        "tasks": [],
+        "best_by_total_return": None,
+        "best_by_sharpe": None,
+        "smallest_drawdown": None,
+        "cost_vs_gross_gap_rollup": {
+            "task_count": 0,
+            "tasks": [],
+            "largest_cost_gap": None,
+            "best_gross_return": None,
+            "best_net_return": None,
         },
-        'per_stock_contribution_rollup': {
-            'stocks': [],
-            'best_overall': None,
-            'worst_overall': None,
+        "per_stock_contribution_rollup": {
+            "stocks": [],
+            "best_overall": None,
+            "worst_overall": None,
         },
     }

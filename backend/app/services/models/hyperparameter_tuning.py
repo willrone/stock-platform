@@ -243,13 +243,17 @@ class HyperparameterTuner:
             "completed_trials": len(completed_trials),
             "failed_trials": len(self.trials) - len(completed_trials),
             "best_score": self.best_trial.score if self.best_trial else None,
-            "best_hyperparameters": self.best_trial.hyperparameters
-            if self.best_trial
-            else None,
-            "average_score": np.mean([t.score for t in completed_trials])
-            if completed_trials
-            else None,
-            "std_score": np.std([t.score for t in completed_trials])
-            if completed_trials
-            else None,
+            "best_hyperparameters": (
+                self.best_trial.hyperparameters if self.best_trial else None
+            ),
+            "average_score": (
+                np.mean([t.score for t in completed_trials])
+                if completed_trials
+                else None
+            ),
+            "std_score": (
+                np.std([t.score for t in completed_trials])
+                if completed_trials
+                else None
+            ),
         }

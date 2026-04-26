@@ -186,7 +186,7 @@ class LoggerMixin:
 def log_performance(operation: str, duration: float, **kwargs):
     """记录性能日志"""
     logger.bind(log_type="performance").info(
-        f"PERFORMANCE | {operation} | {duration:.3f}s | {json.dumps(kwargs)}"
+        "PERFORMANCE | {operation} | {duration:.3f}s | {json.dumps(kwargs)}"
     )
 
 

@@ -103,7 +103,9 @@ class VersionManager:
                 actual_count = version_info.get("stock_count", 0)
                 expected_count = len(expected_stocks)
                 if actual_count != expected_count:
-                    issues.append(f"股票数量不一致: 期望 {expected_count}, 实际 {actual_count}")
+                    issues.append(
+                        f"股票数量不一致: 期望 {expected_count}, 实际 {actual_count}"
+                    )
 
             # 检查日期范围
             if expected_date_range:

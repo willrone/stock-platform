@@ -87,7 +87,10 @@ const PositionAnalysis = dynamic(
     import('../../../components/backtest/PositionAnalysis').then(mod => ({
       default: mod.PositionAnalysis,
     })),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载持仓分析中...</div> }
+  {
+    ssr: false,
+    loading: () => <div className="h-64 flex items-center justify-center">加载持仓分析中...</div>,
+  }
 );
 
 const RiskAnalysis = dynamic(
@@ -95,7 +98,10 @@ const RiskAnalysis = dynamic(
     import('../../../components/backtest/RiskAnalysis').then(mod => ({
       default: mod.RiskAnalysis,
     })),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载风险分析中...</div> }
+  {
+    ssr: false,
+    loading: () => <div className="h-64 flex items-center justify-center">加载风险分析中...</div>,
+  }
 );
 
 const PerformanceBreakdown = dynamic(
@@ -103,7 +109,10 @@ const PerformanceBreakdown = dynamic(
     import('../../../components/backtest/PerformanceBreakdown').then(mod => ({
       default: mod.PerformanceBreakdown,
     })),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">加载绩效分析中...</div> }
+  {
+    ssr: false,
+    loading: () => <div className="h-64 flex items-center justify-center">加载绩效分析中...</div>,
+  }
 );
 
 interface TaskDetailContentProps {
@@ -214,15 +223,42 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                   variant="scrollable"
                   scrollButtons="auto"
                 >
-                  <Tab label={<TabLabel icon={<BarChart3 size={16} />} text="概览" />} value="overview" />
-                  <Tab label={<TabLabel icon={<LineChart size={16} />} text="交互式图表" />} value="charts" />
-                  <Tab label={<TabLabel icon={<FileText size={16} />} text="交易记录" />} value="trades" />
-                  <Tab label={<TabLabel icon={<AlertTriangle size={16} />} text="信号记录" />} value="signals" />
-                  <Tab label={<TabLabel icon={<PieChart size={16} />} text="持仓分析" />} value="positions" />
-                  <Tab label={<TabLabel icon={<Calendar size={16} />} text="月度分析" />} value="monthly" />
-                  <Tab label={<TabLabel icon={<Activity size={16} />} text="风险分析" />} value="risk" />
-                  <Tab label={<TabLabel icon={<TrendingUp size={16} />} text="绩效分解" />} value="performance" />
-                  <Tab label={<TabLabel icon={<Activity size={16} />} text="性能分析" />} value="perf_monitor" />
+                  <Tab
+                    label={<TabLabel icon={<BarChart3 size={16} />} text="概览" />}
+                    value="overview"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<LineChart size={16} />} text="交互式图表" />}
+                    value="charts"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<FileText size={16} />} text="交易记录" />}
+                    value="trades"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<AlertTriangle size={16} />} text="信号记录" />}
+                    value="signals"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<PieChart size={16} />} text="持仓分析" />}
+                    value="positions"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<Calendar size={16} />} text="月度分析" />}
+                    value="monthly"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<Activity size={16} />} text="风险分析" />}
+                    value="risk"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<TrendingUp size={16} />} text="绩效分解" />}
+                    value="performance"
+                  />
+                  <Tab
+                    label={<TabLabel icon={<Activity size={16} />} text="性能分析" />}
+                    value="perf_monitor"
+                  />
                 </Tabs>
 
                 <Box sx={{ mt: 2 }}>
@@ -245,7 +281,8 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                                     策略配置
                                   </Typography>
                                   <Typography variant="caption" color="text.secondary">
-                                    策略: {getStrategyDisplayName(model.strategyConfigInfo.strategyName)}
+                                    策略:{' '}
+                                    {getStrategyDisplayName(model.strategyConfigInfo.strategyName)}
                                   </Typography>
                                 </Box>
                                 <Button
@@ -311,9 +348,7 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                   )}
 
                   {model.selectedBacktestTab === 'positions' && (
-                    <Box sx={{ mt: 2 }}>
-                      {renderPositionAnalysis(model, currentTask)}
-                    </Box>
+                    <Box sx={{ mt: 2 }}>{renderPositionAnalysis(model, currentTask)}</Box>
                   )}
 
                   {model.selectedBacktestTab === 'monthly' && (
@@ -339,13 +374,9 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                                   fontSize: '0.75rem',
                                   borderRadius: 1,
                                   bgcolor:
-                                    monthData.monthly_return >= 0
-                                      ? 'success.light'
-                                      : 'error.light',
+                                    monthData.monthly_return >= 0 ? 'success.light' : 'error.light',
                                   color:
-                                    monthData.monthly_return >= 0
-                                      ? 'success.dark'
-                                      : 'error.dark',
+                                    monthData.monthly_return >= 0 ? 'success.dark' : 'error.dark',
                                 }}
                                 title={`${monthData.year}年${monthData.month}月: ${(
                                   monthData.monthly_return * 100
@@ -359,7 +390,12 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                           </Box>
                         </Box>
                       ) : (
-                        <EmptyState icon={<Calendar size={48} color="#999" style={{ margin: '0 auto 16px' }} />} message="月度分析数据加载中..." />
+                        <EmptyState
+                          icon={
+                            <Calendar size={48} color="#999" style={{ margin: '0 auto 16px' }} />
+                          }
+                          message="月度分析数据加载中..."
+                        />
                       )}
                     </Box>
                   )}
@@ -374,7 +410,12 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                           rollingMetrics={model.adaptedRiskData.rollingMetrics}
                         />
                       ) : (
-                        <EmptyState icon={<Activity size={48} color="#999" style={{ margin: '0 auto 16px' }} />} message="风险分析数据加载中..." />
+                        <EmptyState
+                          icon={
+                            <Activity size={48} color="#999" style={{ margin: '0 auto 16px' }} />
+                          }
+                          message="风险分析数据加载中..."
+                        />
                       )}
                     </Box>
                   )}
@@ -390,15 +431,18 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                           benchmarkComparison={model.adaptedPerformanceData.benchmarkComparison}
                         />
                       ) : (
-                        <EmptyState icon={<TrendingUp size={48} color="#999" style={{ margin: '0 auto 16px' }} />} message="绩效分解数据加载中..." />
+                        <EmptyState
+                          icon={
+                            <TrendingUp size={48} color="#999" style={{ margin: '0 auto 16px' }} />
+                          }
+                          message="绩效分解数据加载中..."
+                        />
                       )}
                     </Box>
                   )}
 
                   {model.selectedBacktestTab === 'perf_monitor' && (
-                    <Box sx={{ mt: 2 }}>
-                      {renderPerformanceMonitor(currentTask)}
-                    </Box>
+                    <Box sx={{ mt: 2 }}>{renderPerformanceMonitor(currentTask)}</Box>
                   )}
                 </Box>
               </Box>
@@ -427,7 +471,12 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                           <Typography variant="caption" color="text.secondary">
                             模型
                           </Typography>
-                          <Chip label={currentTask.model_id} color="secondary" size="small" sx={{ mt: 0.5 }} />
+                          <Chip
+                            label={currentTask.model_id}
+                            color="secondary"
+                            size="small"
+                            sx={{ mt: 0.5 }}
+                          />
                         </Box>
                         <Box>
                           <Typography variant="caption" color="text.secondary">
@@ -462,7 +511,11 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                   <Divider />
 
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mb: 1, display: 'block' }}
+                    >
                       选择的股票
                     </Typography>
                     <Box
@@ -490,9 +543,11 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                               pb: 1,
                             }}
                           >
-                            {paginateStocks(currentTask.stock_codes, model.selectedStocksPage).map(code => (
-                              <Chip key={code} label={code} size="small" />
-                            ))}
+                            {paginateStocks(currentTask.stock_codes, model.selectedStocksPage).map(
+                              code => (
+                                <Chip key={code} label={code} size="small" />
+                              )
+                            )}
                           </Box>
 
                           {renderStockPagination(currentTask.stock_codes, model)}
@@ -571,10 +626,19 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                       onChange={(_event, newValue) => model.setSelectedPredictionTab(newValue)}
                       aria-label="预测结果展示"
                     >
-                      <Tab label={<TabLabel icon={<LineChart size={16} />} text="价格走势" />} value="chart" />
-                      <Tab label={<TabLabel icon={<BarChart3 size={16} />} text="预测分析" />} value="prediction" />
+                      <Tab
+                        label={<TabLabel icon={<LineChart size={16} />} text="价格走势" />}
+                        value="chart"
+                      />
+                      <Tab
+                        label={<TabLabel icon={<BarChart3 size={16} />} text="预测分析" />}
+                        value="prediction"
+                      />
                       {currentTask.task_type === 'backtest' && (
-                        <Tab label={<TabLabel icon={<Activity size={16} />} text="回测结果" />} value="backtest" />
+                        <Tab
+                          label={<TabLabel icon={<Activity size={16} />} text="回测结果" />}
+                          value="backtest"
+                        />
                       )}
                       <Tab label="数据表格" value="table" />
                     </Tabs>
@@ -599,12 +663,13 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                         />
                       )}
 
-                      {model.selectedPredictionTab === 'backtest' && currentTask.task_type === 'backtest' && (
-                        <BacktestChart
-                          stockCode={model.selectedStock || currentTask.stock_codes?.[0] || ''}
-                          backtestData={model.backtestSummaryData}
-                        />
-                      )}
+                      {model.selectedPredictionTab === 'backtest' &&
+                        currentTask.task_type === 'backtest' && (
+                          <BacktestChart
+                            stockCode={model.selectedStock || currentTask.stock_codes?.[0] || ''}
+                            backtestData={model.backtestSummaryData}
+                          />
+                        )}
 
                       {model.selectedPredictionTab === 'table' && (
                         <TableContainer component={Paper}>
@@ -659,8 +724,7 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                                   </TableCell>
                                   <TableCell>
                                     <Typography variant="caption" color="text.secondary">
-                                      [
-                                      {(prediction.confidence_interval.lower * 100).toFixed(2)}%,{' '}
+                                      [{(prediction.confidence_interval.lower * 100).toFixed(2)}%,{' '}
                                       {(prediction.confidence_interval.upper * 100).toFixed(2)}%]
                                     </Typography>
                                   </TableCell>
@@ -699,8 +763,16 @@ export function TaskDetailContent({ model }: TaskDetailContentProps): React.Reac
                 <CardHeader title="统计信息" />
                 <CardContent>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <StatItem value={currentTask.results.total_stocks} label="总股票数" color="primary.main" />
-                    <StatItem value={currentTask.results.successful_predictions} label="成功预测" color="success.main" />
+                    <StatItem
+                      value={currentTask.results.total_stocks}
+                      label="总股票数"
+                      color="primary.main"
+                    />
+                    <StatItem
+                      value={currentTask.results.successful_predictions}
+                      label="成功预测"
+                      color="success.main"
+                    />
                     <StatItem
                       value={`${((currentTask.results.average_confidence || 0) * 100).toFixed(1)}%`}
                       label="平均置信度"
@@ -777,7 +849,13 @@ function TabLabel({ icon, text }: { icon: React.ReactNode; text: string }): Reac
   );
 }
 
-function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }): React.ReactNode {
+function EmptyState({
+  icon,
+  message,
+}: {
+  icon: React.ReactNode;
+  message: string;
+}): React.ReactNode {
   return (
     <Box sx={{ textAlign: 'center', py: 4 }}>
       {icon}
@@ -788,7 +866,15 @@ function EmptyState({ icon, message }: { icon: React.ReactNode; message: string 
   );
 }
 
-function StatItem({ value, label, color }: { value: React.ReactNode; label: string; color: string }): React.ReactNode {
+function StatItem({
+  value,
+  label,
+  color,
+}: {
+  value: React.ReactNode;
+  label: string;
+  color: string;
+}): React.ReactNode {
   return (
     <Box sx={{ textAlign: 'center' }}>
       <Typography variant="h4" sx={{ fontWeight: 600, color }}>
@@ -807,10 +893,7 @@ function paginateStocks(stockCodes: string[], page: number): string[] {
   return stockCodes.slice(startIndex, startIndex + stocksPerPage);
 }
 
-function renderStockPagination(
-  stockCodes: string[],
-  model: TaskDetailPageModel
-): React.ReactNode {
+function renderStockPagination(stockCodes: string[], model: TaskDetailPageModel): React.ReactNode {
   const stocksPerPage = 12;
   const totalPages = Math.ceil(stockCodes.length / stocksPerPage);
 
@@ -900,7 +983,12 @@ function renderPositionAnalysis(
 
   if (Array.isArray(positionAnalysis)) {
     if (positionAnalysis.length > 0) {
-      return <PositionAnalysis positionAnalysis={positionAnalysis} stockCodes={currentTask.stock_codes || []} />;
+      return (
+        <PositionAnalysis
+          positionAnalysis={positionAnalysis}
+          stockCodes={currentTask.stock_codes || []}
+        />
+      );
     }
     return renderNoDataState('暂无持仓分析数据');
   }
@@ -941,8 +1029,8 @@ function renderPerformanceMonitor(
           当前回测未启用性能监控，或后端尚未写入性能报告。
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          请确认后端创建回测执行器时已开启 enable_performance_profiling，并返回
-          performance_analysis 字段。
+          请确认后端创建回测执行器时已开启 enable_performance_profiling，并返回 performance_analysis
+          字段。
         </Typography>
       </Box>
     );
@@ -1052,7 +1140,9 @@ function renderPerformanceMonitor(
                         <TableCell>{name}</TableCell>
                         <TableCell align="right">{data.call_count || 0}</TableCell>
                         <TableCell align="right">{(data.total_time || 0).toFixed(4)}</TableCell>
-                        <TableCell align="right">{((data.avg_time || 0) * 1000).toFixed(2)}</TableCell>
+                        <TableCell align="right">
+                          {((data.avg_time || 0) * 1000).toFixed(2)}
+                        </TableCell>
                       </TableRow>
                     ))}
                 </TableBody>
@@ -1085,7 +1175,9 @@ function renderPerformanceMonitor(
                       <TableCell align="right">{(data.sequential_time || 0).toFixed(4)}</TableCell>
                       <TableCell align="right">{(data.parallel_time || 0).toFixed(4)}</TableCell>
                       <TableCell align="right">{(data.speedup || 0).toFixed(2)}x</TableCell>
-                      <TableCell align="right">{(data.efficiency_percent || 0).toFixed(1)}</TableCell>
+                      <TableCell align="right">
+                        {(data.efficiency_percent || 0).toFixed(1)}
+                      </TableCell>
                       <TableCell align="right">{data.worker_count || 0}</TableCell>
                     </TableRow>
                   ))}

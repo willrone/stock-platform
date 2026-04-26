@@ -2,7 +2,6 @@
 统一错误处理框架
 """
 
-import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
@@ -93,9 +92,9 @@ class BaseError(Exception):
                 "request_id": self.context.request_id,
                 "additional_data": self.context.additional_data,
             },
-            "original_exception": str(self.original_exception)
-            if self.original_exception
-            else None,
+            "original_exception": (
+                str(self.original_exception) if self.original_exception else None
+            ),
             "recovery_actions": [
                 {
                     "action_type": action.action_type,
@@ -191,7 +190,6 @@ def log_structured_exception(
     return normalized_error
 
 
-
 def log_best_effort_failure(
     message: str,
     *,
@@ -233,7 +231,9 @@ class ErrorRecoveryManager:
         # 默认恢复动作
         return [
             RecoveryAction(
-                action_type="log_and_continue", parameters={}, description="记录错误并继续执行"
+                action_type="log_and_continue",
+                parameters={},
+                description="记录错误并继续执行",
             )
         ]
 
@@ -419,9 +419,9 @@ class ErrorRecoveryManager:
             "total_errors": len(recent_errors),
             "error_counts_by_type": error_counts,
             "error_counts_by_severity": severity_counts,
-            "most_common_error": max(error_counts.items(), key=lambda x: x[1])
-            if error_counts
-            else None,
+            "most_common_error": (
+                max(error_counts.items(), key=lambda x: x[1]) if error_counts else None
+            ),
             "critical_errors": len(
                 [e for e in recent_errors if e.severity == ErrorSeverity.CRITICAL]
             ),

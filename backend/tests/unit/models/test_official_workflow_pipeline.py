@@ -10,7 +10,10 @@ from app.services.qlib.official_workflow import (
     build_official_lightgbm_workflow_config,
     create_official_dataset_adapter,
 )
-from app.services.qlib.training_engine.pipeline import QlibTrainingPipeline, TrainingRequest
+from app.services.qlib.training_engine.pipeline import (
+    QlibTrainingPipeline,
+    TrainingRequest,
+)
 
 
 class _FakeOfficialDataset:
@@ -51,9 +54,14 @@ def test_build_official_dataset_config_can_override_instruments() -> None:
         market=OfficialMarket.CSI300,
     )
 
-    config = build_official_dataset_config(workflow, instruments_override=["600036.SH", "601288.SH"])
+    config = build_official_dataset_config(
+        workflow, instruments_override=["600036.SH", "601288.SH"]
+    )
 
-    assert config["kwargs"]["handler"]["kwargs"]["instruments"] == ["600036_sh", "601288_sh"]
+    assert config["kwargs"]["handler"]["kwargs"]["instruments"] == [
+        "600036_sh",
+        "601288_sh",
+    ]
 
 
 def test_build_official_dataset_config_normalizes_mixed_instrument_codes() -> None:
@@ -81,7 +89,9 @@ def test_create_official_dataset_adapter_counts_segment_lengths() -> None:
     )
     fake_dataset = _FakeOfficialDataset()
 
-    adapter = create_official_dataset_adapter(workflow, dataset_factory=lambda _cfg: fake_dataset)
+    adapter = create_official_dataset_adapter(
+        workflow, dataset_factory=lambda _cfg: fake_dataset
+    )
 
     assert adapter.shape == (20, 360)
     assert adapter.empty is False
@@ -95,8 +105,12 @@ def test_create_official_dataset_adapter_counts_segment_lengths() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pipeline_prepare_dataset_uses_official_replication_path(monkeypatch) -> None:
-    engine = SimpleNamespace(data_provider=SimpleNamespace(prepare_qlib_dataset=AsyncMock()))
+async def test_pipeline_prepare_dataset_uses_official_replication_path(
+    monkeypatch,
+) -> None:
+    engine = SimpleNamespace(
+        data_provider=SimpleNamespace(prepare_qlib_dataset=AsyncMock())
+    )
     pipeline = QlibTrainingPipeline(engine)
     request = TrainingRequest(
         model_id="model-1",
@@ -139,10 +153,13 @@ async def test_pipeline_prepare_dataset_uses_official_replication_path(monkeypat
     monkeypatch.setattr(
         pipeline_module,
         "create_official_dataset_adapter",
-        lambda workflow, stock_codes=None, provider_uri=None: built.update({
-            "provider_uri": provider_uri,
-            "adapter_stock_codes": stock_codes,
-        }) or sentinel,
+        lambda workflow, stock_codes=None, provider_uri=None: built.update(
+            {
+                "provider_uri": provider_uri,
+                "adapter_stock_codes": stock_codes,
+            }
+        )
+        or sentinel,
     )
 
     dataset = await pipeline.prepare_dataset(request)

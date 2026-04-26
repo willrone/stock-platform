@@ -7,7 +7,6 @@
 """
 
 import asyncio
-import json
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -22,11 +21,6 @@ from loguru import logger
 
 # 检测Qlib可用性
 try:
-    import qlib
-    from qlib.config import REG_CN
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
     from qlib.utils import init_instance_by_config
 
     QLIB_AVAILABLE = True
@@ -67,9 +61,8 @@ except Exception as e:
     QLIB_AVAILABLE = False
 
 from ..automl.early_stopping import EarlyStoppingManager, create_default_early_stopping
-from ..data.simple_data_service import SimpleDataService
 from .enhanced_qlib_provider import EnhancedQlibDataProvider
-from .performance_monitor import PerformanceMonitor, get_performance_monitor
+from .performance_monitor import get_performance_monitor
 from .qlib_model_manager import QlibModelManager
 from .training_engine import (
     QlibTrainingOrchestrator,
@@ -108,7 +101,9 @@ class QlibTrainingConfig:
     use_alpha_factors: bool = True
     cache_features: bool = True
     # 特征选择配置
-    selected_features: Optional[List[str]] = None  # 用户选择的特征列表，None表示使用所有特征
+    selected_features: Optional[List[str]] = (
+        None  # 用户选择的特征列表，None表示使用所有特征
+    )
     # 早停策略配置
     enable_early_stopping: bool = True
     early_stopping_monitor: str = "val_loss"
@@ -183,11 +178,16 @@ class QlibTrainingResult:
 
 class OutlierHandler:
     """异常值处理器 - 对收益率标签进行Winsorize处理"""
-    
-    def __init__(self, method: str = "winsorize", lower_percentile: float = 0.01, upper_percentile: float = 0.99):
+
+    def __init__(
+        self,
+        method: str = "winsorize",
+        lower_percentile: float = 0.01,
+        upper_percentile: float = 0.99,
+    ):
         """
         初始化异常值处理器
-        
+
         Args:
             method: 处理方法，'winsorize' 或 'clip'
             lower_percentile: 下分位数（用于Winsorize）
@@ -196,72 +196,74 @@ class OutlierHandler:
         self.method = method
         self.lower_percentile = lower_percentile
         self.upper_percentile = upper_percentile
-    
-    def handle_label_outliers(self, data: pd.DataFrame, label_col: str = "label") -> pd.DataFrame:
+
+    def handle_label_outliers(
+        self, data: pd.DataFrame, label_col: str = "label"
+    ) -> pd.DataFrame:
         """
         处理标签中的异常值
-        
+
         Args:
             data: 数据DataFrame
             label_col: 标签列名
-        
+
         Returns:
             处理后的DataFrame
         """
         if label_col not in data.columns:
             return data
-        
+
         data_processed = data.copy()
         label_values = data_processed[label_col]
-        
+
         # 移除NaN和无穷值
         valid_mask = pd.notna(label_values) & np.isfinite(label_values)
         if not valid_mask.any():
             logger.warning(f"标签列 {label_col} 没有有效值")
             return data_processed
-        
+
         valid_labels = label_values[valid_mask]
-        
+
         if self.method == "winsorize":
             # Winsorize方法：将极端值截断到分位数
             lower_bound = valid_labels.quantile(self.lower_percentile)
             upper_bound = valid_labels.quantile(self.upper_percentile)
-            
+
             # 记录异常值数量
             outliers_lower = (label_values < lower_bound).sum()
             outliers_upper = (label_values > upper_bound).sum()
-            
+
             if outliers_lower > 0 or outliers_upper > 0:
                 logger.info(
                     f"标签异常值处理: 下界={lower_bound:.6f} (异常值={outliers_lower}), "
                     f"上界={upper_bound:.6f} (异常值={outliers_upper})"
                 )
-            
+
             # 截断到分位数
             data_processed[label_col] = label_values.clip(
                 lower=lower_bound, upper=upper_bound
             )
-            
+
         elif self.method == "clip":
             # Clip方法：使用Z-score方法检测异常值
             mean = valid_labels.mean()
             std = valid_labels.std()
-            
+
             if std > 0:
                 z_scores = np.abs((label_values - mean) / std)
                 # 使用3倍标准差作为阈值
                 threshold = 3.0
                 outliers = z_scores > threshold
-                
+
                 if outliers.sum() > 0:
                     logger.info(
                         f"标签异常值处理: 使用Z-score方法，检测到 {outliers.sum()} 个异常值"
                     )
                     # 将异常值截断到阈值
-                    data_processed.loc[outliers, label_col] = np.sign(
-                        label_values[outliers] - mean
-                    ) * threshold * std + mean
-        
+                    data_processed.loc[outliers, label_col] = (
+                        np.sign(label_values[outliers] - mean) * threshold * std + mean
+                    )
+
         # 处理极端价格变化（可能是除权除息）
         # 如果收益率超过50%，标记为可疑
         extreme_mask = np.abs(data_processed[label_col]) > 0.5
@@ -269,25 +271,26 @@ class OutlierHandler:
             logger.warning(
                 f"检测到 {extreme_mask.sum()} 个极端收益率（>50%），可能是除权除息，已处理"
             )
-        
+
         return data_processed
 
 
 class RobustFeatureScaler:
     """鲁棒特征标准化器（时间序列安全）"""
-    
+
     def __init__(self):
         try:
             from sklearn.preprocessing import RobustScaler
+
             self.RobustScaler = RobustScaler
         except ImportError:
             logger.warning("sklearn不可用，特征标准化将使用简单标准化")
             self.RobustScaler = None
-        
+
         self.scalers = {}
         self.fitted = False
         self.feature_cols = None
-    
+
     def fit_transform(
         self, data: pd.DataFrame, feature_cols: List[str]
     ) -> pd.DataFrame:
@@ -295,24 +298,24 @@ class RobustFeatureScaler:
         if self.RobustScaler is None:
             logger.warning("sklearn不可用，跳过特征标准化")
             return data
-        
+
         data_scaled = data.copy()
         self.feature_cols = feature_cols
-        
+
         # 确保数据按时间排序
         if isinstance(data.index, pd.MultiIndex):
             data_scaled = data_scaled.sort_index()
         elif isinstance(data.index, pd.DatetimeIndex):
             data_scaled = data_scaled.sort_index()
-        
+
         for col in feature_cols:
             if col not in data_scaled.columns:
                 continue
-            
+
             # 跳过标签列和非数值列
             if col == "label" or not pd.api.types.is_numeric_dtype(data_scaled[col]):
                 continue
-            
+
             try:
                 scaler = self.RobustScaler()
                 # 只使用历史数据拟合（时间序列安全）
@@ -329,41 +332,41 @@ class RobustFeatureScaler:
             except Exception as e:
                 logger.warning(f"标准化列 {col} 时出错: {e}，跳过该列")
                 continue
-        
+
         self.fitted = True
         logger.info(f"特征标准化完成，标准化了 {len(self.scalers)} 个特征列")
         return data_scaled
-    
+
     def transform(
         self, data: pd.DataFrame, feature_cols: List[str] = None
     ) -> pd.DataFrame:
         """转换新数据"""
         if not self.fitted:
             raise ValueError("Scaler尚未拟合，请先调用fit_transform")
-        
+
         if feature_cols is None:
             feature_cols = self.feature_cols
-        
+
         if feature_cols is None:
             logger.warning("未指定特征列，返回原始数据")
             return data
-        
+
         if self.RobustScaler is None:
             return data
-        
+
         data_scaled = data.copy()
-        
+
         for col in feature_cols:
             if col not in data_scaled.columns or col not in self.scalers:
                 continue
-            
+
             try:
                 col_values = data_scaled[col].values.reshape(-1, 1)
                 data_scaled[col] = self.scalers[col].transform(col_values).flatten()
             except Exception as e:
                 logger.warning(f"转换列 {col} 时出错: {e}，保持原值")
                 continue
-        
+
         return data_scaled
 
 
@@ -470,9 +473,8 @@ class UnifiedQlibTrainingEngine:
                 current_price = processed_data["$close"]
                 if isinstance(processed_data.index, pd.MultiIndex):
                     # 按股票分组，计算未来N天的价格
-                    future_price = (
-                        processed_data.groupby(level=0)["$close"]
-                        .shift(-prediction_horizon)
+                    future_price = processed_data.groupby(level=0)["$close"].shift(
+                        -prediction_horizon
                     )
                 else:
                     # 直接计算未来N天的价格
@@ -485,12 +487,14 @@ class UnifiedQlibTrainingEngine:
                     processed_data["label"] = label_values.fillna(0)
                 else:
                     processed_data["label"] = pd.Series(
-                        label_values.iloc[:, 0].values
-                        if hasattr(label_values, "iloc")
-                        else label_values,
+                        (
+                            label_values.iloc[:, 0].values
+                            if hasattr(label_values, "iloc")
+                            else label_values
+                        ),
                         index=processed_data.index,
                     ).fillna(0)
-                
+
                 logger.debug(
                     f"股票 {stock_code} 标签创建完成，预测周期={prediction_horizon}天，"
                     f"标签范围=[{processed_data['label'].min():.6f}, {processed_data['label'].max():.6f}]"
@@ -545,7 +549,7 @@ class UnifiedQlibTrainingEngine:
             max_workers = min(mp.cpu_count(), 8)
             # 获取prediction_horizon参数
             prediction_horizon = config.prediction_horizon if config else 5
-            
+
             # 临时禁用多进程以避免 pickle 序列化问题
             if False and len(stock_groups) > 1 and max_workers > 1:
                 # 多进程处理
@@ -557,7 +561,10 @@ class UnifiedQlibTrainingEngine:
                     # 提交任务
                     for stock_code, stock_data in stock_groups.items():
                         future = executor.submit(
-                            self._process_stock_data, stock_data, stock_code, prediction_horizon
+                            self._process_stock_data,
+                            stock_data,
+                            stock_code,
+                            prediction_horizon,
                         )
                         futures[future] = stock_code
 
@@ -575,7 +582,9 @@ class UnifiedQlibTrainingEngine:
                 # 单进程处理
                 logger.info("使用单进程处理数据")
                 for stock_code, stock_data in stock_groups.items():
-                    processed_data = self._process_stock_data(stock_data, stock_code, prediction_horizon)
+                    processed_data = self._process_stock_data(
+                        stock_data, stock_code, prediction_horizon
+                    )
                     if not processed_data.empty:
                         processed_stocks.append(processed_data)
                         logger.debug(f"完成股票 {stock_code} 的数据处理")
@@ -606,21 +615,25 @@ class UnifiedQlibTrainingEngine:
             val_data = dataset[dataset.index.isin(val_dates)]
 
         # 异常值处理（在标签创建后、特征标准化前）
-        outlier_handler = OutlierHandler(method="winsorize", lower_percentile=0.01, upper_percentile=0.99)
+        outlier_handler = OutlierHandler(
+            method="winsorize", lower_percentile=0.01, upper_percentile=0.99
+        )
         if "label" in train_data.columns:
             logger.info("开始处理标签异常值")
-            train_data = outlier_handler.handle_label_outliers(train_data, label_col="label")
+            train_data = outlier_handler.handle_label_outliers(
+                train_data, label_col="label"
+            )
             if val_data is not None and "label" in val_data.columns:
-                val_data = outlier_handler.handle_label_outliers(val_data, label_col="label")
+                val_data = outlier_handler.handle_label_outliers(
+                    val_data, label_col="label"
+                )
             logger.info("标签异常值处理完成")
 
         # 特征标准化（时间序列安全）
         feature_scaler = RobustFeatureScaler()
         # 获取特征列（排除标签列）
-        feature_cols = [
-            col for col in train_data.columns if col != "label"
-        ]
-        
+        feature_cols = [col for col in train_data.columns if col != "label"]
+
         if feature_cols:
             logger.info(f"开始特征标准化，特征列数: {len(feature_cols)}")
             # 在训练集上拟合并转换
@@ -674,9 +687,8 @@ class UnifiedQlibTrainingEngine:
                         current_price = data[close_col]
                         if isinstance(data.index, pd.MultiIndex):
                             # 按股票分组，计算未来N天的价格
-                            future_price = (
-                                data.groupby(level=0)[close_col]
-                                .shift(-horizon)
+                            future_price = data.groupby(level=0)[close_col].shift(
+                                -horizon
                             )
                         else:
                             # 直接计算未来N天的价格
@@ -689,9 +701,11 @@ class UnifiedQlibTrainingEngine:
                             data["label"] = label_values.fillna(0)
                         else:
                             data["label"] = pd.Series(
-                                label_values.iloc[:, 0].values
-                                if hasattr(label_values, "iloc")
-                                else label_values,
+                                (
+                                    label_values.iloc[:, 0].values
+                                    if hasattr(label_values, "iloc")
+                                    else label_values
+                                ),
                                 index=data.index,
                             ).fillna(0)
                         logger.info(
@@ -704,9 +718,11 @@ class UnifiedQlibTrainingEngine:
                             data["label"] = last_col
                         else:
                             data["label"] = pd.Series(
-                                last_col.iloc[:, 0].values
-                                if hasattr(last_col, "iloc")
-                                else last_col,
+                                (
+                                    last_col.iloc[:, 0].values
+                                    if hasattr(last_col, "iloc")
+                                    else last_col
+                                ),
                                 index=data.index,
                             )
                         logger.warning(
@@ -800,6 +816,7 @@ class UnifiedQlibTrainingEngine:
                     # 分离特征和标签
                     all_feature_cols = [col for col in data.columns if col != "label"]
                     if config and config.selected_features:
+
                         def map_feature_name(feature_name: str) -> List[str]:
                             """将前端特征名称映射到可能的Qlib特征名称"""
                             base_mapping = {
@@ -819,7 +836,11 @@ class UnifiedQlibTrainingEngine:
                                 "ema": ["EMA", "EMA20", "ema"],
                                 "rsi": ["RSI14", "RSI", "rsi", "rsi_14"],
                                 "macd": ["MACD", "macd"],
-                                "macd_signal": ["MACD_SIGNAL", "macd_signal", "MACD_SIGN"],
+                                "macd_signal": [
+                                    "MACD_SIGNAL",
+                                    "macd_signal",
+                                    "MACD_SIGN",
+                                ],
                                 "macd_histogram": [
                                     "MACD_HIST",
                                     "MACD_HISTOGRAM",
@@ -860,7 +881,11 @@ class UnifiedQlibTrainingEngine:
                             }
 
                             fundamental_mapping = {
-                                "price_change": ["RET1", "price_change", "PRICE_CHANGE"],
+                                "price_change": [
+                                    "RET1",
+                                    "price_change",
+                                    "PRICE_CHANGE",
+                                ],
                                 "price_change_5d": [
                                     "RET5",
                                     "price_change_5d",
@@ -876,7 +901,10 @@ class UnifiedQlibTrainingEngine:
                                     "volume_change",
                                     "VOLUME_CHANGE",
                                 ],
-                                "volume_ma_ratio": ["VOLUME_MA_RATIO", "volume_ma_ratio"],
+                                "volume_ma_ratio": [
+                                    "VOLUME_MA_RATIO",
+                                    "volume_ma_ratio",
+                                ],
                                 "volatility_5d": [
                                     "VOLATILITY5",
                                     "volatility_5d",
@@ -927,10 +955,14 @@ class UnifiedQlibTrainingEngine:
                                 col
                                 for col in config.selected_features
                                 if col
-                                not in [f for f in mapped_features if f in all_feature_cols]
+                                not in [
+                                    f for f in mapped_features if f in all_feature_cols
+                                ]
                             ]
                             if missing_features:
-                                logger.warning(f"以下特征不存在，将被忽略: {missing_features[:10]}")
+                                logger.warning(
+                                    f"以下特征不存在，将被忽略: {missing_features[:10]}"
+                                )
                             logger.info(
                                 f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}"
                             )
@@ -1027,9 +1059,11 @@ class UnifiedQlibTrainingEngine:
                             label_obj = LabelSeries(
                                 label_values_1d,
                                 label_values_2d,
-                                label_series.index
-                                if isinstance(label_series, pd.Series)
-                                else data.index,
+                                (
+                                    label_series.index
+                                    if isinstance(label_series, pd.Series)
+                                    else data.index
+                                ),
                             )
                         else:
                             default_values_1d = np.zeros(len(data))
@@ -1075,13 +1109,20 @@ class UnifiedQlibTrainingEngine:
                             **kwargs,
                         ):
                             super().__init__(*args, **kwargs)
-                            object.__setattr__(self, "_label_series_obj", label_series_obj)
-                            object.__setattr__(self, "_feature_series_obj", feature_series_obj)
+                            object.__setattr__(
+                                self, "_label_series_obj", label_series_obj
+                            )
+                            object.__setattr__(
+                                self, "_feature_series_obj", feature_series_obj
+                            )
 
                         def __getitem__(self, key):
                             if key == "label" and self._label_series_obj is not None:
                                 return self._label_series_obj
-                            if key == "feature" and self._feature_series_obj is not None:
+                            if (
+                                key == "feature"
+                                and self._feature_series_obj is not None
+                            ):
                                 return self._feature_series_obj
                             return super().__getitem__(key)
 
@@ -1154,9 +1195,8 @@ class UnifiedQlibTrainingEngine:
             raise RuntimeError("Qlib不可用，无法训练模型")
 
         # 初始化早停管理器
-        early_stopping_manager = None
         if config.enable_early_stopping:
-            early_stopping_manager = create_default_early_stopping()
+            create_default_early_stopping()
             logger.info("早停策略已启用")
 
         try:
@@ -1211,7 +1251,7 @@ class UnifiedQlibTrainingEngine:
                     sig = inspect.signature(model.fit)
                     fit_params = list(sig.parameters.keys())
                     logger.info(f"模型fit方法参数: {fit_params}")
-                except:
+                except Exception:
                     if hasattr(model.fit, "__code__"):
                         fit_params = list(model.fit.__code__.co_varnames)
                         logger.info(f"模型fit方法参数(通过co_varnames): {fit_params}")
@@ -1220,8 +1260,6 @@ class UnifiedQlibTrainingEngine:
             async def training_progress_callback(
                 epoch, train_loss, val_loss=None, val_metrics=None
             ):
-                nonlocal early_stopped, stopped_epoch, best_epoch, early_stopping_reason
-
                 if progress_callback and model_id:
                     num_iterations = (
                         config.hyperparameters.get("num_iterations")
@@ -1271,7 +1309,10 @@ class UnifiedQlibTrainingEngine:
             fit_kwargs = {}
             if "num_boost_round" in fit_params and num_boost_round is not None:
                 fit_kwargs["num_boost_round"] = num_boost_round
-            if "early_stopping_rounds" in fit_params and early_stopping_rounds is not None:
+            if (
+                "early_stopping_rounds" in fit_params
+                and early_stopping_rounds is not None
+            ):
                 fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
             if "verbose_eval" in fit_params:
                 fit_kwargs["verbose_eval"] = verbose_eval
@@ -1286,8 +1327,12 @@ class UnifiedQlibTrainingEngine:
                 if not evals_result:
                     if hasattr(model, "evals_result_"):
                         evals_result = model.evals_result_
-                    elif hasattr(model, "model") and hasattr(model.model, "best_iteration"):
-                        logger.debug("模型未直接暴露 evals_result，回退到 best_iteration 信息")
+                    elif hasattr(model, "model") and hasattr(
+                        model.model, "best_iteration"
+                    ):
+                        logger.debug(
+                            "模型未直接暴露 evals_result，回退到 best_iteration 信息"
+                        )
 
                 if evals_result:
                     train_metrics = evals_result.get("train", {})
@@ -1307,17 +1352,35 @@ class UnifiedQlibTrainingEngine:
                         max_epochs = max(len(train_losses), len(valid_losses))
                         training_history.clear()
                         for epoch in range(max_epochs):
-                            train_loss = train_losses[epoch] if epoch < len(train_losses) else None
-                            val_loss = valid_losses[epoch] if epoch < len(valid_losses) else None
+                            train_loss = (
+                                train_losses[epoch]
+                                if epoch < len(train_losses)
+                                else None
+                            )
+                            val_loss = (
+                                valid_losses[epoch]
+                                if epoch < len(valid_losses)
+                                else None
+                            )
                             training_history.append(
                                 {
                                     "epoch": int(epoch + 1),
-                                    "train_loss": float(round(train_loss, 4)) if train_loss is not None else None,
-                                    "val_loss": float(round(val_loss, 4)) if val_loss is not None else None,
+                                    "train_loss": (
+                                        float(round(train_loss, 4))
+                                        if train_loss is not None
+                                        else None
+                                    ),
+                                    "val_loss": (
+                                        float(round(val_loss, 4))
+                                        if val_loss is not None
+                                        else None
+                                    ),
                                     "train_accuracy": 0.0,
                                     "val_accuracy": 0.0,
                                     "learning_rate": float(
-                                        config.hyperparameters.get("learning_rate", 0.001)
+                                        config.hyperparameters.get(
+                                            "learning_rate", 0.001
+                                        )
                                     ),
                                 }
                             )
@@ -1326,7 +1389,9 @@ class UnifiedQlibTrainingEngine:
                             f"从官方 evals_result 获取训练历史: {len(training_history)} 轮, metric={preferred_metric}"
                         )
             except Exception as e:
-                logger.debug(f"无法从官方 evals_result 获取训练历史: {e}", exc_info=True)
+                logger.debug(
+                    f"无法从官方 evals_result 获取训练历史: {e}", exc_info=True
+                )
 
             # 读取官方模型的真实 best_iteration / early stopping 结果
             actual_best_iteration = None
@@ -1502,18 +1567,22 @@ class UnifiedQlibTrainingEngine:
         except Exception as e:
             logger.error(f"模型评估失败: {e}", exc_info=True)
             # 返回默认指标
-            return self._get_default_metrics(), self._get_default_metrics(), {
-                "ic": None,
-                "icir": None,
-                "rank_ic": None,
-                "rank_icir": None,
-                "long_short_ann_return": None,
-                "long_short_ann_sharpe": None,
-                "long_avg_ann_return": None,
-                "long_avg_ann_sharpe": None,
-                "sample_count": 0,
-                "analysis_scope": "validation",
-            }
+            return (
+                self._get_default_metrics(),
+                self._get_default_metrics(),
+                {
+                    "ic": None,
+                    "icir": None,
+                    "rank_ic": None,
+                    "rank_icir": None,
+                    "long_short_ann_return": None,
+                    "long_short_ann_sharpe": None,
+                    "long_avg_ann_return": None,
+                    "long_avg_ann_sharpe": None,
+                    "sample_count": 0,
+                    "analysis_scope": "validation",
+                },
+            )
 
     def _extract_evaluation_inputs(
         self,
@@ -1531,15 +1600,16 @@ class UnifiedQlibTrainingEngine:
             segment = (
                 "train"
                 if "训练" in dataset_name
-                else "valid"
-                if "验证" in dataset_name
-                else "train"
+                else "valid" if "验证" in dataset_name else "train"
             )
 
             if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
                 if hasattr(dataset, "segments") and segment in dataset.segments:
                     segment_data = dataset.segments[segment]
-                    if isinstance(segment_data, pd.DataFrame) and "label" in segment_data.columns:
+                    if (
+                        isinstance(segment_data, pd.DataFrame)
+                        and "label" in segment_data.columns
+                    ):
                         label_series = segment_data["label"]
                         if hasattr(label_series, "_series"):
                             y_true = label_series._series.values
@@ -1553,14 +1623,21 @@ class UnifiedQlibTrainingEngine:
                 elif hasattr(dataset, "prepare"):
                     try:
                         prepared = dataset.prepare(segment, col_set=["label"])
-                        if isinstance(prepared, pd.DataFrame) and "label" in prepared.columns:
+                        if (
+                            isinstance(prepared, pd.DataFrame)
+                            and "label" in prepared.columns
+                        ):
                             label_col = prepared["label"]
                             if hasattr(label_col, "_series"):
                                 y_true = label_col._series.values
                                 y_index = label_col._series.index
                             elif hasattr(label_col, "values"):
                                 label_values = label_col.values
-                                y_true = label_values.flatten() if getattr(label_values, "ndim", 1) == 2 else label_values
+                                y_true = (
+                                    label_values.flatten()
+                                    if getattr(label_values, "ndim", 1) == 2
+                                    else label_values
+                                )
                                 y_index = label_col.index
                             else:
                                 y_true = np.array(label_col).flatten()
@@ -1630,7 +1707,9 @@ class UnifiedQlibTrainingEngine:
         dataset_name: str,
     ) -> Dict[str, Any]:
         """按 Qlib 官方思路计算信号质量指标。"""
-        evaluation_inputs = self._extract_evaluation_inputs(dataset, predictions, dataset_name)
+        evaluation_inputs = self._extract_evaluation_inputs(
+            dataset, predictions, dataset_name
+        )
         default_result = {
             "ic": None,
             "icir": None,
@@ -1658,7 +1737,11 @@ class UnifiedQlibTrainingEngine:
             df.index = y_index
 
         if isinstance(df.index, pd.MultiIndex):
-            date_level = "datetime" if "datetime" in (df.index.names or []) else df.index.names[-1]
+            date_level = (
+                "datetime"
+                if "datetime" in (df.index.names or [])
+                else df.index.names[-1]
+            )
             grouped = df.groupby(level=date_level, group_keys=False)
         else:
             grouped = [("all", df)]
@@ -1751,7 +1834,9 @@ class UnifiedQlibTrainingEngine:
                 dataset, predictions, dataset_name
             )
             if evaluation_inputs is None:
-                logger.warning(f"数据集 {dataset_name} 中没有有效评估输入，使用默认指标")
+                logger.warning(
+                    f"数据集 {dataset_name} 中没有有效评估输入，使用默认指标"
+                )
                 return self._get_default_metrics()
 
             y_true = evaluation_inputs["y_true"]
@@ -2024,14 +2109,16 @@ class UnifiedQlibTrainingEngine:
             return {
                 "target_correlations": target_correlations,
                 "high_correlation_pairs": high_corr_pairs,
-                "avg_target_correlation": float(
-                    np.mean(list(target_correlations.values()))
-                )
-                if target_correlations
-                else 0.0,
-                "max_target_correlation": float(max(target_correlations.values()))
-                if target_correlations
-                else 0.0,
+                "avg_target_correlation": (
+                    float(np.mean(list(target_correlations.values())))
+                    if target_correlations
+                    else 0.0
+                ),
+                "max_target_correlation": (
+                    float(max(target_correlations.values()))
+                    if target_correlations
+                    else 0.0
+                ),
             }
 
         except Exception as e:
@@ -2308,7 +2395,9 @@ class UnifiedQlibTrainingEngine:
 
             aligned = aligned[normalized_feature_names]
             if missing:
-                logger.info("预测特征缺失补齐: count={}, sample={}", len(missing), missing[:5])
+                logger.info(
+                    "预测特征缺失补齐: count={}, sample={}", len(missing), missing[:5]
+                )
             return aligned
 
         except Exception as e:

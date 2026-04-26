@@ -150,8 +150,7 @@ export class DataService {
 
       dataLogger.debug(`[DataService] 解析后的数据数组长度: ${dataArray.length}`, {
         responseType: typeof response,
-        responseKeys:
-          response && !Array.isArray(response) ? Object.keys(response) : [],
+        responseKeys: response && !Array.isArray(response) ? Object.keys(response) : [],
         hasData: !Array.isArray(response) && !!response?.data,
         dataIsArray: !Array.isArray(response) && Array.isArray(response?.data),
       });
@@ -231,9 +230,7 @@ export class DataService {
   /**
    * 获取热门股票
    */
-  static async getPopularStocks(): Promise<
-    PopularStock[]
-  > {
+  static async getPopularStocks(): Promise<PopularStock[]> {
     try {
       dataLogger.debug('[DataService] 开始调用 /stocks/popular API...');
       const response = await apiRequest.get<PopularStocksResponse | PopularStock[]>(
@@ -306,9 +303,7 @@ export class DataService {
   /**
    * 获取可用策略列表（用于策略信号页）
    */
-  static async getAvailableStrategies(): Promise<
-    StrategyDefinition[]
-  > {
+  static async getAvailableStrategies(): Promise<StrategyDefinition[]> {
     const resp = await apiRequest.get<StrategyDefinition[] | null>('/backtest/strategies');
     // 后端返回的是 { key, name, ... } 数组
     return Array.isArray(resp) ? resp : resp ?? [];
@@ -446,9 +441,9 @@ export class DataService {
     const url = `/models/available-features${
       queryParams.toString() ? '?' + queryParams.toString() : ''
     }`;
-    const response = await apiRequest.get<AvailableFeaturesResponse | { data: AvailableFeaturesResponse }>(
-      url
-    );
+    const response = await apiRequest.get<
+      AvailableFeaturesResponse | { data: AvailableFeaturesResponse }
+    >(url);
 
     // 处理响应格式：可能是 { data: {...} } 或直接是 payload
     if ('data' in response && response.data) {
