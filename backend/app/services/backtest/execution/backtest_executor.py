@@ -768,15 +768,15 @@ class BacktestExecutor:
             min_item = min(_stock_times, key=lambda x: x[1])
             logger.info(
                 f"📊 策略 {strategy.name} 预计算性能统计: "
-                f"总计={total_time:.2f}s, 平均={avg_time*1000:.1f}ms/股, "
-                f"最慢={max_item[0]}({max_item[1]*1000:.1f}ms, {max_item[2]}行), "
-                f"最快={min_item[0]}({min_item[1]*1000:.1f}ms, {min_item[2]}行), "
+                f"总计={total_time:.2f}s, 平均={avg_time * 1000:.1f}ms/股, "
+                f"最慢={max_item[0]}({max_item[1] * 1000:.1f}ms, {max_item[2]}行), "
+                f"最快={min_item[0]}({min_item[1] * 1000:.1f}ms, {min_item[2]}行), "
                 f"股票数={len(_stock_times)}"
             )
             # 记录 top5 最慢的股票
             sorted_times = sorted(_stock_times, key=lambda x: x[1], reverse=True)[:5]
             for code, t, rows in sorted_times:
-                logger.info(f"  🐢 慢股: {code} = {t*1000:.1f}ms ({rows}行)")
+                logger.info(f"  🐢 慢股: {code} = {t * 1000:.1f}ms ({rows}行)")
 
         if success_count > 0:
             logger.info(
@@ -1240,7 +1240,7 @@ class BacktestExecutor:
         _batch_signals_data: List[dict] = []  # 收集所有信号记录
         _batch_executed_signals: List[dict] = []  # 收集已执行的信号
         _batch_unexecuted_signals: List[dict] = []  # 收集未执行的信号
-        _current_backtest_id: str | None = None  # 缓存 backtest_id
+        _current_backtest_id: Optional[str] = None  # 缓存 backtest_id
         _BATCH_FLUSH_THRESHOLD = 5000  # 流式写入阈值（从1000提升，减少flush次数）
 
         # 流式写入辅助函数：当积累足够数据时写入数据库
@@ -1248,7 +1248,7 @@ class BacktestExecutor:
             signals_data: List[dict],
             executed_signals: List[dict],
             unexecuted_signals: List[dict],
-            backtest_id: str | None,
+            backtest_id: Optional[str],
             clear_after: bool = True,
         ) -> None:
             """流式写入批量数据到数据库
@@ -2267,7 +2267,7 @@ class BacktestExecutor:
                             )
                             session.commit()
                             logger.info(
-                                f"进度更新: {_progress_pct:.0f}%, days={i+1}/{len(trading_dates)}, "
+                                f"进度更新: {_progress_pct:.0f}%, days={i + 1}/{len(trading_dates)}, "
                                 f"signals={total_signals}, trades={executed_trades}"
                             )
                         except Exception as inner_error:
@@ -2487,8 +2487,8 @@ class BacktestExecutor:
                     f"to_sell={len(to_sell)} to_buy={len(to_buy)}"
                 )
                 logger.info(
-                    f"[topk_buffer] topk_list(head)={topk_list[:min(5,len(topk_list))]} "
-                    f"holdings(head)={holdings[:min(5,len(holdings))]}"
+                    f"[topk_buffer] topk_list(head)={topk_list[:min(5, len(topk_list))]} "
+                    f"holdings(head)={holdings[:min(5, len(holdings))]}"
                 )
             except Exception:
                 pass

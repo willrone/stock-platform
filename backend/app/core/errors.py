@@ -28,14 +28,13 @@ class AppError(Exception):
         details: Optional[Dict[str, Any]] = None,
         retryable: bool = False,
     ):
+        super().__init__(message, error_type, error_code, details, retryable)
         self.message = message
         self.error_type = error_type
         self.error_code = error_code or self._generate_error_code(error_type)
         self.details = details or {}
         self.retryable = retryable
         self.timestamp = datetime.now()
-
-        super().__init__(self.message)
 
     def _generate_error_code(self, error_type: ErrorType) -> str:
         """生成错误码"""

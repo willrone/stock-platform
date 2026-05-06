@@ -3,7 +3,7 @@
 用于存储可视化所需的扩展数据
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -22,7 +22,7 @@ from app.core.database import Base
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for DB compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class BacktestDetailedResult(Base):

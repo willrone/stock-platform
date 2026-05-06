@@ -4,7 +4,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -15,7 +15,7 @@ from app.core.database import Base
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for DB compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TaskType(Enum):

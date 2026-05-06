@@ -3,23 +3,44 @@ SFTP同步服务
 用于从远端服务器通过SFTP下载股票parquet数据
 """
 
+import asyncio
+import logging
 import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from importlib import import_module
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import pandas as pd
 import paramiko
-from loguru import logger
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+try:
+    from loguru import logger as _logger
+except ImportError:
+    _logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 
-from ..events.data_sync_events import get_data_sync_event_manager
-
 # 绑定日志类型为数据同步
-logger = logger.bind(log_type="data_sync")
+logger = _logger.bind(log_type="data_sync") if hasattr(_logger, "bind") else _logger
+
+
+def _get_data_sync_event_manager():
+    """延迟加载事件管理器，不吞掉内部导入错误。"""
+    events_module = import_module("..events.data_sync_events", package=__package__)
+    return events_module.get_data_sync_event_manager()
+
+
+def _require_pandas() -> None:
+    """在实际读取 parquet 前检查 pandas 可用性。"""
+    if pd is None:
+        raise ImportError("SFTP 股票列表读取依赖 pandas，请先安装 pandas。")
 
 
 @dataclass
@@ -99,7 +120,7 @@ class SFTPSyncService:
         self.local_data_dir.mkdir(parents=True, exist_ok=True)
 
         # 获取事件管理器
-        self.event_manager = get_data_sync_event_manager()
+        self.event_manager = _get_data_sync_event_manager()
 
         # 缓存远端文件列表，避免重复查询
         self._remote_files_cache: Optional[Dict[str, str]] = (
@@ -197,6 +218,7 @@ class SFTPSyncService:
 
             # 读取parquet文件获取股票列表
             logger.debug("正在读取parquet文件...")
+            _require_pandas()
             # 尝试使用 pyarrow 引擎，如果失败则使用 fastparquet
             try:
                 df = pd.read_parquet(temp_file, engine="pyarrow")
@@ -481,6 +503,162 @@ class SFTPSyncService:
         # 所有重试都失败
         return False, 0, last_error or "未知错误"
 
+    def _log_sync_event_task_result(self, task, failure_message: str) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            logger.warning(f"{failure_message}: 任务已取消")
+        except Exception as error:
+            logger.warning(f"{failure_message}: {error}")
+
+    def _emit_sync_event(self, coro, failure_message: str) -> None:
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is not None:
+            try:
+                task = running_loop.create_task(coro)
+                task.add_done_callback(
+                    lambda completed_task: self._log_sync_event_task_result(
+                        completed_task,
+                        failure_message,
+                    )
+                )
+            except Exception as error:
+                coro.close()
+                logger.warning(f"{failure_message}: {error}")
+            return
+
+        try:
+            asyncio.run(coro)
+        except Exception as error:
+            logger.warning(f"{failure_message}: {error}")
+
+    def _get_target_stock_codes(self, stock_codes: Optional[List[str]]) -> List[str]:
+        if stock_codes is None:
+            logger.info("股票代码列表为空，从远端获取股票列表...")
+            return self.get_remote_stock_list()
+
+        logger.info(f"使用提供的股票代码列表，共 {len(stock_codes)} 只股票")
+        return stock_codes
+
+    def _partition_stock_codes(
+        self, stock_codes: List[str], remote_files_cache: Dict[str, str]
+    ) -> Tuple[List[str], List[str]]:
+        available_stock_codes = [
+            code for code in stock_codes if code in remote_files_cache
+        ]
+        missing_stock_codes = [
+            code for code in stock_codes if code not in remote_files_cache
+        ]
+        return available_stock_codes, missing_stock_codes
+
+    def _sync_stock_with_reconnect(
+        self,
+        stock_code: str,
+        ssh: paramiko.SSHClient,
+        sftp: paramiko.SFTPClient,
+    ) -> Tuple[bool, int, str, paramiko.SSHClient, paramiko.SFTPClient]:
+        success, file_size, error_msg = self.sync_stock_file(stock_code, sftp)
+        if success or "连接" not in error_msg.lower():
+            return success, file_size, error_msg, ssh, sftp
+
+        logger.warning(f"[{stock_code}] 检测到连接问题，尝试重新连接...")
+        try:
+            self._disconnect_sftp(ssh, sftp)
+            ssh, sftp = self._connect_sftp()
+            logger.info(f"[{stock_code}] 重新连接成功，重试同步...")
+            success, file_size, error_msg = self.sync_stock_file(stock_code, sftp)
+        except Exception as reconnect_error:
+            logger.error(f"[{stock_code}] 重新连接失败: {reconnect_error}")
+            error_msg = f"重新连接失败: {reconnect_error}"
+
+        return success, file_size, error_msg, ssh, sftp
+
+    def _refresh_connection_if_needed(
+        self,
+        index: int,
+        ssh: paramiko.SSHClient,
+        sftp: paramiko.SFTPClient,
+    ) -> Tuple[paramiko.SSHClient, paramiko.SFTPClient]:
+        if index % 100 != 0 or index <= 0:
+            return ssh, sftp
+
+        try:
+            sftp.stat(".")
+        except Exception:
+            logger.warning("检测到SFTP连接可能断开，尝试重新连接...")
+            try:
+                self._disconnect_sftp(ssh, sftp)
+                ssh, sftp = self._connect_sftp()
+                logger.info("SFTP连接已恢复")
+            except Exception as reconnect_error:
+                logger.error(f"重新连接失败: {reconnect_error}")
+
+        return ssh, sftp
+
+    def _log_sync_progress(
+        self,
+        index: int,
+        total_files: int,
+        sync_start_time: datetime,
+        synced_files: int,
+        failed_files: List[str],
+    ) -> None:
+        if index % 10 != 0:
+            return
+
+        elapsed = (datetime.now() - sync_start_time).total_seconds()
+        avg_time = elapsed / index if index > 0 else 0
+        remaining = (total_files - index) * avg_time if avg_time > 0 else 0
+        success_rate = (synced_files / index * 100) if index > 0 else 0
+        logger.info(
+            f"同步进度: {index}/{total_files} "
+            f"({synced_files} 成功, {len(failed_files)} 失败, 成功率: "
+            f"{success_rate:.1f}%) | 已耗时: {elapsed:.1f}秒 | "
+            f"预计剩余: {remaining:.1f}秒"
+        )
+
+    def _build_sync_message(
+        self,
+        synced_files: int,
+        total_files: int,
+        total_original_files: int,
+        available_stock_codes: List[str],
+        failed_files: List[str],
+        missing_stock_codes: List[str],
+        total_duration: float,
+    ) -> str:
+        if total_original_files > 0:
+            original_success_rate = synced_files / total_original_files * 100
+            available_success_rate = (
+                (synced_files / len(available_stock_codes) * 100)
+                if available_stock_codes
+                else 0
+            )
+            message = f"同步完成: {synced_files}/{total_original_files} 成功"
+            message += (
+                f" (相对于原始列表: {original_success_rate:.1f}%, "
+                f"相对于可用文件: {available_success_rate:.1f}%)"
+            )
+        else:
+            success_rate = (synced_files / total_files * 100) if total_files > 0 else 0
+            message = (
+                f"同步完成: {synced_files}/{total_files} 成功 "
+                f"(成功率: {success_rate:.1f}%)"
+            )
+
+        if failed_files:
+            message += f", {len(failed_files)} 失败"
+
+        if missing_stock_codes:
+            message += f", {len(missing_stock_codes)} 个文件在远端不存在（已跳过）"
+
+        message += f", 总耗时: {total_duration:.1f}秒"
+        return message
+
     def sync_all_stocks(self, stock_codes: Optional[List[str]] = None) -> SyncResult:
         """
         同步所有股票数据
@@ -491,8 +669,6 @@ class SFTPSyncService:
         Returns:
             同步结果
         """
-        import asyncio
-
         sync_start_time = datetime.now()
         ssh = None
         sftp = None
@@ -516,12 +692,7 @@ class SFTPSyncService:
                 f"远端文件缓存构建完成，找到 {len(remote_files_cache)} 个可用的股票文件"
             )
 
-            # 获取股票列表
-            if stock_codes is None:
-                logger.info("股票代码列表为空，从远端获取股票列表...")
-                stock_codes = self.get_remote_stock_list()
-            else:
-                logger.info(f"使用提供的股票代码列表，共 {len(stock_codes)} 只股票")
+            stock_codes = self._get_target_stock_codes(stock_codes)
 
             if not stock_codes:
                 logger.warning("未找到要同步的股票")
@@ -534,13 +705,9 @@ class SFTPSyncService:
                     message="未找到要同步的股票",
                 )
 
-            # 过滤出远端实际存在的股票代码
-            available_stock_codes = [
-                code for code in stock_codes if code in remote_files_cache
-            ]
-            missing_stock_codes = [
-                code for code in stock_codes if code not in remote_files_cache
-            ]
+            available_stock_codes, missing_stock_codes = self._partition_stock_codes(
+                stock_codes, remote_files_cache
+            )
 
             if missing_stock_codes:
                 logger.info(
@@ -572,11 +739,8 @@ class SFTPSyncService:
 
             # 同步每个股票文件
             total_files = len(stock_codes)
-            # 保存变量到外层作用域，以便在finally块中使用
-            sync_available_stock_codes = available_stock_codes
-            sync_missing_stock_codes = missing_stock_codes
             synced_files = 0
-            failed_files = []
+            failed_files: List[str] = []
             total_size = 0
 
             logger.info(f"开始同步 {total_files} 只股票的数据...")
@@ -584,46 +748,24 @@ class SFTPSyncService:
 
             for i, stock_code in enumerate(stock_codes, 1):
                 try:
-                    # 发出同步开始事件
-                    try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(
-                            self.event_manager.emit_sync_started(
-                                stock_code=stock_code,
-                                date_range=(sync_start_time, datetime.now()),
-                                sync_type="sftp_sync",
-                                metadata={"batch_index": i, "total_files": total_files},
-                            )
-                        )
-                        loop.close()
-                    except Exception as e:
-                        logger.warning(f"发出同步开始事件失败 {stock_code}: {e}")
-
-                    file_start_time = datetime.now()
-                    success, file_size, error_msg = self.sync_stock_file(
-                        stock_code, sftp
+                    self._emit_sync_event(
+                        self.event_manager.emit_sync_started(
+                            stock_code=stock_code,
+                            date_range=(sync_start_time, datetime.now()),
+                            sync_type="sftp_sync",
+                            metadata={"batch_index": i, "total_files": total_files},
+                        ),
+                        f"发出同步开始事件失败 {stock_code}",
                     )
 
-                    # 如果连接错误，尝试重新连接
-                    if not success and "连接" in error_msg.lower():
-                        logger.warning(
-                            f"[{stock_code}] 检测到连接问题，尝试重新连接..."
+                    file_start_time = datetime.now()
+                    success, file_size, error_msg, ssh, sftp = (
+                        self._sync_stock_with_reconnect(
+                            stock_code,
+                            ssh,
+                            sftp,
                         )
-                        try:
-                            self._disconnect_sftp(ssh, sftp)
-                            ssh, sftp = self._connect_sftp()
-                            logger.info(f"[{stock_code}] 重新连接成功，重试同步...")
-                            # 重试一次
-                            success, file_size, error_msg = self.sync_stock_file(
-                                stock_code, sftp
-                            )
-                        except Exception as reconnect_error:
-                            logger.error(
-                                f"[{stock_code}] 重新连接失败: {reconnect_error}"
-                            )
-                            error_msg = f"重新连接失败: {reconnect_error}"
-
+                    )
                     file_duration = (datetime.now() - file_start_time).total_seconds()
 
                     if success:
@@ -633,74 +775,48 @@ class SFTPSyncService:
                             f"[{i}/{total_files}] {stock_code}: 成功, 大小: {file_size} 字节, 耗时: {file_duration:.2f}秒"
                         )
 
-                        # 发出同步完成事件
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            loop.run_until_complete(
-                                self.event_manager.emit_sync_completed(
-                                    stock_code=stock_code,
-                                    date_range=(file_start_time, datetime.now()),
-                                    sync_type="sftp_sync",
-                                    metadata={
-                                        "file_size": file_size,
-                                        "duration_seconds": file_duration,
-                                        "batch_index": i,
-                                        "total_files": total_files,
-                                    },
-                                )
-                            )
-                            loop.close()
-                        except Exception as e:
-                            logger.warning(f"发出同步完成事件失败 {stock_code}: {e}")
+                        self._emit_sync_event(
+                            self.event_manager.emit_sync_completed(
+                                stock_code=stock_code,
+                                date_range=(file_start_time, datetime.now()),
+                                sync_type="sftp_sync",
+                                metadata={
+                                    "file_size": file_size,
+                                    "duration_seconds": file_duration,
+                                    "batch_index": i,
+                                    "total_files": total_files,
+                                },
+                            ),
+                            f"发出同步完成事件失败 {stock_code}",
+                        )
                     else:
                         failed_files.append(stock_code)
                         logger.warning(
                             f"[{i}/{total_files}] {stock_code}: 失败 - {error_msg}"
                         )
 
-                        # 发出同步失败事件
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            loop.run_until_complete(
-                                self.event_manager.emit_sync_failed(
-                                    stock_code=stock_code,
-                                    date_range=(file_start_time, datetime.now()),
-                                    sync_type="sftp_sync",
-                                    error_message=error_msg or "文件同步失败",
-                                    metadata={
-                                        "batch_index": i,
-                                        "total_files": total_files,
-                                    },
-                                )
-                            )
-                            loop.close()
-                        except Exception as e:
-                            logger.warning(f"发出同步失败事件失败 {stock_code}: {e}")
-
-                    # 每100个文件检查一次连接健康，每10个文件记录一次进度
-                    if i % 100 == 0 and i > 0:
-                        try:
-                            sftp.stat(".")
-                        except Exception:
-                            logger.warning("检测到SFTP连接可能断开，尝试重新连接...")
-                            try:
-                                self._disconnect_sftp(ssh, sftp)
-                                ssh, sftp = self._connect_sftp()
-                                logger.info("SFTP连接已恢复")
-                            except Exception as reconnect_error:
-                                logger.error(f"重新连接失败: {reconnect_error}")
-
-                    if i % 10 == 0:
-                        elapsed = (datetime.now() - sync_start_time).total_seconds()
-                        avg_time = elapsed / i if i > 0 else 0
-                        remaining = (total_files - i) * avg_time if avg_time > 0 else 0
-                        success_rate = (synced_files / i * 100) if i > 0 else 0
-                        logger.info(
-                            f"同步进度: {i}/{total_files} ({synced_files} 成功, {len(failed_files)} 失败, 成功率: {success_rate:.1f}%) | "
-                            f"已耗时: {elapsed:.1f}秒 | 预计剩余: {remaining:.1f}秒"
+                        self._emit_sync_event(
+                            self.event_manager.emit_sync_failed(
+                                stock_code=stock_code,
+                                date_range=(file_start_time, datetime.now()),
+                                sync_type="sftp_sync",
+                                error_message=error_msg or "文件同步失败",
+                                metadata={
+                                    "batch_index": i,
+                                    "total_files": total_files,
+                                },
+                            ),
+                            f"发出同步失败事件失败 {stock_code}",
                         )
+
+                    ssh, sftp = self._refresh_connection_if_needed(i, ssh, sftp)
+                    self._log_sync_progress(
+                        i,
+                        total_files,
+                        sync_start_time,
+                        synced_files,
+                        failed_files,
+                    )
 
                 except Exception as e:
                     logger.error(f"同步股票 {stock_code} 时出错: {e}", exc_info=True)
@@ -709,30 +825,17 @@ class SFTPSyncService:
             total_duration = (datetime.now() - sync_start_time).total_seconds()
             success = synced_files > 0
 
-            # 计算成功率
-            if "total_original_files" in locals() and total_original_files > 0:
-                # 如果有原始文件总数，计算相对于原始列表的成功率
-                original_success_rate = (
-                    (synced_files / total_original_files * 100)
-                    if total_original_files > 0
-                    else 0
-                )
-                # 计算相对于可用文件的成功率
-                available_success_rate = (
-                    (synced_files / len(sync_available_stock_codes) * 100)
-                    if sync_available_stock_codes
-                    else 0
-                )
-                message = f"同步完成: {synced_files}/{total_original_files} 成功"
-                message += f" (相对于原始列表: {original_success_rate:.1f}%, 相对于可用文件: {available_success_rate:.1f}%)"
-            else:
-                success_rate = (
-                    (synced_files / total_files * 100) if total_files > 0 else 0
-                )
-                message = f"同步完成: {synced_files}/{total_files} 成功 (成功率: {success_rate:.1f}%)"
+            message = self._build_sync_message(
+                synced_files=synced_files,
+                total_files=total_files,
+                total_original_files=total_original_files,
+                available_stock_codes=available_stock_codes,
+                failed_files=failed_files,
+                missing_stock_codes=missing_stock_codes,
+                total_duration=total_duration,
+            )
 
             if failed_files:
-                message += f", {len(failed_files)} 失败"
                 # 如果失败文件较多，只记录前20个
                 if len(failed_files) > 20:
                     logger.warning(f"失败文件列表（前20个）: {failed_files[:20]}")
@@ -740,32 +843,28 @@ class SFTPSyncService:
                 else:
                     logger.warning(f"失败文件列表: {failed_files}")
 
-            if "sync_missing_stock_codes" in locals() and sync_missing_stock_codes:
-                message += (
-                    f", {len(sync_missing_stock_codes)} 个文件在远端不存在（已跳过）"
-                )
-                logger.info(f"远端不存在的文件数量: {len(sync_missing_stock_codes)}")
-
-            message += f", 总耗时: {total_duration:.1f}秒"
+            if missing_stock_codes:
+                logger.info(f"远端不存在的文件数量: {len(missing_stock_codes)}")
 
             logger.info("=" * 60)
             logger.info(f"同步任务完成: {message}")
-            if "total_original_files" in locals() and total_original_files > 0:
+            if total_original_files > 0:
                 logger.info(
-                    f"原始股票列表: {total_original_files} 个, 远端可用文件: {len(sync_available_stock_codes)} 个"
+                    f"原始股票列表: {total_original_files} 个, 远端可用文件: "
+                    f"{len(available_stock_codes)} 个"
                 )
             logger.info(
                 f"实际同步文件数: {total_files}, 成功: {synced_files}, 失败: {len(failed_files)}"
             )
-            logger.info(f"总数据大小: {total_size / (1024*1024):.2f} MB")
+            logger.info(f"总数据大小: {total_size / (1024 * 1024):.2f} MB")
             logger.info(f"总耗时: {total_duration:.1f}秒")
             if synced_files > 0:
                 logger.info(f"平均速度: {synced_files / total_duration:.2f} 文件/秒")
             if failed_files:
                 logger.warning(f"失败的股票代码（前10个）: {failed_files[:10]}")
-            if "sync_missing_stock_codes" in locals() and sync_missing_stock_codes:
+            if missing_stock_codes:
                 logger.info(
-                    f"远端不存在的股票代码示例（前10个）: {sync_missing_stock_codes[:10]}"
+                    f"远端不存在的股票代码示例（前10个）: {missing_stock_codes[:10]}"
                 )
             logger.info("=" * 60)
 

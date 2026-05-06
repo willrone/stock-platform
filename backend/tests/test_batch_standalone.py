@@ -255,9 +255,9 @@ def test_performance():
 
     print(f"\n当前测试: {stock_count} 只股票 × {days} 天")
     print("\n推算 500 只股票:")
-    print(f"  批量模式: {estimated_batch:.2f}s = {estimated_batch/60:.2f} 分钟")
+    print(f"  批量模式: {estimated_batch:.2f}s = {estimated_batch / 60:.2f} 分钟")
     print(
-        f"  传统模式: {estimated_traditional:.2f}s = {estimated_traditional/60:.2f} 分钟"
+        f"  传统模式: {estimated_traditional:.2f}s = {estimated_traditional / 60:.2f} 分钟"
     )
 
     target_time = 180  # 3 分钟
@@ -266,7 +266,7 @@ def test_performance():
         print(f"   剩余时间预算: {target_time - estimated_batch:.2f}s")
     else:
         needed_speedup = estimated_batch / target_time
-        print(f"\n⚠️  批量模式预计需要 {estimated_batch/60:.2f} 分钟")
+        print(f"\n⚠️  批量模式预计需要 {estimated_batch / 60:.2f} 分钟")
         print(f"   还需要 {needed_speedup:.2f}x 加速才能达到 3 分钟目标")
 
     # 7. 详细性能分析

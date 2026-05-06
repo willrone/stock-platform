@@ -47,7 +47,21 @@ count = True
 per-file-ignores =
     */__init__.py:F401
     app/api/v1/*.py:B008
+    app/api/v1/data.py:B008,C901
+    app/api/v1/models.py:B008,C901
+    app/api/v1/tasks.py:B008,C901
+    app/core/error_handler.py:B042
+    app/core/errors.py:B042
+    app/services/backtest/execution/backtest_executor.py:C901
+    app/services/backtest/execution/batch_signal_generator.py:C901
+    app/services/backtest/execution/multiprocess_backtest*.py:C901
+    app/services/backtest/execution/multiprocess_backtest.py:C901
+    app/services/backtest/optimization/portfolio_hyperparameter_optimizer.py:C901
+    app/services/backtest/optimization/strategy_hyperparameter_optimizer.py:C901
+    app/services/prediction/risk_assessment.py:C901
+    app/services/prediction/technical_indicators.py:C901
     app/services/models/model_training.py:E402
-    app/services/qlib/enhanced_qlib_provider.py:E402
+    app/services/qlib/enhanced_qlib_provider.py:E402,C901
+    app/services/qlib/unified_qlib_training_engine.py:C901
     app/services/qlib/test_alpha158_expression_engine.py:E402
     tests/*.py:E402

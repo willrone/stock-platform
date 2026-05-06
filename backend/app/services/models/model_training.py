@@ -90,6 +90,7 @@ except ImportError:
     def handle_async_exception(func):
         return func
 
+
 # 导入其他依赖
 from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
@@ -843,12 +844,12 @@ class ModelTrainingService:
                         patience_counter += 1
 
                     if patience_counter >= config.early_stopping_patience:
-                        logger.info(f"早停触发，在第 {epoch+1} 轮停止训练")
+                        logger.info(f"早停触发，在第 {epoch + 1} 轮停止训练")
                         break
 
                 if (epoch + 1) % 10 == 0:
                     logger.info(
-                        "Epoch {epoch+1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
+                        "Epoch {epoch + 1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
                     )
                     if device.type == "cuda":
                         logger.info(

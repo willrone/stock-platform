@@ -262,7 +262,7 @@ class TestPositionAnalyzer:
                 [
                     {
                         "stock_code": stock_code,
-                        "stock_name": f"股票{i+1}",
+                        "stock_name": f"股票{i + 1}",
                         "action": "BUY",
                         "price": 10.0 + i,
                         "quantity": 1000,
@@ -273,7 +273,7 @@ class TestPositionAnalyzer:
                     },
                     {
                         "stock_code": stock_code,
-                        "stock_name": f"股票{i+1}",
+                        "stock_name": f"股票{i + 1}",
                         "action": "SELL",
                         "price": 11.0 + i,
                         "quantity": 1000,

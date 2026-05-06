@@ -474,9 +474,9 @@ class MLOpsIntegrationTest:
 
         for test_name, test_func in test_cases:
             try:
-                logger.info(f"\n{'='*50}")
+                logger.info(f"\n{'=' * 50}")
                 logger.info(f"执行测试: {test_name}")
-                logger.info(f"{'='*50}")
+                logger.info(f"{'=' * 50}")
 
                 start_time = time.time()
                 result = test_func()
@@ -528,9 +528,9 @@ class MLOpsIntegrationTest:
                 json.dump(report, f, indent=2, ensure_ascii=False)
 
             # 打印摘要
-            logger.info(f"\n{'='*60}")
+            logger.info(f"\n{'=' * 60}")
             logger.info("MLOps系统集成测试报告")
-            logger.info(f"{'='*60}")
+            logger.info(f"{'=' * 60}")
             logger.info(f"测试时间: {report['test_timestamp']}")
             logger.info(f"总测试数: {total_count}")
             logger.info(f"通过测试: {passed_count}")
@@ -554,7 +554,7 @@ class MLOpsIntegrationTest:
             else:
                 logger.info("\n❌ 系统状态: 需要改进 (成功率 < 70%)")
 
-            logger.info(f"{'='*60}")
+            logger.info(f"{'=' * 60}")
 
         except Exception as e:
             logger.error(f"生成测试报告失败: {e}")

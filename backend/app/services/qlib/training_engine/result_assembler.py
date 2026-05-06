@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class QlibTrainingResultAssembler:
@@ -62,9 +62,11 @@ class QlibTrainingResultAssembler:
         training_duration: float,
         train_samples: int,
         validation_samples: int,
+        test_samples: int = 0,
         feature_correlation: Dict[str, Any],
         early_stopping_info: Dict[str, Any],
         signal_quality: Dict[str, Any],
+        segment_evaluation: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """构建 QlibTrainingResult。"""
         return self.result_cls(
@@ -77,11 +79,12 @@ class QlibTrainingResultAssembler:
             training_duration=training_duration,
             train_samples=train_samples,
             validation_samples=validation_samples,
-            test_samples=0,
+            test_samples=test_samples,
             early_stopped=early_stopping_info["early_stopped"],
             stopped_epoch=early_stopping_info["stopped_epoch"],
             best_epoch=early_stopping_info["best_epoch"],
             early_stopping_reason=early_stopping_info["early_stopping_reason"],
             feature_correlation=feature_correlation,
             signal_quality=signal_quality,
+            segment_evaluation=segment_evaluation,
         )

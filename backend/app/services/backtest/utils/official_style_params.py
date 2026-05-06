@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 _RANKING_STRATEGIES = {
     "topk_dropout",
@@ -12,7 +12,7 @@ _RANKING_STRATEGIES = {
 }
 
 
-def derive_official_style_topk_dropout_params(pool_size: int) -> dict[str, int]:
+def derive_official_style_topk_dropout_params(pool_size: int) -> Dict[str, int]:
     if pool_size < 2:
         raise ValueError("official-style TopkDropout 至少需要 2 只股票")
 
@@ -35,9 +35,9 @@ def derive_official_style_topk_dropout_params(pool_size: int) -> dict[str, int]:
 def apply_official_style_topk_dropout_params(
     *,
     strategy_name: str,
-    stock_codes: list[str] | None,
-    strategy_config: dict[str, Any] | None,
-) -> dict[str, Any]:
+    stock_codes: Optional[List[str]],
+    strategy_config: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
     normalized_config = dict(strategy_config or {})
     normalized_name = str(strategy_name or "").lower()
     official_style_enabled = bool(normalized_config.get("official_style"))

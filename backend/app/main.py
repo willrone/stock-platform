@@ -5,7 +5,7 @@ FastAPI 应用程序入口点
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -257,7 +257,9 @@ def create_application() -> FastAPI:
 
     # 添加异常处理器
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request, exc):
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
         """HTTP异常处理"""
         from app.api.v1.schemas import StandardResponse
 
@@ -269,7 +271,9 @@ def create_application() -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request, exc):
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         """通用异常处理"""
         import logging
 

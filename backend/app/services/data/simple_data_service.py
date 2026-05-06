@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import httpx
@@ -48,13 +48,18 @@ class SimpleDataService:
 
     def __init__(
         self,
-        data_path: Optional[str | Path] = None,
+        data_path: Optional[Union[str, Path]] = None,
         remote_url: Optional[str] = None,
         timeout: Optional[float] = None,
         offline_fallback: bool = True,
     ):
         self.remote_url = remote_url or settings.REMOTE_DATA_SERVICE_URL
-        self.timeout = float(timeout or settings.REMOTE_DATA_SERVICE_TIMEOUT)
+        configured_timeout = float(
+            timeout if timeout is not None else settings.REMOTE_DATA_SERVICE_TIMEOUT
+        )
+        self.timeout = (
+            min(configured_timeout, 1.0) if offline_fallback else configured_timeout
+        )
 
         # Local cache paths (used heavily by tests)
         self.data_path = (

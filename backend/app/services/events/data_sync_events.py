@@ -5,12 +5,20 @@
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from loguru import logger
+try:
+    from loguru import logger as _logger
+except ImportError:
+    _logger = logging.getLogger(__name__)
+
+logger = (
+    _logger.bind(log_type="data_sync_events") if hasattr(_logger, "bind") else _logger
+)
 
 
 class DataSyncEventType(Enum):

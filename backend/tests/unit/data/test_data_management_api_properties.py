@@ -1,455 +1,231 @@
-"""
-数据管理API属性测试
-验证数据管理API端点调用真实服务的正确性属性
-"""
+"""当前 data 路由契约测试。"""
 
-import shutil
-import tempfile
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime
+from types import ModuleType, SimpleNamespace
+
+fake_paramiko = ModuleType("paramiko")
+fake_paramiko.SSHClient = type("SSHClient", (), {})
+fake_paramiko.SFTPClient = type("SFTPClient", (), {})
+fake_paramiko.SSHException = Exception
+fake_paramiko.socket = SimpleNamespace(error=OSError)
+sys.modules.setdefault("paramiko", fake_paramiko)
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
+import pandas as pd
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from hypothesis import given, settings
-from hypothesis import strategies as st
-from hypothesis.strategies import composite
 
-from app.main import create_application
-from app.services.data.parquet_manager import ParquetManager
+from app.api.v1.data import (
+    get_data_service,
+    get_sftp_sync_service,
+)
+from app.api.v1.data import router as data_router
+from app.services.data.sftp_sync_service import SyncResult
 
-# DataSyncEngine 已移除，使用占位符
-try:
-    from app.services.data.incremental_updater import (
-        IncrementalUpdater as DataSyncEngine,
+
+def _build_client() -> TestClient:
+    app = FastAPI()
+    app.include_router(data_router, prefix="/api/v1")
+    return TestClient(app)
+
+
+def test_status_route_uses_current_data_service_contract() -> None:
+    client = _build_client()
+    status = SimpleNamespace(
+        service_url="http://example.test",
+        is_available=True,
+        last_check=datetime(2026, 1, 1, 12, 0, 0),
+        response_time_ms=12.5,
+        error_message=None,
     )
-except ImportError:
-    DataSyncEngine = None
+    mock_service = MagicMock()
+    mock_service.check_remote_service_status = AsyncMock(return_value=status)
+    client.app.dependency_overrides[get_data_service] = lambda: mock_service
+
+    try:
+        response = client.get("/api/v1/data/status")
+    finally:
+        client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["service_url"] == "http://example.test"
+    assert payload["data"]["is_connected"] is True
+    mock_service.check_remote_service_status.assert_awaited_once()
 
 
-@composite
-def stock_codes(draw):
-    """生成股票代码"""
-    _ = draw(st.sampled_from(["SZ", "SH"]))
-    _ = draw(st.integers(min_value=1, max_value=999999))
-    return "{code:06d}.{market}"
+def test_remote_stocks_route_maps_ts_codes_from_service() -> None:
+    client = _build_client()
+    stocks = [
+        {"ts_code": "000001.SZ", "name": "平安银行"},
+        {"ts_code": "000002.SZ", "name": "万科A"},
+    ]
+    mock_service = MagicMock()
+    mock_service.get_remote_stock_list = AsyncMock(return_value=stocks)
+    client.app.dependency_overrides[get_data_service] = lambda: mock_service
+
+    try:
+        response = client.get("/api/v1/data/remote/stocks")
+    finally:
+        client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["total_stocks"] == 2
+    assert payload["data"]["stock_codes"] == ["000001.SZ", "000002.SZ"]
+    mock_service.get_remote_stock_list.assert_awaited_once()
 
 
-@composite
-def file_filters(draw):
-    """生成文件过滤条件"""
-    return {
-        "stock_code": draw(st.one_of(st.none(), stock_codes())),
-        "start_date": draw(
-            st.one_of(
-                st.none(),
-                st.datetimes(min_value=datetime(2020, 1, 1), max_value=datetime.now()),
-            )
-        ),
-        "end_date": draw(
-            st.one_of(
-                st.none(),
-                st.datetimes(min_value=datetime(2020, 1, 1), max_value=datetime.now()),
-            )
-        ),
-        "min_size": draw(
-            st.one_of(st.none(), st.integers(min_value=1000, max_value=1000000))
-        ),
-        "max_size": draw(
-            st.one_of(st.none(), st.integers(min_value=1000000, max_value=10000000))
-        ),
-        "limit": draw(st.integers(min_value=1, max_value=100)),
-        "offset": draw(st.integers(min_value=0, max_value=50)),
-    }
+def test_local_stocks_route_reads_current_parquet_layout(tmp_path, monkeypatch) -> None:
+    client = _build_client()
+    monkeypatch.setattr("app.api.v1.data.settings.DATA_ROOT_PATH", str(tmp_path))
 
-
-@composite
-def sync_requests(draw):
-    """生成同步请求"""
-    codes = draw(st.lists(stock_codes(), min_size=1, max_size=5))
-    end_date = datetime.now()
-    start_date = end_date - timedelta(
-        days=draw(st.integers(min_value=1, max_value=365))
-    )
-
-    return {
-        "stock_codes": codes,
-        "start_date": start_date,
-        "end_date": end_date,
-        "force_update": draw(st.booleans()),
-        "sync_mode": draw(st.sampled_from(["incremental", "full"])),
-        "max_concurrent": draw(st.integers(min_value=1, max_value=5)),
-        "retry_count": draw(st.integers(min_value=1, max_value=3)),
-    }
-
-
-class TestDataManagementAPIProperties:
-    """数据管理API属性测试类"""
-
-    def setup_method(self):
-        """测试前设置"""
-        self.temp_dir = tempfile.mkdtemp()
-
-        # 创建测试应用，禁用限流中间件
-        self.test_app = create_application()
-        self.test_app.user_middleware = [
-            middleware
-            for middleware in self.test_app.user_middleware
-            if "RateLimitMiddleware" not in str(middleware.cls)
-        ]
-
-        self.client = TestClient(self.test_app)
-
-        # 创建模拟服务
-        self.mock_parquet_manager = MagicMock(spec=ParquetManager)
-        self.mock_sync_engine = AsyncMock(spec=DataSyncEngine)
-
-    def teardown_method(self):
-        """测试后清理"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-        # 清理依赖覆盖
-        self.test_app.dependency_overrides.clear()
-
-    @pytest.mark.asyncio
-    @given(file_filters())
-    @settings(max_examples=10, deadline=5000)
-    async def test_data_files_api_calls_real_parquet_manager(self, filters):
-        """
-        属性 1: API路由真实服务调用
-        数据文件列表API应该调用真实的Parquet管理器而不是返回模拟数据
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 1.4, 2.1**
-        """
-        from app.core.container import get_parquet_manager
-        from app.models.file_management import DetailedFileInfo, IntegrityStatus
-
-        # 模拟Parquet管理器返回
-        mock_file_info = DetailedFileInfo(
-            file_path=f"/data/{filters.get('stock_code', '000001.SZ')}/test.parquet",
-            stock_code=filters.get("stock_code", "000001.SZ"),
-            date_range=(datetime(2023, 1, 1), datetime(2023, 12, 31)),
-            record_count=1000,
-            file_size=1024000,
-            last_modified=datetime.now(),
-            integrity_status=IntegrityStatus.VALID,
-            compression_ratio=0.3,
-            created_at=datetime.now(),
-        )
-
-        # 配置模拟管理器
-        self.mock_parquet_manager.get_detailed_file_list.return_value = [mock_file_info]
-
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = (
-            lambda: self.mock_parquet_manager
-        )
-
-        # 构建查询参数
-        params = {}
-        for key, value in filters.items():
-            if value is not None:
-                if isinstance(value, datetime):
-                    params[key] = value.isoformat()
-                else:
-                    params[key] = value
-
-        response = self.client.get("/api/v1/data/files", params=params)
-
-        # 验证响应
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "files" in data["data"]
-
-        # 验证调用了真实服务
-        self.mock_parquet_manager.get_detailed_file_list.assert_called_once()
-
-        # 验证过滤条件传递正确
-        call_args = self.mock_parquet_manager.get_detailed_file_list.call_args[0][0]
-        assert call_args.stock_code == filters.get("stock_code")
-        assert call_args.limit == filters.get("limit", 100)
-        assert call_args.offset == filters.get("offset", 0)
-
-    @pytest.mark.asyncio
-    async def test_data_stats_api_calls_real_parquet_manager(self):
-        """
-        属性 1: API路由真实服务调用
-        数据统计API应该调用真实的Parquet管理器获取统计信息
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 5.1, 2.2**
-        """
-        from app.core.container import get_parquet_manager
-        from app.models.file_management import ComprehensiveStats
-
-        # 模拟统计数据
-        mock_stats = ComprehensiveStats(
-            total_files=10,
-            total_size_bytes=10240000,
-            total_records=50000,
-            stock_count=5,
-            date_range=(datetime(2023, 1, 1), datetime(2023, 12, 31)),
-            average_file_size=1024000.0,
-            storage_efficiency=4.88,
-            last_sync_time=datetime.now(),
-            stocks_by_size=[("000001.SZ", 2048000), ("000002.SZ", 1536000)],
-            monthly_distribution={"2023-01": 1000, "2023-02": 1200},
-        )
-
-        # 配置模拟管理器
-        self.mock_parquet_manager.get_comprehensive_stats.return_value = mock_stats
-
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = (
-            lambda: self.mock_parquet_manager
-        )
-
-        response = self.client.get("/api/v1/data/stats")
-
-        # 验证响应
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "total_files" in data["data"]
-        assert data["data"]["total_files"] == 10
-        assert data["data"]["stock_count"] == 5
-
-        # 验证调用了真实服务
-        self.mock_parquet_manager.get_comprehensive_stats.assert_called_once()
-
-    @pytest.mark.asyncio
-    @given(sync_requests())
-    @settings(max_examples=5, deadline=10000)
-    async def test_data_sync_api_calls_real_sync_engine(self, sync_request):
-        """
-        属性 1: API路由真实服务调用
-        数据同步API应该调用真实的数据同步引擎而不是返回模拟结果
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 1.5, 4.1**
-        """
-        from app.core.container import get_data_sync_engine
-        from app.models.sync_models import BatchSyncResult, SyncResult
-
-        # 模拟同步结果
-        mock_sync_results = [
-            SyncResult(
-                stock_code=code,
-                success=True,
-                records_synced=1000,
-                start_time=datetime.now(),
-                end_time=datetime.now(),
-                data_range=(sync_request["start_date"], sync_request["end_date"]),
-            )
-            for code in sync_request["stock_codes"]
-        ]
-
-        mock_batch_result = BatchSyncResult(
-            sync_id="test-sync-123",
-            success=True,
-            total_stocks=len(sync_request["stock_codes"]),
-            successful_syncs=mock_sync_results,
-            failed_syncs=[],
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            message="同步完成",
-        )
-
-        # 配置模拟引擎
-        self.mock_sync_engine.sync_stocks_batch.return_value = mock_batch_result
-
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_data_sync_engine] = (
-            lambda: self.mock_sync_engine
-        )
-
-        # 构建请求数据
-        request_data = {
-            "stock_codes": sync_request["stock_codes"],
-            "start_date": sync_request["start_date"].isoformat(),
-            "end_date": sync_request["end_date"].isoformat(),
-            "force_update": sync_request["force_update"],
+    stock_data_dir = tmp_path / "parquet" / "stock_data"
+    stock_data_dir.mkdir(parents=True)
+    df = pd.DataFrame(
+        {
+            "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ"],
+            "date": pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
+            "close": [10.0, 10.5, 20.0],
         }
+    )
+    df.to_parquet(stock_data_dir / "sample.parquet", index=False)
 
-        response = self.client.post("/api/v1/data/sync", json=request_data)
+    response = client.get("/api/v1/data/local/stocks")
 
-        # 验证响应
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "sync_id" in data["data"]
-        assert data["data"]["total_stocks"] == len(sync_request["stock_codes"])
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["stock_codes"] == ["000001.SZ", "000002.SZ"]
+    assert payload["data"]["total_stocks"] == 2
+    assert payload["data"]["stocks"][0]["record_count"] == 2
 
-        # 验证调用了真实服务
-        self.mock_sync_engine.sync_stocks_batch.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_sync_progress_api_calls_real_sync_engine(self):
-        """
-        属性 1: API路由真实服务调用
-        同步进度API应该调用真实的数据同步引擎获取进度信息
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 4.2, 5.3**
-        """
-        from app.core.container import get_data_sync_engine
-        from app.models.sync_models import SyncProgress, SyncStatus
+def test_local_stocks_simple_route_uses_current_filename_contract(
+    tmp_path, monkeypatch
+) -> None:
+    client = _build_client()
+    monkeypatch.setattr("app.api.v1.data.settings.DATA_ROOT_PATH", str(tmp_path))
 
-        sync_id = "test-sync-123"
-        mock_progress = SyncProgress(
-            sync_id=sync_id,
-            total_stocks=5,
-            completed_stocks=3,
-            failed_stocks=1,
-            current_stock="000001.SZ",
-            progress_percentage=80.0,
-            estimated_remaining_time=timedelta(minutes=2),
-            start_time=datetime.now(),
-            status=SyncStatus.RUNNING,
-            last_update=datetime.now(),
+    stock_data_dir = tmp_path / "parquet" / "stock_data"
+    stock_data_dir.mkdir(parents=True)
+    (stock_data_dir / "000001_SZ.parquet").touch()
+    (stock_data_dir / "600000_SH.parquet").touch()
+    (stock_data_dir / "430001_BJ.parquet").touch()
+
+    response = client.get("/api/v1/data/local/stocks/simple")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["stock_codes"] == ["000001.SZ", "430001.BJ", "600000.SH"]
+    assert payload["data"]["total_stocks"] == 3
+
+
+def test_sync_remote_route_uses_current_sftp_service_contract() -> None:
+    client = _build_client()
+    sync_result = SyncResult(
+        success=True,
+        total_files=2,
+        synced_files=2,
+        failed_files=[],
+        total_size=4096,
+        message="同步完成: 2/2 成功",
+    )
+    mock_sftp = MagicMock()
+    mock_sftp.enabled = True
+    mock_sftp.sync_selected_stocks = MagicMock(return_value=sync_result)
+    client.app.dependency_overrides[get_sftp_sync_service] = lambda: mock_sftp
+
+    try:
+        response = client.post(
+            "/api/v1/data/sync/remote",
+            json={"stock_codes": ["000001.SZ", "000002.SZ"]},
         )
+    finally:
+        client.app.dependency_overrides.clear()
 
-        # 配置模拟引擎
-        self.mock_sync_engine.get_sync_progress.return_value = mock_progress
-
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_data_sync_engine] = (
-            lambda: self.mock_sync_engine
-        )
-
-        response = self.client.get(f"/api/v1/data/sync/{sync_id}/progress")
-
-        # 验证响应
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["data"]["sync_id"] == sync_id
-        assert data["data"]["progress_percentage"] == 80.0
-
-        # 验证调用了真实服务
-        self.mock_sync_engine.get_sync_progress.assert_called_once_with(sync_id)
-
-    @pytest.mark.asyncio
-    async def test_delete_files_api_calls_real_parquet_manager(self):
-        """
-        属性 1: API路由真实服务调用
-        删除文件API应该调用真实的Parquet管理器进行安全删除
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 2.3**
-        """
-        from app.core.container import get_parquet_manager
-        from app.models.file_management import DeletionResult
-
-        file_paths = ["/data/000001.SZ/test1.parquet", "/data/000002.SZ/test2.parquet"]
-
-        mock_deletion_result = DeletionResult(
-            success=True,
-            deleted_files=file_paths,
-            failed_files=[],
-            total_deleted=2,
-            freed_space_bytes=2048000,
-            message="删除成功",
-        )
-
-        # 配置模拟管理器
-        self.mock_parquet_manager.delete_files_safely.return_value = (
-            mock_deletion_result
-        )
-
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = (
-            lambda: self.mock_parquet_manager
-        )
-
-        response = self.client.delete(
-            "/api/v1/data/files", params={"file_paths": file_paths}
-        )
-
-        # 验证响应
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["data"]["total_deleted"] == 2
-        assert data["data"]["freed_space_bytes"] == 2048000
-
-        # 验证调用了真实服务
-        self.mock_parquet_manager.delete_files_safely.assert_called_once_with(
-            file_paths
-        )
-
-    @pytest.mark.asyncio
-    async def test_api_error_handling_consistency(self):
-        """
-        属性 1: API路由真实服务调用
-        API错误处理应该一致地处理服务层异常
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 6.1, 6.3**
-        """
-        from app.core.container import get_parquet_manager
-
-        # 配置模拟管理器抛出异常
-        self.mock_parquet_manager.get_comprehensive_stats.side_effect = Exception(
-            "服务异常"
-        )
-
-        # 使用FastAPI依赖覆盖
-        self.test_app.dependency_overrides[get_parquet_manager] = (
-            lambda: self.mock_parquet_manager
-        )
-
-        response = self.client.get("/api/v1/data/stats")
-
-        # 验证错误处理
-        assert response.status_code == 500
-        data = response.json()
-        assert "detail" in data
-        assert "服务异常" in data["detail"]
-
-    @pytest.mark.asyncio
-    async def test_monitoring_endpoints_integration(self):
-        """
-        属性 1: API路由真实服务调用
-        监控端点应该正确集成监控服务
-        **功能: data-management-implementation, 属性 1: API路由真实服务调用**
-        **验证: 需求 5.1, 5.2**
-        """
-        # 测试系统健康检查端点
-        response = self.client.get("/api/v1/monitoring/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "overall_healthy" in data["data"]
-        assert "services" in data["data"]
-
-        # 测试性能指标端点
-        response = self.client.get("/api/v1/monitoring/metrics")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-        # 测试系统概览端点
-        response = self.client.get("/api/v1/monitoring/overview")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-        # 测试错误统计端点
-        response = self.client.get("/api/v1/monitoring/errors")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-        # 测试数据质量检查端点
-        response = self.client.get("/api/v1/monitoring/quality")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-        # 测试异常检测端点
-        response = self.client.get("/api/v1/monitoring/anomalies")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["total_files"] == 2
+    assert payload["data"]["synced_files"] == 2
+    mock_sftp.sync_selected_stocks.assert_called_once_with(["000001.SZ", "000002.SZ"])
 
 
-@pytest.fixture(autouse=True)
-def cleanup_after_test():
-    """测试后自动清理"""
-    yield
-    # 清理代码可以在这里添加
+def test_sync_remote_route_reports_disabled_sftp() -> None:
+    client = _build_client()
+    mock_sftp = MagicMock()
+    mock_sftp.enabled = False
+    client.app.dependency_overrides[get_sftp_sync_service] = lambda: mock_sftp
+
+    try:
+        response = client.post("/api/v1/data/sync/remote", json={})
+    finally:
+        client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is False
+    assert "SFTP同步未启用" in payload["message"]
+
+
+def test_event_history_route_uses_current_event_manager_contract(monkeypatch) -> None:
+    client = _build_client()
+    event = SimpleNamespace(
+        to_dict=lambda: {
+            "event_type": "sync_completed",
+            "stock_code": "000001.SZ",
+            "sync_type": "sftp_sync",
+        }
+    )
+    mock_event_manager = MagicMock()
+    mock_event_manager.get_event_history.return_value = [event]
+    monkeypatch.setattr(
+        "app.api.v1.data.get_data_sync_event_manager",
+        lambda: mock_event_manager,
+    )
+
+    response = client.get(
+        "/api/v1/data/events/history",
+        params={"stock_code": "000001.SZ", "event_type": "sync_completed", "limit": 10},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["total_events"] == 1
+    assert payload["data"]["events"][0]["stock_code"] == "000001.SZ"
+
+
+def test_event_history_route_rejects_invalid_event_type() -> None:
+    client = _build_client()
+
+    response = client.get(
+        "/api/v1/data/events/history", params={"event_type": "bad_type"}
+    )
+
+    assert response.status_code == 400
+    assert "无效的事件类型" in response.json()["detail"]
+
+
+def test_event_stats_and_clear_history_use_current_event_manager(monkeypatch) -> None:
+    client = _build_client()
+    mock_event_manager = MagicMock()
+    mock_event_manager.get_stats.return_value = {"total_events": 3, "history_size": 3}
+    monkeypatch.setattr(
+        "app.api.v1.data.get_data_sync_event_manager",
+        lambda: mock_event_manager,
+    )
+
+    stats_response = client.get("/api/v1/data/events/stats")
+    clear_response = client.delete("/api/v1/data/events/history")
+
+    assert stats_response.status_code == 200
+    assert stats_response.json()["data"]["total_events"] == 3
+    assert clear_response.status_code == 200
+    mock_event_manager.get_stats.assert_called_once()
+    mock_event_manager.clear_history.assert_called_once()

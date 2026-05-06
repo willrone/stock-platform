@@ -5,7 +5,7 @@
 import asyncio
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from loguru import logger
@@ -32,7 +32,7 @@ class TaskProgress:
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime duration calculations."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _require_iso_datetime(raw_value: Any, field_name: str) -> datetime:
@@ -56,7 +56,7 @@ class TaskExecutorProtocol(Protocol):
     def execute(
         self, queued_task: QueuedTask, context: TaskExecutionContext
     ) -> Dict[str, Any]:
-        ...
+        """Execute a queued task and return a result payload."""
 
 
 class ProgressTracker:
@@ -785,7 +785,9 @@ class TaskExecutionEngine:
 
         logger.info("所有任务处理器已注册到调度器")
 
-    def validate_task_config(self, task_type: TaskType, config: Dict[str, Any]) -> bool:
+    def validate_task_config(  # noqa: C901
+        self, task_type: TaskType, config: Dict[str, Any]
+    ) -> bool:
         """验证任务配置"""
         try:
             if task_type == TaskType.PREDICTION:
@@ -1041,7 +1043,7 @@ class HyperparameterOptimizationTaskExecutor:
     def __init__(self, task_repository: TaskRepository):
         self.task_repository = task_repository
 
-    def execute(
+    def execute(  # noqa: C901
         self, queued_task: QueuedTask, context: TaskExecutionContext
     ) -> Dict[str, Any]:
         """执行超参优化任务"""

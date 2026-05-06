@@ -2,7 +2,7 @@
 策略配置数据模型
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from sqlalchemy import JSON, Column, DateTime, String, Text
@@ -12,7 +12,7 @@ from app.core.database import Base
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for DB compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class StrategyConfig(Base):

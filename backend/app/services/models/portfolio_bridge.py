@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from loguru import logger
 from sqlalchemy import text
@@ -25,7 +25,7 @@ def _safe_json_dict(value: Any) -> Dict[str, Any]:
     return {}
 
 
-def _safe_number(value: Any) -> float | None:
+def _safe_number(value: Any) -> Optional[float]:
     if value is None:
         return None
     try:
@@ -34,7 +34,7 @@ def _safe_number(value: Any) -> float | None:
         return None
 
 
-def _extract_model_id_from_task(task_config: Dict[str, Any]) -> str | None:
+def _extract_model_id_from_task(task_config: Dict[str, Any]) -> Optional[str]:
     if not isinstance(task_config, dict):
         return None
     candidates = [
@@ -124,7 +124,7 @@ def _query_signal_summary(session: Any, task_id: str) -> Dict[str, Any]:
     }
 
 
-def _normalize_datetime(value: Any) -> str | None:
+def _normalize_datetime(value: Any) -> Optional[str]:
     if value is None:
         return None
     if isinstance(value, str):

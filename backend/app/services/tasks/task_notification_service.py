@@ -3,7 +3,7 @@
 """
 
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
@@ -44,7 +44,7 @@ class TaskProgressNotification:
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TaskNotificationService:
@@ -430,9 +430,9 @@ class TaskNotificationService:
                 if duration < 60:
                     return f"{duration:.1f}秒"
                 elif duration < 3600:
-                    return f"{duration/60:.1f}分钟"
+                    return f"{duration / 60:.1f}分钟"
                 else:
-                    return f"{duration/3600:.1f}小时"
+                    return f"{duration / 3600:.1f}小时"
 
             return None
 

@@ -79,7 +79,7 @@ class EnhancedPositionAnalysis:
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        result = {
+        result: Dict[str, Any] = {
             "stock_performance": self.stock_performance,
         }
         if self.position_weights:

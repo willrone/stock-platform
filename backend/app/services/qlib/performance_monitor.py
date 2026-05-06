@@ -9,8 +9,15 @@ import time
 from typing import Any, Dict, List
 
 import pandas as pd
-import psutil
 from loguru import logger
+
+try:
+    import psutil
+
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
 
 
 class PerformanceMonitor:
@@ -25,7 +32,11 @@ class PerformanceMonitor:
             "cpu_usage": 0.0,
             "stages": {},
         }
-        self.process = psutil.Process()
+        if PSUTIL_AVAILABLE:
+            self.process = psutil.Process()
+        else:
+            self.process = None
+            logger.warning("psutil 未安装，性能监控将使用降级模式（CPU/内存指标为0）")
         logger.info("性能监控器初始化完成")
 
     def start_stage(self, stage_name: str):
@@ -71,6 +82,8 @@ class PerformanceMonitor:
 
     def _get_memory_usage(self) -> float:
         """获取当前内存使用情况（MB）"""
+        if not PSUTIL_AVAILABLE or self.process is None:
+            return 0.0
         try:
             return self.process.memory_info().rss / 1024 / 1024
         except Exception as e:
@@ -79,6 +92,8 @@ class PerformanceMonitor:
 
     def _get_cpu_usage(self) -> float:
         """获取当前CPU使用情况（%）"""
+        if not PSUTIL_AVAILABLE or self.process is None:
+            return 0.0
         try:
             return self.process.cpu_percent(interval=0.1)
         except Exception as e:

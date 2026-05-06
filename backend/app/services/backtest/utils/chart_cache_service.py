@@ -5,7 +5,7 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -117,7 +117,7 @@ class ChartCacheService:
                         if expiry_hours is not None
                         else self.DEFAULT_CACHE_EXPIRY_HOURS
                     )
-                    expires_at = datetime.now(UTC) + timedelta(hours=hours)
+                    expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
 
                     # 查找现有记录
                     stmt = select(BacktestChartCache).where(
@@ -134,7 +134,7 @@ class ChartCacheService:
                         existing_record.chart_data = chart_data
                         existing_record.data_hash = data_hash
                         existing_record.expires_at = expires_at
-                        existing_record.created_at = datetime.now(UTC)
+                        existing_record.created_at = datetime.now(timezone.utc)
                         self.logger.info(
                             f"更新缓存: task_id={task_id}, chart_type={chart_type}"
                         )
@@ -224,7 +224,7 @@ class ChartCacheService:
                     stmt = delete(BacktestChartCache).where(
                         and_(
                             BacktestChartCache.expires_at.isnot(None),
-                            BacktestChartCache.expires_at < datetime.now(UTC),
+                            BacktestChartCache.expires_at < datetime.now(timezone.utc),
                         )
                     )
 
@@ -263,7 +263,7 @@ class ChartCacheService:
                 expired_stmt = select(BacktestChartCache).where(
                     and_(
                         BacktestChartCache.expires_at.isnot(None),
-                        BacktestChartCache.expires_at < datetime.now(UTC),
+                        BacktestChartCache.expires_at < datetime.now(timezone.utc),
                     )
                 )
                 expired_result = await session.execute(expired_stmt)

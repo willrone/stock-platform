@@ -6,7 +6,7 @@ API依赖注入和共享函数
 """
 
 import os
-from typing import Any, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import Header
 from loguru import logger
@@ -74,8 +74,8 @@ except Exception as e:
 
 
 def _resolve_backtest_config_value(
-    config: dict[str, Any],
-    strategy_config: dict[str, Any],
+    config: Dict[str, Any],
+    strategy_config: Dict[str, Any],
     key: str,
     default: Any,
 ) -> Any:
@@ -125,7 +125,9 @@ def _parse_bool_env(var_name: str, default: bool = False) -> bool:
     return val.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _normalize_task_backtest_strategy_config(config: dict | None) -> tuple[str, dict]:
+def _normalize_task_backtest_strategy_config(
+    config: Optional[Dict[str, Any]],
+) -> Tuple[str, Dict[str, Any]]:
     """规范化任务回测配置，补齐模型驱动回测所需的 strategy_config.model_id。"""
     normalized = dict(config or {})
     strategy_name = str(
@@ -291,7 +293,7 @@ def execute_prediction_task_simple(task_id: str):
             session.close()
 
 
-def execute_backtest_task_simple(task_id: str):
+def execute_backtest_task_simple(task_id: str):  # noqa: C901
     """
     简化的回测任务执行函数（进程池执行）
 

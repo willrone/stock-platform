@@ -606,7 +606,7 @@ class TestProgressTrackerReliability:
 
         # 模拟步骤执行
         for i in range(total_steps):
-            step_name = f"步骤_{i+1}"
+            step_name = f"步骤_{i + 1}"
             progress = tracker.update_step(step_name, {"step_index": i})
 
             # 验证进度信息

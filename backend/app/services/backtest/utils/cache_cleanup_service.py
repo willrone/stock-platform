@@ -4,7 +4,7 @@
 """
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -63,7 +63,7 @@ class CacheCleanupService:
         self.logger.info("开始执行缓存清理任务...")
 
         cleanup_results = {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "expired_cache_cleaned": 0,
             "old_data_cleaned": {},
             "errors": [],
@@ -197,7 +197,7 @@ class CacheCleanupService:
         self.logger.info("手动执行清理任务...")
 
         cleanup_results = {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "manual_trigger": True,
             "expired_cache_cleaned": 0,
             "old_data_cleaned": {},

@@ -527,7 +527,7 @@ class TestModelManagementProperties:
         # 创建多个版本
         created_versions = ["1.0.0"]  # 基础版本
         for i in range(num_versions):
-            version = f"1.{i+1}.0"
+            version = f"1.{i + 1}.0"
             success = self.version_manager.create_version(
                 model_id=model_id,
                 version=version,

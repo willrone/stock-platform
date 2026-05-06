@@ -287,12 +287,12 @@ async def get_remote_stock_list(
         }
         estimated_size = len(json.dumps(response_data))
         logger.info(
-            f"准备返回股票列表，股票数量: {len(stocks)}, 股票代码数量: {len(stock_codes)}, 估算响应大小: {estimated_size/1024:.2f} KB"
+            f"准备返回股票列表，股票数量: {len(stocks)}, 股票代码数量: {len(stock_codes)}, 估算响应大小: {estimated_size / 1024:.2f} KB"
         )
 
         if estimated_size > 5 * 1024 * 1024:  # 5MB
             logger.warning(
-                f"响应数据较大 ({estimated_size/1024/1024:.2f} MB)，可能导致前端处理失败"
+                f"响应数据较大 ({estimated_size / 1024 / 1024:.2f} MB)，可能导致前端处理失败"
             )
 
         return StandardResponse(

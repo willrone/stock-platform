@@ -169,7 +169,7 @@ def main():
         logger.info("🎉 大部分测试通过！基本功能正常")
         return 0
     else:
-        logger.warning(f"⚠️  通过率较低: {passed/total*100:.1f}%")
+        logger.warning(f"⚠️  通过率较低: {passed / total * 100:.1f}%")
         return 1
 
 

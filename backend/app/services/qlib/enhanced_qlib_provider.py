@@ -758,9 +758,7 @@ class Alpha158Calculator:
 
                 # 如果预先获取的列表中没有找到，直接检查文件系统（处理时序问题）
                 if selected is None:
-                    logger.warning(
-                        "[Alpha158] 在集合中未找到，开始直接文件系统检查..."
-                    )
+                    logger.warning("[Alpha158] 在集合中未找到，开始直接文件系统检查...")
                     # 确保使用绝对路径
                     qlib_features_dir_abs = qlib_features_dir.resolve()
                     logger.debug(
@@ -1242,7 +1240,7 @@ class Alpha158Calculator:
                     # 每10个因子输出一次进度
                     if idx % 10 == 0:
                         logger.info(
-                            f"股票 {stock_code} 计算进度: {idx+1}/{total_factors} ({((idx+1)/total_factors*100):.1f}%)"
+                            f"股票 {stock_code} 计算进度: {idx + 1}/{total_factors} ({((idx + 1) / total_factors * 100):.1f}%)"
                         )
                     try:
                         # 使用表达式评估器计算因子
@@ -1259,7 +1257,7 @@ class Alpha158Calculator:
                             else:
                                 # 全部是NaN，可能是数据不足或计算错误
                                 logger.debug(
-                                    f"因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 全部为NaN: {field_expr}"
+                                    f"因子 {factor_name} ({idx + 1}/{len(self.alpha_fields)}) 全部为NaN: {field_expr}"
                                 )
                                 factors[factor_name] = 0
                                 fail_count += 1
@@ -1269,7 +1267,7 @@ class Alpha158Calculator:
                         else:
                             # 如果表达式解析失败，填充0
                             logger.debug(
-                                f"因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 表达式解析返回空: {field_expr}"
+                                f"因子 {factor_name} ({idx + 1}/{len(self.alpha_fields)}) 表达式解析返回空: {field_expr}"
                             )
                             factors[factor_name] = 0
                             fail_count += 1
@@ -1278,7 +1276,7 @@ class Alpha158Calculator:
                             )
                     except Exception as e:
                         logger.debug(
-                            f"计算因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 失败: {e}, 表达式: {field_expr}"
+                            f"计算因子 {factor_name} ({idx + 1}/{len(self.alpha_fields)}) 失败: {e}, 表达式: {field_expr}"
                         )
                         # 失败时填充0
                         factors[factor_name] = 0

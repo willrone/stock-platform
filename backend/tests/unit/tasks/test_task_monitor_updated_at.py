@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.services.tasks.task_monitor import TaskMonitor
 
 
 def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _db_timestamp(value: datetime) -> str:

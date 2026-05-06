@@ -6,7 +6,7 @@ import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from queue import Empty, PriorityQueue
 from typing import Any, Callable, Dict, List, Optional
@@ -20,7 +20,7 @@ from app.models.task_models import TaskType
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TaskPriority(Enum):

@@ -497,7 +497,7 @@ class DeploymentManager:
 
         # 逐批部署
         for i, (env_name, env) in enumerate(environments.items()):
-            logger.info(f"滚动部署批次 {i+1}/{len(environments)}: {env_name}")
+            logger.info(f"滚动部署批次 {i + 1}/{len(environments)}: {env_name}")
 
             await self._deploy_to_environment(env, config)
 

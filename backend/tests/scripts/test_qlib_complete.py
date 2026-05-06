@@ -258,9 +258,9 @@ def main():
     ]
 
     for suite_name, test_func in test_suites:
-        logger.info(f"\n{'='*50}")
+        logger.info(f"\n{'=' * 50}")
         logger.info(f"执行测试套件: {suite_name}")
-        logger.info(f"{'='*50}")
+        logger.info(f"{'=' * 50}")
 
         try:
             results = test_func()
@@ -275,9 +275,9 @@ def main():
             all_test_results.append(False)
 
     # 汇总结果
-    logger.info(f"\n{'='*50}")
+    logger.info(f"\n{'=' * 50}")
     logger.info("测试结果汇总")
-    logger.info(f"{'='*50}")
+    logger.info(f"{'=' * 50}")
 
     total_tests = len(all_test_results)
     passed_tests = sum(all_test_results)

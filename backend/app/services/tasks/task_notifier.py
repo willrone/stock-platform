@@ -7,7 +7,7 @@
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from loguru import logger
@@ -25,7 +25,7 @@ from app.websocket import manager
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for consistent task timestamp handling."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TaskNotifier:

@@ -457,7 +457,7 @@ class BacktestPerformanceProfiler:
                 print(f"  {op_type}:")
                 print(f"    操作次数: {stats['count']}")
                 print(f"    总耗时: {stats['total_time']:.4f}秒")
-                print(f"    平均耗时: {stats['avg_time']*1000:.2f}ms")
+                print(f"    平均耗时: {stats['avg_time'] * 1000:.2f}ms")
 
         print("=" * 80)
 

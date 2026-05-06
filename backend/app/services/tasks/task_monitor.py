@@ -5,8 +5,8 @@
 
 import logging
 import sqlite3
-from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from app.core.database import SessionLocal
 from app.models.task_models import TaskStatus
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TaskMonitor:
@@ -36,14 +36,14 @@ class TaskMonitor:
         Returns:
             卡住的任务列表
         """
-        conn: sqlite3.Connection | None = None
+        conn: Optional[sqlite3.Connection] = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
             # 计算超时时间点
             timeout_time = utcnow() - timedelta(minutes=timeout_minutes)
-            timeout_str = timeout_time.isoformat()
+            timeout_str = timeout_time.strftime("%Y-%m-%d %H:%M:%S.%f")
 
             # 查询运行中但超时的任务
             cursor.execute(
@@ -52,7 +52,10 @@ class TaskMonitor:
                        created_at, started_at, progress
                 FROM tasks
                 WHERE status IN ('running', 'queued')
-                AND (started_at IS NULL OR started_at < ?)
+                AND (
+                    COALESCE(updated_at, started_at, created_at) IS NULL
+                    OR COALESCE(updated_at, started_at, created_at) < ?
+                )
                 ORDER BY created_at DESC
                 """,
                 (timeout_str,),
@@ -188,7 +191,7 @@ class TaskMonitor:
 
     def get_task_statistics(self) -> Dict[str, Any]:
         """获取任务统计信息"""
-        conn: sqlite3.Connection | None = None
+        conn: Optional[sqlite3.Connection] = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()

@@ -110,6 +110,8 @@ class QlibTrainingConfig:
     early_stopping_min_delta: float = 0.001
     enable_overfitting_detection: bool = True
     enable_adaptive_patience: bool = True
+    label_normalization: Optional[str] = None
+    label_definition: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -128,6 +130,8 @@ class QlibTrainingConfig:
             "early_stopping_min_delta": self.early_stopping_min_delta,
             "enable_overfitting_detection": self.enable_overfitting_detection,
             "enable_adaptive_patience": self.enable_adaptive_patience,
+            "label_normalization": self.label_normalization,
+            "label_definition": self.label_definition,
         }
 
 
@@ -153,6 +157,7 @@ class QlibTrainingResult:
     early_stopping_reason: Optional[str] = None
     feature_correlation: Optional[Dict[str, Any]] = None
     signal_quality: Optional[Dict[str, Any]] = None
+    segment_evaluation: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -173,6 +178,7 @@ class QlibTrainingResult:
             "early_stopping_reason": self.early_stopping_reason,
             "feature_correlation": self.feature_correlation,
             "signal_quality": self.signal_quality,
+            "segment_evaluation": self.segment_evaluation,
         }
 
 
@@ -672,8 +678,9 @@ class UnifiedQlibTrainingEngine:
                 # 处理训练集和验证集的标签
                 def _create_label_for_data(data, data_name, horizon):
                     """为数据集创建标签 - 修复：使用prediction_horizon参数"""
-                    if data is None or "label" in data.columns:
+                    if data is None:
                         return
+                    has_label = "label" in data.columns
 
                     # 尝试找到收盘价列
                     close_col = None
@@ -682,21 +689,17 @@ class UnifiedQlibTrainingEngine:
                             close_col = col
                             break
 
-                    if close_col is not None:
-                        # 正确计算未来N天收益率作为标签
+                    if not has_label and close_col is not None:
+                        # 默认标签: 未来N天收益率
                         current_price = data[close_col]
                         if isinstance(data.index, pd.MultiIndex):
-                            # 按股票分组，计算未来N天的价格
                             future_price = data.groupby(level=0)[close_col].shift(
                                 -horizon
                             )
                         else:
-                            # 直接计算未来N天的价格
                             future_price = data[close_col].shift(-horizon)
 
-                        # 计算收益率：(未来价格 - 当前价格) / 当前价格
                         label_values = (future_price - current_price) / current_price
-
                         if isinstance(label_values, pd.Series):
                             data["label"] = label_values.fillna(0)
                         else:
@@ -708,10 +711,7 @@ class UnifiedQlibTrainingEngine:
                                 ),
                                 index=data.index,
                             ).fillna(0)
-                        logger.info(
-                            f"{data_name}自动创建标签列（未来{horizon}天收益率），标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
-                        )
-                    else:
+                    elif not has_label:
                         # 如果没有收盘价，使用最后一列作为标签
                         last_col = data.iloc[:, -1]
                         if isinstance(last_col, pd.Series):
@@ -728,6 +728,42 @@ class UnifiedQlibTrainingEngine:
                         logger.warning(
                             f"{data_name}未找到收盘价列，使用最后一列作为标签，标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
                         )
+
+                    if "label" not in data.columns:
+                        return
+
+                    if config and config.label_definition == "future_excess_return_cs":
+                        if isinstance(data.index, pd.MultiIndex):
+                            date_level = (
+                                "datetime"
+                                if "datetime" in (data.index.names or [])
+                                else data.index.names[-1]
+                            )
+                            data["label"] = data["label"] - data["label"].groupby(
+                                level=date_level
+                            ).transform("mean")
+                        else:
+                            data["label"] = data["label"] - float(data["label"].mean())
+
+                    if config and config.label_normalization == "cs_rank_norm":
+                        if isinstance(data.index, pd.MultiIndex):
+                            date_level = (
+                                "datetime"
+                                if "datetime" in (data.index.names or [])
+                                else data.index.names[-1]
+                            )
+                            ranked = (
+                                data["label"]
+                                .groupby(level=date_level, group_keys=False)
+                                .rank(pct=True)
+                            )
+                        else:
+                            ranked = data["label"].rank(pct=True)
+                        data["label"] = (ranked - 0.5) * 3.46
+
+                    logger.info(
+                        f"{data_name}标签列准备完成，标签统计: 非零值={data['label'].abs().gt(1e-6).sum()}, 零值={data['label'].abs().le(1e-6).sum()}, 范围=[{data['label'].min():.6f}, {data['label'].max():.6f}]"
+                    )
 
                 prediction_horizon = config.prediction_horizon if config else 5
                 _create_label_for_data(self.train_data, "训练集", prediction_horizon)
@@ -1597,11 +1633,49 @@ class UnifiedQlibTrainingEngine:
             y_true = None
             y_index = None
 
-            segment = (
-                "train"
-                if "训练" in dataset_name
-                else "valid" if "验证" in dataset_name else "train"
-            )
+            lower_name = str(dataset_name).lower()
+            if "测试" in dataset_name or "test" in lower_name:
+                segment = "test"
+            elif "验证" in dataset_name or "valid" in lower_name:
+                segment = "valid"
+            else:
+                segment = "train"
+
+            def _extract_label_from_prepared(prepared_obj):
+                if prepared_obj is None:
+                    return None, None
+                if isinstance(prepared_obj, pd.Series):
+                    return prepared_obj.values, prepared_obj.index
+                if isinstance(prepared_obj, pd.DataFrame):
+                    if "label" in prepared_obj.columns:
+                        label_series = prepared_obj["label"]
+                        return label_series.values, label_series.index
+                    if isinstance(prepared_obj.columns, pd.MultiIndex):
+                        level0 = prepared_obj.columns.get_level_values(0)
+                        label_mask = level0 == "label"
+                        if label_mask.any():
+                            label_df = prepared_obj.loc[:, label_mask]
+                            if (
+                                isinstance(label_df, pd.DataFrame)
+                                and not label_df.empty
+                            ):
+                                label_series = label_df.iloc[:, 0]
+                                return label_series.values, label_series.index
+                    if prepared_obj.shape[1] == 1:
+                        label_series = prepared_obj.iloc[:, 0]
+                        return label_series.values, label_series.index
+                if hasattr(prepared_obj, "_series"):
+                    series_obj = prepared_obj._series
+                    return series_obj.values, series_obj.index
+                if hasattr(prepared_obj, "values"):
+                    values = prepared_obj.values
+                    values = (
+                        values.flatten() if getattr(values, "ndim", 1) == 2 else values
+                    )
+                    return values, getattr(prepared_obj, "index", None)
+                return np.asarray(prepared_obj).flatten(), getattr(
+                    prepared_obj, "index", None
+                )
 
             if hasattr(dataset, "data") and isinstance(dataset.data, pd.DataFrame):
                 if hasattr(dataset, "segments") and segment in dataset.segments:
@@ -1645,6 +1719,26 @@ class UnifiedQlibTrainingEngine:
                     except Exception as e:
                         logger.debug(f"通过prepare方法获取标签失败: {e}")
 
+            if (
+                y_true is None
+                and hasattr(dataset, "dataset")
+                and hasattr(dataset.dataset, "prepare")
+            ):
+                try:
+                    prepared = dataset.dataset.prepare(segment, col_set="label")
+                    y_true, y_index = _extract_label_from_prepared(prepared)
+                except Exception as e:
+                    logger.debug(
+                        f"通过official adapter dataset.prepare获取标签失败: {e}"
+                    )
+
+            if y_true is None and hasattr(dataset, "prepare"):
+                try:
+                    prepared = dataset.prepare(segment, col_set="label")
+                    y_true, y_index = _extract_label_from_prepared(prepared)
+                except Exception as e:
+                    logger.debug(f"通过prepare获取标签失败: {e}")
+
             if y_true is None and isinstance(dataset, pd.DataFrame):
                 if "label" in dataset.columns:
                     label_col = dataset["label"]
@@ -1676,6 +1770,10 @@ class UnifiedQlibTrainingEngine:
 
             y_true = np.asarray(y_true[:min_len])
             y_pred = np.asarray(y_pred[:min_len])
+            if y_true.ndim > 1:
+                y_true = y_true.reshape(-1)
+            if y_pred.ndim > 1:
+                y_pred = y_pred.reshape(-1)
             if y_index is not None:
                 y_index = y_index[:min_len]
             elif pred_index is not None:
@@ -1689,7 +1787,8 @@ class UnifiedQlibTrainingEngine:
             y_true = y_true[valid_mask]
             y_pred = y_pred[valid_mask]
             if y_index is not None:
-                y_index = y_index[valid_mask]
+                y_index_array = np.asarray(y_index)
+                y_index = y_index_array[valid_mask]
 
             return {
                 "y_true": y_true,
@@ -1707,6 +1806,13 @@ class UnifiedQlibTrainingEngine:
         dataset_name: str,
     ) -> Dict[str, Any]:
         """按 Qlib 官方思路计算信号质量指标。"""
+        lower_name = str(dataset_name).lower()
+        if "测试" in dataset_name or "test" in lower_name:
+            analysis_scope = "test"
+        elif "验证" in dataset_name or "valid" in lower_name:
+            analysis_scope = "validation"
+        else:
+            analysis_scope = "train"
         evaluation_inputs = self._extract_evaluation_inputs(
             dataset, predictions, dataset_name
         )
@@ -1720,7 +1826,7 @@ class UnifiedQlibTrainingEngine:
             "long_avg_ann_return": None,
             "long_avg_ann_sharpe": None,
             "sample_count": 0,
-            "analysis_scope": "validation" if "验证" in dataset_name else "train",
+            "analysis_scope": analysis_scope,
         }
         if evaluation_inputs is None:
             return default_result
@@ -1806,7 +1912,7 @@ class UnifiedQlibTrainingEngine:
             "long_avg_ann_return": _safe_ann_return(long_avg_returns),
             "long_avg_ann_sharpe": _safe_ann_sharpe(long_avg_returns),
             "sample_count": int(len(y_true)),
-            "analysis_scope": "validation" if "验证" in dataset_name else "train",
+            "analysis_scope": analysis_scope,
         }
         return result
 

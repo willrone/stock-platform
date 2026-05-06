@@ -70,15 +70,15 @@ class ParquetManager:
     def get_file_path(self, stock_code: str, date: datetime) -> Path:
         """获取指定股票和日期的Parquet文件路径"""
         year = date.year
-        _ = date.month
-        filename = "{stock_code}_{year}-{month:02d}.parquet"
-        return self.base_path / stock_code / str(year) / "{month:02d}" / filename
+        month = date.month
+        filename = f"{stock_code}_{year}-{month:02d}.parquet"
+        return self.base_path / stock_code / str(year) / f"{month:02d}" / filename
 
     def get_directory_path(self, stock_code: str, date: datetime) -> Path:
         """获取指定股票和日期的目录路径"""
         year = date.year
-        _ = date.month
-        return self.base_path / stock_code / str(year) / "{month:02d}"
+        month = date.month
+        return self.base_path / stock_code / str(year) / f"{month:02d}"
 
     def ensure_directory(self, file_path: Path):
         """确保目录存在"""

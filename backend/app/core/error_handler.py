@@ -67,7 +67,14 @@ class BaseError(Exception):
         original_exception: Optional[Exception] = None,
         recovery_actions: Optional[List[RecoveryAction]] = None,
     ):
-        super().__init__(message)
+        super().__init__(
+            message,
+            error_type,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
         self.message = message
         self.error_type = error_type
         self.severity = severity
@@ -76,6 +83,9 @@ class BaseError(Exception):
         self.recovery_actions = recovery_actions or []
         self.timestamp = datetime.utcnow()
         self.error_id = f"{error_type.value}_{int(self.timestamp.timestamp())}"
+
+    def __str__(self) -> str:
+        return self.message
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -109,43 +119,127 @@ class BaseError(Exception):
 class PredictionError(BaseError):
     """预测相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.PREDICTION_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.PREDICTION_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class TaskError(BaseError):
     """任务相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.TASK_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.TASK_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class ModelError(BaseError):
     """模型相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.MODEL_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.MODEL_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class DataError(BaseError):
     """数据相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.DATA_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.DATA_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class SystemError(BaseError):
     """系统相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.SYSTEM_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.SYSTEM_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class ValidationError(BaseError):
     """验证相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.VALIDATION_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.VALIDATION_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 ERROR_CLASS_BY_TYPE = {

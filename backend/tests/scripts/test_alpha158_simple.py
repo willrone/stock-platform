@@ -2,6 +2,7 @@
 """
 简单测试Alpha158表达式引擎 - 只测试前10个因子
 """
+
 import os
 import sys
 from pathlib import Path
@@ -50,7 +51,7 @@ def main():
     for idx in range(min(10, len(calculator.alpha_fields))):
         field_expr = calculator.alpha_fields[idx]
         factor_name = calculator.alpha_names[idx]
-        print(f"{idx+1}/10: {factor_name} = {field_expr[:60]}...")
+        print(f"{idx + 1}/10: {factor_name} = {field_expr[:60]}...")
 
         try:
             result = calculator._evaluate_qlib_expression(test_data, field_expr)
