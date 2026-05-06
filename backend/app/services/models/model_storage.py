@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 try:
     import joblib
@@ -45,7 +45,7 @@ except ImportError:
     SHARED_TYPES_AVAILABLE = False
 
     # 如果导入失败，使用本地定义作为备选
-    class ModelStatus(Enum):
+    class ModelStatus(Enum):  # type: ignore[no-redef]
         """模型状态"""
 
         TRAINING = "training"
@@ -56,7 +56,7 @@ except ImportError:
         DEPRECATED = "deprecated"
         FAILED = "failed"
 
-    class ModelType(Enum):
+    class ModelType(Enum):  # type: ignore[no-redef]
         """模型类型"""
 
         XGBOOST = "xgboost"
@@ -67,7 +67,7 @@ except ImportError:
         ENSEMBLE = "ensemble"
 
     @dataclass
-    class ModelMetadata:
+    class ModelMetadata:  # type: ignore[no-redef]
         """模型元数据"""
 
         model_id: str
@@ -118,13 +118,13 @@ except ImportError:
             data["status"] = ModelStatus(data["status"])
             data["created_at"] = datetime.fromisoformat(data["created_at"])
             data["updated_at"] = datetime.fromisoformat(data["updated_at"])
-            return cls(**data)
+            return cast("ModelMetadata", cls(**data))
 
 
 class ModelStorage:
     """模型存储管理器"""
 
-    def __init__(self, storage_root: str = None):
+    def __init__(self, storage_root: Optional[str] = None):
         # 使用配置中的路径，如果没有提供则使用默认配置
         from app.core.config import settings
 
@@ -159,7 +159,7 @@ class ModelStorage:
 
         logger.info(f"模型存储初始化完成: {self.storage_root}")
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     def save_model(
         self, model: Any, metadata: ModelMetadata, overwrite: bool = False
     ) -> bool:
@@ -249,7 +249,7 @@ class ModelStorage:
                 original_exception=e,
             )
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     def load_model(
         self, model_id: str, version: Optional[str] = None
     ) -> Tuple[Any, ModelMetadata]:
@@ -310,7 +310,7 @@ class ModelStorage:
                 original_exception=e,
             )
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     def get_model_metadata(
         self, model_id: str, version: Optional[str] = None
     ) -> Optional[ModelMetadata]:
@@ -346,7 +346,7 @@ class ModelStorage:
             logger.error(f"获取模型元数据失败: {model_id}, 错误: {e}")
             return None
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     def list_models(
         self,
         model_type: Optional[ModelType] = None,
@@ -394,7 +394,7 @@ class ModelStorage:
         metadata_file = self.metadata_dir / f"{model_id}.json"
         return metadata_file.exists()
 
-    def _backup_model(self, model_id: str):
+    def _backup_model(self, model_id: str) -> None:
         """备份模型"""
         try:
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -427,7 +427,7 @@ class ModelStorage:
     def get_storage_stats(self) -> Dict[str, Any]:
         """获取存储统计信息"""
         try:
-            stats = {
+            stats: Dict[str, Any] = {
                 "total_models": 0,
                 "models_by_type": {},
                 "models_by_status": {},
