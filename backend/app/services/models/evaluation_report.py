@@ -12,7 +12,7 @@
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 DEFAULT_EARLY_STOPPING_INFO = {
     "early_stopped": False,
@@ -157,11 +157,8 @@ def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_report_payload(report: Mapping[str, Any]) -> Dict[str, Any]:
     """兼容并补齐评估报告字段，保证前端/导出结构稳定。"""
-    if not isinstance(report, dict):
-        return report
-
     normalized = dict(report)
     training_summary = normalized.get("training_summary")
     training_summary = training_summary if isinstance(training_summary, dict) else {}
@@ -334,7 +331,7 @@ class ModelEvaluationReport:
 class EvaluationReportGenerator:
     """评估报告生成器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.reports: Dict[str, ModelEvaluationReport] = {}
 
     def generate_report(
@@ -345,7 +342,7 @@ class EvaluationReportGenerator:
         version: str,
         training_summary: Dict[str, Any],
         performance_metrics: Dict[str, Any],
-        feature_importance: List[Dict[str, Any]],
+        feature_importance: Mapping[str, float] | Sequence[Mapping[str, Any] | str],
         training_history: List[Dict[str, Any]],
         hyperparameters: Dict[str, Any],
         training_data_info: Dict[str, Any],
@@ -389,12 +386,12 @@ class EvaluationReportGenerator:
         )
 
         # 构建特征重要性
-        features = []
+        features: List[FeatureImportance] = []
         # 处理不同的特征重要性格式
-        if isinstance(feature_importance, dict):
+        if isinstance(feature_importance, Mapping):
             # 如果是字典格式 {feature_name: importance}
             sorted_features = sorted(
-                feature_importance.items(), key=lambda x: x[1], reverse=True
+                feature_importance.items(), key=lambda item: item[1], reverse=True
             )
             for i, (feat_name, importance) in enumerate(sorted_features):
                 features.append(
@@ -402,13 +399,13 @@ class EvaluationReportGenerator:
                         feature_name=feat_name, importance=float(importance), rank=i + 1
                     )
                 )
-        elif isinstance(feature_importance, list):
+        else:
             # 如果是列表格式
             for i, feat in enumerate(feature_importance):
-                if isinstance(feat, dict):
+                if isinstance(feat, Mapping):
                     features.append(
                         FeatureImportance(
-                            feature_name=feat.get("name", f"feature_{i}"),
+                            feature_name=str(feat.get("name", f"feature_{i}")),
                             importance=float(feat.get("importance", 0.0)),
                             rank=i + 1,
                         )
@@ -420,24 +417,16 @@ class EvaluationReportGenerator:
                     )
 
         # 构建训练历史
-        history = []
+        history: List[TrainingHistory] = []
         for hist in training_history:
             history.append(
                 TrainingHistory(
                     epoch=int(hist.get("epoch", 0) or 0),
-                    train_loss=(
-                        None
-                        if hist.get("train_loss") is None
-                        else float(hist.get("train_loss", 0.0))
-                    ),
-                    val_loss=(
-                        None
-                        if hist.get("val_loss") is None
-                        else float(hist.get("val_loss", 0.0))
-                    ),
+                    train_loss=float(hist.get("train_loss") or 0.0),
+                    val_loss=float(hist.get("val_loss") or 0.0),
                     train_accuracy=float(hist.get("train_accuracy", 0.0) or 0.0),
                     val_accuracy=float(hist.get("val_accuracy", 0.0) or 0.0),
-                    timestamp=hist.get("timestamp", datetime.now().isoformat()),
+                    timestamp=str(hist.get("timestamp", datetime.now().isoformat())),
                 )
             )
 

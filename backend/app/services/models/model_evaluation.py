@@ -15,12 +15,10 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Dict,
     List,
     Optional,
     Tuple,
-    TypeVar,
     cast,
 )
 
@@ -28,36 +26,13 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
+from app.core.error_handler import handle_async_exception
 from app.core.logging import logger as app_logger
 
 logger = app_logger
 
-_F = TypeVar("_F", bound=Callable[..., Any])
-
 if TYPE_CHECKING:
     from .model_storage import ModelStorage
-
-# 导入统一的错误处理机制
-try:
-    from app.core.error_handler import (
-        DataError,
-        ErrorContext,
-        ErrorSeverity,
-        ModelError,
-        TaskError,
-        handle_async_exception,
-    )
-except ImportError:
-    logger.warning("错误处理模块未找到，使用默认错误处理")
-    ModelError = Exception
-    DataError = Exception
-    TaskError = Exception
-    ErrorSeverity = None
-    ErrorContext = None
-
-    def handle_async_exception(func: _F) -> _F:
-        return func
-
 
 # 从shared_types.py导入共享类型
 try:
@@ -224,7 +199,7 @@ class FinancialMetricsCalculator:
                 else:  # 预测下跌，持现金
                     trading_returns.append(0.0)
 
-        return cast(np.ndarray, np.array(trading_returns, dtype=float))
+        return np.array(trading_returns, dtype=float)
 
     @staticmethod
     def calculate_sharpe_ratio(

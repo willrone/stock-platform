@@ -11,7 +11,7 @@
 import json
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from loguru import logger
 from sqlalchemy import and_, select, update
@@ -37,8 +37,8 @@ class ModelStatus(Enum):
 class ModelLifecycleManager:
     """模型生命周期管理器"""
 
-    def __init__(self):
-        self.status_transitions = {
+    def __init__(self) -> None:
+        self.status_transitions: Dict[ModelStatus, List[ModelStatus]] = {
             # 允许的状态转换映射
             ModelStatus.CREATING: [ModelStatus.TRAINING, ModelStatus.FAILED],
             ModelStatus.TRAINING: [ModelStatus.READY, ModelStatus.FAILED],
@@ -162,7 +162,7 @@ class ModelLifecycleManager:
         to_status: str,
         reason: Optional[str],
         metadata: Optional[Dict[str, Any]],
-    ):
+    ) -> None:
         """记录生命周期事件"""
         event = ModelLifecycleEvent(
             model_id=model_id,
@@ -216,7 +216,7 @@ class ModelLifecycleManager:
                     "to_status": event.to_status,
                     "reason": event.reason,
                     "metadata": (
-                        json.loads(event.event_metadata)
+                        json.loads(str(event.event_metadata))
                         if event.event_metadata
                         else None
                     ),
@@ -269,7 +269,9 @@ class ModelLifecycleManager:
                     "model_name": model.model_name,
                     "model_type": model.model_type,
                     "status": model.status,
-                    "accuracy": model.accuracy,
+                    "accuracy": cast(
+                        Dict[str, Any], model.performance_metrics or {}
+                    ).get("accuracy"),
                     "created_at": model.created_at.isoformat(),
                     "updated_at": model.updated_at.isoformat(),
                 }
@@ -322,7 +324,7 @@ class ModelLifecycleManager:
             for model in models_to_cleanup:
                 # 转换到归档状态
                 success = await self.transition_status(
-                    model.model_id,
+                    str(model.model_id),
                     ModelStatus.ARCHIVED.value,
                     f"自动清理：超过{days_threshold}天的失败模型",
                     {"auto_cleanup": True, "days_threshold": days_threshold},
@@ -368,7 +370,7 @@ class ModelLifecycleManager:
                 )
             )
 
-            statistics = {}
+            statistics: Dict[str, int] = {}
             for status, count in result.fetchall():
                 statistics[status] = count
 

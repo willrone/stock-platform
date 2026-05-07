@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from sqlalchemy import text
@@ -34,7 +34,7 @@ def _safe_number(value: Any) -> Optional[float]:
         return None
 
 
-def _extract_model_id_from_task(task_config: Dict[str, Any]) -> Optional[str]:
+def _extract_model_id_from_task(task_config: Any) -> Optional[str]:
     if not isinstance(task_config, dict):
         return None
     candidates = [
@@ -50,7 +50,7 @@ def _extract_model_id_from_task(task_config: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _extract_backtest_result(task_result: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_backtest_result(task_result: Any) -> Dict[str, Any]:
     if not isinstance(task_result, dict):
         return {}
     nested = task_result.get("backtest_results")
@@ -131,7 +131,7 @@ def _normalize_datetime(value: Any) -> Optional[str]:
         return value
     if hasattr(value, "isoformat"):
         try:
-            return value.isoformat()
+            return str(value.isoformat())
         except Exception:
             return str(value)
     return str(value)
@@ -194,7 +194,7 @@ def _extract_monthly_return_summary(task_result: Dict[str, Any]) -> Dict[str, An
 def _extract_stock_contribution_summary(task_result: Dict[str, Any]) -> Dict[str, Any]:
     stock_details = task_result.get("stock_performance_detail")
     stock_details = stock_details if isinstance(stock_details, list) else []
-    normalized_details = []
+    normalized_details: List[Dict[str, Any]] = []
     for item in stock_details:
         if not isinstance(item, dict):
             continue
@@ -206,7 +206,9 @@ def _extract_stock_contribution_summary(task_result: Dict[str, Any]) -> Dict[str
                 "avg_pnl_per_trade": _safe_number(item.get("avg_pnl_per_trade")),
             }
         )
-    normalized_details.sort(key=lambda item: item["total_pnl"], reverse=True)
+    normalized_details.sort(
+        key=lambda item: float(item["total_pnl"]), reverse=True
+    )
     best_stock = task_result.get("best_performing_stock")
     best_stock = (
         best_stock
@@ -224,7 +226,7 @@ def _extract_stock_contribution_summary(task_result: Dict[str, Any]) -> Dict[str
         "worst_stock": worst_stock,
         "top_contributors": normalized_details[:3],
         "bottom_contributors": sorted(
-            normalized_details, key=lambda item: item["total_pnl"]
+            normalized_details, key=lambda item: float(item["total_pnl"])
         )[:3],
     }
 
@@ -274,7 +276,7 @@ def build_portfolio_bridge_summary(
         logger.warning(f"查询模型 {model_id} 的 bridge tasks 失败: {exc}")
         return _default_bridge_summary(model_id)
 
-    matched_tasks = []
+    matched_tasks: List[Dict[str, Any]] = []
     stock_rollup: dict[str, dict[str, Any]] = {}
     for row in task_rows:
         task_config = _safe_json_dict(row.config)
@@ -368,7 +370,8 @@ def build_portfolio_bridge_summary(
 
     if valid_returns:
         best_return = max(
-            valid_returns, key=lambda task: task["portfolio_metrics"]["total_return"]
+            valid_returns,
+            key=lambda task: float(task["portfolio_metrics"]["total_return"]),
         )
         summary["best_by_total_return"] = {
             "task_id": best_return["task_id"],
@@ -378,7 +381,8 @@ def build_portfolio_bridge_summary(
         }
     if valid_sharpes:
         best_sharpe = max(
-            valid_sharpes, key=lambda task: task["portfolio_metrics"]["sharpe_ratio"]
+            valid_sharpes,
+            key=lambda task: float(task["portfolio_metrics"]["sharpe_ratio"]),
         )
         summary["best_by_sharpe"] = {
             "task_id": best_sharpe["task_id"],
@@ -388,7 +392,8 @@ def build_portfolio_bridge_summary(
         }
     if valid_drawdowns:
         smallest_drawdown = max(
-            valid_drawdowns, key=lambda task: task["portfolio_metrics"]["max_drawdown"]
+            valid_drawdowns,
+            key=lambda task: float(task["portfolio_metrics"]["max_drawdown"]),
         )
         summary["smallest_drawdown"] = {
             "task_id": smallest_drawdown["task_id"],
@@ -422,8 +427,10 @@ def build_portfolio_bridge_summary(
     if valid_cost_tasks:
         largest_cost_gap = max(
             valid_cost_tasks,
-            key=lambda task: task["cost_metrics"].get("gross_minus_net_value_gap")
-            or float("-inf"),
+            key=lambda task: float(
+                task["cost_metrics"].get("gross_minus_net_value_gap")
+                or float("-inf")
+            ),
         )
         summary["cost_vs_gross_gap_rollup"]["largest_cost_gap"] = {
             "task_id": largest_cost_gap["task_id"],
@@ -435,8 +442,10 @@ def build_portfolio_bridge_summary(
         }
         best_gross = max(
             valid_cost_tasks,
-            key=lambda task: task["cost_metrics"].get("total_return_without_cost")
-            or float("-inf"),
+            key=lambda task: float(
+                task["cost_metrics"].get("total_return_without_cost")
+                or float("-inf")
+            ),
         )
         summary["cost_vs_gross_gap_rollup"]["best_gross_return"] = {
             "task_id": best_gross["task_id"],
@@ -449,7 +458,7 @@ def build_portfolio_bridge_summary(
         if valid_returns:
             best_net = max(
                 valid_returns,
-                key=lambda task: task["portfolio_metrics"]["total_return"],
+                key=lambda task: float(task["portfolio_metrics"]["total_return"]),
             )
             summary["cost_vs_gross_gap_rollup"]["best_net_return"] = {
                 "task_id": best_net["task_id"],
@@ -459,13 +468,13 @@ def build_portfolio_bridge_summary(
             }
 
     aggregated_stocks = sorted(
-        stock_rollup.values(), key=lambda item: item["total_pnl"], reverse=True
+        stock_rollup.values(), key=lambda item: float(item["total_pnl"]), reverse=True
     )
     summary["per_stock_contribution_rollup"]["stocks"] = aggregated_stocks
     if aggregated_stocks:
         summary["per_stock_contribution_rollup"]["best_overall"] = aggregated_stocks[0]
         summary["per_stock_contribution_rollup"]["worst_overall"] = min(
-            aggregated_stocks, key=lambda item: item["total_pnl"]
+            aggregated_stocks, key=lambda item: float(item["total_pnl"])
         )
 
     return summary

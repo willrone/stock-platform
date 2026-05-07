@@ -61,9 +61,9 @@ class ScheduledTask:
     name: str
     priority: TaskPriority
     resource_requirement: ResourceRequirement
-    task_func: Callable
-    args: tuple = field(default_factory=tuple)
-    kwargs: dict = field(default_factory=dict)
+    task_func: Callable[..., Any]
+    args: tuple[Any, ...] = field(default_factory=tuple)
+    kwargs: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     scheduled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
@@ -74,8 +74,10 @@ class ScheduledTask:
     retry_count: int = 0
     max_retries: int = 3
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> bool:
         """用于优先队列排序"""
+        if not isinstance(other, ScheduledTask):
+            return NotImplemented
         # 优先级高的任务排在前面，创建时间早的排在前面
         if self.priority.value != other.priority.value:
             return self.priority.value > other.priority.value
@@ -133,24 +135,24 @@ class TaskScheduler:
         self._scheduler_task: Optional[asyncio.Task] = None
 
         # 回调函数
-        self.task_callbacks: Dict[str, List[Callable]] = {
+        self.task_callbacks: Dict[str, List[Callable[..., Any]]] = {
             "task_started": [],
             "task_completed": [],
             "task_failed": [],
             "task_cancelled": [],
         }
 
-    def add_callback(self, event: str, callback: Callable):
+    def add_callback(self, event: str, callback: Callable[..., Any]) -> None:
         """添加事件回调函数"""
         if event in self.task_callbacks:
             self.task_callbacks[event].append(callback)
 
-    def remove_callback(self, event: str, callback: Callable):
+    def remove_callback(self, event: str, callback: Callable[..., Any]) -> None:
         """移除事件回调函数"""
         if event in self.task_callbacks and callback in self.task_callbacks[event]:
             self.task_callbacks[event].remove(callback)
 
-    async def _notify_callbacks(self, event: str, task: ScheduledTask):
+    async def _notify_callbacks(self, event: str, task: ScheduledTask) -> None:
         """通知回调函数"""
         for callback in self.task_callbacks.get(event, []):
             try:
@@ -164,11 +166,11 @@ class TaskScheduler:
     def schedule_task(
         self,
         name: str,
-        task_func: Callable,
+        task_func: Callable[..., Any],
         resource_requirement: ResourceRequirement,
         priority: TaskPriority = TaskPriority.NORMAL,
-        args: tuple = (),
-        kwargs: dict = None,
+        args: tuple[Any, ...] = (),
+        kwargs: Optional[dict[str, Any]] = None,
         max_retries: int = 3,
     ) -> str:
         """
@@ -272,9 +274,9 @@ class TaskScheduler:
             required_gpu_memory_gb=task.resource_requirement.gpu_memory_gb,
         )
 
-        return resource_check["available"]
+        return bool(resource_check.get("available", False))
 
-    async def _execute_task(self, task: ScheduledTask):
+    async def _execute_task(self, task: ScheduledTask) -> None:
         """执行任务"""
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now()
@@ -335,7 +337,7 @@ class TaskScheduler:
             ]:
                 self.completed_tasks[task.task_id] = task
 
-    async def _scheduler_loop(self):
+    async def _scheduler_loop(self) -> None:
         """调度器主循环"""
         while self._running:
             try:
@@ -358,7 +360,7 @@ class TaskScheduler:
                 logger.error(f"调度器循环出错: {e}")
                 await asyncio.sleep(self.check_interval)
 
-    async def start(self):
+    async def start(self) -> None:
         """启动调度器"""
         if self._running:
             logger.warning("任务调度器已经在运行")
@@ -368,7 +370,7 @@ class TaskScheduler:
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
         logger.info("任务调度器已启动")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """停止调度器"""
         if not self._running:
             return

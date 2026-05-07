@@ -16,6 +16,12 @@ import numpy as np
 from loguru import logger
 
 
+def _require_numeric_bound(value: Optional[float], name: str) -> float:
+    if value is None:
+        raise ValueError(f"超参数 {name} 缺少数值边界")
+    return value
+
+
 class SearchStrategy(Enum):
     """搜索策略"""
 
@@ -50,7 +56,9 @@ class HyperparameterTrial:
 class HyperparameterTuner:
     """超参数调优器"""
 
-    def __init__(self, search_strategy: SearchStrategy = SearchStrategy.GRID_SEARCH):
+    def __init__(
+        self, search_strategy: SearchStrategy = SearchStrategy.GRID_SEARCH
+    ) -> None:
         self.search_strategy = search_strategy
         self.trials: List[HyperparameterTrial] = []
         self.best_trial: Optional[HyperparameterTrial] = None
@@ -77,7 +85,7 @@ class HyperparameterTuner:
         logger.info(f"将测试 {len(param_combinations)} 组超参数")
 
         best_score = float("-inf")
-        best_trial = None
+        best_trial: Optional[HyperparameterTrial] = None
 
         for trial_id, params in enumerate(param_combinations):
             try:
@@ -112,6 +120,9 @@ class HyperparameterTuner:
                 )
                 self.trials.append(trial)
 
+        if best_trial is None:
+            raise ValueError("网格搜索未产生成功的超参数试验")
+
         self.best_trial = best_trial
         return best_trial
 
@@ -125,7 +136,7 @@ class HyperparameterTuner:
         logger.info(f"开始随机搜索超参数，试验次数: {n_trials}")
 
         best_score = float("-inf")
-        best_trial = None
+        best_trial: Optional[HyperparameterTrial] = None
 
         for trial_id in range(n_trials):
             # 随机采样参数
@@ -163,6 +174,9 @@ class HyperparameterTuner:
                 )
                 self.trials.append(trial)
 
+        if best_trial is None:
+            raise ValueError("随机搜索未产生成功的超参数试验")
+
         self.best_trial = best_trial
         return best_trial
 
@@ -170,32 +184,38 @@ class HyperparameterTuner:
         self, param_space: Dict[str, HyperparameterSpace]
     ) -> List[Dict[str, Any]]:
         """生成网格搜索的所有参数组合"""
-        param_values = {}
+        param_values: Dict[str, List[Any]] = {}
 
         for param_name, param_space_def in param_space.items():
             if param_space_def.param_type == "int":
-                values = list(
-                    range(
-                        int(param_space_def.min_value),
-                        int(param_space_def.max_value) + 1,
-                        int(param_space_def.step or 1),
-                    )
+                min_value = _require_numeric_bound(
+                    param_space_def.min_value, param_name
                 )
+                max_value = _require_numeric_bound(
+                    param_space_def.max_value, param_name
+                )
+                step = int(param_space_def.step or 1)
+                values = list(range(int(min_value), int(max_value) + 1, step))
             elif param_space_def.param_type == "float":
+                min_value = _require_numeric_bound(
+                    param_space_def.min_value, param_name
+                )
+                max_value = _require_numeric_bound(
+                    param_space_def.max_value, param_name
+                )
+                float_step = _require_numeric_bound(param_space_def.step, param_name)
                 values = np.arange(
-                    param_space_def.min_value,
-                    param_space_def.max_value + param_space_def.step,
-                    param_space_def.step,
+                    min_value, max_value + float_step, float_step
                 ).tolist()
             elif param_space_def.param_type == "choice":
-                values = param_space_def.choices
+                values = list(param_space_def.choices or [])
             else:
                 raise ValueError(f"不支持的参数类型: {param_space_def.param_type}")
 
             param_values[param_name] = values
 
         # 生成所有组合
-        combinations = []
+        combinations: List[Dict[str, Any]] = []
         for combination in product(*param_values.values()):
             combinations.append(dict(zip(param_values.keys(), combination)))
 
@@ -205,19 +225,35 @@ class HyperparameterTuner:
         self, param_space: Dict[str, HyperparameterSpace]
     ) -> Dict[str, Any]:
         """随机采样参数"""
-        params = {}
+        params: Dict[str, Any] = {}
 
         for param_name, param_space_def in param_space.items():
+            value: Any
             if param_space_def.param_type == "int":
-                value = np.random.randint(
-                    int(param_space_def.min_value), int(param_space_def.max_value) + 1
+                min_value = _require_numeric_bound(
+                    param_space_def.min_value, param_name
                 )
+                max_value = _require_numeric_bound(
+                    param_space_def.max_value, param_name
+                )
+                sampled_value = int(
+                    np.random.randint(int(min_value), int(max_value) + 1)
+                )
+                value = sampled_value
             elif param_space_def.param_type == "float":
-                value = np.random.uniform(
-                    param_space_def.min_value, param_space_def.max_value
+                min_value = _require_numeric_bound(
+                    param_space_def.min_value, param_name
                 )
+                max_value = _require_numeric_bound(
+                    param_space_def.max_value, param_name
+                )
+                sampled_float = float(np.random.uniform(min_value, max_value))
+                value = sampled_float
             elif param_space_def.param_type == "choice":
-                value = np.random.choice(param_space_def.choices)
+                choices = list(param_space_def.choices or [])
+                if not choices:
+                    raise ValueError(f"超参数 {param_name} 缺少可选值")
+                value = np.random.choice(choices).item()
             else:
                 raise ValueError(f"不支持的参数类型: {param_space_def.param_type}")
 

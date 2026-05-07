@@ -5,10 +5,10 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 from loguru import logger
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, ModelError
@@ -85,13 +85,15 @@ class ModelTrainer:
 class RandomForestTrainer(ModelTrainer):
     """随机森林训练器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(ModelType.RANDOM_FOREST)
 
     def create_model(self, hyperparameters: Dict[str, Any]) -> Any:
         """创建随机森林模型"""
         try:
-            from sklearn.ensemble import RandomForestRegressor
+            from sklearn.ensemble import (  # type: ignore[import-untyped,unused-ignore]
+                RandomForestRegressor,
+            )
 
             default_params = {
                 "n_estimators": 100,
@@ -134,13 +136,15 @@ class RandomForestTrainer(ModelTrainer):
 class LinearRegressionTrainer(ModelTrainer):
     """线性回归训练器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(ModelType.LINEAR_REGRESSION)
 
     def create_model(self, hyperparameters: Dict[str, Any]) -> Any:
         """创建线性回归模型"""
         try:
-            from sklearn.linear_model import LinearRegression
+            from sklearn.linear_model import (  # type: ignore[import-untyped,unused-ignore]
+                LinearRegression,
+            )
 
             return LinearRegression(**hyperparameters)
         except ImportError:
@@ -174,12 +178,12 @@ class LinearRegressionTrainer(ModelTrainer):
 class MockModel:
     """模拟模型类，用于在没有sklearn时提供基本功能"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.is_fitted = False
-        self.feature_importances_ = None
-        self.coef_ = None
+        self.feature_importances_: Optional[np.ndarray[Any, Any]] = None
+        self.coef_: Optional[np.ndarray[Any, Any]] = None
 
-    def fit(self, X, y):
+    def fit(self, X: Any, y: Any) -> "MockModel":
         """模拟训练"""
         self.is_fitted = True
         n_features = X.shape[1] if hasattr(X, "shape") else len(X.columns)
@@ -187,12 +191,12 @@ class MockModel:
         self.coef_ = np.random.randn(n_features)
         return self
 
-    def predict(self, X):
+    def predict(self, X: Any) -> np.ndarray[Any, Any]:
         """模拟预测"""
         if not self.is_fitted:
             raise ValueError("模型未训练")
         n_samples = X.shape[0] if hasattr(X, "shape") else len(X)
-        return np.random.randn(n_samples)
+        return cast(np.ndarray[Any, Any], np.asarray(np.random.randn(n_samples)))
 
 
 class TrainerFactory:
@@ -216,7 +220,7 @@ class TrainerFactory:
 class ModelTrainingService:
     """模型训练服务"""
 
-    def __init__(self, model_storage: ModelStorage, data_dir: str = "backend/data"):
+    def __init__(self, model_storage: ModelStorage, data_dir: str = "backend/data") -> None:
         self.model_storage = model_storage
         self.data_dir = Path(data_dir)
 
@@ -237,7 +241,7 @@ class ModelTrainingService:
         end_date: datetime,
         config: TrainingConfig,
         created_by: str,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
     ) -> TrainingResult:
         """训练模型"""
         training_start_time = datetime.utcnow()
@@ -489,14 +493,23 @@ class ModelTrainingService:
 
         return X, y
 
-    def _train_test_split(self, X, y, test_size=0.2, random_state=42):
+    def _train_test_split(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        test_size: float = 0.2,
+        random_state: int = 42,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         """数据分割"""
         try:
-            from sklearn.model_selection import train_test_split
+            from sklearn.model_selection import (  # type: ignore[import-untyped,unused-ignore]
+                train_test_split,
+            )
 
-            return train_test_split(
+            X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=random_state
             )
+            return X_train, X_test, y_train, y_test
         except ImportError:
             # 简单的数据分割实现
             n_samples = len(X)
@@ -523,14 +536,14 @@ class ModelTrainingService:
             y_pred = model.predict(X)
 
             # 计算基本指标
-            mse = np.mean((y - y_pred) ** 2)
-            mae = np.mean(np.abs(y - y_pred))
+            mse = float(np.mean((y - y_pred) ** 2))
+            mae = float(np.mean(np.abs(y - y_pred)))
             rmse = float(np.sqrt(mse))
 
             # 计算R²
-            ss_res = np.sum((y - y_pred) ** 2)
-            ss_tot = np.sum((y - np.mean(y)) ** 2)
-            r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+            ss_res: float = float(np.sum((y - y_pred) ** 2))
+            ss_tot: float = float(np.sum((y - np.mean(y)) ** 2))
+            r2: float = 1.0 - (ss_res / ss_tot) if ss_tot != 0 else 0.0
 
             # 对于回归模型，计算方向准确率（预测涨跌方向的准确率）
             # 如果y是价格变化率或收益率
@@ -547,8 +560,8 @@ class ModelTrainingService:
                 # 对齐长度
                 min_len = min(len(y_direction), len(y_pred_direction))
                 if min_len > 0:
-                    direction_accuracy = np.mean(
-                        y_direction[:min_len] == y_pred_direction[:min_len]
+                    direction_accuracy: float = float(
+                        np.mean(y_direction[:min_len] == y_pred_direction[:min_len])
                     )
                 else:
                     direction_accuracy = 0.0
@@ -560,7 +573,7 @@ class ModelTrainingService:
             # 2. 如果R²为正，也可以使用R²，但方向准确率更直观
             # 3. 如果R²为负，说明模型比简单均值还差，设为0
             if direction_accuracy > 0:
-                accuracy_metric = direction_accuracy
+                accuracy_metric: float = direction_accuracy
             elif r2 > 0:
                 # R²为正时，可以转换为0-1范围（R²通常在0-1之间，但可能超过1）
                 accuracy_metric = min(1.0, max(0.0, r2))
@@ -592,15 +605,15 @@ class ModelTrainingService:
         try:
             from sklearn.model_selection import cross_val_score
 
-            scores = cross_val_score(
+            cv_scores = cross_val_score(
                 model, X, y, cv=cv, scoring="neg_mean_squared_error"
             )
-            return [-score for score in scores]  # 转换为正值
+            return [float(-score) for score in cv_scores]  # 转换为正值
         except ImportError:
             # 简单的交叉验证实现
             n_samples = len(X)
             fold_size = n_samples // cv
-            scores = []
+            fallback_scores: List[float] = []
 
             for i in range(cv):
                 start_idx = i * fold_size
@@ -622,12 +635,12 @@ class ModelTrainingService:
                 fold_model.fit(X_fold_train, y_fold_train)
                 y_pred = fold_model.predict(X_fold_val)
 
-                mse = np.mean((y_fold_val - y_pred) ** 2)
-                scores.append(mse)
+                mse = float(np.mean((y_fold_val - y_pred) ** 2))
+                fallback_scores.append(mse)
 
-            return scores
+            return fallback_scores
 
-    def _update_average_training_time(self, training_time: float):
+    def _update_average_training_time(self, training_time: float) -> None:
         """更新平均训练时间"""
         total_successful = self.training_stats["successful_trainings"]
         if total_successful == 1:

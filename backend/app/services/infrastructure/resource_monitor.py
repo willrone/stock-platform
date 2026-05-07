@@ -6,7 +6,7 @@
 import asyncio
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import psutil
 from loguru import logger
@@ -72,13 +72,13 @@ class ResourceMonitor:
         self.usage_history: List[ResourceUsage] = []
         self._monitoring = False
         self._monitor_task: Optional[asyncio.Task] = None
-        self.callbacks: List[callable] = []
+        self.callbacks: List[Callable[..., Any]] = []
 
-    def add_callback(self, callback: callable):
+    def add_callback(self, callback: Callable[..., Any]) -> None:
         """添加资源使用回调函数"""
         self.callbacks.append(callback)
 
-    def remove_callback(self, callback: callable):
+    def remove_callback(self, callback: Callable[..., Any]) -> None:
         """移除资源使用回调函数"""
         if callback in self.callbacks:
             self.callbacks.remove(callback)
@@ -101,7 +101,7 @@ class ResourceMonitor:
         disk_total_gb = disk.total / (1024**3)
 
         # GPU使用情况
-        gpu_usage = None
+        gpu_usage: Optional[List[Dict[str, Any]]] = None
         if GPU_AVAILABLE:
             try:
                 gpus = GPUtil.getGPUs()
@@ -232,7 +232,7 @@ class ResourceMonitor:
 
         return alerts
 
-    async def _monitor_loop(self, interval: float = 30.0):
+    async def _monitor_loop(self, interval: float = 30.0) -> None:
         """监控循环"""
         while self._monitoring:
             try:
@@ -270,7 +270,7 @@ class ResourceMonitor:
                 logger.error(f"资源监控循环出错: {e}")
                 await asyncio.sleep(interval)
 
-    async def start_monitoring(self, interval: float = 30.0):
+    async def start_monitoring(self, interval: float = 30.0) -> None:
         """开始监控"""
         if self._monitoring:
             logger.warning("资源监控已经在运行")
@@ -280,7 +280,7 @@ class ResourceMonitor:
         self._monitor_task = asyncio.create_task(self._monitor_loop(interval))
         logger.info(f"开始资源监控，间隔 {interval} 秒")
 
-    async def stop_monitoring(self):
+    async def stop_monitoring(self) -> None:
         """停止监控"""
         if not self._monitoring:
             return
@@ -302,7 +302,7 @@ class ResourceMonitor:
         if not start_time and not end_time:
             return self.usage_history.copy()
 
-        filtered_history = []
+        filtered_history: List[ResourceUsage] = []
         for usage in self.usage_history:
             if start_time and usage.timestamp < start_time:
                 continue

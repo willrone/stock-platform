@@ -10,7 +10,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from loguru import logger
 from sqlalchemy import and_, desc, func, or_, select
@@ -25,7 +25,7 @@ from .model_lifecycle_manager import ModelStatus, model_lifecycle_manager
 class EnhancedModelStorage:
     """增强的模型存储服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.lifecycle_manager = model_lifecycle_manager
         self.lineage_tracker = lineage_tracker
 
@@ -106,9 +106,11 @@ class EnhancedModelStorage:
             db.add(model)
             await db.flush()  # 获取模型ID
 
+            model_id = str(model.model_id)
+
             # 记录血缘信息
             lineage_success = await self.lineage_tracker.record_training_lineage(
-                model.model_id,
+                model_id,
                 training_config,
                 data_sources,
                 feature_config,
@@ -117,11 +119,11 @@ class EnhancedModelStorage:
             )
 
             if not lineage_success:
-                logger.warning(f"血缘信息记录失败，但模型创建继续: {model.model_id}")
+                logger.warning(f"血缘信息记录失败，但模型创建继续: {model_id}")
 
             # 记录生命周期事件
             await self.lifecycle_manager.transition_status(
-                model.model_id,
+                model_id,
                 ModelStatus.TRAINING.value,
                 "开始训练",
                 {
@@ -136,13 +138,13 @@ class EnhancedModelStorage:
 
             result = {
                 "success": True,
-                "model_id": model.model_id,
+                "model_id": model_id,
                 "model_name": model.model_name,
                 "status": model.status,
                 "lineage_recorded": lineage_success,
             }
 
-            logger.info(f"模型创建成功: {model.model_id}")
+            logger.info(f"模型创建成功: {model_id}")
             return result
 
         except Exception as e:
@@ -260,7 +262,7 @@ class EnhancedModelStorage:
                 count_query = count_query.where(and_(*conditions))
 
             total_result = await db.execute(count_query)
-            total_count = total_result.scalar()
+            total_count = int(total_result.scalar() or 0)
 
             # 获取模型列表
             models_query = (
@@ -272,13 +274,14 @@ class EnhancedModelStorage:
             models = models_result.scalars().all()
 
             # 过滤结果
-            filtered_models = []
+            filtered_models: List[Dict[str, Any]] = []
             for model in models:
                 # 标签过滤
                 if tags:
-                    model_tags = []
-                    if model.hyperparameters and "tags" in model.hyperparameters:
-                        model_tags = model.hyperparameters["tags"]
+                    model_tags: List[str] = []
+                    hyperparameters = cast(Dict[str, Any], model.hyperparameters or {})
+                    if "tags" in hyperparameters:
+                        model_tags = cast(List[str], hyperparameters["tags"])
 
                     if not any(tag in model_tags for tag in tags):
                         continue
@@ -293,7 +296,7 @@ class EnhancedModelStorage:
                         continue
 
                 # 构建返回数据
-                model_data = model.to_dict()
+                model_data = dict(model.to_dict())
 
                 # 添加标签信息
                 if model.hyperparameters and "tags" in model.hyperparameters:
@@ -379,7 +382,7 @@ class EnhancedModelStorage:
                 return {"error": f"模型不存在: {model_id}"}
 
             # 构建基本信息
-            model_data = model.to_dict()
+            model_data = dict(model.to_dict())
 
             # 添加标签信息
             if model.hyperparameters and "tags" in model.hyperparameters:
@@ -448,11 +451,15 @@ class EnhancedModelStorage:
             if not metrics:
                 metrics = ["accuracy", "precision", "recall", "f1_score", "auc"]
 
-            comparison_data = {"models": [], "metrics_comparison": {}, "summary": {}}
+            comparison_data: Dict[str, Any] = {
+                "models": [],
+                "metrics_comparison": {},
+                "summary": {},
+            }
 
             # 收集模型数据
             for model in models:
-                model_info = {
+                model_info: Dict[str, Any] = {
                     "model_id": model.model_id,
                     "model_name": model.model_name,
                     "model_type": model.model_type,
@@ -471,7 +478,7 @@ class EnhancedModelStorage:
 
             # 对比指标
             for metric in metrics:
-                metric_values = []
+                metric_values: List[Dict[str, Any]] = []
                 for model in models:
                     if (
                         model.performance_metrics
@@ -489,7 +496,10 @@ class EnhancedModelStorage:
                     # 排序
                     metric_values.sort(key=lambda x: x["value"], reverse=True)
 
-                    comparison_data["metrics_comparison"][metric] = {
+                    metrics_comparison = cast(
+                        Dict[str, Any], comparison_data["metrics_comparison"]
+                    )
+                    metrics_comparison[metric] = {
                         "values": metric_values,
                         "best": metric_values[0] if metric_values else None,
                         "worst": metric_values[-1] if metric_values else None,
@@ -502,8 +512,11 @@ class EnhancedModelStorage:
 
             # 生成摘要
             if comparison_data["metrics_comparison"]:
-                best_overall = {}
-                for _metric, data in comparison_data["metrics_comparison"].items():
+                best_overall: Dict[str, int] = {}
+                metrics_comparison = cast(
+                    Dict[str, Dict[str, Any]], comparison_data["metrics_comparison"]
+                )
+                for _metric, data in metrics_comparison.items():
                     if data["best"]:
                         model_id = data["best"]["model_id"]
                         if model_id not in best_overall:
@@ -511,7 +524,7 @@ class EnhancedModelStorage:
                         best_overall[model_id] += 1
 
                 if best_overall:
-                    best_model_id = max(best_overall, key=best_overall.get)
+                    best_model_id = max(best_overall, key=lambda mid: best_overall[mid])
                     best_model = next(m for m in models if m.model_id == best_model_id)
 
                     comparison_data["summary"] = {
@@ -519,10 +532,10 @@ class EnhancedModelStorage:
                             "model_id": best_model.model_id,
                             "model_name": best_model.model_name,
                             "wins_count": best_overall[best_model_id],
-                            "total_metrics": len(comparison_data["metrics_comparison"]),
+                            "total_metrics": len(metrics_comparison),
                         },
                         "total_models": len(models),
-                        "compared_metrics": len(comparison_data["metrics_comparison"]),
+                        "compared_metrics": len(metrics_comparison),
                     }
 
             return comparison_data

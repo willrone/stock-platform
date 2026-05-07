@@ -5,7 +5,7 @@
 import asyncio
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -96,13 +96,13 @@ class DeploymentConfig:
 
     # 监控配置
     monitoring_enabled: bool = True
-    alert_thresholds: Dict[str, float] = None
+    alert_thresholds: Optional[Dict[str, float]] = None
 
     # 回滚配置
     auto_rollback: bool = True
     rollback_threshold: float = 0.1  # 性能下降阈值
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.alert_thresholds is None:
             self.alert_thresholds = {
                 "error_rate": 0.05,
@@ -147,7 +147,7 @@ class DeploymentRecord:
 class ModelEvaluator:
     """模型评估器"""
 
-    def __init__(self, model_storage: ModelStorage, data_dir: str = "backend/data"):
+    def __init__(self, model_storage: ModelStorage, data_dir: str = "backend/data") -> None:
         self.model_storage = model_storage
         self.data_dir = Path(data_dir)
 
@@ -267,6 +267,8 @@ class ModelEvaluator:
             test_days = config.get("test_days", 30)
             end_date = datetime.utcnow().date()
             start_date = end_date - timedelta(days=test_days)
+            start_datetime = datetime.combine(start_date, time.min)
+            end_datetime = datetime.combine(end_date, time.min)
 
             # 获取训练时使用的股票代码
             stock_codes = metadata.training_data_info.get("stock_codes", ["000001.SZ"])
@@ -274,7 +276,9 @@ class ModelEvaluator:
             # 加载测试数据
             all_data = []
             for stock_code in stock_codes:
-                stock_data = self._load_stock_data(stock_code, start_date, end_date)
+                stock_data = self._load_stock_data(
+                    stock_code, start_datetime, end_datetime
+                )
                 if len(stock_data) > 0:
                     all_data.append(stock_data)
 
@@ -301,7 +305,9 @@ class ModelEvaluator:
             logger.error(f"准备测试数据失败: {e}")
             raise
 
-    def _load_stock_data(self, stock_code: str, start_date, end_date) -> pd.DataFrame:
+    def _load_stock_data(
+        self, stock_code: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """加载股票数据"""
         # 使用统一的数据加载器
         from app.services.data.stock_data_loader import StockDataLoader
@@ -370,7 +376,7 @@ class ModelEvaluator:
     ) -> Dict[str, float]:
         """评估模型稳定性"""
         try:
-            metrics = {}
+            metrics: Dict[str, float] = {}
 
             # 时间窗口稳定性测试
             window_size = min(len(test_data) // 5, 100)  # 5个时间窗口
@@ -381,7 +387,7 @@ class ModelEvaluator:
             if not feature_columns:
                 feature_columns = [col for col in test_data.columns if col != "close"]
 
-            window_scores = []
+            window_scores: List[float] = []
             for i in range(0, len(test_data) - window_size, window_size):
                 window_data = test_data.iloc[i : i + window_size]
                 X = window_data[feature_columns]
@@ -395,7 +401,7 @@ class ModelEvaluator:
                     y_pred = model.predict(X)
                     from sklearn.metrics import r2_score
 
-                    score = r2_score(y, y_pred)
+                    score = float(r2_score(y, y_pred))
                     window_scores.append(score)
                 except Exception:
                     continue
@@ -417,7 +423,7 @@ class ModelEvaluator:
     ) -> Dict[str, float]:
         """评估业务指标"""
         try:
-            metrics = {}
+            metrics: Dict[str, float] = {}
 
             feature_columns = metadata.feature_columns
             if not feature_columns:
@@ -582,7 +588,7 @@ class ModelEvaluator:
             logger.error(f"生成建议失败: {e}")
             return "reject"
 
-    def _save_evaluation(self, evaluation: ModelEvaluation):
+    def _save_evaluation(self, evaluation: ModelEvaluation) -> None:
         """保存评估结果"""
         try:
             evaluation_dir = Path("backend/models/evaluations")
@@ -606,7 +612,7 @@ class ModelEvaluator:
 class ModelDeploymentService:
     """模型部署服务"""
 
-    def __init__(self, model_storage: ModelStorage, evaluator: ModelEvaluator):
+    def __init__(self, model_storage: ModelStorage, evaluator: ModelEvaluator) -> None:
         self.model_storage = model_storage
         self.evaluator = evaluator
 
@@ -773,7 +779,7 @@ class ModelDeploymentService:
                 original_exception=e,
             )
 
-    def _execute_deployment(self, deployment_record: DeploymentRecord):
+    def _execute_deployment(self, deployment_record: DeploymentRecord) -> None:
         """执行实际部署"""
         try:
             # 加载模型
@@ -799,7 +805,7 @@ class ModelDeploymentService:
 
     def _deploy_to_production(
         self, model: Any, metadata: ModelMetadata, deployment_record: DeploymentRecord
-    ):
+    ) -> None:
         """部署到生产环境"""
         # 这里实现生产环境部署逻辑
         # 例如：更新模型服务、重启预测服务等
@@ -820,7 +826,7 @@ class ModelDeploymentService:
 
     def _deploy_to_staging(
         self, model: Any, metadata: ModelMetadata, deployment_record: DeploymentRecord
-    ):
+    ) -> None:
         """部署到测试环境"""
         logger.info(f"部署到测试环境: {deployment_record.model_id}")
 
@@ -834,7 +840,7 @@ class ModelDeploymentService:
 
     def _deploy_canary(
         self, model: Any, metadata: ModelMetadata, deployment_record: DeploymentRecord
-    ):
+    ) -> None:
         """金丝雀部署"""
         logger.info(f"金丝雀部署: {deployment_record.model_id}")
 
@@ -919,7 +925,7 @@ class ModelDeploymentService:
                 original_exception=e,
             )
 
-    def _execute_rollback(self, deployment_record: DeploymentRecord):
+    def _execute_rollback(self, deployment_record: DeploymentRecord) -> None:
         """执行回滚操作"""
         logger.info(f"执行回滚: {deployment_record.deployment_id}")
 
@@ -961,11 +967,11 @@ class ModelDeploymentService:
 class ModelPerformanceMonitor:
     """模型性能监控器"""
 
-    def __init__(self):
-        self.monitoring_tasks: Dict[str, asyncio.Task] = {}
+    def __init__(self) -> None:
+        self.monitoring_tasks: Dict[str, asyncio.Task[Any]] = {}
         self.performance_data: Dict[str, List[Dict[str, Any]]] = {}
 
-    def start_monitoring(self, deployment_id: str, config: DeploymentConfig):
+    def start_monitoring(self, deployment_id: str, config: DeploymentConfig) -> None:
         """开始监控部署"""
         logger.info(f"开始监控部署: {deployment_id}")
 
@@ -973,7 +979,7 @@ class ModelPerformanceMonitor:
         # 例如：定期检查模型性能、收集指标等
         self.performance_data[deployment_id] = []
 
-    def stop_monitoring(self, deployment_id: str):
+    def stop_monitoring(self, deployment_id: str) -> None:
         """停止监控部署"""
         logger.info(f"停止监控部署: {deployment_id}")
 

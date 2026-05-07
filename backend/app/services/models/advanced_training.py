@@ -8,7 +8,7 @@
 import pickle
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import torch
@@ -17,72 +17,32 @@ import xgboost as xgb
 from loguru import logger
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
-# 从shared_types.py导入共享类型
-try:
-    from .shared_types import (
-        BacktestMetrics,
-        EnsembleConfig,
-        EnsembleMethod,
-        ModelStatus,
-        ModelType,
-        OnlineLearningConfig,
-    )
-
-    SHARED_TYPES_AVAILABLE = True
-except ImportError:
-    SHARED_TYPES_AVAILABLE = False
-    ModelType = None
-    ModelStatus = None
-    EnsembleMethod = None
-    EnsembleConfig = None
-    OnlineLearningConfig = None
-    BacktestMetrics = None
+from app.core.error_handler import handle_async_exception
 
 # 可选导入ModelEvaluator
-try:
-    from .model_evaluation import ModelEvaluator
+from .model_evaluation import ModelEvaluator
 
-    MODEL_EVALUATOR_AVAILABLE = True
-except ImportError:
-    MODEL_EVALUATOR_AVAILABLE = False
-    ModelEvaluator = None
-
-# 导入统一的错误处理机制
-try:
-    from app.core.error_handler import (
-        DataError,
-        ErrorContext,
-        ErrorSeverity,
-        ModelError,
-        TaskError,
-        handle_async_exception,
-    )
-except ImportError:
-    logger.warning("错误处理模块未找到，使用默认错误处理")
-    ModelError = Exception
-    DataError = Exception
-    TaskError = Exception
-    ErrorSeverity = None
-    ErrorContext = None
-
-    def handle_async_exception(func):
-        return func
+# 从shared_types.py导入共享类型
+from .shared_types import (
+    EnsembleConfig,
+    EnsembleMethod,
+    ModelType,
+    OnlineLearningConfig,
+)
 
 if TYPE_CHECKING:
     from .model_training import ModelTrainingService
 
 
+OnlineUpdateMetrics = Dict[str, float | str | bool]
+
+
 class EnsembleModelManager:
     """集成模型管理器"""
 
-    def __init__(self, model_training_service: "ModelTrainingService"):
+    def __init__(self, model_training_service: "ModelTrainingService") -> None:
         self.training_service = model_training_service
-        # 可选创建ModelEvaluator
-        if MODEL_EVALUATOR_AVAILABLE and ModelEvaluator is not None:
-            self.evaluator = ModelEvaluator()
-        else:
-            self.evaluator = None
-            logger.warning("ModelEvaluator不可用，集成模型评估功能可能受限")
+        self.evaluator = ModelEvaluator()
         # 修复路径问题
         from app.core.config import settings
 
@@ -100,7 +60,7 @@ class EnsembleModelManager:
             self.ensemble_dir = (backend_dir / "data" / "ensembles").resolve()
             self.ensemble_dir.mkdir(parents=True, exist_ok=True)
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def create_ensemble(
         self,
         ensemble_id: str,
@@ -170,7 +130,7 @@ class EnsembleModelManager:
         )
         return ensemble_info
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _load_base_models(self, model_ids: List[str]) -> List[Any]:
         """加载基础模型"""
         models = []
@@ -209,7 +169,7 @@ class EnsembleModelManager:
 
         return models
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _create_voting_ensemble(
         self,
         base_models: List[Dict],
@@ -259,7 +219,7 @@ class EnsembleModelManager:
 
         return ensemble_model
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _create_weighted_ensemble(
         self,
         base_models: List[Dict],
@@ -291,7 +251,7 @@ class EnsembleModelManager:
 
         return ensemble_model
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _create_stacking_ensemble(
         self,
         base_models: List[Dict],
@@ -355,7 +315,7 @@ class EnsembleModelManager:
 
         return ensemble_model
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _create_bagging_ensemble(
         self,
         base_models: List[Dict],
@@ -374,7 +334,7 @@ class EnsembleModelManager:
 
         return ensemble_model
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _get_model_predictions(
         self, model: Any, X: np.ndarray, model_type: str
     ) -> np.ndarray:
@@ -388,7 +348,7 @@ class EnsembleModelManager:
 
             dtest = xgb.DMatrix(X_flat)
             predictions = model.predict(dtest)
-            return (predictions > 0.5).astype(int)
+            return cast(np.ndarray, (predictions > 0.5).astype(int))
 
         else:
             # PyTorch模型预测
@@ -399,7 +359,7 @@ class EnsembleModelManager:
                 predictions = torch.argmax(outputs, dim=1).numpy()
             return predictions
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _predict_ensemble(
         self, ensemble_model: Dict[str, Any], X: np.ndarray
     ) -> np.ndarray:
@@ -419,7 +379,7 @@ class EnsembleModelManager:
 
             # 加权平均
             final_predictions = np.sum(predictions, axis=0)
-            return (final_predictions > 0.5).astype(int)
+            return cast(np.ndarray, (final_predictions > 0.5).astype(int))
 
         elif ensemble_type == "stacking":
             # 获取基础模型预测作为元特征
@@ -435,7 +395,7 @@ class EnsembleModelManager:
             # 使用元模型预测
             meta_model = ensemble_model["meta_model"]
             if ensemble_model["meta_model_type"] == "xgboost":
-                return meta_model.predict(meta_X)
+                return cast(np.ndarray, meta_model.predict(meta_X))
             else:
                 with torch.no_grad():
                     meta_X_tensor = torch.FloatTensor(meta_X)
@@ -454,7 +414,7 @@ class EnsembleModelManager:
             # 多数投票
             predictions_array = np.array(predictions)
             final_predictions = np.mean(predictions_array, axis=0)
-            return (final_predictions > 0.5).astype(int)
+            return cast(np.ndarray, (final_predictions > 0.5).astype(int))
 
         else:
             raise ValueError(f"不支持的集成类型: {ensemble_type}")
@@ -475,10 +435,10 @@ class OnlineLearningManager:
 
     def __init__(self, model_training_service: "ModelTrainingService"):
         self.training_service = model_training_service
-        self.memory_buffer = {}  # 存储最近的训练数据
-        self.model_performance_history = {}  # 模型性能历史
+        self.memory_buffer: Dict[str, Dict[str, Any]] = {}  # 存储最近的训练数据
+        self.model_performance_history: Dict[str, Dict[str, Any]] = {}  # 模型性能历史
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def setup_online_learning(
         self, model_id: str, config: OnlineLearningConfig
     ) -> Dict[str, Any]:
@@ -519,14 +479,14 @@ class OnlineLearningManager:
         logger.info(f"模型 {model_id} 在线学习设置完成")
         return setup_info
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def update_model_online(
         self,
         model_id: str,
         new_data: np.ndarray,
         new_labels: np.ndarray,
         current_model: Any,
-    ) -> Tuple[Any, Dict[str, float]]:
+    ) -> Tuple[Any, OnlineUpdateMetrics]:
         """
         在线更新模型
 
@@ -594,7 +554,7 @@ class OnlineLearningManager:
             logger.info(f"数据不足，跳过模型 {model_id} 的在线更新")
             return current_model, {"accuracy": 0.0, "message": "insufficient_data"}
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _incremental_training(
         self, model: Any, X: np.ndarray, y: np.ndarray, model_id: str
     ) -> Any:
@@ -655,10 +615,10 @@ class OnlineLearningManager:
             logger.warning(f"不支持的模型类型进行增量训练: {type(model)}")
             return model
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _evaluate_online_model(
         self, model: Any, X: np.ndarray, y: np.ndarray
-    ) -> Dict[str, float]:
+    ) -> OnlineUpdateMetrics:
         """评估在线模型"""
         try:
             if isinstance(model, xgb.Booster):
@@ -680,13 +640,17 @@ class OnlineLearningManager:
             precision = precision_score(y, y_pred, zero_division=0)
             recall = recall_score(y, y_pred, zero_division=0)
 
-            return {"accuracy": accuracy, "precision": precision, "recall": recall}
+            return {
+                "accuracy": float(accuracy),
+                "precision": float(precision),
+                "recall": float(recall),
+            }
 
         except Exception as e:
             logger.error(f"在线模型评估失败: {e}")
             return {"accuracy": 0.0, "error": str(e)}
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def _should_retrain(
         self, model_id: str, current_metrics: Dict[str, float]
     ) -> bool:
@@ -710,13 +674,15 @@ class OnlineLearningManager:
         # 如果性能下降超过阈值，建议重训练
         performance_drop = historical_best - recent_avg
 
-        return performance_drop > config.adaptation_threshold
+        return bool(performance_drop > config.adaptation_threshold)
 
 
 class AdvancedTrainingService:
     """高级训练服务主类"""
 
-    def __init__(self, model_training_service=None):
+    def __init__(
+        self, model_training_service: Optional["ModelTrainingService"] = None
+    ) -> None:
         """
         初始化高级训练服务
 
@@ -724,11 +690,11 @@ class AdvancedTrainingService:
             model_training_service: ModelTrainingService实例，如果为None则不创建（避免循环依赖）
         """
         self.model_training_service = model_training_service
-        self.ensemble_manager = None
-        self.online_learning_manager = None
+        self.ensemble_manager: Optional[EnsembleModelManager] = None
+        self.online_learning_manager: Optional[OnlineLearningManager] = None
 
-    @handle_async_exception
-    async def initialize(self):
+    @handle_async_exception  # type: ignore[untyped-decorator]
+    async def initialize(self) -> None:
         """初始化服务"""
         # 如果已经有model_training_service实例，直接使用
         # 如果没有，则不初始化（避免循环依赖）
@@ -743,7 +709,7 @@ class AdvancedTrainingService:
 
         logger.info("高级训练服务初始化完成")
 
-    @handle_async_exception
+    @handle_async_exception  # type: ignore[untyped-decorator]
     async def create_ensemble_model(
         self,
         ensemble_id: str,
@@ -751,17 +717,23 @@ class AdvancedTrainingService:
         validation_data: Tuple[np.ndarray, np.ndarray],
     ) -> Dict[str, Any]:
         """创建集成模型"""
-        return await self.ensemble_manager.create_ensemble(
+        if self.ensemble_manager is None:
+            raise RuntimeError("AdvancedTrainingService尚未初始化集成模型管理器")
+        ensemble_info = await self.ensemble_manager.create_ensemble(
             ensemble_id, config, validation_data
         )
+        return dict(ensemble_info)
 
     async def setup_online_learning(
         self, model_id: str, config: OnlineLearningConfig
     ) -> Dict[str, Any]:
         """设置在线学习"""
-        return await self.online_learning_manager.setup_online_learning(
+        if self.online_learning_manager is None:
+            raise RuntimeError("AdvancedTrainingService尚未初始化在线学习管理器")
+        setup_info = await self.online_learning_manager.setup_online_learning(
             model_id, config
         )
+        return dict(setup_info)
 
     async def update_model_online(
         self,
@@ -769,11 +741,14 @@ class AdvancedTrainingService:
         new_data: np.ndarray,
         new_labels: np.ndarray,
         current_model: Any,
-    ) -> Tuple[Any, Dict[str, float]]:
+    ) -> Tuple[Any, OnlineUpdateMetrics]:
         """在线更新模型"""
-        return await self.online_learning_manager.update_model_online(
+        if self.online_learning_manager is None:
+            raise RuntimeError("AdvancedTrainingService尚未初始化在线学习管理器")
+        updated_model, metrics = await self.online_learning_manager.update_model_online(
             model_id, new_data, new_labels, current_model
         )
+        return updated_model, dict(metrics)
 
 
 # 导出主要类和函数

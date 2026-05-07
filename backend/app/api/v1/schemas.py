@@ -33,12 +33,12 @@ class StandardResponse(BaseModel):
         },
     )
 
-    def model_dump_json(self, **kwargs):
+    def model_dump_json(self, **kwargs: Any) -> str:
         """自定义JSON序列化，确保datetime正确序列化"""
         import json
         from datetime import datetime
 
-        def json_serial(obj):
+        def json_serial(obj: Any) -> Any:
             """JSON序列化辅助函数"""
             if isinstance(obj, datetime):
                 return obj.isoformat()

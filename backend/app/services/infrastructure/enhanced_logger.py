@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 
 class LogLevel(Enum):
@@ -118,7 +118,7 @@ class LogRotationManager:
         self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self._cleanup_thread.start()
 
-    def _cleanup_loop(self):
+    def _cleanup_loop(self) -> None:
         """清理循环"""
         while True:
             try:
@@ -128,11 +128,11 @@ class LogRotationManager:
                 logging.error(f"日志清理失败: {e}")
                 time.sleep(300)  # 出错后5分钟再试
 
-    def cleanup_old_logs(self):
+    def cleanup_old_logs(self) -> None:
         """清理旧日志文件"""
         try:
             # 获取所有日志文件
-            log_files = []
+            log_files: List[Path] = []
             for pattern in ["*.log", "*.log.*", "*.gz"]:
                 log_files.extend(self.log_dir.glob(pattern))
 
@@ -165,7 +165,7 @@ class LogRotationManager:
         except Exception as e:
             logging.error(f"日志清理过程失败: {e}")
 
-    def _compress_old_files(self, log_files: List[Path]):
+    def _compress_old_files(self, log_files: List[Path]) -> None:
         """压缩旧日志文件"""
         for log_file in log_files:
             # 跳过已压缩的文件和当前活跃的日志文件
@@ -232,20 +232,20 @@ class EnhancedLogger:
         self.rotation_manager = LogRotationManager(self.log_dir)
 
         # 性能统计
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "total_logs": 0,
             "logs_by_level": {level.value: 0 for level in LogLevel},
             "logs_by_category": {cat.value: 0 for cat in LogCategory},
             "start_time": datetime.now(),
         }
 
-    def _add_console_handler(self):
+    def _add_console_handler(self) -> None:
         """添加控制台处理器"""
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(self.formatter)
         self.logger.addHandler(console_handler)
 
-    def _add_file_handler(self):
+    def _add_file_handler(self) -> None:
         """添加文件处理器"""
         # 主日志文件
         main_log_file = self.log_dir / f"{self.service_name}.log"
@@ -275,8 +275,8 @@ class EnhancedLogger:
         level: LogLevel,
         message: str,
         category: LogCategory = LogCategory.SYSTEM,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """带上下文的日志记录"""
         extra_data = {"category": category.value, **kwargs}
 
@@ -289,27 +289,48 @@ class EnhancedLogger:
         log_level = getattr(logging, level.value)
         self.logger.log(log_level, message, extra={"extra_data": extra_data})
 
-    def debug(self, message: str, category: LogCategory = LogCategory.SYSTEM, **kwargs):
+    def debug(
+        self,
+        message: str,
+        category: LogCategory = LogCategory.SYSTEM,
+        **kwargs: Any,
+    ) -> None:
         """调试日志"""
         self._log_with_context(LogLevel.DEBUG, message, category, **kwargs)
 
-    def info(self, message: str, category: LogCategory = LogCategory.SYSTEM, **kwargs):
+    def info(
+        self,
+        message: str,
+        category: LogCategory = LogCategory.SYSTEM,
+        **kwargs: Any,
+    ) -> None:
         """信息日志"""
         self._log_with_context(LogLevel.INFO, message, category, **kwargs)
 
     def warning(
-        self, message: str, category: LogCategory = LogCategory.SYSTEM, **kwargs
-    ):
+        self,
+        message: str,
+        category: LogCategory = LogCategory.SYSTEM,
+        **kwargs: Any,
+    ) -> None:
         """警告日志"""
         self._log_with_context(LogLevel.WARNING, message, category, **kwargs)
 
-    def error(self, message: str, category: LogCategory = LogCategory.ERROR, **kwargs):
+    def error(
+        self,
+        message: str,
+        category: LogCategory = LogCategory.ERROR,
+        **kwargs: Any,
+    ) -> None:
         """错误日志"""
         self._log_with_context(LogLevel.ERROR, message, category, **kwargs)
 
     def critical(
-        self, message: str, category: LogCategory = LogCategory.ERROR, **kwargs
-    ):
+        self,
+        message: str,
+        category: LogCategory = LogCategory.ERROR,
+        **kwargs: Any,
+    ) -> None:
         """严重错误日志"""
         self._log_with_context(LogLevel.CRITICAL, message, category, **kwargs)
 
@@ -321,8 +342,8 @@ class EnhancedLogger:
         duration_ms: float,
         request_id: Optional[str] = None,
         user_id: Optional[str] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """记录API请求日志"""
         message = "{method} {path} - {status_code} ({duration_ms:.2f}ms)"
 
@@ -344,8 +365,8 @@ class EnhancedLogger:
         records_count: int,
         duration_ms: float,
         success: bool = True,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """记录数据操作日志"""
         status = "成功" if success else "失败"
         message = f"数据操作{status}: {operation} {stock_code} ({records_count}条记录, {duration_ms:.2f}ms)"
@@ -367,8 +388,12 @@ class EnhancedLogger:
         )
 
     def log_performance_metric(
-        self, metric_name: str, value: float, unit: str = "", **kwargs
-    ):
+        self,
+        metric_name: str,
+        value: float,
+        unit: str = "",
+        **kwargs: Any,
+    ) -> None:
         """记录性能指标日志"""
         message = f"性能指标: {metric_name} = {value}{unit}"
 
@@ -391,8 +416,8 @@ class EnhancedLogger:
         description: str,
         user_id: Optional[str] = None,
         ip_address: Optional[str] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """记录安全事件日志"""
         message = f"安全事件: {event_type} - {description}"
 
@@ -413,12 +438,13 @@ class EnhancedLogger:
 
     def get_stats(self) -> Dict[str, Any]:
         """获取日志统计信息"""
-        uptime = datetime.now() - self.stats["start_time"]
+        start_time = cast(datetime, self.stats["start_time"])
+        uptime = datetime.now() - start_time
 
         return {
             "total_logs": self.stats["total_logs"],
-            "logs_by_level": self.stats["logs_by_level"].copy(),
-            "logs_by_category": self.stats["logs_by_category"].copy(),
+            "logs_by_level": cast(Dict[str, int], self.stats["logs_by_level"]).copy(),
+            "logs_by_category": cast(Dict[str, int], self.stats["logs_by_category"]).copy(),
             "uptime_seconds": uptime.total_seconds(),
             "logs_per_minute": self.stats["total_logs"]
             / max(uptime.total_seconds() / 60, 1),
@@ -437,7 +463,7 @@ class EnhancedLogger:
     ) -> List[Dict[str, Any]]:
         """搜索日志"""
         # 这是一个简化的实现，实际应用中可能需要使用专门的日志搜索引擎
-        results = []
+        results: List[Dict[str, Any]] = []
 
         try:
             log_files = list(self.log_dir.glob("*.log"))
@@ -502,7 +528,7 @@ class EnhancedLogger:
 _loggers: Dict[str, EnhancedLogger] = {}
 
 
-def get_logger(name: str, **kwargs) -> EnhancedLogger:
+def get_logger(name: str, **kwargs: Any) -> EnhancedLogger:
     """获取日志记录器实例"""
     if name not in _loggers:
         _loggers[name] = EnhancedLogger(name, **kwargs)

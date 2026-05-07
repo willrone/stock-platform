@@ -6,7 +6,9 @@
 """
 
 import math
+from typing import Tuple, cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,7 +33,7 @@ class TimesNet(nn.Module):
         num_kernels: int = 6,
         top_k: int = 5,
         dropout: float = 0.1,
-    ):
+    ) -> None:
         super(TimesNet, self).__init__()
         self.seq_len = seq_len
         self.pred_len = pred_len
@@ -59,7 +61,7 @@ class TimesNet(nn.Module):
             nn.Linear(d_ff, num_classes),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [batch_size, seq_len, input_dim]
         x = self.input_projection(x)  # [batch_size, seq_len, d_model]
 
@@ -71,13 +73,21 @@ class TimesNet(nn.Module):
         x = x.transpose(1, 2)  # [batch_size, d_model, seq_len]
         output = self.classifier(x)
 
-        return output
+        return cast(torch.Tensor, output)
 
 
 class TimesBlock(nn.Module):
     """TimesNet的核心模块"""
 
-    def __init__(self, d_model, d_ff, seq_len, top_k, num_kernels, dropout):
+    def __init__(
+        self,
+        d_model: int,
+        d_ff: int,
+        seq_len: int,
+        top_k: int,
+        num_kernels: int,
+        dropout: float,
+    ) -> None:
         super(TimesBlock, self).__init__()
         self.seq_len = seq_len
         self.top_k = top_k
@@ -101,10 +111,8 @@ class TimesBlock(nn.Module):
             nn.Linear(d_ff, d_model),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [batch_size, seq_len, d_model]
-        B, T, N = x.shape
-
         # 简化版本：直接使用1D卷积处理时间序列
         # 转置以适应Conv1d: [B, N, T]
         x_conv = x.transpose(1, 2)
@@ -121,23 +129,31 @@ class TimesBlock(nn.Module):
 
         # FFN
         y = self.ffn(res)
-        return self.norm2(res + self.dropout(y))
+        return cast(torch.Tensor, self.norm2(res + self.dropout(y)))
 
-    def FFT_for_Period(self, x, k=2):
+    def FFT_for_Period(
+        self, x: torch.Tensor, k: int = 2
+    ) -> Tuple[np.ndarray, torch.Tensor]:
         """FFT分析找到主要周期"""
         xf = torch.fft.rfft(x, dim=1)
         frequency_list = abs(xf).mean(0).mean(-1)
         frequency_list[0] = 0
-        _, top_list = torch.topk(frequency_list, k)
-        top_list = top_list.detach().cpu().numpy()
+        _, top_indices = torch.topk(frequency_list, k)
+        top_list = top_indices.detach().cpu().numpy()
         period = x.shape[1] // top_list
-        return period, abs(xf).mean(-1)[:, top_list]
+        return period, abs(xf).mean(-1)[:, top_indices]
 
 
 class Inception_Block_V1(nn.Module):
     """Inception块用于TimesNet"""
 
-    def __init__(self, in_channels, out_channels, num_kernels=6, init_weight=True):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        num_kernels: int = 6,
+        init_weight: bool = True,
+    ) -> None:
         super(Inception_Block_V1, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -153,16 +169,16 @@ class Inception_Block_V1(nn.Module):
         if init_weight:
             self._initialize_weights()
 
-    def _initialize_weights(self):
+    def _initialize_weights(self) -> None:
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [batch_size, in_channels, height, width]
-        res_list = []
+        res_list: list[torch.Tensor] = []
         for i in range(self.num_kernels):
             res_list.append(self.kernels[i](x))
         res = torch.stack(res_list, dim=-1).mean(-1)
@@ -188,7 +204,7 @@ class PatchTST(nn.Module):
         nhead: int = 8,
         num_layers: int = 3,
         dropout: float = 0.1,
-    ):
+    ) -> None:
         super(PatchTST, self).__init__()
         self.seq_len = seq_len
         self.patch_len = patch_len
@@ -222,20 +238,20 @@ class PatchTST(nn.Module):
             nn.Linear(d_model // 2, num_classes),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [batch_size, seq_len, input_dim]
         batch_size = x.shape[0]
 
         # 创建patches
-        patches = []
+        patch_list: list[torch.Tensor] = []
         for i in range(self.patch_num):
             start_idx = i * self.stride
             end_idx = start_idx + self.patch_len
             patch = x[:, start_idx:end_idx, :].reshape(batch_size, -1)
-            patches.append(patch)
+            patch_list.append(patch)
 
         patches = torch.stack(
-            patches, dim=1
+            patch_list, dim=1
         )  # [batch_size, patch_num, patch_len * input_dim]
 
         # Patch嵌入
@@ -253,7 +269,7 @@ class PatchTST(nn.Module):
         # 分类
         output = self.classifier(x)
 
-        return output
+        return cast(torch.Tensor, output)
 
 
 class Informer(nn.Module):
@@ -275,7 +291,7 @@ class Informer(nn.Module):
         num_decoder_layers: int = 1,
         dropout: float = 0.1,
         factor: int = 5,
-    ):
+    ) -> None:
         super(Informer, self).__init__()
         self.d_model = d_model
         self.seq_len = seq_len
@@ -304,7 +320,7 @@ class Informer(nn.Module):
             nn.Linear(d_model // 2, num_classes),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [batch_size, seq_len, input_dim]
         x = self.input_embedding(x)  # [batch_size, seq_len, d_model]
         x = self.pos_encoding(x)
@@ -317,13 +333,15 @@ class Informer(nn.Module):
         x = x.transpose(1, 2)  # [batch_size, d_model, seq_len]
         output = self.decoder(x)
 
-        return output
+        return cast(torch.Tensor, output)
 
 
 class InformerEncoderLayer(nn.Module):
     """Informer编码器层"""
 
-    def __init__(self, d_model, nhead, dropout, factor):
+    def __init__(
+        self, d_model: int, nhead: int, dropout: float, factor: int
+    ) -> None:
         super(InformerEncoderLayer, self).__init__()
         self.self_attention = ProbAttention(d_model, nhead, dropout, factor)
         self.feed_forward = nn.Sequential(
@@ -336,7 +354,7 @@ class InformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # 自注意力
         attn_output = self.self_attention(x, x, x)
         x = self.norm1(x + self.dropout(attn_output))
@@ -351,7 +369,9 @@ class InformerEncoderLayer(nn.Module):
 class ProbAttention(nn.Module):
     """ProbSparse自注意力机制"""
 
-    def __init__(self, d_model, nhead, dropout, factor):
+    def __init__(
+        self, d_model: int, nhead: int, dropout: float, factor: int
+    ) -> None:
         super(ProbAttention, self).__init__()
         self.d_model = d_model
         self.nhead = nhead
@@ -365,7 +385,9 @@ class ProbAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, query, key, value):
+    def forward(
+        self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
+    ) -> torch.Tensor:
         batch_size, seq_len, _ = query.shape
 
         # 线性变换
@@ -416,7 +438,7 @@ class ProbAttention(nn.Module):
         )
         output = self.w_o(attn_output)
 
-        return output
+        return cast(torch.Tensor, output)
 
 
 class PositionalEncoding(nn.Module):
@@ -438,8 +460,9 @@ class PositionalEncoding(nn.Module):
 
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
-        return x + self.pe[: x.size(1), :].transpose(0, 1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pe = cast(torch.Tensor, self.pe)
+        return x + pe[: x.size(1), :].transpose(0, 1)
 
 
 # 导出所有模型

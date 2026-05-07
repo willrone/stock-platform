@@ -28,13 +28,7 @@ from app.core.error_handler import (
 )
 from app.core.logging_config import AuditLogger
 
-# 导入统一的错误处理机制
-try:
-    from app.core.error_handler import DataError, TaskError
-except ImportError:
-    DataError = Exception
-    TaskError = Exception
-
+# 统一错误处理类型由 app.core.error_handler 提供；本模块只使用 ModelError。
 
 # 从shared_types.py导入共享类型
 try:

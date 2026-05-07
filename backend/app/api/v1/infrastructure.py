@@ -2,8 +2,10 @@
 基础设施监控和调度API
 """
 
+# mypy: disable-error-code=untyped-decorator
+
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
@@ -14,7 +16,7 @@ from app.services.infrastructure.deployment_manager import (
     DeploymentStrategy,
     deployment_manager,
 )
-from app.services.infrastructure.health_monitor import health_monitor
+from app.services.infrastructure.health_monitor import HealthCheckResult, health_monitor
 from app.services.infrastructure.resource_monitor import (
     resource_monitor,
 )
@@ -26,7 +28,7 @@ router = APIRouter(prefix="/infrastructure", tags=["基础设施"])
 
 
 @router.get("/resources/current", summary="获取当前资源使用情况")
-async def get_current_resources():
+async def get_current_resources() -> dict[str, Any]:
     """获取当前系统资源使用情况"""
     try:
         usage = resource_monitor.get_current_usage()
@@ -38,8 +40,8 @@ async def get_current_resources():
 
 @router.get("/resources/history", summary="获取资源使用历史")
 async def get_resource_history(
-    duration_minutes: int = Query(60, description="历史数据时间范围（分钟）")
-):
+    duration_minutes: int = Query(60, description="历史数据时间范围（分钟）"),
+) -> dict[str, Any]:
     """获取指定时间范围内的资源使用历史"""
     try:
         start_time = datetime.now() - timedelta(minutes=duration_minutes)
@@ -60,8 +62,8 @@ async def get_resource_history(
 
 @router.get("/resources/average", summary="获取平均资源使用情况")
 async def get_average_resources(
-    duration_minutes: int = Query(60, description="统计时间范围（分钟）")
-):
+    duration_minutes: int = Query(60, description="统计时间范围（分钟）"),
+) -> dict[str, Any]:
     """获取指定时间范围内的平均资源使用情况"""
     try:
         avg_usage = resource_monitor.get_average_usage(duration_minutes)
@@ -80,7 +82,7 @@ async def get_average_resources(
 @router.post("/resources/check-availability", summary="检查资源可用性")
 async def check_resource_availability(
     memory_gb: float = 0, cpu_percent: float = 0, gpu_memory_gb: float = 0
-):
+) -> dict[str, Any]:
     """检查是否有足够的资源可用"""
     try:
         availability = resource_monitor.is_resource_available(
@@ -96,7 +98,7 @@ async def check_resource_availability(
 
 
 @router.get("/resources/thresholds", summary="获取资源阈值配置")
-async def get_resource_thresholds():
+async def get_resource_thresholds() -> dict[str, Any]:
     """获取当前资源阈值配置"""
     try:
         thresholds = resource_monitor.thresholds
@@ -128,7 +130,7 @@ async def update_resource_thresholds(
     disk_critical: Optional[float] = None,
     gpu_memory_warning: Optional[float] = None,
     gpu_memory_critical: Optional[float] = None,
-):
+) -> dict[str, Any]:
     """更新资源阈值配置"""
     try:
         # 更新阈值
@@ -156,7 +158,7 @@ async def update_resource_thresholds(
 
 
 @router.get("/scheduler/stats", summary="获取调度器统计信息")
-async def get_scheduler_stats():
+async def get_scheduler_stats() -> dict[str, Any]:
     """获取任务调度器统计信息"""
     try:
         stats = task_scheduler.get_scheduler_stats()
@@ -167,7 +169,7 @@ async def get_scheduler_stats():
 
 
 @router.get("/scheduler/tasks", summary="获取所有任务状态")
-async def get_all_tasks():
+async def get_all_tasks() -> dict[str, Any]:
     """获取所有任务的状态信息"""
     try:
         tasks = task_scheduler.get_all_tasks()
@@ -178,7 +180,7 @@ async def get_all_tasks():
 
 
 @router.get("/scheduler/tasks/{task_id}", summary="获取特定任务状态")
-async def get_task_status(task_id: str):
+async def get_task_status(task_id: str) -> dict[str, Any]:
     """获取特定任务的状态信息"""
     try:
         task_status = task_scheduler.get_task_status(task_id)
@@ -195,7 +197,7 @@ async def get_task_status(task_id: str):
 
 
 @router.delete("/scheduler/tasks/{task_id}", summary="取消任务")
-async def cancel_task(task_id: str):
+async def cancel_task(task_id: str) -> dict[str, Any]:
     """取消指定的任务"""
     try:
         success = task_scheduler.cancel_task(task_id)
@@ -212,7 +214,7 @@ async def cancel_task(task_id: str):
 
 
 @router.post("/scheduler/start", summary="启动调度器")
-async def start_scheduler():
+async def start_scheduler() -> dict[str, Any]:
     """启动任务调度器"""
     try:
         await task_scheduler.start()
@@ -223,7 +225,7 @@ async def start_scheduler():
 
 
 @router.post("/scheduler/stop", summary="停止调度器")
-async def stop_scheduler():
+async def stop_scheduler() -> dict[str, Any]:
     """停止任务调度器"""
     try:
         await task_scheduler.stop()
@@ -234,7 +236,9 @@ async def stop_scheduler():
 
 
 @router.post("/monitoring/start", summary="启动资源监控")
-async def start_monitoring(interval: float = Query(30.0, description="监控间隔（秒）")):
+async def start_monitoring(
+    interval: float = Query(30.0, description="监控间隔（秒）"),
+) -> dict[str, Any]:
     """启动资源监控"""
     try:
         await resource_monitor.start_monitoring(interval)
@@ -245,7 +249,7 @@ async def start_monitoring(interval: float = Query(30.0, description="监控间�
 
 
 @router.post("/monitoring/stop", summary="停止资源监控")
-async def stop_monitoring():
+async def stop_monitoring() -> dict[str, Any]:
     """停止资源监控"""
     try:
         await resource_monitor.stop_monitoring()
@@ -256,7 +260,7 @@ async def stop_monitoring():
 
 
 @router.get("/health", summary="基础设施健康检查")
-async def infrastructure_health():
+async def infrastructure_health() -> dict[str, Any]:
     """检查基础设施组件的健康状态"""
     try:
         # 检查资源监控器状态
@@ -321,7 +325,7 @@ async def create_deployment(
     auto_rollback_enabled: bool = True,
     rollback_threshold_error_rate: float = 0.05,
     rollback_threshold_latency_ms: float = 1000.0,
-):
+) -> dict[str, Any]:
     """创建新的部署"""
     try:
         # 验证部署策略
@@ -363,7 +367,7 @@ async def create_deployment(
 
 
 @router.get("/deployments", summary="获取所有部署")
-async def get_all_deployments():
+async def get_all_deployments() -> dict[str, Any]:
     """获取所有部署记录"""
     try:
         deployments = deployment_manager.get_all_deployments()
@@ -377,7 +381,7 @@ async def get_all_deployments():
 
 
 @router.get("/deployments/{deployment_id}", summary="获取部署状态")
-async def get_deployment_status(deployment_id: str):
+async def get_deployment_status(deployment_id: str) -> dict[str, Any]:
     """获取特定部署的状态"""
     try:
         deployment = deployment_manager.get_deployment_status(deployment_id)
@@ -394,7 +398,7 @@ async def get_deployment_status(deployment_id: str):
 
 
 @router.get("/deployments/active", summary="获取活跃部署")
-async def get_active_deployment():
+async def get_active_deployment() -> dict[str, Any]:
     """获取当前活跃的部署"""
     try:
         active_deployment = deployment_manager.get_active_deployment()
@@ -406,7 +410,9 @@ async def get_active_deployment():
 
 
 @router.post("/deployments/{deployment_id}/rollback", summary="回滚部署")
-async def rollback_deployment(deployment_id: str, target_version: Optional[str] = None):
+async def rollback_deployment(
+    deployment_id: str, target_version: Optional[str] = None
+) -> dict[str, Any]:
     """回滚指定的部署"""
     try:
         rollback_id = await deployment_manager.rollback(deployment_id, target_version)
@@ -428,7 +434,7 @@ async def rollback_deployment(deployment_id: str, target_version: Optional[str] 
 
 
 @router.get("/deployments/strategies", summary="获取支持的部署策略")
-async def get_deployment_strategies():
+async def get_deployment_strategies() -> dict[str, Any]:
     """获取所有支持的部署策略"""
     try:
         strategies = [
@@ -462,7 +468,7 @@ async def get_deployment_strategies():
 @router.post("/compatibility/validate", summary="验证模型兼容性")
 async def validate_model_compatibility(
     model_path: str, target_model_path: Optional[str] = None
-):
+) -> dict[str, Any]:
     """验证模型兼容性"""
     try:
         # 提取目标模型元数据（如果提供）
@@ -486,7 +492,7 @@ async def validate_model_compatibility(
 
 
 @router.get("/compatibility/metadata/{model_path:path}", summary="提取模型元数据")
-async def extract_model_metadata(model_path: str):
+async def extract_model_metadata(model_path: str) -> dict[str, Any]:
     """提取模型元数据"""
     try:
         metadata = compatibility_validator.extract_model_metadata(model_path)
@@ -502,7 +508,7 @@ async def extract_model_metadata(model_path: str):
 @router.post("/compatibility/check-deployment", summary="检查部署兼容性")
 async def check_deployment_compatibility(
     model_path: str, deployment_strategy: str = "immediate"
-):
+) -> dict[str, Any]:
     """检查模型是否适合部署"""
     try:
         # 验证模型兼容性
@@ -539,7 +545,7 @@ async def check_deployment_compatibility(
 
 
 @router.get("/compatibility/system-info", summary="获取系统信息")
-async def get_system_info():
+async def get_system_info() -> dict[str, Any]:
     """获取当前系统信息"""
     try:
         import importlib.metadata
@@ -572,24 +578,26 @@ async def get_system_info():
 @router.post("/health/check", summary="运行健康检查")
 async def run_health_checks(
     model_path: Optional[str] = None, check_names: Optional[List[str]] = None
-):
+) -> dict[str, Any]:
     """运行健康检查"""
     try:
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if model_path:
             kwargs["model_path"] = model_path
 
         if check_names:
             # 运行指定的检查
-            results = {}
+            results: dict[str, Any] = {}
+            check_objects: dict[str, HealthCheckResult] = {}
             for check_name in check_names:
-                result = await health_monitor.health_checker.run_check(
+                hc_result = await health_monitor.health_checker.run_check(
                     check_name, **kwargs
                 )
-                results[check_name] = result.to_dict()
+                check_objects[check_name] = hc_result
+                results[check_name] = hc_result.to_dict()
 
             overall_status = health_monitor.health_checker.get_overall_health(
-                {name: result for name, result in results.items()}
+                check_objects
             )
 
             return {
@@ -610,7 +618,7 @@ async def run_health_checks(
 
 
 @router.get("/health/checks", summary="获取可用的健康检查")
-async def get_available_health_checks():
+async def get_available_health_checks() -> dict[str, Any]:
     """获取所有可用的健康检查"""
     try:
         checks = []
@@ -632,7 +640,7 @@ async def get_available_health_checks():
 async def get_health_check_history(
     check_name: Optional[str] = None,
     limit: int = Query(100, description="返回记录数量限制"),
-):
+) -> dict[str, Any]:
     """获取健康检查历史"""
     try:
         history = health_monitor.get_health_history(check_name, limit)
@@ -656,10 +664,10 @@ async def run_performance_test(
     duration_seconds: int = 60,
     concurrent_users: int = 1,
     model_path: Optional[str] = None,
-):
+) -> dict[str, Any]:
     """运行性能测试"""
     try:
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "duration_seconds": duration_seconds,
             "concurrent_users": concurrent_users,
         }
@@ -680,14 +688,17 @@ async def run_load_test(
     max_users: int = 100,
     ramp_up_seconds: int = 60,
     model_path: Optional[str] = None,
-):
+) -> dict[str, Any]:
     """运行负载测试"""
     try:
-        kwargs = {"max_users": max_users, "ramp_up_seconds": ramp_up_seconds}
+        kwargs_load: dict[str, Any] = {
+            "max_users": max_users,
+            "ramp_up_seconds": ramp_up_seconds,
+        }
         if model_path:
-            kwargs["model_path"] = model_path
+            kwargs_load["model_path"] = model_path
 
-        result = await health_monitor.run_load_test(test_name, **kwargs)
+        result = await health_monitor.run_load_test(test_name, **kwargs_load)
 
         return {"success": True, "data": result}
     except Exception as e:
@@ -696,7 +707,7 @@ async def run_load_test(
 
 
 @router.get("/performance/tests", summary="获取可用的性能测试")
-async def get_available_performance_tests():
+async def get_available_performance_tests() -> dict[str, Any]:
     """获取所有可用的性能测试"""
     try:
         tests = []
@@ -727,7 +738,7 @@ async def set_performance_baseline(
     success_count: int = 100,
     error_count: int = 0,
     total_requests: int = 100,
-):
+) -> dict[str, Any]:
     """设置性能基准指标"""
     try:
         metrics = {
@@ -759,7 +770,7 @@ async def set_performance_baseline(
 async def get_performance_test_history(
     test_name: Optional[str] = None,
     limit: int = Query(100, description="返回记录数量限制"),
-):
+) -> dict[str, Any]:
     """获取性能测试历史"""
     try:
         history = health_monitor.get_performance_history(test_name, limit)
@@ -779,10 +790,10 @@ async def validate_deployment_readiness(
     run_health_checks: bool = True,
     run_performance_test: bool = True,
     performance_test_duration: int = 30,
-):
+) -> dict[str, Any]:
     """部署前的综合验证"""
     try:
-        validation_results = {
+        validation_results: dict[str, Any] = {
             "model_path": model_path,
             "timestamp": datetime.now().isoformat(),
             "overall_ready": True,

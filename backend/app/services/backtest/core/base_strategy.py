@@ -6,7 +6,7 @@
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import pandas as pd
 
@@ -21,7 +21,7 @@ class BaseStrategy(ABC):
         self.config = config
         # NOTE: Prefer per-DataFrame caching via data.attrs to avoid cross-stock pollution.
         # self.indicators kept for backward compatibility / ad-hoc usage.
-        self.indicators = {}
+        self.indicators: Dict[str, pd.Series] = {}
 
     def _get_current_idx(self, data: pd.DataFrame, current_date: datetime) -> int:
         """Fast path for locating current_date index.
@@ -61,7 +61,7 @@ class BaseStrategy(ABC):
             key = (id(self), self.name)
             cached = cache.get(key)
             if cached is not None:
-                return cached
+                return cast(Dict[str, pd.Series], cached)
             indicators = self.calculate_indicators(data)
             cache[key] = indicators
             return indicators

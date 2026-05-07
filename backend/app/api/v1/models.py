@@ -8,7 +8,7 @@ import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -36,34 +36,39 @@ from app.websocket import (
     notify_model_training_progress,
 )
 
+ModelInfoRecord = Any
+
 router = APIRouter(prefix="/models", tags=["模型管理"])
 
 # 导入模型训练服务
 DEEP_TRAINING_AVAILABLE = False
 ML_TRAINING_AVAILABLE = False
-DeepModelTrainingService = None
+DeepModelTrainingService: type[Any] | None = None
 DeepModelType = None
 DeepTrainingConfig = None
-MLModelTrainingService = None
+MLModelTrainingService: type[Any] | None = None
 MLModelType = None
 MLTrainingConfig = None
-ModelStorage = None
+ModelStorage: type[Any] | None = None
 
 try:
     from app.services.models.model_training import (
-        ModelTrainingService as DeepModelTrainingService,
+        ModelTrainingService as ImportedDeepModelTrainingService,
     )
 
+    DeepModelTrainingService = ImportedDeepModelTrainingService
     DEEP_TRAINING_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"深度学习训练服务导入失败: {e}")
 
 try:
-    from app.services.models.model_storage import ModelStorage
+    from app.services.models.model_storage import ModelStorage as ImportedModelStorage
     from app.services.models.model_training_service import (
-        ModelTrainingService as MLModelTrainingService,
+        ModelTrainingService as ImportedMLModelTrainingService,
     )
 
+    ModelStorage = ImportedModelStorage
+    MLModelTrainingService = ImportedMLModelTrainingService
     ML_TRAINING_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"传统ML训练服务导入失败: {e}")
@@ -71,21 +76,26 @@ except ImportError as e:
 TRAINING_AVAILABLE = DEEP_TRAINING_AVAILABLE or ML_TRAINING_AVAILABLE
 
 # 全局训练服务实例（延迟初始化）
-_deep_training_service: Optional[DeepModelTrainingService] = None
-_ml_training_service: Optional[MLModelTrainingService] = None
-_model_storage: Optional[ModelStorage] = None
+_deep_training_service: Any | None = None
+_ml_training_service: Any | None = None
+_model_storage: Any | None = None
 
 
 class TrainingCancelledError(Exception):
     """训练任务被用户取消。"""
 
 
-_active_training_jobs: Dict[str, Dict[str, object]] = {}
+class TrainingJob(TypedDict):
+    future: Future[Any]
+    cancel_event: threading.Event
+
+
+_active_training_jobs: Dict[str, TrainingJob] = {}
 _active_training_jobs_lock = threading.Lock()
 
 
 def _register_training_job(
-    model_id: str, future: Future, cancel_event: threading.Event
+    model_id: str, future: Future[Any], cancel_event: threading.Event
 ) -> None:
     with _active_training_jobs_lock:
         _active_training_jobs[model_id] = {
@@ -94,12 +104,12 @@ def _register_training_job(
         }
 
 
-def _pop_training_job(model_id: str) -> Optional[Dict[str, object]]:
+def _pop_training_job(model_id: str) -> Optional[TrainingJob]:
     with _active_training_jobs_lock:
         return _active_training_jobs.pop(model_id, None)
 
 
-def _get_training_job(model_id: str) -> Optional[Dict[str, object]]:
+def _get_training_job(model_id: str) -> Optional[TrainingJob]:
     with _active_training_jobs_lock:
         return _active_training_jobs.get(model_id)
 
@@ -110,25 +120,52 @@ def _is_training_cancel_requested(model_id: str) -> bool:
     return bool(cancel_event and cancel_event.is_set())
 
 
-def get_deep_training_service() -> DeepModelTrainingService:
+def get_deep_training_service() -> Any | None:
     """获取深度学习训练服务实例"""
     global _deep_training_service
-    if _deep_training_service is None and DEEP_TRAINING_AVAILABLE:
+    if (
+        _deep_training_service is None
+        and DEEP_TRAINING_AVAILABLE
+        and DeepModelTrainingService is not None
+    ):
         _deep_training_service = DeepModelTrainingService()
     return _deep_training_service
 
 
-def get_ml_training_service() -> MLModelTrainingService:
+def get_ml_training_service() -> Any | None:
     """获取传统ML训练服务实例"""
     global _ml_training_service, _model_storage
     if _ml_training_service is None and ML_TRAINING_AVAILABLE:
-        if _model_storage is None:
+        if _model_storage is None and ModelStorage is not None:
             _model_storage = ModelStorage()
-        _ml_training_service = MLModelTrainingService(_model_storage)
+        if MLModelTrainingService is not None and _model_storage is not None:
+            _ml_training_service = MLModelTrainingService(_model_storage)
     return _ml_training_service
 
 
-def _format_feature_importance_for_report(feature_importance) -> list:
+def _as_model_info(value: Any) -> ModelInfoRecord:
+    return value
+
+
+def _safe_json_dict(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            import json
+
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _number_or_default(value: Optional[float], default: float) -> float:
+    return default if value is None else value
+
+
+def _format_feature_importance_for_report(feature_importance: Any) -> List[Dict[str, Any]]:
     """将特征重要性转换为报告格式"""
     if not feature_importance:
         return []
@@ -146,7 +183,7 @@ def _format_feature_importance_for_report(feature_importance) -> list:
         return []
 
 
-def _normalize_accuracy(metrics: dict) -> float:
+def _normalize_accuracy(metrics: Any) -> float:
     """规范化准确率，确保不为负数"""
     if not isinstance(metrics, dict):
         return 0.0
@@ -166,7 +203,7 @@ def _normalize_accuracy(metrics: dict) -> float:
     return max(0.0, float(r2))
 
 
-def _normalize_performance_metrics_for_report(metrics: dict) -> dict:
+def _normalize_performance_metrics_for_report(metrics: Any) -> Dict[str, Any]:
     """规范化性能指标用于报告，确保accuracy不为负数，保留所有指标"""
     if not isinstance(metrics, dict):
         return {"accuracy": 0.0, "rmse": 0.0, "mae": 0.0, "r2": 0.0}
@@ -208,16 +245,16 @@ def _run_train_model_task_sync(
     model_id: str,
     model_name: str,
     model_type: str,
-    stock_codes: list,
+    stock_codes: List[str],
     start_date: datetime,
     end_date: datetime,
-    hyperparameters: dict,
+    hyperparameters: Dict[str, Any],
     enable_hyperparameter_tuning: bool = False,
     hyperparameter_search_strategy: str = "random_search",
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
-):
+) -> None:
     """
     同步包装函数，用于在线程池中执行异步训练任务
     这样训练任务中的同步阻塞操作不会阻塞主事件循环
@@ -250,10 +287,10 @@ def _run_train_model_task_sync(
 
 
 # 创建线程池执行器（单例）
-_train_executor = None
+_train_executor: ThreadPoolExecutor | None = None
 
 
-def get_train_executor():
+def get_train_executor() -> ThreadPoolExecutor:
     """获取训练任务线程池执行器"""
     global _train_executor
     if _train_executor is None:
@@ -267,23 +304,23 @@ async def train_model_task(
     model_id: str,
     model_name: str,
     model_type: str,
-    stock_codes: list,
+    stock_codes: List[str],
     start_date: datetime,
     end_date: datetime,
-    hyperparameters: dict,
+    hyperparameters: Dict[str, Any],
     enable_hyperparameter_tuning: bool = False,
     hyperparameter_search_strategy: str = "random_search",
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
-):
+) -> None:
     """后台训练任务 - 使用统一Qlib训练引擎"""
     session = SessionLocal()
     report_generator = EvaluationReportGenerator()
 
     try:
         model_repository = ModelInfoRepository(session)
-        model_info = model_repository.get_model_info(model_id)
+        model_info = _as_model_info(model_repository.get_model_info(model_id))
 
         if not model_info:
             logger.error(f"模型不存在: {model_id}")
@@ -313,8 +350,8 @@ async def train_model_task(
                 progress: float,
                 stage: str,
                 message: str,
-                metrics: dict = None,
-            ):
+                metrics: Optional[Dict[str, Any]] = None,
+            ) -> None:
                 if _is_training_cancel_requested(model_id):
                     raise TrainingCancelledError("训练已取消")
 
@@ -322,13 +359,13 @@ async def train_model_task(
                 if main_loop:
                     asyncio.run_coroutine_threadsafe(
                         notify_model_training_progress(
-                            model_id, progress, stage, message, metrics
+                            model_id, progress, stage, message, metrics or {}
                         ),
                         main_loop,
                     )
                 else:
                     await notify_model_training_progress(
-                        model_id, progress, stage, message, metrics
+                        model_id, progress, stage, message, metrics or {}
                     )
 
                 # 更新数据库（在当前事件循环中执行）
@@ -402,7 +439,9 @@ async def train_model_task(
                 }
 
                 # 定义训练函数
-                async def train_with_params(params):
+                async def train_with_params(
+                    params: Dict[str, Any],
+                ) -> Dict[str, float]:
                     config = QlibTrainingConfig(
                         model_type=qlib_model_type,
                         hyperparameters={**hyperparameters, **params},
@@ -440,26 +479,25 @@ async def train_model_task(
                 strategy = (hyperparameter_search_strategy or "random_search").lower()
                 total_trials = max(int(hyperparameter_search_trials), 1)
 
-                def _generate_grid_combinations(space: dict) -> List[dict]:
-                    values = {}
+                def _generate_grid_combinations(
+                    space: Dict[str, HyperparameterSpace],
+                ) -> List[Dict[str, Any]]:
+                    values: Dict[str, List[Any]] = {}
                     for name, spec in space.items():
                         if spec.param_type == "int":
-                            values[name] = list(
-                                range(
-                                    int(spec.min_value),
-                                    int(spec.max_value) + 1,
-                                    int(spec.step or 1),
-                                )
-                            )
+                            min_value = int(_number_or_default(spec.min_value, 0.0))
+                            max_value = int(_number_or_default(spec.max_value, 0.0))
+                            step = int(_number_or_default(spec.step, 1.0)) or 1
+                            values[name] = list(range(min_value, max_value + 1, step))
                         elif spec.param_type == "float":
-                            step = float(spec.step or 0.01)
-                            start = float(spec.min_value)
-                            end = float(spec.max_value)
+                            float_step = float(_number_or_default(spec.step, 0.01))
+                            start = float(_number_or_default(spec.min_value, 0.0))
+                            end = float(_number_or_default(spec.max_value, 0.0))
                             vals = []
                             current = start
                             while current <= end + 1e-9:
                                 vals.append(round(current, 4))
-                                current += step
+                                current += float_step
                             values[name] = vals
                         else:
                             values[name] = list(spec.choices or [])
@@ -473,28 +511,32 @@ async def train_model_task(
                     combinations = _generate_grid_combinations(param_space)
                     if not combinations:
                         logger.warning("超参数网格为空，改用随机搜索")
-                        combinations = None
+                        combinations = []
                     if combinations and len(combinations) > total_trials:
                         combinations = random.sample(combinations, total_trials)
                     trial_params = combinations
                 elif strategy == SearchStrategy.BAYESIAN_OPTIMIZATION.value:
                     logger.warning("暂不支持贝叶斯优化，改用随机搜索")
-                    trial_params = None
-                else:
-                    trial_params = None
-
-                if trial_params is None:
                     trial_params = []
+                else:
+                    trial_params = []
+
+                if not trial_params:
                     for _ in range(total_trials):
-                        params = {}
+                        params: Dict[str, Any] = {}
                         for param_name, space in param_space.items():
                             if space.param_type == "float":
                                 params[param_name] = round(
-                                    random.uniform(space.min_value, space.max_value), 4
+                                    random.uniform(
+                                        _number_or_default(space.min_value, 0.0),
+                                        _number_or_default(space.max_value, 0.0),
+                                    ),
+                                    4,
                                 )
                             elif space.param_type == "int":
                                 params[param_name] = random.randint(
-                                    space.min_value, space.max_value
+                                    int(_number_or_default(space.min_value, 0.0)),
+                                    int(_number_or_default(space.max_value, 0.0)),
                                 )
                         trial_params.append(params)
 
@@ -631,7 +673,7 @@ async def train_model_task(
                 model_id=model_id,
                 model_name=model_name,
                 model_type=model_type,
-                version=model_info.version,
+                version=str(model_info.version),
                 training_summary={
                     "duration": result.training_duration,
                     "total_samples": total_samples,
@@ -685,12 +727,13 @@ async def train_model_task(
             if accuracy < 0:
                 accuracy = max(0.0, result.validation_metrics.get("r2", 0.0))
 
-            model_info.performance_metrics = {
+            performance_metrics = {
                 "accuracy": float(accuracy),
                 "mse": result.validation_metrics.get("mse", 0.0),
                 "mae": result.validation_metrics.get("mae", 0.0),
                 "r2": result.validation_metrics.get("r2", 0.0),
             }
+            model_info.performance_metrics = performance_metrics
             model_info.evaluation_report = report_generator.to_dict(report)
             model_info.hyperparameters = final_hyperparameters
             session.commit()
@@ -698,15 +741,11 @@ async def train_model_task(
             # 发送完成通知
             if main_loop:
                 asyncio.run_coroutine_threadsafe(
-                    notify_model_training_completed(
-                        model_id, model_info.performance_metrics
-                    ),
+                    notify_model_training_completed(model_id, performance_metrics),
                     main_loop,
                 )
             else:
-                await notify_model_training_completed(
-                    model_id, model_info.performance_metrics
-                )
+                await notify_model_training_completed(model_id, performance_metrics)
             logger.info(f"统一Qlib模型训练完成: {model_id}")
 
         except TrainingCancelledError as e:
@@ -752,12 +791,14 @@ async def train_model_task(
 
 
 @router.get("/{model_id}/versions", response_model=StandardResponse)
-async def get_model_versions(model_id: str):
+async def get_model_versions(model_id: str) -> StandardResponse:
     """获取模型的所有版本"""
     session = SessionLocal()
     try:
         # 获取主模型
-        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        model = _as_model_info(
+            session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        )
         if not model:
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
 
@@ -781,7 +822,9 @@ async def get_model_versions(model_id: str):
                     "model_name": v.model_name,
                     "version": v.version,
                     "status": v.status,
-                    "accuracy": (v.performance_metrics or {}).get("accuracy", 0.0),
+                    "accuracy": _safe_json_dict(v.performance_metrics).get(
+                        "accuracy", 0.0
+                    ),
                     "created_at": v.created_at.isoformat() if v.created_at else None,
                     "is_current": v.model_id == model_id,
                 }
@@ -802,11 +845,13 @@ async def get_model_versions(model_id: str):
 
 
 @router.get("/{model_id}/evaluation-report", response_model=StandardResponse)
-async def get_model_evaluation_report(model_id: str):
+async def get_model_evaluation_report(model_id: str) -> StandardResponse:
     """获取模型评估报告"""
     session = SessionLocal()
     try:
-        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        model = _as_model_info(
+            session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        )
         if not model:
             logger.warning(f"模型不存在: {model_id}")
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
@@ -816,7 +861,8 @@ async def get_model_evaluation_report(model_id: str):
         )
 
         # 检查评估报告是否存在
-        if model.evaluation_report is None:
+        report_payload = model.evaluation_report
+        if report_payload is None:
             logger.warning(f"模型 {model_id} 的评估报告为 None，状态: {model.status}")
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
@@ -824,8 +870,8 @@ async def get_model_evaluation_report(model_id: str):
 
         # 检查评估报告是否为空字典
         if (
-            isinstance(model.evaluation_report, dict)
-            and len(model.evaluation_report) == 0
+            isinstance(report_payload, dict)
+            and len(report_payload) == 0
         ):
             logger.warning(f"模型 {model_id} 的评估报告为空字典")
             raise HTTPException(
@@ -834,8 +880,8 @@ async def get_model_evaluation_report(model_id: str):
 
         # 检查评估报告是否为空字符串
         if (
-            isinstance(model.evaluation_report, str)
-            and len(model.evaluation_report.strip()) == 0
+            isinstance(report_payload, str)
+            and len(report_payload.strip()) == 0
         ):
             logger.warning(f"模型 {model_id} 的评估报告为空字符串")
             raise HTTPException(
@@ -843,13 +889,14 @@ async def get_model_evaluation_report(model_id: str):
             )
 
         # 如果评估报告是字符串，尝试解析为JSON
-        if isinstance(model.evaluation_report, str):
+        if isinstance(report_payload, str):
             try:
                 import json
 
-                evaluation_report = normalize_report_payload(
-                    json.loads(model.evaluation_report)
-                )
+                parsed_report = json.loads(report_payload)
+                if not isinstance(parsed_report, dict):
+                    raise HTTPException(status_code=500, detail="评估报告格式错误")
+                evaluation_report = normalize_report_payload(parsed_report)
                 logger.info(f"成功解析模型 {model_id} 的评估报告（从字符串）")
                 return StandardResponse(
                     success=True, message="评估报告获取成功", data=evaluation_report
@@ -862,7 +909,7 @@ async def get_model_evaluation_report(model_id: str):
         return StandardResponse(
             success=True,
             message="评估报告获取成功",
-            data=normalize_report_payload(model.evaluation_report),
+            data=normalize_report_payload(_safe_json_dict(report_payload)),
         )
     except HTTPException:
         raise
@@ -874,7 +921,7 @@ async def get_model_evaluation_report(model_id: str):
 
 
 @router.get("", response_model=StandardResponse)
-async def list_models():
+async def list_models() -> StandardResponse:
     """获取模型列表"""
     session = SessionLocal()
     try:
@@ -900,7 +947,7 @@ async def get_available_features(
     stock_code: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-):
+) -> StandardResponse:
     """
     获取可用于模型训练的特征列表
 
@@ -1140,7 +1187,7 @@ async def get_available_features(
 
 
 @router.get("/{model_id}", response_model=StandardResponse)
-async def get_model_detail(model_id: str):
+async def get_model_detail(model_id: str) -> StandardResponse:
     """获取模型详情"""
     session = SessionLocal()
     try:
@@ -1166,7 +1213,7 @@ async def get_model_detail(model_id: str):
 
 
 @router.delete("/{model_id}", response_model=StandardResponse)
-async def delete_model(model_id: str):
+async def delete_model(model_id: str) -> StandardResponse:
     """删除模型"""
     session = SessionLocal()
     try:
@@ -1207,11 +1254,13 @@ async def delete_model(model_id: str):
 
 
 @router.post("/{model_id}/cancel-training", response_model=StandardResponse)
-async def cancel_model_training(model_id: str):
+async def cancel_model_training(model_id: str) -> StandardResponse:
     """取消模型训练。"""
     session = SessionLocal()
     try:
-        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        model = _as_model_info(
+            session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        )
         if not model:
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
 
@@ -1260,7 +1309,7 @@ async def cancel_model_training(model_id: str):
 
 
 @router.post("/train", response_model=StandardResponse)
-async def create_training_task(request: ModelTrainingRequest):
+async def create_training_task(request: ModelTrainingRequest) -> StandardResponse:
     """创建模型训练任务"""
     if not TRAINING_AVAILABLE:
         raise HTTPException(
@@ -1376,10 +1425,10 @@ async def create_training_task(request: ModelTrainingRequest):
 
 
 @router.get("/{model_id}/lifecycle", response_model=StandardResponse)
-async def get_model_lifecycle(model_id: str):
+async def get_model_lifecycle(model_id: str) -> StandardResponse:
     """获取模型生命周期信息"""
     try:
-        lifecycle_info = model_lifecycle_manager.get_model_lifecycle(model_id)
+        lifecycle_info = await model_lifecycle_manager.get_lifecycle_history(model_id)
 
         if not lifecycle_info:
             raise HTTPException(
@@ -1389,7 +1438,7 @@ async def get_model_lifecycle(model_id: str):
         return StandardResponse(
             success=True,
             message="模型生命周期信息获取成功",
-            data=lifecycle_info.to_dict(),
+            data={"events": lifecycle_info},
         )
 
     except HTTPException:
@@ -1402,10 +1451,10 @@ async def get_model_lifecycle(model_id: str):
 
 
 @router.get("/{model_id}/lineage", response_model=StandardResponse)
-async def get_model_lineage(model_id: str):
+async def get_model_lineage(model_id: str) -> StandardResponse:
     """获取模型血缘信息"""
     try:
-        lineage_info = lineage_tracker.get_model_lineage(model_id)
+        lineage_info = await lineage_tracker.get_model_lineage(model_id)
 
         if not lineage_info:
             raise HTTPException(
@@ -1413,7 +1462,7 @@ async def get_model_lineage(model_id: str):
             )
 
         return StandardResponse(
-            success=True, message="模型血缘信息获取成功", data=lineage_info.to_dict()
+            success=True, message="模型血缘信息获取成功", data=lineage_info
         )
 
     except HTTPException:
@@ -1424,23 +1473,22 @@ async def get_model_lineage(model_id: str):
 
 
 @router.get("/{model_id}/dependencies", response_model=StandardResponse)
-async def get_model_dependencies(model_id: str):
+async def get_model_dependencies(model_id: str) -> StandardResponse:
     """获取模型依赖关系"""
     try:
         # 获取血缘信息
-        lineage_info = lineage_tracker.get_model_lineage(model_id)
+        lineage_info = await lineage_tracker.get_model_lineage(model_id)
 
         if not lineage_info:
             raise HTTPException(
                 status_code=404, detail=f"模型依赖信息不存在: {model_id}"
             )
 
-        # 提取依赖关系
         dependencies = {
-            "data_dependencies": lineage_info.data_dependencies,
-            "feature_dependencies": lineage_info.feature_dependencies,
-            "model_dependencies": lineage_info.model_dependencies,
-            "config_dependencies": lineage_info.config_dependencies,
+            "data_dependencies": lineage_info.get("data_dependencies", []),
+            "feature_dependencies": lineage_info.get("feature_dependencies", []),
+            "model_dependencies": lineage_info.get("model_dependencies", []),
+            "config_dependencies": lineage_info.get("config_dependencies", []),
         }
 
         return StandardResponse(
@@ -1457,7 +1505,7 @@ async def get_model_dependencies(model_id: str):
 @router.post("/{model_id}/lifecycle/transition", response_model=StandardResponse)
 async def transition_model_lifecycle(
     model_id: str, new_stage: str, notes: Optional[str] = None
-):
+) -> StandardResponse:
     """转换模型生命周期阶段"""
     try:
         # 验证阶段
@@ -1478,20 +1526,20 @@ async def transition_model_lifecycle(
             )
 
         # 执行阶段转换
-        success = model_lifecycle_manager.transition_stage(
-            model_id=model_id, new_stage=new_stage, notes=notes
+        success = await model_lifecycle_manager.transition_status(
+            model_id=model_id, new_status=new_stage, reason=notes
         )
 
         if not success:
             raise HTTPException(status_code=400, detail="生命周期阶段转换失败")
 
         # 获取更新后的生命周期信息
-        updated_lifecycle = model_lifecycle_manager.get_model_lifecycle(model_id)
+        updated_lifecycle = await model_lifecycle_manager.get_lifecycle_history(model_id)
 
         return StandardResponse(
             success=True,
             message=f"模型生命周期已转换到: {new_stage}",
-            data=updated_lifecycle.to_dict() if updated_lifecycle else {},
+            data={"events": updated_lifecycle},
         )
 
     except HTTPException:
@@ -1502,7 +1550,9 @@ async def transition_model_lifecycle(
 
 
 @router.get("/{model_id}/performance-history", response_model=StandardResponse)
-async def get_model_performance_history(model_id: str, time_range: str = "30d"):
+async def get_model_performance_history(
+    model_id: str, time_range: str = "30d"
+) -> StandardResponse:
     """获取模型性能历史"""
     try:
         # 解析时间范围
@@ -1523,16 +1573,17 @@ async def get_model_performance_history(model_id: str, time_range: str = "30d"):
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
 
+        performance_history: Dict[str, Any]
         # 获取性能历史（这里需要从监控系统获取）
         try:
             from app.services.monitoring.performance_monitor import performance_monitor
 
-            performance_history = performance_monitor.get_model_performance_history(
+            performance_history = performance_monitor.get_model_performance(
                 model_id=model_id, start_time=start_time, end_time=end_time
             )
         except ImportError:
             # 如果监控服务不可用，返回空历史
-            performance_history = []
+            performance_history = {}
 
         return StandardResponse(
             success=True,
@@ -1542,7 +1593,11 @@ async def get_model_performance_history(model_id: str, time_range: str = "30d"):
                 "time_range": time_range,
                 "performance_history": performance_history,
                 "summary": {
-                    "total_records": len(performance_history),
+                    "total_records": (
+                        len(performance_history.get("metrics_history", []))
+                        if isinstance(performance_history, dict)
+                        else 0
+                    ),
                     "start_time": start_time.isoformat(),
                     "end_time": end_time.isoformat(),
                 },
@@ -1564,7 +1619,7 @@ async def search_models(
     min_accuracy: Optional[float] = None,
     tags: Optional[str] = None,
     limit: int = 50,
-):
+) -> StandardResponse:
     """搜索模型"""
     session = SessionLocal()
     try:
@@ -1594,14 +1649,9 @@ async def search_models(
             models = query_filter.all()
             filtered_models = []
             for model in models:
-                performance_metrics = model.performance_metrics or {}
-                if isinstance(performance_metrics, str):
-                    try:
-                        import json
-
-                        performance_metrics = json.loads(performance_metrics)
-                    except Exception:
-                        performance_metrics = {}
+                performance_metrics: Dict[str, Any] = _safe_json_dict(
+                    model.performance_metrics
+                )
 
                 accuracy = performance_metrics.get("accuracy", 0.0)
                 if isinstance(accuracy, dict):
@@ -1617,20 +1667,13 @@ async def search_models(
         # 转换为返回格式
         model_list = []
         for model in models[:limit]:
-            performance_metrics = model.performance_metrics or {}
-            if isinstance(performance_metrics, str):
-                try:
-                    import json
-
-                    performance_metrics = json.loads(performance_metrics)
-                except Exception:
-                    performance_metrics = {}
+            performance_metrics = _safe_json_dict(model.performance_metrics)
 
             accuracy = performance_metrics.get("accuracy", 0.0)
             if isinstance(accuracy, dict):
                 accuracy = accuracy.get("value", 0.0)
 
-            model_data = {
+            model_data: Dict[str, Any] = {
                 "model_id": model.model_id,
                 "model_name": model.model_name,
                 "model_type": model.model_type,
@@ -1669,26 +1712,29 @@ async def search_models(
 
 
 @router.post("/{model_id}/tags", response_model=StandardResponse)
-async def add_model_tags(model_id: str, tags: List[str]):
+async def add_model_tags(model_id: str, tags: List[str]) -> StandardResponse:
     """为模型添加标签"""
     session = SessionLocal()
     try:
-        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        model = _as_model_info(
+            session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        )
         if not model:
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
 
         # 获取现有标签
+        hyperparameters = _safe_json_dict(model.hyperparameters)
+        existing_tags_raw = hyperparameters.get("tags", [])
         existing_tags = (
-            model.hyperparameters.get("tags", []) if model.hyperparameters else []
+            existing_tags_raw if isinstance(existing_tags_raw, list) else []
         )
 
         # 合并标签（去重）
         all_tags = list(set(existing_tags + tags))
 
         # 更新模型标签
-        if not model.hyperparameters:
-            model.hyperparameters = {}
-        model.hyperparameters["tags"] = all_tags
+        hyperparameters["tags"] = all_tags
+        model.hyperparameters = hyperparameters
 
         session.commit()
 
@@ -1709,26 +1755,29 @@ async def add_model_tags(model_id: str, tags: List[str]):
 
 
 @router.delete("/{model_id}/tags", response_model=StandardResponse)
-async def remove_model_tags(model_id: str, tags: List[str]):
+async def remove_model_tags(model_id: str, tags: List[str]) -> StandardResponse:
     """移除模型标签"""
     session = SessionLocal()
     try:
-        model = session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        model = _as_model_info(
+            session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
+        )
         if not model:
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
 
         # 获取现有标签
+        hyperparameters = _safe_json_dict(model.hyperparameters)
+        existing_tags_raw = hyperparameters.get("tags", [])
         existing_tags = (
-            model.hyperparameters.get("tags", []) if model.hyperparameters else []
+            existing_tags_raw if isinstance(existing_tags_raw, list) else []
         )
 
         # 移除指定标签
         remaining_tags = [tag for tag in existing_tags if tag not in tags]
 
         # 更新模型标签
-        if not model.hyperparameters:
-            model.hyperparameters = {}
-        model.hyperparameters["tags"] = remaining_tags
+        hyperparameters["tags"] = remaining_tags
+        model.hyperparameters = hyperparameters
 
         session.commit()
 

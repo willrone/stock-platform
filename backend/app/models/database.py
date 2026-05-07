@@ -9,7 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 
 class TaskStatus(Enum):
@@ -164,7 +164,7 @@ class DatabaseManager:
         self.ensure_db_directory()
         self.init_database()
 
-    def ensure_db_directory(self):
+    def ensure_db_directory(self) -> None:
         """确保数据库目录存在"""
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
@@ -176,7 +176,7 @@ class DatabaseManager:
         conn.row_factory = sqlite3.Row  # 使结果可以按列名访问
         return conn
 
-    def init_database(self):
+    def init_database(self) -> None:
         """初始化数据库表结构"""
         with self.get_connection() as conn:
             # 创建任务表
@@ -290,7 +290,7 @@ class DatabaseManager:
         """获取单条记录"""
         with self.get_connection() as conn:
             cursor = conn.execute(query, params)
-            return cursor.fetchone()
+            return cast(Optional[sqlite3.Row], cursor.fetchone())
 
     def fetch_all(self, query: str, params: tuple = ()) -> list:
         """获取多条记录"""

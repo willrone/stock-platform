@@ -8,7 +8,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar, cast
 
 import psutil
 from loguru import logger
@@ -41,7 +41,7 @@ class CacheEntry:
             return False
         return time.time() - self.created_at > self.ttl
 
-    def touch(self):
+    def touch(self) -> None:
         """更新访问时间和次数"""
         self.last_accessed = time.time()
         self.access_count += 1
@@ -58,7 +58,7 @@ class CacheStats:
     memory_usage_bytes: int = 0
     hit_rate: float = 0.0
 
-    def update_hit_rate(self):
+    def update_hit_rate(self) -> None:
         """更新命中率"""
         total = self.hits + self.misses
         self.hit_rate = self.hits / total if total > 0 else 0.0
@@ -89,10 +89,10 @@ class LRUCache:
         self._cleanup_task = None
         self._start_cleanup_task()
 
-    def _start_cleanup_task(self):
+    def _start_cleanup_task(self) -> None:
         """启动后台清理任务"""
 
-        def cleanup_loop():
+        def cleanup_loop() -> None:
             while True:
                 try:
                     self._cleanup_expired()
@@ -114,7 +114,7 @@ class LRUCache:
         except Exception:
             return 1024  # 默认1KB
 
-    def _cleanup_expired(self):
+    def _cleanup_expired(self) -> None:
         """清理过期条目"""
         with self._lock:
             expired_keys = []
@@ -129,12 +129,12 @@ class LRUCache:
             if expired_keys:
                 logger.info(f"清理了 {len(expired_keys)} 个过期缓存条目")
 
-    def _check_memory_usage(self):
+    def _check_memory_usage(self) -> None:
         """检查内存使用情况"""
         if self._memory_usage > self.memory_limit_bytes * self._cleanup_threshold:
             self._evict_by_memory_pressure()
 
-    def _evict_by_memory_pressure(self):
+    def _evict_by_memory_pressure(self) -> None:
         """基于内存压力进行驱逐"""
         with self._lock:
             # 按访问时间排序，驱逐最久未访问的条目
@@ -155,14 +155,14 @@ class LRUCache:
             if evicted_count > 0:
                 logger.info(f"内存压力清理了 {evicted_count} 个缓存条目")
 
-    def _remove_entry(self, key: str):
+    def _remove_entry(self, key: str) -> None:
         """移除缓存条目"""
         if key in self._cache:
             entry = self._cache.pop(key)
             self._memory_usage -= entry.size_bytes
             self._stats.size -= 1
 
-    def _evict_lru(self):
+    def _evict_lru(self) -> None:
         """驱逐最近最少使用的条目"""
         if self._cache:
             key, entry = self._cache.popitem(last=False)  # FIFO
@@ -250,7 +250,7 @@ class LRUCache:
                 return True
             return False
 
-    def clear(self):
+    def clear(self) -> None:
         """清空缓存"""
         with self._lock:
             self._cache.clear()
@@ -292,7 +292,7 @@ class LRUCache:
 class CacheManager:
     """缓存管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._caches: Dict[str, LRUCache] = {}
         self._lock = threading.RLock()
 
@@ -331,7 +331,7 @@ class CacheManager:
     def get_global_stats(self) -> Dict[str, Any]:
         """获取全局缓存统计"""
         with self._lock:
-            total_stats = {
+            total_stats: Dict[str, Any] = {
                 "total_caches": len(self._caches),
                 "total_hits": 0,
                 "total_misses": 0,
@@ -370,7 +370,7 @@ class CacheManager:
 
             return total_stats
 
-    def clear_all(self):
+    def clear_all(self) -> None:
         """清空所有缓存"""
         with self._lock:
             for cache in self._caches.values():
@@ -395,16 +395,18 @@ class CacheManager:
 # 全局缓存管理器实例
 cache_manager = CacheManager()
 
+F = TypeVar("F", bound=Callable[..., Any])
+
 
 def cached(
     cache_name: str = "default",
     ttl: Optional[float] = None,
-    key_func: Optional[Callable] = None,
-):
+    key_func: Optional[Callable[..., Any]] = None,
+) -> Callable[[F], F]:
     """缓存装饰器"""
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: F) -> F:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             # 生成缓存键
             if key_func:
                 cache_key = key_func(*args, **kwargs)
@@ -426,20 +428,20 @@ def cached(
 
             return result
 
-        return wrapper
+        return cast(F, wrapper)
 
     return decorator
 
 
-async def async_cached(
+def async_cached(
     cache_name: str = "default",
     ttl: Optional[float] = None,
-    key_func: Optional[Callable] = None,
-):
+    key_func: Optional[Callable[..., Any]] = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """异步缓存装饰器"""
 
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             # 生成缓存键
             if key_func:
                 cache_key = key_func(*args, **kwargs)
