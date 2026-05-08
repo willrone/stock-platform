@@ -11,7 +11,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -52,9 +52,9 @@ class AlgorithmRecommendation:
 class AlgorithmSelector:
     """智能算法选择器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.algorithm_profiles = self._initialize_algorithm_profiles()
-        self.performance_history = {}
+        self.performance_history: Dict[str, Any] = {}
 
     def _initialize_algorithm_profiles(self) -> Dict[str, Dict[str, Any]]:
         """初始化算法特征档案"""
@@ -355,7 +355,7 @@ class AlgorithmSelector:
             # 返回标准化的斜率作为趋势强度
             trend_strength = slope / (np.std(y) + 1e-8)
 
-            return trend_strength
+            return float(trend_strength)
 
         except Exception as e:
             logger.warning(f"趋势分析失败: {e}")
@@ -387,7 +387,7 @@ class AlgorithmSelector:
             snr = signal_power / (noise_power + 1e-8)
             noise_score = 1.0 / (1.0 + snr)  # 转换为0-1的噪声分数
 
-            return noise_score
+            return float(noise_score)
 
         except Exception as e:
             logger.warning(f"噪声分析失败: {e}")
@@ -424,13 +424,14 @@ class AlgorithmSelector:
                 if not np.isnan(corr):
                     correlations.append(abs(corr))
 
-            avg_corr = np.mean(correlations) if correlations else 0.0
+            avg_corr = float(np.mean(correlations)) if correlations else 0.0
+            avg_mi_score = float(avg_mi)
 
             # 非线性分数：互信息相对于线性相关性的比值
             if avg_corr == 0:
-                return min(avg_mi, 1.0)
+                return min(avg_mi_score, 1.0)
 
-            nonlinearity_score = avg_mi / (avg_corr + 1e-8)
+            nonlinearity_score = avg_mi_score / (avg_corr + 1e-8)
             return min(nonlinearity_score, 1.0)
 
         except Exception as e:
@@ -620,7 +621,7 @@ class AlgorithmSelector:
 
         # 历史性能加权
         if algorithm in self.performance_history:
-            historical_performance = np.mean(self.performance_history[algorithm])
+            historical_performance = float(np.mean(self.performance_history[algorithm]))
             score += historical_performance * 0.3
             reasoning.append(f"历史平均性能: {historical_performance:.3f}")
 
@@ -679,7 +680,7 @@ class AlgorithmSelector:
                 default_params["d_model"] = 256
                 default_params["num_layers"] = 6
 
-        return default_params
+        return cast(Dict[str, Any], default_params)
 
     def _estimate_performance(
         self, algorithm: str, data_characteristics: Dict[str, Any]
@@ -710,7 +711,7 @@ class AlgorithmSelector:
         # 噪声影响
         performance *= 1.0 - noise_score * 0.2
 
-        return min(0.95, max(0.5, performance))
+        return float(min(0.95, max(0.5, performance)))
 
     def _estimate_training_time(
         self, algorithm: str, data_characteristics: Dict[str, Any]
@@ -735,7 +736,7 @@ class AlgorithmSelector:
         scale_factor = (n_samples / 1000) * (n_features / 10)
         estimated_time = base_time * scale_factor
 
-        return max(0.1, estimated_time)
+        return float(max(0.1, estimated_time))
 
     def _estimate_resource_requirements(
         self, algorithm: str, data_characteristics: Dict[str, Any]
@@ -768,7 +769,7 @@ class AlgorithmSelector:
 
         return requirements
 
-    def update_performance_history(self, algorithm: str, performance: float):
+    def update_performance_history(self, algorithm: str, performance: float) -> Any:
         """更新算法性能历史"""
         if algorithm not in self.performance_history:
             self.performance_history[algorithm] = []

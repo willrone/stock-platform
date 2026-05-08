@@ -144,7 +144,7 @@ class MetricCalculator:
         self.events: deque = deque(maxlen=10000)
         self.lock = threading.Lock()
 
-    def add_event(self, event: MetricEvent):
+    def add_event(self, event: MetricEvent) -> Any:
         """添加事件"""
         # 检查过滤条件
         if not self._matches_filters(event):
@@ -393,7 +393,7 @@ class MetricCalculator:
 class BusinessMetricsCollector:
     """业务指标收集器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.metric_definitions: Dict[str, MetricDefinition] = {}
         self.metric_calculators: Dict[str, MetricCalculator] = {}
         self.metric_values: List[MetricValue] = []
@@ -411,7 +411,7 @@ class BusinessMetricsCollector:
 
         logger.info("业务指标收集器初始化完成")
 
-    def _register_default_metrics(self):
+    def _register_default_metrics(self) -> None:
         """注册默认业务指标"""
         default_metrics = [
             MetricDefinition(
@@ -470,7 +470,7 @@ class BusinessMetricsCollector:
         for metric_def in default_metrics:
             self.register_metric(metric_def)
 
-    def register_metric(self, metric_definition: MetricDefinition):
+    def register_metric(self, metric_definition: MetricDefinition) -> Any:
         """注册指标定义"""
         with self.lock:
             self.metric_definitions[metric_definition.metric_id] = metric_definition
@@ -482,7 +482,7 @@ class BusinessMetricsCollector:
             f"注册业务指标: {metric_definition.name} ({metric_definition.metric_id})"
         )
 
-    def unregister_metric(self, metric_id: str):
+    def unregister_metric(self, metric_id: str) -> Any:
         """注销指标定义"""
         with self.lock:
             if metric_id in self.metric_definitions:
@@ -505,7 +505,7 @@ class BusinessMetricsCollector:
         variant_id: Optional[str] = None,
         properties: Optional[Dict[str, Any]] = None,
         value: Optional[float] = None,
-    ):
+    ) -> Any:
         """记录业务事件"""
         event = MetricEvent(
             event_id=str(uuid.uuid4()),
@@ -571,7 +571,7 @@ class BusinessMetricsCollector:
 
         return results
 
-    async def start_real_time_calculation(self):
+    async def start_real_time_calculation(self) -> None:
         """启动实时指标计算"""
         if self.running:
             logger.warning("实时计算已在运行")
@@ -590,7 +590,7 @@ class BusinessMetricsCollector:
 
         logger.info("启动实时指标计算")
 
-    async def stop_real_time_calculation(self):
+    async def stop_real_time_calculation(self) -> None:
         """停止实时指标计算"""
         if not self.running:
             return
@@ -610,7 +610,9 @@ class BusinessMetricsCollector:
         self.calculation_tasks.clear()
         logger.info("停止实时指标计算")
 
-    async def _metric_calculation_loop(self, metric_id: str, interval_seconds: int):
+    async def _metric_calculation_loop(
+        self, metric_id: str, interval_seconds: int
+    ) -> Any:
         """指标计算循环"""
         while self.running:
             try:
@@ -672,7 +674,7 @@ class BusinessMetricsCollector:
         # 计算实验的所有指标
         metrics = self.calculate_all_metrics(experiment_id=experiment_id)
 
-        summary = {
+        summary: Dict[str, Any] = {
             "experiment_id": experiment_id,
             "timestamp": datetime.now().isoformat(),
             "metrics": {},

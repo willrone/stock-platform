@@ -99,8 +99,8 @@ class ShapExplainerFactory:
         model: Any,
         explainer_type: ExplainerType,
         background_data: Optional[np.ndarray] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> Any:
         """
         创建SHAP解释器
 
@@ -525,8 +525,8 @@ class ShapExplainerManager:
             return []
 
         # 聚合特征重要性
-        feature_importance_sum = {}
-        feature_count = {}
+        feature_importance_sum: Dict[str, float] = {}
+        feature_count: Dict[str, int] = {}
 
         for explanation in explanations:
             for feature, importance in explanation.feature_importance.items():
@@ -538,7 +538,7 @@ class ShapExplainerManager:
                 feature_count[feature] += 1
 
         # 计算平均重要性
-        avg_importance = {}
+        avg_importance: Dict[str, float] = {}
         for feature in feature_importance_sum:
             avg_importance[feature] = (
                 feature_importance_sum[feature] / feature_count[feature]
@@ -570,8 +570,8 @@ class ShapExplainerManager:
 
         # 基本统计
         total_explanations = len(explanations)
-        explanation_types = {}
-        explainer_types = {}
+        explanation_types: Any = {}
+        explainer_types: Any = {}
 
         for explanation in explanations:
             exp_type = explanation.explanation_type.value
@@ -586,7 +586,7 @@ class ShapExplainerManager:
         )
 
         # 摘要统计
-        summary_stats = {
+        summary_stats: Any = {
             "mean_abs_shap": [],
             "total_attribution": [],
             "positive_attribution": [],
@@ -617,7 +617,7 @@ class ShapExplainerManager:
             "generated_at": datetime.now().isoformat(),
         }
 
-    def _save_explanation(self, explanation: ExplanationResult):
+    def _save_explanation(self, explanation: ExplanationResult) -> Any:
         """保存解释结果"""
         try:
             explanation_file = self.storage_path / f"{explanation.explanation_id}.json"
@@ -641,7 +641,7 @@ class ShapExplainerManager:
         except Exception as e:
             logger.error(f"保存解释结果失败: {e}")
 
-    def cleanup_old_explanations(self, days: int = 30):
+    def cleanup_old_explanations(self, days: int = 30) -> Any:
         """清理旧的解释结果"""
         cutoff_date = datetime.now() - pd.Timedelta(days=days)
 

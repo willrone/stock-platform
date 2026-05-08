@@ -10,9 +10,18 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol, cast
 
 from loguru import logger
+
+
+class TrafficSplitter(Protocol):
+    """Traffic splitter interface."""
+
+    def assign_variant(
+        self, user_id: str, experiment: Any, session_id: Optional[str] = None
+    ) -> Any:
+        raise NotImplementedError
 
 
 class TrafficSplitMethod(Enum):
@@ -236,7 +245,7 @@ class RandomSplitter:
 class StickySessionSplitter:
     """粘性会话分割器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.user_assignments: Dict[str, Dict[str, str]] = defaultdict(dict)
         self.lock = threading.Lock()
 
@@ -270,7 +279,7 @@ class StickySessionSplitter:
 class TrafficManager:
     """流量分割管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.experiments: Dict[str, ABExperiment] = {}
         self.user_assignments: Dict[str, List[UserAssignment]] = defaultdict(list)
         self.assignment_history: deque = deque(maxlen=10000)
@@ -299,7 +308,7 @@ class TrafficManager:
         logger.info(f"创建A/B测试实验: {experiment.name} ({experiment.experiment_id})")
         return experiment.experiment_id
 
-    def _validate_experiment(self, experiment: ABExperiment):
+    def _validate_experiment(self, experiment: ABExperiment) -> Any:
         """验证实验配置"""
         if not experiment.variants:
             raise ValueError("实验必须至少包含一个变体")
@@ -436,7 +445,9 @@ class TrafficManager:
                 return None
 
             # 使用分割器分配变体
-            splitter = self.splitters.get(experiment.split_method)
+            splitter = cast(
+                Optional[TrafficSplitter], self.splitters.get(experiment.split_method)
+            )
             if not splitter:
                 logger.error(f"不支持的分割方法: {experiment.split_method}")
                 return None
@@ -568,7 +579,7 @@ class TrafficManager:
         assignments = self.get_experiment_assignments(experiment_id)
 
         # 按变体统计
-        variant_stats = defaultdict(int)
+        variant_stats: Any = defaultdict(int)
         for assignment in assignments:
             variant_stats[assignment.variant_id] += 1
 
