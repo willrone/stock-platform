@@ -6,7 +6,7 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.v1.schemas import StandardResponse
 from app.services.data_versioning.integration_service import data_versioning_integration
@@ -22,7 +22,7 @@ class CreateVersionRequest(BaseModel):
     version_name: str
     data_type: str
     description: str = ""
-    tags: List[str] = []
+    tags: List[str] = Field(default_factory=list)
     copy_file: bool = False
 
 
@@ -36,7 +36,7 @@ class CreateSnapshotRequest(BaseModel):
     snapshot_name: str
     version_ids: List[str]
     description: str = ""
-    tags: List[str] = []
+    tags: List[str] = Field(default_factory=list)
 
 
 class TrackModelTrainingRequest(BaseModel):
@@ -54,7 +54,7 @@ async def list_versions(
     tags: Optional[str] = Query(None, description="标签过滤，逗号分隔"),
     created_by: Optional[str] = Query(None, description="创建者过滤"),
     limit: int = Query(100, description="返回数量限制"),
-):
+) -> Any:
     """获取数据版本列表"""
     try:
         # 转换参数
@@ -114,7 +114,7 @@ async def list_versions(
 @router.get(
     "/versions/{version_id}", response_model=StandardResponse, summary="获取版本详情"
 )
-async def get_version(version_id: str):
+async def get_version(version_id: str) -> Any:
     """获取版本详情"""
     try:
         version = data_versioning_integration.version_manager.get_version(version_id)
@@ -144,7 +144,7 @@ async def get_version(version_id: str):
 
 
 @router.post("/versions", response_model=StandardResponse, summary="创建数据版本")
-async def create_version(request: CreateVersionRequest):
+async def create_version(request: CreateVersionRequest) -> Any:
     """创建数据版本"""
     try:
         # 转换数据类型
@@ -185,7 +185,7 @@ async def create_version(request: CreateVersionRequest):
 @router.post(
     "/versions/feature", response_model=StandardResponse, summary="创建特征版本"
 )
-async def create_feature_version(request: CreateFeatureVersionRequest):
+async def create_feature_version(request: CreateFeatureVersionRequest) -> Any:
     """创建特征版本"""
     try:
         version_id = data_versioning_integration.create_feature_version(
@@ -215,7 +215,7 @@ async def create_feature_version(request: CreateFeatureVersionRequest):
     response_model=StandardResponse,
     summary="比较版本",
 )
-async def compare_versions(version_id1: str, version_id2: str):
+async def compare_versions(version_id1: str, version_id2: str) -> Any:
     """比较两个版本"""
     try:
         comparison = data_versioning_integration.get_version_comparison(
@@ -233,7 +233,7 @@ async def compare_versions(version_id1: str, version_id2: str):
     response_model=StandardResponse,
     summary="获取股票数据版本",
 )
-async def get_stock_versions(stock_code: str):
+async def get_stock_versions(stock_code: str) -> Any:
     """获取股票的所有数据版本"""
     try:
         versions = data_versioning_integration.get_stock_data_versions(stock_code)
@@ -257,7 +257,7 @@ async def get_stock_versions(stock_code: str):
     response_model=StandardResponse,
     summary="获取股票特征血缘",
 )
-async def get_stock_feature_lineage(stock_code: str):
+async def get_stock_feature_lineage(stock_code: str) -> Any:
     """获取股票的特征血缘"""
     try:
         lineage_info = data_versioning_integration.get_feature_lineage_for_stock(
@@ -281,7 +281,7 @@ async def search_lineage_nodes(
     tags: Optional[str] = Query(None, description="标签，逗号分隔"),
     created_by: Optional[str] = Query(None, description="创建者"),
     limit: int = Query(100, description="返回数量限制"),
-):
+) -> Any:
     """搜索血缘节点"""
     try:
         # 转换参数
@@ -336,7 +336,7 @@ async def search_lineage_nodes(
     response_model=StandardResponse,
     summary="获取特征血缘",
 )
-async def get_feature_lineage(feature_id: str):
+async def get_feature_lineage(feature_id: str) -> Any:
     """获取特征血缘"""
     try:
         lineage = data_versioning_integration.lineage_tracker.get_feature_lineage(
@@ -359,7 +359,7 @@ async def get_feature_lineage(feature_id: str):
     response_model=StandardResponse,
     summary="获取模型血缘",
 )
-async def get_model_lineage(model_id: str):
+async def get_model_lineage(model_id: str) -> Any:
     """获取模型血缘"""
     try:
         lineage = data_versioning_integration.get_model_training_lineage(model_id)
@@ -373,7 +373,7 @@ async def get_model_lineage(model_id: str):
 @router.post(
     "/lineage/model-training", response_model=StandardResponse, summary="追踪模型训练"
 )
-async def track_model_training(request: TrackModelTrainingRequest):
+async def track_model_training(request: TrackModelTrainingRequest) -> Any:
     """追踪模型训练血缘"""
     try:
         lineage_ids = data_versioning_integration.track_model_training_with_versions(
@@ -400,7 +400,7 @@ async def track_model_training(request: TrackModelTrainingRequest):
 
 
 @router.post("/snapshots", response_model=StandardResponse, summary="创建数据快照")
-async def create_snapshot(request: CreateSnapshotRequest):
+async def create_snapshot(request: CreateSnapshotRequest) -> Any:
     """创建数据快照"""
     try:
         snapshot_id = data_versioning_integration.version_manager.create_snapshot(
@@ -430,7 +430,7 @@ async def create_snapshot(request: CreateSnapshotRequest):
 async def list_snapshots(
     created_by: Optional[str] = Query(None, description="创建者过滤"),
     limit: int = Query(100, description="返回数量限制"),
-):
+) -> Any:
     """获取快照列表"""
     try:
         snapshots = data_versioning_integration.version_manager.list_snapshots(
@@ -455,7 +455,7 @@ async def list_snapshots(
 
 
 @router.get("/stats", response_model=StandardResponse, summary="获取版本控制统计")
-async def get_versioning_stats():
+async def get_versioning_stats() -> Any:
     """获取数据版本控制统计信息"""
     try:
         stats = data_versioning_integration.get_data_versioning_stats()
@@ -469,7 +469,7 @@ async def get_versioning_stats():
 
 
 @router.get("/lineage/summary", response_model=StandardResponse, summary="获取血缘摘要")
-async def get_lineage_summary():
+async def get_lineage_summary() -> Any:
     """获取血缘摘要"""
     try:
         summary = data_versioning_integration.lineage_tracker.get_lineage_summary()
@@ -485,7 +485,7 @@ async def get_lineage_summary():
 )
 async def delete_version(
     version_id: str, remove_file: bool = Query(False, description="是否删除文件")
-):
+) -> Any:
     """删除版本"""
     try:
         success = data_versioning_integration.version_manager.delete_version(
@@ -511,7 +511,7 @@ async def delete_version(
 async def cleanup_old_versions(
     days_to_keep: int = Query(30, description="保留天数"),
     keep_tagged_versions: bool = Query(True, description="是否保留标记版本"),
-):
+) -> Any:
     """清理旧版本"""
     try:
         result = data_versioning_integration.cleanup_old_versions(

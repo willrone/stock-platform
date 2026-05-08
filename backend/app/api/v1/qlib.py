@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.v1.schemas import StandardResponse
 from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
@@ -61,7 +61,7 @@ class QlibModelConfigRequest(BaseModel):
     """Qlib模型配置请求"""
 
     model_type: str
-    hyperparameters: Dict[str, Any] = {}
+    hyperparameters: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelRecommendationRequest(BaseModel):
@@ -73,7 +73,7 @@ class ModelRecommendationRequest(BaseModel):
 
 
 @router.post("/dataset/prepare", response_model=StandardResponse)
-async def prepare_qlib_dataset(request: QlibDatasetRequest):
+async def prepare_qlib_dataset(request: QlibDatasetRequest) -> Any:
     """准备Qlib标准格式的数据集"""
     try:
         provider = get_qlib_provider()
@@ -114,7 +114,7 @@ async def prepare_qlib_dataset(request: QlibDatasetRequest):
 
 
 @router.post("/factors/alpha158", response_model=StandardResponse)
-async def calculate_alpha158_factors(request: AlphaFactorsRequest):
+async def calculate_alpha158_factors(request: AlphaFactorsRequest) -> Any:
     """计算Alpha158因子"""
     try:
         provider = get_qlib_provider()
@@ -164,7 +164,7 @@ async def calculate_alpha158_factors(request: AlphaFactorsRequest):
 
 
 @router.post("/model/config", response_model=StandardResponse)
-async def create_qlib_model_config(request: QlibModelConfigRequest):
+async def create_qlib_model_config(request: QlibModelConfigRequest) -> Any:
     """创建Qlib模型配置"""
     try:
         provider = get_qlib_provider()
@@ -190,7 +190,7 @@ async def create_qlib_model_config(request: QlibModelConfigRequest):
 
 
 @router.get("/cache/stats", response_model=StandardResponse)
-async def get_cache_stats():
+async def get_cache_stats() -> Any:
     """获取缓存统计信息"""
     try:
         provider = get_qlib_provider()
@@ -206,7 +206,7 @@ async def get_cache_stats():
 
 
 @router.delete("/cache/clear", response_model=StandardResponse)
-async def clear_cache():
+async def clear_cache() -> Any:
     """清空缓存"""
     try:
         provider = get_qlib_provider()
@@ -220,7 +220,7 @@ async def clear_cache():
 
 
 @router.get("/status", response_model=StandardResponse)
-async def get_qlib_status():
+async def get_qlib_status() -> Any:
     """获取Qlib集成状态"""
     try:
         provider = get_qlib_provider()
@@ -268,7 +268,7 @@ async def get_qlib_status():
 
 
 @router.get("/factors/list", response_model=StandardResponse)
-async def list_alpha_factors():
+async def list_alpha_factors() -> Any:
     """获取支持的Alpha因子列表"""
     try:
         provider = get_qlib_provider()
@@ -325,7 +325,7 @@ async def list_alpha_factors():
 
 
 @router.get("/models/supported", response_model=StandardResponse)
-async def get_supported_models():
+async def get_supported_models() -> Any:
     """获取支持的模型列表"""
     try:
         engine = get_training_engine()
@@ -368,7 +368,7 @@ async def get_supported_models():
 
 
 @router.get("/models/{model_name}/config", response_model=StandardResponse)
-async def get_model_config_template(model_name: str):
+async def get_model_config_template(model_name: str) -> Any:
     """获取模型配置模板"""
     try:
         engine = get_training_engine()
@@ -391,7 +391,7 @@ async def get_model_config_template(model_name: str):
 
 
 @router.get("/models/{model_name}/hyperparameters", response_model=StandardResponse)
-async def get_model_hyperparameters(model_name: str):
+async def get_model_hyperparameters(model_name: str) -> Any:
     """获取模型超参数规格"""
     try:
         engine = get_training_engine()
@@ -430,7 +430,7 @@ async def get_model_hyperparameters(model_name: str):
 
 
 @router.post("/models/recommend", response_model=StandardResponse)
-async def recommend_models(request: ModelRecommendationRequest):
+async def recommend_models(request: ModelRecommendationRequest) -> Any:
     """推荐适合的模型"""
     try:
         engine = get_training_engine()
@@ -481,7 +481,7 @@ async def recommend_models(request: ModelRecommendationRequest):
 
 
 @router.get("/models/{model_name}/training-tips", response_model=StandardResponse)
-async def get_training_tips(model_name: str):
+async def get_training_tips(model_name: str) -> Any:
     """获取模型训练建议"""
     try:
         engine = get_training_engine()
