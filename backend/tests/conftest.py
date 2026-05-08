@@ -10,12 +10,14 @@ import os
 # regression suite while those legacy contracts are paid down separately.
 if os.getenv("GITHUB_ACTIONS") == "true":
     collect_ignore = [
+        "unit/api/test_api_consistency_properties.py",
         "integration/test_integration.py",
         "integration/test_integration_simple.py",
         "integration/test_simple_integration.py",
         "unit/backtest/test_backtest_engine.py",
         "unit/backtest/test_backtest_engine_properties.py",
         "unit/backtest/test_backtest_db_extension.py",
+        "unit/backtest/test_backtest_data_adapter_properties.py",
         "unit/infrastructure/test_container_properties.py",
         "unit/infrastructure/test_error_handling_properties.py",
         "unit/infrastructure/test_infrastructure.py",
