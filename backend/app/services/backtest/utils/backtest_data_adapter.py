@@ -11,11 +11,9 @@ from loguru import logger
 
 from app.core.error_handler import ErrorSeverity, TaskError
 
-from ..analysis.position_analysis import PositionAnalyzer
 from ..models.analysis_models import (
     DrawdownAnalysis,
     EnhancedBacktestResult,
-    EnhancedPositionAnalysis,
     ExtendedRiskMetrics,
     PositionAnalysis,
     MonthlyReturnsAnalysis,

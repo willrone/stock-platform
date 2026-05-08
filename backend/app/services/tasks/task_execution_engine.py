@@ -1025,7 +1025,7 @@ class QlibPrecomputeTaskExecutor:
                         f"Qlib预计算任务失败: {task_id}, {result.get('message')}"
                     )
 
-                return cast(Dict[str, Any], result)
+                return result
 
             except Exception as e:
                 error_message = f"Qlib预计算任务执行失败: {str(e)}"
@@ -1211,7 +1211,7 @@ class HyperparameterOptimizationTaskExecutor:
                         progress=100.0,
                     )
 
-                return cast(Dict[str, Any], result)
+                return result
 
             except Exception as e:
                 logger.error(f"超参优化任务执行失败: {e}", exc_info=True)
