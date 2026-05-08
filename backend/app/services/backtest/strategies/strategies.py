@@ -12,8 +12,16 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped,unused-ignore]
-import talib
 from loguru import logger
+
+try:
+    import talib
+
+    TALIB_AVAILABLE = True
+except ImportError:
+    talib = None
+    TALIB_AVAILABLE = False
+    logger.warning("TA-Lib未安装，将使用pandas实现技术指标")
 
 from app.core.error_handler import ErrorSeverity, TaskError
 
@@ -361,14 +369,21 @@ class CCIStrategy(BaseStrategy):
 
         typical_price = (high + low + close) / 3
 
-        # 使用 talib.CCI 替换手动 rolling.apply 计算（性能优化）
-        cci_values = talib.CCI(
-            high.values.astype(np.float64),
-            low.values.astype(np.float64),
-            close.values.astype(np.float64),
-            timeperiod=self.period,
-        )
-        cci = pd.Series(cci_values, index=data.index)
+        if TALIB_AVAILABLE and talib is not None:
+            cci_values = talib.CCI(
+                high.values.astype(np.float64),
+                low.values.astype(np.float64),
+                close.values.astype(np.float64),
+                timeperiod=self.period,
+            )
+            cci = pd.Series(cci_values, index=data.index)
+        else:
+            rolling_mean = typical_price.rolling(window=self.period).mean()
+            mean_deviation = typical_price.rolling(window=self.period).apply(
+                lambda values: np.mean(np.abs(values - np.mean(values))),
+                raw=True,
+            )
+            cci = (typical_price - rolling_mean) / (0.015 * mean_deviation)
 
         return {"cci": cci, "typical_price": typical_price, "price": close}
 
