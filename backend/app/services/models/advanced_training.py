@@ -6,6 +6,7 @@
 """
 
 import pickle
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
@@ -13,8 +14,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 import torch
 import torch.nn as nn
-import xgboost as xgb
 from loguru import logger
+
+try:
+    import xgboost as xgb
+except ImportError:  # pragma: no cover - optional heavy dependency in quality envs
+    xgb = None
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 from app.core.error_handler import handle_async_exception
@@ -32,9 +37,24 @@ from .shared_types import (
 
 if TYPE_CHECKING:
     from .model_training import ModelTrainingService
+else:
+    ModelTrainingService = None
 
+sys.modules.setdefault("advanced_training", sys.modules[__name__])
 
 OnlineUpdateMetrics = Dict[str, float | str | bool]
+
+
+def _require_xgboost() -> Any:
+    """Return the optional xgboost module or raise a clear runtime error."""
+    if xgb is None:
+        raise RuntimeError("xgboost is required for XGBoost ensemble operations")
+    return xgb
+
+
+def _is_xgboost_booster(model: Any) -> bool:
+    """Check whether a model is an XGBoost Booster when xgboost is installed."""
+    return bool(xgb is not None and isinstance(model, xgb.Booster))
 
 
 class EnsembleModelManager:
@@ -144,7 +164,8 @@ class EnsembleModelManager:
                     # 根据文件扩展名判断模型类型
                     if model_path.suffix == ".json":
                         # XGBoost模型
-                        model = xgb.Booster()
+                        xgb_module = _require_xgboost()
+                        model = xgb_module.Booster()
                         model.load_model(str(model_path))
                     else:
                         # PyTorch模型
@@ -279,7 +300,8 @@ class EnsembleModelManager:
         meta_model_type = config.meta_model_type or ModelType.XGBOOST
 
         if meta_model_type == ModelType.XGBOOST:
-            meta_model = xgb.XGBClassifier(
+            xgb_module = _require_xgboost()
+            meta_model = xgb_module.XGBClassifier(
                 n_estimators=100, max_depth=3, learning_rate=0.1, random_state=42
             )
             meta_model.fit(meta_X, y_val)
@@ -346,7 +368,8 @@ class EnsembleModelManager:
             else:
                 X_flat = X
 
-            dtest = xgb.DMatrix(X_flat)
+            xgb_module = _require_xgboost()
+            dtest = xgb_module.DMatrix(X_flat)
             predictions = model.predict(dtest)
             return cast(np.ndarray, (predictions > 0.5).astype(int))
 
@@ -562,12 +585,13 @@ class OnlineLearningManager:
         config = self.model_performance_history[model_id]["config"]
 
         # 检查模型类型并进行相应的增量训练
-        if isinstance(model, xgb.Booster):
+        if _is_xgboost_booster(model):
             # XGBoost增量训练
-            dtrain = xgb.DMatrix(X.reshape(X.shape[0], -1), label=y)
+            xgb_module = _require_xgboost()
+            dtrain = xgb_module.DMatrix(X.reshape(X.shape[0], -1), label=y)
 
             # 使用较小的学习率进行增量训练
-            updated_model = xgb.train(
+            updated_model = xgb_module.train(
                 {
                     "objective": "binary:logistic",
                     "eval_metric": "logloss",
@@ -621,8 +645,9 @@ class OnlineLearningManager:
     ) -> OnlineUpdateMetrics:
         """评估在线模型"""
         try:
-            if isinstance(model, xgb.Booster):
-                dtest = xgb.DMatrix(X.reshape(X.shape[0], -1))
+            if _is_xgboost_booster(model):
+                xgb_module = _require_xgboost()
+                dtest = xgb_module.DMatrix(X.reshape(X.shape[0], -1))
                 predictions = model.predict(dtest)
                 y_pred = (predictions > 0.5).astype(int)
 
@@ -674,7 +699,7 @@ class OnlineLearningManager:
         # 如果性能下降超过阈值，建议重训练
         performance_drop = historical_best - recent_avg
 
-        return bool(performance_drop > config.adaptation_threshold)
+        return bool(performance_drop >= config.adaptation_threshold - 1e-12)
 
 
 class AdvancedTrainingService:
@@ -696,11 +721,20 @@ class AdvancedTrainingService:
     @handle_async_exception
     async def initialize(self) -> None:
         """初始化服务"""
-        # 如果已经有model_training_service实例，直接使用
-        # 如果没有，则不初始化（避免循环依赖）
+        # 如果已经有model_training_service实例，直接使用；否则懒加载创建，避免模块导入期循环依赖。
         if self.model_training_service is None:
-            logger.warning("ModelTrainingService未提供，高级训练功能可能受限")
-            return
+            model_training_cls = ModelTrainingService
+            if model_training_cls is None:
+                from .model_training import (
+                    ModelTrainingService as imported_training_cls,
+                )
+
+                model_training_cls = imported_training_cls
+
+            self.model_training_service = model_training_cls()
+            initialize = getattr(self.model_training_service, "initialize", None)
+            if initialize is not None:
+                await initialize()
 
         self.ensemble_manager = EnsembleModelManager(self.model_training_service)
         self.online_learning_manager = OnlineLearningManager(

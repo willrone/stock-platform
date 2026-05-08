@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from hypothesis import given, settings
+from hypothesis import HealthCheck
 from hypothesis import strategies as st
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -429,7 +430,10 @@ class TestNotificationServiceReliability:
         task_name=st.text(min_size=1, max_size=100),
         task_type=st.sampled_from([t for t in TaskType]),
     )
-    @settings(max_examples=100)
+    @pytest.mark.asyncio
+    @settings(
+        max_examples=100, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    )
     async def test_notification_service_reliability(
         self, task_id, user_id, task_name, task_type
     ):
@@ -499,12 +503,18 @@ class TestNotificationServiceReliability:
             st.text(min_size=1, max_size=50), min_size=1, max_size=5, unique=True
         ),
     )
-    @settings(max_examples=50)
+    @pytest.mark.asyncio
+    @settings(
+        max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    )
     async def test_subscription_management_reliability(self, user_id, task_ids):
         """
         功能: production-ready-implementation, 属性 5: 通知服务可靠性
         验证订阅管理的可靠性 - 订阅和取消订阅应该正确管理
         """
+        # Hypothesis 多 example 复用测试实例，显式重建服务避免跨 example 订阅状态污染。
+        self.notification_service = TaskNotificationService()
+
         # 订阅多个任务
         for task_id in task_ids:
             await self.notification_service.subscribe_user_to_task(user_id, task_id)
