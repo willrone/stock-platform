@@ -4,7 +4,7 @@
 
 import json
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
@@ -76,7 +76,7 @@ class StrategyConfigUpdate(BaseModel):
 async def get_strategy_configs(
     strategy_name: Optional[str] = Query(None, description="策略名称筛选"),
     user_id: Optional[str] = Query(None, description="用户ID筛选"),
-):
+) -> Any:
     """获取策略配置列表"""
     try:
         async with AsyncSessionLocal() as session:
@@ -109,7 +109,7 @@ async def get_strategy_configs(
 
 
 @router.get("/{config_id}", response_model=StandardResponse)
-async def get_strategy_config(config_id: str):
+async def get_strategy_config(config_id: str) -> Any:
     """获取特定配置详情"""
     try:
         async with AsyncSessionLocal() as session:
@@ -132,7 +132,7 @@ async def get_strategy_config(config_id: str):
 
 
 @router.post("", response_model=StandardResponse)
-async def create_strategy_config(request: StrategyConfigCreate):
+async def create_strategy_config(request: StrategyConfigCreate) -> Any:
     """保存新配置"""
     try:
         logger.info(
@@ -240,14 +240,14 @@ async def create_strategy_config(request: StrategyConfigCreate):
 
 
 @router.put("/{config_id}", response_model=StandardResponse)
-async def update_strategy_config(config_id: str, request: StrategyConfigUpdate):
+async def update_strategy_config(config_id: str, request: StrategyConfigUpdate) -> Any:
     """更新配置"""
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(StrategyConfig).where(StrategyConfig.config_id == config_id)
             )
-            config = result.scalar_one_or_none()
+            config = cast(Any, result.scalar_one_or_none())
 
             if not config:
                 raise HTTPException(status_code=404, detail="配置不存在")
@@ -287,7 +287,7 @@ async def update_strategy_config(config_id: str, request: StrategyConfigUpdate):
 
 
 @router.delete("/{config_id}", response_model=StandardResponse)
-async def delete_strategy_config(config_id: str):
+async def delete_strategy_config(config_id: str) -> Any:
     """删除配置"""
     try:
         async with AsyncSessionLocal() as session:
@@ -302,7 +302,7 @@ async def delete_strategy_config(config_id: str):
             await session.delete(config)
             await session.commit()
 
-            return StandardResponse(success=True, message="删除配置成功")
+            return StandardResponse(success=True, message="删除配置成功", data={})
     except HTTPException:
         raise
     except Exception as e:

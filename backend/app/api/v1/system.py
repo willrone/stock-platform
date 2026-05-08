@@ -1,8 +1,8 @@
 """
 系统状态路由
 """
-
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/system", tags=["系统状态"])
     summary="获取API版本信息",
     description="获取当前API的版本信息和更新日志",
 )
-async def get_api_version():
+async def get_api_version() -> Any:
     """获取API版本信息"""
     version_info = {
         "version": "1.0.0",
@@ -64,7 +64,7 @@ async def get_api_version():
     summary="获取系统状态",
     description="获取各个服务组件的运行状态",
 )
-async def get_system_status(request: Request):
+async def get_system_status(request: Request) -> Any:
     """获取系统状态"""
     try:
         # 获取错误处理中间件的统计信息（如果可用）

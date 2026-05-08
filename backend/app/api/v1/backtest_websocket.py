@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 from typing import Any, Dict
 
-import websockets
 from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
 from loguru import logger
@@ -23,7 +22,7 @@ from app.services.backtest.execution.backtest_progress_monitor import (
 router = APIRouter(prefix="/backtest", tags=["backtest-websocket"])
 
 
-def get_db():
+def get_db() -> Any:
     """获取数据库会话依赖"""
     db = SessionLocal()
     try:
@@ -35,7 +34,7 @@ def get_db():
 class BacktestWebSocketManager:
     """回测WebSocket连接管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_connections: Dict[str, WebSocket] = {}
         self.task_subscriptions: Dict[str, set] = {}  # task_id -> set of connection_ids
         self.connection_tasks: Dict[str, str] = {}  # connection_id -> task_id
@@ -80,7 +79,7 @@ class BacktestWebSocketManager:
             logger.error(f"回测WebSocket连接失败: {connection_id}, 错误: {e}")
             return False
 
-    async def disconnect(self, connection_id: str):
+    async def disconnect(self, connection_id: str) -> Any:
         """断开WebSocket连接"""
         if connection_id not in self.active_connections:
             return
@@ -100,7 +99,9 @@ class BacktestWebSocketManager:
 
         logger.info(f"回测WebSocket连接断开: {connection_id}, 任务: {task_id}")
 
-    async def send_to_connection(self, connection_id: str, message: Dict[str, Any]):
+    async def send_to_connection(
+        self, connection_id: str, message: Dict[str, Any]
+    ) -> Any:
         """向单个连接发送消息"""
         if connection_id not in self.active_connections:
             return
@@ -112,7 +113,9 @@ class BacktestWebSocketManager:
             logger.error(f"发送回测WebSocket消息失败: {connection_id}, 错误: {e}")
             await self.disconnect(connection_id)
 
-    async def send_to_task_subscribers(self, task_id: str, message: Dict[str, Any]):
+    async def send_to_task_subscribers(
+        self, task_id: str, message: Dict[str, Any]
+    ) -> Any:
         """发送消息给任务订阅者"""
         if task_id not in self.task_subscriptions:
             return
@@ -121,7 +124,7 @@ class BacktestWebSocketManager:
         for connection_id in subscribers:
             await self.send_to_connection(connection_id, message)
 
-    async def send_progress_update(self, task_id: str, progress_data):
+    async def send_progress_update(self, task_id: str, progress_data: Any) -> Any:
         """发送进度更新"""
         message = {
             "type": "progress_update",
@@ -165,7 +168,7 @@ class BacktestWebSocketManager:
 
         await self.send_to_task_subscribers(task_id, message)
 
-    async def send_error_notification(self, task_id: str, error_message: str):
+    async def send_error_notification(self, task_id: str, error_message: str) -> Any:
         """发送错误通知"""
         message = {
             "type": "backtest_error",
@@ -176,7 +179,9 @@ class BacktestWebSocketManager:
 
         await self.send_to_task_subscribers(task_id, message)
 
-    async def send_completion_notification(self, task_id: str, results: Dict[str, Any]):
+    async def send_completion_notification(
+        self, task_id: str, results: Dict[str, Any]
+    ) -> Any:
         """发送完成通知"""
         message = {
             "type": "backtest_completed",
@@ -187,7 +192,7 @@ class BacktestWebSocketManager:
 
         await self.send_to_task_subscribers(task_id, message)
 
-    async def send_cancellation_notification(self, task_id: str, reason: str):
+    async def send_cancellation_notification(self, task_id: str, reason: str) -> Any:
         """发送取消通知"""
         message = {
             "type": "backtest_cancelled",
@@ -217,7 +222,7 @@ backtest_ws_manager = BacktestWebSocketManager()
 @router.websocket("/ws/{task_id}")
 async def backtest_progress_websocket(
     websocket: WebSocket, task_id: str, session: Session = Depends(get_db)
-):
+) -> Any:
     """回测进度WebSocket端点"""
     connection_id = f"bt_{task_id}_{datetime.utcnow().timestamp()}"
 
@@ -260,7 +265,7 @@ async def backtest_progress_websocket(
                         "timestamp": datetime.utcnow().isoformat(),
                     },
                 )
-            except websockets.WebSocketDisconnect:
+            except WebSocketDisconnect:
                 await backtest_ws_manager.disconnect(connection_id)
                 break
             except RuntimeError as e:
@@ -297,7 +302,7 @@ async def backtest_progress_websocket(
 
 async def handle_backtest_websocket_message(
     connection_id: str, task_id: str, message: Dict[str, Any]
-):
+) -> Any:
     """处理回测WebSocket消息"""
     message_type = message.get("type")
 
@@ -340,13 +345,15 @@ async def handle_backtest_websocket_message(
 
 
 @router.get("/ws/stats")
-async def get_backtest_websocket_stats():
+async def get_backtest_websocket_stats() -> Any:
     """获取回测WebSocket统计信息"""
     return {"success": True, "data": backtest_ws_manager.get_connection_stats()}
 
 
 @router.get("/progress/{task_id}")
-async def get_backtest_progress(task_id: str, session: Session = Depends(get_db)):
+async def get_backtest_progress(
+    task_id: str, session: Session = Depends(get_db)
+) -> Any:
     """获取回测进度（HTTP接口）"""
     try:
         # 验证任务存在
@@ -422,7 +429,7 @@ async def get_backtest_progress(task_id: str, session: Session = Depends(get_db)
 @router.post("/cancel/{task_id}")
 async def cancel_backtest(
     task_id: str, reason: str = "用户取消", session: Session = Depends(get_db)
-):
+) -> Any:
     """取消回测任务"""
     try:
         # 验证任务存在

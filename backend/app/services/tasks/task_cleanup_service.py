@@ -35,7 +35,7 @@ class TaskCleanupService:
         self.is_running = False
         self.cleanup_task: Optional[asyncio.Task] = None
 
-    async def start(self):
+    async def start(self) -> None:
         """启动清理服务"""
         if self.is_running:
             logger.warning("任务清理服务已在运行")
@@ -49,7 +49,7 @@ class TaskCleanupService:
             f"{self.task_timeout_minutes}分钟"
         )
 
-    async def stop(self):
+    async def stop(self) -> None:
         """停止清理服务"""
         if not self.is_running:
             return
@@ -64,7 +64,7 @@ class TaskCleanupService:
 
         logger.info("任务清理服务已停止")
 
-    async def _cleanup_loop(self):
+    async def _cleanup_loop(self) -> None:
         """清理循环"""
         while self.is_running:
             try:
@@ -76,7 +76,7 @@ class TaskCleanupService:
                 logger.error(f"任务清理循环出错: {e}", exc_info=True)
                 await asyncio.sleep(60)  # 出错后等待1分钟再继续
 
-    async def _perform_cleanup(self):
+    async def _perform_cleanup(self) -> None:
         """执行清理操作"""
         try:
             # 获取卡住的任务

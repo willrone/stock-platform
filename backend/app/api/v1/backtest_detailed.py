@@ -31,7 +31,7 @@ router = APIRouter(prefix="/backtest-detailed", tags=["回测详细结果"])
 @router.get("/{task_id}/detailed-result", response_model=StandardResponse)
 async def get_detailed_backtest_result(
     task_id: str, session: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """获取回测详细结果"""
     logger.info(f"[API] 收到获取回测详细结果请求: task_id={task_id}")
 
@@ -89,7 +89,7 @@ async def get_portfolio_snapshots(
         None, description="返回记录数限制，不指定则返回所有数据"
     ),
     session: AsyncSession = Depends(get_async_session),
-):
+) -> Any:
     """获取组合快照数据"""
     logger.info(
         f"[API] 收到获取组合快照请求: task_id={task_id}, start_date={start_date}, end_date={end_date}, limit={limit}"
@@ -140,7 +140,7 @@ async def get_trade_records(
     order_by: str = Query("timestamp", description="排序字段"),
     order_desc: bool = Query(True, description="是否降序排列"),
     session: AsyncSession = Depends(get_async_session),
-):
+) -> Any:
     """获取交易记录"""
     try:
         repository = BacktestDetailedRepository(session)
@@ -195,7 +195,7 @@ async def get_trade_records(
 @router.get("/{task_id}/trade-statistics", response_model=StandardResponse)
 async def get_trade_statistics(
     task_id: str, session: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """获取交易统计信息"""
     try:
         repository = BacktestDetailedRepository(session)
@@ -221,7 +221,7 @@ async def get_signal_records(
     order_by: str = Query("timestamp", description="排序字段"),
     order_desc: bool = Query(True, description="是否降序排列"),
     session: AsyncSession = Depends(get_async_session),
-):
+) -> Any:
     """获取信号记录"""
     try:
         repository = BacktestDetailedRepository(session)
@@ -316,7 +316,7 @@ async def get_signal_records(
 @router.get("/{task_id}/signal-statistics", response_model=StandardResponse)
 async def get_signal_statistics(
     task_id: str, session: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """获取信号统计信息"""
     try:
         repository = BacktestDetailedRepository(session)
@@ -337,7 +337,7 @@ async def get_benchmark_data(
     task_id: str,
     benchmark_symbol: str = Query("000300.SH", description="基准代码"),
     session: AsyncSession = Depends(get_async_session),
-):
+) -> Any:
     """获取基准对比数据"""
     try:
         repository = BacktestDetailedRepository(session)
@@ -358,7 +358,7 @@ async def get_benchmark_data(
 
 
 @router.post("/{task_id}/cache-chart", response_model=StandardResponse)
-async def cache_chart_data(task_id: str, request: CacheChartRequest):
+async def cache_chart_data(task_id: str, request: CacheChartRequest) -> Any:
     """缓存图表数据"""
     try:
         cache_service = ChartCacheService()
@@ -384,7 +384,7 @@ async def cache_chart_data(task_id: str, request: CacheChartRequest):
 
 
 @router.get("/{task_id}/cached-chart/{chart_type}", response_model=StandardResponse)
-async def get_cached_chart_data(task_id: str, chart_type: str):
+async def get_cached_chart_data(task_id: str, chart_type: str) -> Any:
     """获取缓存的图表数据"""
     try:
         cache_service = ChartCacheService()
@@ -410,7 +410,7 @@ async def invalidate_cache(
     chart_type: Optional[str] = Query(
         None, description="特定图表类型，不指定则清理所有"
     ),
-):
+) -> Any:
     """使缓存失效"""
     try:
         cache_service = ChartCacheService()
@@ -435,7 +435,7 @@ async def invalidate_cache(
 
 
 @router.get("/cache/statistics", response_model=StandardResponse)
-async def get_cache_statistics():
+async def get_cache_statistics() -> Any:
     """获取缓存统计信息"""
     try:
         cache_service = ChartCacheService()
@@ -449,7 +449,7 @@ async def get_cache_statistics():
 
 
 @router.delete("/cache/cleanup", response_model=StandardResponse)
-async def cleanup_expired_cache():
+async def cleanup_expired_cache() -> Any:
     """清理过期缓存"""
     try:
         cache_service = ChartCacheService()
@@ -469,7 +469,7 @@ async def cleanup_expired_cache():
 @router.delete("/{task_id}/data", response_model=StandardResponse)
 async def delete_task_data(
     task_id: str, session: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """删除任务的所有详细数据"""
     try:
         repository = BacktestDetailedRepository(session)

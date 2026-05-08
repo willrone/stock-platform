@@ -8,7 +8,7 @@
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from loguru import logger
 
@@ -28,6 +28,22 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _task_id(task: Task) -> str:
+    return str(task.task_id)
+
+
+def _task_status(task: Task) -> str:
+    return str(task.status)
+
+
+def _task_progress(task: Task) -> float:
+    return float(task.progress)
+
+
+def _task_result(task: Task) -> Any:
+    return cast(Any, task.result)
+
+
 class TaskNotifier:
     """任务状态通知器"""
 
@@ -44,7 +60,7 @@ class TaskNotifier:
         self._last_check_time: Dict[str, datetime] = {}  # 记录每个任务的最后检查时间
         self._last_progress: Dict[str, float] = {}  # 记录每个任务的上次进度
 
-    async def start(self):
+    async def start(self) -> None:
         """启动任务状态监控"""
         if self.is_running:
             logger.warning("任务通知器已经在运行")
@@ -54,7 +70,7 @@ class TaskNotifier:
         self._monitor_task = asyncio.create_task(self._monitor_loop())
         logger.info("任务状态通知器已启动")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """停止任务状态监控"""
         self.is_running = False
         if self._monitor_task:
@@ -65,7 +81,7 @@ class TaskNotifier:
                 pass
         logger.info("任务状态通知器已停止")
 
-    async def _monitor_loop(self):
+    async def _monitor_loop(self) -> None:
         """监控循环"""
         while self.is_running:
             try:
@@ -77,7 +93,7 @@ class TaskNotifier:
                 logger.error(f"任务状态监控出错: {e}", exc_info=True)
                 await asyncio.sleep(self.poll_interval)
 
-    async def _check_and_notify(self):
+    async def _check_and_notify(self) -> None:
         """检查任务状态变化并通知"""
         with SessionLocal() as session:
             try:
@@ -97,12 +113,16 @@ class TaskNotifier:
                 all_tasks = set(running_tasks) | set(recent_tasks)
 
                 for task in all_tasks:
-                    last_check = self._last_check_time.get(task.task_id)
-                    last_progress = self._last_progress.get(task.task_id, -1)
+                    task_id = _task_id(task)
+                    task_progress = _task_progress(task)
+                    last_check = self._last_check_time.get(task_id)
+                    last_progress = self._last_progress.get(task_id, -1.0)
 
-                    progress_changed = task.progress != last_progress
+                    progress_changed = task_progress != last_progress
                     task_update_time = (
-                        task.completed_at or task.started_at or task.created_at
+                        cast(Optional[datetime], task.completed_at)
+                        or cast(Optional[datetime], task.started_at)
+                        or cast(datetime, task.created_at)
                     )
                     time_changed = not last_check or (
                         task_update_time and task_update_time > last_check
@@ -111,15 +131,15 @@ class TaskNotifier:
                     if not progress_changed and not time_changed:
                         continue
 
-                    self._last_check_time[task.task_id] = utcnow()
-                    self._last_progress[task.task_id] = task.progress
+                    self._last_check_time[task_id] = utcnow()
+                    self._last_progress[task_id] = task_progress
 
                     await self._notify_task_update(task)
 
             except Exception as e:
                 logger.error(f"检查任务状态失败: {e}", exc_info=True)
 
-    async def _notify_task_update(self, task):
+    async def _notify_task_update(self, task: Task) -> None:
         """通知任务状态更新"""
         try:
             # 如果是回测任务，需要特殊处理
@@ -131,53 +151,56 @@ class TaskNotifier:
 
         except Exception as e:
             logger.error(
-                f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True
+                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
             )
 
-    async def _notify_backtest_update(self, task):
+    async def _notify_backtest_update(self, task: Task) -> None:
         """通知回测任务更新"""
         try:
+            task_id = _task_id(task)
+            task_status = _task_status(task)
+            task_progress = _task_progress(task)
+
             # 总是先同步数据库中的最新数据到进度监控器
             await self._sync_backtest_progress_from_task(task)
 
             # 获取同步后的进度数据
-            progress_data = backtest_progress_monitor.get_progress_data(task.task_id)
+            progress_data = backtest_progress_monitor.get_progress_data(task_id)
 
             if progress_data:
                 # 如果有进度监控数据，使用回测WebSocket管理器发送详细进度
                 await backtest_ws_manager.send_progress_update(
-                    task.task_id, progress_data
+                    task_id, progress_data
                 )
             else:
                 # 如果仍然没有，发送基本进度消息
                 message = {
                     "type": "progress_update",
-                    "task_id": task.task_id,
-                    "overall_progress": task.progress,
-                    "status": task.status,
+                    "task_id": task_id,
+                    "overall_progress": task_progress,
+                    "status": task_status,
                     "timestamp": utcnow().isoformat(),
                 }
 
                 # 根据任务状态添加信息
-                if task.status == TaskStatus.COMPLETED.value:
+                if task_status == TaskStatus.COMPLETED.value:
                     message["type"] = "backtest_completed"
-                    if task.result:
-                        message["results"] = task.result
-                elif task.status == TaskStatus.FAILED.value:
+                    task_result = _task_result(task)
+                    if task_result:
+                        message["results"] = task_result
+                elif task_status == TaskStatus.FAILED.value:
                     message["type"] = "backtest_error"
                     message["error_message"] = task.error_message
 
-                await backtest_ws_manager.send_to_task_subscribers(
-                    task.task_id, message
-                )
+                await backtest_ws_manager.send_to_task_subscribers(task_id, message)
 
             logger.debug(
-                f"已发送回测任务状态更新: {task.task_id}, 状态: {task.status}, 进度: {task.progress}%"
+                f"已发送回测任务状态更新: {task_id}, 状态: {task_status}, 进度: {task_progress}%"
             )
 
         except Exception as e:
             logger.error(
-                f"发送回测任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True
+                f"发送回测任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
             )
             # 如果回测WebSocket通知失败，回退到通用通知
             await self._notify_general_task_update(task)
@@ -190,28 +213,28 @@ class TaskNotifier:
         以避免旧进度在重跑/重建时被错误继承。
         """
         try:
-            if task.status != TaskStatus.RUNNING.value:
+            task_id = _task_id(task)
+            task_progress = _task_progress(task)
+            if _task_status(task) != TaskStatus.RUNNING.value:
                 return
 
-            progress_data = backtest_progress_monitor.get_progress_data(task.task_id)
+            progress_data = backtest_progress_monitor.get_progress_data(task_id)
             if not progress_data:
-                await self._start_backtest_progress(task.task_id)
-                progress_data = backtest_progress_monitor.get_progress_data(
-                    task.task_id
-                )
+                await self._start_backtest_progress(task_id)
+                progress_data = backtest_progress_monitor.get_progress_data(task_id)
 
             if progress_data and self._should_reset_for_new_run(
-                task.progress, progress_data
+                task_progress, progress_data
             ):
                 self._reset_progress_for_new_run(progress_data)
 
             if progress_data:
-                progress_data.overall_progress = task.progress
+                progress_data.overall_progress = task_progress
 
-            await self._sync_backtest_stages(task.task_id, task.progress)
+            await self._sync_backtest_stages(task_id, task_progress)
         except Exception as e:
             logger.warning(
-                f"同步回测进度失败: {task.task_id}, 错误: {e}", exc_info=True
+                f"同步回测进度失败: {_task_id(task)}, 错误: {e}", exc_info=True
             )
 
     async def _start_backtest_progress(self, task_id: str) -> None:
@@ -347,76 +370,81 @@ class TaskNotifier:
                 task_id, stage_name, progress=progress, status=status
             )
 
-    async def _notify_general_task_update(self, task):
+    async def _notify_general_task_update(self, task: Task) -> None:
         """通知普通任务更新"""
         try:
+            task_id = _task_id(task)
+            task_status = _task_status(task)
+            task_progress = _task_progress(task)
+            task_name = str(task.task_name)
+
             # 根据任务状态和进度变化发送不同类型的消息
-            if task.status == TaskStatus.RUNNING.value:
+            if task_status == TaskStatus.RUNNING.value:
                 # 运行中：发送进度更新
                 message = {
                     "type": "task:progress",
-                    "task_id": task.task_id,
-                    "status": task.status,
-                    "progress": task.progress,
+                    "task_id": task_id,
+                    "status": task_status,
+                    "progress": task_progress,
                     "timestamp": utcnow().isoformat(),
                 }
-                await manager.send_to_task_subscribers(task.task_id, message)
+                await manager.send_to_task_subscribers(task_id, message)
                 logger.debug(
-                    f"已发送任务进度更新: {task.task_id}, 进度: {task.progress}%"
+                    f"已发送任务进度更新: {task_id}, 进度: {task_progress}%"
                 )
 
             elif task.status == TaskStatus.COMPLETED.value:
                 # 已完成：发送完成消息
                 message = {
                     "type": "task:completed",
-                    "task_id": task.task_id,
-                    "task_name": task.task_name,
-                    "status": task.status,
-                    "progress": task.progress,
+                    "task_id": task_id,
+                    "task_name": task_name,
+                    "status": task_status,
+                    "progress": task_progress,
                     "completed_at": (
                         task.completed_at.isoformat() if task.completed_at else None
                     ),
                     "results": task.result,
                     "timestamp": utcnow().isoformat(),
                 }
-                await manager.send_to_task_subscribers(task.task_id, message)
-                logger.debug(f"已发送任务完成通知: {task.task_id}")
+                await manager.send_to_task_subscribers(task_id, message)
+                logger.debug(f"已发送任务完成通知: {task_id}")
 
             elif task.status == TaskStatus.FAILED.value:
                 # 失败：发送失败消息
                 message = {
                     "type": "task:failed",
-                    "task_id": task.task_id,
-                    "task_name": task.task_name,
-                    "status": task.status,
+                    "task_id": task_id,
+                    "task_name": task_name,
+                    "status": task_status,
                     "error": task.error_message,
                     "error_message": task.error_message,
                     "timestamp": utcnow().isoformat(),
                 }
-                await manager.send_to_task_subscribers(task.task_id, message)
+                await manager.send_to_task_subscribers(task_id, message)
                 logger.debug(
-                    f"已发送任务失败通知: {task.task_id}, 错误: {task.error_message}"
+                    f"已发送任务失败通知: {task_id}, 错误: {task.error_message}"
                 )
             else:
                 # 其他状态：发送通用更新
                 message = {
                     "type": "task:update",
-                    "task_id": task.task_id,
-                    "task_name": task.task_name,
-                    "status": task.status,
-                    "progress": task.progress,
+                    "task_id": task_id,
+                    "task_name": task_name,
+                    "status": task_status,
+                    "progress": task_progress,
                     "timestamp": utcnow().isoformat(),
                 }
-                await manager.send_to_task_subscribers(task.task_id, message)
+                await manager.send_to_task_subscribers(task_id, message)
                 logger.debug(
                     "已发送任务状态更新: "
-                    f"{task.task_id}, 状态: {task.status}, "
-                    f"进度: {task.progress}%"
+                    f"{task_id}, 状态: {task_status}, "
+                    f"进度: {task_progress}%"
                 )
 
         except Exception as e:
             logger.error(
-                f"发送任务状态通知失败: {task.task_id}, 错误: {e}", exc_info=True
+                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
             )
 
 

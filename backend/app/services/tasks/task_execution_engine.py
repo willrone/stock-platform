@@ -6,7 +6,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, cast
 
 from loguru import logger
 
@@ -76,7 +76,9 @@ class ProgressTracker:
         self.step_start_time = utcnow()
         self.step_durations: List[float] = []
 
-    def update_step(self, step_name: str, details: Optional[Dict[str, Any]] = None):
+    def update_step(
+        self, step_name: str, details: Optional[Dict[str, Any]] = None
+    ) -> Any:
         """更新当前步骤"""
         if self.current_step > 0:
             # 记录上一步的耗时
@@ -508,14 +510,15 @@ class BacktestTaskExecutor:
                 # 验证保存后的数据
                 saved_task = self.task_repository.get_task_by_id(task_id)
                 if saved_task and saved_task.result:
+                    saved_result = cast(Any, saved_task.result)
                     logger.info(
                         "验证保存结果: "
-                        f"task_id={task_id}, result类型={type(saved_task.result)}, "
-                        f"result是否为None={saved_task.result is None}"
+                        f"task_id={task_id}, result类型={type(saved_result)}, "
+                        f"result是否为None={saved_result is None}"
                     )
-                    if isinstance(saved_task.result, dict):
+                    if isinstance(saved_result, dict):
                         logger.info(
-                            f"保存后的result包含字段={list(saved_task.result.keys())[:20]}"
+                            f"保存后的result包含字段={list(saved_result.keys())[:20]}"
                         )
 
                 logger.info(f"回测任务完成: {task_id}, 总收益: {total_return:.2%}")
@@ -778,7 +781,7 @@ class TaskExecutionEngine:
 
         return executor.execute
 
-    def register_handlers_to_scheduler(self, scheduler):
+    def register_handlers_to_scheduler(self, scheduler: Any) -> Any:
         """将所有处理器注册到调度器"""
         for task_type, executor in self.executors.items():
             scheduler.register_task_handler(task_type, executor.execute)
@@ -925,7 +928,10 @@ class TaskExecutionEngine:
                 return min(stock_count * 20 + 300, 7200)  # 最多2小时
 
             elif task_type == TaskType.HYPERPARAMETER_OPTIMIZATION:
-                n_trials = config.get("optimization_config", {}).get("n_trials", 50)
+                optimization_config = cast(
+                    Dict[str, Any], config.get("optimization_config", {})
+                )
+                n_trials = int(optimization_config.get("n_trials", 50))
                 # 优化时间与试验次数相关，每个试验大约需要1-2分钟
                 return min(n_trials * 90, 7200)  # 最多2小时
 
@@ -953,7 +959,7 @@ class QlibPrecomputeTaskExecutor:
     def __init__(self, task_repository: TaskRepository):
         self.task_repository = task_repository
 
-    def execute(self, queued_task: QueuedTask, context: TaskExecutionContext):
+    def execute(self, queued_task: QueuedTask, context: TaskExecutionContext) -> Any:
         """执行Qlib预计算任务"""
         task_id = queued_task.task_id
 
@@ -973,7 +979,7 @@ class QlibPrecomputeTaskExecutor:
                 self.task_repository.update_task_status(task_id, TaskStatus.RUNNING)
 
                 # 创建进度回调
-                def progress_callback(progress: float, message: str):
+                def progress_callback(progress: float, message: str) -> Any:
                     """进度回调函数"""
                     self.task_repository.update_task_progress(task_id, progress)
                     if context.progress_callback:
@@ -1019,7 +1025,7 @@ class QlibPrecomputeTaskExecutor:
                         f"Qlib预计算任务失败: {task_id}, {result.get('message')}"
                     )
 
-                return result
+                return cast(Dict[str, Any], result)
 
             except Exception as e:
                 error_message = f"Qlib预计算任务执行失败: {str(e)}"
@@ -1112,19 +1118,19 @@ class HyperparameterOptimizationTaskExecutor:
                 # StrategyHyperparameterOptimizer 的 progress_callback
                 # 签名已扩展，包含 trial 统计信息
                 def progress_callback(
-                    trial_num,
-                    n_trials,
-                    strategy_params,
-                    score,
-                    backtest_report,
-                    completed_trials=0,
-                    running_trials=0,
-                    pruned_trials=0,
-                    failed_trials=0,
-                    best_score=None,
-                    best_trial_number=None,
-                    best_params=None,
-                ):
+                    trial_num: Any,
+                    n_trials: Any,
+                    strategy_params: Any,
+                    score: Any,
+                    backtest_report: Any,
+                    completed_trials: Any = 0,
+                    running_trials: Any = 0,
+                    pruned_trials: Any = 0,
+                    failed_trials: Any = 0,
+                    best_score: Any = None,
+                    best_trial_number: Any = None,
+                    best_params: Any = None,
+                ) -> Any:
                     progress = (trial_num / n_trials) * 100
                     message = f"Trial {trial_num}/{n_trials}"
                     if score is not None:
@@ -1205,7 +1211,7 @@ class HyperparameterOptimizationTaskExecutor:
                         progress=100.0,
                     )
 
-                return result
+                return cast(Dict[str, Any], result)
 
             except Exception as e:
                 logger.error(f"超参优化任务执行失败: {e}", exc_info=True)

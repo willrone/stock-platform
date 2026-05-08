@@ -17,6 +17,9 @@ from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import PerformanceLogger
 from app.models.task_models import TaskType
 
+TaskHandler = Callable[["QueuedTask", "TaskExecutionContext"], Any]
+ProgressCallback = Callable[[float, str], None]
+
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
@@ -46,7 +49,7 @@ class QueuedTask:
     retry_count: int = 0
     max_retries: int = 3
 
-    def __lt__(self, other):
+    def __lt__(self, other: "QueuedTask") -> bool:
         """优先级比较，用于优先队列排序"""
         if self.priority.value != other.priority.value:
             return self.priority.value < other.priority.value
@@ -62,7 +65,7 @@ class TaskExecutionContext:
     executor_id: str
     start_time: datetime
     estimated_end_time: Optional[datetime] = None
-    progress_callback: Optional[Callable] = None
+    progress_callback: Optional[ProgressCallback] = None
     cancel_event: Optional[threading.Event] = None
 
 
@@ -74,10 +77,10 @@ class TaskExecutor:
         self.max_concurrent_tasks = max_concurrent_tasks
         self.thread_pool = ThreadPoolExecutor(max_workers=max_concurrent_tasks)
         self.running_tasks: Dict[str, TaskExecutionContext] = {}
-        self.task_handlers: Dict[TaskType, Callable] = {}
+        self.task_handlers: Dict[TaskType, TaskHandler] = {}
         self.is_running = True
 
-    def register_handler(self, task_type: TaskType, handler: Callable):
+    def register_handler(self, task_type: TaskType, handler: TaskHandler) -> None:
         """注册任务处理器"""
         self.task_handlers[task_type] = handler
         logger.info(f"注册任务处理器: {task_type.value} -> {handler.__name__}")
@@ -87,8 +90,10 @@ class TaskExecutor:
         return len(self.running_tasks) < self.max_concurrent_tasks and self.is_running
 
     def execute_task(
-        self, queued_task: QueuedTask, progress_callback: Optional[Callable] = None
-    ) -> Future:
+        self,
+        queued_task: QueuedTask,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> Future[Dict[str, Any]]:
         """执行任务"""
         if not self.can_accept_task():
             raise TaskError(
@@ -131,12 +136,17 @@ class TaskExecutor:
         return future
 
     def _execute_task_with_context(
-        self, handler: Callable, queued_task: QueuedTask, context: TaskExecutionContext
+        self,
+        handler: TaskHandler,
+        queued_task: QueuedTask,
+        context: TaskExecutionContext,
     ) -> Dict[str, Any]:
         """在上下文中执行任务"""
         try:
             # 执行任务
             result = handler(queued_task, context)
+            if not isinstance(result, dict):
+                return {"result": result}
 
             # 记录性能指标
             duration = (utcnow() - context.start_time).total_seconds()
@@ -183,7 +193,7 @@ class TaskExecutor:
 
     def get_running_tasks(self) -> List[Dict[str, Any]]:
         """获取正在运行的任务"""
-        running_tasks = []
+        running_tasks: List[Dict[str, Any]] = []
         for task_id, context in self.running_tasks.items():
             task_info = {
                 "task_id": task_id,
@@ -200,7 +210,7 @@ class TaskExecutor:
 
         return running_tasks
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """关闭执行器"""
         self.is_running = False
         self.thread_pool.shutdown(wait=True)
@@ -211,7 +221,7 @@ class TaskScheduler:
     """任务调度器"""
 
     def __init__(self, max_executors: int = 3):
-        self.task_queue = PriorityQueue()
+        self.task_queue: PriorityQueue[QueuedTask] = PriorityQueue()
         self.executors: List[TaskExecutor] = []
         self.max_executors = max_executors
         self.scheduler_thread: Optional[threading.Thread] = None
@@ -219,7 +229,7 @@ class TaskScheduler:
         self.task_timeout_seconds = 3600  # 默认任务超时1小时
 
         # 统计信息
-        self.stats = {
+        self.stats: Dict[str, int] = {
             "total_queued": 0,
             "total_executed": 0,
             "total_failed": 0,
@@ -232,12 +242,12 @@ class TaskScheduler:
             executor = TaskExecutor(f"executor_{i}", max_concurrent_tasks=2)
             self.executors.append(executor)
 
-    def register_task_handler(self, task_type: TaskType, handler: Callable):
+    def register_task_handler(self, task_type: TaskType, handler: TaskHandler) -> None:
         """为所有执行器注册任务处理器"""
         for executor in self.executors:
             executor.register_handler(task_type, handler)
 
-    def start(self):
+    def start(self) -> None:
         """启动调度器"""
         if self.is_running:
             return
@@ -249,7 +259,7 @@ class TaskScheduler:
         self.scheduler_thread.start()
         logger.info("任务调度器启动")
 
-    def stop(self):
+    def stop(self) -> None:
         """停止调度器"""
         self.is_running = False
 
@@ -298,7 +308,7 @@ class TaskScheduler:
             logger.error(f"任务入队失败: {task_id}, 错误: {e}")
             return False
 
-    def _scheduler_loop(self):
+    def _scheduler_loop(self) -> None:
         """调度器主循环"""
         while self.is_running:
             try:
@@ -342,10 +352,10 @@ class TaskScheduler:
                 return executor
         return None
 
-    def _create_progress_callback(self, task_id: str) -> Callable:
+    def _create_progress_callback(self, task_id: str) -> ProgressCallback:
         """创建进度回调函数"""
 
-        def progress_callback(progress: float, message: str = ""):
+        def progress_callback(progress: float, message: str = "") -> None:
             # 这里可以通过WebSocket发送进度更新
             logger.debug(
                 f"任务进度更新: {task_id}, 进度: {progress:.2f}, 消息: {message}"
@@ -353,10 +363,12 @@ class TaskScheduler:
 
         return progress_callback
 
-    def _monitor_task_execution(self, queued_task: QueuedTask, future: Future):
+    def _monitor_task_execution(
+        self, queued_task: QueuedTask, future: Future[Dict[str, Any]]
+    ) -> None:
         """监控任务执行"""
 
-        def monitor():
+        def monitor() -> None:
             try:
                 # 等待任务完成或超时
                 future.result(timeout=self.task_timeout_seconds)
@@ -377,7 +389,7 @@ class TaskScheduler:
         monitor_thread = threading.Thread(target=monitor, daemon=True)
         monitor_thread.start()
 
-    def _handle_task_failure(self, queued_task: QueuedTask, error_message: str):
+    def _handle_task_failure(self, queued_task: QueuedTask, error_message: str) -> None:
         """处理任务失败"""
         # 检查是否需要重试
         if queued_task.retry_count < queued_task.max_retries:
@@ -387,7 +399,7 @@ class TaskScheduler:
             )
 
             # 延迟重新入队
-            def retry_task():
+            def retry_task() -> None:
                 time.sleep(min(2**queued_task.retry_count, 60))  # 指数退避
                 self.task_queue.put(queued_task)
 
@@ -396,7 +408,7 @@ class TaskScheduler:
         else:
             logger.error(f"任务最终失败: {queued_task.task_id}, 已达到最大重试次数")
 
-    def _handle_task_timeout(self, queued_task: QueuedTask):
+    def _handle_task_timeout(self, queued_task: QueuedTask) -> None:
         """处理任务超时"""
         # 尝试取消任务
         for executor in self.executors:
@@ -407,7 +419,7 @@ class TaskScheduler:
 
     def get_queue_status(self) -> Dict[str, Any]:
         """获取队列状态"""
-        running_tasks = []
+        running_tasks: List[Dict[str, Any]] = []
         for executor in self.executors:
             running_tasks.extend(executor.get_running_tasks())
 
@@ -433,7 +445,7 @@ class TaskScheduler:
         logger.warning(f"无法取消任务: {task_id}，任务可能已完成或不在执行中")
         return False
 
-    def set_task_timeout(self, timeout_seconds: int):
+    def set_task_timeout(self, timeout_seconds: int) -> None:
         """设置任务超时时间"""
         self.task_timeout_seconds = timeout_seconds
         logger.info(f"任务超时时间设置为: {timeout_seconds}秒")
@@ -442,7 +454,7 @@ class TaskScheduler:
 class TaskQueueManager:
     """任务队列管理器 - 统一管理多个调度器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.schedulers: Dict[str, TaskScheduler] = {}
         self.default_scheduler_name = "default"
 
@@ -461,7 +473,7 @@ class TaskQueueManager:
         logger.info(f"创建调度器: {name}, 最大执行器数: {max_executors}")
         return scheduler
 
-    def get_scheduler(self, name: str = None) -> TaskScheduler:
+    def get_scheduler(self, name: Optional[str] = None) -> TaskScheduler:
         """获取调度器"""
         scheduler_name = name or self.default_scheduler_name
         scheduler = self.schedulers.get(scheduler_name)
@@ -473,13 +485,13 @@ class TaskQueueManager:
 
         return scheduler
 
-    def start_all_schedulers(self):
+    def start_all_schedulers(self) -> None:
         """启动所有调度器"""
         for name, scheduler in self.schedulers.items():
             scheduler.start()
             logger.info(f"启动调度器: {name}")
 
-    def stop_all_schedulers(self):
+    def stop_all_schedulers(self) -> None:
         """停止所有调度器"""
         for name, scheduler in self.schedulers.items():
             scheduler.stop()
@@ -492,7 +504,7 @@ class TaskQueueManager:
         config: Dict[str, Any],
         user_id: str,
         priority: TaskPriority = TaskPriority.NORMAL,
-        scheduler_name: str = None,
+        scheduler_name: Optional[str] = None,
     ) -> bool:
         """将任务加入指定调度器的队列"""
         scheduler = self.get_scheduler(scheduler_name)
@@ -500,7 +512,10 @@ class TaskQueueManager:
 
     def get_overall_status(self) -> Dict[str, Any]:
         """获取所有调度器的整体状态"""
-        overall_stats = {"total_schedulers": len(self.schedulers), "schedulers": {}}
+        overall_stats: Dict[str, Any] = {
+            "total_schedulers": len(self.schedulers),
+            "schedulers": {},
+        }
 
         for name, scheduler in self.schedulers.items():
             overall_stats["schedulers"][name] = scheduler.get_queue_status()

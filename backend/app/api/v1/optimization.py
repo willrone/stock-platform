@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -24,7 +24,7 @@ async def create_optimization_task(
     request: HyperparameterOptimizationRequest,
     db: AsyncSession = Depends(get_async_session),
     user_id: str = Depends(get_current_user),
-):
+) -> Any:
     """创建超参优化任务"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -81,7 +81,7 @@ async def create_optimization_task(
         except Exception as submit_error:
             logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
             await task_repository.update_task_status(
-                task_id=task.task_id,
+                task_id=cast(str, task.task_id),
                 status=TaskStatus.FAILED,
                 error_message=f"任务提交失败: {str(submit_error)}",
             )
@@ -118,7 +118,7 @@ async def list_optimization_tasks(
     offset: int = 0,
     db: AsyncSession = Depends(get_async_session),
     user_id: str = Depends(get_current_user),
-):
+) -> Any:
     """获取超参优化任务列表"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -135,7 +135,7 @@ async def list_optimization_tasks(
         # 转换为前端格式
         task_list = []
         for task in optimization_tasks:
-            config = task.config or {}
+            config: Any = task.config or {}
             optimization_config = config.get("optimization_config", {})
 
             task_data = {
@@ -177,7 +177,7 @@ async def list_optimization_tasks(
 @router.get("/tasks/{task_id}", response_model=StandardResponse)
 async def get_optimization_task(
     task_id: str, db: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """获取超参优化任务详情"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -189,7 +189,7 @@ async def get_optimization_task(
         if task.task_type != TaskType.HYPERPARAMETER_OPTIMIZATION.value:
             raise HTTPException(status_code=400, detail="该任务不是超参优化任务")
 
-        config = task.config or {}
+        config: Any = task.config or {}
         optimization_config = config.get("optimization_config", {})
 
         task_data = {
@@ -231,7 +231,7 @@ async def get_optimization_task(
 @router.get("/tasks/{task_id}/status", response_model=StandardResponse)
 async def get_optimization_status(
     task_id: str, db: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """获取优化任务实时状态"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -240,8 +240,8 @@ async def get_optimization_status(
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
 
-        result = task.result or {}
-        config = task.config or {}
+        result: Any = task.result or {}
+        config: Any = task.config or {}
         optimization_config = config.get("optimization_config", {})
 
         # 从 result 或 config 中获取 n_trials
@@ -281,7 +281,7 @@ async def get_optimization_status(
 @router.get("/tasks/{task_id}/param-importance", response_model=StandardResponse)
 async def get_param_importance(
     task_id: str, db: AsyncSession = Depends(get_async_session)
-):
+) -> Any:
     """获取参数重要性"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -293,7 +293,7 @@ async def get_param_importance(
         if task.status != TaskStatus.COMPLETED.value:
             raise HTTPException(status_code=400, detail="任务尚未完成")
 
-        result = task.result or {}
+        result: Any = task.result or {}
         param_importance = result.get("param_importance", {})
 
         return StandardResponse(
@@ -308,7 +308,7 @@ async def get_param_importance(
 
 
 @router.get("/tasks/{task_id}/pareto-front", response_model=StandardResponse)
-async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_session)):
+async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_session)) -> Any:
     """获取帕累托前沿（多目标优化时）"""
     try:
         task_repository = AsyncTaskRepository(db)
@@ -320,7 +320,7 @@ async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_se
         if task.status != TaskStatus.COMPLETED.value:
             raise HTTPException(status_code=400, detail="任务尚未完成")
 
-        result = task.result or {}
+        result: Any = task.result or {}
         pareto_front = result.get("pareto_front", [])
 
         if not pareto_front:
@@ -337,7 +337,7 @@ async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_se
         raise HTTPException(status_code=500, detail=f"获取帕累托前沿失败: {str(e)}")
 
 
-def execute_optimization_task_simple(task_id: str):
+def execute_optimization_task_simple(task_id: str) -> Any:
     """
     简化的超参优化任务执行函数（进程池执行）
     """
@@ -383,12 +383,12 @@ def execute_optimization_task_simple(task_id: str):
 
         # 创建 QueuedTask
         queued_task = QueuedTask(
-            task_id=task.task_id,
+            task_id=cast(str, task.task_id),
             task_type=TaskType.HYPERPARAMETER_OPTIMIZATION,
-            user_id=task.user_id or "default_user",
-            config=task.config or {},
+            user_id=cast(Optional[str], task.user_id) or "default_user",
+            config=cast(Dict[str, Any], task.config or {}),
             priority=TaskPriority.NORMAL,
-            created_at=task.created_at if task.created_at else datetime.now(),
+            created_at=cast(Optional[datetime], task.created_at) or datetime.now(),
         )
 
         # 创建执行上下文
@@ -396,9 +396,12 @@ def execute_optimization_task_simple(task_id: str):
             task_id=task_id,
             executor_id=f"optimization_executor_{os.getpid()}",
             start_time=datetime.now(),
-            progress_callback=lambda progress, message: task_repository.update_task_status(
-                task_id, TaskStatus.RUNNING, progress=progress
-            ),
+            progress_callback=lambda progress, message: (
+                task_repository.update_task_status(
+                    task_id, TaskStatus.RUNNING, progress=progress
+                ),
+                None,
+            )[1],
             cancel_event=None,
         )
 

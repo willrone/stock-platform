@@ -145,7 +145,7 @@ class TaskMonitor:
         """
         stuck_tasks = self.get_stuck_tasks(timeout_minutes)
 
-        result = {
+        result: Dict[str, Any] = {
             "total_stuck": len(stuck_tasks),
             "fixed_tasks": [],
             "failed_tasks": [],
@@ -197,13 +197,11 @@ class TaskMonitor:
             cursor = conn.cursor()
 
             # 统计各状态任务数量
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT status, COUNT(*) as count
                 FROM tasks
                 GROUP BY status
-                """
-            )
+                """)
 
             status_counts = {}
             for status, count in cursor.fetchall():

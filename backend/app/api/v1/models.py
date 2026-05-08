@@ -21,6 +21,7 @@ from app.models.task_models import ModelInfo
 from app.repositories.task_repository import ModelInfoRepository
 from app.services.models.evaluation_report import (
     EvaluationReportGenerator,
+    build_official_record_summary,
     normalize_report_payload,
 )
 from app.services.models.hyperparameter_tuning import (
@@ -29,6 +30,7 @@ from app.services.models.hyperparameter_tuning import (
 )
 from app.services.models.lineage_tracker import lineage_tracker
 from app.services.models.model_lifecycle_manager import model_lifecycle_manager
+from app.services.models.portfolio_bridge import build_portfolio_bridge_summary
 from app.websocket import (
     notify_model_training_cancelled,
     notify_model_training_completed,
@@ -165,7 +167,9 @@ def _number_or_default(value: Optional[float], default: float) -> float:
     return default if value is None else value
 
 
-def _format_feature_importance_for_report(feature_importance: Any) -> List[Dict[str, Any]]:
+def _format_feature_importance_for_report(
+    feature_importance: Any,
+) -> List[Dict[str, Any]]:
     """将特征重要性转换为报告格式"""
     if not feature_importance:
         return []
@@ -253,6 +257,9 @@ def _run_train_model_task_sync(
     hyperparameter_search_strategy: str = "random_search",
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
+    workflow_mode: Optional[str] = None,
+    official_dataset: Optional[str] = None,
+    official_market: Optional[str] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
 ) -> None:
     """
@@ -312,6 +319,9 @@ async def train_model_task(
     hyperparameter_search_strategy: str = "random_search",
     hyperparameter_search_trials: int = 10,
     selected_features: Optional[List[str]] = None,
+    workflow_mode: Optional[str] = None,
+    official_dataset: Optional[str] = None,
+    official_market: Optional[str] = None,
     main_loop: Optional[asyncio.AbstractEventLoop] = None,
 ) -> None:
     """后台训练任务 - 使用统一Qlib训练引擎"""
@@ -869,20 +879,14 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
             )
 
         # 检查评估报告是否为空字典
-        if (
-            isinstance(report_payload, dict)
-            and len(report_payload) == 0
-        ):
+        if isinstance(report_payload, dict) and len(report_payload) == 0:
             logger.warning(f"模型 {model_id} 的评估报告为空字典")
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
             )
 
         # 检查评估报告是否为空字符串
-        if (
-            isinstance(report_payload, str)
-            and len(report_payload.strip()) == 0
-        ):
+        if isinstance(report_payload, str) and len(report_payload.strip()) == 0:
             logger.warning(f"模型 {model_id} 的评估报告为空字符串")
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
@@ -906,10 +910,24 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
                 raise HTTPException(status_code=500, detail="评估报告格式错误")
 
         logger.info(f"成功获取模型 {model_id} 的评估报告")
+        evaluation_report = normalize_report_payload(_safe_json_dict(report_payload))
+        bridge_summary = build_portfolio_bridge_summary(session, model_id)
+        evaluation_report["portfolio_bridge_summary"] = bridge_summary
+        evaluation_report["official_record_summary"] = build_official_record_summary(
+            evaluation_report
+        )
+        evaluation_report["cost_vs_gross_gap_summary"] = bridge_summary.get(
+            "cost_vs_gross_gap_rollup", {}
+        )
+        evaluation_report["per_stock_ranking_preference"] = bridge_summary.get(
+            "per_stock_contribution_rollup", {}
+        )
+        evaluation_report.setdefault("ranking_overlap_summary", {"available": False})
+        evaluation_report.setdefault("event_replay_summary", {"available": False})
         return StandardResponse(
             success=True,
             message="评估报告获取成功",
-            data=normalize_report_payload(_safe_json_dict(report_payload)),
+            data=evaluation_report,
         )
     except HTTPException:
         raise
@@ -1356,6 +1374,47 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
                 status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式"
             )
 
+        hyperparameters = dict(request.hyperparameters or {})
+        if request.workflow_mode:
+            hyperparameters["workflow_mode"] = request.workflow_mode
+        if request.official_dataset:
+            hyperparameters["official_dataset"] = request.official_dataset
+        if request.official_market:
+            hyperparameters["official_market"] = request.official_market
+        if request.workflow_mode == "official_replication":
+            from app.services.qlib.official_workflow import (
+                OfficialDataset,
+                OfficialMarket,
+                build_official_lightgbm_workflow_config,
+            )
+
+            official_dataset = OfficialDataset(
+                (request.official_dataset or "alpha158").lower()
+            )
+            official_market = OfficialMarket(
+                (request.official_market or "csi300").lower()
+            )
+            official_config = build_official_lightgbm_workflow_config(
+                dataset=official_dataset,
+                market=official_market,
+            )
+            hyperparameters.setdefault(
+                "official_dataset", official_config.dataset.value
+            )
+            hyperparameters.setdefault("official_market", official_config.market)
+            hyperparameters.setdefault("official_benchmark", official_config.benchmark)
+            hyperparameters.setdefault(
+                "official_segments",
+                {
+                    "train": list(official_config.segments.train),
+                    "valid": list(official_config.segments.valid),
+                    "test": list(official_config.segments.test),
+                },
+            )
+            hyperparameters.setdefault("open_cost", official_config.open_cost)
+            hyperparameters.setdefault("close_cost", official_config.close_cost)
+            hyperparameters.setdefault("min_cost", official_config.min_cost)
+
         # 创建模型记录
         model_info = ModelInfo(
             model_id=model_id,
@@ -1365,7 +1424,7 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
             file_path=str(model_file_path),
             training_data_start=start_date,
             training_data_end=end_date,
-            hyperparameters=request.hyperparameters or {},
+            hyperparameters=hyperparameters,
             status="training",
             parent_model_id=request.parent_model_id,
             created_at=datetime.utcnow(),
@@ -1393,7 +1452,10 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
             stock_codes=request.stock_codes,
             start_date=start_date,
             end_date=end_date,
-            hyperparameters=request.hyperparameters or {},
+            hyperparameters=hyperparameters,
+            workflow_mode=hyperparameters.get("workflow_mode"),
+            official_dataset=hyperparameters.get("official_dataset"),
+            official_market=hyperparameters.get("official_market"),
             enable_hyperparameter_tuning=request.enable_hyperparameter_tuning,
             hyperparameter_search_strategy=request.hyperparameter_search_strategy,
             hyperparameter_search_trials=request.hyperparameter_search_trials,
@@ -1534,7 +1596,9 @@ async def transition_model_lifecycle(
             raise HTTPException(status_code=400, detail="生命周期阶段转换失败")
 
         # 获取更新后的生命周期信息
-        updated_lifecycle = await model_lifecycle_manager.get_lifecycle_history(model_id)
+        updated_lifecycle = await model_lifecycle_manager.get_lifecycle_history(
+            model_id
+        )
 
         return StandardResponse(
             success=True,
@@ -1725,9 +1789,7 @@ async def add_model_tags(model_id: str, tags: List[str]) -> StandardResponse:
         # 获取现有标签
         hyperparameters = _safe_json_dict(model.hyperparameters)
         existing_tags_raw = hyperparameters.get("tags", [])
-        existing_tags = (
-            existing_tags_raw if isinstance(existing_tags_raw, list) else []
-        )
+        existing_tags = existing_tags_raw if isinstance(existing_tags_raw, list) else []
 
         # 合并标签（去重）
         all_tags = list(set(existing_tags + tags))
@@ -1768,9 +1830,7 @@ async def remove_model_tags(model_id: str, tags: List[str]) -> StandardResponse:
         # 获取现有标签
         hyperparameters = _safe_json_dict(model.hyperparameters)
         existing_tags_raw = hyperparameters.get("tags", [])
-        existing_tags = (
-            existing_tags_raw if isinstance(existing_tags_raw, list) else []
-        )
+        existing_tags = existing_tags_raw if isinstance(existing_tags_raw, list) else []
 
         # 移除指定标签
         remaining_tags = [tag for tag in existing_tags if tag not in tags]

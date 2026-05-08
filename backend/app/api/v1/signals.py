@@ -65,7 +65,7 @@ def _infer_warmup_days_for_config(
 
     if strategy_name.lower() == "portfolio" or "strategies" in strategy_config:
         strategy_names = [
-            s.get("name")
+            str(s.get("name"))
             for s in (strategy_config.get("strategies") or [])
             if isinstance(s, dict) and s.get("name")
         ]
@@ -265,7 +265,7 @@ async def get_latest_signals(
     ),
     offset: int = Query(0, ge=0, description="分页偏移"),
     data_service: SimpleDataService = Depends(get_data_service),
-):
+) -> Any:
     """
     获取股票池内每只股票的“最新信号”（近N个交易日窗口内最后一次BUY/SELL；若无则HOLD）。
 
@@ -346,7 +346,7 @@ async def get_latest_signals_multi(
     ),
     offset: int = Query(0, ge=0, description="分页偏移"),
     data_service: SimpleDataService = Depends(get_data_service),
-):
+) -> Any:
     """
     获取股票池内每只股票在多个策略下的“最新信号”。
 
@@ -529,7 +529,7 @@ async def get_signal_history(
     strategy_config: Optional[str] = Query(None, description="策略参数（JSON字符串）"),
     days: int = Query(60, ge=5, le=365, description="最近N个交易日"),
     data_service: SimpleDataService = Depends(get_data_service),
-):
+) -> Any:
     """
     获取单只股票近N个交易日的BUY/SELL信号事件列表（不包含HOLD）。
 
@@ -605,7 +605,7 @@ async def get_signal_history_multi(
     ),
     days: int = Query(60, ge=5, le=365, description="最近N个交易日"),
     data_service: SimpleDataService = Depends(get_data_service),
-):
+) -> Any:
     """
     获取单只股票在多个策略下近N个交易日的BUY/SELL信号事件列表（不包含HOLD）。
 

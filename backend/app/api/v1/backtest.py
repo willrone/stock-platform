@@ -728,6 +728,15 @@ async def run_backtest(request: BacktestRequest) -> Any:
                     strategy_config, "rebalance_frequency", "daily"
                 )
             ),
+            open_cost=float(
+                _resolve_backtest_config_value(strategy_config, "open_cost", 0.0)
+            ),
+            close_cost=float(
+                _resolve_backtest_config_value(strategy_config, "close_cost", 0.0)
+            ),
+            min_cost=float(
+                _resolve_backtest_config_value(strategy_config, "min_cost", 0.0)
+            ),
         )
 
         # 执行回测（StrategyFactory会自动检测是否为组合策略）

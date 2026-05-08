@@ -123,6 +123,13 @@ class ModelTrainingRequest(BaseModel):
     hyperparameter_search_trials: int = Field(
         default=10, description="超参数搜索试验次数"
     )
+    workflow_mode: Optional[str] = Field(None, description="训练工作流模式")
+    official_dataset: Optional[str] = Field(
+        None, description="官方复现数据集，如 alpha158/alpha360"
+    )
+    official_market: Optional[str] = Field(
+        None, description="官方复现市场，如 csi300/csi500"
+    )
 
 
 class RemoteDataSyncRequest(BaseModel):

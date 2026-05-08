@@ -6,7 +6,7 @@ API依赖注入和共享函数
 """
 
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 from fastapi import Header
 from loguru import logger
@@ -87,7 +87,7 @@ def _resolve_backtest_config_value(
     return default
 
 
-def get_task_repository():
+def get_task_repository() -> Any:
     """获取任务仓库（使用同步会话）"""
     session = SessionLocal()
     try:
@@ -97,7 +97,7 @@ def get_task_repository():
         raise
 
 
-def get_prediction_result_repository():
+def get_prediction_result_repository() -> Any:
     """获取预测结果仓库（使用同步会话）"""
     session = SessionLocal()
     try:
@@ -107,7 +107,7 @@ def get_prediction_result_repository():
         raise
 
 
-def get_model_info_repository():
+def get_model_info_repository() -> Any:
     """获取模型信息仓库（使用同步会话）"""
     session = SessionLocal()
     try:
@@ -155,7 +155,7 @@ def _normalize_task_backtest_strategy_config(
 
 # 简化的任务执行函数（用于进程池执行）
 # 注意：此函数在独立进程中执行，不能使用全局变量或单例
-def execute_prediction_task_simple(task_id: str):
+def execute_prediction_task_simple(task_id: str) -> Any:
     """
     简化的预测任务执行函数（进程池执行）
 
@@ -192,7 +192,7 @@ def execute_prediction_task_simple(task_id: str):
             raise
 
         # 解析任务配置
-        config = task.config or {}
+        config: Any = task.config or {}
         stock_codes = config.get("stock_codes", [])
         model_id = config.get("model_id", "default_model")
 
@@ -293,7 +293,7 @@ def execute_prediction_task_simple(task_id: str):
             session.close()
 
 
-def execute_backtest_task_simple(task_id: str):  # noqa: C901
+def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
     """
     简化的回测任务执行函数（进程池执行）
 
@@ -335,7 +335,7 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
         )
 
         # 解析任务配置
-        config = task.config or {}
+        config: Any = task.config or {}
         strategy_name, strategy_config = _normalize_task_backtest_strategy_config(
             config
         )
@@ -488,6 +488,16 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
                     config, strategy_config, "rebalance_frequency", "daily"
                 )
             ),
+            open_cost=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "open_cost", 0.0
+                )
+            ),
+            close_cost=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "close_cost", 0.0
+                )
+            ),
         )
 
         # 执行回测
@@ -497,7 +507,7 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
 
         try:
             # 创建异步任务并等待完成
-            async def run_async_backtest():
+            async def run_async_backtest() -> Any:
                 return await executor.run_backtest(
                     strategy_name=strategy_name,
                     stock_codes=stock_codes,
@@ -541,7 +551,7 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
             try:
                 task_logger.info(f"开始保存回测详细数据: {task_id}")
 
-                async def save_detailed_data():
+                async def save_detailed_data() -> Any:
                     """异步保存详细数据"""
                     from app.core.database import (
                         get_async_session_context,
@@ -574,11 +584,11 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
                     async with get_async_session_context() as session:
                         try:
 
-                            async def _save_data():
+                            async def _save_data() -> Any:
                                 repository = BacktestDetailedRepository(session)
 
                                 # 辅助函数：将numpy类型转换为Python原生类型
-                                def to_python_type(value):
+                                def to_python_type(value: Any) -> Any:
                                     """将numpy/pandas类型转换为Python原生类型"""
                                     from datetime import datetime
 
@@ -627,7 +637,7 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
 
                                 # 准备分析数据
                                 # 处理 position_analysis（可能是 EnhancedPositionAnalysis 对象或列表）
-                                position_analysis_data = None
+                                position_analysis_data: Any = None
                                 task_logger.info(
                                     f"检查 position_analysis: type={type(enhanced_result.position_analysis)}, value={enhanced_result.position_analysis is not None}"
                                 )
@@ -999,7 +1009,7 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
 
         if "config" in locals():
             task_logger.error(f"配置内容: {config}")
-        if "task" in locals():
+        if "task" in locals() and task is not None:
             task_logger.error(
                 f"任务对象: task_id={task.task_id}, task_type={task.task_type}, status={task.status}"
             )
@@ -1019,7 +1029,7 @@ def execute_backtest_task_simple(task_id: str):  # noqa: C901
             session.close()
 
 
-def execute_qlib_precompute_task_simple(task_id: str):
+def execute_qlib_precompute_task_simple(task_id: str) -> Any:
     """
     简化的Qlib预计算任务执行函数（进程池执行）
 
@@ -1045,7 +1055,11 @@ def execute_qlib_precompute_task_simple(task_id: str):
         from datetime import datetime
 
         from app.services.tasks.task_execution_engine import QlibPrecomputeTaskExecutor
-        from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext
+        from app.services.tasks.task_queue import (
+            QueuedTask,
+            TaskExecutionContext,
+            TaskPriority,
+        )
 
         task_repository = TaskRepository(session)
 
@@ -1064,21 +1078,19 @@ def execute_qlib_precompute_task_simple(task_id: str):
         from app.models.task_models import TaskType
 
         queued_task = QueuedTask(
-            task_id=task.task_id,
+            task_id=cast(str, task.task_id),
             task_type=TaskType.QLIB_PRECOMPUTE,
-            user_id=task.user_id,
-            priority=1,  # 默认优先级
-            config=task.config or {},
-            created_at=task.created_at or datetime.utcnow(),
+            user_id=cast(str, task.user_id),
+            priority=TaskPriority.NORMAL,
+            config=cast(Dict[str, Any], task.config or {}),
+            created_at=cast(Optional[datetime], task.created_at) or datetime.utcnow(),
         )
 
         # 创建执行上下文
         cancel_event = threading.Event()
-        progress_callback = (
-            lambda progress, message: task_repository.update_task_progress(
-                task_id, progress
-            )
-        )
+
+        def progress_callback(progress: float, message: str = "") -> None:
+            task_repository.update_task_progress(task_id, progress)
 
         context = TaskExecutionContext(
             task_id=task_id,

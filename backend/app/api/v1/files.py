@@ -1,9 +1,9 @@
 """
 文件服务路由 - 处理文件下载等操作
 """
-
 import os
 import tempfile
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/files", tags=["文件服务"])
 
 
 @router.get("/download/{filename}")
-async def download_file(filename: str):
+async def download_file(filename: str) -> Any:
     """下载文件"""
     try:
         # 安全检查：只允许下载报告文件

@@ -124,7 +124,7 @@ class TaskManager:
             # 创建任务对象
             task = Task(
                 name=request.name.strip(),
-                description=request.description.strip(),
+                description=request.description,
                 stock_codes=json.dumps(request.stock_codes),
                 indicators=json.dumps(request.indicators),
                 models=json.dumps(request.models),
@@ -530,11 +530,9 @@ class TaskManager:
             }
 
             # 任务状态统计
-            status_rows = self.db_manager.fetch_all(
-                """
+            status_rows = self.db_manager.fetch_all("""
                 SELECT status, COUNT(*) as count FROM tasks GROUP BY status
-            """
-            )
+            """)
 
             for row in status_rows:
                 status = row["status"]
@@ -598,7 +596,9 @@ class TaskManager:
         """添加进度更新回调"""
         self.progress_callbacks.append(callback)
 
-    def _trigger_status_change_callbacks(self, task_id: int, status: TaskStatus) -> None:
+    def _trigger_status_change_callbacks(
+        self, task_id: int, status: TaskStatus
+    ) -> None:
         """触发状态变更回调"""
         for callback in self.status_change_callbacks:
             try:
