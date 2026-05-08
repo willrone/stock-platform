@@ -32,13 +32,28 @@ class DataLoader:
         try:
             if data is None or data.empty:
                 return False
-            if len(data) < min_rows:
-                return False
-            # coverage ratio: rows / expected business days (rough)
-            total_days = (end_date.date() - start_date.date()).days + 1
-            expected = max(1, total_days * 5 // 7)
+            # coverage ratio: rows / expected business days. Short, fully-covered
+            # windows can legitimately contain fewer rows than the default
+            # long-window minimum. Treat coverage as the primary validity signal,
+            # while still rejecting obvious stale/truncated data.
+            expected_index = pd.bdate_range(
+                start=start_date.date(), end=end_date.date()
+            )
+            expected = max(1, len(expected_index))
             coverage = len(data) / expected
-            return coverage >= min_coverage_ratio
+            if coverage < min_coverage_ratio:
+                return False
+
+            data_index = pd.DatetimeIndex(data.index)
+            first_date = data_index.min().date()
+            last_date = data_index.max().date()
+            max_leading_gap_days = 7
+            if (first_date - start_date.date()).days > max_leading_gap_days:
+                return False
+            if last_date < end_date.date():
+                return False
+
+            return len(data) >= min_rows or coverage >= min_coverage_ratio
         except Exception:
             return False
 
