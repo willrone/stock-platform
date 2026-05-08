@@ -1,0 +1,22 @@
+# 重型 ML / 量化依赖
+#
+# 不建议在普通 CI quality/test job 中默认安装。
+# 需要训练、Qlib 官方工作流、深度学习模型或完整量化实验时单独安装本文件。
+
+# Qlib 需要从 GitHub 安装（项目当前使用 Python 3.11 CI / 本地 Python 3.13 兼容验证）
+git+https://github.com/microsoft/qlib.git
+
+vectorbt>=0.26.0
+optuna>=3.4.0
+
+# PyTorch / 深度学习
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+transformers==4.35.2
+
+# 树模型 / 传统 ML 扩展
+xgboost==2.0.2
+
+# TA-Lib 编译依赖较重，默认不安装；代码侧应保持 talib 可选回退。
+# ta-lib==0.4.28

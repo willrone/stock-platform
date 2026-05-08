@@ -1,0 +1,8 @@
+# 后端安全扫描工具依赖
+#
+# Safety 3.x 依赖 pydantic>=2.6，和当前应用运行时 pydantic==2.5.0
+# 不应放进 requirements-quality.txt / requirements-test.txt 的同一解析集合。
+# 推荐安全扫描 job 单独安装本文件，或用独立 venv/pipx 运行。
+
+bandit==1.7.5
+safety>=3.7.0
