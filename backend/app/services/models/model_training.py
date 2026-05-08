@@ -231,7 +231,9 @@ class QlibDataProvider:
             try:
                 from .feature_engineering import FeatureEngineer
 
-                self.feature_engineer = FeatureEngineer(data_service, str(self.data_root))
+                self.feature_engineer = FeatureEngineer(
+                    data_service, str(self.data_root)
+                )
             except Exception as e:
                 logger.warning(f"特征工程模块初始化失败，使用降级实现: {e}")
 
@@ -475,7 +477,7 @@ class ModelTrainingService:
 
         logger.info("模型训练服务初始化完成")
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def train_model(
         self,
         model_id: str,
@@ -707,7 +709,7 @@ class ModelTrainingService:
         logger.info(f"数据分割完成，训练集: {len(train_X)}, 验证集: {len(val_X)}")
         return train_X, train_y, val_X, val_y
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def _train_xgboost(
         self,
         train_X: np.ndarray,
@@ -751,7 +753,7 @@ class ModelTrainingService:
         logger.info("XGBoost模型训练完成")
         return model
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def _train_deep_learning_model(
         self,
         train_X: np.ndarray,
@@ -938,7 +940,7 @@ class ModelTrainingService:
             win_rate=win_rate,
         )
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def _save_model(
         self, model_id: str, model: Any, config: TrainingConfig, metrics: ModelMetrics
     ) -> str:
@@ -978,7 +980,7 @@ class ModelTrainingService:
 
         return str(model_path)
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def create_ensemble_model(
         self,
         ensemble_id: str,
@@ -1043,7 +1045,7 @@ class ModelTrainingService:
         logger.info(f"集成模型 {ensemble_id} 创建完成")
         return cast(Dict[str, Any], ensemble_info)
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def setup_online_learning(
         self,
         model_id: str,
@@ -1073,12 +1075,14 @@ class ModelTrainingService:
 
         if self.advanced_training is None:
             raise RuntimeError("高级训练服务不可用")
-        setup_info = await self.advanced_training.setup_online_learning(model_id, config)
+        setup_info = await self.advanced_training.setup_online_learning(
+            model_id, config
+        )
 
         logger.info(f"模型 {model_id} 在线学习设置完成")
         return cast(Dict[str, Any], setup_info)
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def update_model_with_new_data(
         self,
         model_id: str,
@@ -1124,7 +1128,7 @@ class ModelTrainingService:
         )
         return updated_model, metrics
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def train_ensemble_models(
         self,
         ensemble_id: str,

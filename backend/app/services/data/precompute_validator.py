@@ -49,7 +49,7 @@ class PrecomputeValidator:
         "fundamental": ["price_change", "volatility_5d"],
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化验证器"""
 
     def validate_precomputed_data(

@@ -10,7 +10,7 @@ import asyncio
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import pandas as pd
 from loguru import logger
@@ -38,9 +38,9 @@ class OfflineFactorPrecomputeService:
     def __init__(
         self,
         batch_size: int = 50,
-        max_workers: int = None,
+        max_workers: Optional[int] = None,
         progress_callback: Optional[Callable[[float, str], None]] = None,
-    ):
+    ) -> None:
         """
         初始化预计算服务
 
@@ -84,7 +84,7 @@ class OfflineFactorPrecomputeService:
             f"离线因子预计算服务初始化完成，批次大小: {batch_size}, 最大并发数: {self.max_workers}"
         )
 
-    async def initialize_qlib(self):
+    async def initialize_qlib(self) -> None:
         """初始化Qlib环境（延迟初始化）"""
         if self.qlib_provider is None:
             self.qlib_provider = EnhancedQlibDataProvider()
@@ -636,10 +636,10 @@ class OfflineFactorPrecomputeService:
 
                 for stock_code, result in zip(batch_codes, results):
                     try:
-                        if isinstance(result, Exception):
+                        if isinstance(result, BaseException):
                             failed_stocks.append(stock_code)
                             logger.error(f"✗ 股票 {stock_code} 预计算失败: {result}")
-                        elif result is not None and not result.empty:
+                        elif result is not None and not cast(Any, result).empty:
                             # 增量更新：如果文件已存在，合并数据
                             output_file = (
                                 output_dir / f"{stock_code.replace('.', '_')}.parquet"

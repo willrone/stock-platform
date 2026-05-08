@@ -20,7 +20,7 @@ from app.services.data.stock_data_loader import StockDataLoader
 class IncrementalUpdater:
     """增量更新器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.data_loader = StockDataLoader()
         self.format_converter = QlibFormatConverter()
 

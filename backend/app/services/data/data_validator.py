@@ -155,8 +155,10 @@ class DataValidator:
         self, df: pd.DataFrame, rule: ValidationRule, stock_code: str
     ) -> Dict[str, Any]:
         """应用单个验证规则"""
-        issues = []
+        issues: List[Dict[str, Any]] = []
         modified_count = 0
+        rule_issues: List[Dict[str, Any]] = []
+        rule_modified = 0
 
         if rule == ValidationRule.POSITIVE_PRICES:
             df, rule_issues, rule_modified = self._validate_positive_prices(
@@ -184,9 +186,6 @@ class DataValidator:
             )
         elif rule == ValidationRule.OUTLIER_DETECTION:
             df, rule_issues, rule_modified = self._detect_outliers(df, stock_code)
-        else:
-            rule_issues = []
-            rule_modified = 0
 
         issues.extend(rule_issues)
         modified_count += rule_modified

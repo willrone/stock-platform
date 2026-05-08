@@ -16,7 +16,7 @@ from loguru import logger
 class QlibBinConverter:
     """Qlib Bin格式转换器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化转换器"""
 
     def convert_parquet_to_bin(

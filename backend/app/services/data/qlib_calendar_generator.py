@@ -16,7 +16,7 @@ from app.core.config import settings
 class QlibCalendarGenerator:
     """Qlib交易日历生成器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.qlib_data_path = Path(settings.QLIB_DATA_PATH)
         self.calendar_dir = self.qlib_data_path / "calendars"
         self.calendar_file = self.calendar_dir / "day.txt"
@@ -89,7 +89,9 @@ class QlibCalendarGenerator:
             for date_str in date_strings:
                 f.write(f"{date_str}\n")
 
-    def generate_calendar_from_data(self, stock_data_path: Path = None) -> bool:
+    def generate_calendar_from_data(
+        self, stock_data_path: Optional[Path] = None
+    ) -> bool:
         """
         从股票数据中提取交易日并生成日历文件
 

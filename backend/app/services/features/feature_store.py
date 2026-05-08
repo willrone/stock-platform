@@ -99,7 +99,7 @@ class FeatureCacheEntry:
 class FeatureStore:
     """特征存储管理器"""
 
-    def __init__(self, storage_path: str = "./data/features"):
+    def __init__(self, storage_path: str = "./data/features") -> None:
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
@@ -121,7 +121,7 @@ class FeatureStore:
 
         logger.info(f"特征存储初始化完成，存储路径: {self.storage_path}")
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """初始化特征存储"""
         try:
             # 加载现有元数据
@@ -339,7 +339,7 @@ class FeatureStore:
         self,
         stock_codes: Optional[List[str]] = None,
         feature_names: Optional[List[str]] = None,
-    ):
+    ) -> None:
         """使缓存失效"""
         keys_to_remove = []
 
@@ -439,7 +439,7 @@ class FeatureStore:
         # 简化的命中率计算
         return min(1.0, total_access / len(self._cache_index))
 
-    async def _load_metadata(self):
+    async def _load_metadata(self) -> None:
         """加载所有特征元数据"""
         try:
             for metadata_file in self.metadata_dir.glob("*.json"):
@@ -458,7 +458,7 @@ class FeatureStore:
         except Exception as e:
             logger.error(f"加载特征元数据失败: {e}")
 
-    async def _load_cache_index(self):
+    async def _load_cache_index(self) -> None:
         """加载缓存索引"""
         index_file = self.cache_dir / "_cache_index.json"
         if not index_file.exists():
@@ -495,12 +495,14 @@ class FeatureStore:
         except Exception as e:
             logger.error(f"加载缓存索引失败: {e}")
 
-    async def _save_metadata(self, metadata: FeatureMetadata):
+    async def _save_metadata(self, metadata: FeatureMetadata) -> None:
         """保存特征元数据"""
         metadata_file = self.metadata_dir / f"{metadata.feature_name}.json"
         await self._save_metadata_to_file(metadata, metadata_file)
 
-    async def _save_metadata_to_file(self, metadata: FeatureMetadata, file_path: Path):
+    async def _save_metadata_to_file(
+        self, metadata: FeatureMetadata, file_path: Path
+    ) -> None:
         """保存元数据到指定文件"""
         try:
             with open(file_path, "w", encoding="utf-8") as f:
@@ -509,7 +511,7 @@ class FeatureStore:
             logger.error(f"保存特征元数据失败 {file_path}: {e}")
             raise
 
-    async def _save_cache_index(self):
+    async def _save_cache_index(self) -> None:
         """保存缓存索引"""
         index_file = self.cache_dir / "_cache_index.json"
 
@@ -544,7 +546,7 @@ class FeatureStore:
         except Exception as e:
             logger.error(f"保存缓存索引失败: {e}")
 
-    async def _cleanup_expired_cache(self):
+    async def _cleanup_expired_cache(self) -> None:
         """清理过期缓存"""
         expired_keys = []
 
@@ -567,7 +569,7 @@ class FeatureStore:
             await self._save_cache_index()
             logger.info(f"清理过期缓存完成，移除 {len(expired_keys)} 个条目")
 
-    async def _cleanup_old_cache(self):
+    async def _cleanup_old_cache(self) -> None:
         """清理旧缓存（基于LRU策略）"""
         if len(self._cache_index) <= self.max_cache_size:
             return

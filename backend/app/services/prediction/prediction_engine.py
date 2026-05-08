@@ -95,7 +95,7 @@ class ModelLoader:
         try:
             model_path = self.model_dir / f"{model_id}.joblib"
 
-            metadata = {}
+            metadata: Any = {}
             if model_path.exists():
                 model, metadata = self._load_model_file(model_path)
             else:
@@ -174,7 +174,7 @@ class ModelLoader:
         logger.info(f"创建备用模型: {model_id}")
         return model, metadata
 
-    def save_model(self, model_id: str, model: Any, metadata: Dict[str, Any]):
+    def save_model(self, model_id: str, model: Any, metadata: Dict[str, Any]) -> Any:
         """保存模型"""
         try:
             model_path = self.model_dir / f"{model_id}.joblib"
@@ -218,7 +218,7 @@ class RiskAssessment:
         if len(returns_clean) == 0:
             return 0.0
 
-        return np.percentile(returns_clean, (1 - confidence_level) * 100)
+        return float(np.percentile(returns_clean, (1 - confidence_level) * 100))
 
     @staticmethod
     def calculate_expected_shortfall(
@@ -266,7 +266,7 @@ class RiskAssessment:
         vol = np.std(returns_clean)
         if annualize:
             vol *= np.sqrt(252)  # 年化
-        return vol
+        return float(vol)
 
     @staticmethod
     def calculate_max_drawdown(prices: Union[pd.Series, np.ndarray]) -> float:
@@ -788,7 +788,7 @@ class PredictionEngine:
             engine = UnifiedQlibTrainingEngine()
             start_date = end_date - timedelta(days=365)
 
-            async def run_predict():
+            async def run_predict() -> Any:
                 return await engine.predict_with_qlib_model(
                     model_path=model_path,
                     stock_codes=[stock_code],
@@ -984,7 +984,7 @@ class PredictionEngine:
             return "unknown"
 
     def _calculate_predicted_return(
-        self, direction: int, confidence: float, horizon
+        self, direction: int, confidence: float, horizon: Any
     ) -> float:
         """根据方向、置信度和时间范围计算预测收益率"""
         # 根据预测方向和置信度计算预期收益率
@@ -1108,7 +1108,7 @@ class PredictionEngine:
 
         return lower_bound, upper_bound
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """清空预测缓存"""
         self.prediction_cache.clear()
         if self.feature_extractor.cache:

@@ -5,7 +5,7 @@ Qlib数据格式转换工具
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -24,7 +24,7 @@ class QlibFormatConverter:
         "volume": "$volume",
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化转换器"""
 
     def convert_parquet_to_qlib(
@@ -416,7 +416,7 @@ class QlibFormatConverter:
 
         try:
             date_level = df.index.get_level_values(1).to_numpy()
-            mask = np.ones(len(df), dtype=bool)
+            mask: np.ndarray[Any, np.dtype[np.bool_]] = np.ones(len(df), dtype=bool)
 
             if start_date is not None:
                 start_ts = pd.Timestamp(start_date)

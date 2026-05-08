@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
-import paramiko
+paramiko = cast(Any, import_module("paramiko"))
 
 try:
     import pandas as pd
@@ -23,7 +23,7 @@ except ImportError:
 try:
     from loguru import logger as _logger
 except ImportError:
-    _logger = logging.getLogger(__name__)
+    _logger = cast(Any, logging.getLogger(__name__))
 
 from app.core.config import settings
 
@@ -31,7 +31,7 @@ from app.core.config import settings
 logger = _logger.bind(log_type="data_sync") if hasattr(_logger, "bind") else _logger
 
 
-def _get_data_sync_event_manager():
+def _get_data_sync_event_manager() -> Any:
     """延迟加载事件管理器，不吞掉内部导入错误。"""
     events_module = import_module("..events.data_sync_events", package=__package__)
     return events_module.get_data_sync_event_manager()
@@ -131,7 +131,7 @@ class SFTPSyncService:
             f"SFTP同步服务初始化: {self.host}:{self.port}, 本地目录: {self.local_data_dir}, enabled={self.enabled}"
         )
 
-    def _connect_sftp(self) -> Tuple[paramiko.SSHClient, paramiko.SFTPClient]:
+    def _connect_sftp(self) -> Tuple[Any, Any]:
         """
         建立SFTP连接
 
@@ -144,7 +144,7 @@ class SFTPSyncService:
             )
 
         logger.info(f"开始连接SFTP服务器: {self.host}, 用户: {self.username}")
-        ssh = paramiko.SSHClient()
+        ssh = cast(Any, paramiko.SSHClient())
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
@@ -170,7 +170,7 @@ class SFTPSyncService:
             logger.error(f"连接SFTP服务器失败: {e}", exc_info=True)
             raise
 
-    def _disconnect_sftp(self, ssh: paramiko.SSHClient, sftp: paramiko.SFTPClient):
+    def _disconnect_sftp(self, ssh: Any, sftp: Any) -> Any:
         """关闭SFTP连接"""
         try:
             sftp.close()
@@ -242,7 +242,7 @@ class SFTPSyncService:
                 stock_codes = df.iloc[:, 0].unique().tolist()
 
             logger.info(f"成功获取股票列表: {len(stock_codes)} 只股票")
-            return stock_codes
+            return cast(List[str], stock_codes)
 
         except Exception as e:
             logger.error(f"获取远端股票列表失败: {e}", exc_info=True)
@@ -254,7 +254,7 @@ class SFTPSyncService:
                 temp_file.unlink()
                 logger.debug(f"已清理临时文件: {temp_file}")
 
-    def _build_remote_files_cache(self, sftp: paramiko.SFTPClient) -> Dict[str, str]:
+    def _build_remote_files_cache(self, sftp: Any) -> Dict[str, str]:
         """
         构建远端文件缓存，列出所有parquet文件并建立股票代码到文件路径的映射
 
@@ -320,9 +320,7 @@ class SFTPSyncService:
             logger.error(f"构建远端文件缓存失败: {e}", exc_info=True)
             return {}
 
-    def _find_remote_file(
-        self, stock_code: str, sftp: paramiko.SFTPClient
-    ) -> Optional[str]:
+    def _find_remote_file(self, stock_code: str, sftp: Any) -> Optional[str]:
         """
         查找远端文件路径
 
@@ -393,7 +391,7 @@ class SFTPSyncService:
         return None
 
     def sync_stock_file(
-        self, stock_code: str, sftp: paramiko.SFTPClient, max_retries: int = 3
+        self, stock_code: str, sftp: Any, max_retries: int = 3
     ) -> Tuple[bool, int, str]:
         """
         同步单个股票文件（带重试机制）
@@ -503,7 +501,7 @@ class SFTPSyncService:
         # 所有重试都失败
         return False, 0, last_error or "未知错误"
 
-    def _log_sync_event_task_result(self, task, failure_message: str) -> None:
+    def _log_sync_event_task_result(self, task: Any, failure_message: str) -> None:
         try:
             task.result()
         except asyncio.CancelledError:
@@ -511,7 +509,7 @@ class SFTPSyncService:
         except Exception as error:
             logger.warning(f"{failure_message}: {error}")
 
-    def _emit_sync_event(self, coro, failure_message: str) -> None:
+    def _emit_sync_event(self, coro: Any, failure_message: str) -> None:
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -558,9 +556,9 @@ class SFTPSyncService:
     def _sync_stock_with_reconnect(
         self,
         stock_code: str,
-        ssh: paramiko.SSHClient,
-        sftp: paramiko.SFTPClient,
-    ) -> Tuple[bool, int, str, paramiko.SSHClient, paramiko.SFTPClient]:
+        ssh: Any,
+        sftp: Any,
+    ) -> Tuple[bool, int, str, Any, Any]:
         success, file_size, error_msg = self.sync_stock_file(stock_code, sftp)
         if success or "连接" not in error_msg.lower():
             return success, file_size, error_msg, ssh, sftp
@@ -580,9 +578,9 @@ class SFTPSyncService:
     def _refresh_connection_if_needed(
         self,
         index: int,
-        ssh: paramiko.SSHClient,
-        sftp: paramiko.SFTPClient,
-    ) -> Tuple[paramiko.SSHClient, paramiko.SFTPClient]:
+        ssh: Any,
+        sftp: Any,
+    ) -> Tuple[Any, Any]:
         if index % 100 != 0 or index <= 0:
             return ssh, sftp
 

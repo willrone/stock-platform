@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from loguru import logger
@@ -24,7 +24,7 @@ from app.models.file_management import (
 from app.models.stock_simple import StockData
 
 
-def _read_parquet_with_fallback(file_path):
+def _read_parquet_with_fallback(file_path: Any) -> Any:
     """
     读取 parquet 文件，如果 pyarrow 失败则尝试 fastparquet
     用于处理包含 arrow.py_extension_type 的旧版本 parquet 文件
@@ -80,7 +80,7 @@ class ParquetManager:
         month = date.month
         return self.base_path / stock_code / str(year) / f"{month:02d}"
 
-    def ensure_directory(self, file_path: Path):
+    def ensure_directory(self, file_path: Path) -> Any:
         """确保目录存在"""
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -249,7 +249,7 @@ class ParquetManager:
         Returns:
             List[ParquetFileInfo]: 文件信息列表
         """
-        file_infos = []
+        file_infos: List[ParquetFileInfo] = []
 
         try:
             stock_dir = self.base_path / stock_code
@@ -327,14 +327,14 @@ class ParquetManager:
 
         return deleted_count
 
-    def get_storage_stats(self) -> Dict[str, any]:
+    def get_storage_stats(self) -> Dict[str, Any]:
         """
         获取存储统计信息
 
         Returns:
             Dict: 存储统计信息
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "total_files": 0,
             "total_size": 0,
             "stock_count": 0,
@@ -361,7 +361,7 @@ class ParquetManager:
                     continue
 
                 stock_code = stock_dir.name
-                stock_stats = {
+                stock_stats: Dict[str, Any] = {
                     "file_count": 0,
                     "total_size": 0,
                     "record_count": 0,
@@ -410,7 +410,7 @@ class ParquetManager:
         self, stock_data: List[StockData]
     ) -> Dict[Tuple[str, int, int], List[StockData]]:
         """按股票代码和月份分组数据"""
-        grouped = {}
+        grouped: Dict[Tuple[str, int, int], List[StockData]] = {}
 
         for data in stock_data:
             key = (data.stock_code, data.date.year, data.date.month)
@@ -613,7 +613,7 @@ class ParquetManager:
             stock_count = 0
             all_dates = []
             stocks_by_size = []
-            monthly_distribution = {}
+            monthly_distribution: Dict[str, int] = {}
 
             # 确定搜索路径：检查是否有 daily 子目录
             search_path = self.base_path
@@ -1081,7 +1081,7 @@ class ParquetManager:
             self.logger.warning(f"检查文件完整性失败 {file_path}: {e}")
             return IntegrityStatus.UNKNOWN
 
-    def _cleanup_empty_directories(self):
+    def _cleanup_empty_directories(self) -> None:
         """清理空目录"""
         try:
             for root, dirs, _files in os.walk(self.base_path, topdown=False):

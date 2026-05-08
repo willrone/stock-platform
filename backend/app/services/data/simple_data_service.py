@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 import httpx
@@ -186,7 +186,7 @@ class SimpleDataService:
         if isinstance(value, datetime):
             return value
         if isinstance(value, (pd.Timestamp,)):
-            return value.to_pydatetime()
+            return cast(datetime, value.to_pydatetime())
         if isinstance(value, str):
             # Support ISO and YYYY-MM-DD
             try:
@@ -494,7 +494,7 @@ class SimpleDataService:
                     close=float(item.get("close", 0)),
                     volume=int(item.get("volume", 0)),
                     adj_close=(
-                        float(item.get("adj_close"))
+                        float(cast(Any, item.get("adj_close")))
                         if item.get("adj_close") is not None
                         else None
                     ),
@@ -598,16 +598,17 @@ class SimpleDataService:
 
             data = response.json()
             if isinstance(data, dict):
-                return data.get("stocks", [])
+                stocks = data.get("stocks", [])
+                return cast(List[Dict[str, Any]], stocks)
             return None
         except Exception as e:
             logger.error(f"获取股票列表异常: {e}")
             return None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Any:
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Any:
         if self.client and not self.client.is_closed:
             await self.client.aclose()
             self.client = None

@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -241,7 +241,7 @@ class FeatureCache:
             return self.cache[cache_key]["features"]
         return None
 
-    def set(self, cache_key: str, features: pd.DataFrame):
+    def set(self, cache_key: str, features: pd.DataFrame) -> Any:
         """设置缓存"""
         if len(self.cache) >= self.max_size:
             self._evict_oldest()
@@ -252,7 +252,7 @@ class FeatureCache:
         }
         self.access_times[cache_key] = datetime.utcnow()
 
-    def _evict_oldest(self):
+    def _evict_oldest(self) -> Any:
         """清理最旧的缓存项"""
         if not self.access_times:
             return
@@ -261,7 +261,7 @@ class FeatureCache:
         del self.cache[oldest_key]
         del self.access_times[oldest_key]
 
-    def clear(self):
+    def clear(self) -> None:
         """清空缓存"""
         self.cache.clear()
         self.access_times.clear()
@@ -380,7 +380,7 @@ class FeatureExtractor:
                 original_exception=e,
             )
 
-    def _validate_data(self, data: pd.DataFrame):
+    def _validate_data(self, data: pd.DataFrame) -> Any:
         """验证输入数据"""
         required_columns = ["open", "high", "low", "close"]
         missing_columns = [col for col in required_columns if col not in data.columns]
@@ -641,7 +641,7 @@ class FeatureExtractor:
     ) -> List[str]:
         """选择最重要的特征"""
         importance = self.get_feature_importance(features, target)
-        return importance.head(top_k).index.tolist()
+        return cast(List[str], importance.head(top_k).index.tolist())
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计信息"""

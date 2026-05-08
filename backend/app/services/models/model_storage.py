@@ -153,7 +153,7 @@ class ModelStorage:
 
         logger.info(f"模型存储初始化完成: {self.storage_root}")
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     def save_model(
         self, model: Any, metadata: ModelMetadata, overwrite: bool = False
     ) -> bool:
@@ -243,7 +243,7 @@ class ModelStorage:
                 original_exception=e,
             )
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     def load_model(
         self, model_id: str, version: Optional[str] = None
     ) -> Tuple[Any, ModelMetadata]:
@@ -304,7 +304,7 @@ class ModelStorage:
                 original_exception=e,
             )
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     def get_model_metadata(
         self, model_id: str, version: Optional[str] = None
     ) -> Optional[ModelMetadata]:
@@ -340,7 +340,7 @@ class ModelStorage:
             logger.error(f"获取模型元数据失败: {model_id}, 错误: {e}")
             return None
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     def list_models(
         self,
         model_type: Optional[ModelType] = None,

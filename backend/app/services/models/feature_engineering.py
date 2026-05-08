@@ -38,7 +38,7 @@ class DataLoader:
         self.data_service = data_service
         self.data_root = data_root
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def load_stock_data(
         self, stock_code: str, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
@@ -94,7 +94,7 @@ class FeatureCalculator:
             TechnicalIndicatorCalculator()
         )
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def calculate_technical_indicators(
         self, stock_data: pd.DataFrame
     ) -> pd.DataFrame:
@@ -171,7 +171,7 @@ class FeatureEngineer:
         self.data_loader = DataLoader(data_service, data_root)
         self.feature_calculator = FeatureCalculator()
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def prepare_features(
         self, stock_codes: List[str], start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
@@ -267,7 +267,7 @@ class QlibFeatureProvider:
     def __init__(self) -> None:
         self.qlib_initialized = False
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def initialize_qlib(self) -> bool:
         """初始化Qlib环境"""
         if not QLIB_AVAILABLE:
@@ -309,7 +309,7 @@ class QlibFeatureProvider:
             logger.error(f"Qlib初始化失败: {e}")
             return False
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def get_qlib_features(
         self, stock_codes: List[str], start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:

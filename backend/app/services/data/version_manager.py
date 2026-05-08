@@ -8,7 +8,7 @@ from __future__ import annotations  # 延迟评估类型注解
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from loguru import logger
 
@@ -18,7 +18,7 @@ from app.core.config import settings
 class VersionManager:
     """数据版本管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.qlib_data_path = Path(settings.QLIB_DATA_PATH)
         self.version_file = self.qlib_data_path / "data_version.json"
         self.version_file.parent.mkdir(parents=True, exist_ok=True)
@@ -33,7 +33,7 @@ class VersionManager:
         try:
             if self.version_file.exists():
                 with open(self.version_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast(Dict[str, Any], json.load(f))
             else:
                 # 返回默认版本信息
                 return self._get_default_version_info()
@@ -47,7 +47,7 @@ class VersionManager:
         date_range: Dict[str, str],
         indicators: Dict[str, List[str]],
         parquet_version: Optional[str] = None,
-    ):
+    ) -> Any:
         """
         更新版本信息
 
