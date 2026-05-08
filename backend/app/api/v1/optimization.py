@@ -100,9 +100,7 @@ async def create_optimization_task(
             "error_message": task.error_message,
         }
 
-        return StandardResponse(
-            success=True, message="超参优化任务创建成功", data=task_data
-        )
+        return StandardResponse(success=True, message="超参优化任务创建成功", data=task_data)
 
     except Exception as e:
         logger.error(f"创建超参优化任务失败: {e}", exc_info=True)
@@ -167,9 +165,7 @@ async def list_optimization_tasks(
 
     except Exception as e:
         logger.error(f"获取超参优化任务列表失败: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"获取超参优化任务列表失败: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"获取超参优化任务列表失败: {str(e)}")
 
 
 @router.get("/tasks/{task_id}", response_model=StandardResponse)
@@ -213,17 +209,13 @@ async def get_optimization_task(
             "result": task.result,
         }
 
-        return StandardResponse(
-            success=True, message="获取超参优化任务详情成功", data=task_data
-        )
+        return StandardResponse(success=True, message="获取超参优化任务详情成功", data=task_data)
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"获取超参优化任务详情失败: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"获取超参优化任务详情失败: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"获取超参优化任务详情失败: {str(e)}")
 
 
 @router.get("/tasks/{task_id}/status", response_model=StandardResponse)
@@ -265,9 +257,7 @@ async def get_optimization_status(
             f"running={status_data['running_trials']}, result_keys={list(result.keys())}"
         )
 
-        return StandardResponse(
-            success=True, message="获取优化状态成功", data=status_data
-        )
+        return StandardResponse(success=True, message="获取优化状态成功", data=status_data)
 
     except HTTPException:
         raise
@@ -326,9 +316,7 @@ async def get_pareto_front(
         if not pareto_front:
             raise HTTPException(status_code=400, detail="该任务不是多目标优化任务")
 
-        return StandardResponse(
-            success=True, message="获取帕累托前沿成功", data=pareto_front
-        )
+        return StandardResponse(success=True, message="获取帕累托前沿成功", data=pareto_front)
 
     except HTTPException:
         raise

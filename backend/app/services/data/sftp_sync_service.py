@@ -89,9 +89,7 @@ class SFTPSyncService:
         self.remote_data_dir = remote_data_dir or settings.SFTP_REMOTE_DATA_DIR
 
         if not self.enabled:
-            logger.warning(
-                "SFTP同步未启用（SFTP_SYNC_ENABLED=false），远端同步接口将不可用"
-            )
+            logger.warning("SFTP同步未启用（SFTP_SYNC_ENABLED=false），远端同步接口将不可用")
 
         # Validate required fields only when enabled
         if self.enabled:
@@ -123,9 +121,9 @@ class SFTPSyncService:
         self.event_manager = _get_data_sync_event_manager()
 
         # 缓存远端文件列表，避免重复查询
-        self._remote_files_cache: Optional[Dict[str, str]] = (
-            None  # {stock_code: actual_file_path}
-        )
+        self._remote_files_cache: Optional[
+            Dict[str, str]
+        ] = None  # {stock_code: actual_file_path}
 
         logger.info(
             f"SFTP同步服务初始化: {self.host}:{self.port}, 本地目录: {self.local_data_dir}, enabled={self.enabled}"
@@ -229,9 +227,7 @@ class SFTPSyncService:
                 except Exception as e2:
                     logger.error(f"使用 fastparquet 引擎也失败: {e2}")
                     raise
-            logger.debug(
-                f"parquet文件读取完成，行数: {len(df)}, 列: {list(df.columns)}"
-            )
+            logger.debug(f"parquet文件读取完成，行数: {len(df)}, 列: {list(df.columns)}")
 
             # 假设股票代码在'ts_code'列中
             if "ts_code" in df.columns:
@@ -294,9 +290,7 @@ class SFTPSyncService:
                     if stock_code not in cache:
                         cache[stock_code] = full_path
                     else:
-                        logger.debug(
-                            f"股票代码 {stock_code} 已存在，跳过重复映射: {filename}"
-                        )
+                        logger.debug(f"股票代码 {stock_code} 已存在，跳过重复映射: {filename}")
                 else:
                     # 如果正则匹配失败，尝试其他格式
                     # 例如：600868_SH -> 600868.SH
@@ -383,9 +377,7 @@ class SFTPSyncService:
                 if file_match:
                     file_code, file_market = file_match.groups()
                     if file_code == code and file_market == market:
-                        logger.debug(
-                            f"[{stock_code}] 通过反向匹配找到文件: {cached_path}"
-                        )
+                        logger.debug(f"[{stock_code}] 通过反向匹配找到文件: {cached_path}")
                         return cached_path
 
         return None
@@ -441,9 +433,7 @@ class SFTPSyncService:
                         f"[{stock_code}] 重试 {attempt + 1}/{max_retries}: 正在同步 ({remote_file} -> {local_file})"
                     )
                 else:
-                    logger.debug(
-                        f"[{stock_code}] 正在同步: {remote_file} -> {local_file}"
-                    )
+                    logger.debug(f"[{stock_code}] 正在同步: {remote_file} -> {local_file}")
 
                 # 原子下载：先下到临时文件，再替换，避免覆盖/半文件
                 tmp_file = local_file.with_suffix(local_file.suffix + ".tmp")
@@ -644,8 +634,7 @@ class SFTPSyncService:
         else:
             success_rate = (synced_files / total_files * 100) if total_files > 0 else 0
             message = (
-                f"同步完成: {synced_files}/{total_files} 成功 "
-                f"(成功率: {success_rate:.1f}%)"
+                f"同步完成: {synced_files}/{total_files} 成功 " f"(成功率: {success_rate:.1f}%)"
             )
 
         if failed_files:
@@ -686,9 +675,7 @@ class SFTPSyncService:
             # 预构建文件缓存以提高效率
             logger.info("预构建远端文件缓存...")
             remote_files_cache = self._build_remote_files_cache(sftp)
-            logger.info(
-                f"远端文件缓存构建完成，找到 {len(remote_files_cache)} 个可用的股票文件"
-            )
+            logger.info(f"远端文件缓存构建完成，找到 {len(remote_files_cache)} 个可用的股票文件")
 
             stock_codes = self._get_target_stock_codes(stock_codes)
 
@@ -708,17 +695,11 @@ class SFTPSyncService:
             )
 
             if missing_stock_codes:
-                logger.info(
-                    f"远端服务器上缺少 {len(missing_stock_codes)} 个股票文件，将跳过这些文件"
-                )
-                logger.debug(
-                    f"缺少的股票代码示例（前20个）: {missing_stock_codes[:20]}"
-                )
+                logger.info(f"远端服务器上缺少 {len(missing_stock_codes)} 个股票文件，将跳过这些文件")
+                logger.debug(f"缺少的股票代码示例（前20个）: {missing_stock_codes[:20]}")
 
             original_count = len(stock_codes)
-            logger.info(
-                f"实际可同步的股票数量: {len(available_stock_codes)}/{original_count}"
-            )
+            logger.info(f"实际可同步的股票数量: {len(available_stock_codes)}/{original_count}")
 
             if not available_stock_codes:
                 logger.warning("远端服务器上没有可用的股票文件")
@@ -757,12 +738,16 @@ class SFTPSyncService:
                     )
 
                     file_start_time = datetime.now()
-                    success, file_size, error_msg, ssh, sftp = (
-                        self._sync_stock_with_reconnect(
-                            stock_code,
-                            ssh,
-                            sftp,
-                        )
+                    (
+                        success,
+                        file_size,
+                        error_msg,
+                        ssh,
+                        sftp,
+                    ) = self._sync_stock_with_reconnect(
+                        stock_code,
+                        ssh,
+                        sftp,
                     )
                     file_duration = (datetime.now() - file_start_time).total_seconds()
 
@@ -861,9 +846,7 @@ class SFTPSyncService:
             if failed_files:
                 logger.warning(f"失败的股票代码（前10个）: {failed_files[:10]}")
             if missing_stock_codes:
-                logger.info(
-                    f"远端不存在的股票代码示例（前10个）: {missing_stock_codes[:10]}"
-                )
+                logger.info(f"远端不存在的股票代码示例（前10个）: {missing_stock_codes[:10]}")
             logger.info("=" * 60)
 
             return SyncResult(

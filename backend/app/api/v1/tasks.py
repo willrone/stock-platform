@@ -124,9 +124,7 @@ async def create_task(
             }
         else:  # BACKTEST
             if not request.backtest_config:
-                raise HTTPException(
-                    status_code=400, detail="回测任务需要提供backtest_config"
-                )
+                raise HTTPException(status_code=400, detail="回测任务需要提供backtest_config")
 
             # 兼容前端/调用方使用 backtest_config 内的 strategy_type / strategy_params 字段。
             # 后端执行器期望字段：
@@ -600,14 +598,10 @@ async def compare_backtest_results(request: BacktestCompareRequest) -> Any:
                 raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
             if task.task_type != "backtest":
-                raise HTTPException(
-                    status_code=400, detail=f"任务 {task_id} 不是回测任务"
-                )
+                raise HTTPException(status_code=400, detail=f"任务 {task_id} 不是回测任务")
 
             if not task.result:
-                raise HTTPException(
-                    status_code=404, detail=f"任务 {task_id} 没有回测结果"
-                )
+                raise HTTPException(status_code=404, detail=f"任务 {task_id} 没有回测结果")
 
             # 转换结果数据
             raw_result = cast(Any, task.result)
@@ -737,9 +731,7 @@ async def get_task_stats(user_id: str = Depends(get_current_user)) -> Any:
             "success_rate": stats.get("success_rate", 0.0),
         }
 
-        return StandardResponse(
-            success=True, message="任务统计获取成功", data=task_stats
-        )
+        return StandardResponse(success=True, message="任务统计获取成功", data=task_stats)
 
     except Exception as e:
         logger.error(f"获取任务统计失败: {e}", exc_info=True)
@@ -790,9 +782,7 @@ async def rebuild_task(
         }
         task_type_enum = type_map.get(cast(str, task_type))
         if not task_type_enum:
-            raise HTTPException(
-                status_code=400, detail=f"不支持重建的任务类型: {task_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"不支持重建的任务类型: {task_type}")
 
         # 创建新任务
         new_task = task_repository.create_task(
@@ -1047,9 +1037,7 @@ async def get_task_detail(task_id: str) -> Any:
         )
 
         if backtest_results is not None:
-            logger.info(
-                f"回测结果详情返回: task_id={task_id}, task_type={task_type_value}"
-            )
+            logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task_type_value}")
             if isinstance(backtest_results, dict):
                 logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20]}")
 
@@ -1131,9 +1119,7 @@ async def stop_task(task_id: str) -> Any:
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         if task.status not in [TaskStatus.RUNNING.value, TaskStatus.QUEUED.value]:
-            raise HTTPException(
-                status_code=400, detail=f"任务状态为 {task.status}，无法停止"
-            )
+            raise HTTPException(status_code=400, detail=f"任务状态为 {task.status}，无法停止")
 
         # 更新任务状态为已取消
         task = task_repository.update_task_status(
@@ -1168,9 +1154,7 @@ async def retry_task(task_id: str) -> Any:
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         if task.status not in [TaskStatus.FAILED.value, TaskStatus.CANCELLED.value]:
-            raise HTTPException(
-                status_code=400, detail=f"任务状态为 {task.status}，无法重试"
-            )
+            raise HTTPException(status_code=400, detail=f"任务状态为 {task.status}，无法重试")
 
         # 重置任务状态
         task = task_repository.update_task_status(
@@ -1239,7 +1223,9 @@ async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False)
 
         message = f"处理完成：发现 {result['total_stuck']} 个卡住任务"
         if auto_fix:
-            message += f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
+            message += (
+                f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
+            )
 
         return StandardResponse(success=True, message=message, data=result)
 
@@ -1266,9 +1252,7 @@ async def force_complete_task(task_id: str, status: str = "cancelled") -> Any:
                 data={"task_id": task_id, "status": status},
             )
         else:
-            raise HTTPException(
-                status_code=404, detail=f"任务不存在或处理失败: {task_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"任务不存在或处理失败: {task_id}")
 
     except HTTPException:
         raise

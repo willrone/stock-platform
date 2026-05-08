@@ -18,9 +18,7 @@ from typing import Any, Dict, List, Optional, Set
 from loguru import logger
 
 from app.services.monitoring.drift_detector import DriftReport, DriftSeverity
-from app.services.monitoring.performance_monitor import (
-    Alert,
-)
+from app.services.monitoring.performance_monitor import Alert
 
 
 class NotificationChannel(Enum):

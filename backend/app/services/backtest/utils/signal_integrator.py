@@ -252,9 +252,7 @@ class SignalIntegrator:
 
         # 生成最终信号
         reasons = [s.reason for s in signals]
-        integrated_reason = (
-            f"组合信号: {', '.join(set(reasons[:3]))}"  # 最多显示3个原因
-        )
+        integrated_reason = f"组合信号: {', '.join(set(reasons[:3]))}"  # 最多显示3个原因
 
         integrated_signal = TradingSignal(
             timestamp=integrated_timestamp,

@@ -79,9 +79,7 @@ class StockDataLoader:
                     df["date"] = pd.to_datetime(df["date"])
                     df = df.set_index("date")
 
-            logger.debug(
-                f"✅ 加载预计算特征: {stock_code}, {len(df)} 行, {len(df.columns)} 列"
-            )
+            logger.debug(f"✅ 加载预计算特征: {stock_code}, {len(df)} 行, {len(df.columns)} 列")
             return df
 
         except Exception as e:
@@ -134,16 +132,12 @@ class StockDataLoader:
                             "$volume": "volume",
                         }
                     )
-                    logger.info(
-                        f"✅ 使用预计算特征（含 OHLCV）: {stock_code}, {len(df)} 行"
-                    )
+                    logger.info(f"✅ 使用预计算特征（含 OHLCV）: {stock_code}, {len(df)} 行")
                 else:
                     # 预计算特征不含 OHLCV，需要加载原始数据并合并
                     base_df = self._load_base_data(stock_code)
                     if base_df.empty:
-                        logger.warning(
-                            f"原始数据不存在，仅使用预计算特征: {stock_code}"
-                        )
+                        logger.warning(f"原始数据不存在，仅使用预计算特征: {stock_code}")
                         df = precomputed
                     else:
                         # 合并：base_df (OHLCV) + precomputed (技术指标)

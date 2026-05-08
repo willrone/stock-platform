@@ -517,9 +517,7 @@ class BacktestTaskExecutor:
                         f"result是否为None={saved_result is None}"
                     )
                     if isinstance(saved_result, dict):
-                        logger.info(
-                            f"保存后的result包含字段={list(saved_result.keys())[:20]}"
-                        )
+                        logger.info(f"保存后的result包含字段={list(saved_result.keys())[:20]}")
 
                 logger.info(f"回测任务完成: {task_id}, 总收益: {total_return:.2%}")
                 return task_result
@@ -1021,9 +1019,7 @@ class QlibPrecomputeTaskExecutor:
                         TaskStatus.FAILED,
                         error_message=result.get("message", "预计算失败"),
                     )
-                    logger.error(
-                        f"Qlib预计算任务失败: {task_id}, {result.get('message')}"
-                    )
+                    logger.error(f"Qlib预计算任务失败: {task_id}, {result.get('message')}")
 
                 return result
 
@@ -1169,7 +1165,9 @@ class HyperparameterOptimizationTaskExecutor:
                         StrategyHyperparameterOptimizer,
                     )
                 except ImportError as e:
-                    error_msg = f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
+                    error_msg = (
+                        f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
+                    )
                     logger.error(error_msg)
                     raise ValueError(error_msg) from e
 

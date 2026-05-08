@@ -211,9 +211,7 @@ async def retry_db_operation(
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(
-                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
-                    )
+                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
             else:
                 # 非锁定错误，直接抛出
                 raise
@@ -271,9 +269,7 @@ def retry_db_operation_sync(
                     time.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(
-                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
-                    )
+                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
             else:
                 # 非锁定错误，直接抛出
                 raise

@@ -129,9 +129,7 @@ async def get_prediction_result(prediction_id: str) -> Any:
             ],
         }
 
-        return StandardResponse(
-            success=True, message="预测结果获取成功", data=response_data
-        )
+        return StandardResponse(success=True, message="预测结果获取成功", data=response_data)
 
     except Exception as e:
         logger.error(f"获取预测结果失败: {e}")

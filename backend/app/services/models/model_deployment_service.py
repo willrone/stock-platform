@@ -285,9 +285,7 @@ class ModelEvaluator:
                     all_data.append(stock_data)
 
             if not all_data:
-                raise ModelError(
-                    message="无法加载测试数据", severity=ErrorSeverity.HIGH
-                )
+                raise ModelError(message="无法加载测试数据", severity=ErrorSeverity.HIGH)
 
             # 合并数据
             test_data = pd.concat(all_data, axis=0)

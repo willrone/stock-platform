@@ -116,9 +116,7 @@ class ProcessTaskExecutor:
 
         future.add_done_callback(on_done)
 
-        logger.debug(
-            f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}"
-        )
+        logger.debug(f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}")
         return future
 
     async def submit_async(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:

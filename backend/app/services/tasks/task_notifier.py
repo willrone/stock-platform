@@ -150,9 +150,7 @@ class TaskNotifier:
                 await self._notify_general_task_update(task)
 
         except Exception as e:
-            logger.error(
-                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
-            )
+            logger.error(f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True)
 
     async def _notify_backtest_update(self, task: Task) -> None:
         """通知回测任务更新"""
@@ -197,9 +195,7 @@ class TaskNotifier:
             )
 
         except Exception as e:
-            logger.error(
-                f"发送回测任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
-            )
+            logger.error(f"发送回测任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True)
             # 如果回测WebSocket通知失败，回退到通用通知
             await self._notify_general_task_update(task)
 
@@ -231,9 +227,7 @@ class TaskNotifier:
 
             await self._sync_backtest_stages(task_id, task_progress)
         except Exception as e:
-            logger.warning(
-                f"同步回测进度失败: {_task_id(task)}, 错误: {e}", exc_info=True
-            )
+            logger.warning(f"同步回测进度失败: {_task_id(task)}, 错误: {e}", exc_info=True)
 
     async def _start_backtest_progress(self, task_id: str) -> None:
         """初始化回测进度监控器。"""
@@ -418,9 +412,7 @@ class TaskNotifier:
                     "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task_id, message)
-                logger.debug(
-                    f"已发送任务失败通知: {task_id}, 错误: {task.error_message}"
-                )
+                logger.debug(f"已发送任务失败通知: {task_id}, 错误: {task.error_message}")
             else:
                 # 其他状态：发送通用更新
                 message = {
@@ -439,9 +431,7 @@ class TaskNotifier:
                 )
 
         except Exception as e:
-            logger.error(
-                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
-            )
+            logger.error(f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True)
 
 
 # 全局任务通知器实例

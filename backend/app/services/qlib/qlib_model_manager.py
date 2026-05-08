@@ -56,9 +56,7 @@ class ModelMetadata:
     category: ModelCategory
     complexity: ModelComplexity
     description: str
-    supported_tasks: List[
-        str
-    ]  # 支持的任务类型：regression, classification, forecasting
+    supported_tasks: List[str]  # 支持的任务类型：regression, classification, forecasting
     min_samples: int  # 最小样本数要求
     recommended_features: int  # 推荐特征数
     training_time_estimate: str  # 训练时间估计

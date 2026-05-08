@@ -518,9 +518,7 @@ class DeploymentManager:
             if config.health_check_enabled:
                 health_results = await self._run_health_checks(env, config)
                 if not health_results.get("overall_healthy", False):
-                    raise RuntimeError(
-                        f"实例 {env_name} 健康检查失败: {health_results}"
-                    )
+                    raise RuntimeError(f"实例 {env_name} 健康检查失败: {health_results}")
 
             env.status = DeploymentStatus.ACTIVE
 

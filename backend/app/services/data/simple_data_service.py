@@ -320,9 +320,7 @@ class SimpleDataService:
                     df_filtered = df[mask].copy()
 
                     if df_filtered.empty:
-                        logger.debug(
-                            f"Parquet文件在指定日期范围内无数据: {parquet_path}"
-                        )
+                        logger.debug(f"Parquet文件在指定日期范围内无数据: {parquet_path}")
                         continue
 
                     # Convert to list of dicts
@@ -342,9 +340,7 @@ class SimpleDataService:
                         }
                         out.append(item)
 
-                    logger.info(
-                        f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录"
-                    )
+                    logger.info(f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录")
                     return out
                 except Exception as e:
                     logger.error(f"加载Parquet数据失败: {parquet_path}, {e}")

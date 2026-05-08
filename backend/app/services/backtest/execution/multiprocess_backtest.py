@@ -273,9 +273,7 @@ def run_multiprocess_backtest(
     stock_data = data_loader.load_multiple_stocks(stock_codes, start_date, end_date)
 
     data_load_time = time.perf_counter() - data_load_start
-    logger.info(
-        f"✅ 数据加载完成: {len(stock_data)} 只股票, 耗时 {data_load_time:.2f}秒"
-    )
+    logger.info(f"✅ 数据加载完成: {len(stock_data)} 只股票, 耗时 {data_load_time:.2f}秒")
 
     # 4. 获取交易日历
     all_dates = set()

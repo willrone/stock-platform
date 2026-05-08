@@ -868,9 +868,7 @@ class TechnicalIndicatorCalculator:
                     )
                     results[stock_code] = indicators_result
 
-                    print(
-                        f"股票 {stock_code} 指标计算完成: {len(indicators_result)} 条记录"
-                    )
+                    print(f"股票 {stock_code} 指标计算完成: {len(indicators_result)} 条记录")
 
                 except Exception as e:
                     print(f"股票 {stock_code} 指标计算失败: {e}")

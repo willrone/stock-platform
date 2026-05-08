@@ -137,9 +137,7 @@ class ModelLifecycleManager:
 
             await db.commit()
 
-            logger.info(
-                f"模型状态转换成功: {model_id} {current_status.value} -> {new_status}"
-            )
+            logger.info(f"模型状态转换成功: {model_id} {current_status.value} -> {new_status}")
             return True
 
         except Exception as e:

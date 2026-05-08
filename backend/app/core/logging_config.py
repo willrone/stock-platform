@@ -336,9 +336,7 @@ class PerformanceLogger:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        logger.info(
-            f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data
-        )
+        logger.info(f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data)
 
 
 class LogContext:

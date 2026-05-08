@@ -459,7 +459,9 @@ class PredictionEngine:
                     "predicted_direction": (
                         1
                         if predicted_return > 0.01
-                        else -1 if predicted_return < -0.01 else 0
+                        else -1
+                        if predicted_return < -0.01
+                        else 0
                     ),
                     "confidence_score": model_metadata.get(
                         "performance_metrics", {}
@@ -918,9 +920,7 @@ class PredictionEngine:
 
             # 验证模型ID
             if not config.model_id:
-                raise PredictionError(
-                    message="模型ID不能为空", severity=ErrorSeverity.MEDIUM
-                )
+                raise PredictionError(message="模型ID不能为空", severity=ErrorSeverity.MEDIUM)
 
             # 验证置信水平
             if not 0.5 <= config.confidence_level <= 0.99:

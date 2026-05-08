@@ -399,9 +399,7 @@ class EnhancedMetricsCalculator:
         """计算滚动指标"""
 
         if len(returns) < window:
-            logger.warning(
-                f"数据长度 {len(returns)} 小于滚动窗口 {window}，跳过滚动指标计算"
-            )
+            logger.warning(f"数据长度 {len(returns)} 小于滚动窗口 {window}，跳过滚动指标计算")
             return {}
 
         # 滚动夏普比率
@@ -587,9 +585,7 @@ class EnhancedMetricsCalculator:
                 "excess_return": total_excess_return,
                 "upside_capture": up_capture,
                 "downside_capture": down_capture,
-                "benchmark_data": benchmark_df[
-                    "close"
-                ].to_dict(),  # 保存基准数据用于前端展示
+                "benchmark_data": benchmark_df["close"].to_dict(),  # 保存基准数据用于前端展示
             }
 
         except Exception as e:

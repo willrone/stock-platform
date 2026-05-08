@@ -10,9 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from app.services.infrastructure.websocket_manager import (
-    websocket_manager,
-)
+from app.services.infrastructure.websocket_manager import websocket_manager
 
 
 @dataclass

@@ -140,9 +140,7 @@ class PerformanceOptimizer:
 
             return feature
         except Exception as e:
-            logger.error(
-                f"计算复杂特征失败: {feature.get('name', 'unknown')}, 错误: {e}"
-            )
+            logger.error(f"计算复杂特征失败: {feature.get('name', 'unknown')}, 错误: {e}")
             return feature
 
     def optimize_database_queries(self, query_configs: List[Dict]) -> List[Dict]:
@@ -333,9 +331,7 @@ class PerformanceOptimizer:
             if memory.percent > 85:
                 warnings.append(f"内存使用率过高: {memory.percent}%")
             if (disk.used / disk.total) * 100 > 90:
-                warnings.append(
-                    f"磁盘使用率过高: {(disk.used / disk.total) * 100:.1f}%"
-                )
+                warnings.append(f"磁盘使用率过高: {(disk.used / disk.total) * 100:.1f}%")
 
             resource_info["warnings"] = warnings
 

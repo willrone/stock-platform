@@ -111,9 +111,7 @@ class QlibCalendarGenerator:
 
             self._write_calendar(date_strings)
 
-            logger.info(
-                f"交易日历文件已生成: {self.calendar_file}, 包含 {len(date_strings)} 个交易日"
-            )
+            logger.info(f"交易日历文件已生成: {self.calendar_file}, 包含 {len(date_strings)} 个交易日")
             logger.info(f"日期范围: {date_strings[0]} 至 {date_strings[-1]}")
 
             return True
@@ -155,9 +153,7 @@ class QlibCalendarGenerator:
                 for date_str in date_strings:
                     f.write(f"{date_str}\n")
 
-            logger.info(
-                f"交易日历文件已生成: {self.calendar_file}, 包含 {len(date_strings)} 个交易日"
-            )
+            logger.info(f"交易日历文件已生成: {self.calendar_file}, 包含 {len(date_strings)} 个交易日")
             logger.info(f"日期范围: {date_strings[0]} 至 {date_strings[-1]}")
 
             return True
@@ -189,7 +185,5 @@ class QlibCalendarGenerator:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=5 * 365)
 
-        logger.info(
-            f"使用默认日期范围生成交易日历: {start_date.date()} 至 {end_date.date()}"
-        )
+        logger.info(f"使用默认日期范围生成交易日历: {start_date.date()} 至 {end_date.date()}")
         return self.generate_calendar_from_date_range(start_date, end_date)

@@ -9,14 +9,8 @@ from typing import Any, Dict, List, cast
 
 from loguru import logger
 
-from app.services.data_versioning.lineage_tracker import (
-    NodeType,
-    data_lineage_tracker,
-)
-from app.services.data_versioning.version_manager import (
-    DataType,
-    data_version_manager,
-)
+from app.services.data_versioning.lineage_tracker import NodeType, data_lineage_tracker
+from app.services.data_versioning.version_manager import DataType, data_version_manager
 from app.services.events.data_sync_events import (
     DataSyncEvent,
     DataSyncEventType,

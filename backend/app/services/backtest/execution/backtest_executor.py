@@ -146,9 +146,7 @@ class BacktestExecutor:
         import os
 
         if max_workers is None:
-            max_workers = min(
-                os.cpu_count() or 4, 8
-            )  # 最多8个线程，避免过多线程导致开销
+            max_workers = min(os.cpu_count() or 4, 8)  # 最多8个线程，避免过多线程导致开销
 
         self.enable_parallel = enable_parallel
         self.max_workers = max_workers
@@ -172,9 +170,7 @@ class BacktestExecutor:
 
         if enable_parallel:
             mode = "多进程" if use_multiprocessing else "多线程"
-            logger.info(
-                f"回测执行器已启用并行化（{mode}），最大工作进程/线程数: {max_workers}"
-            )
+            logger.info(f"回测执行器已启用并行化（{mode}），最大工作进程/线程数: {max_workers}")
 
         if self.enable_performance_profiling:
             logger.info("回测执行器已启用性能分析")
@@ -310,9 +306,7 @@ class BacktestExecutor:
                 portfolio_manager = PortfolioManagerArray(
                     backtest_config, actual_stock_codes
                 )
-                logger.info(
-                    f"✅ Phase 1: 使用数组化持仓管理器 (stocks={len(actual_stock_codes)})"
-                )
+                logger.info(f"✅ Phase 1: 使用数组化持仓管理器 (stocks={len(actual_stock_codes)})")
             else:
                 portfolio_manager = PortfolioManager(backtest_config)
                 logger.info(f"使用传统持仓管理器 (stocks={len(actual_stock_codes)})")
@@ -725,9 +719,7 @@ class BacktestExecutor:
             from ..core.strategy_portfolio import StrategyPortfolio
 
             if isinstance(strategy, StrategyPortfolio):
-                logger.info(
-                    f"🚀 Portfolio策略检测到，递归预计算 {len(strategy.strategies)} 个子策略"
-                )
+                logger.info(f"🚀 Portfolio策略检测到，递归预计算 {len(strategy.strategies)} 个子策略")
                 for sub in strategy.strategies:
                     self._precompute_strategy_signals(sub, stock_data)
                 return
@@ -772,9 +764,7 @@ class BacktestExecutor:
             if ok:
                 success_count += 1
             elif err:
-                logger.warning(
-                    f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}"
-                )
+                logger.warning(f"策略 {strategy.name} 对股票 {stock_code} 预计算信号失败: {err}")
 
         # 📊 性能统计：预计算耗时分布
         if _stock_times:
@@ -821,9 +811,7 @@ class BacktestExecutor:
             from ..models import TradingSignal
 
             if isinstance(strategy, StrategyPortfolio):
-                logger.info(
-                    f"🔄 Portfolio策略信号整合开始: {len(strategy.strategies)} 个子策略"
-                )
+                logger.info(f"🔄 Portfolio策略信号整合开始: {len(strategy.strategies)} 个子策略")
 
                 # 1. 递归提取所有子策略的信号
                 all_sub_signals: Dict[Tuple[str, datetime], Any] = {}
@@ -873,14 +861,12 @@ class BacktestExecutor:
 
                         # 将整合后的信号添加到字典
                         for sig in integrated:
-                            signal_dict[(sig.stock_code, sig.timestamp)] = (
-                                sig.signal_type
-                            )
+                            signal_dict[
+                                (sig.stock_code, sig.timestamp)
+                            ] = sig.signal_type
                             integrated_count += 1
 
-                logger.info(
-                    f"✅ Portfolio策略信号整合完成: {integrated_count} 个整合信号"
-                )
+                logger.info(f"✅ Portfolio策略信号整合完成: {integrated_count} 个整合信号")
                 return signal_dict
 
         except Exception as e:
@@ -915,9 +901,7 @@ class BacktestExecutor:
                 logger.warning(f"提取股票 {stock_code} 的信号失败: {e}")
 
         if extracted_count > 0:
-            logger.info(
-                f"✅ 策略 {strategy.name} 信号提取完成: {extracted_count} 个信号"
-            )
+            logger.info(f"✅ 策略 {strategy.name} 信号提取完成: {extracted_count} 个信号")
 
         return signal_dict
 
@@ -1170,9 +1154,7 @@ class BacktestExecutor:
                             cache = original_data.attrs.setdefault(
                                 "_precomputed_signals", {}
                             )
-                            cache[strategy.name] = (
-                                signals  # 使用 strategy.name 作为稳定的 key
-                            )
+                            cache[strategy.name] = signals  # 使用 strategy.name 作为稳定的 key
                             results.append((True, code, None))
                         else:
                             results.append((False, code, err))
@@ -1244,9 +1226,7 @@ class BacktestExecutor:
                         logger.warning(f"任务不存在，停止回测执行: {task_id}")
                         return False
                     if not _is_task_running(task.status):
-                        logger.warning(
-                            f"任务状态为 {task.status}，停止回测执行: {task_id}"
-                        )
+                        logger.warning(f"任务状态为 {task.status}，停止回测执行: {task_id}")
                         return False
                     return True
                 finally:
@@ -1805,20 +1785,20 @@ class BacktestExecutor:
                             )
 
                     # Rebalance according to TopK+buffer rules
-                    executed_trade_signals, unexecuted_signals, trades_this_day = (
-                        self._rebalance_topk_buffer(
-                            portfolio_manager=portfolio_manager,
-                            current_prices=current_prices,
-                            current_date=current_date,
-                            scores=scores,
-                            topk=k,
-                            buffer_n=buffer_n,
-                            max_changes=trades_limit,
-                            strategy=strategy,
-                            debug=bool(
-                                trade_mode_config.get("debug_topk_buffer", False)
-                            ),
-                        )
+                    (
+                        executed_trade_signals,
+                        unexecuted_signals,
+                        trades_this_day,
+                    ) = self._rebalance_topk_buffer(
+                        portfolio_manager=portfolio_manager,
+                        current_prices=current_prices,
+                        current_date=current_date,
+                        scores=scores,
+                        topk=k,
+                        buffer_n=buffer_n,
+                        max_changes=trades_limit,
+                        strategy=strategy,
+                        debug=bool(trade_mode_config.get("debug_topk_buffer", False)),
                     )
 
                     # Debug: show what was executed on key dates / when trades happen
@@ -1849,8 +1829,7 @@ class BacktestExecutor:
                                     "stock_code": signal.stock_code,
                                     "timestamp": signal.timestamp,
                                     "signal_type": signal.signal_type.name,
-                                    "execution_reason": validation_reason
-                                    or "信号验证失败",
+                                    "execution_reason": validation_reason or "信号验证失败",
                                 }
                             )
                             continue
@@ -1889,8 +1868,7 @@ class BacktestExecutor:
                                     "stock_code": signal.stock_code,
                                     "timestamp": signal.timestamp,
                                     "signal_type": signal.signal_type.name,
-                                    "execution_reason": failure_reason
-                                    or "执行失败（未知原因）",
+                                    "execution_reason": failure_reason or "执行失败（未知原因）",
                                 }
                             )
 
@@ -2100,9 +2078,7 @@ class BacktestExecutor:
                     portfolio_value = portfolio_manager.get_portfolio_value(
                         current_prices
                     )
-                    logger.debug(
-                        f"回测进度: {progress:.1f}%, 组合价值: {portfolio_value:.2f}"
-                    )
+                    logger.debug(f"回测进度: {progress:.1f}%, 组合价值: {portfolio_value:.2f}")
 
             except Exception as e:
                 error_msg = f"回测循环错误，日期: {current_date}, 错误: {e}"
@@ -2576,9 +2552,7 @@ class BacktestExecutor:
 
             # 验证股票代码
             if not stock_codes or len(stock_codes) == 0:
-                raise TaskError(
-                    message="股票代码列表不能为空", severity=ErrorSeverity.MEDIUM
-                )
+                raise TaskError(message="股票代码列表不能为空", severity=ErrorSeverity.MEDIUM)
 
             if len(stock_codes) > 1000:
                 raise TaskError(
@@ -2588,9 +2562,7 @@ class BacktestExecutor:
 
             # 验证日期范围
             if start_date >= end_date:
-                raise TaskError(
-                    message="开始日期必须早于结束日期", severity=ErrorSeverity.MEDIUM
-                )
+                raise TaskError(message="开始日期必须早于结束日期", severity=ErrorSeverity.MEDIUM)
 
             date_range = (end_date - start_date).days
             if date_range < 30:
@@ -2607,9 +2579,7 @@ class BacktestExecutor:
 
             # 验证策略配置
             if not isinstance(strategy_config, dict):
-                raise TaskError(
-                    message="策略配置必须是字典格式", severity=ErrorSeverity.MEDIUM
-                )
+                raise TaskError(message="策略配置必须是字典格式", severity=ErrorSeverity.MEDIUM)
 
             return True
 

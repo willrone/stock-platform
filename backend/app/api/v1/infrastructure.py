@@ -17,12 +17,8 @@ from app.services.infrastructure.deployment_manager import (
     deployment_manager,
 )
 from app.services.infrastructure.health_monitor import HealthCheckResult, health_monitor
-from app.services.infrastructure.resource_monitor import (
-    resource_monitor,
-)
-from app.services.infrastructure.task_scheduler import (
-    task_scheduler,
-)
+from app.services.infrastructure.resource_monitor import resource_monitor
+from app.services.infrastructure.task_scheduler import task_scheduler
 
 router = APIRouter(prefix="/infrastructure", tags=["基础设施"])
 
@@ -74,9 +70,7 @@ async def get_average_resources(
         return {"success": True, "data": avg_usage.to_dict()}
     except Exception as e:
         logger.error(f"获取平均资源使用情况失败: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"获取平均资源使用情况失败: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"获取平均资源使用情况失败: {str(e)}")
 
 
 @router.post("/resources/check-availability", summary="检查资源可用性")
@@ -844,17 +838,13 @@ async def validate_deployment_readiness(
                     validation_results["recommendations"].append("优化模型性能后再部署")
             except Exception as e:
                 validation_results["performance_test"] = {"error": str(e)}
-                validation_results["recommendations"].append(
-                    "性能测试失败，建议检查模型"
-                )
+                validation_results["recommendations"].append("性能测试失败，建议检查模型")
 
         # 4. 生成部署建议
         if validation_results["overall_ready"]:
             validation_results["recommendations"].append("模型已准备就绪，可以安全部署")
             if compatibility_result.get("compatibility_level") == "warning":
-                validation_results["recommendations"].append(
-                    "建议使用蓝绿部署或金丝雀发布策略"
-                )
+                validation_results["recommendations"].append("建议使用蓝绿部署或金丝雀发布策略")
         else:
             validation_results["recommendations"].append("请解决所有问题后再尝试部署")
 

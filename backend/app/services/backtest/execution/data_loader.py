@@ -347,9 +347,7 @@ class DataLoader:
         if parallel and len(stock_codes) > 1 and self.max_workers:
             # 并行加载多只股票数据
             max_workers = min(self.max_workers, len(stock_codes))
-            logger.info(
-                f"并行加载 {len(stock_codes)} 只股票数据，使用 {max_workers} 个线程"
-            )
+            logger.info(f"并行加载 {len(stock_codes)} 只股票数据，使用 {max_workers} 个线程")
 
             def load_single_stock(
                 stock_code: str,
@@ -399,9 +397,7 @@ class DataLoader:
                     continue
 
         if precomputed_count > 0:
-            logger.info(
-                f"从预计算结果加载了 {precomputed_count}/{len(stock_data)} 只股票的数据"
-            )
+            logger.info(f"从预计算结果加载了 {precomputed_count}/{len(stock_data)} 只股票的数据")
 
         if failed_stocks:
             logger.warning(f"部分股票数据加载失败: {failed_stocks}")

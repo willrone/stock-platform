@@ -138,9 +138,7 @@ async def get_training_tasks(
         raise HTTPException(status_code=500, detail=f"获取训练任务失败: {str(e)}")
 
 
-@router.get(
-    "/tasks/{task_id}", response_model=StandardResponse, summary="获取训练任务详情"
-)
+@router.get("/tasks/{task_id}", response_model=StandardResponse, summary="获取训练任务详情")
 async def get_training_task(task_id: str) -> Any:
     """获取训练任务详情"""
     try:
@@ -173,9 +171,7 @@ async def get_training_task(task_id: str) -> Any:
             if lifecycle_info:
                 task_dict["model_lifecycle"] = lifecycle_info.to_dict()
 
-        return StandardResponse(
-            success=True, message="成功获取训练任务详情", data=task_dict
-        )
+        return StandardResponse(success=True, message="成功获取训练任务详情", data=task_dict)
 
     except HTTPException:
         raise
@@ -304,9 +300,7 @@ async def get_training_metrics(task_id: str) -> Any:
                 "final_val_accuracy": val_acc_history[-1] if val_acc_history else None,
             }
 
-        return StandardResponse(
-            success=True, message="成功获取训练指标", data=metrics_data
-        )
+        return StandardResponse(success=True, message="成功获取训练指标", data=metrics_data)
 
     except HTTPException:
         raise
@@ -477,9 +471,7 @@ async def get_training_stats() -> Any:
             ]
             stats["success_rate"] = len(successful_tasks) / len(completed_tasks) * 100
 
-        return StandardResponse(
-            success=True, message="成功获取训练统计信息", data=stats
-        )
+        return StandardResponse(success=True, message="成功获取训练统计信息", data=stats)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取训练统计失败: {str(e)}")

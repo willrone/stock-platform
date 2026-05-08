@@ -380,17 +380,13 @@ async def get_feature_stats() -> Any:
     try:
         stats = await feature_store.get_cache_stats()
 
-        return StandardResponse(
-            success=True, message="成功获取特征统计信息", data=stats
-        )
+        return StandardResponse(success=True, message="成功获取特征统计信息", data=stats)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取特征统计失败: {str(e)}")
 
 
-@router.post(
-    "/indicators/config", response_model=StandardResponse, summary="配置技术指标"
-)
+@router.post("/indicators/config", response_model=StandardResponse, summary="配置技术指标")
 async def configure_technical_indicator(config: TechnicalIndicatorConfig) -> Any:
     """配置技术指标参数"""
     try:
@@ -426,9 +422,7 @@ async def configure_technical_indicator(config: TechnicalIndicatorConfig) -> Any
         raise HTTPException(status_code=500, detail=f"配置技术指标失败: {str(e)}")
 
 
-@router.get(
-    "/indicators/config", response_model=StandardResponse, summary="获取技术指标配置"
-)
+@router.get("/indicators/config", response_model=StandardResponse, summary="获取技术指标配置")
 async def get_technical_indicator_configs(
     indicator_type: Optional[str] = Query(None, description="指标类型过滤"),
     enabled_only: bool = Query(True, description="只返回启用的配置"),
@@ -552,25 +546,19 @@ async def batch_compute_features(
         raise HTTPException(status_code=500, detail=f"批量计算特征失败: {str(e)}")
 
 
-@router.get(
-    "/pipeline/status", response_model=StandardResponse, summary="获取特征管道状态"
-)
+@router.get("/pipeline/status", response_model=StandardResponse, summary="获取特征管道状态")
 async def get_pipeline_status() -> Any:
     """获取特征计算管道状态"""
     try:
         status = await feature_pipeline.get_pipeline_stats()
 
-        return StandardResponse(
-            success=True, message="成功获取特征管道状态", data=status
-        )
+        return StandardResponse(success=True, message="成功获取特征管道状态", data=status)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取管道状态失败: {str(e)}")
 
 
-@router.post(
-    "/pipeline/trigger", response_model=StandardResponse, summary="触发特征计算"
-)
+@router.post("/pipeline/trigger", response_model=StandardResponse, summary="触发特征计算")
 async def trigger_feature_computation(
     stock_code: str,
     feature_types: List[str] = Query([], description="特征类型列表"),

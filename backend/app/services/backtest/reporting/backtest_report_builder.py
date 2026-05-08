@@ -297,9 +297,7 @@ class BacktestReportBuilder:
             payload.end_date,
         )
         if benchmark_returns is None or benchmark_returns.empty:
-            logger.warning(
-                f"无法为 official_portfolio_analysis 加载基准收益序列: {benchmark}"
-            )
+            logger.warning(f"无法为 official_portfolio_analysis 加载基准收益序列: {benchmark}")
             return None
 
         common_dates = (

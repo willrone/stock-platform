@@ -61,22 +61,16 @@ async def get_detailed_backtest_result(
                         f"[API] stock_performance 类型: {type(stock_perf)}, 长度: {len(stock_perf) if isinstance(stock_perf, list) else 'N/A'}"
                     )
             elif isinstance(pos_analysis, list):
-                logger.info(
-                    f"[API] position_analysis 是数组，长度: {len(pos_analysis)}"
-                )
+                logger.info(f"[API] position_analysis 是数组，长度: {len(pos_analysis)}")
         else:
             logger.warning("[API] position_analysis 为空或不存在")
 
-        return StandardResponse(
-            success=True, message="获取回测详细结果成功", data=result_dict
-        )
+        return StandardResponse(success=True, message="获取回测详细结果成功", data=result_dict)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"[API] 获取回测详细结果失败: task_id={task_id}, error={e}", exc_info=True
-        )
+        logger.error(f"[API] 获取回测详细结果失败: task_id={task_id}, error={e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取回测详细结果失败: {str(e)}")
 
 
@@ -85,9 +79,7 @@ async def get_portfolio_snapshots(
     task_id: str,
     start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
-    limit: Optional[int] = Query(
-        None, description="返回记录数限制，不指定则返回所有数据"
-    ),
+    limit: Optional[int] = Query(None, description="返回记录数限制，不指定则返回所有数据"),
     session: AsyncSession = Depends(get_async_session),
 ) -> Any:
     """获取组合快照数据"""
@@ -108,9 +100,7 @@ async def get_portfolio_snapshots(
         )
 
         snapshots_data = [snapshot.to_dict() for snapshot in snapshots]
-        logger.info(
-            f"[API] 成功获取组合快照: task_id={task_id}, count={len(snapshots_data)}"
-        )
+        logger.info(f"[API] 成功获取组合快照: task_id={task_id}, count={len(snapshots_data)}")
 
         return StandardResponse(
             success=True,
@@ -122,9 +112,7 @@ async def get_portfolio_snapshots(
         logger.error(f"[API] 日期格式错误: {e}")
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
     except Exception as e:
-        logger.error(
-            f"[API] 获取组合快照失败: task_id={task_id}, error={e}", exc_info=True
-        )
+        logger.error(f"[API] 获取组合快照失败: task_id={task_id}, error={e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取组合快照失败: {str(e)}")
 
 
@@ -407,9 +395,7 @@ async def get_cached_chart_data(task_id: str, chart_type: str) -> Any:
 @router.delete("/{task_id}/cache", response_model=StandardResponse)
 async def invalidate_cache(
     task_id: str,
-    chart_type: Optional[str] = Query(
-        None, description="特定图表类型，不指定则清理所有"
-    ),
+    chart_type: Optional[str] = Query(None, description="特定图表类型，不指定则清理所有"),
 ) -> Any:
     """使缓存失效"""
     try:

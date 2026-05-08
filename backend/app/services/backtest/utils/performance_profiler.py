@@ -241,9 +241,7 @@ class BacktestPerformanceProfiler:
         )
 
         logger.info(
-            f"并行化效率 {operation_name}: "
-            f"加速比={speedup:.2f}x, "
-            f"效率={efficiency:.1f}%"
+            f"并行化效率 {operation_name}: " f"加速比={speedup:.2f}x, " f"效率={efficiency:.1f}%"
         )
 
     def record_db_operation(

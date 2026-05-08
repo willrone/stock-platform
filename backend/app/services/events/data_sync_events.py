@@ -97,9 +97,7 @@ class DataSyncEventManager:
         """取消注册事件监听器"""
         if event_type in self._listeners and callback in self._listeners[event_type]:
             self._listeners[event_type].remove(callback)
-            logger.info(
-                f"取消注册事件监听器: {event_type.value}, 回调: {callback.__name__}"
-            )
+            logger.info(f"取消注册事件监听器: {event_type.value}, 回调: {callback.__name__}")
 
     async def emit_event(self, event: DataSyncEvent) -> Any:
         """发出事件"""
@@ -115,9 +113,7 @@ class DataSyncEventManager:
             events_by_type[event.event_type.value] += 1
             self._stats["last_event_time"] = event.timestamp.isoformat()
 
-            logger.info(
-                f"发出数据同步事件: {event.event_type.value}, 股票: {event.stock_code}"
-            )
+            logger.info(f"发出数据同步事件: {event.event_type.value}, 股票: {event.stock_code}")
 
             # 通知监听器
             listeners = self._listeners.get(event.event_type, [])
@@ -146,15 +142,11 @@ class DataSyncEventManager:
                                 if i < len(listeners)
                                 else "unknown"
                             )
-                            logger.error(
-                                f"事件监听器执行失败 {listener_name}: {result}"
-                            )
+                            logger.error(f"事件监听器执行失败 {listener_name}: {result}")
                         else:
                             logger.debug(f"事件监听器执行成功: {listeners[i].__name__}")
 
-            logger.debug(
-                f"事件处理完成: {event.event_type.value}, 监听器数量: {len(listeners)}"
-            )
+            logger.debug(f"事件处理完成: {event.event_type.value}, 监听器数量: {len(listeners)}")
 
         except Exception as e:
             logger.error(f"发出事件失败: {e}")

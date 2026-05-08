@@ -12,15 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import torch
@@ -410,9 +402,7 @@ class ModelEvaluator:
             max_consecutive_losses=max_consecutive_losses,
         )
 
-        logger.info(
-            f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}"
-        )
+        logger.info(f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}")
         return metrics
 
 

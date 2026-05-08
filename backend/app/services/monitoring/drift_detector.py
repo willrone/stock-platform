@@ -641,9 +641,7 @@ class DriftDetector:
                             f"特征 {feature_name} 的 {method.value} 检测暂不可用: {e}"
                         )
                     except Exception as e:
-                        logger.error(
-                            f"特征 {feature_name} 的 {method.value} 检测失败: {e}"
-                        )
+                        logger.error(f"特征 {feature_name} 的 {method.value} 检测失败: {e}")
 
             multivariate_detector = self.multivariate_detectors.get(key)
 
@@ -686,9 +684,7 @@ class DriftDetector:
                     logger.error(f"多变量漂移检测失败: {e}")
 
             if run_multivariate_detection and multivariate_detector is None:
-                raise DriftDetectionUnavailableError(
-                    "漂移检测不可用: PCA 重构检测器尚未完成参考数据拟合"
-                )
+                raise DriftDetectionUnavailableError("漂移检测不可用: PCA 重构检测器尚未完成参考数据拟合")
 
             if detector_unavailable_errors:
                 unique_errors = list(
@@ -749,9 +745,7 @@ class DriftDetector:
             if len(self.drift_reports) > self.max_reports:
                 self.drift_reports = self.drift_reports[-self.max_reports :]
 
-            logger.info(
-                f"完成漂移检测: {model_id}, 总体严重程度: {overall_severity.value}"
-            )
+            logger.info(f"完成漂移检测: {model_id}, 总体严重程度: {overall_severity.value}")
             return report
 
     def _generate_summary(self, results: List[DriftResult]) -> Dict[str, Any]:
@@ -808,9 +802,7 @@ class DriftDetector:
             if r.severity in [DriftSeverity.HIGH, DriftSeverity.CRITICAL]
         ]
         if high_drift_features:
-            recommendations.append(
-                f"重点关注漂移严重的特征: {', '.join(high_drift_features)}"
-            )
+            recommendations.append(f"重点关注漂移严重的特征: {', '.join(high_drift_features)}")
 
         return recommendations
 

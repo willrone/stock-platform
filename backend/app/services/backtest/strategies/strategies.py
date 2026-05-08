@@ -111,9 +111,7 @@ class BollingerBandStrategy(BaseStrategy):
                     _pb = indicators["percent_b"].iloc[current_idx]
                     # 动态 strength：基于 %B 偏离程度
                     if sig_type == SignalType.BUY:
-                        _strength = min(
-                            1.0, max(0.1, abs(_pb))
-                        )  # %B 越负（越低于下轨），信号越强
+                        _strength = min(1.0, max(0.1, abs(_pb)))  # %B 越负（越低于下轨），信号越强
                     else:
                         _strength = min(
                             1.0, max(0.1, abs(1 - _pb))

@@ -71,11 +71,7 @@ except ImportError as e:
 
 # 导入统一的错误处理机制
 try:
-    from app.core.error_handler import (
-        DataError,
-        ErrorSeverity,
-        handle_async_exception,
-    )
+    from app.core.error_handler import DataError, ErrorSeverity, handle_async_exception
 except ImportError:
     logger.warning("错误处理模块未找到，使用默认错误处理")
 
@@ -400,9 +396,7 @@ class QlibDataProvider:
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(
-            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
-        )
+        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
         return combined_features
 
     def _add_fundamental_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -1123,9 +1117,7 @@ class ModelTrainingService:
             model_id, new_X, new_y, current_model
         )
 
-        logger.info(
-            f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}"
-        )
+        logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}")
         return updated_model, metrics
 
     @handle_async_exception
@@ -1207,9 +1199,7 @@ class ModelTrainingService:
             "total_base_models": len(base_model_ids),
         }
 
-        logger.info(
-            f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型"
-        )
+        logger.info(f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型")
         return result
 
 

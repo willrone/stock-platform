@@ -63,9 +63,7 @@ async def list_versions(
             try:
                 data_type_enum = DataType(data_type)
             except ValueError:
-                raise HTTPException(
-                    status_code=400, detail=f"无效的数据类型: {data_type}"
-                )
+                raise HTTPException(status_code=400, detail=f"无效的数据类型: {data_type}")
 
         status_enum = None
         if status:
@@ -111,9 +109,7 @@ async def list_versions(
         raise HTTPException(status_code=500, detail=f"获取版本列表失败: {str(e)}")
 
 
-@router.get(
-    "/versions/{version_id}", response_model=StandardResponse, summary="获取版本详情"
-)
+@router.get("/versions/{version_id}", response_model=StandardResponse, summary="获取版本详情")
 async def get_version(version_id: str) -> Any:
     """获取版本详情"""
     try:
@@ -151,9 +147,7 @@ async def create_version(request: CreateVersionRequest) -> Any:
         try:
             data_type_enum = DataType(request.data_type)
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail=f"无效的数据类型: {request.data_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"无效的数据类型: {request.data_type}")
 
         version_id = data_versioning_integration.version_manager.create_version(
             file_path=request.file_path,
@@ -182,9 +176,7 @@ async def create_version(request: CreateVersionRequest) -> Any:
         raise HTTPException(status_code=500, detail=f"创建版本失败: {str(e)}")
 
 
-@router.post(
-    "/versions/feature", response_model=StandardResponse, summary="创建特征版本"
-)
+@router.post("/versions/feature", response_model=StandardResponse, summary="创建特征版本")
 async def create_feature_version(request: CreateFeatureVersionRequest) -> Any:
     """创建特征版本"""
     try:
@@ -290,9 +282,7 @@ async def search_lineage_nodes(
             try:
                 node_type_enum = NodeType(node_type)
             except ValueError:
-                raise HTTPException(
-                    status_code=400, detail=f"无效的节点类型: {node_type}"
-                )
+                raise HTTPException(status_code=400, detail=f"无效的节点类型: {node_type}")
 
         tags_list = None
         if tags:
@@ -460,9 +450,7 @@ async def get_versioning_stats() -> Any:
     try:
         stats = data_versioning_integration.get_data_versioning_stats()
 
-        return StandardResponse(
-            success=True, message="成功获取版本控制统计信息", data=stats
-        )
+        return StandardResponse(success=True, message="成功获取版本控制统计信息", data=stats)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取统计信息失败: {str(e)}")

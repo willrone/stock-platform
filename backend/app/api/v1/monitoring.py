@@ -59,9 +59,7 @@ async def get_monitoring_metrics(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(
-                status_code=400, detail=f"不支持的时间范围: {time_range}"
-            )
+            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
@@ -108,9 +106,7 @@ async def get_monitoring_metrics(
         raise HTTPException(status_code=500, detail=f"获取监控指标失败: {str(e)}")
 
 
-@router.get(
-    "/metrics/{model_id}", response_model=StandardResponse, summary="获取模型监控指标"
-)
+@router.get("/metrics/{model_id}", response_model=StandardResponse, summary="获取模型监控指标")
 async def get_model_metrics(
     model_id: str,
     time_range: str = Query("1d", description="时间范围"),
@@ -128,9 +124,7 @@ async def get_model_metrics(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(
-                status_code=400, detail=f"不支持的时间范围: {time_range}"
-            )
+            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
@@ -231,9 +225,7 @@ async def create_alert_config(request: AlertConfigRequest) -> Any:
         raise HTTPException(status_code=500, detail=f"创建告警配置失败: {str(e)}")
 
 
-@router.get(
-    "/alerts/{alert_id}", response_model=StandardResponse, summary="获取告警配置详情"
-)
+@router.get("/alerts/{alert_id}", response_model=StandardResponse, summary="获取告警配置详情")
 async def get_alert_config(alert_id: str) -> Any:
     """获取告警配置详情"""
     try:
@@ -242,9 +234,7 @@ async def get_alert_config(alert_id: str) -> Any:
         if not alert_config:
             raise HTTPException(status_code=404, detail=f"告警配置不存在: {alert_id}")
 
-        return StandardResponse(
-            success=True, message="成功获取告警配置详情", data=alert_config
-        )
+        return StandardResponse(success=True, message="成功获取告警配置详情", data=alert_config)
 
     except HTTPException:
         raise
@@ -252,9 +242,7 @@ async def get_alert_config(alert_id: str) -> Any:
         raise HTTPException(status_code=500, detail=f"获取告警配置详情失败: {str(e)}")
 
 
-@router.put(
-    "/alerts/{alert_id}", response_model=StandardResponse, summary="更新告警配置"
-)
+@router.put("/alerts/{alert_id}", response_model=StandardResponse, summary="更新告警配置")
 async def update_alert_config(alert_id: str, request: AlertUpdateRequest) -> Any:
     """更新告警配置"""
     try:
@@ -296,9 +284,7 @@ async def update_alert_config(alert_id: str, request: AlertUpdateRequest) -> Any
         raise HTTPException(status_code=500, detail=f"更新告警配置失败: {str(e)}")
 
 
-@router.delete(
-    "/alerts/{alert_id}", response_model=StandardResponse, summary="删除告警配置"
-)
+@router.delete("/alerts/{alert_id}", response_model=StandardResponse, summary="删除告警配置")
 async def delete_alert_config(alert_id: str) -> Any:
     """删除告警配置"""
     try:
@@ -338,9 +324,7 @@ async def get_alert_history(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(
-                status_code=400, detail=f"不支持的时间范围: {time_range}"
-            )
+            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]

@@ -53,8 +53,7 @@ _DEPRECATED_SERVICE_IMPORTS = {
 def _deprecated_import_warning(old_import: str, new_import: str) -> Any:
     """发出弃用警告"""
     warnings.warn(
-        f"从 'app.services.{old_import}' 导入已弃用。"
-        f"请使用 'app.services.{new_import}' 代替。",
+        f"从 'app.services.{old_import}' 导入已弃用。" f"请使用 'app.services.{new_import}' 代替。",
         DeprecationWarning,
         stacklevel=3,
     )

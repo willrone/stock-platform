@@ -54,9 +54,7 @@ async def get_api_version() -> Any:
         },
     }
 
-    return StandardResponse(
-        success=True, message="API版本信息获取成功", data=version_info
-    )
+    return StandardResponse(success=True, message="API版本信息获取成功", data=version_info)
 
 
 @router.get(
@@ -102,9 +100,7 @@ async def get_system_status(request: Request) -> Any:
             "error_statistics": error_stats,
         }
 
-        return StandardResponse(
-            success=True, message="系统状态获取成功", data=system_status
-        )
+        return StandardResponse(success=True, message="系统状态获取成功", data=system_status)
 
     except Exception as e:
         logger.error(f"获取系统状态失败: {e}", exc_info=True)

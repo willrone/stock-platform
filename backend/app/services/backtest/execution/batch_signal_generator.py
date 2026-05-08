@@ -27,7 +27,8 @@ PackedSignals = Tuple[np.ndarray[Any, Any], np.ndarray[Any, Any], np.ndarray[Any
 class BatchPrecomputeStrategy(Protocol):
     def precompute_all_signals_batch(
         self, data: pd.DataFrame
-    ) -> Optional[pd.DataFrame]: ...
+    ) -> Optional[pd.DataFrame]:
+        ...
 
 
 def _multiprocess_precompute_stock_signals(
@@ -111,7 +112,9 @@ def _multiprocess_precompute_stock_signals(
                 vv = (
                     1.0
                     if v == SignalType.BUY
-                    else -1.0 if v == SignalType.SELL else 0.0
+                    else -1.0
+                    if v == SignalType.SELL
+                    else 0.0
                 )
             else:
                 try:

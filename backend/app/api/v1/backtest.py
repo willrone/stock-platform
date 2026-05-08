@@ -668,9 +668,10 @@ async def run_backtest(request: BacktestRequest) -> Any:
     }
     """
     try:
-        normalized_strategy_name, strategy_config = (
-            _normalize_backtest_strategy_request(request)
-        )
+        (
+            normalized_strategy_name,
+            strategy_config,
+        ) = _normalize_backtest_strategy_request(request)
 
         # 检测是否为组合策略
         is_portfolio = normalized_strategy_name.lower() == "portfolio" or (
@@ -1015,9 +1016,7 @@ async def get_portfolio_templates() -> Any:
             },
         ]
 
-        return StandardResponse(
-            success=True, message="获取策略组合模板成功", data=templates
-        )
+        return StandardResponse(success=True, message="获取策略组合模板成功", data=templates)
     except Exception as e:
         logger.error(f"获取策略组合模板失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取策略组合模板失败: {str(e)}")

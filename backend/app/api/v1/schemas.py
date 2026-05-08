@@ -77,9 +77,7 @@ class TaskCreateRequest(BaseModel):
     prediction_config: Optional[Dict[str, Any]] = Field(
         default=None, description="预测配置"
     )
-    backtest_config: Optional[Dict[str, Any]] = Field(
-        default=None, description="回测配置"
-    )
+    backtest_config: Optional[Dict[str, Any]] = Field(default=None, description="回测配置")
 
 
 class BacktestRequest(BaseModel):
@@ -114,22 +112,16 @@ class ModelTrainingRequest(BaseModel):
     )
     description: Optional[str] = Field(None, description="模型描述")
     parent_model_id: Optional[str] = Field(None, description="父模型ID，用于创建新版本")
-    enable_hyperparameter_tuning: bool = Field(
-        default=False, description="是否启用超参数调优"
-    )
+    enable_hyperparameter_tuning: bool = Field(default=False, description="是否启用超参数调优")
     hyperparameter_search_strategy: str = Field(
         default="random_search", description="超参数搜索策略"
     )
-    hyperparameter_search_trials: int = Field(
-        default=10, description="超参数搜索试验次数"
-    )
+    hyperparameter_search_trials: int = Field(default=10, description="超参数搜索试验次数")
     workflow_mode: Optional[str] = Field(None, description="训练工作流模式")
     official_dataset: Optional[str] = Field(
         None, description="官方复现数据集，如 alpha158/alpha360"
     )
-    official_market: Optional[str] = Field(
-        None, description="官方复现市场，如 csi300/csi500"
-    )
+    official_market: Optional[str] = Field(None, description="官方复现市场，如 csi300/csi500")
 
 
 class RemoteDataSyncRequest(BaseModel):
@@ -146,16 +138,10 @@ class QlibPrecomputeRequest(BaseModel):
     stock_codes: Optional[List[str]] = Field(
         default=None, description="股票代码列表（可选，None则处理所有股票）"
     )
-    start_date: Optional[str] = Field(
-        default=None, description="开始日期（可选，ISO格式字符串）"
-    )
-    end_date: Optional[str] = Field(
-        default=None, description="结束日期（可选，ISO格式字符串）"
-    )
+    start_date: Optional[str] = Field(default=None, description="开始日期（可选，ISO格式字符串）")
+    end_date: Optional[str] = Field(default=None, description="结束日期（可选，ISO格式字符串）")
     batch_size: int = Field(default=50, description="每批处理的股票数（默认50）")
-    max_workers: Optional[int] = Field(
-        default=None, description="最大并发数（可选，None则自动选择）"
-    )
+    max_workers: Optional[int] = Field(default=None, description="最大并发数（可选，None则自动选择）")
 
 
 class ParamSpaceConfig(BaseModel):
@@ -184,9 +170,7 @@ class ObjectiveConfig(BaseModel):
             "| ['sharpe', 'calmar', 'ic'] (多目标)"
         ),
     )
-    direction: str = Field(
-        default="maximize", description="优化方向: maximize 或 minimize"
-    )
+    direction: str = Field(default="maximize", description="优化方向: maximize 或 minimize")
     objective_weights: Optional[Dict[str, float]] = Field(
         None, description="自定义权重（custom 时使用）"
     )
@@ -239,30 +223,22 @@ class BacktestCompareRequest(BaseModel):
     task_ids: List[str] = Field(
         ..., description="要对比的任务ID列表", min_length=2, max_length=5
     )
-    comparison_metrics: Optional[List[str]] = Field(
-        default=None, description="指定对比的指标"
-    )
+    comparison_metrics: Optional[List[str]] = Field(default=None, description="指定对比的指标")
 
 
 class BacktestExportRequest(BaseModel):
     """回测报告导出请求"""
 
     format: str = Field(..., description="导出格式: pdf 或 excel")
-    include_charts: Optional[List[str]] = Field(
-        default=None, description="包含的图表类型"
-    )
-    include_tables: Optional[List[str]] = Field(
-        default=None, description="包含的数据表格"
-    )
+    include_charts: Optional[List[str]] = Field(default=None, description="包含的图表类型")
+    include_tables: Optional[List[str]] = Field(default=None, description="包含的数据表格")
     include_raw_data: bool = Field(default=False, description="是否包含原始数据")
 
 
 class RebuildTaskRequest(BaseModel):
     """任务重建请求"""
 
-    task_name: Optional[str] = Field(
-        None, description="新任务名称，默认为 [重建] {原名}"
-    )
+    task_name: Optional[str] = Field(None, description="新任务名称，默认为 [重建] {原名}")
     config_override: Optional[Dict[str, Any]] = Field(
         None, description="配置覆盖，深度合并到原 config"
     )

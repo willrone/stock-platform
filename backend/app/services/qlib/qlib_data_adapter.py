@@ -237,9 +237,7 @@ class QlibDataAdapter:
                     else:
                         df_filled[col] = df_filled[col].fillna(0)
 
-                logger.debug(
-                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数"
-                )
+                logger.debug(f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数")
 
         # 记录缺失值处理情况
         missing_counts_before = df.isnull().sum()
@@ -366,9 +364,7 @@ class QlibDataAdapter:
                 data = self._fix_data_quality_issues(data, quality_issues)
 
             is_valid = await self.validate_qlib_data_format(data)
-            logger.info(
-                f"Qlib格式验证和修复完成: 有效={is_valid}, 数据形状={data.shape}"
-            )
+            logger.info(f"Qlib格式验证和修复完成: 有效={is_valid}, 数据形状={data.shape}")
             return is_valid, data
         except Exception as exc:
             logger.error(f"Qlib格式验证和修复失败: {exc}")
@@ -560,9 +556,7 @@ class QlibDataAdapter:
             conversion_info["memory_usage_mb"] = (
                 converted_df.memory_usage(deep=True).sum() / 1024 / 1024
             )
-            logger.info(
-                f"Qlib格式转换完成: {conversion_info['final_shape']}, 有效={is_valid}"
-            )
+            logger.info(f"Qlib格式转换完成: {conversion_info['final_shape']}, 有效={is_valid}")
             return is_valid, converted_df, conversion_info
         except Exception as exc:
             logger.error(f"Qlib格式转换失败: {exc}")
