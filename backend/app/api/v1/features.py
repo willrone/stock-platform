@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -53,7 +53,7 @@ class FeatureQueryRequest(BaseModel):
 @router.get(
     "/indicators/available", response_model=StandardResponse, summary="获取可用技术指标"
 )
-async def get_available_indicators():
+async def get_available_indicators() -> Any:
     """获取所有可用的技术指标类型"""
     try:
         indicators = [
@@ -77,7 +77,7 @@ async def get_available_indicators():
 
 
 @router.post("/compute", response_model=StandardResponse, summary="计算特征")
-async def compute_features(request: FeatureComputeRequest):
+async def compute_features(request: FeatureComputeRequest) -> Any:
     """计算股票特征"""
     try:
         # 解析日期
@@ -93,20 +93,23 @@ async def compute_features(request: FeatureComputeRequest):
 
         for stock_code in request.stock_codes:
             try:
-                # 触发特征计算
-                feature_data = feature_pipeline.compute_features_for_stock(
-                    stock_code=stock_code,
-                    start_date=start_date,
-                    end_date=end_date,
-                    feature_types=request.feature_types,
-                    technical_indicators=request.technical_indicators,
+                feature_names = (
+                    request.technical_indicators or request.feature_types or None
+                )
+                feature_data = await feature_pipeline.calculate_features(
+                    stock_codes=[stock_code],
+                    start_date=datetime.combine(start_date, datetime.min.time()),
+                    end_date=datetime.combine(end_date, datetime.min.time()),
+                    feature_names=feature_names,
                 )
 
                 results[stock_code] = {
-                    "success": True,
-                    "feature_count": len(feature_data) if feature_data else 0,
+                    "success": not feature_data.empty,
+                    "feature_count": (
+                        len(feature_data.columns) if not feature_data.empty else 0
+                    ),
                     "computed_features": (
-                        list(feature_data.keys()) if feature_data else []
+                        list(feature_data.columns) if not feature_data.empty else []
                     ),
                 }
 
@@ -153,7 +156,7 @@ async def compute_technical_indicators(
     start_date: str = Query(..., description="开始日期 (YYYY-MM-DD)"),
     end_date: str = Query(..., description="结束日期 (YYYY-MM-DD)"),
     indicators: str = Query(None, description="指标列表，逗号分隔"),
-):
+) -> Any:
     """计算股票的技术指标"""
     try:
         # 解析日期
@@ -222,34 +225,22 @@ async def compute_technical_indicators(
 
 
 @router.post("/store", response_model=StandardResponse, summary="存储特征")
-async def store_feature(request: FeatureStoreRequest):
+async def store_feature(request: FeatureStoreRequest) -> Any:
     """存储特征到特征存储"""
     try:
-        # 存储特征
-        feature_id = feature_store.store_feature(
-            feature_name=request.feature_name,
-            feature_data=request.feature_data,
-            metadata=request.metadata,
-            tags=request.tags,
+        raise HTTPException(
+            status_code=501,
+            detail="当前 FeatureStore 仅支持元数据注册和特征缓存，暂不支持直接存储任意特征数据",
         )
 
-        return StandardResponse(
-            success=True,
-            message=f"成功存储特征: {request.feature_name}",
-            data={
-                "feature_id": feature_id,
-                "feature_name": request.feature_name,
-                "data_size": len(request.feature_data),
-                "tags": request.tags,
-            },
-        )
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"存储特征失败: {str(e)}")
 
 
 @router.post("/query", response_model=StandardResponse, summary="查询特征")
-async def query_features(request: FeatureQueryRequest):
+async def query_features(request: FeatureQueryRequest) -> Any:
     """查询特征数据"""
     try:
         # 解析日期
@@ -262,18 +253,30 @@ async def query_features(request: FeatureQueryRequest):
         if request.end_date:
             end_date = datetime.strptime(request.end_date, "%Y-%m-%d").date()
 
-        # 查询特征
-        features = feature_store.query_features(
-            stock_codes=request.stock_codes,
-            feature_names=request.feature_names,
-            start_date=start_date,
-            end_date=end_date,
-            tags=request.tags,
+        if (
+            not request.stock_codes
+            or not request.feature_names
+            or not start_date
+            or not end_date
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="查询缓存特征需要提供 stock_codes、feature_names、start_date 和 end_date",
+            )
+
+        features_df = await feature_store.get_cached_features(
+            request.stock_codes,
+            (
+                datetime.combine(start_date, datetime.min.time()),
+                datetime.combine(end_date, datetime.min.time()),
+            ),
+            request.feature_names,
         )
+        features = [] if features_df is None else features_df.to_dict(orient="records")
 
         return StandardResponse(
             success=True,
-            message=f"成功查询特征: {len(features)} 个特征",
+            message=f"成功查询特征: {len(features)} 条记录",
             data={
                 "features": features,
                 "total_count": len(features),
@@ -297,7 +300,7 @@ async def list_features(
     feature_type: Optional[str] = Query(None, description="特征类型过滤"),
     tags: Optional[str] = Query(None, description="标签过滤，逗号分隔"),
     limit: int = Query(100, description="返回数量限制"),
-):
+) -> Any:
     """获取特征列表"""
     try:
         # 解析标签
@@ -305,10 +308,27 @@ async def list_features(
         if tags:
             tag_list = [tag.strip() for tag in tags.split(",")]
 
-        # 获取特征列表
-        features = feature_store.list_features(
-            stock_code=stock_code, feature_type=feature_type, tags=tag_list, limit=limit
+        feature_type_filter = None
+        if feature_type:
+            from app.services.features.feature_store import FeatureType
+
+            feature_type_filter = FeatureType(feature_type)
+
+        feature_metadata = await feature_store.list_features(
+            feature_type=feature_type_filter
         )
+        features = [item.to_dict() for item in feature_metadata]
+        if tag_list:
+            features = [
+                item
+                for item in features
+                if set(tag_list).issubset(set(item.get("tags", [])))
+            ]
+        if stock_code:
+            features = [
+                item for item in features if stock_code in item.get("stock_codes", [])
+            ]
+        features = features[:limit]
 
         return StandardResponse(
             success=True,
@@ -334,10 +354,10 @@ async def list_features(
     response_model=StandardResponse,
     summary="获取特征元数据",
 )
-async def get_feature_metadata(feature_name: str):
+async def get_feature_metadata(feature_name: str) -> Any:
     """获取特征元数据"""
     try:
-        metadata = feature_store.get_feature_metadata(feature_name)
+        metadata = await feature_store.get_feature_metadata(feature_name)
 
         if not metadata:
             raise HTTPException(status_code=404, detail=f"特征不存在: {feature_name}")
@@ -345,7 +365,7 @@ async def get_feature_metadata(feature_name: str):
         return StandardResponse(
             success=True,
             message="成功获取特征元数据",
-            data={"feature_name": feature_name, "metadata": metadata},
+            data={"feature_name": feature_name, "metadata": metadata.to_dict()},
         )
 
     except HTTPException:
@@ -355,10 +375,10 @@ async def get_feature_metadata(feature_name: str):
 
 
 @router.get("/stats", response_model=StandardResponse, summary="获取特征统计")
-async def get_feature_stats():
+async def get_feature_stats() -> Any:
     """获取特征存储统计信息"""
     try:
-        stats = feature_store.get_stats()
+        stats = await feature_store.get_cache_stats()
 
         return StandardResponse(
             success=True, message="成功获取特征统计信息", data=stats
@@ -371,7 +391,7 @@ async def get_feature_stats():
 @router.post(
     "/indicators/config", response_model=StandardResponse, summary="配置技术指标"
 )
-async def configure_technical_indicator(config: TechnicalIndicatorConfig):
+async def configure_technical_indicator(config: TechnicalIndicatorConfig) -> Any:
     """配置技术指标参数"""
     try:
         # 验证指标类型
@@ -412,7 +432,7 @@ async def configure_technical_indicator(config: TechnicalIndicatorConfig):
 async def get_technical_indicator_configs(
     indicator_type: Optional[str] = Query(None, description="指标类型过滤"),
     enabled_only: bool = Query(True, description="只返回启用的配置"),
-):
+) -> Any:
     """获取技术指标配置列表"""
     try:
         # 模拟配置数据
@@ -456,21 +476,15 @@ async def get_technical_indicator_configs(
 @router.delete(
     "/features/{feature_name}", response_model=StandardResponse, summary="删除特征"
 )
-async def delete_feature(feature_name: str):
+async def delete_feature(feature_name: str) -> Any:
     """删除特征"""
     try:
-        success = feature_store.delete_feature(feature_name)
-
-        if not success:
+        metadata = await feature_store.get_feature_metadata(feature_name)
+        if not metadata:
             raise HTTPException(status_code=404, detail=f"特征不存在: {feature_name}")
-
-        return StandardResponse(
-            success=True,
-            message=f"成功删除特征: {feature_name}",
-            data={
-                "feature_name": feature_name,
-                "deleted_at": datetime.now().isoformat(),
-            },
+        raise HTTPException(
+            status_code=501,
+            detail="当前 FeatureStore 暂不支持通过 API 删除特征元数据",
         )
 
     except HTTPException:
@@ -486,21 +500,30 @@ async def batch_compute_features(
     start_date: str = Query(..., description="开始日期 (YYYY-MM-DD)"),
     end_date: str = Query(..., description="结束日期 (YYYY-MM-DD)"),
     parallel: bool = Query(True, description="是否并行计算"),
-):
+) -> Any:
     """批量计算多只股票的特征"""
     try:
         # 解析日期
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-        # 批量计算特征
-        batch_results = feature_pipeline.batch_compute_features(
-            stock_codes=stock_codes,
-            feature_types=feature_types,
-            start_date=start_dt,
-            end_date=end_dt,
-            parallel=parallel,
-        )
+        batch_results: Dict[str, Any] = {}
+        for stock_code in stock_codes:
+            feature_data = await feature_pipeline.calculate_features(
+                stock_codes=[stock_code],
+                start_date=datetime.combine(start_dt, datetime.min.time()),
+                end_date=datetime.combine(end_dt, datetime.min.time()),
+                feature_names=feature_types or None,
+            )
+            batch_results[stock_code] = {
+                "success": not feature_data.empty,
+                "feature_count": (
+                    len(feature_data.columns) if not feature_data.empty else 0
+                ),
+                "computed_features": (
+                    list(feature_data.columns) if not feature_data.empty else []
+                ),
+            }
 
         # 统计结果
         successful_count = sum(
@@ -532,10 +555,10 @@ async def batch_compute_features(
 @router.get(
     "/pipeline/status", response_model=StandardResponse, summary="获取特征管道状态"
 )
-async def get_pipeline_status():
+async def get_pipeline_status() -> Any:
     """获取特征计算管道状态"""
     try:
-        status = feature_pipeline.get_status()
+        status = await feature_pipeline.get_pipeline_stats()
 
         return StandardResponse(
             success=True, message="成功获取特征管道状态", data=status
@@ -552,27 +575,15 @@ async def trigger_feature_computation(
     stock_code: str,
     feature_types: List[str] = Query([], description="特征类型列表"),
     force_recompute: bool = Query(False, description="是否强制重新计算"),
-):
+) -> Any:
     """手动触发特征计算"""
     try:
-        # 触发特征计算
-        task_id = feature_pipeline.trigger_computation(
-            stock_code=stock_code,
-            feature_types=feature_types,
-            force_recompute=force_recompute,
+        raise HTTPException(
+            status_code=501,
+            detail="当前 FeaturePipeline 暂不支持后台触发任务；请使用 /features/batch-compute 同步计算",
         )
 
-        return StandardResponse(
-            success=True,
-            message=f"成功触发特征计算: {stock_code}",
-            data={
-                "task_id": task_id,
-                "stock_code": stock_code,
-                "feature_types": feature_types,
-                "force_recompute": force_recompute,
-                "triggered_at": datetime.now().isoformat(),
-            },
-        )
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"触发特征计算失败: {str(e)}")

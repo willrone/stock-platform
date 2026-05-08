@@ -5,7 +5,7 @@
 from __future__ import annotations  # 延迟评估类型注解，避免在独立进程中类型解析问题
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from loguru import logger
 from sqlalchemy import and_, asc, desc, func, or_
@@ -31,14 +31,20 @@ class TaskRepository:
 
     def _to_json_safe(self, value: Any) -> Any:
         """递归转换为可 JSON 序列化的类型"""
+        np: Any = None
+        pd: Any = None
         try:
-            import numpy as np
+            import numpy as _np
+
+            np = _np
         except Exception:
-            np = None
+            pass
         try:
-            import pandas as pd
+            import pandas as _pd
+
+            pd = _pd
         except Exception:
-            pd = None
+            pass
 
         from datetime import date, datetime
         from enum import Enum
@@ -121,7 +127,7 @@ class TaskRepository:
         """根据ID获取任务"""
         try:
             task = self.db.query(Task).filter(Task.task_id == task_id).first()
-            return task
+            return cast(Optional[Task], task)
         except Exception as e:
             raise TaskError(
                 message=f"获取任务失败: {str(e)}",
@@ -148,7 +154,7 @@ class TaskRepository:
             query = self.db.query(Task).filter(Task.user_id == user_id)
 
             if exclude_result:
-                query = query.options(defer(Task.result))
+                query = query.options(defer(cast(Any, Task.result)))
 
             if status_filter:
                 query = query.filter(Task.status == status_filter.value)
@@ -159,7 +165,7 @@ class TaskRepository:
             tasks = (
                 query.order_by(desc(Task.created_at)).offset(offset).limit(limit).all()
             )
-            return tasks
+            return cast(List[Task], tasks)
 
         except Exception as e:
             raise TaskError(
@@ -207,7 +213,7 @@ class TaskRepository:
                 .limit(limit)
                 .all()
             )
-            return tasks
+            return cast(List[Task], tasks)
         except Exception as e:
             raise TaskError(
                 message=f"根据状态获取任务失败: {str(e)}",
@@ -238,7 +244,7 @@ class TaskRepository:
                 .limit(limit)
                 .all()
             )
-            return tasks
+            return cast(List[Task], tasks)
         except Exception as e:
             raise TaskError(
                 message=f"获取最近更新的任务失败: {str(e)}",
@@ -251,7 +257,7 @@ class TaskRepository:
         task_id: str,
         status: TaskStatus,
         progress: Optional[float] = None,
-        result=None,  # 使用 None 作为默认值，避免类型注解问题
+        result: Any = None,  # 使用 None 作为默认值，避免类型注解问题
         error_message: Optional[str] = None,
     ) -> "Task":
         """更新任务状态"""
@@ -269,31 +275,34 @@ class TaskRepository:
                     context=ErrorContext(task_id=task_id),
                 )
 
-            old_status = task.status
-            task.status = status.value
+            task_record = cast(Any, task)
+            old_status = cast(str, task.status)
+            task_record.status = status.value
 
             if progress is not None:
-                task.progress = progress
+                task_record.progress = progress
 
             if result is not None:
                 # 强制更新 result 字段，即使值看起来相同
                 from sqlalchemy.orm.attributes import flag_modified
 
-                task.result = self._to_json_safe(result)
+                task_record.result = self._to_json_safe(result)
                 flag_modified(task, "result")  # 标记 result 字段为已修改
 
             if error_message is not None:
-                task.error_message = error_message
+                task_record.error_message = error_message
 
             # 更新时间戳
-            if status == TaskStatus.RUNNING and not task.started_at:
-                task.started_at = datetime.utcnow()
+            if status == TaskStatus.RUNNING and not cast(
+                Optional[datetime], task.started_at
+            ):
+                task_record.started_at = datetime.utcnow()
             elif status in [
                 TaskStatus.COMPLETED,
                 TaskStatus.FAILED,
                 TaskStatus.CANCELLED,
             ]:
-                task.completed_at = datetime.utcnow()
+                task_record.completed_at = datetime.utcnow()
 
             self.db.commit()
             self.db.refresh(task)
@@ -305,7 +314,7 @@ class TaskRepository:
                 record_id=task_id,
                 old_values={"status": old_status},
                 new_values={"status": status.value},
-                user_id=task.user_id,
+                user_id=cast(Optional[str], task.user_id),
             )
 
             logger.info(f"任务状态更新: {task_id}, {old_status} -> {status.value}")
@@ -333,8 +342,9 @@ class TaskRepository:
                     context=ErrorContext(task_id=task_id),
                 )
 
-            old_progress = task.progress
-            task.progress = progress
+            task_record = cast(Any, task)
+            old_progress = cast(float, task.progress)
+            task_record.progress = progress
 
             self.db.commit()
             self.db.refresh(task)
@@ -438,11 +448,10 @@ class TaskRepository:
                 total_deleted = 0
                 for model_class, table_name in related_tables:
                     try:
-                        stmt = sql_delete(model_class).where(
-                            model_class.task_id == task_id
-                        )
+                        model = cast(Any, model_class)
+                        stmt = sql_delete(model_class).where(model.task_id == task_id)
                         result = self.db.execute(stmt)
-                        deleted_count = result.rowcount
+                        deleted_count = cast(Any, result).rowcount or 0
                         if deleted_count > 0:
                             logger.info(f"删除{table_name}: {deleted_count}条记录")
                             total_deleted += deleted_count
@@ -509,7 +518,7 @@ class TaskRepository:
         try:
             cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-            def _base_filter(q):
+            def _base_filter(q: Any) -> Any:
                 q = q.filter(Task.created_at >= cutoff_date)
                 if user_id:
                     q = q.filter(Task.user_id == user_id)
@@ -592,7 +601,7 @@ class TaskRepository:
             self.db.commit()
 
             logger.info(f"清理旧任务完成: 删除 {deleted_count} 个任务")
-            return deleted_count
+            return int(deleted_count)
 
         except Exception as e:
             self.db.rollback()
@@ -665,7 +674,7 @@ class PredictionResultRepository:
                 .order_by(desc(PredictionResult.created_at))
                 .all()
             )
-            return results
+            return cast(List[PredictionResult], results)
         except Exception as e:
             raise TaskError(
                 message=f"获取预测结果失败: {str(e)}",
@@ -686,7 +695,7 @@ class PredictionResultRepository:
                 .limit(limit)
                 .all()
             )
-            return results
+            return cast(List[PredictionResult], results)
         except Exception as e:
             raise TaskError(
                 message=f"获取股票预测历史失败: {str(e)}",
@@ -768,7 +777,7 @@ class BacktestResultRepository:
                 .order_by(desc(BacktestResult.created_at))
                 .all()
             )
-            return results
+            return cast(List[BacktestResult], results)
         except Exception as e:
             raise TaskError(
                 message=f"获取回测结果失败: {str(e)}",
@@ -842,7 +851,7 @@ class ModelInfoRepository:
                 self.db.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
             )
             if direct_match:
-                return direct_match
+                return cast(ModelInfo, direct_match)
 
             exact_name_match = (
                 self.db.query(ModelInfo)
@@ -851,7 +860,7 @@ class ModelInfoRepository:
                 .first()
             )
             if exact_name_match:
-                return exact_name_match
+                return cast(ModelInfo, exact_name_match)
 
             normalized_alias = (model_id or "").strip()
             if not normalized_alias:
@@ -876,7 +885,7 @@ class ModelInfoRepository:
                 )
                 .first()
             )
-            return alias_match
+            return cast(Optional[ModelInfo], alias_match)
         except Exception as e:
             raise TaskError(
                 message=f"获取模型信息失败: {str(e)}",
@@ -898,7 +907,7 @@ class ModelInfoRepository:
                 .order_by(desc(ModelInfo.created_at))
                 .all()
             )
-            return models
+            return cast(List[ModelInfo], models)
         except Exception as e:
             raise TaskError(
                 message=f"获取模型列表失败: {str(e)}",
@@ -919,9 +928,10 @@ class ModelInfoRepository:
                     context=ErrorContext(model_id=model_id),
                 )
 
-            model_info.status = status
+            model_record = cast(Any, model_info)
+            model_record.status = status
             if deployed_at:
-                model_info.deployed_at = deployed_at
+                model_record.deployed_at = deployed_at
 
             self.db.commit()
             self.db.refresh(model_info)

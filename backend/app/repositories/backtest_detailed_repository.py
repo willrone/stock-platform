@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 from loguru import logger
 from sqlalchemy import and_, asc, delete, desc, func, select, text
@@ -33,7 +33,7 @@ class BacktestDetailedRepository:
         self.session = session
         self.logger = logger.bind(repository="backtest_detailed")
 
-    def _ensure_datetime(self, value: Optional[datetime]) -> Optional[datetime]:
+    def _ensure_datetime(self, value: Any) -> Optional[datetime]:
         """Ensure datetime input for SQLite DateTime columns."""
         if value is None:
             return None
@@ -45,7 +45,7 @@ class BacktestDetailedRepository:
             except ValueError:
                 # Fallback for date-only values.
                 return datetime.fromisoformat(f"{value}T00:00:00")
-        return value
+        return None
 
     # ==================== BacktestDetailedResult 相关操作 ====================
 
@@ -91,18 +91,25 @@ class BacktestDetailedRepository:
         """根据任务ID获取回测详细结果"""
         try:
 
-            async def _get_result():
+            async def _get_result() -> Optional[BacktestDetailedResult]:
                 stmt = select(BacktestDetailedResult).where(
                     BacktestDetailedResult.task_id == task_id
                 )
                 result = await self.session.execute(stmt)
-                return result.scalar_one_or_none()
+                return cast(
+                    Optional[BacktestDetailedResult], result.scalar_one_or_none()
+                )
 
-            return await retry_db_operation(
+            result_value = await retry_db_operation(
                 _get_result,
                 max_retries=3,
                 retry_delay=0.1,
                 operation_name=f"获取回测详细结果 (task_id={task_id})",
+            )
+            return (
+                result_value
+                if isinstance(result_value, BacktestDetailedResult)
+                else None
             )
 
         except Exception as e:
@@ -127,22 +134,22 @@ class BacktestDetailedRepository:
                 self.logger.warning(f"未找到回测详细结果: task_id={task_id}")
                 return False
 
+            result_row = cast(Any, detailed_result)
+
             # 更新扩展指标
             if extended_metrics:
-                detailed_result.sortino_ratio = extended_metrics.get(
-                    "sortino_ratio", detailed_result.sortino_ratio
+                result_row.sortino_ratio = extended_metrics.get(
+                    "sortino_ratio", result_row.sortino_ratio
                 )
-                detailed_result.calmar_ratio = extended_metrics.get(
-                    "calmar_ratio", detailed_result.calmar_ratio
+                result_row.calmar_ratio = extended_metrics.get(
+                    "calmar_ratio", result_row.calmar_ratio
                 )
-                detailed_result.max_drawdown_duration = extended_metrics.get(
-                    "max_drawdown_duration", detailed_result.max_drawdown_duration
+                result_row.max_drawdown_duration = extended_metrics.get(
+                    "max_drawdown_duration", result_row.max_drawdown_duration
                 )
-                detailed_result.var_95 = extended_metrics.get(
-                    "var_95", detailed_result.var_95
-                )
-                detailed_result.downside_deviation = extended_metrics.get(
-                    "downside_deviation", detailed_result.downside_deviation
+                result_row.var_95 = extended_metrics.get("var_95", result_row.var_95)
+                result_row.downside_deviation = extended_metrics.get(
+                    "downside_deviation", result_row.downside_deviation
                 )
 
             # 更新分析数据
@@ -164,7 +171,7 @@ class BacktestDetailedRepository:
                 if "rolling_metrics" in analysis_data:
                     detailed_result.rolling_metrics = analysis_data["rolling_metrics"]
 
-            detailed_result.updated_at = datetime.utcnow()
+            result_row.updated_at = datetime.utcnow()
             await self.session.flush()
 
             self.logger.info(f"更新回测详细结果: task_id={task_id}")
@@ -230,7 +237,7 @@ class BacktestDetailedRepository:
                 stmt = stmt.limit(limit)
 
             result = await self.session.execute(stmt)
-            return result.scalars().all()
+            return list(result.scalars().all())
 
         except Exception as e:
             self.logger.error("获取组合快照失败: {}", e, exc_info=True)
@@ -300,6 +307,7 @@ class BacktestDetailedRepository:
                 stmt = stmt.where(TradeRecord.timestamp <= end_date)
 
             # 排序
+            order_col: Any
             if order_by == "timestamp":
                 order_col = TradeRecord.timestamp
             elif order_by == "pnl":
@@ -317,7 +325,7 @@ class BacktestDetailedRepository:
             stmt = stmt.offset(offset).limit(limit)
 
             result = await self.session.execute(stmt)
-            return result.scalars().all()
+            return list(result.scalars().all())
 
         except Exception as e:
             self.logger.error("获取交易记录失败: {}", e, exc_info=True)
@@ -644,6 +652,7 @@ class BacktestDetailedRepository:
                 stmt = stmt.where(SignalRecord.executed == executed)
 
             # 排序
+            order_col: Any
             if order_by == "timestamp":
                 order_col = SignalRecord.timestamp
             elif order_by == "price":
@@ -661,7 +670,7 @@ class BacktestDetailedRepository:
             stmt = stmt.offset(offset).limit(limit)
 
             result = await self.session.execute(stmt)
-            return result.scalars().all()
+            return list(result.scalars().all())
 
         except Exception as e:
             self.logger.error("获取信号记录失败: {}", e, exc_info=True)
@@ -679,7 +688,7 @@ class BacktestDetailedRepository:
         """获取信号记录总数"""
         try:
 
-            async def _get_count():
+            async def _get_count() -> int:
                 stmt = select(func.count(SignalRecord.id)).where(
                     SignalRecord.task_id == task_id
                 )
@@ -698,11 +707,13 @@ class BacktestDetailedRepository:
                 result = await self.session.execute(stmt)
                 return result.scalar() or 0
 
-            return await retry_db_operation(
-                _get_count,
-                max_retries=3,
-                retry_delay=0.1,
-                operation_name=f"获取信号记录总数 (task_id={task_id})",
+            return int(
+                await retry_db_operation(
+                    _get_count,
+                    max_retries=3,
+                    retry_delay=0.1,
+                    operation_name=f"获取信号记录总数 (task_id={task_id})",
+                )
             )
 
         except Exception as e:
@@ -828,7 +839,7 @@ class BacktestDetailedRepository:
                     and_(base_where, SignalRecord.signal_type == "SELL")
                 )
                 executed_stmt = select(func.count(SignalRecord.id)).where(
-                    and_(base_where, SignalRecord.executed is True)
+                    and_(base_where, SignalRecord.executed.is_(True))
                 )
                 avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(
                     base_where
@@ -921,7 +932,7 @@ class BacktestDetailedRepository:
                         SignalRecord.signal_type == signal_type,
                         SignalRecord.timestamp >= timestamp_start,
                         SignalRecord.timestamp < timestamp_end,
-                        SignalRecord.executed is False,
+                        SignalRecord.executed.is_(False),
                     )
                 )
                 .order_by(SignalRecord.timestamp)
@@ -932,7 +943,7 @@ class BacktestDetailedRepository:
 
             if signals:
                 # 标记第一个匹配的信号为已执行
-                signal = signals[0]
+                signal = cast(Any, signals[0])
                 signal.executed = True
                 signal.execution_reason = None  # 已执行时清空未执行原因
                 await self.session.flush()
@@ -972,7 +983,7 @@ class BacktestDetailedRepository:
                         SignalRecord.signal_type == signal_type,
                         SignalRecord.timestamp >= timestamp_start,
                         SignalRecord.timestamp < timestamp_end,
-                        SignalRecord.executed is False,  # 只更新未执行的信号
+                        SignalRecord.executed.is_(False),  # 只更新未执行的信号
                     )
                 )
                 .order_by(SignalRecord.timestamp)
@@ -983,7 +994,7 @@ class BacktestDetailedRepository:
 
             if signals:
                 # 更新第一个匹配的信号的未执行原因
-                signal = signals[0]
+                signal = cast(Any, signals[0])
                 signal.execution_reason = execution_reason
                 await self.session.flush()
                 self.logger.debug(
@@ -1016,11 +1027,13 @@ class BacktestDetailedRepository:
         try:
             # 构建 CASE WHEN 语句
             case_conditions = []
-            params = {"task_id": task_id}
+            params: Dict[str, Any] = {"task_id": task_id}
 
             for i, (stock_code, timestamp, signal_type) in enumerate(signal_keys):
                 # 将时间戳转换为日期范围
                 ts = self._ensure_datetime(timestamp)
+                if ts is None:
+                    continue
                 timestamp_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
                 timestamp_end = timestamp_start + timedelta(days=1)
 
@@ -1036,18 +1049,16 @@ class BacktestDetailedRepository:
 
             # 构建完整的 UPDATE 语句
             where_clause = " OR ".join(case_conditions)
-            sql = text(
-                f"""
+            sql = text(f"""
                 UPDATE signal_records
                 SET executed = 1, execution_reason = NULL
                 WHERE task_id = :task_id
                 AND executed = 0
                 AND ({where_clause})
-            """
-            )
+            """)
 
             result = await self.session.execute(sql, params)
-            updated_count = result.rowcount
+            updated_count = int(getattr(result, "rowcount", 0) or 0)
             await self.session.flush()
 
             self.logger.info(
@@ -1080,13 +1091,15 @@ class BacktestDetailedRepository:
             # 构建 CASE WHEN 语句用于 execution_reason
             case_when_parts = []
             where_conditions = []
-            params = {"task_id": task_id}
+            params: Dict[str, Any] = {"task_id": task_id}
 
             for i, (stock_code, timestamp, signal_type, execution_reason) in enumerate(
                 signal_reasons
             ):
                 # 将时间戳转换为日期范围
                 ts = self._ensure_datetime(timestamp)
+                if ts is None:
+                    continue
                 timestamp_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
                 timestamp_end = timestamp_start + timedelta(days=1)
 
@@ -1106,18 +1119,16 @@ class BacktestDetailedRepository:
             # 构建完整的 UPDATE 语句
             case_when_clause = " ".join(case_when_parts)
             where_clause = " OR ".join(where_conditions)
-            sql = text(
-                f"""
+            sql = text(f"""
                 UPDATE signal_records
                 SET execution_reason = CASE {case_when_clause} END
                 WHERE task_id = :task_id
                 AND executed = 0
                 AND ({where_clause})
-            """
-            )
+            """)
 
             result = await self.session.execute(sql, params)
-            updated_count = result.rowcount
+            updated_count = int(getattr(result, "rowcount", 0) or 0)
             await self.session.flush()
 
             self.logger.info(
@@ -1181,7 +1192,7 @@ class BacktestDetailedRepository:
                 )
             )
             result = await self.session.execute(stmt)
-            return result.scalar_one_or_none()
+            return cast(Optional[BacktestBenchmark], result.scalar_one_or_none())
 
         except Exception as e:
             self.logger.error(f"获取基准数据失败: {e}", exc_info=True)
@@ -1201,12 +1212,22 @@ class BacktestDetailedRepository:
                 (BacktestBenchmark, "基准数据"),
             ]
 
-            deleted_counts = {}
+            deleted_counts: Dict[str, int] = {}
+            task_id_column: Dict[Any, Callable[[], Any]] = {
+                BacktestDetailedResult: lambda: BacktestDetailedResult.task_id,
+                BacktestStatistics: lambda: BacktestStatistics.task_id,
+                PortfolioSnapshot: lambda: PortfolioSnapshot.task_id,
+                TradeRecord: lambda: TradeRecord.task_id,
+                SignalRecord: lambda: SignalRecord.task_id,
+                BacktestBenchmark: lambda: BacktestBenchmark.task_id,
+            }
 
             for model_class, table_name in tables_and_models:
-                stmt = delete(model_class).where(model_class.task_id == task_id)
+                stmt = delete(model_class).where(
+                    task_id_column[model_class]() == task_id
+                )
                 result = await self.session.execute(stmt)
-                deleted_count = result.rowcount
+                deleted_count = int(getattr(result, "rowcount", 0) or 0)
                 deleted_counts[table_name] = deleted_count
 
                 if deleted_count > 0:
@@ -1239,12 +1260,21 @@ class BacktestDetailedRepository:
                 (BacktestBenchmark, "基准数据"),
             ]
 
-            cleanup_results = {}
+            cleanup_results: Dict[str, int] = {}
+            created_at_column: Dict[Any, Callable[[], Any]] = {
+                BacktestDetailedResult: lambda: BacktestDetailedResult.created_at,
+                BacktestStatistics: lambda: BacktestStatistics.created_at,
+                PortfolioSnapshot: lambda: PortfolioSnapshot.created_at,
+                TradeRecord: lambda: TradeRecord.created_at,
+                BacktestBenchmark: lambda: BacktestBenchmark.created_at,
+            }
 
             for model_class, table_name in tables_and_models:
-                stmt = delete(model_class).where(model_class.created_at < cutoff_date)
+                stmt = delete(model_class).where(
+                    created_at_column[model_class]() < cutoff_date
+                )
                 result = await self.session.execute(stmt)
-                deleted_count = result.rowcount
+                deleted_count = int(getattr(result, "rowcount", 0) or 0)
                 cleanup_results[table_name] = deleted_count
 
                 if deleted_count > 0:
