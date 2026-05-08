@@ -2,8 +2,10 @@
 回测服务路由
 """
 
+# mypy: disable-error-code="untyped-decorator"
+
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List, cast
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -68,14 +70,16 @@ def _coerce_numeric_value(
     value: object,
     *,
     field_name: str,
-    default: float,
+    default: float | int | str,
     context: ErrorContext,
 ) -> float:
     """将回测结果中的数值安全转换为 float，并记录降级日志。"""
     try:
         if value is None:
-            return float(default)
-        return float(value)
+            value = default
+        if isinstance(value, (int, float)):
+            return float(value)
+        return float(str(value))
     except (TypeError, ValueError) as conversion_error:
         log_structured_exception(
             f"回测结果字段 {field_name} 不是可序列化数值，已回退默认值",
@@ -91,11 +95,13 @@ def _coerce_numeric_value(
                 }
             ),
         )
-        return float(default)
+        return (
+            float(default) if isinstance(default, (int, float)) else float(str(default))
+        )
 
 
 @router.get("/strategies", response_model=StandardResponse)
-async def get_available_strategies():
+async def get_available_strategies() -> Any:
     """获取可用策略列表"""
     try:
         from app.services.backtest import AdvancedStrategyFactory, StrategyFactory
@@ -590,7 +596,7 @@ async def get_available_strategies():
             },
         }
 
-        result = []
+        result: List[Dict[str, Any]] = []
         for strategy_key in all_strategies:
             if strategy_key in strategy_descriptions:
                 result.append(
@@ -614,7 +620,12 @@ async def get_available_strategies():
             "factor_investment": 2,
             "other": 3,
         }
-        result.sort(key=lambda x: (category_order.get(x.get("category"), 3), x["key"]))
+        result.sort(
+            key=lambda x: (
+                category_order.get(cast(str, x.get("category", "other"))),
+                cast(str, x["key"]),
+            )
+        )
 
         return StandardResponse(success=True, message="获取策略列表成功", data=result)
     except Exception as e:
@@ -623,7 +634,7 @@ async def get_available_strategies():
 
 
 @router.post("", response_model=StandardResponse)
-async def run_backtest(request: BacktestRequest):
+async def run_backtest(request: BacktestRequest) -> Any:
     """
     运行回测（支持单策略和组合策略）
 
@@ -725,7 +736,7 @@ async def run_backtest(request: BacktestRequest):
         # 所以在线程中创建新的事件循环来运行
         import asyncio
 
-        def _run_backtest_in_thread():
+        def _run_backtest_in_thread() -> Any:
             """在独立线程中运行回测，避免阻塞FastAPI事件循环。"""
             return asyncio.run(
                 executor.run_backtest(
@@ -903,7 +914,7 @@ async def run_backtest(request: BacktestRequest):
 
 
 @router.get("/portfolio-templates", response_model=StandardResponse)
-async def get_portfolio_templates():
+async def get_portfolio_templates() -> Any:
     """获取预设的策略组合模板"""
     try:
         templates = [

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -284,7 +284,7 @@ class OutlierHandler:
 class RobustFeatureScaler:
     """鲁棒特征标准化器（时间序列安全）"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         try:
             from sklearn.preprocessing import RobustScaler
 
@@ -293,9 +293,9 @@ class RobustFeatureScaler:
             logger.warning("sklearn不可用，特征标准化将使用简单标准化")
             self.RobustScaler = None
 
-        self.scalers = {}
+        self.scalers: Dict[str, Any] = {}
         self.fitted = False
-        self.feature_cols = None
+        self.feature_cols: Optional[List[str]] = None
 
     def fit_transform(
         self, data: pd.DataFrame, feature_cols: List[str]
@@ -344,7 +344,7 @@ class RobustFeatureScaler:
         return data_scaled
 
     def transform(
-        self, data: pd.DataFrame, feature_cols: List[str] = None
+        self, data: pd.DataFrame, feature_cols: Optional[List[str]] = None
     ) -> pd.DataFrame:
         """转换新数据"""
         if not self.fitted:
@@ -379,11 +379,12 @@ class RobustFeatureScaler:
 class UnifiedQlibTrainingEngine:
     """统一Qlib训练引擎"""
 
-    def __init__(self, websocket_manager=None):
+    def __init__(self, websocket_manager: Any = None) -> None:
         self.websocket_manager = websocket_manager
         self.data_provider = EnhancedQlibDataProvider()
         self.model_manager = QlibModelManager()
         self.early_stopping_manager = None
+        self._enable_multiprocessing = False
         self.performance_monitor = get_performance_monitor()
         self.training_pipeline = QlibTrainingPipeline(self)
         self.result_assembler = QlibTrainingResultAssembler(QlibTrainingResult)
@@ -396,7 +397,7 @@ class UnifiedQlibTrainingEngine:
 
         logger.info("统一Qlib训练引擎初始化完成")
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """初始化训练引擎"""
         try:
             # 初始化Qlib环境
@@ -414,7 +415,7 @@ class UnifiedQlibTrainingEngine:
         start_date: datetime,
         end_date: datetime,
         config: QlibTrainingConfig,
-        progress_callback=None,
+        progress_callback: Any = None,
     ) -> QlibTrainingResult:
         """统一的Qlib模型训练流程。"""
         request = TrainingRequest(
@@ -426,7 +427,9 @@ class UnifiedQlibTrainingEngine:
             config=config,
             progress_callback=progress_callback,
         )
-        return await self.training_orchestrator.execute(request)
+        return cast(
+            QlibTrainingResult, await self.training_orchestrator.execute(request)
+        )
 
     async def _create_qlib_model_config(
         self, config: QlibTrainingConfig
@@ -436,7 +439,7 @@ class UnifiedQlibTrainingEngine:
 
         # 使用模型管理器创建配置
         try:
-            qlib_config = self.model_manager.create_qlib_config(
+            qlib_config: Dict[str, Any] = self.model_manager.create_qlib_config(
                 model_name, config.hyperparameters
             )
             return qlib_config
@@ -518,7 +521,7 @@ class UnifiedQlibTrainingEngine:
         self,
         dataset: pd.DataFrame,
         validation_split: float,
-        config: QlibTrainingConfig = None,
+        config: Optional[QlibTrainingConfig] = None,
     ) -> Tuple[Any, Any]:
         """准备训练和验证数据集，返回qlib DatasetH对象"""
         if not QLIB_AVAILABLE:
@@ -556,8 +559,12 @@ class UnifiedQlibTrainingEngine:
             # 获取prediction_horizon参数
             prediction_horizon = config.prediction_horizon if config else 5
 
-            # 临时禁用多进程以避免 pickle 序列化问题
-            if False and len(stock_groups) > 1 and max_workers > 1:
+            # 默认禁用多进程以避免 pickle 序列化问题，可通过实例属性开启
+            if (
+                len(stock_groups) > 1
+                and max_workers > 1
+                and self._enable_multiprocessing
+            ):
                 # 多进程处理
                 logger.info(f"使用 {max_workers} 个进程并行处理数据")
 
@@ -676,7 +683,9 @@ class UnifiedQlibTrainingEngine:
                     self.data = self.train_data
 
                 # 处理训练集和验证集的标签
-                def _create_label_for_data(data, data_name, horizon):
+                def _create_label_for_data(
+                    data: Any, data_name: Any, horizon: Any
+                ) -> Any:
                     """为数据集创建标签 - 修复：使用prediction_horizon参数"""
                     if data is None:
                         return
@@ -780,10 +789,10 @@ class UnifiedQlibTrainingEngine:
                     val_label_stats = self.val_data["label"].describe()
                     logger.info(f"验证集标签统计: {val_label_stats.to_dict()}")
 
-            def __len__(self):
+            def __len__(self) -> Any:
                 return len(self.data)
 
-            def __getitem__(self, key):
+            def __getitem__(self, key: Any) -> Any:
                 if key == "train":
                     return self.train_data
                 elif key == "valid" and self.val_data is not None:
@@ -793,10 +802,10 @@ class UnifiedQlibTrainingEngine:
             def prepare(
                 self,
                 key: Union[List[str], Tuple[str], str, slice, pd.Index],
-                col_set: Union[List[str], str] = None,
-                data_key: str = None,
-                **kwargs,
-            ):
+                col_set: Optional[Union[List[str], str]] = None,
+                data_key: Optional[str] = None,
+                **kwargs: Any,
+            ) -> Any:
                 """实现接近 qlib DatasetH 的 prepare 接口。"""
                 if col_set is None:
                     col_set = ["feature", "label"]
@@ -805,7 +814,7 @@ class UnifiedQlibTrainingEngine:
                 if isinstance(col_set, str):
                     col_set = [col_set]
 
-                def _prepare_single(segment_key: str):
+                def _prepare_single(segment_key: Any) -> Any:
                     # 根据key选择对应的数据集
                     if segment_key == "train":
                         data = self.train_data
@@ -817,36 +826,38 @@ class UnifiedQlibTrainingEngine:
                     class LabelSeries:
                         """包装Series，使values返回2D数组以满足qlib的要求"""
 
-                        def __init__(self, values_1d, values_2d, index):
+                        def __init__(
+                            self, values_1d: Any, values_2d: Any, index: Any
+                        ) -> None:
                             self._series = pd.Series(values_1d, index=index)
                             self._values_2d = values_2d
                             self._index = index
 
                         @property
-                        def values(self):
+                        def values(self) -> Any:
                             return self._values_2d
 
                         @property
-                        def index(self):
+                        def index(self) -> Any:
                             return self._index
 
-                        def __len__(self):
+                        def __len__(self) -> Any:
                             return len(self._series)
 
-                        def __getitem__(self, key):
+                        def __getitem__(self, key: Any) -> Any:
                             return self._series[key]
 
-                        def __iter__(self):
+                        def __iter__(self) -> Any:
                             return iter(self._series)
 
-                        def __array__(self, dtype=None):
+                        def __array__(self, dtype: Any = None) -> Any:
                             return (
                                 self._values_2d
                                 if dtype is None
                                 else self._values_2d.astype(dtype)
                             )
 
-                        def __getattr__(self, name):
+                        def __getattr__(self, name: Any) -> Any:
                             return getattr(self._series, name)
 
                     # 分离特征和标签
@@ -1008,22 +1019,22 @@ class UnifiedQlibTrainingEngine:
                     class FeatureSeries:
                         """包装Series，使values返回2D数组"""
 
-                        def __init__(self, feature_array_2d, index):
+                        def __init__(self, feature_array_2d: Any, index: Any) -> None:
                             self._feature_array_2d = feature_array_2d
                             self._index = index
 
                         @property
-                        def values(self):
+                        def values(self) -> Any:
                             return self._feature_array_2d
 
                         @property
-                        def index(self):
+                        def index(self) -> Any:
                             return self._index
 
-                        def __len__(self):
+                        def __len__(self) -> Any:
                             return len(self._feature_array_2d)
 
-                        def __getitem__(self, key):
+                        def __getitem__(self, key: Any) -> Any:
                             if isinstance(key, (int, np.integer)):
                                 return self._feature_array_2d[key]
                             elif isinstance(key, slice):
@@ -1034,17 +1045,17 @@ class UnifiedQlibTrainingEngine:
                                     return self._feature_array_2d[loc]
                                 return self._feature_array_2d[key]
 
-                        def __iter__(self):
+                        def __iter__(self) -> Any:
                             return iter(self._feature_array_2d)
 
-                        def __array__(self, dtype=None):
+                        def __array__(self, dtype: Any = None) -> Any:
                             return (
                                 self._feature_array_2d
                                 if dtype is None
                                 else self._feature_array_2d.astype(dtype)
                             )
 
-                        def __getattr__(self, name):
+                        def __getattr__(self, name: Any) -> Any:
                             if hasattr(self._feature_array_2d, name):
                                 return getattr(self._feature_array_2d, name)
                             raise AttributeError(
@@ -1139,11 +1150,11 @@ class UnifiedQlibTrainingEngine:
 
                         def __init__(
                             self,
-                            *args,
-                            label_series_obj=None,
-                            feature_series_obj=None,
-                            **kwargs,
-                        ):
+                            *args: Any,
+                            label_series_obj: Any = None,
+                            feature_series_obj: Any = None,
+                            **kwargs: Any,
+                        ) -> None:
                             super().__init__(*args, **kwargs)
                             object.__setattr__(
                                 self, "_label_series_obj", label_series_obj
@@ -1152,7 +1163,7 @@ class UnifiedQlibTrainingEngine:
                                 self, "_feature_series_obj", feature_series_obj
                             )
 
-                        def __getitem__(self, key):
+                        def __getitem__(self, key: Any) -> Any:
                             if key == "label" and self._label_series_obj is not None:
                                 return self._label_series_obj
                             if (
@@ -1169,28 +1180,20 @@ class UnifiedQlibTrainingEngine:
                         return FeatureSeries(empty_array, data.index)
 
                     if original_col_set == "label" or col_set == ["label"]:
-                        if label_obj_final is not None:
-                            return label_obj_final
-                        default_values_1d = np.zeros(len(data))
-                        default_values_2d = default_values_1d.reshape(-1, 1)
-                        return LabelSeries(
-                            default_values_1d, default_values_2d, data.index
-                        )
+                        return label_obj_final
 
-                    if label_obj_final is not None or feature_obj_final is not None:
-                        return CustomDataFrame(
-                            result_base,
-                            label_series_obj=label_obj_final,
-                            feature_series_obj=feature_obj_final,
-                        )
-                    return result_base
+                    return CustomDataFrame(
+                        result_base,
+                        label_series_obj=label_obj_final,
+                        feature_series_obj=feature_obj_final,
+                    )
 
                 if isinstance(key, (list, tuple)):
-                    return [_prepare_single(segment_key) for segment_key in key]
+                    return [_prepare_single(str(segment_key)) for segment_key in key]
 
                 return _prepare_single(key)
 
-            def __getattr__(self, name):
+            def __getattr__(self, name: Any) -> Any:
                 # 转发其他属性到DataFrame
                 return getattr(self.data, name)
 
@@ -1223,8 +1226,8 @@ class UnifiedQlibTrainingEngine:
         train_dataset: Any,
         val_dataset: Any,
         config: QlibTrainingConfig,
-        progress_callback=None,
-        model_id: str = None,
+        progress_callback: Any = None,
+        model_id: Optional[str] = None,
     ) -> Tuple[Any, List[Dict[str, Any]]]:
         """训练Qlib模型并实时更新进度，集成早停策略"""
         if not QLIB_AVAILABLE:
@@ -1260,7 +1263,7 @@ class UnifiedQlibTrainingEngine:
                 )
 
             # 训练历史记录
-            training_history = []
+            training_history: Any = []
             early_stopped = False
             stopped_epoch = 0
             best_epoch = 0
@@ -1294,8 +1297,11 @@ class UnifiedQlibTrainingEngine:
 
             # 创建训练进度回调（主要用于非官方模型或回退场景）
             async def training_progress_callback(
-                epoch, train_loss, val_loss=None, val_metrics=None
-            ):
+                epoch: Any,
+                train_loss: Any,
+                val_loss: Any = None,
+                val_metrics: Any = None,
+            ) -> Any:
                 if progress_callback and model_id:
                     num_iterations = (
                         config.hyperparameters.get("num_iterations")
@@ -1340,7 +1346,7 @@ class UnifiedQlibTrainingEngine:
                 config.early_stopping_patience if config.enable_early_stopping else None
             )
             verbose_eval = config.hyperparameters.get("verbose_eval", 20)
-            evals_result = {}
+            evals_result: Any = {}
 
             fit_kwargs = {}
             if "num_boost_round" in fit_params and num_boost_round is not None:
@@ -1491,15 +1497,18 @@ class UnifiedQlibTrainingEngine:
             )
 
             # 返回模型和训练历史，包含早停信息
-            return (
-                model,
-                training_history,
-                {
-                    "early_stopped": early_stopped,
-                    "stopped_epoch": stopped_epoch,
-                    "best_epoch": best_epoch,
-                    "early_stopping_reason": early_stopping_reason,
-                },
+            return cast(
+                Tuple[Any, List[Dict[str, Any]]],
+                (
+                    model,
+                    training_history,
+                    {
+                        "early_stopped": early_stopped,
+                        "stopped_epoch": stopped_epoch,
+                        "best_epoch": best_epoch,
+                        "early_stopping_reason": early_stopping_reason,
+                    },
+                ),
             )
 
         except Exception as e:
@@ -1515,8 +1524,8 @@ class UnifiedQlibTrainingEngine:
         val_dataset: pd.DataFrame,
         config: QlibTrainingConfig,
         early_stopping_manager: EarlyStoppingManager,
-        progress_callback: callable,
-    ):
+        progress_callback: Callable[..., Any],
+    ) -> Any:
         """模拟带早停的训练过程（用于不支持回调的模型）"""
         logger.info("使用模拟训练过程进行早停检查")
 
@@ -1543,7 +1552,7 @@ class UnifiedQlibTrainingEngine:
         model: Any,
         train_dataset: pd.DataFrame,
         val_dataset: pd.DataFrame,
-        model_id: str = None,
+        model_id: Optional[str] = None,
     ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
         """评估模型性能并计算详细指标"""
         try:
@@ -1623,7 +1632,7 @@ class UnifiedQlibTrainingEngine:
     def _extract_evaluation_inputs(
         self,
         dataset: pd.DataFrame,
-        predictions,
+        predictions: Any,
         dataset_name: str,
     ) -> Optional[Dict[str, Any]]:
         """统一提取评估所需的标签、预测值与索引。"""
@@ -1641,7 +1650,7 @@ class UnifiedQlibTrainingEngine:
             else:
                 segment = "train"
 
-            def _extract_label_from_prepared(prepared_obj):
+            def _extract_label_from_prepared(prepared_obj: Any) -> Any:
                 if prepared_obj is None:
                     return None, None
                 if isinstance(prepared_obj, pd.Series):
@@ -1802,7 +1811,7 @@ class UnifiedQlibTrainingEngine:
     def _calculate_signal_quality(
         self,
         dataset: pd.DataFrame,
-        predictions,
+        predictions: Any,
         dataset_name: str,
     ) -> Dict[str, Any]:
         """按 Qlib 官方思路计算信号质量指标。"""
@@ -1880,10 +1889,10 @@ class UnifiedQlibTrainingEngine:
             if pd.notna(avg_return):
                 long_avg_returns.append(float(avg_return))
 
-        def _safe_mean(values):
+        def _safe_mean(values: Any) -> Any:
             return float(np.mean(values)) if values else None
 
-        def _safe_ir(values):
+        def _safe_ir(values: Any) -> Any:
             if len(values) <= 1:
                 return None
             std = float(np.std(values, ddof=1))
@@ -1891,10 +1900,10 @@ class UnifiedQlibTrainingEngine:
                 return None
             return float(np.mean(values) / std)
 
-        def _safe_ann_return(values):
+        def _safe_ann_return(values: Any) -> Any:
             return float(np.mean(values) * 252) if values else None
 
-        def _safe_ann_sharpe(values):
+        def _safe_ann_sharpe(values: Any) -> Any:
             if len(values) <= 1:
                 return None
             std = float(np.std(values, ddof=1))
@@ -1919,9 +1928,9 @@ class UnifiedQlibTrainingEngine:
     def _calculate_metrics(
         self,
         dataset: pd.DataFrame,
-        predictions,
+        predictions: Any,
         dataset_name: str,
-        model_id: str = None,
+        model_id: Optional[str] = None,
     ) -> Dict[str, float]:
         """计算真实的评估指标，基于预测值和真实标签"""
         try:
@@ -1971,8 +1980,12 @@ class UnifiedQlibTrainingEngine:
             # 记录方向分布信息
             unique_true = np.unique(y_true_direction)
             unique_pred = np.unique(y_pred_direction)
-            true_counts = {val: np.sum(y_true_direction == val) for val in unique_true}
-            pred_counts = {val: np.sum(y_pred_direction == val) for val in unique_pred}
+            true_counts: Dict[Any, Any] = {
+                val: np.sum(y_true_direction == val) for val in unique_true
+            }
+            pred_counts: Dict[Any, Any] = {
+                val: np.sum(y_pred_direction == val) for val in unique_pred
+            }
             logger.info(
                 f"{dataset_name} 方向分布 - 真实: {true_counts}, 预测: {pred_counts}, 样本数: {len(y_true_direction)}"
             )
@@ -2337,9 +2350,9 @@ class UnifiedQlibTrainingEngine:
                     def prepare(
                         self,
                         key: str,
-                        col_set: Union[List[str], str] = None,
-                        data_key: str = None,
-                    ):
+                        col_set: Optional[Union[List[str], str]] = None,
+                        data_key: Optional[str] = None,
+                    ) -> Any:
                         if col_set is None:
                             col_set = ["feature"]
                         if isinstance(col_set, str):
@@ -2350,22 +2363,24 @@ class UnifiedQlibTrainingEngine:
                         ]
 
                         class FeatureSeries:
-                            def __init__(self, feature_array_2d, index):
+                            def __init__(
+                                self, feature_array_2d: Any, index: Any
+                            ) -> None:
                                 self._feature_array_2d = feature_array_2d
                                 self._index = index
 
                             @property
-                            def values(self):
+                            def values(self) -> Any:
                                 return self._feature_array_2d
 
                             @property
-                            def index(self):
+                            def index(self) -> Any:
                                 return self._index
 
-                            def __len__(self):
+                            def __len__(self) -> Any:
                                 return len(self._feature_array_2d)
 
-                            def __getitem__(self, key):
+                            def __getitem__(self, key: Any) -> Any:
                                 if isinstance(key, (int, np.integer)):
                                     return self._feature_array_2d[key]
                                 if isinstance(key, slice):
@@ -2375,10 +2390,10 @@ class UnifiedQlibTrainingEngine:
                                     return self._feature_array_2d[loc]
                                 return self._feature_array_2d[key]
 
-                            def __iter__(self):
+                            def __iter__(self) -> Any:
                                 return iter(self._feature_array_2d)
 
-                            def __array__(self, dtype=None):
+                            def __array__(self, dtype: Any = None) -> Any:
                                 return (
                                     self._feature_array_2d
                                     if dtype is None
@@ -2403,7 +2418,7 @@ class UnifiedQlibTrainingEngine:
 
                         return self.data
 
-                    def __getattr__(self, name):
+                    def __getattr__(self, name: Any) -> Any:
                         return getattr(self.data, name)
 
                 dataset = DataFrameDatasetAdapter(dataset)
@@ -2512,7 +2527,7 @@ class UnifiedQlibTrainingEngine:
 
     def get_supported_model_types(self) -> List[str]:
         """获取支持的模型类型列表"""
-        return self.model_manager.get_supported_models()
+        return list(self.model_manager.get_supported_models())
 
     def get_model_config_template(self, model_type: str) -> Dict[str, Any]:
         """获取模型配置模板"""
@@ -2540,10 +2555,13 @@ class UnifiedQlibTrainingEngine:
         self, sample_count: int, feature_count: int, task_type: str = "regression"
     ) -> List[str]:
         """推荐适合的模型"""
-        return self.model_manager.recommend_models(
-            sample_count, feature_count, task_type
+        return list(
+            self.model_manager.recommend_models(sample_count, feature_count, task_type)
         )
 
     def get_training_recommendations(self, model_type: str) -> Dict[str, Any]:
         """获取训练建议"""
-        return self.model_manager.get_training_recommendations(model_type)
+        recommendations: Dict[str, Any] = (
+            self.model_manager.get_training_recommendations(model_type)
+        )
+        return recommendations

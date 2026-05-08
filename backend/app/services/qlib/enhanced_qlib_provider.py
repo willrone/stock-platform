@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -35,11 +35,13 @@ try:
         if hasattr(qlib, "_mount_nfs_uri"):
             _original_mount_nfs_uri = qlib._mount_nfs_uri
 
-            def _patched_mount_nfs_uri(provider_uri, mount_path, auto_mount):
+            def _patched_mount_nfs_uri(
+                provider_uri: Any, mount_path: Any, auto_mount: Any
+            ) -> Any:
                 """修复后的 _mount_nfs_uri，处理 Path 对象和路径格式问题"""
 
                 # 清理路径的函数
-                def clean_path(path_val):
+                def clean_path(path_val: Any) -> Any:
                     """清理路径，移除末尾的多余冒号和反斜杠等异常字符"""
                     if isinstance(path_val, Path):
                         path_str = path_val.resolve().as_posix()
@@ -135,7 +137,9 @@ try:
             if hasattr(CalendarProvider, "load_calendar"):
                 _original_load_calendar = CalendarProvider.load_calendar
 
-                def _patched_load_calendar(self, freq, future=False):
+                def _patched_load_calendar(
+                    self: Any, freq: Any, future: Any = False
+                ) -> Any:
                     r"""修复后的 load_calendar，修复路径拼接问题（:/ 字符）"""
                     try:
                         # 调用原始方法
@@ -283,7 +287,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 class Alpha158Calculator:
     """Alpha158因子计算器 - 使用Qlib内置的Alpha158实现"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.factor_cache = FactorCache()
         self.max_workers = min(mp.cpu_count(), 8)  # 最多使用8个进程
 
@@ -908,7 +912,7 @@ class Alpha158Calculator:
                         # 方法4: 尝试打开文件
                         can_open = False
                         try:
-                            with open(os_path, "rb") as f:
+                            with open(os_path, "rb"):
                                 can_open = True
                                 file_size = os.path.getsize(os_path)
                         except OSError as e:
@@ -1498,7 +1502,7 @@ class Alpha158Calculator:
             # 步骤1: 处理Ref函数（最基础，可能被其他函数使用）
             # 注意：这里直接替换变量，因为Ref函数需要立即使用变量
             # 但需要确保变量名已经标准化（有$前缀）
-            def replace_ref(match):
+            def replace_ref(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 确保变量名有$前缀（calc_data中的列名应该有$前缀）
@@ -1539,7 +1543,7 @@ class Alpha158Calculator:
                         expr = expr.replace(nested_pattern, f"calc_data['${var_name}']")
 
             # 步骤2: 处理Log函数（可能在Corr等函数内部）
-            def replace_log(match):
+            def replace_log(match: Any) -> Any:
                 inner = match.group(1)
                 # 处理 Log($var+1) 或 Log($var-1) 等形式
                 if "+" in inner or "-" in inner:
@@ -1572,7 +1576,7 @@ class Alpha158Calculator:
                 log_iteration += 1
 
             # 步骤3: 处理Abs函数
-            def replace_abs(match):
+            def replace_abs(match: Any) -> Any:
                 inner = match.group(1)
                 return f"np.abs({inner})"
 
@@ -1587,7 +1591,7 @@ class Alpha158Calculator:
                 abs_iteration += 1
 
             # 步骤4: 保留Greater/Less，交由运行时函数处理，返回Series以支持rolling
-            def _as_series(x, ref):
+            def _as_series(x: Any, ref: Any) -> Any:
                 if isinstance(x, pd.Series):
                     return x
                 if np.isscalar(x):
@@ -1596,7 +1600,7 @@ class Alpha158Calculator:
                     return pd.Series(x, index=ref.index)
                 return pd.Series(x, index=ref.index)
 
-            def Greater(a, b=0):
+            def Greater(a: Any, b: Any = 0) -> Any:
                 """Greater函数：返回布尔Series，表示a > b"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1605,12 +1609,12 @@ class Alpha158Calculator:
                     # 返回布尔Series，True表示a > b，False表示a <= b
                     return (a_s > b_s).astype(float)
                 return (
-                    float(a > b)
-                    if np.isscalar(a) and np.isscalar(b)
-                    else np.maximum(a, b)
+                    1.0
+                    if float(a) > float(b)
+                    else 0.0 if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
                 )
 
-            def Less(a, b=0):
+            def Less(a: Any, b: Any = 0) -> Any:
                 """Less函数：返回布尔Series，表示a < b"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1619,12 +1623,12 @@ class Alpha158Calculator:
                     # 返回布尔Series，True表示a < b，False表示a >= b
                     return (a_s < b_s).astype(float)
                 return (
-                    float(a < b)
-                    if np.isscalar(a) and np.isscalar(b)
-                    else np.minimum(a, b)
+                    1.0
+                    if float(a) < float(b)
+                    else 0.0 if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
                 )
 
-            def Sum(x, n):
+            def Sum(x: Any, n: Any) -> Any:
                 """Sum函数：对Series进行滚动求和"""
                 # 确保x是Series
                 if not isinstance(x, pd.Series):
@@ -1639,7 +1643,7 @@ class Alpha158Calculator:
                     x_s = x_s.astype(float)
                 return x_s.rolling(int(n)).sum()
 
-            def Mean(x, n):
+            def Mean(x: Any, n: Any) -> Any:
                 """Mean函数：对Series进行滚动均值"""
                 if not isinstance(x, pd.Series):
                     x_s = _as_series(x, calc_data)
@@ -1651,7 +1655,7 @@ class Alpha158Calculator:
                     x_s = x_s.astype(float)
                 return x_s.rolling(int(n)).mean()
 
-            def Std(x, n):
+            def Std(x: Any, n: Any) -> Any:
                 """Std函数：对Series进行滚动标准差"""
                 if not isinstance(x, pd.Series):
                     x_s = _as_series(x, calc_data)
@@ -1667,7 +1671,7 @@ class Alpha158Calculator:
             # 注意：这些函数已经在返回值中包含了calc_data['$var']，所以不需要在步骤14再次替换
             # IdxMax返回最大值在窗口中的位置（从右往左，0到n-1），然后除以n归一化
             # IdxMin返回最小值在窗口中的位置（从右往左，0到n-1），然后除以n归一化
-            def replace_idxmax(match):
+            def replace_idxmax(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 计算最大值在窗口中的位置（从右往左，0到n-1），然后除以n
@@ -1675,7 +1679,7 @@ class Alpha158Calculator:
                 # 注意：raw=True时x是numpy数组，需要使用pd.isna()或np.isnan()
                 return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmax()) / {n} if len(x) == {n} and not np.isnan(x).all() else np.nan, raw=True))"
 
-            def replace_idxmin(match):
+            def replace_idxmin(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 计算最小值在窗口中的位置（从右往左，0到n-1），然后除以n
@@ -1707,7 +1711,7 @@ class Alpha158Calculator:
             # 这里先处理滚动窗口的情况，标量情况由运行时函数处理
 
             # 运行时Max/Min函数（处理Series和标量的情况）
-            def Max(a, b):
+            def Max(a: Any, b: Any) -> Any:
                 """Max函数：如果两个参数都是Series或一个是Series一个是标量，返回逐元素最大值"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1715,10 +1719,12 @@ class Alpha158Calculator:
                     b_s = _as_series(b, ref)
                     return pd.concat([a_s, b_s], axis=1).max(axis=1)
                 return (
-                    max(a, b) if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
+                    max(float(cast(Any, a)), float(cast(Any, b)))
+                    if np.isscalar(a) and np.isscalar(b)
+                    else np.maximum(a, b)
                 )
 
-            def Min(a, b):
+            def Min(a: Any, b: Any) -> Any:
                 """Min函数：如果两个参数都是Series或一个是Series一个是标量，返回逐元素最小值"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1726,25 +1732,27 @@ class Alpha158Calculator:
                     b_s = _as_series(b, ref)
                     return pd.concat([a_s, b_s], axis=1).min(axis=1)
                 return (
-                    min(a, b) if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
+                    min(float(cast(Any, a)), float(cast(Any, b)))
+                    if np.isscalar(a) and np.isscalar(b)
+                    else np.minimum(a, b)
                 )
 
-            def replace_max(match):
+            def replace_max(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).max()"
 
-            def replace_min(match):
+            def replace_min(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).min()"
 
-            def replace_mean_var(match):
+            def replace_mean_var(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).mean()"
 
-            def replace_std(match):
+            def replace_std(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).std()"
@@ -1784,7 +1792,7 @@ class Alpha158Calculator:
                 std_var_iteration += 1
 
             # 步骤7: 处理Corr函数（两个变量）
-            def replace_corr(match):
+            def replace_corr(match: Any) -> Any:
                 var1_expr = match.group(1)
                 var2_expr = match.group(2)
                 n = int(match.group(3))
@@ -1820,10 +1828,10 @@ class Alpha158Calculator:
 
             # 步骤9: 处理Mean函数（用于嵌套表达式，如Mean(Abs(...), n)）
             # 使用类似Sum函数的括号匹配方法处理嵌套Mean函数
-            def find_mean_and_replace(expr_str):
+            def find_mean_and_replace(expr_str: Any) -> Any:
                 """找到Mean函数并替换，处理嵌套括号"""
 
-                def find_matching_paren(s, start_pos):
+                def find_matching_paren(s: Any, start_pos: Any) -> Any:
                     count = 0
                     i = start_pos
                     while i < len(s):
@@ -1873,10 +1881,10 @@ class Alpha158Calculator:
 
             # 步骤10: 处理Std函数（用于嵌套表达式，如Std(Abs(...), n)）
             # 使用类似Sum函数的括号匹配方法处理嵌套Std函数
-            def find_std_and_replace(expr_str):
+            def find_std_and_replace(expr_str: Any) -> Any:
                 """找到Std函数并替换，处理嵌套括号"""
 
-                def find_matching_paren(s, start_pos):
+                def find_matching_paren(s: Any, start_pos: Any) -> Any:
                     """找到匹配的右括号位置"""
                     count = 0
                     i = start_pos
@@ -1941,7 +1949,7 @@ class Alpha158Calculator:
                 iteration += 1
 
             # 步骤11: 处理Quantile函数
-            def replace_quantile(match):
+            def replace_quantile(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 q = float(match.group(3))
@@ -1960,7 +1968,7 @@ class Alpha158Calculator:
                 quantile_iteration += 1
 
             # 步骤12: 处理Rank函数
-            def replace_rank(match):
+            def replace_rank(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 使用raw=False，x是Series，可以使用iloc
@@ -1976,18 +1984,18 @@ class Alpha158Calculator:
                 rank_iteration += 1
 
             # 步骤13: 处理Slope, Rsquare, Resi函数（如果需要）
-            def replace_slope(match):
+            def replace_slope(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0] if len(x) == {n} else np.nan, raw=True)"
 
-            def replace_rsquare(match):
+            def replace_rsquare(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 使用raw=False，x是Series，可以使用iloc
                 return f"calc_data['${var}'].rolling({n}).apply(lambda x: 1 - np.var(x.values - np.linspace(x.iloc[0] if len(x) > 0 else 0, x.iloc[-1] if len(x) > 0 else 0, len(x))) / (np.var(x.values) + 1e-8) if len(x) == {n} and np.var(x.values) > 0 else 0, raw=False)"
 
-            def replace_resi(match):
+            def replace_resi(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 使用raw=False，x是Series，可以使用iloc
@@ -2121,7 +2129,7 @@ class Alpha158Calculator:
             # 处理包含比较操作符或复杂表达式的Mean/Std函数
             # Mean函数 - 处理包含比较操作符的表达式，如 Mean($close>Ref($close, 1), 5)
             # 使用直接的字符串替换方法，确保所有Mean函数都被替换
-            def find_matching_paren_simple(s, start_pos):
+            def find_matching_paren_simple(s: Any, start_pos: Any) -> Any:
                 count = 0
                 i = start_pos
                 while i < len(s):
@@ -2434,7 +2442,7 @@ class EnhancedQlibDataProvider:
 
         logger.info("增强版Qlib数据提供器初始化完成")
 
-    async def initialize_qlib(self):
+    async def initialize_qlib(self) -> Any:
         """初始化Qlib环境"""
         global _QLIB_GLOBAL_INITIALIZED
 
@@ -2528,7 +2536,7 @@ class EnhancedQlibDataProvider:
                     data_path = C.dpm.data_path
                     if isinstance(data_path, dict):
                         # 清理路径的函数
-                        def clean_path_value(path_val):
+                        def clean_path_value(path_val: Any) -> Any:
                             """清理路径值"""
                             if isinstance(path_val, Path):
                                 path_str = str(path_val)
@@ -2827,9 +2835,10 @@ class EnhancedQlibDataProvider:
         self, model_type: str, hyperparameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """创建 Qlib 模型配置。"""
-        return await self.data_adapter.create_qlib_model_config(
+        config: Dict[str, Any] = await self.data_adapter.create_qlib_model_config(
             model_type, hyperparameters
         )
+        return config
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计信息"""
@@ -2856,7 +2865,7 @@ class EnhancedQlibDataProvider:
                 "qlib_initialized": self._qlib_initialized,
             }
 
-    async def clear_cache(self):
+    async def clear_cache(self) -> None:
         """清空缓存"""
         try:
             cache_dir = self.alpha_calculator.factor_cache.cache_dir

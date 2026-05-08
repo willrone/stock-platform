@@ -189,7 +189,7 @@ class EarlyStopping:
         """获取最佳权重"""
         return self.state.best_weights
 
-    def reset(self):
+    def reset(self) -> None:
         """重置早停状态"""
         self.state = EarlyStoppingState()
 
@@ -214,8 +214,8 @@ class OverfittingDetector:
         self.threshold = threshold
         self.min_epochs = min_epochs
 
-        self.train_losses = []
-        self.val_losses = []
+        self.train_losses: List[float] = []
+        self.val_losses: List[float] = []
         self.overfitting_count = 0
 
     def update(self, train_loss: float, val_loss: float, epoch: int) -> bool:
@@ -257,7 +257,7 @@ class OverfittingDetector:
 
         return False
 
-    def reset(self):
+    def reset(self) -> None:
         """重置检测器状态"""
         self.train_losses = []
         self.val_losses = []
@@ -289,7 +289,7 @@ class AdaptiveEarlyStopping:
         self.improvement_threshold = improvement_threshold
 
         self.current_patience = initial_patience
-        self.best_value = None
+        self.best_value: Optional[float] = None
         self.wait = 0
         self.significant_improvements = 0
 
@@ -308,10 +308,12 @@ class AdaptiveEarlyStopping:
             self.best_value = current_value
             return False
 
-        # 检查是否有显著改进
-        improvement = abs(current_value - self.best_value) / abs(self.best_value)
+        best_value = self.best_value
 
-        if current_value < self.best_value:  # 假设越小越好
+        # 检查是否有显著改进
+        improvement = abs(current_value - best_value) / abs(best_value)
+
+        if current_value < best_value:  # 假设越小越好
             self.best_value = current_value
             self.wait = 0
 
@@ -338,7 +340,7 @@ class AdaptiveEarlyStopping:
 
         return False
 
-    def reset(self):
+    def reset(self) -> None:
         """重置自适应早停状态"""
         self.current_patience = self.initial_patience
         self.best_value = None
@@ -349,20 +351,20 @@ class AdaptiveEarlyStopping:
 class EarlyStoppingManager:
     """早停管理器，支持多种早停策略"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化早停管理器"""
         self.strategies: Dict[str, EarlyStopping] = {}
-        self.overfitting_detector = None
-        self.adaptive_strategy = None
+        self.overfitting_detector: Optional[OverfittingDetector] = None
+        self.adaptive_strategy: Optional[AdaptiveEarlyStopping] = None
 
-    def add_strategy(self, name: str, config: EarlyStoppingConfig):
+    def add_strategy(self, name: str, config: EarlyStoppingConfig) -> None:
         """添加早停策略"""
         self.strategies[name] = EarlyStopping(config)
         logger.info(f"添加早停策略: {name}")
 
     def add_overfitting_detector(
         self, patience: int = 5, threshold: float = 0.1, min_epochs: int = 10
-    ):
+    ) -> None:
         """添加过拟合检测器"""
         self.overfitting_detector = OverfittingDetector(patience, threshold, min_epochs)
         logger.info("添加过拟合检测器")
@@ -372,7 +374,7 @@ class EarlyStoppingManager:
         initial_patience: int = 10,
         patience_factor: float = 1.5,
         max_patience: int = 50,
-    ):
+    ) -> None:
         """添加自适应早停策略"""
         self.adaptive_strategy = AdaptiveEarlyStopping(
             initial_patience, patience_factor, max_patience
@@ -404,19 +406,21 @@ class EarlyStoppingManager:
                 results[name] = should_stop
 
         # 更新过拟合检测器
+        overfitting_detector = self.overfitting_detector
         if (
-            self.overfitting_detector
+            overfitting_detector is not None
             and "train_loss" in metrics
             and "val_loss" in metrics
         ):
-            overfitting_detected = self.overfitting_detector.update(
+            overfitting_detected = overfitting_detector.update(
                 metrics["train_loss"], metrics["val_loss"], epoch
             )
             results["overfitting_detector"] = overfitting_detected
 
         # 更新自适应策略
-        if self.adaptive_strategy and "val_loss" in metrics:
-            adaptive_stop = self.adaptive_strategy.update(metrics["val_loss"], epoch)
+        adaptive_strategy = self.adaptive_strategy
+        if adaptive_strategy is not None and "val_loss" in metrics:
+            adaptive_stop = adaptive_strategy.update(metrics["val_loss"], epoch)
             results["adaptive_strategy"] = adaptive_stop
 
         return results
@@ -438,14 +442,14 @@ class EarlyStoppingManager:
         for name, strategy in self.strategies.items():
             states[name] = strategy.get_state()
 
-        if self.overfitting_detector:
+        if self.overfitting_detector is not None:
             states["overfitting_detector"] = {
                 "train_losses": self.overfitting_detector.train_losses,
                 "val_losses": self.overfitting_detector.val_losses,
                 "overfitting_count": self.overfitting_detector.overfitting_count,
             }
 
-        if self.adaptive_strategy:
+        if self.adaptive_strategy is not None:
             states["adaptive_strategy"] = {
                 "current_patience": self.adaptive_strategy.current_patience,
                 "best_value": self.adaptive_strategy.best_value,
@@ -455,15 +459,15 @@ class EarlyStoppingManager:
 
         return states
 
-    def reset_all(self):
+    def reset_all(self) -> None:
         """重置所有策略"""
         for strategy in self.strategies.values():
             strategy.reset()
 
-        if self.overfitting_detector:
+        if self.overfitting_detector is not None:
             self.overfitting_detector.reset()
 
-        if self.adaptive_strategy:
+        if self.adaptive_strategy is not None:
             self.adaptive_strategy.reset()
 
         logger.info("所有早停策略已重置")

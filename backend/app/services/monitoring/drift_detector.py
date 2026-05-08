@@ -9,14 +9,11 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 
-try:
-    from loguru import logger
-except ImportError:
-    logger = logging.getLogger(__name__)
+logger: Any = logging.getLogger(__name__)
 
 try:
     from scipy import stats
@@ -146,7 +143,7 @@ class DriftReport:
 class StatisticalDriftDetector:
     """统计漂移检测器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.methods = {
             DriftMethod.KS_TEST: self._ks_test,
             DriftMethod.WASSERSTEIN: self._wasserstein_distance,
@@ -220,9 +217,11 @@ class StatisticalDriftDetector:
         cur_probs = np.where(cur_probs == 0, 1e-6, cur_probs)
 
         # 计算PSI
-        psi = np.sum((cur_probs - ref_probs) * np.log(cur_probs / ref_probs))
+        psi: float = float(
+            np.sum((cur_probs - ref_probs) * np.log(cur_probs / ref_probs))
+        )
 
-        return float(psi), None
+        return psi, None
 
     def _jensen_shannon_divergence(
         self, ref_data: np.ndarray, cur_data: np.ndarray, bins: int = 10
@@ -336,28 +335,30 @@ class MultivariateDriftDetector:
             n_components: PCA主成分数量
         """
         self.n_components = n_components
-        self.pca = None
-        self.scaler = None
-        self.reference_reconstructed = None
+        self.pca: Any = None
+        self.scaler: Any = None
+        self.reference_reconstructed: Any = None
 
-    def fit_reference(self, reference_data: np.ndarray):
+    def fit_reference(self, reference_data: np.ndarray) -> None:
         """拟合参考数据"""
         pca_class, scaler_class = _require_sklearn_components()
 
         # 标准化
         self.scaler = scaler_class()
-        scaled_data = self.scaler.fit_transform(reference_data)
+        scaled_data = cast(Any, self.scaler).fit_transform(reference_data)
 
         # PCA降维
         self.pca = pca_class(n_components=min(self.n_components, scaled_data.shape[1]))
-        self.pca.fit(scaled_data)
+        cast(Any, self.pca).fit(scaled_data)
 
         # 计算重构数据
-        transformed = self.pca.transform(scaled_data)
-        self.reference_reconstructed = self.pca.inverse_transform(transformed)
+        transformed = cast(Any, self.pca).transform(scaled_data)
+        self.reference_reconstructed = cast(Any, self.pca).inverse_transform(
+            transformed
+        )
 
         logger.info(
-            f"多变量漂移检测器已拟合，解释方差比: {self.pca.explained_variance_ratio_.sum():.3f}"
+            f"多变量漂移检测器已拟合，解释方差比: {cast(Any, self.pca).explained_variance_ratio_.sum():.3f}"
         )
 
     def detect_drift(self, current_data: np.ndarray) -> Tuple[float, DriftSeverity]:
@@ -373,12 +374,15 @@ class MultivariateDriftDetector:
         if self.pca is None or self.scaler is None:
             raise ValueError("需要先调用fit_reference方法")
 
+        scaler = cast(Any, self.scaler)
+        pca = cast(Any, self.pca)
+
         # 标准化当前数据
-        scaled_current = self.scaler.transform(current_data)
+        scaled_current = scaler.transform(current_data)
 
         # PCA变换和重构
-        transformed_current = self.pca.transform(scaled_current)
-        reconstructed_current = self.pca.inverse_transform(transformed_current)
+        transformed_current = pca.transform(scaled_current)
+        reconstructed_current = pca.inverse_transform(transformed_current)
 
         # 计算重构误差
         ref_error = np.mean(
@@ -443,7 +447,7 @@ class DriftDetector:
         self.multivariate_detectors: Dict[str, MultivariateDriftDetector] = {}
 
         # 参考数据
-        self.reference_data: Dict[str, np.ndarray] = {}
+        self.reference_data: Dict[str, Any] = {}
 
         # 检测历史
         self.drift_reports: List[DriftReport] = []
@@ -461,7 +465,7 @@ class DriftDetector:
         features: Dict[str, float],
         prediction: Optional[float] = None,
         timestamp: Optional[datetime] = None,
-    ):
+    ) -> None:
         """添加样本数据"""
         if timestamp is None:
             timestamp = datetime.now()
@@ -482,7 +486,7 @@ class DriftDetector:
                     {"timestamp": timestamp, "prediction": prediction}
                 )
 
-    def fit_reference_data(self, model_id: str, model_version: str):
+    def fit_reference_data(self, model_id: str, model_version: str) -> None:
         """拟合参考数据"""
         key = f"{model_id}_{model_version}"
 
@@ -533,7 +537,7 @@ class DriftDetector:
         self,
         model_id: str,
         model_version: str,
-        methods: List[DriftMethod] = None,
+        methods: Optional[List[DriftMethod]] = None,
         detection_window_hours: int = 1,
     ) -> Optional[DriftReport]:
         """
@@ -666,7 +670,9 @@ class DriftDetector:
                             "n_features": len(feature_names),
                             "pca_components": multivariate_detector.n_components,
                             "explained_variance": float(
-                                multivariate_detector.pca.explained_variance_ratio_.sum()
+                                cast(
+                                    Any, multivariate_detector.pca
+                                ).explained_variance_ratio_.sum()
                             ),
                         },
                     )
@@ -698,7 +704,9 @@ class DriftDetector:
                 drift_scores = [
                     r.drift_score for r in feature_results if r.drift_score is not None
                 ]
-                overall_drift_score = np.mean(drift_scores) if drift_scores else 0.0
+                overall_drift_score = (
+                    float(np.mean(drift_scores)) if drift_scores else 0.0
+                )
 
                 severities = [r.severity for r in feature_results]
                 severity_levels = {
@@ -751,9 +759,9 @@ class DriftDetector:
         if not results:
             return {}
 
-        severity_counts = defaultdict(int)
-        method_counts = defaultdict(int)
-        drift_type_counts = defaultdict(int)
+        severity_counts: Any = defaultdict(int)
+        method_counts: Any = defaultdict(int)
+        drift_type_counts: Any = defaultdict(int)
 
         for result in results:
             severity_counts[result.severity.value] += 1
@@ -831,7 +839,7 @@ class DriftDetector:
         reports = self.get_drift_history(model_id, model_version, limit=1)
         return reports[0] if reports else None
 
-    def clear_reference_data(self, model_id: str, model_version: str):
+    def clear_reference_data(self, model_id: str, model_version: str) -> Any:
         """清除参考数据"""
         key = f"{model_id}_{model_version}"
         with self.lock:
