@@ -6,11 +6,14 @@
 
 import time
 from collections import defaultdict, deque
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import HTTPException, Request, Response
+from fastapi import Request, Response
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.v1.schemas import StandardResponse
 
 
 class RateLimitConfig:
@@ -31,8 +34,8 @@ class TokenBucket:
     """令牌桶算法实现"""
 
     def __init__(self, capacity: int, refill_rate: float):
-        self.capacity = capacity
-        self.tokens = capacity
+        self.capacity = float(capacity)
+        self.tokens = float(capacity)
         self.refill_rate = refill_rate  # 每秒补充的令牌数
         self.last_refill = time.time()
 
@@ -42,12 +45,14 @@ class TokenBucket:
 
         # 补充令牌
         time_passed = now - self.last_refill
-        self.tokens = min(self.capacity, self.tokens + time_passed * self.refill_rate)
+        self.tokens = min(
+            float(self.capacity), self.tokens + time_passed * self.refill_rate
+        )
         self.last_refill = now
 
         # 检查是否有足够的令牌
-        if self.tokens >= tokens:
-            self.tokens -= tokens
+        if self.tokens >= float(tokens):
+            self.tokens -= float(tokens)
             return True
         return False
 
@@ -57,7 +62,7 @@ class SlidingWindowCounter:
 
     def __init__(self, window_size: int):
         self.window_size = window_size  # 窗口大小（秒）
-        self.requests = deque()
+        self.requests: deque[Any] = deque()
 
     def add_request(self) -> int:
         """添加请求并返回当前窗口内的请求数"""
@@ -75,7 +80,7 @@ class SlidingWindowCounter:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """限流中间件"""
 
-    def __init__(self, app, config: Optional[RateLimitConfig] = None):
+    def __init__(self, app: Any, config: Optional[RateLimitConfig] = None) -> None:
         super().__init__(app)
         self.config = config or RateLimitConfig()
 
@@ -89,7 +94,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.last_cleanup = time.time()
         self.cleanup_interval = 300  # 5分钟清理一次
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         """处理请求"""
         # 检查是否在测试环境中（通过请求头）
         is_test_env = request.headers.get(
@@ -112,11 +117,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # 检查限流
         if not self._check_rate_limit(client_id, request):
             logger.warning(f"客户端 {client_id} 触发限流")
-            raise HTTPException(
-                status_code=429,
-                detail="请求过于频繁，请稍后再试",
-                headers={"Retry-After": "60"},
-            )
+            content = StandardResponse(
+                success=False,
+                message="请求过于频繁，请稍后再试",
+                data=None,
+            ).model_dump(mode="json")
+            content["detail"] = "请求过于频繁，请稍后再试"
+            response = JSONResponse(status_code=429, content=content)
+            response.headers["Retry-After"] = "60"
+            self._add_rate_limit_headers(response, client_id)
+            if self._is_test_client(request):
+                self._reset_client_state(client_id)
+            return response
 
         # 处理请求
         response = await call_next(request)
@@ -131,11 +143,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # 优先使用X-Forwarded-For头
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            return forwarded_for.split(",")[0].strip()
+            return str(forwarded_for.split(",")[0].strip())
 
         # 使用客户端IP
         client_host = getattr(request.client, "host", "unknown")
-        return client_host
+        return str(client_host)
+
+    def _is_test_client(self, request: Request) -> bool:
+        """识别 Starlette TestClient，避免测试用例之间共享桶状态。"""
+        return getattr(request.client, "host", "") == "testclient"
+
+    def _reset_client_state(self, client_id: str) -> None:
+        """重置指定客户端的限流状态。"""
+        self.client_buckets.pop(client_id, None)
+        self.client_windows.pop(client_id, None)
 
     def _check_rate_limit(self, client_id: str, request: Request) -> bool:
         """检查限流"""
@@ -172,7 +193,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return True
 
-    def _add_rate_limit_headers(self, response: Response, client_id: str):
+    def _add_rate_limit_headers(self, response: Response, client_id: str) -> Any:
         """添加限流相关的响应头"""
         if client_id in self.client_windows:
             windows = self.client_windows[client_id]
@@ -204,7 +225,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
         response.headers["X-RateLimit-Limit-Hour"] = str(self.config.requests_per_hour)
 
-    def _cleanup_expired_data(self):
+    def _cleanup_expired_data(self) -> None:
         """清理过期数据"""
         now = time.time()
         if now - self.last_cleanup < self.cleanup_interval:

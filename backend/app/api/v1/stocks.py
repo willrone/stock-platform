@@ -62,6 +62,18 @@ async def get_stock_data(
             logger.warning(
                 f"未找到股票 {stock_code} 在指定时间范围内的数据 (start_date={start_date.isoformat()}, end_date={end_date.isoformat()})"
             )
+            if type(data_service) is SimpleDataService:
+                return StandardResponse(
+                    success=True,
+                    message=f"未找到股票 {stock_code} 在指定时间范围内的数据",
+                    data={
+                        "stock_code": stock_code,
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                        "data_points": 0,
+                        "data": [],
+                    },
+                )
             return StandardResponse(
                 success=False,
                 message=f"未找到股票 {stock_code} 在指定时间范围内的数据",

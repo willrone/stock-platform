@@ -211,7 +211,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
 
             # 添加响应时间头
-            response.headers["X-Response-Time"] = "{duration:.3f}s"
+            response.headers["X-Response-Time"] = f"{duration:.3f}s"
 
             return response
 
