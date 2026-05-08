@@ -224,8 +224,8 @@ class TaskManager:
         """
         try:
             # 构建更新语句
-            update_fields = []
-            update_values = []
+            update_fields: List[str] = []
+            update_values: List[Any] = []
 
             if request.status is not None:
                 update_fields.append("status = ?")
@@ -598,7 +598,7 @@ class TaskManager:
         """添加进度更新回调"""
         self.progress_callbacks.append(callback)
 
-    def _trigger_status_change_callbacks(self, task_id: int, status: TaskStatus):
+    def _trigger_status_change_callbacks(self, task_id: int, status: TaskStatus) -> None:
         """触发状态变更回调"""
         for callback in self.status_change_callbacks:
             try:
@@ -606,7 +606,7 @@ class TaskManager:
             except Exception as e:
                 self.logger.error(f"状态变更回调执行失败: {e}")
 
-    def _trigger_progress_callbacks(self, task_id: int, progress: float):
+    def _trigger_progress_callbacks(self, task_id: int, progress: float) -> None:
         """触发进度更新回调"""
         for callback in self.progress_callbacks:
             try:
@@ -633,7 +633,7 @@ class TaskManager:
             )
 
             # 定义进度回调
-            def progress_callback(progress: float):
+            def progress_callback(progress: float) -> None:
                 self.update_task(TaskUpdateRequest(task_id=task_id, progress=progress))
 
             # 执行任务
