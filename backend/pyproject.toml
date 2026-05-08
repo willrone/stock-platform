@@ -56,15 +56,6 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
-
-[[tool.mypy.overrides]]
-module = [
-    "app.api.v1.*",
-    "app.core.config",
-    "app.core.database",
-    "app.main",
-    "app.websocket",
-]
 disable_error_code = ["untyped-decorator"]
 
 [tool.pytest.ini_options]
