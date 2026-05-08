@@ -351,9 +351,11 @@ class DataLifecycleManager:
             )
 
             # 获取数据库中活跃的模型文件路径
-            active_models = self.db_manager.fetch_all("""
+            active_models = self.db_manager.fetch_all(
+                """
                 SELECT file_path FROM model_metadata WHERE is_active = 1
-            """)
+            """
+            )
             active_paths = {row["file_path"] for row in active_models}
 
             # 查找模型文件

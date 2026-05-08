@@ -118,11 +118,15 @@ def ensure_sqlite_task_updated_at_column_sync(connection: Connection) -> None:
     if "updated_at" not in columns:
         connection.exec_driver_sql("ALTER TABLE tasks ADD COLUMN updated_at DATETIME")
 
-    connection.execute(text("""
+    connection.execute(
+        text(
+            """
             UPDATE tasks
             SET updated_at = COALESCE(updated_at, completed_at, started_at, created_at)
             WHERE updated_at IS NULL
-            """))
+            """
+        )
+    )
 
 
 # 会话工厂

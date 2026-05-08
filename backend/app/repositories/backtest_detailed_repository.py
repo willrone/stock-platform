@@ -1049,13 +1049,15 @@ class BacktestDetailedRepository:
 
             # 构建完整的 UPDATE 语句
             where_clause = " OR ".join(case_conditions)
-            sql = text(f"""
+            sql = text(
+                f"""
                 UPDATE signal_records
                 SET executed = 1, execution_reason = NULL
                 WHERE task_id = :task_id
                 AND executed = 0
                 AND ({where_clause})
-            """)
+            """
+            )
 
             result = await self.session.execute(sql, params)
             updated_count = int(getattr(result, "rowcount", 0) or 0)
@@ -1119,13 +1121,15 @@ class BacktestDetailedRepository:
             # 构建完整的 UPDATE 语句
             case_when_clause = " ".join(case_when_parts)
             where_clause = " OR ".join(where_conditions)
-            sql = text(f"""
+            sql = text(
+                f"""
                 UPDATE signal_records
                 SET execution_reason = CASE {case_when_clause} END
                 WHERE task_id = :task_id
                 AND executed = 0
                 AND ({where_clause})
-            """)
+            """
+            )
 
             result = await self.session.execute(sql, params)
             updated_count = int(getattr(result, "rowcount", 0) or 0)

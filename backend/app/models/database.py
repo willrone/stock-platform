@@ -180,7 +180,8 @@ class DatabaseManager:
         """初始化数据库表结构"""
         with self.get_connection() as conn:
             # 创建任务表
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -196,10 +197,12 @@ class DatabaseManager:
                     completed_at TIMESTAMP,
                     error_message TEXT
                 )
-            """)
+            """
+            )
 
             # 创建任务结果表
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS task_results (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id INTEGER NOT NULL,
@@ -213,10 +216,12 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (task_id) REFERENCES tasks (id)
                 )
-            """)
+            """
+            )
 
             # 创建模型元数据表
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS model_metadata (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL UNIQUE,
@@ -230,10 +235,12 @@ class DatabaseManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT 1
                 )
-            """)
+            """
+            )
 
             # 创建系统配置表
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS system_config (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     key TEXT NOT NULL UNIQUE,
@@ -241,7 +248,8 @@ class DatabaseManager:
                     description TEXT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+            """
+            )
 
             # 创建索引
             conn.execute(
