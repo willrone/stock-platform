@@ -199,7 +199,7 @@ class FinancialMetricsCalculator:
                 else:  # 预测下跌，持现金
                     trading_returns.append(0.0)
 
-        return np.array(trading_returns, dtype=float)
+        return cast(np.ndarray, np.array(trading_returns, dtype=float))
 
     @staticmethod
     def calculate_sharpe_ratio(
@@ -253,7 +253,7 @@ class ModelEvaluator:
         self.validator = TimeSeriesValidator(n_splits=5)
         self.metrics_calculator = FinancialMetricsCalculator()
 
-    @handle_async_exception  # type: ignore[untyped-decorator]
+    @handle_async_exception
     async def evaluate_model(
         self,
         model: Any,
@@ -316,13 +316,19 @@ class ModelEvaluator:
                     outputs = model(X_test_tensor)
                     predictions = torch.argmax(outputs, dim=1).cpu().numpy()
 
+            predictions_array = np.asarray(predictions)
+            y_test_array = np.asarray(y_test).flatten()
+            aligned_length = min(len(predictions_array), len(y_test_array))
+            predictions_array = predictions_array[:aligned_length]
+            y_test_array = y_test_array[:aligned_length]
+
             # 计算收益率
             fold_returns = self.metrics_calculator.calculate_returns(
-                predictions, prices_test
+                predictions_array, prices_test
             )
 
-            all_predictions.extend(predictions)
-            all_true_labels.extend(y_test)
+            all_predictions.extend(predictions_array)
+            all_true_labels.extend(y_test_array)
             all_returns.extend(fold_returns)
 
         # 转换为numpy数组
@@ -333,12 +339,16 @@ class ModelEvaluator:
         # 计算分类指标
         accuracy = float(accuracy_score(all_true_labels_array, all_predictions_array))
         precision = float(
-            precision_score(all_true_labels_array, all_predictions_array, zero_division=0)
+            precision_score(
+                all_true_labels_array, all_predictions_array, zero_division=0
+            )
         )
         recall = float(
             recall_score(all_true_labels_array, all_predictions_array, zero_division=0)
         )
-        f1 = float(f1_score(all_true_labels_array, all_predictions_array, zero_division=0))
+        f1 = float(
+            f1_score(all_true_labels_array, all_predictions_array, zero_division=0)
+        )
 
         # 计算金融指标
         total_return = float(np.prod(1 + all_returns_array) - 1)
@@ -355,7 +365,9 @@ class ModelEvaluator:
         losing_trades = all_returns_array[all_returns_array < 0]
 
         if len(losing_trades) > 0 and np.mean(losing_trades) != 0:
-            profit_factor: float = float(abs(np.sum(winning_trades) / np.sum(losing_trades)))
+            profit_factor: float = float(
+                abs(np.sum(winning_trades) / np.sum(losing_trades))
+            )
         else:
             profit_factor = float("inf") if len(winning_trades) > 0 else 0.0
 
