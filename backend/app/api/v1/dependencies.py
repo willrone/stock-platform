@@ -6,7 +6,7 @@ API依赖注入和共享函数
 """
 
 import os
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from fastapi import Header
 from loguru import logger
@@ -19,6 +19,9 @@ from app.repositories.task_repository import (
     TaskRepository,
 )
 from app.services.tasks import TaskQueueManager
+from app.services.backtest.utils.official_style_params import (
+    apply_official_style_topk_dropout_params,
+)
 
 
 # 用户认证依赖
@@ -71,6 +74,15 @@ try:
     logger.info("任务队列管理器已启动")
 except Exception as e:
     logger.warning(f"任务队列管理器启动失败: {e}")
+
+
+def _apply_nest_asyncio_if_available() -> None:
+    """Apply nest_asyncio when installed; keep task execution usable without it."""
+    try:
+        import nest_asyncio
+    except ImportError:
+        return
+    nest_asyncio.apply()
 
 
 def _resolve_backtest_config_value(
@@ -136,9 +148,9 @@ def _normalize_task_backtest_strategy_config(
     strategy_config = dict(normalized.get("strategy_config") or {})
 
     model_id = normalized.get("model_id")
+    normalized_name = strategy_name.lower()
     if model_id:
         strategy_config.setdefault("model_id", model_id)
-        normalized_name = strategy_name.lower()
         if normalized_name in {"model", "signal", "model_signal"}:
             strategy_name = "model_signal"
         elif normalized_name in {
@@ -149,6 +161,13 @@ def _normalize_task_backtest_strategy_config(
             "ranking",
         }:
             strategy_name = "model_topk_dropout"
+
+    stock_codes = cast(Optional[List[str]], normalized.get("stock_codes"))
+    strategy_config = apply_official_style_topk_dropout_params(
+        strategy_name=strategy_name,
+        stock_codes=stock_codes,
+        strategy_config=strategy_config,
+    )
 
     return strategy_name, strategy_config
 
@@ -498,6 +517,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     config, strategy_config, "close_cost", 0.0
                 )
             ),
+            min_cost=float(
+                _resolve_backtest_config_value(config, strategy_config, "min_cost", 0.0)
+            ),
         )
 
         # 执行回测
@@ -518,10 +540,8 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     task_id=task_id,
                 )
 
-            # 在新的事件循环中运行异步任务
-            import nest_asyncio
-
-            nest_asyncio.apply()
+            # 在新的事件循环中运行异步任务；nest_asyncio 是可选依赖。
+            _apply_nest_asyncio_if_available()
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)

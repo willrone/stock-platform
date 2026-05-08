@@ -17,6 +17,10 @@ v1_package.__path__ = [str(BACKEND_ROOT / "app" / "api" / "v1")]
 sys.modules.setdefault("app.api", api_package)
 sys.modules.setdefault("app.api.v1", v1_package)
 
+nest_asyncio_stub = ModuleType("nest_asyncio")
+nest_asyncio_stub.apply = lambda: None
+sys.modules.setdefault("nest_asyncio", nest_asyncio_stub)
+
 from app.api.v1.dependencies import execute_backtest_task_simple
 
 
