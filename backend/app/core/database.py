@@ -22,7 +22,7 @@ class Base(DeclarativeBase):
 
 
 # SQLite 连接配置，启用 WAL 模式以提高并发性能
-def _configure_sqlite_connection(dbapi_conn, connection_record):
+def _configure_sqlite_connection(dbapi_conn: Any, connection_record: Any) -> Any:
     """配置 SQLite 连接，启用 WAL 模式"""
     if "sqlite" in settings.DATABASE_URL.lower():
         # 启用 WAL 模式（Write-Ahead Logging），提高并发性能
@@ -37,7 +37,7 @@ def _configure_sqlite_connection(dbapi_conn, connection_record):
 
 # 异步数据库引擎
 # 对于异步引擎，需要在连接时配置 SQLite
-async def _configure_async_sqlite_connection(dbapi_conn, connection_record):
+async def _configure_async_sqlite_connection(dbapi_conn: Any, connection_record: Any) -> Any:
     """配置异步 SQLite 连接"""
     _configure_sqlite_connection(dbapi_conn, connection_record)
 
@@ -63,7 +63,7 @@ async_engine = create_async_engine(
 if "sqlite" in settings.DATABASE_URL.lower():
 
     @event.listens_for(async_engine.sync_engine, "connect")
-    def set_sqlite_pragma_async(dbapi_conn, connection_record):
+    def set_sqlite_pragma_async(dbapi_conn: Any, connection_record: Any) -> Any:
         _configure_sqlite_connection(dbapi_conn, connection_record)
 
 
@@ -94,7 +94,7 @@ sync_engine = create_engine(
 if "sqlite" in settings.database_url_sync.lower():
 
     @event.listens_for(sync_engine, "connect")
-    def set_sqlite_pragma_sync(dbapi_conn, connection_record):
+    def set_sqlite_pragma_sync(dbapi_conn: Any, connection_record: Any) -> Any:
         _configure_sqlite_connection(dbapi_conn, connection_record)
 
 

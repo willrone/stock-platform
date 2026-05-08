@@ -4,7 +4,7 @@ WebSocket连接管理器
 
 import asyncio
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
@@ -18,9 +18,9 @@ class WebSocketMessage:
 
     type: str  # task_status, system_alert, notification
     data: Dict[str, Any]
-    timestamp: str = None
+    timestamp: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.timestamp is None:
             self.timestamp = datetime.utcnow().isoformat()
 
@@ -34,12 +34,10 @@ class ClientConnection:
 
     websocket: WebSocket
     user_id: Optional[str] = None
-    subscribed_tasks: Set[str] = None
-    connected_at: datetime = None
+    subscribed_tasks: Set[str] = field(default_factory=set)
+    connected_at: Optional[datetime] = None
 
-    def __post_init__(self):
-        if self.subscribed_tasks is None:
-            self.subscribed_tasks = set()
+    def __post_init__(self) -> None:
         if self.connected_at is None:
             self.connected_at = datetime.utcnow()
 
@@ -47,7 +45,7 @@ class ClientConnection:
 class WebSocketManager:
     """WebSocket连接管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # 存储所有活跃连接 {connection_id: ClientConnection}
         self.active_connections: Dict[str, ClientConnection] = {}
         # 用户ID到连接ID的映射 {user_id: set(connection_ids)}
@@ -95,7 +93,7 @@ class WebSocketManager:
             logger.error(f"WebSocket连接失败: {connection_id}, 错误: {e}")
             return False
 
-    async def disconnect(self, connection_id: str):
+    async def disconnect(self, connection_id: str) -> None:
         """断开WebSocket连接"""
         if connection_id not in self.active_connections:
             return
@@ -124,7 +122,7 @@ class WebSocketManager:
 
         logger.info(f"WebSocket连接断开: {connection_id}, 用户: {user_id}")
 
-    async def subscribe_task(self, connection_id: str, task_id: str):
+    async def subscribe_task(self, connection_id: str, task_id: str) -> None:
         """订阅任务状态更新"""
         if connection_id not in self.active_connections:
             logger.warning(f"尝试订阅任务但连接不存在: {connection_id}")
@@ -139,7 +137,7 @@ class WebSocketManager:
 
         logger.info(f"连接 {connection_id} 订阅任务: {task_id}")
 
-    async def unsubscribe_task(self, connection_id: str, task_id: str):
+    async def unsubscribe_task(self, connection_id: str, task_id: str) -> None:
         """取消订阅任务状态更新"""
         if connection_id not in self.active_connections:
             return
@@ -158,12 +156,12 @@ class WebSocketManager:
         self,
         task_id: str,
         status: str,
-        progress: float = None,
-        result: Dict[str, Any] = None,
-        error_message: str = None,
-    ):
+        progress: Optional[float] = None,
+        result: Optional[Dict[str, Any]] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
         """推送任务状态变化"""
-        message_data = {
+        message_data: Dict[str, Any] = {
             "task_id": task_id,
             "status": status,
             "timestamp": datetime.utcnow().isoformat(),
@@ -186,7 +184,7 @@ class WebSocketManager:
                 f"任务状态通知已发送: {task_id}, 状态: {status}, 订阅者: {len(subscribers)}"
             )
 
-    async def notify_user(self, user_id: str, message_type: str, data: Dict[str, Any]):
+    async def notify_user(self, user_id: str, message_type: str, data: Dict[str, Any]) -> None:
         """向特定用户发送通知"""
         message = WebSocketMessage(type=message_type, data=data)
 
@@ -203,7 +201,7 @@ class WebSocketManager:
 
     async def broadcast_system_alert(
         self, alert_type: str, message: str, severity: str = "info"
-    ):
+    ) -> None:
         """广播系统告警"""
         alert_message = WebSocketMessage(
             type="system_alert",
@@ -222,7 +220,7 @@ class WebSocketManager:
             f"系统告警已广播: {alert_type}, 严重程度: {severity}, 接收者: {len(connections)}"
         )
 
-    async def _send_to_connection(self, connection_id: str, message: WebSocketMessage):
+    async def _send_to_connection(self, connection_id: str, message: WebSocketMessage) -> None:
         """向单个连接发送消息"""
         if connection_id not in self.active_connections:
             return
@@ -237,7 +235,7 @@ class WebSocketManager:
 
     async def _broadcast_to_connections(
         self, connection_ids: List[str], message: WebSocketMessage
-    ):
+    ) -> None:
         """向多个连接广播消息"""
         if not connection_ids:
             return
@@ -254,7 +252,7 @@ class WebSocketManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _send_queued_messages(self, connection_id: str, user_id: str):
+    async def _send_queued_messages(self, connection_id: str, user_id: str) -> None:
         """发送离线消息队列中的消息"""
         if user_id not in self.message_queue:
             return
@@ -282,7 +280,7 @@ class WebSocketManager:
             },
         }
 
-    async def handle_client_message(self, connection_id: str, message: str):
+    async def handle_client_message(self, connection_id: str, message: str) -> None:
         """处理客户端发送的消息"""
         try:
             data = json.loads(message)

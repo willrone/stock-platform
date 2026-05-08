@@ -5,6 +5,7 @@ Prometheus指标收集模块
 """
 
 import time
+from typing import Any
 
 from fastapi.responses import Response as FastAPIResponse
 from loguru import logger
@@ -65,11 +66,11 @@ cpu_usage_percent = Gauge("cpu_usage_percent", "CPU使用率（百分比）")
 class MetricsCollector:
     """指标收集器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.start_time = time.time()
         self._setup_app_info()
 
-    def _setup_app_info(self):
+    def _setup_app_info(self) -> None:
         """设置应用程序信息"""
         app_info.info(
             {
@@ -81,7 +82,7 @@ class MetricsCollector:
 
     def record_request(
         self, method: str, endpoint: str, status_code: int, duration: float
-    ):
+    ) -> None:
         """记录HTTP请求指标"""
         try:
             # 清理端点路径，移除参数
@@ -100,7 +101,7 @@ class MetricsCollector:
         except Exception as e:
             logger.error(f"记录请求指标失败: {e}")
 
-    def record_error(self, error_type: str, endpoint: str):
+    def record_error(self, error_type: str, endpoint: str) -> None:
         """记录错误指标"""
         try:
             clean_endpoint = self._clean_endpoint(endpoint)
@@ -108,14 +109,14 @@ class MetricsCollector:
         except Exception as e:
             logger.error(f"记录错误指标失败: {e}")
 
-    def record_prediction_task(self, status: str):
+    def record_prediction_task(self, status: str) -> None:
         """记录预测任务指标"""
         try:
             prediction_tasks_total.labels(status=status).inc()
         except Exception as e:
             logger.error(f"记录预测任务指标失败: {e}")
 
-    def record_model_prediction_time(self, model_type: str, duration: float):
+    def record_model_prediction_time(self, model_type: str, duration: float) -> None:
         """记录模型预测时间"""
         try:
             model_prediction_duration_seconds.labels(model_type=model_type).observe(
@@ -124,35 +125,35 @@ class MetricsCollector:
         except Exception as e:
             logger.error(f"记录模型预测时间失败: {e}")
 
-    def record_data_sync(self, source: str, status: str):
+    def record_data_sync(self, source: str, status: str) -> None:
         """记录数据同步指标"""
         try:
             data_sync_total.labels(source=source, status=status).inc()
         except Exception as e:
             logger.error(f"记录数据同步指标失败: {e}")
 
-    def update_active_connections(self, count: int):
+    def update_active_connections(self, count: int) -> None:
         """更新活跃连接数"""
         try:
             active_connections.set(count)
         except Exception as e:
             logger.error(f"更新活跃连接数失败: {e}")
 
-    def update_database_connections(self, count: int):
+    def update_database_connections(self, count: int) -> None:
         """更新数据库连接数"""
         try:
             database_connections_active.set(count)
         except Exception as e:
             logger.error(f"更新数据库连接数失败: {e}")
 
-    def update_task_queue_size(self, size: int):
+    def update_task_queue_size(self, size: int) -> None:
         """更新任务队列大小"""
         try:
             task_queue_size.set(size)
         except Exception as e:
             logger.error(f"更新任务队列大小失败: {e}")
 
-    def update_system_metrics(self):
+    def update_system_metrics(self) -> None:
         """更新系统指标"""
         try:
             import psutil
@@ -195,7 +196,8 @@ class MetricsCollector:
             self.update_system_metrics()
 
             # 生成指标数据
-            return generate_latest()
+            metrics_data: str = generate_latest().decode("utf-8")
+            return metrics_data
         except Exception as e:
             logger.error(f"生成指标数据失败: {e}")
             return ""
@@ -208,10 +210,10 @@ metrics_collector = MetricsCollector()
 class MetricsMiddleware:
     """指标收集中间件"""
 
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -227,7 +229,7 @@ class MetricsMiddleware:
 
         status_code = 200
 
-        async def send_wrapper(message):
+        async def send_wrapper(message: Any) -> None:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
@@ -257,7 +259,7 @@ async def metrics_endpoint() -> FastAPIResponse:
         )
 
 
-def setup_metrics_collection():
+def setup_metrics_collection() -> MetricsCollector:
     """设置指标收集"""
     logger.info("指标收集系统已启动")
     return metrics_collector

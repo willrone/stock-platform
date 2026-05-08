@@ -173,14 +173,14 @@ class DataAnalyzer:
     @staticmethod
     def analyze_file(file_path: str) -> Dict[str, Any]:
         """分析数据文件"""
-        file_path = Path(file_path)
+        path = Path(file_path)
 
-        if not file_path.exists():
-            raise FileNotFoundError(f"文件不存在: {file_path}")
+        if not path.exists():
+            raise FileNotFoundError(f"文件不存在: {path}")
 
-        analysis = {
-            "file_size": file_path.stat().st_size,
-            "file_extension": file_path.suffix.lower(),
+        analysis: Dict[str, Any] = {
+            "file_size": path.stat().st_size,
+            "file_extension": path.suffix.lower(),
             "row_count": None,
             "column_count": None,
             "columns": [],
@@ -191,22 +191,22 @@ class DataAnalyzer:
 
         try:
             # 根据文件类型进行分析
-            if file_path.suffix.lower() in [".csv", ".tsv"]:
-                df = pd.read_csv(file_path)
+            if path.suffix.lower() in [".csv", ".tsv"]:
+                df = pd.read_csv(path)
                 analysis.update(DataAnalyzer._analyze_dataframe(df))
-            elif file_path.suffix.lower() in [".xlsx", ".xls"]:
-                df = pd.read_excel(file_path)
+            elif path.suffix.lower() in [".xlsx", ".xls"]:
+                df = pd.read_excel(path)
                 analysis.update(DataAnalyzer._analyze_dataframe(df))
-            elif file_path.suffix.lower() == ".json":
-                with open(file_path, "r", encoding="utf-8") as f:
+            elif path.suffix.lower() == ".json":
+                with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 analysis.update(DataAnalyzer._analyze_json(data))
-            elif file_path.suffix.lower() == ".parquet":
-                df = pd.read_parquet(file_path)
+            elif path.suffix.lower() == ".parquet":
+                df = pd.read_parquet(path)
                 analysis.update(DataAnalyzer._analyze_dataframe(df))
 
         except Exception as e:
-            logger.warning(f"数据分析失败 {file_path}: {e}")
+            logger.warning(f"数据分析失败 {path}: {e}")
             analysis["analysis_error"] = str(e)
 
         return analysis
@@ -233,7 +233,7 @@ class DataAnalyzer:
     @staticmethod
     def _analyze_json(data: Any) -> Dict[str, Any]:
         """分析JSON数据"""
-        analysis = {}
+        analysis: Dict[str, Any] = {}
 
         if isinstance(data, list):
             analysis["row_count"] = len(data)
@@ -308,13 +308,13 @@ class DataVersionManager:
         Returns:
             版本ID
         """
-        file_path = Path(file_path)
+        path = Path(file_path)
 
-        if not file_path.exists():
-            raise FileNotFoundError(f"文件不存在: {file_path}")
+        if not path.exists():
+            raise FileNotFoundError(f"文件不存在: {path}")
 
         # 计算文件哈希
-        file_hash = self.hash_calculator.calculate_file_hash(str(file_path))
+        file_hash = self.hash_calculator.calculate_file_hash(str(path))
 
         with self.lock:
             # 检查是否已存在相同哈希的版本
@@ -327,17 +327,17 @@ class DataVersionManager:
             version_id = f"v_{int(datetime.now().timestamp())}_{file_hash[:8]}"
 
             # 分析数据文件
-            analysis = self.data_analyzer.analyze_file(str(file_path))
+            analysis = self.data_analyzer.analyze_file(str(path))
 
             # 确定存储路径
             if copy_file:
                 version_file_path = (
-                    self.storage_path / f"{version_id}{file_path.suffix}"
+                    self.storage_path / f"{version_id}{path.suffix}"
                 )
-                shutil.copy2(file_path, version_file_path)
+                shutil.copy2(path, version_file_path)
                 stored_path = str(version_file_path)
             else:
-                stored_path = str(file_path)
+                stored_path = str(path)
 
             # 创建版本对象
             version = DataVersion(
@@ -362,7 +362,7 @@ class DataVersionManager:
             self.hash_to_version[file_hash] = version_id
 
             # 更新路径索引
-            path_key = str(file_path.resolve())
+            path_key = str(path.resolve())
             if path_key not in self.path_to_version:
                 self.path_to_version[path_key] = []
             self.path_to_version[path_key].append(version_id)
@@ -576,7 +576,7 @@ class DataVersionManager:
         if not version1 or not version2:
             raise ValueError("版本不存在")
 
-        comparison = {
+        comparison: Dict[str, Any] = {
             "version1": version1.to_dict(),
             "version2": version2.to_dict(),
             "differences": {},
@@ -628,7 +628,7 @@ class DataVersionManager:
     def get_version_stats(self) -> Dict[str, Any]:
         """获取版本统计信息"""
         with self.lock:
-            stats = {
+            stats: Dict[str, Any] = {
                 "total_versions": len(self.versions),
                 "total_lineages": len(self.lineages),
                 "total_snapshots": len(self.snapshots),
@@ -658,7 +658,7 @@ class DataVersionManager:
 
             return stats
 
-    def _load_versions(self):
+    def _load_versions(self) -> None:
         """加载现有版本"""
         try:
             versions_file = self.storage_path / "versions.json"
@@ -725,19 +725,19 @@ class DataVersionManager:
         except Exception as e:
             logger.error(f"加载版本数据失败: {e}")
 
-    def _save_version(self, version: DataVersion):
+    def _save_version(self, version: DataVersion) -> None:
         """保存版本信息"""
         self._save_all_data()
 
-    def _save_lineage(self, lineage: DataLineage):
+    def _save_lineage(self, lineage: DataLineage) -> None:
         """保存血缘信息"""
         self._save_all_data()
 
-    def _save_snapshot(self, snapshot: DataSnapshot):
+    def _save_snapshot(self, snapshot: DataSnapshot) -> None:
         """保存快照信息"""
         self._save_all_data()
 
-    def _save_all_data(self):
+    def _save_all_data(self) -> None:
         """保存所有数据"""
         try:
             data = {

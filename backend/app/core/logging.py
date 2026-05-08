@@ -9,7 +9,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, cast
 
 from loguru import logger
 
@@ -19,7 +19,7 @@ from app.core.config import settings
 class StructuredFormatter:
     """结构化日志格式化器"""
 
-    def __init__(self, include_extra: bool = True):
+    def __init__(self, include_extra: bool = True) -> None:
         self.include_extra = include_extra
 
     def format(self, record: Dict[str, Any]) -> str:
@@ -78,7 +78,7 @@ def setup_logging() -> None:
         logger.add(
             sys.stdout,
             level=settings.LOG_LEVEL.upper(),
-            format=StructuredFormatter().format,
+            format=cast(Any, StructuredFormatter().format),
             serialize=True,
         )
 
@@ -178,19 +178,24 @@ class LoggerMixin:
     """日志记录混入类"""
 
     @property
-    def logger(self):
+    def logger(self) -> Any:
         """获取当前类的日志记录器"""
         return logger.bind(class_name=self.__class__.__name__)
 
 
-def log_performance(operation: str, duration: float, **kwargs):
+def log_performance(operation: str, duration: float, **kwargs: Any) -> Any:
     """记录性能日志"""
     logger.bind(log_type="performance").info(
         "PERFORMANCE | {operation} | {duration:.3f}s | {json.dumps(kwargs)}"
     )
 
 
-def log_audit(action: str, user_id: str = None, resource: str = None, **kwargs):
+def log_audit(
+    action: str,
+    user_id: Optional[str] = None,
+    resource: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
     """记录审计日志"""
     audit_data = {
         "action": action,
@@ -207,10 +212,10 @@ def log_access(
     path: str,
     status_code: int,
     duration: float,
-    ip: str = None,
-    user_agent: str = None,
-    **kwargs,
-):
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
     """记录API访问日志"""
     access_data = {
         "method": method,
@@ -227,11 +232,11 @@ def log_access(
 
 def log_data_sync(
     operation: str,
-    stock_code: str = None,
+    stock_code: Optional[str] = None,
     status: str = "success",
     records: int = 0,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """记录数据同步日志"""
     sync_data = {
         "operation": operation,
@@ -244,7 +249,7 @@ def log_data_sync(
     logger.bind(log_type="data_sync").info(f"DATA_SYNC | {json.dumps(sync_data)}")
 
 
-def log_task(task_id: str, task_type: str, status: str, **kwargs):
+def log_task(task_id: str, task_type: str, status: str, **kwargs: Any) -> Any:
     """记录任务执行日志"""
     task_data = {
         "task_id": task_id,

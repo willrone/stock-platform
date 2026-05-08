@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
@@ -299,9 +299,11 @@ def log_best_effort_failure(
 class ErrorRecoveryManager:
     """错误恢复管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.error_history: List[BaseError] = []
-        self.recovery_strategies = {
+        self.recovery_strategies: Dict[
+            ErrorType, Callable[[Any], List[RecoveryAction]]
+        ] = {
             ErrorType.PREDICTION_ERROR: self._handle_prediction_error,
             ErrorType.TASK_ERROR: self._handle_task_error,
             ErrorType.MODEL_ERROR: self._handle_model_error,
@@ -498,8 +500,8 @@ class ErrorRecoveryManager:
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
         recent_errors = [e for e in self.error_history if e.timestamp > cutoff_time]
 
-        error_counts = {}
-        severity_counts = {}
+        error_counts: Any = {}
+        severity_counts: Any = {}
 
         for error in recent_errors:
             error_type = error.error_type.value
@@ -526,10 +528,10 @@ class ErrorRecoveryManager:
 error_recovery_manager = ErrorRecoveryManager()
 
 
-def handle_exception(func):
+def handle_exception(func: Any) -> Any:
     """装饰器：统一异常处理"""
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except BaseError as e:
@@ -549,10 +551,10 @@ def handle_exception(func):
     return wrapper
 
 
-def handle_async_exception(func):
+def handle_async_exception(func: Any) -> Any:
     """装饰器：异步函数统一异常处理"""
 
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return await func(*args, **kwargs)
         except BaseError as e:

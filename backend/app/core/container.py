@@ -4,7 +4,7 @@
 """
 
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Optional
 
 from app.services.data import SimpleDataService
 from app.services.data.sftp_sync_service import SFTPSyncService
@@ -14,13 +14,13 @@ from app.services.prediction import TechnicalIndicatorCalculator
 class ServiceContainer:
     """服务容器，管理所有服务组件"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._data_service: Optional[SimpleDataService] = None
         self._indicators_service: Optional[TechnicalIndicatorCalculator] = None
         self._sftp_sync_service: Optional[SFTPSyncService] = None
         self._initialized = False
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """初始化所有服务"""
         if self._initialized:
             return
@@ -32,7 +32,7 @@ class ServiceContainer:
 
         self._initialized = True
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """清理所有服务"""
         if self._data_service:
             await self._data_service.__aexit__(None, None, None)
@@ -42,21 +42,21 @@ class ServiceContainer:
     @property
     def data_service(self) -> SimpleDataService:
         """获取数据服务"""
-        if not self._initialized:
+        if not self._initialized or self._data_service is None:
             raise RuntimeError("服务容器未初始化")
         return self._data_service
 
     @property
     def indicators_service(self) -> TechnicalIndicatorCalculator:
         """获取技术指标服务"""
-        if not self._initialized:
+        if not self._initialized or self._indicators_service is None:
             raise RuntimeError("服务容器未初始化")
         return self._indicators_service
 
     @property
     def sftp_sync_service(self) -> SFTPSyncService:
         """获取SFTP同步服务"""
-        if not self._initialized:
+        if not self._initialized or self._sftp_sync_service is None:
             raise RuntimeError("服务容器未初始化")
         return self._sftp_sync_service
 
@@ -74,7 +74,7 @@ async def get_container() -> ServiceContainer:
     return _container
 
 
-async def cleanup_container():
+async def cleanup_container() -> None:
     """清理服务容器"""
     global _container
     if _container:
@@ -83,7 +83,7 @@ async def cleanup_container():
 
 
 @asynccontextmanager
-async def container_lifespan():
+async def container_lifespan() -> Any:
     """服务容器生命周期管理器"""
     try:
         container = await get_container()

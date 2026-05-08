@@ -60,7 +60,7 @@ class Task(Base):
     error_message = Column(Text, nullable=True)
     estimated_duration = Column(Integer, nullable=True)  # 预估时长（秒）
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "task_id": self.task_id,
             "task_name": self.task_name,
@@ -99,7 +99,7 @@ class PredictionResult(Base):
     risk_metrics = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -145,7 +145,7 @@ class BacktestResult(Base):
     trade_history = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -199,7 +199,7 @@ class ModelInfo(Base):
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     deployed_at = Column(DateTime, nullable=True)
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "model_id": self.model_id,
             "model_name": self.model_name,
@@ -244,7 +244,7 @@ class ModelLifecycleEvent(Base):
     event_metadata = Column(JSON, nullable=True)  # 附加元数据
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "event_id": self.event_id,
             "model_id": self.model_id,
@@ -303,7 +303,7 @@ class RiskMetrics:
     max_drawdown: float
     sharpe_ratio: float
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "value_at_risk": self.value_at_risk,
             "expected_shortfall": self.expected_shortfall,

@@ -4,6 +4,7 @@
 """
 
 from datetime import datetime, timezone
+from typing import Any, cast
 
 from sqlalchemy import (
     JSON,
@@ -65,7 +66,7 @@ class BacktestDetailedResult(Base):
         Index("idx_backtest_detailed_backtest_id", "backtest_id"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -113,7 +114,7 @@ class BacktestChartCache(Base):
         Index("idx_chart_cache_task_id", "task_id"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -126,9 +127,10 @@ class BacktestChartCache(Base):
 
     def is_expired(self) -> bool:
         """检查缓存是否过期"""
-        if self.expires_at is None:
+        expires_at = cast(Any, self.expires_at)
+        if expires_at is None:
             return False
-        return utcnow() > self.expires_at
+        return bool(utcnow() > expires_at)
 
 
 class PortfolioSnapshot(Base):
@@ -155,7 +157,7 @@ class PortfolioSnapshot(Base):
         Index("idx_portfolio_backtest_date", "backtest_id", "snapshot_date"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -204,7 +206,7 @@ class TradeRecord(Base):
         Index("idx_trade_stock_time", "stock_code", "timestamp"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -260,7 +262,7 @@ class SignalRecord(Base):
         ),  # 复合索引，加速按任务+股票+信号类型查询
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         # 安全地获取 execution_reason，兼容字段不存在的情况
         execution_reason = None
         try:
@@ -319,7 +321,7 @@ class BacktestBenchmark(Base):
         Index("idx_benchmark_backtest_id", "backtest_id"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -413,7 +415,7 @@ class BacktestStatistics(Base):
         Index("idx_statistics_backtest_id", "backtest_id"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> Any:
         """转换为字典格式"""
         return {
             "id": self.id,

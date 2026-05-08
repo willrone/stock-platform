@@ -179,7 +179,7 @@ class MetricsCalculator:
         self.records: Dict[str, deque] = defaultdict(lambda: deque(maxlen=window_size))
         self.lock = threading.Lock()
 
-    def add_record(self, record: PredictionRecord):
+    def add_record(self, record: PredictionRecord) -> Any:
         """添加预测记录"""
         with self.lock:
             key = f"{record.model_id}_{record.model_version}"
@@ -282,7 +282,7 @@ class MetricsCalculator:
 class AlertManager:
     """告警管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules: Dict[str, AlertRule] = {}
         self.active_alerts: Dict[str, Alert] = {}
         self.alert_history: List[Alert] = []
@@ -292,7 +292,7 @@ class AlertManager:
         # 注册默认告警规则
         self._register_default_rules()
 
-    def _register_default_rules(self):
+    def _register_default_rules(self) -> None:
         """注册默认告警规则"""
         default_rules = [
             AlertRule(
@@ -348,24 +348,24 @@ class AlertManager:
         for rule in default_rules:
             self.rules[rule.name] = rule
 
-    def add_rule(self, rule: AlertRule):
+    def add_rule(self, rule: AlertRule) -> Any:
         """添加告警规则"""
         with self.lock:
             self.rules[rule.name] = rule
         logger.info(f"添加告警规则: {rule.name}")
 
-    def remove_rule(self, rule_name: str):
+    def remove_rule(self, rule_name: str) -> Any:
         """移除告警规则"""
         with self.lock:
             if rule_name in self.rules:
                 del self.rules[rule_name]
                 logger.info(f"移除告警规则: {rule_name}")
 
-    def add_callback(self, callback: Callable[[Alert], None]):
+    def add_callback(self, callback: Callable[[Alert], None]) -> Any:
         """添加告警回调函数"""
         self.callbacks.append(callback)
 
-    def check_metrics(self, metrics: PerformanceMetrics):
+    def check_metrics(self, metrics: PerformanceMetrics) -> Any:
         """检查指标并触发告警"""
         with self.lock:
             for rule_name, rule in self.rules.items():
@@ -637,7 +637,7 @@ class PerformanceMonitor:
         latency_ms: float = 0.0,
         success: bool = True,
         error_message: Optional[str] = None,
-    ):
+    ) -> Any:
         """记录预测请求"""
         record = PredictionRecord(
             request_id=request_id,
@@ -655,7 +655,7 @@ class PerformanceMonitor:
         self.metrics_calculator.add_record(record)
         logger.debug(f"记录预测: {request_id}, 延迟: {latency_ms}ms, 成功: {success}")
 
-    async def start_monitoring(self):
+    async def start_monitoring(self) -> None:
         """启动监控"""
         if self.running:
             logger.warning("监控已在运行")
@@ -665,7 +665,7 @@ class PerformanceMonitor:
         self.monitoring_task = asyncio.create_task(self._monitoring_loop())
         logger.info("性能监控已启动")
 
-    async def stop_monitoring(self):
+    async def stop_monitoring(self) -> None:
         """停止监控"""
         if not self.running:
             return
@@ -680,7 +680,7 @@ class PerformanceMonitor:
 
         logger.info("性能监控已停止")
 
-    async def _monitoring_loop(self):
+    async def _monitoring_loop(self) -> None:
         """监控循环"""
         while self.running:
             try:
@@ -748,11 +748,11 @@ class PerformanceMonitor:
 
         return history[-limit:]
 
-    def add_alert_rule(self, rule: AlertRule):
+    def add_alert_rule(self, rule: AlertRule) -> Any:
         """添加告警规则"""
         self.alert_manager.add_rule(rule)
 
-    def remove_alert_rule(self, rule_name: str):
+    def remove_alert_rule(self, rule_name: str) -> Any:
         """移除告警规则"""
         self.alert_manager.remove_rule(rule_name)
 
@@ -760,15 +760,15 @@ class PerformanceMonitor:
         """获取所有告警规则"""
         return list(self.alert_manager.rules.values())
 
-    def get_active_alerts(self) -> List[Alert]:
+    def get_active_alerts(self) -> List[Dict[str, Any]]:
         """获取活跃告警"""
         return self.alert_manager.get_active_alerts()
 
-    def get_alert_history(self, limit: int = 100) -> List[Alert]:
+    def get_alert_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """获取告警历史"""
-        return self.alert_manager.get_alert_history(limit)
+        return self.alert_manager.get_alert_history(limit=limit)
 
-    def add_alert_callback(self, callback: Callable[[Alert], None]):
+    def add_alert_callback(self, callback: Callable[[Alert], None]) -> Any:
         """添加告警回调"""
         self.alert_manager.add_callback(callback)
 
@@ -790,10 +790,14 @@ class PerformanceMonitor:
         active_alerts = self.get_active_alerts()
         alert_counts = {
             "critical": len(
-                [a for a in active_alerts if a.level == AlertLevel.CRITICAL]
+                [a for a in active_alerts if a.get("level") == AlertLevel.CRITICAL.value]
             ),
-            "warning": len([a for a in active_alerts if a.level == AlertLevel.WARNING]),
-            "info": len([a for a in active_alerts if a.level == AlertLevel.INFO]),
+            "warning": len(
+                [a for a in active_alerts if a.get("level") == AlertLevel.WARNING.value]
+            ),
+            "info": len(
+                [a for a in active_alerts if a.get("level") == AlertLevel.INFO.value]
+            ),
         }
 
         return {
@@ -877,8 +881,8 @@ class PerformanceMonitor:
                 active_models.add(f"{m.model_id}_{m.model_version}")
 
         # 计算平均指标
-        avg_latency = 0
-        error_rate = 0
+        avg_latency = 0.0
+        error_rate = 0.0
         if recent_metrics:
             avg_latency = statistics.mean([m.avg_latency_ms for m in recent_metrics])
             error_rate = statistics.mean([m.error_rate for m in recent_metrics])

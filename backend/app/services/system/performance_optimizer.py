@@ -16,11 +16,11 @@ from loguru import logger
 class PerformanceOptimizer:
     """系统性能优化器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.executor = ThreadPoolExecutor(max_workers=4)
-        self.cache = {}
-        self.cache_ttl = {}
-        self.performance_metrics = {}
+        self.cache: Dict[str, Any] = {}
+        self.cache_ttl: Dict[str, Any] = {}
+        self.performance_metrics: Dict[str, Any] = {}
 
     def optimize_feature_computation(self, feature_configs: List[Dict]) -> List[Dict]:
         """优化特征计算性能"""
@@ -255,7 +255,7 @@ class PerformanceOptimizer:
         """批量优化查询"""
         try:
             # 按表分组
-            table_groups = {}
+            table_groups: Any = {}
             for query in queries:
                 table = query.get("table", "unknown")
                 if table not in table_groups:
@@ -440,7 +440,7 @@ class PerformanceOptimizer:
 
         return suggestions
 
-    def __del__(self):
+    def __del__(self) -> Any:
         """清理资源"""
         try:
             if hasattr(self, "executor"):

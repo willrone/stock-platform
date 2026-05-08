@@ -9,12 +9,12 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 try:
     from loguru import logger as _logger
 except ImportError:
-    _logger = logging.getLogger(__name__)
+    _logger = cast(Any, logging.getLogger(__name__))
 
 logger = (
     _logger.bind(log_type="data_sync_events") if hasattr(_logger, "bind") else _logger
@@ -62,7 +62,7 @@ class DataSyncEvent:
 class DataSyncEventManager:
     """数据同步事件管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # 事件监听器注册表
         self._listeners: Dict[DataSyncEventType, List[Callable]] = {
             event_type: [] for event_type in DataSyncEventType
@@ -73,7 +73,7 @@ class DataSyncEventManager:
         self._max_history_size = 1000
 
         # 统计信息
-        self._stats = {
+        self._stats: Dict[str, Any] = {
             "total_events": 0,
             "events_by_type": {event_type.value: 0 for event_type in DataSyncEventType},
             "last_event_time": None,
@@ -83,7 +83,7 @@ class DataSyncEventManager:
 
     def register_listener(
         self, event_type: DataSyncEventType, callback: Callable[[DataSyncEvent], Any]
-    ):
+    ) -> Any:
         """注册事件监听器"""
         if event_type not in self._listeners:
             self._listeners[event_type] = []
@@ -93,7 +93,7 @@ class DataSyncEventManager:
 
     def unregister_listener(
         self, event_type: DataSyncEventType, callback: Callable[[DataSyncEvent], Any]
-    ):
+    ) -> Any:
         """取消注册事件监听器"""
         if event_type in self._listeners and callback in self._listeners[event_type]:
             self._listeners[event_type].remove(callback)
@@ -101,7 +101,7 @@ class DataSyncEventManager:
                 f"取消注册事件监听器: {event_type.value}, 回调: {callback.__name__}"
             )
 
-    async def emit_event(self, event: DataSyncEvent):
+    async def emit_event(self, event: DataSyncEvent) -> Any:
         """发出事件"""
         try:
             # 记录事件
@@ -110,8 +110,9 @@ class DataSyncEventManager:
                 self._event_history.pop(0)
 
             # 更新统计
-            self._stats["total_events"] += 1
-            self._stats["events_by_type"][event.event_type.value] += 1
+            self._stats["total_events"] = int(self._stats["total_events"]) + 1
+            events_by_type = cast(Dict[str, int], self._stats["events_by_type"])
+            events_by_type[event.event_type.value] += 1
             self._stats["last_event_time"] = event.timestamp.isoformat()
 
             logger.info(
@@ -164,7 +165,7 @@ class DataSyncEventManager:
         date_range: Tuple[datetime, datetime],
         sync_type: str = "manual",
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> Any:
         """发出同步开始事件"""
         event = DataSyncEvent(
             event_type=DataSyncEventType.SYNC_STARTED,
@@ -182,7 +183,7 @@ class DataSyncEventManager:
         date_range: Tuple[datetime, datetime],
         sync_type: str = "manual",
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> Any:
         """发出同步完成事件"""
         event = DataSyncEvent(
             event_type=DataSyncEventType.SYNC_COMPLETED,
@@ -201,7 +202,7 @@ class DataSyncEventManager:
         sync_type: str = "manual",
         error_message: str = "",
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> Any:
         """发出同步失败事件"""
         event = DataSyncEvent(
             event_type=DataSyncEventType.SYNC_FAILED,
@@ -219,7 +220,7 @@ class DataSyncEventManager:
         stock_code: str,
         date_range: Tuple[datetime, datetime],
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> Any:
         """发出增量更新事件"""
         event = DataSyncEvent(
             event_type=DataSyncEventType.INCREMENTAL_UPDATE,
@@ -236,7 +237,7 @@ class DataSyncEventManager:
         stock_code: str,
         date_range: Tuple[datetime, datetime],
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> Any:
         """发出全量刷新事件"""
         event = DataSyncEvent(
             event_type=DataSyncEventType.FULL_REFRESH,
@@ -279,7 +280,7 @@ class DataSyncEventManager:
             "history_size": len(self._event_history),
         }
 
-    def clear_history(self):
+    def clear_history(self) -> None:
         """清空事件历史"""
         self._event_history.clear()
         logger.info("事件历史已清空")
@@ -297,14 +298,14 @@ def get_data_sync_event_manager() -> DataSyncEventManager:
     return _global_event_manager
 
 
-def register_feature_pipeline_callbacks():
+def register_feature_pipeline_callbacks() -> None:
     """注册特征管道回调"""
     from ..features.feature_pipeline import FeaturePipeline
 
     event_manager = get_data_sync_event_manager()
     feature_pipeline = FeaturePipeline()
 
-    async def on_sync_completed(event: DataSyncEvent):
+    async def on_sync_completed(event: DataSyncEvent) -> Any:
         """同步完成回调"""
         try:
             await feature_pipeline.on_data_sync_complete(
@@ -315,7 +316,7 @@ def register_feature_pipeline_callbacks():
         except Exception as e:
             logger.error(f"特征管道回调执行失败: {e}")
 
-    async def on_incremental_update(event: DataSyncEvent):
+    async def on_incremental_update(event: DataSyncEvent) -> Any:
         """增量更新回调"""
         try:
             await feature_pipeline.on_data_sync_complete(

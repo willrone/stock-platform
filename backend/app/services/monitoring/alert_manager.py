@@ -125,9 +125,21 @@ class EmailNotifier:
             return False
 
         try:
+            if not self.config.smtp_server or self.config.smtp_port is None:
+                logger.error("SMTP配置不完整：缺少服务器或端口")
+                return False
+            if not self.config.smtp_username or not self.config.smtp_password:
+                logger.error("SMTP配置不完整：缺少用户名或密码")
+                return False
+
+            smtp_server = self.config.smtp_server
+            smtp_port = self.config.smtp_port
+            smtp_username = self.config.smtp_username
+            smtp_password = self.config.smtp_password
+
             # 创建邮件
             msg = MIMEMultipart()
-            msg["From"] = self.config.smtp_username
+            msg["From"] = smtp_username
             msg["Subject"] = subject
 
             # 添加HTML内容
@@ -135,9 +147,9 @@ class EmailNotifier:
             msg.attach(MIMEText(html_content, "html"))
 
             # 发送邮件
-            with smtplib.SMTP(self.config.smtp_server, self.config.smtp_port) as server:
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
                 server.starttls()
-                server.login(self.config.smtp_username, self.config.smtp_password)
+                server.login(smtp_username, smtp_password)
 
                 for recipient in recipients:
                     msg["To"] = recipient
@@ -187,12 +199,12 @@ class WebSocketNotifier:
         self.config = config
         self.connections: Set[Any] = set()  # WebSocket连接集合
 
-    def add_connection(self, websocket):
+    def add_connection(self, websocket: Any) -> Any:
         """添加WebSocket连接"""
         self.connections.add(websocket)
         logger.info(f"添加WebSocket连接，当前连接数: {len(self.connections)}")
 
-    def remove_connection(self, websocket):
+    def remove_connection(self, websocket: Any) -> Any:
         """移除WebSocket连接"""
         self.connections.discard(websocket)
         logger.info(f"移除WebSocket连接，当前连接数: {len(self.connections)}")
@@ -278,7 +290,7 @@ class WebhookNotifier:
 class RateLimiter:
     """限流器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.notification_history: Dict[str, deque] = defaultdict(
             lambda: deque(maxlen=100)
         )
@@ -315,7 +327,7 @@ class RateLimiter:
 class AlertNotificationManager:
     """告警通知管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.notification_configs: Dict[NotificationChannel, NotificationConfig] = {}
         self.notifiers: Dict[NotificationChannel, Any] = {}
         self.rate_limiter = RateLimiter()
@@ -328,7 +340,7 @@ class AlertNotificationManager:
 
         logger.info("告警通知管理器初始化完成")
 
-    def _init_default_configs(self):
+    def _init_default_configs(self) -> None:
         """初始化默认配置"""
         # 邮件配置
         email_config = NotificationConfig(
@@ -362,7 +374,7 @@ class AlertNotificationManager:
         )
         self.notification_configs[NotificationChannel.WEBHOOK] = webhook_config
 
-    def update_config(self, channel: NotificationChannel, config: NotificationConfig):
+    def update_config(self, channel: NotificationChannel, config: NotificationConfig) -> Any:
         """更新通知配置"""
         self.notification_configs[channel] = config
 
@@ -380,14 +392,14 @@ class AlertNotificationManager:
         """获取通知配置"""
         return self.notification_configs.get(channel)
 
-    async def send_alert_notification(self, alert: Alert):
+    async def send_alert_notification(self, alert: Alert) -> Any:
         """发送告警通知"""
         subject = f"[{alert.level.value.upper()}] {alert.rule_name}"
         content = self._format_alert_content(alert)
 
         await self._send_notification("alert", alert.alert_id, subject, content)
 
-    async def send_drift_notification(self, drift_report: DriftReport):
+    async def send_drift_notification(self, drift_report: DriftReport) -> Any:
         """发送漂移检测通知"""
         if drift_report.overall_severity in [
             DriftSeverity.HIGH,
@@ -402,7 +414,7 @@ class AlertNotificationManager:
 
     async def send_custom_notification(
         self, subject: str, content: str, notification_type: str = "custom"
-    ):
+    ) -> Any:
         """发送自定义通知"""
         notification_id = str(uuid.uuid4())
         await self._send_notification(
@@ -411,7 +423,7 @@ class AlertNotificationManager:
 
     async def _send_notification(
         self, notification_type: str, source_id: str, subject: str, content: str
-    ):
+    ) -> Any:
         """发送通知到所有启用的渠道"""
         for channel, config in self.notification_configs.items():
             if not config.enabled:
@@ -428,7 +440,7 @@ class AlertNotificationManager:
 
     async def _send_to_channel(
         self, channel: NotificationChannel, source_id: str, subject: str, content: str
-    ):
+    ) -> Any:
         """发送通知到指定渠道"""
         if channel not in self.notifiers:
             logger.warning(f"通知器未初始化: {channel.value}")
@@ -558,10 +570,12 @@ class AlertNotificationManager:
                 return {}
 
             # 按渠道统计
-            channel_stats = defaultdict(lambda: {"sent": 0, "failed": 0, "total": 0})
+            channel_stats: Dict[str, Dict[str, int]] = defaultdict(
+                lambda: {"sent": 0, "failed": 0, "total": 0}
+            )
 
             # 按状态统计
-            status_stats = defaultdict(int)
+            status_stats: Dict[str, int] = defaultdict(int)
 
             # 最近24小时统计
             cutoff_time = datetime.now() - timedelta(hours=24)
@@ -586,12 +600,12 @@ class AlertNotificationManager:
                 ),
             }
 
-    def add_websocket_connection(self, websocket):
+    def add_websocket_connection(self, websocket: Any) -> Any:
         """添加WebSocket连接"""
         if NotificationChannel.WEBSOCKET in self.notifiers:
             self.notifiers[NotificationChannel.WEBSOCKET].add_connection(websocket)
 
-    def remove_websocket_connection(self, websocket):
+    def remove_websocket_connection(self, websocket: Any) -> Any:
         """移除WebSocket连接"""
         if NotificationChannel.WEBSOCKET in self.notifiers:
             self.notifiers[NotificationChannel.WEBSOCKET].remove_connection(websocket)
