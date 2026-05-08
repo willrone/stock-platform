@@ -389,7 +389,7 @@ def run_multiprocess_backtest(
 
     if all_equity_curves:
         # 按日期对齐并计算平均值
-        date_to_values = {}
+        date_to_values: Dict[Any, List[float]] = {}
         for curve in all_equity_curves:
             for date, value in curve:
                 if date not in date_to_values:

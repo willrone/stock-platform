@@ -7,7 +7,7 @@ from collections import defaultdict
 from typing import Any, Dict, List
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 from loguru import logger
 
 from app.core.error_handler import ErrorSeverity, TaskError
@@ -16,7 +16,7 @@ from app.core.error_handler import ErrorSeverity, TaskError
 class PositionAnalyzer:
     """持仓分析器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     async def analyze_position_performance(
@@ -82,7 +82,7 @@ class PositionAnalyzer:
         """分析各股票表现"""
 
         # 按股票分组统计
-        stock_stats = defaultdict(
+        stock_stats: defaultdict[str, Dict[str, Any]] = defaultdict(
             lambda: {
                 "stock_code": "",
                 "trades": [],
@@ -115,7 +115,7 @@ class PositionAnalyzer:
                 stock_stats[stock_code]["sell_trades"].append(trade)
 
         # 计算每只股票的详细指标
-        result = []
+        result: List[Dict[str, Any]] = []
         for stock_code, stats in stock_stats.items():
             buy_trades = stats["buy_trades"]
             sell_trades = stats["sell_trades"]
@@ -195,7 +195,9 @@ class PositionAnalyzer:
                 "largest_win": float(largest_win),
                 "largest_loss": float(largest_loss),
                 "profit_factor": (
-                    float(abs(avg_win / avg_loss)) if avg_loss != 0 else float("inf")
+                    float(abs(float(avg_win) / float(avg_loss)))
+                    if float(avg_loss) != 0
+                    else 0.0
                 ),
                 # 持仓期分析
                 "avg_holding_period": int(avg_holding_period),
@@ -227,7 +229,7 @@ class PositionAnalyzer:
     ) -> List[int]:
         """计算单只股票的持仓期"""
 
-        holding_periods = []
+        holding_periods: List[int] = []
 
         # 简化的FIFO配对算法
         buy_queue = sorted(buy_trades, key=lambda x: pd.to_datetime(x["timestamp"]))
@@ -257,20 +259,20 @@ class PositionAnalyzer:
 
         try:
             # 收集所有持仓数据
-            all_positions = []
-            weight_history = []
+            all_positions: List[Dict[str, Any]] = []
+            weight_history: List[Dict[str, Any]] = []
 
             for snapshot in portfolio_history:
                 date = snapshot.get("date")
                 portfolio_value = snapshot.get("portfolio_value", 0)
                 positions = snapshot.get("positions", {})
 
-                if portfolio_value > 0 and positions:
+                if float(portfolio_value) > 0 and positions:
                     # 计算当前时点的权重
                     position_weights = {}
                     for stock_code, position in positions.items():
                         market_value = position.get("market_value", 0)
-                        weight = market_value / portfolio_value
+                        weight = float(market_value) / float(portfolio_value)
                         position_weights[stock_code] = weight
 
                         all_positions.append(
@@ -329,7 +331,7 @@ class PositionAnalyzer:
             stock_weights[position["stock_code"]].append(position["weight"])
 
         # 计算每只股票的权重统计
-        weight_stats = []
+        weight_stats: List[Dict[str, Any]] = []
         for stock_code, weights in stock_weights.items():
             stats = {
                 "stock_code": stock_code,
@@ -344,7 +346,7 @@ class PositionAnalyzer:
         # 按平均权重排序
         weight_stats.sort(key=lambda x: x["avg_weight"], reverse=True)
 
-        return weight_stats
+        return {"stock_weights": weight_stats}
 
     def _analyze_weight_changes(
         self, weight_history: List[Dict]
@@ -502,9 +504,9 @@ class PositionAnalyzer:
         """分析交易时间模式"""
 
         # 按月份统计
-        monthly_counts = defaultdict(int)
+        monthly_counts: Dict[int, int] = defaultdict(int)
         # 按星期统计
-        weekday_counts = defaultdict(int)
+        weekday_counts: Dict[int, int] = defaultdict(int)
 
         for trade in trades:
             timestamp = pd.to_datetime(trade["timestamp"])
@@ -566,7 +568,7 @@ class PositionAnalyzer:
         ]
 
         # 按月统计交易次数
-        monthly_trades = defaultdict(int)
+        monthly_trades: defaultdict[str, int] = defaultdict(int)
         for trade in trades:
             timestamp = pd.to_datetime(trade["timestamp"])
             month_key = timestamp.strftime("%Y-%m")
@@ -626,7 +628,7 @@ class PositionAnalyzer:
         """分析持仓期"""
 
         # 按股票分组计算持仓期
-        stock_holdings = defaultdict(lambda: {"buys": [], "sells": []})
+        stock_holdings: defaultdict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: {"buys": [], "sells": []})
 
         for trade in trade_history:
             stock_code = trade.get("stock_code", "")
@@ -697,7 +699,7 @@ class PositionAnalyzer:
         """计算交易集中度"""
 
         # 按股票统计交易量
-        stock_volumes = defaultdict(float)
+        stock_volumes: defaultdict[str, float] = defaultdict(float)
         total_volume = 0
 
         for trade in trade_history:
@@ -753,10 +755,10 @@ class PositionAnalyzer:
             return {}
 
         # 计算权重
-        weights = []
+        weights: List[float] = []
         for position in positions.values():
-            market_value = position.get("market_value", 0)
-            weight = market_value / portfolio_value
+            market_value = float(position.get("market_value", 0))
+            weight = market_value / float(portfolio_value)
             weights.append(weight)
 
         if not weights:

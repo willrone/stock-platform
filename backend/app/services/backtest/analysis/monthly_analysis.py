@@ -3,10 +3,10 @@
 提供详细的月度、季度、年度绩效分析功能
 """
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 from loguru import logger
 
 from app.core.error_handler import ErrorSeverity, TaskError
@@ -15,7 +15,7 @@ from app.core.error_handler import ErrorSeverity, TaskError
 class MonthlyAnalyzer:
     """月度分析器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.month_names = {
             1: "一月",
             2: "二月",
@@ -211,7 +211,7 @@ class MonthlyAnalyzer:
         return result
 
     def _calculate_monthly_statistics(
-        self, monthly_returns: List[Dict]
+        self, monthly_returns: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """计算月度统计指标"""
 
@@ -267,7 +267,9 @@ class MonthlyAnalyzer:
             ),
         }
 
-    def _calculate_max_consecutive_months(self, returns: List[float], condition) -> int:
+    def _calculate_max_consecutive_months(
+        self, returns: List[float], condition: Callable[[float], bool]
+    ) -> int:
         """计算最大连续月份数"""
         max_consecutive = 0
         current_consecutive = 0
@@ -288,7 +290,7 @@ class MonthlyAnalyzer:
             return {}
 
         # 按月份分组
-        month_groups = {}
+        month_groups: Dict[int, List[float]] = {}
         for month_data in monthly_returns:
             month = month_data["month"]
             if month not in month_groups:
@@ -296,7 +298,7 @@ class MonthlyAnalyzer:
             month_groups[month].append(month_data["monthly_return"])
 
         # 计算每个月份的平均收益
-        monthly_averages = {}
+        monthly_averages: Dict[int, Dict[str, Any]] = {}
         for month, returns in month_groups.items():
             monthly_averages[month] = {
                 "month": month,
@@ -308,13 +310,13 @@ class MonthlyAnalyzer:
             }
 
         # 按季度分组
-        quarter_groups = {1: [], 2: [], 3: [], 4: []}
+        quarter_groups: Dict[int, List[float]] = {1: [], 2: [], 3: [], 4: []}
         for month_data in monthly_returns:
             quarter = (month_data["month"] - 1) // 3 + 1
             quarter_groups[quarter].append(month_data["monthly_return"])
 
         # 计算每个季度的平均收益
-        quarterly_averages = {}
+        quarterly_averages: Dict[int, Dict[str, Any]] = {}
         for quarter, returns in quarter_groups.items():
             if returns:
                 quarterly_averages[quarter] = {
@@ -328,23 +330,23 @@ class MonthlyAnalyzer:
 
         # 找出最佳和最差的月份/季度
         best_month = (
-            max(monthly_averages.values(), key=lambda x: x["avg_return"])
+            max(monthly_averages.values(), key=lambda x: float(x["avg_return"]))
             if monthly_averages
             else None
         )
         worst_month = (
-            min(monthly_averages.values(), key=lambda x: x["avg_return"])
+            min(monthly_averages.values(), key=lambda x: float(x["avg_return"]))
             if monthly_averages
             else None
         )
 
         best_quarter = (
-            max(quarterly_averages.values(), key=lambda x: x["avg_return"])
+            max(quarterly_averages.values(), key=lambda x: float(x["avg_return"]))
             if quarterly_averages
             else None
         )
         worst_quarter = (
-            min(quarterly_averages.values(), key=lambda x: x["avg_return"])
+            min(quarterly_averages.values(), key=lambda x: float(x["avg_return"]))
             if quarterly_averages
             else None
         )
@@ -474,6 +476,6 @@ class MonthlyAnalyzer:
             cumulative = (1 + returns).cumprod()
             running_max = cumulative.expanding().max()
             drawdown = (cumulative - running_max) / running_max
-            return drawdown.min()
+            return float(drawdown.min())
         except Exception:
             return 0

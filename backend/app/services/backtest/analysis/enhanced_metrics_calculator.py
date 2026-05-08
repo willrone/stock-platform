@@ -302,13 +302,13 @@ class EnhancedMetricsCalculator:
         win_rate = win_count / total_trades if total_trades > 0 else 0
 
         # 盈亏统计
-        wins = [t["pnl"] for t in winning_trades]
-        losses = [t["pnl"] for t in losing_trades]
+        wins = [float(t["pnl"]) for t in winning_trades]
+        losses = [float(t["pnl"]) for t in losing_trades]
 
-        avg_win = np.mean(wins) if wins else 0
-        avg_loss = np.mean(losses) if losses else 0
-        largest_win = max(wins) if wins else 0
-        largest_loss = min(losses) if losses else 0
+        avg_win = float(np.mean(wins)) if wins else 0.0
+        avg_loss = float(np.mean(losses)) if losses else 0.0
+        largest_win = float(max(wins)) if wins else 0.0
+        largest_loss = float(min(losses)) if losses else 0.0
 
         # 盈亏比
         profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else float("inf")
@@ -329,7 +329,7 @@ class EnhancedMetricsCalculator:
                 trade_durations.append(duration)
                 del buy_trades[stock_code]
 
-        avg_trade_duration = np.mean(trade_durations) if trade_durations else 0
+        avg_trade_duration = float(np.mean(trade_durations)) if trade_durations else 0.0
 
         return {
             "total_trades": total_trades,
@@ -659,17 +659,17 @@ class EnhancedMetricsCalculator:
         """
         try:
             # 按股票代码分组统计
-            stock_performance = {}
+            stock_performance: Dict[str, Dict[str, float]] = {}
 
             for trade in trade_history:
                 stock_code = trade.get("stock_code", "")
-                pnl = trade.get("pnl", 0)
+                pnl = float(trade.get("pnl", 0) or 0)
 
                 if stock_code not in stock_performance:
                     stock_performance[stock_code] = {
-                        "total_pnl": 0,
-                        "trade_count": 0,
-                        "win_count": 0,
+                        "total_pnl": 0.0,
+                        "trade_count": 0.0,
+                        "win_count": 0.0,
                     }
 
                 stock_performance[stock_code]["total_pnl"] += pnl
@@ -683,7 +683,7 @@ class EnhancedMetricsCalculator:
                 perf["win_rate"] = (
                     perf["win_count"] / perf["trade_count"]
                     if perf["trade_count"] > 0
-                    else 0
+                    else 0.0
                 )
 
             # 排序

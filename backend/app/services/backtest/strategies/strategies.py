@@ -8,10 +8,10 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 import talib
 from loguru import logger
 
@@ -133,7 +133,7 @@ class BollingerBandStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -292,7 +292,7 @@ class StochasticStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -436,7 +436,7 @@ class CCIStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -583,7 +583,7 @@ class KDJStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
         try:
             indicators = self.get_cached_indicators(data)
             current_idx = self._get_current_idx(data, current_date)
@@ -727,7 +727,7 @@ class OBVStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
         try:
             indicators = self.get_cached_indicators(data)
             current_idx = self._get_current_idx(data, current_date)
@@ -809,7 +809,7 @@ class StatisticalArbitrageStrategy(BaseStrategy):
         min_len = min(len(returns1), len(returns2))
         correlation = returns1.iloc[-min_len:].corr(returns2.iloc[-min_len:])
 
-        return correlation
+        return float(correlation)
 
 
 class PairsTradingStrategy(StatisticalArbitrageStrategy):
@@ -844,9 +844,11 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
             "momentum_20d": momentum_20d,
         }
 
-    def find_pairs(self, stock_data: Dict[str, pd.DataFrame]) -> List[Tuple[str, str]]:
+    def find_pairs(
+        self, stock_data: Dict[str, pd.DataFrame]
+    ) -> List[Tuple[str, str, float]]:
         """寻找符合条件的配对"""
-        valid_pairs = []
+        valid_pairs: List[Tuple[str, str, float]] = []
         stock_codes = list(stock_data.keys())
 
         for i in range(len(stock_codes)):
@@ -869,7 +871,7 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成配对交易信号（单股票模式下使用相对强度）"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -963,7 +965,7 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成均值回归交易信号"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1123,7 +1125,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             "mean_reversion_strength": mean_reversion_strength,
         }
 
-    def _estimate_half_life(self, returns) -> float:
+    def _estimate_half_life(self, returns: Any) -> float:
         """估计半衰期。纯 numpy 实现，避免 pandas shift/iloc/isna 开销。
 
         Args:
@@ -1140,7 +1142,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             # 取最近 252 个有效值
             window = min(len(arr) - 1, 252)
             if window < 10:
-                return self.half_life
+                return float(self.half_life)
 
             y = arr[-window:]  # t 期收益
             x = arr[-window - 1 : -1]  # t-1 期收益（lag）
@@ -1148,7 +1150,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             # 过滤 NaN/Inf
             valid = np.isfinite(x) & np.isfinite(y)
             if valid.sum() < 10:
-                return self.half_life
+                return float(self.half_life)
 
             y = y[valid]
             x = x[valid]
@@ -1160,14 +1162,14 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             )
 
             if beta >= 0:
-                return self.half_life
+                return float(self.half_life)
 
             half_life = -np.log(2) / beta
-            return max(1, min(half_life, 252))
+            return float(max(1, min(half_life, 252)))
 
         except Exception as e:
             logger.warning(f"半衰期估计失败: {e}")
-            return self.half_life
+            return float(self.half_life)
 
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
@@ -1200,7 +1202,10 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                                 else 0.8
                             ),
                             price=current_price,
-                            reason=f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, 半衰期: {float(half_life):.1f}",
+                            reason=(
+                                f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, "
+                                f"半衰期: {float(half_life or 0.0):.1f}"
+                            ),
                             metadata={
                                 "zscore": float(current_zscore),
                                 "half_life": (
@@ -1214,7 +1219,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1430,7 +1435,7 @@ class ValueFactorStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """价值因子信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1529,7 +1534,7 @@ class MomentumFactorStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """动量因子信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1608,7 +1613,7 @@ class LowVolatilityStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """低波动因子信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1741,7 +1746,7 @@ class MultiFactorStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """多因子策略信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1823,7 +1828,7 @@ class MultiFactorStrategy(FactorStrategy):
 class AdvancedStrategyFactory:
     """高级策略工厂"""
 
-    _strategies = {
+    _strategies: Dict[str, Callable[[Dict[str, Any]], BaseStrategy]] = {
         # 技术分析策略
         "bollinger": BollingerBandStrategy,
         "stochastic": StochasticStrategy,
@@ -1860,7 +1865,7 @@ class AdvancedStrategyFactory:
     @classmethod
     def get_available_strategies(cls) -> Dict[str, List[str]]:
         """获取可用策略分类列表"""
-        categories = {
+        categories: Dict[str, List[str]] = {
             "technical": [],
             "statistical_arbitrage": [],
             "factor_investment": [],
@@ -1882,6 +1887,11 @@ class AdvancedStrategyFactory:
         return categories
 
     @classmethod
-    def register_strategy(cls, name: str, strategy_class: type, category: str):
+    def register_strategy(
+        cls,
+        name: str,
+        strategy_class: Callable[[Dict[str, Any]], BaseStrategy],
+        category: str,
+    ) -> None:
         """注册新策略"""
         cls._strategies[name.lower()] = strategy_class

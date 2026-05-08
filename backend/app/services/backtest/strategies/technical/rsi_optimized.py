@@ -211,7 +211,7 @@ class RSIOptimizedStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)

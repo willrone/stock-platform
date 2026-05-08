@@ -4,7 +4,7 @@
 负责创建和管理所有策略实例，整合基础策略和高级策略
 """
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from app.core.error_handler import ErrorSeverity, TaskError
 
@@ -30,11 +30,13 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy
 from .technical.rsi_optimized import RSIOptimizedStrategy
 
+StrategyBuilder = Callable[[Dict[str, Any]], BaseStrategy]
+
 
 class StrategyFactory:
     """统一的策略工厂，整合所有策略"""
 
-    _strategies = {
+    _strategies: Dict[str, StrategyBuilder] = {
         # 基础技术分析策略
         "moving_average": MovingAverageStrategy,
         "rsi": RSIOptimizedStrategy,
@@ -70,7 +72,7 @@ class StrategyFactory:
     @classmethod
     def create_strategy(
         cls, strategy_name: str, config: Dict[str, Any]
-    ) -> BaseStrategy:
+    ) -> BaseStrategy | StrategyPortfolio:
         """
         创建策略实例（支持单策略和组合策略）
 
@@ -232,7 +234,7 @@ class StrategyFactory:
         return categories
 
     @classmethod
-    def register_strategy(cls, name: str, strategy_class: type):
+    def register_strategy(cls, name: str, strategy_class: StrategyBuilder) -> None:
         """注册新策略"""
         cls._strategies[name.lower()] = strategy_class
 

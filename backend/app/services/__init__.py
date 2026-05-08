@@ -50,7 +50,7 @@ _DEPRECATED_SERVICE_IMPORTS = {
 
 
 # 向后兼容性警告
-def _deprecated_import_warning(old_import: str, new_import: str):
+def _deprecated_import_warning(old_import: str, new_import: str) -> Any:
     """发出弃用警告"""
     warnings.warn(
         f"从 'app.services.{old_import}' 导入已弃用。"
@@ -78,7 +78,7 @@ def __getattr__(name: str) -> Any:
 
 
 # 延迟导入函数（保持向后兼容）
-def get_model_training_service():
+def get_model_training_service() -> Any:
     """延迟导入模型训练服务（已弃用）"""
     _deprecated_import_warning(
         "get_model_training_service()", "models.ModelTrainingService"
@@ -93,7 +93,7 @@ def get_model_training_service():
     return DeepModelTrainingService, DeepTrainingConfig, ModelType, ModelMetrics
 
 
-def get_modern_models():
+def get_modern_models() -> Any:
     """延迟导入现代模型（已弃用）"""
     _deprecated_import_warning(
         "get_modern_models()", "models.TimesNet, models.PatchTST, models.Informer"

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
@@ -62,20 +62,20 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         default_model_path = (
             Path(__file__).parent.parent.parent.parent.parent.parent / "data" / "models"
         )
-        self.model_path = config.get("model_path", str(default_model_path))
-        self.lgb_model = None
-        self.xgb_model = None
+        self.model_path: str = str(config.get("model_path", str(default_model_path)))
+        self.lgb_model: Any | None = None
+        self.xgb_model: Any | None = None
 
         # 运行时状态
-        self._daily_returns = []
-        self._cumulative_return = 1.0
-        self._peak = 1.0
-        self._market_returns = []
+        self._daily_returns: list[float] = []
+        self._cumulative_return: float = 1.0
+        self._peak: float = 1.0
+        self._market_returns: list[float] = []
 
         # 加载预训练模型
         self._load_models()
 
-    def _load_models(self):
+    def _load_models(self) -> None:
         """加载预训练模型"""
         if self.model_path and Path(self.model_path).exists():
             model_dir = Path(self.model_path)
@@ -220,7 +220,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
     def _get_feature_vector(
         self, indicators: Dict[str, pd.Series], idx: int
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[Any]:
         """获取特征向量"""
         feature_names = [
             "return_1d",
@@ -286,7 +286,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                     features.append(val if not pd.isna(val) else 0.0)
                 else:
                     features.append(0.0)
-            return np.array(features)
+            return np.array(features, dtype=float)
         except Exception:
             return None
 
@@ -317,7 +317,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         self, data: pd.DataFrame, current_date: datetime, stock_code: str = ""
     ) -> List[TradingSignal]:
         """生成交易信号"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         if data is None or len(data) < 60:
             return signals
@@ -415,13 +415,14 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             features = self._get_feature_vector(indicators, idx)
             if features is not None:
                 try:
-                    import xgboost as xgb
+                    import xgboost as xgb  # type: ignore[import-not-found,unused-ignore]
 
-                    lgb_prob = self.lgb_model.predict(features.reshape(1, -1))[0]
-                    xgb_prob = self.xgb_model.predict(
-                        xgb.DMatrix(features.reshape(1, -1))
-                    )[0]
-                    return self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+                    features_array = np.asarray(features, dtype=float)
+                    lgb_prob = float(self.lgb_model.predict(features_array.reshape(1, -1))[0])
+                    xgb_prob = float(
+                        self.xgb_model.predict(xgb.DMatrix(features_array.reshape(1, -1)))[0]
+                    )
+                    return float(self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob)
                 except Exception:
                     pass
 
@@ -491,7 +492,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                 elif ma_align == 0:
                     score -= 0.05  # 空头排列
 
-            return np.clip(score, 0, 1)
+            return float(np.clip(score, 0, 1))
 
         except Exception:
             return None
@@ -527,7 +528,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
             # 构建特征矩阵
             features_df = pd.DataFrame(index=data.index)
-            missing_features = []
+            missing_features: list[str] = []
             for name in feature_names:
                 if name in indicators:
                     features_df[name] = indicators[name]
@@ -546,7 +547,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             # 模型预测
             lgb_prob = self.lgb_model.predict(X)
             xgb_prob = self.xgb_model.predict(xgb.DMatrix(X))
-            prob = self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+            prob = float(self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob)
 
             # 转换为 pandas Series
             score = pd.Series(prob, index=data.index)
@@ -618,7 +619,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
         return signals
 
     def _calculate_score_fallback(
-        self, indicators: Dict[str, pd.Series], index
+        self, indicators: Dict[str, pd.Series], index: Any
     ) -> pd.Series:
         """使用简化规则计算分数（fallback）"""
         score = pd.Series(0.5, index=index)
@@ -781,7 +782,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
             # 1. 逐股票计算时序特征
             logger.info("计算时序特征...")
-            all_features = []
+            all_features: list[pd.DataFrame] = []
 
             for stock_code, stock_df in df.groupby("stock_code"):
                 stock_df = stock_df.sort_values("date").reset_index(drop=True)
@@ -841,13 +842,13 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
             logger.info("执行模型预测...")
             lgb_prob = self.lgb_model.predict(X)
             xgb_prob = self.xgb_model.predict(xgb.DMatrix(X))
-            prob = self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+            prob = float(self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob)
 
             features_df["prob"] = prob
 
             # 5. 生成信号
             logger.info("生成交易信号...")
-            signals = []
+            signals: list[dict[str, Any]] = []
 
             for _, row in features_df.iterrows():
                 p = row["prob"]
@@ -882,7 +883,7 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
 
             buy_count = (result_df["signal_type"] == SignalType.BUY).sum()
             sell_count = (result_df["signal_type"] == SignalType.SELL).sum()
-            avg_prob = prob.mean()
+            avg_prob = float(prob)
 
             logger.info(
                 f"ML策略批量预计算完成: BUY={buy_count}, SELL={sell_count}, 平均概率={avg_prob:.4f}"

@@ -9,25 +9,35 @@ Phase 3 优化：Numba JIT 编译的向量化回测主循环
 """
 
 from datetime import datetime
-from typing import Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Set, Tuple, TypeVar, cast
 
 import numpy as np
 
+F = TypeVar("F", bound=Callable[..., Any])
+
+# isort: off
 try:
-    from numba import njit, prange
+    from numba import njit as _numba_njit, prange as _numba_prange
 
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
 
-    def njit(*args, **kwargs):
-        def wrapper(func):
+    def njit(*args: Any, **kwargs: Any) -> Callable[[F], F]:
+        def wrapper(func: F) -> F:
             return func
 
         return wrapper
 
-    def prange(*args, **kwargs):
-        return range(*args, **kwargs)
+    def prange(*args: int) -> range:
+        return range(*args)
+else:
+    def njit(*args: Any, **kwargs: Any) -> Callable[[F], F]:
+        return cast(Callable[[F], F], _numba_njit(*args, **kwargs))
+
+    def prange(*args: int) -> range:
+        return cast(range, _numba_prange(*args))
+# isort: on
 
 
 @njit(cache=True, fastmath=True)
@@ -91,8 +101,8 @@ def extract_signals_vectorized(
             count += 1
 
     # 第二遍：提取信号
-    stock_indices = np.empty(count, dtype=np.int32)
-    signal_types = np.empty(count, dtype=np.int8)
+    stock_indices: np.ndarray = np.empty(count, dtype=np.int32)
+    signal_types: np.ndarray = np.empty(count, dtype=np.int8)
 
     idx = 0
     for i in range(N):
@@ -261,7 +271,7 @@ def vectorized_price_lookup(
     return result
 
 
-def get_portfolio_stocks(portfolio_manager) -> Set[str]:
+def get_portfolio_stocks(portfolio_manager: Any) -> Set[str]:
     """
     获取当前持仓的股票代码集合
 
@@ -312,20 +322,22 @@ def extract_signals_from_matrix(
     from ..models import SignalType, TradingSignal
 
     # 使用 Numba 加速提取
+    stock_indices: np.ndarray
+    signal_types: np.ndarray
     if NUMBA_AVAILABLE:
         stock_indices, signal_types = extract_signals_vectorized(
             signal_mat, date_idx, valid_mat
         )
     else:
         # Fallback: 非 Numba 版本
-        indices = []
-        types = []
+        fallback_indices: List[int] = []
+        fallback_types: List[int] = []
         for i in range(signal_mat.shape[0]):
             if valid_mat[i, date_idx] and signal_mat[i, date_idx] != 0:
-                indices.append(i)
-                types.append(signal_mat[i, date_idx])
-        stock_indices = np.array(indices, dtype=np.int32)
-        signal_types = np.array(types, dtype=np.int8)
+                fallback_indices.append(i)
+                fallback_types.append(int(signal_mat[i, date_idx]))
+        stock_indices = np.array(fallback_indices, dtype=np.int32)
+        signal_types = np.array(fallback_types, dtype=np.int8)
 
     # 转换为 TradingSignal 对象
     signals = []

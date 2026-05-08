@@ -34,9 +34,15 @@ class PortfolioManagerArray:
         self.n_stocks = len(stock_codes)
 
         # 持仓数组化 (shape: [n_stocks])
-        self.quantities = np.zeros(self.n_stocks, dtype=np.int32)  # 持仓数量
-        self.avg_costs = np.zeros(self.n_stocks, dtype=np.float64)  # 平均成本
-        self.realized_pnl = np.zeros(self.n_stocks, dtype=np.float64)  # 已实现盈亏
+        self.quantities: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.int32
+        )  # 持仓数量
+        self.avg_costs: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.float64
+        )  # 平均成本
+        self.realized_pnl: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.float64
+        )  # 已实现盈亏
 
         # Trade records 使用 list（延迟转换为 DataFrame）
         self.trades: List[Dict[str, Any]] = []
@@ -50,9 +56,15 @@ class PortfolioManagerArray:
 
         # 无成本组合跟踪
         self.cash_without_cost = config.initial_cash
-        self.quantities_without_cost = np.zeros(self.n_stocks, dtype=np.int32)
-        self.avg_costs_without_cost = np.zeros(self.n_stocks, dtype=np.float64)
-        self.realized_pnl_without_cost = np.zeros(self.n_stocks, dtype=np.float64)
+        self.quantities_without_cost: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.int32
+        )
+        self.avg_costs_without_cost: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.float64
+        )
+        self.realized_pnl_without_cost: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.float64
+        )
 
         # 成本统计
         self.total_commission = 0.0
@@ -72,7 +84,7 @@ class PortfolioManagerArray:
             if idx is not None and self.quantities[idx] > 0:
                 total_value += self.quantities[idx] * price
 
-        return total_value
+        return float(total_value)
 
     def get_portfolio_value_without_cost(
         self, current_prices: Dict[str, float]
@@ -85,7 +97,7 @@ class PortfolioManagerArray:
             if idx is not None and self.quantities_without_cost[idx] > 0:
                 total_value += self.quantities_without_cost[idx] * price
 
-        return total_value
+        return float(total_value)
 
     def get_position(self, stock_code: str) -> Optional[Position]:
         """获取持仓信息（兼容接口）"""
@@ -230,7 +242,10 @@ class PortfolioManagerArray:
 
         # 计算成本
         total_cost = quantity * price
-        commission = total_cost * self.config.commission_rate
+        commission = max(
+            total_cost * (self.config.open_cost or self.config.commission_rate),
+            self.config.min_cost,
+        )
         slippage_cost = quantity * slippage_cost_per_share
         total_cost_with_commission = total_cost + commission
 
@@ -242,7 +257,7 @@ class PortfolioManagerArray:
 
         # 更新持仓数组
         old_quantity = self.quantities[idx]
-        new_quantity = old_quantity + quantity
+        new_quantity: int = int(old_quantity + quantity)
 
         if old_quantity > 0:
             # 更新平均成本
@@ -259,7 +274,7 @@ class PortfolioManagerArray:
         self.cash_without_cost -= cost_without_fees
 
         old_quantity_nc = self.quantities_without_cost[idx]
-        new_quantity_nc = old_quantity_nc + quantity
+        new_quantity_nc: int = int(old_quantity_nc + quantity)
 
         if old_quantity_nc > 0:
             self.avg_costs_without_cost[idx] = (
@@ -276,8 +291,9 @@ class PortfolioManagerArray:
 
         # 记录交易（使用 dict，延迟转换）
         self.trade_counter += 1
+        trade_id = f"T{self.trade_counter:06d}"
         trade_dict = {
-            "trade_id": "T{self.trade_counter:06d}",
+            "trade_id": trade_id,
             "stock_code": stock_code,
             "action": "BUY",
             "quantity": quantity,
@@ -291,7 +307,7 @@ class PortfolioManagerArray:
 
         # 返回 Trade 对象（兼容接口）
         trade = Trade(
-            trade_id=trade_dict["trade_id"],
+            trade_id=trade_id,
             stock_code=stock_code,
             action="BUY",
             quantity=quantity,
@@ -320,12 +336,15 @@ class PortfolioManagerArray:
         # 卖出全部持仓
         quantity = int(self.quantities[idx])
         total_proceeds = quantity * price
-        commission = total_proceeds * self.config.commission_rate
+        commission = max(
+            total_proceeds * (self.config.close_cost or self.config.commission_rate),
+            self.config.min_cost,
+        )
         slippage_cost = quantity * slippage_cost_per_share
         net_proceeds = total_proceeds - commission
 
         # 计算盈亏
-        cost_basis = quantity * self.avg_costs[idx]
+        cost_basis: float = float(quantity * self.avg_costs[idx])
         pnl = net_proceeds - cost_basis
 
         # 执行交易（含成本）
@@ -336,7 +355,9 @@ class PortfolioManagerArray:
 
         # 执行交易（无成本）
         proceeds_without_fees = quantity * original_price
-        cost_basis_without_cost = quantity * self.avg_costs_without_cost[idx]
+        cost_basis_without_cost: float = float(
+            quantity * self.avg_costs_without_cost[idx]
+        )
         pnl_without_cost = proceeds_without_fees - cost_basis_without_cost
 
         self.cash_without_cost += proceeds_without_fees
@@ -350,8 +371,9 @@ class PortfolioManagerArray:
 
         # 记录交易
         self.trade_counter += 1
+        trade_id = f"T{self.trade_counter:06d}"
         trade_dict = {
-            "trade_id": "T{self.trade_counter:06d}",
+            "trade_id": trade_id,
             "stock_code": stock_code,
             "action": "SELL",
             "quantity": quantity,
@@ -364,7 +386,7 @@ class PortfolioManagerArray:
         self.trades.append(trade_dict)
 
         trade = Trade(
-            trade_id=trade_dict["trade_id"],
+            trade_id=trade_id,
             stock_code=stock_code,
             action="SELL",
             quantity=quantity,
@@ -379,7 +401,7 @@ class PortfolioManagerArray:
 
     def record_portfolio_snapshot(
         self, date: datetime, current_prices: Dict[str, float]
-    ):
+    ) -> None:
         """记录组合快照"""
         portfolio_value = self.get_portfolio_value(current_prices)
         portfolio_value_without_cost = self.get_portfolio_value_without_cost(

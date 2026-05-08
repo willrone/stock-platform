@@ -17,13 +17,13 @@ from app.services.backtest.utils.chart_cache_service import chart_cache_service
 class CacheCleanupService:
     """缓存清理服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logger.bind(service="cache_cleanup")
         self.is_running = False
         self.cleanup_interval_hours = 6  # 每6小时清理一次
         self.data_retention_days = 30  # 保留30天的数据
 
-    async def start_cleanup_scheduler(self):
+    async def start_cleanup_scheduler(self) -> None:
         """启动清理调度器"""
         if self.is_running:
             self.logger.warning("清理调度器已在运行")
@@ -49,7 +49,7 @@ class CacheCleanupService:
         finally:
             self.is_running = False
 
-    async def stop_cleanup_scheduler(self):
+    async def stop_cleanup_scheduler(self) -> None:
         """停止清理调度器"""
         if not self.is_running:
             self.logger.warning("清理调度器未在运行")
@@ -62,16 +62,17 @@ class CacheCleanupService:
         """执行清理任务"""
         self.logger.info("开始执行缓存清理任务...")
 
-        cleanup_results = {
+        errors: list[str] = []
+        cleanup_results: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "expired_cache_cleaned": 0,
             "old_data_cleaned": {},
-            "errors": [],
+            "errors": errors,
         }
 
         try:
             # 1. 清理过期的图表缓存
-            expired_count = await self.cleanup_expired_chart_cache()
+            expired_count = int(await self.cleanup_expired_chart_cache())
             cleanup_results["expired_cache_cleaned"] = expired_count
 
             # 2. 清理旧的回测详细数据
@@ -91,7 +92,7 @@ class CacheCleanupService:
         """清理过期的图表缓存"""
         try:
             self.logger.info("清理过期的图表缓存...")
-            expired_count = await chart_cache_service.cleanup_expired_cache()
+            expired_count = int(await chart_cache_service.cleanup_expired_cache())
 
             if expired_count > 0:
                 self.logger.info(f"清理了 {expired_count} 条过期缓存记录")
@@ -111,9 +112,7 @@ class CacheCleanupService:
 
             async with get_async_session_context() as session:
                 repository = BacktestDetailedRepository(session)
-                cleanup_results = await repository.cleanup_old_data(
-                    self.data_retention_days
-                )
+                cleanup_results: Dict[str, int] = await repository.cleanup_old_data(self.data_retention_days)
                 await session.commit()
 
                 total_cleaned = sum(cleanup_results.values())
@@ -139,7 +138,7 @@ class CacheCleanupService:
             # 2. 清理详细数据
             async with get_async_session_context() as session:
                 repository = BacktestDetailedRepository(session)
-                data_success = await repository.delete_task_data(task_id)
+                data_success = bool(await repository.delete_task_data(task_id))
                 await session.commit()
 
             success = cache_success and data_success
@@ -196,17 +195,18 @@ class CacheCleanupService:
         """手动执行清理任务"""
         self.logger.info("手动执行清理任务...")
 
-        cleanup_results = {
+        errors: list[str] = []
+        cleanup_results: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "manual_trigger": True,
             "expired_cache_cleaned": 0,
             "old_data_cleaned": {},
-            "errors": [],
+            "errors": errors,
         }
 
         try:
             if cleanup_expired_cache:
-                expired_count = await self.cleanup_expired_chart_cache()
+                expired_count = int(await self.cleanup_expired_chart_cache())
                 cleanup_results["expired_cache_cleaned"] = expired_count
 
             if cleanup_old_data:
@@ -232,7 +232,7 @@ class CacheCleanupService:
         self,
         cleanup_interval_hours: Optional[int] = None,
         data_retention_days: Optional[int] = None,
-    ):
+    ) -> None:
         """配置清理设置"""
         if cleanup_interval_hours is not None:
             self.cleanup_interval_hours = max(1, cleanup_interval_hours)  # 最少1小时
@@ -247,7 +247,7 @@ class CacheCleanupService:
 cache_cleanup_service = CacheCleanupService()
 
 
-async def start_background_cleanup():
+async def start_background_cleanup() -> None:
     """启动后台清理服务"""
     try:
         await cache_cleanup_service.start_cleanup_scheduler()
@@ -255,7 +255,7 @@ async def start_background_cleanup():
         logger.error(f"启动后台清理服务失败: {e}", exc_info=True)
 
 
-async def stop_background_cleanup():
+async def stop_background_cleanup() -> None:
     """停止后台清理服务"""
     try:
         await cache_cleanup_service.stop_cleanup_scheduler()

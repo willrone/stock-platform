@@ -60,6 +60,9 @@ class BacktestConfig:
     initial_cash: float = 100000.0
     commission_rate: float = 0.001  # 手续费率
     slippage_rate: float = 0.001  # 滑点率
+    open_cost: float = 0.0  # 买入成本率（官方 Qlib 风格）
+    close_cost: float = 0.0  # 卖出成本率（官方 Qlib 风格）
+    min_cost: float = 0.0  # 最低交易成本（官方 Qlib 风格）
     max_position_size: float = 0.2  # 最大单股持仓比例
     cash_reserve_ratio: float = 0.05  # 预留现金比例
     board_lot_size: int = 100  # 最小买入手数（A股默认100股）

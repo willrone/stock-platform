@@ -105,8 +105,8 @@ class BacktestReportBuilder:
         """Resolve final portfolio value without regressing to cash-only valuation."""
         portfolio_history = getattr(portfolio_manager, "portfolio_history", None)
         if portfolio_history:
-            return portfolio_history[-1]["portfolio_value"]
-        return portfolio_manager.get_portfolio_value({})
+            return float(portfolio_history[-1]["portfolio_value"])
+        return float(portfolio_manager.get_portfolio_value({}))
 
     def _build_metrics(self, performance_metrics: dict[str, float]) -> dict[str, float]:
         """Build optimizer-facing metrics block."""
@@ -132,6 +132,9 @@ class BacktestReportBuilder:
             "initial_cash": payload.config.initial_cash,
             "commission_rate": payload.config.commission_rate,
             "slippage_rate": payload.config.slippage_rate,
+            "open_cost": payload.config.open_cost,
+            "close_cost": payload.config.close_cost,
+            "min_cost": payload.config.min_cost,
             "max_position_size": payload.config.max_position_size,
         }
         if payload.strategy_config:
@@ -467,7 +470,10 @@ class BacktestReportBuilder:
                 "max_drawdown": None,
             }
 
+        # isort: off
         from qlib.contrib.evaluate import risk_analysis
+
+        # isort: on
 
         analysis_df = risk_analysis(excess_returns, freq="day")
         return {
@@ -498,8 +504,8 @@ class BacktestReportBuilder:
         """Estimate daily mean excess return from volatility for legacy schema."""
         volatility = performance_metrics.get("volatility", 0)
         if volatility <= 0:
-            return 0
-        return volatility / np.sqrt(252)
+            return 0.0
+        return float(volatility) / float(np.sqrt(252))
 
     def _calculate_additional_metrics(
         self, portfolio_manager: PortfolioManager

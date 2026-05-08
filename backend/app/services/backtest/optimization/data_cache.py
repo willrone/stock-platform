@@ -8,9 +8,9 @@ import asyncio
 import hashlib
 import threading
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 from loguru import logger
 
 
@@ -24,10 +24,11 @@ class BacktestDataCache:
     3. 线程安全的并发访问
     """
 
-    _instance = None
+    _instance: Optional["BacktestDataCache"] = None
+    _initialized: bool = False
     _lock = threading.Lock()
 
-    def __new__(cls):
+    def __new__(cls) -> "BacktestDataCache":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -35,7 +36,7 @@ class BacktestDataCache:
                     cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         if self._initialized:
             return
 
@@ -84,7 +85,7 @@ class BacktestDataCache:
         stock_codes: List[str],
         start_date: datetime,
         end_date: datetime,
-        data_loader: callable,
+        data_loader: Callable[[str, datetime, datetime], pd.DataFrame],
     ) -> int:
         """
         预加载股票数据到缓存
@@ -127,7 +128,7 @@ class BacktestDataCache:
         stock_codes: List[str],
         start_date: datetime,
         end_date: datetime,
-        data_loader: Optional[callable] = None,
+        data_loader: Optional[Callable[[str, datetime, datetime], pd.DataFrame]] = None,
     ) -> int:
         """异步预加载（供优化器使用）。
 
@@ -150,7 +151,7 @@ class BacktestDataCache:
         stock_code: str,
         start_date: datetime,
         end_date: datetime,
-        data_loader: Optional[callable] = None,
+        data_loader: Optional[Callable[[str, datetime, datetime], pd.DataFrame]] = None,
     ) -> Optional[pd.DataFrame]:
         """
         获取股票数据（优先从缓存）

@@ -8,7 +8,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, cast
 
 from ..models import SignalType, TradingSignal
 
@@ -362,7 +362,7 @@ class SignalIntegrator:
             ]
             scored.sort(reverse=True)
         else:  # consensus_topk
-            scored = [(vote_count[c], strength_sum[c], c) for c in candidates]
+            scored = [(vote_count[c], strength_sum[c], vote_count[c], c) for c in candidates]
             scored.sort(reverse=True)
 
         top = scored[: int(topk)]
@@ -373,7 +373,7 @@ class SignalIntegrator:
 
         for item in top:
             if self.method == "consensus_topk":
-                votes, ssum, code = item
+                votes, ssum, _votes2, code = item
                 extra = {
                     "votes": int(votes),
                     "score": float(votes),
@@ -421,11 +421,13 @@ class SignalIntegrator:
         """
         # 优先从metadata中获取
         if signal.metadata and "strategy_name" in signal.metadata:
-            return signal.metadata["strategy_name"]
+            metadata_value = signal.metadata["strategy_name"]
+            return cast(str, metadata_value)
 
         # 从reason中提取（如果格式为 "策略名: 原因"）
-        if ":" in signal.reason:
-            return signal.reason.split(":")[0].strip()
+        reason = str(signal.reason)
+        if ":" in reason:
+            return reason.split(":")[0].strip()
 
         # 默认返回"unknown"
         return "unknown"

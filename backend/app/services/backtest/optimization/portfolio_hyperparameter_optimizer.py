@@ -72,7 +72,7 @@ def _normalize_weights(ws: List[float]) -> List[float]:
 
 
 class PortfolioHyperparameterOptimizer:
-    def __init__(self):
+    def __init__(self) -> None:
         self._history: Dict[str, Any] = {}
 
     def _sample_universe(
@@ -278,7 +278,7 @@ class PortfolioHyperparameterOptimizer:
                 strategy_config["slippage_rate"] = float(backtest_cfg.slippage_rate)
 
             # 3.5 运行回测（在 Optuna 同步 objective 内安全运行 async）
-            def run_in_new_loop():
+            def run_in_new_loop() -> Any:
                 new_loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(new_loop)
                 try:

@@ -116,7 +116,7 @@ class MovingAverageStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             # 计算指标（按 DataFrame 缓存，避免每个交易日重复计算整段 rolling 指标）
@@ -280,7 +280,7 @@ class MACDStrategy(BaseStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)

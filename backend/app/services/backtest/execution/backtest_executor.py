@@ -6,10 +6,10 @@ import time
 from concurrent.futures import as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 from loguru import logger
 
 from app.core.error_handler import ErrorSeverity, TaskError
@@ -25,17 +25,21 @@ from .data_loader import DataLoader
 from .trade_modes import TradeModeExecutionContext, get_trade_mode_executor
 
 # 性能监控（可选导入，避免依赖问题）
+# isort: off
+BacktestPerformanceProfiler: Any = None
+PerformanceContext: Any = None
 try:
     from ..utils.performance_profiler import (
-        BacktestPerformanceProfiler,
-        PerformanceContext,
+        BacktestPerformanceProfiler as _BacktestPerformanceProfiler,
+        PerformanceContext as _PerformanceContext,
     )
 
+    BacktestPerformanceProfiler = _BacktestPerformanceProfiler
+    PerformanceContext = _PerformanceContext
     PERFORMANCE_PROFILING_AVAILABLE = True
 except ImportError:
     PERFORMANCE_PROFILING_AVAILABLE = False
-    BacktestPerformanceProfiler = None
-    PerformanceContext = None
+# isort: on
 
 
 def _multiprocess_precompute_worker(
@@ -126,7 +130,7 @@ class BacktestExecutor:
         max_workers: Optional[int] = None,
         enable_performance_profiling: bool = False,
         use_multiprocessing: bool = False,
-    ):
+    ) -> None:
         """
         初始化回测执行器
 
@@ -153,7 +157,7 @@ class BacktestExecutor:
         self.data_loader = DataLoader(
             data_dir, max_workers=max_workers if enable_parallel else None
         )
-        self.execution_stats = {
+        self.execution_stats: Dict[str, int] = {
             "total_backtests": 0,
             "successful_backtests": 0,
             "failed_backtests": 0,
@@ -164,7 +168,7 @@ class BacktestExecutor:
         self.enable_performance_profiling = (
             enable_performance_profiling and PERFORMANCE_PROFILING_AVAILABLE
         )
-        self.performance_profiler: Optional[BacktestPerformanceProfiler] = None
+        self.performance_profiler: Any = None
 
         if enable_parallel:
             mode = "多进程" if use_multiprocessing else "多线程"
@@ -175,6 +179,12 @@ class BacktestExecutor:
         if self.enable_performance_profiling:
             logger.info("回测执行器已启用性能分析")
 
+    def _profiler(self) -> Any:
+        """Return active profiler after runtime availability checks."""
+        if self.performance_profiler is None:
+            raise RuntimeError("性能分析器尚未初始化")
+        return self.performance_profiler
+
     async def run_backtest(
         self,
         strategy_name: str,
@@ -183,7 +193,7 @@ class BacktestExecutor:
         end_date: datetime,
         strategy_config: Dict[str, Any],
         backtest_config: Optional[BacktestConfig] = None,
-        task_id: str = None,
+        task_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """运行回测"""
         # 轻量分段计时（始终可用，不依赖 performance_profiler）
@@ -195,8 +205,8 @@ class BacktestExecutor:
             self.performance_profiler = BacktestPerformanceProfiler(
                 enable_memory_tracking=True
             )
-            self.performance_profiler.start_backtest()
-            self.performance_profiler.take_memory_snapshot("backtest_start")
+            self._profiler().start_backtest()
+            self._profiler().take_memory_snapshot("backtest_start")
 
         try:
             self.execution_stats["total_backtests"] += 1
@@ -209,25 +219,25 @@ class BacktestExecutor:
                 backtest_config = BacktestConfig()
 
             # 开始进度监控
-            if task_id:
+            if (task_id or ""):
                 await backtest_progress_monitor.start_backtest_monitoring(
-                    task_id=task_id, backtest_id=backtest_id
+                    task_id=(task_id or ""), backtest_id=backtest_id
                 )
                 await backtest_progress_monitor.update_stage(
-                    task_id, "initialization", progress=100, status="completed"
+                    (task_id or ""), "initialization", progress=100, status="completed"
                 )
 
             # 创建策略（性能监控）
             _t0 = time.perf_counter()
             if self.enable_performance_profiling:
-                self.performance_profiler.start_stage(
+                self._profiler().start_stage(
                     "strategy_setup",
                     {"strategy_name": strategy_name, "stock_count": len(stock_codes)},
                 )
 
-            if task_id:
+            if (task_id or ""):
                 await backtest_progress_monitor.update_stage(
-                    task_id, "strategy_setup", status="running"
+                    task_id or "", "strategy_setup", status="running"
                 )
 
             # 优先使用高级策略工厂
@@ -242,7 +252,7 @@ class BacktestExecutor:
                 )
 
             if self.enable_performance_profiling:
-                self.performance_profiler.end_stage("strategy_setup")
+                self._profiler().end_stage("strategy_setup")
             perf_breakdown["strategy_setup_s"] = time.perf_counter() - _t0
 
             if task_id:
@@ -252,12 +262,12 @@ class BacktestExecutor:
 
             # 创建组合管理器
             # Phase 1: 数据加载后再创建（需要 stock_codes）
-            portfolio_manager = None
+            portfolio_manager: Any = None
 
             # 加载数据（性能监控）
             _t0 = time.perf_counter()
             if self.enable_performance_profiling:
-                self.performance_profiler.start_stage(
+                self._profiler().start_stage(
                     "data_loading",
                     {
                         "stock_codes": stock_codes,
@@ -279,14 +289,14 @@ class BacktestExecutor:
             )
 
             if self.enable_performance_profiling:
-                self.performance_profiler.end_stage(
+                self._profiler().end_stage(
                     "data_loading",
                     {
                         "loaded_stocks": len(stock_data),
                         "total_records": sum(len(df) for df in stock_data.values()),
                     },
                 )
-                self.performance_profiler.take_memory_snapshot("after_data_loading")
+                self._profiler().take_memory_snapshot("after_data_loading")
             perf_breakdown["data_loading_s"] = time.perf_counter() - _t0
 
             if task_id:
@@ -382,15 +392,15 @@ class BacktestExecutor:
                     session = SessionLocal()
                     try:
                         task_repo = TaskRepository(session)
-                        existing_task = task_repo.get_task_by_id(task_id)
+                        existing_task = task_repo.get_task_by_id((task_id or ""))
                         if existing_task:
-                            result_data = existing_task.result or {}
+                            result_data: Dict[str, Any] = cast(Any, existing_task.result) or {}
                             progress_data_db = result_data.get("progress_data", {})
                             progress_data_db["total_days"] = len(trading_dates)
                             result_data["progress_data"] = progress_data_db
 
                             task_repo.update_task_status(
-                                task_id=task_id,
+                                task_id=(task_id or ""),
                                 status=TaskStatus.RUNNING,
                                 result=result_data,
                             )
@@ -401,7 +411,7 @@ class BacktestExecutor:
 
             # 执行回测（性能监控）
             if self.enable_performance_profiling:
-                self.performance_profiler.start_stage(
+                self._profiler().start_stage(
                     "backtest_execution",
                     {
                         "total_trading_days": len(trading_dates),
@@ -411,7 +421,7 @@ class BacktestExecutor:
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
-                    task_id, "backtest_execution", status="running"
+                    (task_id or ""), "backtest_execution", status="running"
                 )
 
             _t0 = time.perf_counter()
@@ -437,7 +447,7 @@ class BacktestExecutor:
             perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
 
             if self.enable_performance_profiling:
-                self.performance_profiler.end_stage(
+                self._profiler().end_stage(
                     "backtest_execution",
                     {
                         "total_signals": backtest_results.get("total_signals", 0),
@@ -445,12 +455,12 @@ class BacktestExecutor:
                         "trading_days": backtest_results.get("trading_days", 0),
                     },
                 )
-                self.performance_profiler.update_backtest_stats(
+                self._profiler().update_backtest_stats(
                     signals=backtest_results.get("total_signals", 0),
                     trades=backtest_results.get("executed_trades", 0),
                     days=backtest_results.get("trading_days", 0),
                 )
-                self.performance_profiler.take_memory_snapshot(
+                self._profiler().take_memory_snapshot(
                     "after_backtest_execution"
                 )
 
@@ -461,7 +471,7 @@ class BacktestExecutor:
 
             # 计算绩效指标（性能监控）
             if self.enable_performance_profiling:
-                self.performance_profiler.start_stage("metrics_calculation")
+                self._profiler().start_stage("metrics_calculation")
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -473,7 +483,7 @@ class BacktestExecutor:
             perf_breakdown["metrics_s"] = time.perf_counter() - _t0
 
             if self.enable_performance_profiling:
-                self.performance_profiler.end_stage("metrics_calculation")
+                self._profiler().end_stage("metrics_calculation")
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -482,7 +492,7 @@ class BacktestExecutor:
 
             # 生成回测报告（性能监控）
             if self.enable_performance_profiling:
-                self.performance_profiler.start_stage("report_generation")
+                self._profiler().start_stage("report_generation")
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -512,7 +522,9 @@ class BacktestExecutor:
                 performance_metrics=performance_metrics,
                 strategy_config=strategy_config,
             )
-            backtest_report = self.report_builder.build_report(report_input)
+            backtest_report: Dict[str, Any] = self.report_builder.build_report(
+                report_input
+            )
             perf_breakdown["report_generation_s"] = time.perf_counter() - _t0
             self.report_builder.attach_runtime_diagnostics(
                 backtest_report,
@@ -528,9 +540,9 @@ class BacktestExecutor:
                         BacktestDetailedRepository,
                     )
 
-                    async with get_async_session_context() as session:
-                        repo = BacktestDetailedRepository(session)
-                        signal_stats = await repo.get_signal_statistics(task_id)
+                    async with get_async_session_context() as async_session:
+                        repo = BacktestDetailedRepository(async_session)
+                        signal_stats = await repo.get_signal_statistics((task_id or ""))
                     self.report_builder.attach_signal_execution_summary(
                         backtest_report,
                         signal_stats,
@@ -540,13 +552,13 @@ class BacktestExecutor:
                     backtest_report["signal_execution_summary"] = {}
 
             if self.enable_performance_profiling:
-                self.performance_profiler.end_stage(
+                self._profiler().end_stage(
                     "report_generation", {"report_size": len(str(backtest_report))}
                 )
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
-                    task_id, "report_generation", progress=100, status="completed"
+                    (task_id or ""), "report_generation", progress=100, status="completed"
                 )
                 await backtest_progress_monitor.update_stage(
                     task_id, "data_storage", progress=100, status="completed"
@@ -566,15 +578,15 @@ class BacktestExecutor:
 
             # 生成性能报告
             if self.enable_performance_profiling:
-                self.performance_profiler.end_backtest()
-                self.performance_profiler.take_memory_snapshot("backtest_end")
+                self._profiler().end_backtest()
+                self._profiler().take_memory_snapshot("backtest_end")
 
                 # 将性能报告添加到回测报告中
-                performance_report = self.performance_profiler.generate_report()
+                performance_report = self._profiler().generate_report()
                 backtest_report["performance_analysis"] = performance_report
 
                 # 打印性能摘要
-                self.performance_profiler.print_summary()
+                self._profiler().print_summary()
 
                 # 保存性能报告到文件（如果提供了task_id）
                 if task_id:
@@ -586,7 +598,7 @@ class BacktestExecutor:
                         performance_file = (
                             performance_dir / f"backtest_{task_id}_performance.json"
                         )
-                        self.performance_profiler.save_report(str(performance_file))
+                        self._profiler().save_report(str(performance_file))
                         logger.info(f"性能报告已保存到: {performance_file}")
                     except Exception as e:
                         logger.warning(f"保存性能报告失败: {e}")
@@ -608,7 +620,7 @@ class BacktestExecutor:
             # 即使出错也结束性能分析
             if self.enable_performance_profiling and self.performance_profiler:
                 try:
-                    self.performance_profiler.end_backtest()
+                    self._profiler().end_backtest()
                     logger.warning("回测失败，但性能分析已完成")
                 except Exception as perf_error:
                     logger.warning(f"结束性能分析时出错: {perf_error}")
@@ -628,7 +640,7 @@ class BacktestExecutor:
     ) -> List[datetime]:
         """获取交易日历"""
         # 合并所有股票的交易日期
-        all_dates = set()
+        all_dates: set[datetime] = set()
         for data in stock_data.values():
             all_dates.update(data.index.tolist())
 
@@ -637,7 +649,7 @@ class BacktestExecutor:
             np.array([date for date in all_dates if start_date <= date <= end_date])
         ).tolist()
 
-        return trading_dates
+        return cast(List[datetime], trading_dates)
 
     def _build_date_index(self, stock_data: Dict[str, pd.DataFrame]) -> None:
         """为每只股票建立日期->整数索引，避免回测循环中重复 get_loc。"""
@@ -728,9 +740,11 @@ class BacktestExecutor:
         # 这里使用混合策略：CPU 密集型任务用多进程，I/O 密集型用多线程
         getattr(self, "use_multiprocessing", False)
 
-        _stock_times = []  # 收集每只股票的预计算耗时
+        _stock_times: List[Tuple[str, float, int]] = []  # 收集每只股票的预计算耗时
 
-        def _work_one(item):
+        def _work_one(
+            item: Tuple[str, pd.DataFrame]
+        ) -> Tuple[bool, str, Optional[str]]:
             stock_code, data = item
             try:
                 import time as _time
@@ -936,10 +950,10 @@ class BacktestExecutor:
         dates64 = np.array(trading_dates, dtype="datetime64[ns]")
 
         # 预分配数组（Phase 3 优化：使用连续内存）
-        close = np.full((N, T), np.nan, dtype=np.float64, order="C")
-        open_ = np.full((N, T), np.nan, dtype=np.float64, order="C")
-        valid = np.zeros((N, T), dtype=bool, order="C")
-        signal = np.zeros((N, T), dtype=np.int8, order="C")
+        close: np.ndarray[Any, Any] = np.full((N, T), np.nan, dtype=np.float64, order="C")
+        open_: np.ndarray[Any, Any] = np.full((N, T), np.nan, dtype=np.float64, order="C")
+        valid: np.ndarray[Any, Any] = np.zeros((N, T), dtype=bool, order="C")
+        signal: np.ndarray[Any, Any] = np.zeros((N, T), dtype=np.int8, order="C")
         _align_alloc_s = time.perf_counter() - _t_align_alloc
 
         # 如果已做向量化预计算��号，尽量直接读取 per-stock Series 并对齐到 trading_dates
@@ -1098,10 +1112,10 @@ class BacktestExecutor:
         """
         from concurrent.futures import ProcessPoolExecutor
 
-        results = []
+        results: List[Tuple[bool, str, Optional[str]]] = []
 
         # 准备可序列化的任务数据
-        tasks = []
+        tasks: List[Tuple[str, Dict[str, Any], Dict[str, Any]]] = []
         for stock_code, data in stock_data.items():
             try:
                 # 序列化策略配置（而非策略对象本身）
@@ -1173,8 +1187,8 @@ class BacktestExecutor:
         stock_data: Dict[str, pd.DataFrame],
         trading_dates: List[datetime],
         strategy_config: Optional[Dict[str, Any]] = None,
-        task_id: str = None,
-        backtest_id: str = None,
+        task_id: Optional[str] = None,
+        backtest_id: str = "",
         precomputed_signals: Optional[Dict[Tuple[str, datetime], Any]] = None,
         aligned_arrays: Optional[Dict[str, Any]] = None,
         perf_breakdown: Optional[Dict[str, float]] = None,
@@ -1182,6 +1196,7 @@ class BacktestExecutor:
         """执行回测主循环"""
         total_signals = 0
         executed_trades = 0
+        task_id_str: Optional[str] = task_id
 
         # 性能统计：信号生成时间
         signal_generation_times = []
@@ -1197,18 +1212,16 @@ class BacktestExecutor:
         _ml_progress_update = 0.0
 
         # 辅助函数：检查任务状态
-        def _is_task_running(status) -> bool:
+        def _is_task_running(status: Any) -> bool:
             if status is None:
                 return False
-            # 支持字符串或Enum
+            status_value = getattr(status, "value", status)
             try:
-                return (
-                    status == TaskStatus.RUNNING or status == TaskStatus.RUNNING.value
-                )
+                return str(status_value) == str(TaskStatus.RUNNING.value)
             except Exception:
-                return status == TaskStatus.RUNNING.value
+                return False
 
-        def check_task_status():
+        def check_task_status() -> bool:
             """检查任务是否仍然存在且处于运行状态"""
             if not task_id:
                 return True
@@ -1320,19 +1333,19 @@ class BacktestExecutor:
                         matched_unexec += 1
                     # else: 保持默认 executed=False, execution_reason=None
 
-                async with get_async_session_context() as session:
+                async with get_async_session_context() as async_session:
                     try:
-                        repository = BacktestDetailedRepository(session)
+                        repository = BacktestDetailedRepository(async_session)
 
                         # 一次 INSERT 搞定，不再需要后续 UPDATE
                         if signals_data:
                             await repository.batch_save_signal_records(
-                                task_id=task_id,
-                                backtest_id=backtest_id,
+                                task_id=(task_id or ""),
+                                backtest_id=str(backtest_id),
                                 signals_data=list(signals_data),
                             )
 
-                        await session.commit()
+                        await async_session.commit()
                         logger.info(
                             f"✅ 流式写入完成: {len(signals_data)} 条信号记录"
                             f"（executed={matched_exec}, unexecuted={matched_unexec}, "
@@ -1340,7 +1353,7 @@ class BacktestExecutor:
                         )
 
                     except Exception as e:
-                        await session.rollback()
+                        await async_session.rollback()
                         logger.warning(f"流式写入数据库失败: {e}")
             except Exception as e:
                 logger.warning(f"流式写入数据库时出错: {e}")
@@ -1380,12 +1393,9 @@ class BacktestExecutor:
 
                     if need_codes:
                         # 批量查找价格（向量化）
+                        assert code_to_i is not None and valid_mat is not None and close_mat is not None
                         for c in need_codes:
-                            j = (
-                                code_to_i.get(c)
-                                if isinstance(code_to_i, dict)
-                                else None
-                            )
+                            j = code_to_i.get(c)
                             if j is not None and bool(valid_mat[j, i]):
                                 current_prices[c] = float(close_mat[j, i])
 
@@ -1419,11 +1429,16 @@ class BacktestExecutor:
                 all_signals: List[TradingSignal] = []
 
                 if aligned_arrays is not None:
-                    sig_mat = aligned_arrays.get("signal")
-                    codes = aligned_arrays.get("stock_codes")
-                    close_mat = aligned_arrays.get("close")
-                    valid_mat = aligned_arrays.get("valid")
-                    if isinstance(sig_mat, np.ndarray):
+                    sig_mat = cast(Optional[np.ndarray[Any, Any]], aligned_arrays.get("signal"))
+                    codes = cast(Optional[List[str]], aligned_arrays.get("stock_codes"))
+                    close_mat = cast(Optional[np.ndarray[Any, Any]], aligned_arrays.get("close"))
+                    valid_mat = cast(Optional[np.ndarray[Any, Any]], aligned_arrays.get("valid"))
+                    if (
+                        isinstance(sig_mat, np.ndarray)
+                        and isinstance(close_mat, np.ndarray)
+                        and isinstance(valid_mat, np.ndarray)
+                        and codes is not None
+                    ):
                         sig_idx = np.nonzero(sig_mat[:, i])[0]
                         if sig_idx.size > 0:
                             for j in sig_idx.tolist():
@@ -1463,7 +1478,9 @@ class BacktestExecutor:
                 # ��分 profiling：把"切片"和"生成信号"拆开计时（变量已在循环开头初始化）
 
                 # 辅助函数：快速查找预计算信号
-                def get_precomputed_signal_fast(stock_code: str, date: datetime):
+                def get_precomputed_signal_fast(
+                    stock_code: str, date: datetime
+                ) -> Optional[List[TradingSignal]]:
                     """
                     [优化 1] 从预计算字典中快速查找信号，避免 DataFrame 拷贝
 
@@ -1550,242 +1567,7 @@ class BacktestExecutor:
 
                 # 只有在 aligned/precomputed 路径未拿到信号时，才走逐股票生成回退路径。
                 # 否则会把同一天同一股票的信号重复加入 all_signals，导致 signal_records 计数膨胀。
-                if (
-                    not all_signals
-                    and False
-                    and self.enable_parallel
-                    and len(stock_data) > 3
-                ):
-                    # 并行生成多股票信号
-                    # PERF: avoid per-day ThreadPoolExecutor creation and avoid per-stock futures.
-                    # We batch stocks into coarse tasks to reduce scheduling overhead.
-
-                    # PERF: switch from "per-day submit many tasks" to "persistent workers".
-                    # This dramatically reduces thread scheduling overhead when stock_count is large.
-                    import threading
-
-                    # Initialize worker context once (first trading day)
-                    if (
-                        not hasattr(self, "_signal_worker_ctx")
-                        or self._signal_worker_ctx is None
-                    ):
-                        items = list(stock_data.items())
-
-                        # Greedy balance chunks by estimated per-stock compute cost.
-                        # Cost proxy: number of trading days the stock participates (after warmup) with
-                        # a small penalty for missing days.
-                        scored = []
-                        total_days = len(trading_dates) if trading_dates else 0
-
-                        for code, df in items:
-                            try:
-                                # count how many trading_dates exist in this df
-                                # (O(T) per stock; ok for init and much better load balance than len(df))
-                                avail = df.index
-                                avail_days = 0
-                                for _d in trading_dates:
-                                    if _d in avail:
-                                        avail_days += 1
-                                missing_ratio = (
-                                    1.0 - (avail_days / total_days)
-                                    if total_days > 0
-                                    else 0.0
-                                )
-                                # warmup skip (executor only calls strategy when idx>=20)
-                                effective_days = max(0, avail_days - 20)
-                                cost = float(effective_days) * (
-                                    1.0 + 0.10 * missing_ratio
-                                )
-                                scored.append((cost, code, df))
-                            except Exception:
-                                scored.append((0.0, code, df))
-
-                        scored.sort(reverse=True)
-
-                        worker_n = max(1, int(self.max_workers or 1))
-                        buckets = [
-                            ([], 0.0) for _ in range(worker_n)
-                        ]  # ([(code,df)], total_cost)
-                        for cost, code, df in scored:
-                            # pick bucket with smallest total_cost
-                            bi = min(range(worker_n), key=lambda x: buckets[x][1])
-                            buckets[bi][0].append((code, df))
-                            buckets[bi] = (buckets[bi][0], buckets[bi][1] + float(cost))
-
-                        chunks: List[List[Tuple[str, pd.DataFrame]]] = [
-                            b[0] for b in buckets
-                        ]
-
-                        shared = {"date": None, "error": None}
-                        results: List[
-                            Tuple[List[TradingSignal], float, float, float]
-                        ] = [([], 0.0, 0.0, 0.0) for _ in range(worker_n)]
-
-                        barrier_start = threading.Barrier(worker_n + 1)
-                        barrier_end = threading.Barrier(worker_n + 1)
-
-                        def _worker(
-                            idx: int,
-                            barrier_start=barrier_start,
-                            shared=shared,
-                            barrier_end=barrier_end,
-                            chunks=chunks,
-                            results=results,
-                        ):
-                            while True:
-                                try:
-                                    barrier_start.wait()
-                                except Exception:
-                                    return
-
-                                cd = shared.get("date")
-                                if cd is None:
-                                    # shutdown signal
-                                    try:
-                                        barrier_end.wait()
-                                    except Exception:
-                                        pass
-                                    return
-
-                                batch_signals: List[TradingSignal] = []
-                                slice_sum = 0.0
-                                gen_sum = 0.0
-                                gen_max = 0.0
-
-                                try:
-                                    for stock_code, data in chunks[idx]:
-                                        if cd not in data.index:
-                                            continue
-
-                                        t0 = time.perf_counter()
-                                        idx_map = None
-                                        try:
-                                            idx_map = data.attrs.get("_date_to_idx")
-                                        except Exception:
-                                            idx_map = None
-                                        current_idx = (
-                                            int(idx_map.get(cd))
-                                            if isinstance(idx_map, dict)
-                                            and cd in idx_map
-                                            else int(data.index.get_loc(cd))
-                                        )
-                                        try:
-                                            data.attrs["_current_date"] = cd
-                                            data.attrs["_current_idx"] = current_idx
-                                        except Exception:
-                                            pass
-                                        slice_dur = time.perf_counter() - t0
-                                        slice_sum += float(slice_dur)
-
-                                        if current_idx < 20:
-                                            continue
-
-                                        t1 = time.perf_counter()
-                                        # 优先使用预计算信号
-                                        sigs = get_precomputed_signal_fast(
-                                            stock_code, cd
-                                        )
-                                        if sigs is None:
-                                            # Fallback: 调用策略生成
-                                            sigs = strategy.generate_signals(data, cd)
-                                        gen_dur = time.perf_counter() - t1
-                                        gen_sum += float(gen_dur)
-                                        if gen_dur > gen_max:
-                                            gen_max = float(gen_dur)
-
-                                        if sigs:
-                                            try:
-                                                md = getattr(sigs[0], "metadata", None)
-                                                if md is None:
-                                                    sigs[0].metadata = {}
-                                                    md = sigs[0].metadata
-                                                if isinstance(md, dict):
-                                                    md["_perf"] = {
-                                                        "gen_wall": float(gen_dur),
-                                                        "slice_wall": float(slice_dur),
-                                                    }
-                                            except Exception:
-                                                pass
-
-                                        batch_signals.extend(sigs)
-
-                                    results[idx] = (
-                                        batch_signals,
-                                        slice_sum,
-                                        gen_sum,
-                                        gen_max,
-                                    )
-                                except Exception as e:
-                                    shared["error"] = e
-                                    results[idx] = ([], slice_sum, gen_sum, gen_max)
-
-                                try:
-                                    barrier_end.wait()
-                                except Exception:
-                                    return
-
-                        threads = []
-                        for wi in range(worker_n):
-                            t = threading.Thread(
-                                target=_worker, args=(wi,), daemon=True
-                            )
-                            t.start()
-                            threads.append(t)
-
-                        self._signal_worker_ctx = {
-                            "worker_n": worker_n,
-                            "shared": shared,
-                            "results": results,
-                            "barrier_start": barrier_start,
-                            "barrier_end": barrier_end,
-                            "threads": threads,
-                        }
-
-                    ctx = self._signal_worker_ctx
-
-                    sequential_start = (
-                        time.perf_counter()
-                        if self.enable_performance_profiling
-                        else None
-                    )
-
-                    gen_time_max = 0.0
-
-                    # Broadcast date to workers and collect
-                    ctx["shared"]["date"] = current_date
-                    ctx["shared"]["error"] = None
-
-                    try:
-                        ctx["barrier_start"].wait()
-                        ctx["barrier_end"].wait()
-                    except Exception as e:
-                        logger.error(f"并行生成信号同步失败: {e}")
-
-                    err = ctx["shared"].get("error")
-                    if err is not None:
-                        raise err
-
-                    for signals, slice_sum, gen_sum, gen_max in ctx["results"]:
-                        all_signals.extend(signals)
-                        slice_time_total += float(slice_sum)
-                        gen_time_total += float(gen_sum)
-                        if gen_max and gen_max > gen_time_max:
-                            gen_time_max = float(gen_max)
-
-                    # 记录并行化效率（估算顺序执行时间）
-                    if self.enable_performance_profiling and sequential_start:
-                        parallel_time = time.perf_counter() - sequential_start
-                        estimated_sequential_time = (
-                            parallel_time * len(stock_data) / max(1, self.max_workers)
-                        )
-                        if i == 0:
-                            self.performance_profiler.record_parallel_efficiency(
-                                operation_name="signal_generation",
-                                sequential_time=estimated_sequential_time,
-                                parallel_time=parallel_time,
-                                worker_count=self.max_workers,
-                            )
-                elif not all_signals:
+                if not all_signals:
                     gen_time_max = 0.0
                     # 顺序生成信号（股票数量少或禁用并行）
                     for stock_code, data in stock_data.items():
@@ -1793,14 +1575,17 @@ class BacktestExecutor:
                             # 获取到当前日期的历史数据
                             t0 = time.perf_counter()
                             # same rationale as parallel path: avoid daily slicing copies
-                            idx_map = None
+                            idx_map: Optional[Dict[datetime, int]] = None
                             try:
-                                idx_map = data.attrs.get("_date_to_idx")
+                                idx_map = cast(
+                                    Optional[Dict[datetime, int]],
+                                    data.attrs.get("_date_to_idx"),
+                                )
                             except Exception:
                                 idx_map = None
                             current_idx = (
-                                int(idx_map.get(current_date))
-                                if isinstance(idx_map, dict) and current_date in idx_map
+                                int(idx_map[current_date])
+                                if idx_map is not None and current_date in idx_map
                                 else (
                                     int(data.index.get_loc(current_date))
                                     if current_date in data.index
@@ -1858,7 +1643,7 @@ class BacktestExecutor:
                     signal_generation_times.append(signal_duration)
 
                     # 原有口径：整段信号生成（含切片、计算指标、融合等）
-                    self.performance_profiler.record_function_call(
+                    self._profiler().record_function_call(
                         "generate_signals", signal_duration
                     )
 
@@ -1866,29 +1651,29 @@ class BacktestExecutor:
                     # 注意：并行模式下 slice_time_total / gen_time_total 是"各线程耗时求和"(work)，
                     # 不是 wall-clock；用于判断 CPU work 构成，但不能直接当成整体耗时百分比。
                     if slice_time_total > 0:
-                        self.performance_profiler.record_function_call(
+                        self._profiler().record_function_call(
                             "slice_historical_data_work", float(slice_time_total)
                         )
                     if gen_time_total > 0:
-                        self.performance_profiler.record_function_call(
+                        self._profiler().record_function_call(
                             "generate_signals_core_work", float(gen_time_total)
                         )
 
                     # 额外记录 wall-clock 口径（同 generate_signals，但名字更明确，便于报表阅读）
-                    self.performance_profiler.record_function_call(
+                    self._profiler().record_function_call(
                         "generate_signals_wall", signal_duration
                     )
 
                     # 并行路径下 critical path 近似：单日最慢股票的 generate_signals wall
                     if gen_time_max > 0:
-                        self.performance_profiler.record_function_call(
+                        self._profiler().record_function_call(
                             "generate_signals_core_wall_max", float(gen_time_max)
                         )
 
                         # 线程/调度开销（粗略）：整段 wall - 单日最慢单股 wall
                         overhead = float(signal_duration) - float(gen_time_max)
                         if overhead > 0:
-                            self.performance_profiler.record_function_call(
+                            self._profiler().record_function_call(
                                 "signal_generation_overhead_wall", overhead
                             )
 
@@ -1911,12 +1696,12 @@ class BacktestExecutor:
                                 sub = pp.get("sub_strategy_times")
                                 if isinstance(sub, dict):
                                     for k, v in sub.items():
-                                        self.performance_profiler.record_function_call(
+                                        self._profiler().record_function_call(
                                             f"portfolio_substrategy__{k}", float(v)
                                         )
                                 it = pp.get("integrate_time")
                                 if it is not None:
-                                    self.performance_profiler.record_function_call(
+                                    self._profiler().record_function_call(
                                         "portfolio_integrate", float(it)
                                     )
                     except Exception:
@@ -2065,7 +1850,7 @@ class BacktestExecutor:
                         if self.enable_performance_profiling and trade_exec_start:
                             trade_exec_duration = time.perf_counter() - trade_exec_start
                             trade_execution_times.append(trade_exec_duration)
-                            self.performance_profiler.record_function_call(
+                            self._profiler().record_function_call(
                                 "execute_signal", trade_exec_duration
                             )
 
@@ -2095,7 +1880,7 @@ class BacktestExecutor:
                 # 记录交易执行总时间
                 if self.enable_performance_profiling and trade_start_time:
                     trade_duration = time.perf_counter() - trade_start_time
-                    self.performance_profiler.record_function_call(
+                    self._profiler().record_function_call(
                         "execute_trades_batch", trade_duration
                     )
 
@@ -2225,7 +2010,7 @@ class BacktestExecutor:
                         session = SessionLocal()
                         try:
                             task_repo = TaskRepository(session)
-                            existing_task = task_repo.get_task_by_id(task_id)
+                            existing_task = task_repo.get_task_by_id((task_id or ""))
 
                             # 合并任务状态检查（原来每50天单独检查）
                             if not existing_task:
@@ -2239,9 +2024,7 @@ class BacktestExecutor:
                                     severity=ErrorSeverity.LOW,
                                 )
 
-                            result_data = existing_task.result or {}
-                            if not isinstance(result_data, dict):
-                                result_data = {}
+                            result_data: Dict[str, Any] = cast(Any, existing_task.result) or {}
                             progress_data = result_data.get("progress_data", {})
                             if not isinstance(progress_data, dict):
                                 progress_data = {}
@@ -2260,7 +2043,7 @@ class BacktestExecutor:
                             result_data["progress_data"] = progress_data
 
                             task_repo.update_task_status(
-                                task_id=task_id,
+                                task_id=(task_id or ""),
                                 status=TaskStatus.RUNNING,
                                 progress=overall_progress,
                                 result=result_data,
@@ -2283,7 +2066,7 @@ class BacktestExecutor:
                         logger.warning(f"进度更新DB错误: {db_error}")
 
                     await backtest_progress_monitor.update_execution_progress(
-                        task_id=task_id,
+                        task_id=(task_id or ""),
                         processed_days=i + 1,
                         current_date=current_date.strftime("%Y-%m-%d"),
                         signals_generated=len(all_signals),
@@ -2362,13 +2145,13 @@ class BacktestExecutor:
         # ========== END PERF优化 ==========
 
         # 最终进度更新
-        if task_id:
+        if task_id_str:
             final_portfolio_value = portfolio_manager.get_portfolio_value({})
             await backtest_progress_monitor.update_execution_progress(
-                task_id=task_id,
+                task_id=task_id_str,
                 processed_days=len(trading_dates),
                 current_date=(
-                    trading_dates[-1].strftime("%Y-%m-%d") if trading_dates else None
+                    trading_dates[-1].strftime("%Y-%m-%d") if trading_dates else ""
                 ),
                 signals_generated=0,
                 trades_executed=0,
@@ -2381,7 +2164,7 @@ class BacktestExecutor:
                 avg_signal_time = sum(signal_generation_times) / len(
                     signal_generation_times
                 )
-                self.performance_profiler.end_stage(
+                self._profiler().end_stage(
                     "backtest_execution",
                     {
                         "avg_signal_generation_time": avg_signal_time,
@@ -2390,7 +2173,7 @@ class BacktestExecutor:
                 )
             if trade_execution_times:
                 avg_trade_time = sum(trade_execution_times) / len(trade_execution_times)
-                self.performance_profiler.end_stage(
+                self._profiler().end_stage(
                     "backtest_execution",
                     {
                         "avg_trade_execution_time": avg_trade_time,
@@ -2687,7 +2470,7 @@ class BacktestExecutor:
                 stock_performance: Dict[str, Dict[str, Any]] = {}
 
                 # 辅助函数：统一访问 trade 属性（支持 Trade 对象和字典）
-                def get_trade_attr(trade, attr: str):
+                def get_trade_attr(trade: Any, attr: str) -> Any:
                     if isinstance(trade, dict):
                         return trade.get(attr)
                     return getattr(trade, attr, None)

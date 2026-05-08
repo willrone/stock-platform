@@ -19,11 +19,18 @@ from typing import Any, Callable, Dict, List, Optional
 from loguru import logger
 
 try:
-    import optuna
-    from optuna.pruners import HyperbandPruner
-    from optuna.samplers import NSGAIISampler, TPESampler
-    from optuna.storages import RDBStorage
-except ImportError as e:
+    import optuna  # type: ignore[import-not-found,unused-ignore]  # noqa: I001,I005
+    from optuna.pruners import (  # type: ignore[import-not-found,unused-ignore]  # noqa: I001,I005
+        HyperbandPruner,
+    )
+    from optuna.samplers import (  # type: ignore[import-not-found,unused-ignore]  # noqa: I001,I005
+        NSGAIISampler,
+        TPESampler,
+    )
+    from optuna.storages import (  # type: ignore[import-not-found,unused-ignore]  # noqa: I001,I005
+        RDBStorage,
+    )
+except ImportError as e:  # noqa: I005
     logger.error(f"无法导入 optuna 模块: {e}")
     logger.error("请运行: pip install optuna>=3.4.0")
     raise ImportError(
@@ -39,7 +46,7 @@ from app.services.backtest.optimization.data_cache import get_data_cache
 class StrategyHyperparameterOptimizer:
     """策略超参数优化器"""
 
-    def __init__(self, n_jobs: int = 4, use_persistent_storage: bool = True):
+    def __init__(self, n_jobs: int = 4, use_persistent_storage: bool = True) -> None:
         """
         初始化优化器
 
@@ -47,7 +54,7 @@ class StrategyHyperparameterOptimizer:
             n_jobs: 并行进程数（默认 4）
             use_persistent_storage: 是否使用 SQLite 持久化存储（支持断点续跑）
         """
-        self.optimization_history = {}
+        self.optimization_history: Dict[str, Any] = {}
         self.n_jobs = n_jobs
         self.use_persistent_storage = use_persistent_storage
         self._data_cache = get_data_cache()
@@ -251,7 +258,7 @@ class StrategyHyperparameterOptimizer:
         )
 
         # 定义目标函数
-        def objective(trial: optuna.Trial):
+        def objective(trial: Any) -> Any:
             try:
                 # 从参数空间采样参数
                 strategy_params = {}
@@ -321,14 +328,14 @@ class StrategyHyperparameterOptimizer:
                             w = 0.5
 
                         # nested params: <sk>__<param>
-                        sub_cfg: Dict[str, Any] = {}
+                        sub_config: Dict[str, Any] = {}
                         prefix = f"{sk}__"
                         for pk, pv in strategy_params.items():
                             if str(pk).startswith(prefix):
-                                sub_cfg[str(pk)[len(prefix) :]] = pv
+                                sub_config[str(pk)[len(prefix) :]] = pv
 
                         strategies_list.append(
-                            {"name": sk, "weight": w, "config": sub_cfg}
+                            {"name": sk, "weight": w, "config": sub_config}
                         )
 
                     # fallback: ensure at least 1
@@ -339,16 +346,16 @@ class StrategyHyperparameterOptimizer:
                             if "__" in str(pk):
                                 inferred.add(str(pk).split("__", 1)[0])
                         for sk in sorted(inferred):
-                            sub_cfg: Dict[str, Any] = {}
+                            inferred_sub_config: Dict[str, Any] = {}
                             prefix = f"{sk}__"
                             for pk, pv in strategy_params.items():
                                 if str(pk).startswith(prefix):
-                                    sub_cfg[str(pk)[len(prefix) :]] = pv
+                                    inferred_sub_config[str(pk)[len(prefix) :]] = pv
                             strategies_list.append(
                                 {
                                     "name": sk,
                                     "weight": 1.0 / max(1, len(inferred)),
-                                    "config": sub_cfg,
+                                    "config": inferred_sub_config,
                                 }
                             )
 
@@ -372,7 +379,7 @@ class StrategyHyperparameterOptimizer:
                     # 如果已经有运行中的循环，在新线程中运行
                     with concurrent.futures.ThreadPoolExecutor() as executor_pool:
 
-                        def run_in_new_loop():
+                        def run_in_new_loop() -> Dict[str, Any]:
                             new_loop = asyncio.new_event_loop()
                             asyncio.set_event_loop(new_loop)
                             try:
@@ -582,7 +589,8 @@ class StrategyHyperparameterOptimizer:
                                     first_value = first.get(m)
                                     last_value = last.get(m)
                                     if (
-                                        first_value
+                                        first_value is not None
+                                        and last_value is not None
                                         and first_value != 0
                                         and math.isfinite(first_value)
                                         and math.isfinite(last_value)
@@ -981,7 +989,7 @@ class StrategyHyperparameterOptimizer:
             sharpe_ratio = metrics.get("sharpe_ratio", 0.0)
             # 归一化到 0-1（假设夏普比率范围 -2 到 5）
             normalized = (sharpe_ratio + 2) / 7
-            return max(0.0, min(1.0, normalized))
+            return float(max(0.0, min(1.0, normalized)))
 
         elif objective_metric == "calmar":
             # 卡玛比率 = 年化收益 / 最大回撤
@@ -991,8 +999,8 @@ class StrategyHyperparameterOptimizer:
                 return 0.0
             calmar_ratio = annualized_return / max_drawdown
             # 归一化到 0-1（假设卡玛比率范围 0 到 10）
-            normalized = min(1.0, calmar_ratio / 10)
-            return max(0.0, normalized)
+            normalized = float(min(1.0, calmar_ratio / 10))
+            return float(max(0.0, normalized))
 
         elif objective_metric == "ic":
             # 信息系数（简化版本：使用胜率作为近似）
@@ -1000,7 +1008,7 @@ class StrategyHyperparameterOptimizer:
             # IC 通常范围 -1 到 1，这里用胜率作为近似
             ic = (win_rate - 0.5) * 2  # 将 0-1 映射到 -1 到 1
             normalized = (ic + 1) / 2  # 归一化到 0-1
-            return max(0.0, min(1.0, normalized))
+            return float(max(0.0, min(1.0, normalized)))
 
         elif objective_metric == "ic_ir":
             # 使用无成本组合的 information_ratio 作为信息比率
@@ -1008,24 +1016,24 @@ class StrategyHyperparameterOptimizer:
             information_ratio = ir_info.get("information_ratio", 0.0)
             # 与夏普类似的范围假设 [-2, 5]
             normalized = (information_ratio + 2) / 7
-            return max(0.0, min(1.0, normalized))
+            return float(max(0.0, min(1.0, normalized)))
 
         elif objective_metric == "total_return":
             # 总收益率，假设范围 [-0.5, 1.0]
             total_return = metrics.get("total_return", 0.0)
             normalized = (total_return + 0.5) / 1.5
-            return max(0.0, min(1.0, normalized))
+            return float(max(0.0, min(1.0, normalized)))
 
         elif objective_metric == "annualized_return":
             # 年化收益率，假设范围 [-0.5, 1.0]
             annualized_return = metrics.get("annualized_return", 0.0)
             normalized = (annualized_return + 0.5) / 1.5
-            return max(0.0, min(1.0, normalized))
+            return float(max(0.0, min(1.0, normalized)))
 
         elif objective_metric == "win_rate":
             # 胜率本身已经在 0-1 之间
             win_rate = metrics.get("win_rate", 0.0)
-            return max(0.0, min(1.0, win_rate))
+            return float(max(0.0, min(1.0, win_rate)))
 
         elif objective_metric == "profit_factor":
             # Profit Factor，通常 0-5 之间，>1 才有意义
@@ -1034,7 +1042,7 @@ class StrategyHyperparameterOptimizer:
                 return 0.0
             # 将 [0, 3] 映射到 [0, 1]，>3 视为 1
             normalized = min(1.0, profit_factor / 3.0)
-            return max(0.0, normalized)
+            return float(max(0.0, normalized))
 
         elif objective_metric == "max_drawdown":
             # 最大回撤（负数或0），越小越好，这里转换为“越大越好”的得分
@@ -1042,7 +1050,7 @@ class StrategyHyperparameterOptimizer:
             dd = abs(max_drawdown)
             # 假设 0-60% 的回撤区间，将 0 回撤映射到 1，60% 回撤映射到 0
             normalized = 1.0 - min(1.0, dd / 0.6)
-            return max(0.0, normalized)
+            return float(max(0.0, normalized))
 
         elif objective_metric == "cost":
             # 交易成本：手续费 + 滑点，占初始资金比例，越低越好
@@ -1050,7 +1058,7 @@ class StrategyHyperparameterOptimizer:
             cost_ratio = cost_stats.get("cost_ratio", 0.0)
             # 0 成本 → 1 分，5% 成本 → 0 分，线性下降
             normalized = 1.0 - min(1.0, max(0.0, cost_ratio) / 0.05)
-            return max(0.0, normalized)
+            return float(max(0.0, normalized))
 
         elif objective_metric == "stability":
             # 稳定赚钱：更偏向“样本外（后段）表现 + 低回撤 + 月度稳定”。
@@ -1105,7 +1113,8 @@ class StrategyHyperparameterOptimizer:
                     first_value = first.get(m)
                     last_value = last.get(m)
                     if (
-                        first_value
+                        first_value is not None
+                        and last_value is not None
                         and first_value != 0
                         and math.isfinite(first_value)
                         and math.isfinite(last_value)
@@ -1238,14 +1247,14 @@ class StrategyHyperparameterOptimizer:
                 total_weight += weight
 
             if total_weight > 0:
-                return total_score / total_weight
+                return float(total_score / total_weight)
             return 0.0
 
         else:
             # 默认返回夏普比率
             sharpe_ratio = metrics.get("sharpe_ratio", 0.0)
             normalized = (sharpe_ratio + 2) / 7
-            return max(0.0, min(1.0, normalized))
+            return float(max(0.0, min(1.0, normalized)))
 
     def get_default_param_space(self, strategy_name: str) -> Dict[str, Any]:
         """获取策略的默认参数空间"""

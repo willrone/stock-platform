@@ -70,7 +70,7 @@ class StrategyPortfolio(BaseStrategy):
         weight = 1.0 / len(self.strategies)
         return {strategy.name: weight for strategy in self.strategies}
 
-    def _validate_weights(self):
+    def _validate_weights(self) -> None:
         """验证权重配置"""
         # 检查所有权重是否非负
         for weight in self.weights.values():
@@ -85,7 +85,7 @@ class StrategyPortfolio(BaseStrategy):
             missing = weight_names - strategy_names
             raise ValueError(f"权重配置中包含不存在的策略: {missing}")
 
-    def _normalize_weights(self):
+    def _normalize_weights(self) -> None:
         """归一化权重，确保所有权重之和为1.0"""
         total_weight = sum(self.weights.values())
         if total_weight == 0:
@@ -278,7 +278,7 @@ class StrategyPortfolio(BaseStrategy):
 
         # 使用信号整合器整合信号
         t_int = time.perf_counter()
-        integrated_signals = self.integrator.integrate(
+        integrated_signals: List[TradingSignal] = self.integrator.integrate(
             all_signals, self.weights, consistency_threshold=0.6
         )
         integrate_time = time.perf_counter() - t_int
@@ -325,7 +325,7 @@ class StrategyPortfolio(BaseStrategy):
 
         return all_indicators
 
-    def add_strategy(self, strategy: BaseStrategy, weight: Optional[float] = None):
+    def add_strategy(self, strategy: BaseStrategy, weight: Optional[float] = None) -> None:
         """
         动态添加策略
 
@@ -346,7 +346,7 @@ class StrategyPortfolio(BaseStrategy):
 
         self._normalize_weights()
 
-    def remove_strategy(self, strategy_name: str):
+    def remove_strategy(self, strategy_name: str) -> None:
         """
         移除策略
 
@@ -364,7 +364,7 @@ class StrategyPortfolio(BaseStrategy):
         # 重新归一化权重
         self._normalize_weights()
 
-    def update_weights(self, weights: Dict[str, float]):
+    def update_weights(self, weights: Dict[str, float]) -> None:
         """
         更新策略权重
 

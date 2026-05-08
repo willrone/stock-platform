@@ -15,10 +15,14 @@ import tracemalloc
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from functools import wraps
+from typing import Any, Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar
 
-import psutil
+import psutil  # type: ignore[import-untyped,unused-ignore]
 from loguru import logger
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 @dataclass
@@ -65,7 +69,7 @@ class ParallelEfficiencyMetrics:
 class BacktestPerformanceProfiler:
     """回测性能分析器"""
 
-    def __init__(self, enable_memory_tracking: bool = True):
+    def __init__(self, enable_memory_tracking: bool = True) -> None:
         """
         初始化性能分析器
 
@@ -101,13 +105,13 @@ class BacktestPerformanceProfiler:
 
         logger.info("回测性能分析器初始化完成")
 
-    def start_backtest(self):
+    def start_backtest(self) -> None:
         """开始回测性能分析"""
         self.start_time = time.perf_counter()
         self.start_stage("total_backtest")
         logger.info("开始回测性能分析")
 
-    def end_backtest(self):
+    def end_backtest(self) -> None:
         """结束回测性能分析"""
         if "total_backtest" in self.stages:
             self.end_stage("total_backtest")
@@ -117,7 +121,7 @@ class BacktestPerformanceProfiler:
 
         logger.info("回测性能分析完成")
 
-    def start_stage(self, stage_name: str, details: Optional[Dict[str, Any]] = None):
+    def start_stage(self, stage_name: str, details: Optional[Dict[str, Any]] = None) -> None:
         """
         开始监控一个阶段
 
@@ -189,7 +193,7 @@ class BacktestPerformanceProfiler:
 
         return stage
 
-    def record_function_call(self, func_name: str, duration: float):
+    def record_function_call(self, func_name: str, duration: float) -> None:
         """
         记录函数调用
 
@@ -213,7 +217,7 @@ class BacktestPerformanceProfiler:
         sequential_time: float,
         parallel_time: float,
         worker_count: int,
-    ):
+    ) -> None:
         """
         记录并行化效率
 
@@ -241,8 +245,8 @@ class BacktestPerformanceProfiler:
         )
 
     def record_db_operation(
-        self, operation: str, duration: float, details: Optional[Dict] = None
-    ):
+        self, operation: str, duration: float, details: Optional[Dict[str, Any]] = None
+    ) -> None:
         """
         记录数据库操作
 
@@ -260,7 +264,7 @@ class BacktestPerformanceProfiler:
             }
         )
 
-    def take_memory_snapshot(self, label: str):
+    def take_memory_snapshot(self, label: str) -> None:
         """
         记录内存快照
 
@@ -281,7 +285,7 @@ class BacktestPerformanceProfiler:
             }
         )
 
-    def update_backtest_stats(self, signals: int = 0, trades: int = 0, days: int = 0):
+    def update_backtest_stats(self, signals: int = 0, trades: int = 0, days: int = 0) -> None:
         """
         更新回测统计信息
 
@@ -297,14 +301,14 @@ class BacktestPerformanceProfiler:
     def _get_memory_usage(self) -> float:
         """获取当前内存使用（MB）"""
         try:
-            return self.process.memory_info().rss / 1024 / 1024
+            return float(self.process.memory_info().rss / 1024 / 1024)
         except Exception:
             return 0.0
 
     def _get_cpu_usage(self) -> float:
         """获取当前CPU使用率（%）"""
         try:
-            return self.process.cpu_percent(interval=0.1)
+            return float(self.process.cpu_percent(interval=0.1))
         except Exception:
             return 0.0
 
@@ -318,7 +322,7 @@ class BacktestPerformanceProfiler:
         total_time = time.perf_counter() - self.start_time
 
         # 计算各阶段占比
-        stage_percentages = {}
+        stage_percentages: Dict[str, float] = {}
         for stage_name, stage in self.stages.items():
             if stage.duration > 0:
                 stage_percentages[stage_name] = stage.duration / total_time * 100
@@ -391,11 +395,11 @@ class BacktestPerformanceProfiler:
         if not self.db_operations:
             return {}
 
-        operations_by_type = defaultdict(list)
+        operations_by_type: defaultdict[str, List[float]] = defaultdict(list)
         for op in self.db_operations:
             operations_by_type[op["operation"]].append(op["duration"])
 
-        stats = {}
+        stats: Dict[str, Any] = {}
         for op_type, durations in operations_by_type.items():
             stats[op_type] = {
                 "count": len(durations),
@@ -407,7 +411,7 @@ class BacktestPerformanceProfiler:
 
         return stats
 
-    def print_summary(self):
+    def print_summary(self) -> None:
         """打印性能摘要"""
         report = self.generate_report()
         summary = report["summary"]
@@ -461,7 +465,7 @@ class BacktestPerformanceProfiler:
 
         print("=" * 80)
 
-    def save_report(self, filepath: str):
+    def save_report(self, filepath: str) -> None:
         """
         保存性能报告到文件
 
@@ -472,7 +476,7 @@ class BacktestPerformanceProfiler:
 
         try:
             try:
-                import orjson
+                import orjson  # type: ignore[import-not-found,unused-ignore]
 
                 payload = orjson.dumps(
                     report,
@@ -490,7 +494,9 @@ class BacktestPerformanceProfiler:
 
 
 # 性能分析装饰器
-def profile_function(profiler: Optional[BacktestPerformanceProfiler] = None):
+def profile_function(
+    profiler: Optional[BacktestPerformanceProfiler] = None,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     函数性能分析装饰器
 
@@ -500,8 +506,9 @@ def profile_function(profiler: Optional[BacktestPerformanceProfiler] = None):
             pass
     """
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             if profiler is None:
                 return func(*args, **kwargs)
 
@@ -526,16 +533,18 @@ class PerformanceContext:
         self,
         profiler: BacktestPerformanceProfiler,
         stage_name: str,
-        details: Optional[Dict] = None,
-    ):
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.profiler = profiler
         self.stage_name = stage_name
         self.details = details
 
-    def __enter__(self):
+    def __enter__(self) -> "PerformanceContext":
         self.profiler.start_stage(self.stage_name, self.details)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: object, exc_val: object, exc_tb: object
+    ) -> Literal[False]:
         self.profiler.end_stage(self.stage_name)
         return False

@@ -54,7 +54,7 @@ class PortfolioManager:
                 )
                 total_value += position.market_value
 
-        return total_value
+        return float(total_value)
 
     def get_portfolio_value_without_cost(
         self, current_prices: Dict[str, float]
@@ -71,7 +71,7 @@ class PortfolioManager:
                 )
                 total_value += position.market_value
 
-        return total_value
+        return float(total_value)
 
     def execute_signal(
         self, signal: TradingSignal, current_prices: Dict[str, float]
@@ -179,7 +179,10 @@ class PortfolioManager:
 
         # 计算实际成本
         total_cost = quantity * price
-        commission = total_cost * self.config.commission_rate
+        commission = max(
+            total_cost * (self.config.open_cost or self.config.commission_rate),
+            self.config.min_cost,
+        )
         slippage_cost = quantity * slippage_cost_per_share
         total_cost_with_commission = total_cost + commission
 
@@ -301,7 +304,10 @@ class PortfolioManager:
         # 卖出全部持仓（含成本）
         quantity = position.quantity
         total_proceeds = quantity * price
-        commission = total_proceeds * self.config.commission_rate
+        commission = max(
+            total_proceeds * (self.config.close_cost or self.config.commission_rate),
+            self.config.min_cost,
+        )
         slippage_cost = quantity * slippage_cost_per_share
         net_proceeds = total_proceeds - commission
 
@@ -353,7 +359,7 @@ class PortfolioManager:
 
     def record_portfolio_snapshot(
         self, date: datetime, current_prices: Dict[str, float]
-    ):
+    ) -> None:
         """记录组合快照"""
         portfolio_value = self.get_portfolio_value(current_prices)
         portfolio_value_without_cost = self.get_portfolio_value_without_cost(

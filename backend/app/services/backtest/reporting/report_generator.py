@@ -16,7 +16,7 @@ from app.core.error_handler import ErrorSeverity, TaskError
 class BacktestReportGenerator:
     """回测报告生成器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.temp_dir = tempfile.gettempdir()
         self.reports_dir = os.path.join(self.temp_dir, "backtest_reports")
         os.makedirs(self.reports_dir, exist_ok=True)

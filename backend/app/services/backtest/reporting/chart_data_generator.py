@@ -2,7 +2,7 @@
 图表数据生成器 - 为回测结果生成各种图表所需的数据
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -85,7 +85,7 @@ class ChartDataGenerator:
             )
 
         # TODO: 添加基准数据（如沪深300指数）
-        benchmark_curve = []
+        benchmark_curve: List[Dict[str, Any]] = []
 
         return {
             "equity_curve": equity_curve,
