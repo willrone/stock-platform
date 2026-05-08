@@ -263,12 +263,11 @@ def create_application() -> FastAPI:
         """HTTP异常处理"""
         from app.api.v1.schemas import StandardResponse
 
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=StandardResponse(
-                success=False, message=exc.detail, data=None
-            ).model_dump(),
-        )
+        content = StandardResponse(
+            success=False, message=exc.detail, data=None
+        ).model_dump(mode="json")
+        content["detail"] = exc.detail
+        return JSONResponse(status_code=exc.status_code, content=content)
 
     @app.exception_handler(Exception)
     async def general_exception_handler(

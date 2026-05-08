@@ -5,8 +5,9 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import inspect
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -18,7 +19,7 @@ from app.api.v1.schemas import (
     StandardResponse,
 )
 from app.core.config import settings
-from app.core.container import get_data_service, get_sftp_sync_service
+from app.core import container
 from app.core.error_handler import (
     ErrorContext,
     ErrorSeverity,
@@ -36,11 +37,41 @@ from app.services.events.data_sync_events import (
 router = APIRouter(prefix="/data", tags=["数据管理"])
 
 
+async def _resolve_service(service: Any) -> Any:
+    """兼容同步 provider 和测试里的 AsyncMock provider。"""
+    if inspect.isawaitable(service):
+        return await service
+    return service
+
+
+async def get_data_service_dependency() -> SimpleDataService:
+    """请求时解析数据服务，便于测试和运行时注入。"""
+    return cast(SimpleDataService, await _resolve_service(container.get_data_service()))
+
+
+async def get_sftp_sync_service_dependency() -> SFTPSyncService:
+    """请求时解析 SFTP 同步服务，便于测试和运行时注入。"""
+    return cast(
+        SFTPSyncService,
+        await _resolve_service(container.get_sftp_sync_service()),
+    )
+
+
+async def get_data_service() -> SimpleDataService:
+    """向后兼容旧测试/调用方直接导入的依赖函数名。"""
+    return await get_data_service_dependency()
+
+
+async def get_sftp_sync_service() -> SFTPSyncService:
+    """向后兼容旧测试/调用方直接导入的依赖函数名。"""
+    return await get_sftp_sync_service_dependency()
+
+
 def _build_data_error_context(
     *,
     user_id: Optional[str] = None,
     task_id: Optional[str] = None,
-    **additional_data,
+    **additional_data: Any,
 ) -> ErrorContext:
     """构建 data 路由统一错误上下文。"""
     return ErrorContext(
@@ -51,7 +82,7 @@ def _build_data_error_context(
 
 
 def _mark_task_failed_after_submit_error(
-    task_repository,
+    task_repository: Any,
     *,
     task_id: str,
     submit_error: Exception,
@@ -95,7 +126,7 @@ def _mark_task_failed_after_submit_error(
 async def trigger_qlib_precompute(
     request: QlibPrecomputeRequest,
     user_id: str = Depends(get_current_user),
-):
+) -> Any:
     """
     触发Qlib指标/因子预计算任务
 
@@ -116,7 +147,7 @@ async def trigger_qlib_precompute(
         task_repository = TaskRepository(session)
 
         # 构建任务配置
-        config = {
+        config: Dict[str, Any] = {
             "batch_size": request.batch_size,
         }
 
@@ -130,11 +161,14 @@ async def trigger_qlib_precompute(
             config["max_workers"] = request.max_workers
 
         # 创建任务
-        task = task_repository.create_task(
-            task_name="Qlib预计算任务",
-            task_type=TaskType.QLIB_PRECOMPUTE,
-            user_id=user_id,
-            config=config,
+        task = cast(
+            Any,
+            task_repository.create_task(
+                task_name="Qlib预计算任务",
+                task_type=TaskType.QLIB_PRECOMPUTE,
+                user_id=user_id,
+                config=config,
+            ),
         )
 
         # 将任务提交到进程池执行（异步，不阻塞）
@@ -146,9 +180,10 @@ async def trigger_qlib_precompute(
 
             logger.info(f"Qlib预计算任务已提交到进程池: {task.task_id}")
         except Exception as submit_error:
+            task_id_value = cast(str, task.task_id)
             submit_context = _build_data_error_context(
                 user_id=user_id,
-                task_id=task.task_id,
+                task_id=task_id_value,
                 operation="qlib_precompute_submit",
                 route="trigger_qlib_precompute",
                 stock_codes=request.stock_codes or [],
@@ -162,7 +197,7 @@ async def trigger_qlib_precompute(
             )
             _mark_task_failed_after_submit_error(
                 task_repository,
-                task_id=task.task_id,
+                task_id=task_id_value,
                 submit_error=submit_error,
                 context=submit_context,
             )
@@ -206,7 +241,7 @@ async def trigger_qlib_precompute(
 )
 async def get_data_service_status(
     data_service: SimpleDataService = Depends(get_data_service),
-):
+) -> Any:
     """获取数据服务状态"""
     logger.info("收到数据服务状态检查请求")
     try:
@@ -257,7 +292,7 @@ async def get_data_service_status(
 )
 async def get_remote_stock_list(
     data_service: SimpleDataService = Depends(get_data_service),
-):
+) -> Any:
     """获取远端服务的股票列表"""
     logger.info("收到获取远端股票列表请求")
     try:
@@ -316,7 +351,7 @@ async def get_remote_stock_list(
     summary="获取本地股票列表",
     description="从本地parquet文件获取可用的股票列表",
 )
-async def get_local_stock_list():
+async def get_local_stock_list() -> Any:
     """获取本地股票列表"""
     try:
         from pathlib import Path
@@ -570,7 +605,7 @@ async def get_local_stock_list():
     summary="获取本地股票列表（快速版）",
     description="快速获取本地股票代码列表，仅用于选择股票，不包含详细信息",
 )
-async def get_local_stock_list_simple():
+async def get_local_stock_list_simple() -> Any:
     """快速获取本地股票列表（仅股票代码和名称）"""
     try:
         from pathlib import Path
@@ -580,6 +615,7 @@ async def get_local_stock_list_simple():
         stock_data_path = backend_dir / "data" / "parquet" / "stock_data"
 
         # 如果固定路径不存在，尝试其他可能的路径
+        resolved_stock_data_path: Optional[Path] = None
         if not stock_data_path.exists():
             data_root = Path(settings.DATA_ROOT_PATH)
             if not data_root.is_absolute():
@@ -592,25 +628,27 @@ async def get_local_stock_list_simple():
                 Path("data") / "parquet" / "stock_data",
             ]
 
-            stock_data_path = None
             for path in possible_paths:
                 path_resolved = path.resolve() if path.exists() else None
                 if path_resolved and path_resolved.exists():
-                    stock_data_path = path_resolved
+                    resolved_stock_data_path = path_resolved
                     break
 
-            if stock_data_path is None:
+            if resolved_stock_data_path is None:
                 logger.warning(f"未找到stock_data目录，尝试的路径: {possible_paths}")
                 return StandardResponse(
                     success=False,
                     message="未找到parquet数据目录",
                     data={"stocks": [], "stock_codes": [], "total_stocks": 0},
                 )
+        else:
+            resolved_stock_data_path = stock_data_path
 
+        stock_data_path = resolved_stock_data_path
         logger.info(f"使用股票数据目录: {stock_data_path}")
 
         # 快速方法：从文件名获取股票代码，不读取文件内容
-        stock_codes_set = set()
+        stock_codes_set: set[str] = set()
 
         # 查找所有parquet文件
         parquet_files = list(stock_data_path.glob("*.parquet"))
@@ -688,7 +726,7 @@ async def get_local_stock_list_simple():
 async def sync_remote_data(
     request: RemoteDataSyncRequest,
     sftp_sync_service: SFTPSyncService = Depends(get_sftp_sync_service),
-):
+) -> Any:
     # Friendly message when SFTP sync is disabled (default)
     if not getattr(sftp_sync_service, "enabled", False):
         return StandardResponse(
@@ -793,7 +831,7 @@ async def sync_remote_data(
 )
 async def get_sync_event_history(
     stock_code: Optional[str] = None, event_type: Optional[str] = None, limit: int = 50
-):
+) -> Any:
     """获取数据同步事件历史"""
     try:
         event_manager = get_data_sync_event_manager()
@@ -846,7 +884,7 @@ async def get_sync_event_history(
     summary="获取数据同步事件统计",
     description="获取数据同步事件的统计信息",
 )
-async def get_sync_event_stats():
+async def get_sync_event_stats() -> Any:
     """获取数据同步事件统计"""
     try:
         event_manager = get_data_sync_event_manager()
@@ -867,7 +905,7 @@ async def get_sync_event_stats():
     summary="清空事件历史",
     description="清空所有数据同步事件历史记录",
 )
-async def clear_sync_event_history():
+async def clear_sync_event_history() -> Any:
     """清空事件历史"""
     try:
         event_manager = get_data_sync_event_manager()
