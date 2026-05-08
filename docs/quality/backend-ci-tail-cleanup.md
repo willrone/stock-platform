@@ -11,14 +11,12 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 ## CI-isolated suites
 | Path | Category | Observed issue / reason | Restore path |
 | --- | --- | --- | --- |
-| `unit/api/test_api_consistency_properties.py` | API/property/env-db | FastAPI property tests hit generated malformed parameterized routes and empty CI sqlite tables; latest failure: 400 for `/api/v1/tasks/{` plus `/api/v1/models` 500. Latest JUnit sample: test_parameterized_get_endpoints_consistency: AssertionError: 参数化GET请求应该返回有效状态码，端点: /api/v1/tasks/{, 状态码: 400 assert 400 in [200, 404, 405, 500]  +  where 400 = <Response [400 Bad Request]>.status_code Falsifying example: test_parameterized_get_endpoints_consistency(     self=<tests.un; test_models_list_endpoint: assert 500 == 200  +  where 500 = <Response [500 Internal Server Error]>.status_code | Stabilize route generation and provide isolated API test DB/schema fixtures. |
 | `integration/test_integration.py` | integration/live-app-legacy | Full app integration suite mixes old expectations, external state, and broad endpoint coverage; previous CI showed multiple failures. | Split into smoke tests vs live integration; keep smoke deterministic under TestClient. |
 | `integration/test_integration_simple.py` | integration/live-app-legacy | Simple integration suite still assumes legacy endpoint behavior and local services/data. | Convert service-dependent cases to marked integration job or update endpoint contracts. |
 | `integration/test_simple_integration.py` | integration/live-app-legacy | Legacy simple integration has failing live app assumptions. | Keep out of unit gate; restore under integration marker with explicit fixtures. |
 | `unit/backtest/test_backtest_engine.py` | legacy-backtest-api | Old dataclass/engine API characterization conflicts with current async executor/backtest model. | Decide delete vs port to current BacktestExecutor contract. |
 | `unit/backtest/test_backtest_engine_properties.py` | legacy-backtest-api/property | Property tests still target older engine semantics; latest CI had deterministic failures. | Port generated cases to current engine or mark as legacy until old engine removed. |
 | `unit/backtest/test_backtest_db_extension.py` | async/live-db | Async tests are unmarked and exercise DB extension service directly. | Add pytest-asyncio markers and isolated DB fixture, or move to integration job. |
-| `unit/backtest/test_backtest_data_adapter_properties.py` | flaky-property | Hypothesis reported flaky output for overview data completeness. Latest JUnit sample: test_backtest_overview_data_completeness: hypothesis.errors.Flaky: Hypothesis test_backtest_overview_data_completeness(self=<tests.unit.backtest.test_backtest_data_adapter_properties.TestBacktestDataAdapterProperties object at 0x7fa3a76e7750>, num_trades=5, num_snapshots=10, initia | Make data generation deterministic; isolate global caches/time/randomness. |
 | `unit/infrastructure/test_container_properties.py` | legacy-infrastructure | Container/service lifecycle property tests fail under CI environment assumptions. | Rebuild around current DI/container API with temp config. |
 | `unit/infrastructure/test_error_handling_properties.py` | optional-dependency/env | CircuitBreaker resolves to None in CI path; tests assume callable implementation. | Fix optional import fallback or skip only missing optional component cases. |
 | `unit/infrastructure/test_infrastructure.py` | legacy-infrastructure | Project structure/app/environment checks encode old filesystem/env assumptions. | Update path assumptions to repo root/backend layout and current app factory. |
@@ -39,11 +37,10 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `unit/tasks/test_task_management_properties.py` | state-leak/property | Task management properties see accumulated global tasks/statistics in CI. | Add repository/task manager isolation fixtures and reset global state. |
 
 ## Recommended restore order
-1. API/property and backtest adapter flakes: small surface, latest failures only 3 tests.
-2. Async/live DB and websocket tests: add proper pytest markers/fixtures or move to integration job.
-3. Repository/task state isolation: reset global DB/task managers between property examples.
-4. Backtest legacy engine tests: decide deletion vs port to current executor.
-5. Model/infrastructure property suites: larger contract drift; restore by module with dedicated fixtures.
+1. Async/live DB and websocket tests: add proper pytest markers/fixtures or move to integration job.
+2. Repository/task state isolation: reset global DB/task managers between property examples.
+3. Backtest legacy engine tests: decide deletion vs port to current executor.
+4. Model/infrastructure property suites: larger contract drift; restore by module with dedicated fixtures.
 
 ## Exit criteria
 - Remove each path from `collect_ignore` only in the same PR/commit that makes it pass under `GITHUB_ACTIONS=true pytest tests`.

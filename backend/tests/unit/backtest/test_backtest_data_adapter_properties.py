@@ -38,20 +38,24 @@ class TestBacktestDataAdapterProperties:
         final_value: float = 120000,
     ) -> Dict[str, Any]:
         """创建样本回测结果数据"""
+        rng = np.random.default_rng(
+            abs(hash((num_trades, num_portfolio_snapshots, initial_cash, final_value)))
+            % (2**32)
+        )
 
         # 生成交易历史
         trade_history = []
         for i in range(num_trades):
             trade_date = datetime(2024, 1, 1) + timedelta(days=i * 5)
             action = "BUY" if i % 2 == 0 else "SELL"
-            pnl = np.random.normal(100, 500) if action == "SELL" else 0
+            pnl = rng.normal(100, 500) if action == "SELL" else 0
 
             trade = {
                 "trade_id": "T{i:06d}",
                 "stock_code": f"00000{(i % 3) + 1}.SZ",
                 "action": action,
                 "quantity": 1000,
-                "price": 10.0 + np.random.normal(0, 1),
+                "price": 10.0 + rng.normal(0, 1),
                 "timestamp": trade_date.isoformat(),
                 "commission": 5.0,
                 "pnl": pnl,
@@ -67,7 +71,7 @@ class TestBacktestDataAdapterProperties:
             portfolio_value = (
                 initial_cash
                 + (final_value - initial_cash) * progress
-                + np.random.normal(0, 1000)
+                + rng.normal(0, 1000)
             )
 
             snapshot = {
@@ -245,9 +249,7 @@ class TestBacktestDataAdapterProperties:
         if enhanced_result.drawdown_analysis:
             assert isinstance(enhanced_result.drawdown_analysis, DrawdownAnalysis)
             assert not np.isnan(enhanced_result.drawdown_analysis.max_drawdown)
-            assert (
-                enhanced_result.drawdown_analysis.max_drawdown <= 0
-            ), "最大回撤应该是负数或零"
+            assert enhanced_result.drawdown_analysis.max_drawdown <= 0, "最大回撤应该是负数或零"
 
     @given(
         portfolio_length=st.integers(min_value=30, max_value=252),
@@ -307,9 +309,7 @@ class TestBacktestDataAdapterProperties:
 
         # 验证波动率计算的合理性
         calculated_volatility = risk_metrics.volatility
-        assert (
-            0 < calculated_volatility < 2.0
-        ), f"波动率 {calculated_volatility} 应该在合理范围内"
+        assert 0 < calculated_volatility < 2.0, f"波动率 {calculated_volatility} 应该在合理范围内"
 
         # 验证波动率与输入参数的一致性（允许一定误差）
         expected_volatility = volatility_level
@@ -332,22 +332,16 @@ class TestBacktestDataAdapterProperties:
 
         # 验证最大回撤
         max_drawdown = risk_metrics.max_drawdown
-        assert (
-            -1.0 < max_drawdown <= 0
-        ), f"最大回撤 {max_drawdown} 应该是负数且大于-100%"
+        assert -1.0 < max_drawdown <= 0, f"最大回撤 {max_drawdown} 应该是负数且大于-100%"
 
         # 验证Calmar比率（如果有回撤）
         if max_drawdown < 0:
             calmar_ratio = risk_metrics.calmar_ratio
-            assert (
-                -10 < calmar_ratio < 10
-            ), f"Calmar比率 {calmar_ratio} 应该在合理范围内"
+            assert -10 < calmar_ratio < 10, f"Calmar比率 {calmar_ratio} 应该在合理范围内"
 
         # 验证下行偏差
         downside_deviation = risk_metrics.downside_deviation
-        assert (
-            0 <= downside_deviation < 2.0
-        ), f"下行偏差 {downside_deviation} 应该非负且在合理范围内"
+        assert 0 <= downside_deviation < 2.0, f"下行偏差 {downside_deviation} 应该非负且在合理范围内"
 
     @given(
         num_months=st.integers(min_value=6, max_value=24),
@@ -459,6 +453,7 @@ class TestBacktestDataAdapterProperties:
         且所有统计指标都应该在合理范围内
         """
         # 生成多只股票的交易数据
+        rng = np.random.default_rng(num_stocks * 10_000 + trades_per_stock)
         trade_history = []
         trade_id = 0
 
@@ -473,7 +468,7 @@ class TestBacktestDataAdapterProperties:
                     "stock_code": stock_code,
                     "action": "BUY",
                     "quantity": 1000,
-                    "price": 10.0 + np.random.normal(0, 1),
+                    "price": 10.0 + rng.normal(0, 1),
                     "timestamp": buy_date.isoformat(),
                     "commission": 5.0,
                     "pnl": 0,
@@ -482,8 +477,8 @@ class TestBacktestDataAdapterProperties:
                 trade_id += 1
 
                 # 生成对应的卖出交易
-                sell_date = buy_date + timedelta(days=np.random.randint(5, 30))
-                sell_price = buy_trade["price"] * (1 + np.random.normal(0, 0.1))
+                sell_date = buy_date + timedelta(days=int(rng.integers(5, 30)))
+                sell_price = buy_trade["price"] * (1 + rng.normal(0, 0.1))
                 pnl = (sell_price - buy_trade["price"]) * buy_trade[
                     "quantity"
                 ] - 10.0  # 减去双边手续费
