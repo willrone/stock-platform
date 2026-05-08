@@ -15,7 +15,6 @@ if os.getenv("GITHUB_ACTIONS") == "true":
         "integration/test_simple_integration.py",
         "unit/backtest/test_backtest_engine.py",
         "unit/backtest/test_backtest_engine_properties.py",
-        "unit/backtest/test_backtest_db_extension.py",
         "unit/infrastructure/test_container_properties.py",
         "unit/infrastructure/test_error_handling_properties.py",
         "unit/infrastructure/test_infrastructure.py",
