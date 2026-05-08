@@ -2,13 +2,13 @@
 模型性能监控器
 收集预测请求和响应数据，监控准确率和延迟指标
 """
+
 import asyncio
-import json
 import statistics
 import threading
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
@@ -179,7 +179,7 @@ class MetricsCalculator:
         self.records: Dict[str, deque] = defaultdict(lambda: deque(maxlen=window_size))
         self.lock = threading.Lock()
 
-    def add_record(self, record: PredictionRecord):
+    def add_record(self, record: PredictionRecord) -> Any:
         """添加预测记录"""
         with self.lock:
             key = f"{record.model_id}_{record.model_version}"
@@ -282,7 +282,7 @@ class MetricsCalculator:
 class AlertManager:
     """告警管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules: Dict[str, AlertRule] = {}
         self.active_alerts: Dict[str, Alert] = {}
         self.alert_history: List[Alert] = []
@@ -292,7 +292,7 @@ class AlertManager:
         # 注册默认告警规则
         self._register_default_rules()
 
-    def _register_default_rules(self):
+    def _register_default_rules(self) -> None:
         """注册默认告警规则"""
         default_rules = [
             AlertRule(
@@ -348,24 +348,24 @@ class AlertManager:
         for rule in default_rules:
             self.rules[rule.name] = rule
 
-    def add_rule(self, rule: AlertRule):
+    def add_rule(self, rule: AlertRule) -> Any:
         """添加告警规则"""
         with self.lock:
             self.rules[rule.name] = rule
         logger.info(f"添加告警规则: {rule.name}")
 
-    def remove_rule(self, rule_name: str):
+    def remove_rule(self, rule_name: str) -> Any:
         """移除告警规则"""
         with self.lock:
             if rule_name in self.rules:
                 del self.rules[rule_name]
                 logger.info(f"移除告警规则: {rule_name}")
 
-    def add_callback(self, callback: Callable[[Alert], None]):
+    def add_callback(self, callback: Callable[[Alert], None]) -> Any:
         """添加告警回调函数"""
         self.callbacks.append(callback)
 
-    def check_metrics(self, metrics: PerformanceMetrics):
+    def check_metrics(self, metrics: PerformanceMetrics) -> Any:
         """检查指标并触发告警"""
         with self.lock:
             for rule_name, rule in self.rules.items():
@@ -390,7 +390,7 @@ class AlertManager:
                             alert_id=f"alert_{int(time.time())}_{rule_name}",
                             rule_name=rule_name,
                             level=rule.level,
-                            message=f"{rule.description}: {metric_value:.2f} {rule.condition} {rule.threshold}",
+                            message="{rule.description}: {metric_value:.2f} {rule.condition} {rule.threshold}",
                             metric_value=metric_value,
                             threshold=rule.threshold,
                             timestamp=datetime.now(),
@@ -463,21 +463,21 @@ class AlertManager:
         """获取告警历史"""
         with self.lock:
             history = self.alert_history.copy()
-        
+
         # 时间过滤
         if start_time:
             history = [a for a in history if a.timestamp >= start_time]
         if end_time:
             history = [a for a in history if a.timestamp <= end_time]
-        
+
         # 类型过滤
         if alert_type:
             history = [a for a in history if a.rule_name.startswith(alert_type)]
-        
+
         # 严重程度过滤
         if severity:
             history = [a for a in history if a.level.value == severity]
-        
+
         return [a.to_dict() for a in history[-limit:]]
 
     def get_alert_configs(
@@ -488,12 +488,12 @@ class AlertManager:
         """获取告警配置列表"""
         with self.lock:
             configs = list(self.rules.values())
-        
+
         if alert_type:
             configs = [c for c in configs if c.metric_type.value == alert_type]
         if enabled is not None:
             configs = [c for c in configs if c.enabled == enabled]
-        
+
         return [c.to_dict() for c in configs]
 
     def get_alert_config(self, alert_id: str) -> Optional[Dict[str, Any]]:
@@ -504,21 +504,23 @@ class AlertManager:
 
     def create_alert_config(self, config: Dict[str, Any]) -> str:
         """创建告警配置"""
-        alert_id = f"alert_{config['alert_type']}_{config['metric_name']}_{int(time.time())}"
-        
+        alert_id = (
+            f"alert_{config['alert_type']}_{config['metric_name']}_{int(time.time())}"
+        )
+
         rule = AlertRule(
             name=alert_id,
-            metric_type=MetricType(config.get('alert_type', 'latency')),
-            condition=config.get('comparison', 'gt'),
-            threshold=config.get('threshold', 0),
-            level=AlertLevel(config.get('severity', 'warning')),
-            enabled=config.get('enabled', True),
-            description=config.get('description', ''),
+            metric_type=MetricType(config.get("alert_type", "latency")),
+            condition=config.get("comparison", "gt"),
+            threshold=config.get("threshold", 0),
+            level=AlertLevel(config.get("severity", "warning")),
+            enabled=config.get("enabled", True),
+            description=config.get("description", ""),
         )
-        
+
         with self.lock:
             self.rules[alert_id] = rule
-        
+
         return alert_id
 
     def update_alert_config(self, alert_id: str, update_data: Dict[str, Any]) -> bool:
@@ -526,17 +528,17 @@ class AlertManager:
         with self.lock:
             if alert_id not in self.rules:
                 return False
-            
+
             rule = self.rules[alert_id]
-            if 'threshold' in update_data:
-                rule.threshold = update_data['threshold']
-            if 'comparison' in update_data:
-                rule.condition = update_data['comparison']
-            if 'enabled' in update_data:
-                rule.enabled = update_data['enabled']
-            if 'description' in update_data:
-                rule.description = update_data['description']
-            
+            if "threshold" in update_data:
+                rule.threshold = update_data["threshold"]
+            if "comparison" in update_data:
+                rule.condition = update_data["comparison"]
+            if "enabled" in update_data:
+                rule.enabled = update_data["enabled"]
+            if "description" in update_data:
+                rule.description = update_data["description"]
+
             return True
 
     def delete_alert_config(self, alert_id: str) -> bool:
@@ -547,7 +549,9 @@ class AlertManager:
                 return True
             return False
 
-    def resolve_alert(self, alert_id: str, resolution_note: Optional[str] = None) -> bool:
+    def resolve_alert(
+        self, alert_id: str, resolution_note: Optional[str] = None
+    ) -> bool:
         """解决告警"""
         with self.lock:
             for key, alert in self.active_alerts.items():
@@ -566,21 +570,25 @@ class AlertManager:
     ) -> Dict[str, Any]:
         """测试告警配置"""
         triggered_rules = []
-        
+
         with self.lock:
             for rule_name, rule in self.rules.items():
                 if not rule.enabled:
                     continue
-                
-                should_alert = self._check_condition(test_value, rule.condition, rule.threshold)
+
+                should_alert = self._check_condition(
+                    test_value, rule.condition, rule.threshold
+                )
                 if should_alert:
-                    triggered_rules.append({
-                        "rule_name": rule_name,
-                        "threshold": rule.threshold,
-                        "condition": rule.condition,
-                        "level": rule.level.value,
-                    })
-        
+                    triggered_rules.append(
+                        {
+                            "rule_name": rule_name,
+                            "threshold": rule.threshold,
+                            "condition": rule.condition,
+                            "level": rule.level.value,
+                        }
+                    )
+
         return {
             "test_value": test_value,
             "alert_type": alert_type,
@@ -629,7 +637,7 @@ class PerformanceMonitor:
         latency_ms: float = 0.0,
         success: bool = True,
         error_message: Optional[str] = None,
-    ):
+    ) -> Any:
         """记录预测请求"""
         record = PredictionRecord(
             request_id=request_id,
@@ -647,7 +655,7 @@ class PerformanceMonitor:
         self.metrics_calculator.add_record(record)
         logger.debug(f"记录预测: {request_id}, 延迟: {latency_ms}ms, 成功: {success}")
 
-    async def start_monitoring(self):
+    async def start_monitoring(self) -> None:
         """启动监控"""
         if self.running:
             logger.warning("监控已在运行")
@@ -657,7 +665,7 @@ class PerformanceMonitor:
         self.monitoring_task = asyncio.create_task(self._monitoring_loop())
         logger.info("性能监控已启动")
 
-    async def stop_monitoring(self):
+    async def stop_monitoring(self) -> None:
         """停止监控"""
         if not self.running:
             return
@@ -672,7 +680,7 @@ class PerformanceMonitor:
 
         logger.info("性能监控已停止")
 
-    async def _monitoring_loop(self):
+    async def _monitoring_loop(self) -> None:
         """监控循环"""
         while self.running:
             try:
@@ -740,11 +748,11 @@ class PerformanceMonitor:
 
         return history[-limit:]
 
-    def add_alert_rule(self, rule: AlertRule):
+    def add_alert_rule(self, rule: AlertRule) -> Any:
         """添加告警规则"""
         self.alert_manager.add_rule(rule)
 
-    def remove_alert_rule(self, rule_name: str):
+    def remove_alert_rule(self, rule_name: str) -> Any:
         """移除告警规则"""
         self.alert_manager.remove_rule(rule_name)
 
@@ -752,15 +760,15 @@ class PerformanceMonitor:
         """获取所有告警规则"""
         return list(self.alert_manager.rules.values())
 
-    def get_active_alerts(self) -> List[Alert]:
+    def get_active_alerts(self) -> List[Dict[str, Any]]:
         """获取活跃告警"""
         return self.alert_manager.get_active_alerts()
 
-    def get_alert_history(self, limit: int = 100) -> List[Alert]:
+    def get_alert_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """获取告警历史"""
-        return self.alert_manager.get_alert_history(limit)
+        return self.alert_manager.get_alert_history(limit=limit)
 
-    def add_alert_callback(self, callback: Callable[[Alert], None]):
+    def add_alert_callback(self, callback: Callable[[Alert], None]) -> Any:
         """添加告警回调"""
         self.alert_manager.add_callback(callback)
 
@@ -782,10 +790,14 @@ class PerformanceMonitor:
         active_alerts = self.get_active_alerts()
         alert_counts = {
             "critical": len(
-                [a for a in active_alerts if a.level == AlertLevel.CRITICAL]
+                [a for a in active_alerts if a.get("level") == AlertLevel.CRITICAL.value]
             ),
-            "warning": len([a for a in active_alerts if a.level == AlertLevel.WARNING]),
-            "info": len([a for a in active_alerts if a.level == AlertLevel.INFO]),
+            "warning": len(
+                [a for a in active_alerts if a.get("level") == AlertLevel.WARNING.value]
+            ),
+            "info": len(
+                [a for a in active_alerts if a.get("level") == AlertLevel.INFO.value]
+            ),
         }
 
         return {
@@ -829,7 +841,7 @@ class PerformanceMonitor:
             start_time=start_time,
             end_time=end_time,
         )
-        
+
         if not history:
             return {
                 "model_id": model_id,
@@ -838,35 +850,43 @@ class PerformanceMonitor:
                 "average_latency": 0,
                 "error_rate": 0,
             }
-        
+
         return {
             "model_id": model_id,
             "total_predictions": sum(m.total_requests for m in history),
-            "average_accuracy": statistics.mean([m.success_rate for m in history]) if history else 0,
-            "average_latency": statistics.mean([m.avg_latency_ms for m in history]) if history else 0,
-            "error_rate": statistics.mean([m.error_rate for m in history]) if history else 0,
-            "metrics_history": [m.to_dict() for m in history] if include_predictions else [],
+            "average_accuracy": (
+                statistics.mean([m.success_rate for m in history]) if history else 0
+            ),
+            "average_latency": (
+                statistics.mean([m.avg_latency_ms for m in history]) if history else 0
+            ),
+            "error_rate": (
+                statistics.mean([m.error_rate for m in history]) if history else 0
+            ),
+            "metrics_history": (
+                [m.to_dict() for m in history] if include_predictions else []
+            ),
         }
 
     def get_system_status(self) -> Dict[str, Any]:
         """获取系统整体状态（API 兼容方法）"""
         model_keys = self.metrics_calculator.get_model_keys()
         recent_metrics = self.metrics_history[-50:] if self.metrics_history else []
-        
+
         # 计算活跃模型（最近5分钟有数据的模型）
         cutoff_time = datetime.now() - timedelta(minutes=5)
         active_models = set()
         for m in recent_metrics:
             if m.timestamp >= cutoff_time:
                 active_models.add(f"{m.model_id}_{m.model_version}")
-        
+
         # 计算平均指标
-        avg_latency = 0
-        error_rate = 0
+        avg_latency = 0.0
+        error_rate = 0.0
         if recent_metrics:
             avg_latency = statistics.mean([m.avg_latency_ms for m in recent_metrics])
             error_rate = statistics.mean([m.error_rate for m in recent_metrics])
-        
+
         return {
             "total_models": len(model_keys),
             "active_models": len(active_models),
@@ -874,7 +894,11 @@ class PerformanceMonitor:
             "error_rate": error_rate,
             "monitoring_active": self.running,
             "total_metrics_points": len(self.metrics_history),
-            "last_update": self.metrics_history[-1].timestamp.isoformat() if self.metrics_history else None,
+            "last_update": (
+                self.metrics_history[-1].timestamp.isoformat()
+                if self.metrics_history
+                else None
+            ),
         }
 
     def get_recent_metrics(self, limit: int = 50) -> List[Dict[str, Any]]:

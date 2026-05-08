@@ -2,12 +2,12 @@
 系统性能优化器
 优化特征计算性能和数据库查询效率
 """
-import asyncio
+
 import gc
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List
 
 import psutil
 from loguru import logger
@@ -16,11 +16,11 @@ from loguru import logger
 class PerformanceOptimizer:
     """系统性能优化器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.executor = ThreadPoolExecutor(max_workers=4)
-        self.cache = {}
-        self.cache_ttl = {}
-        self.performance_metrics = {}
+        self.cache: Dict[str, Any] = {}
+        self.cache_ttl: Dict[str, Any] = {}
+        self.performance_metrics: Dict[str, Any] = {}
 
     def optimize_feature_computation(self, feature_configs: List[Dict]) -> List[Dict]:
         """优化特征计算性能"""
@@ -59,9 +59,11 @@ class PerformanceOptimizer:
                 "simple_features": len(simple_features),
                 "complex_features": len(complex_features),
                 "computation_time": computation_time,
-                "features_per_second": len(feature_configs) / computation_time
-                if computation_time > 0
-                else 0,
+                "features_per_second": (
+                    len(feature_configs) / computation_time
+                    if computation_time > 0
+                    else 0
+                ),
             }
 
             logger.info(
@@ -138,7 +140,9 @@ class PerformanceOptimizer:
 
             return feature
         except Exception as e:
-            logger.error(f"计算复杂特征失败: {feature.get('name', 'unknown')}, 错误: {e}")
+            logger.error(
+                f"计算复杂特征失败: {feature.get('name', 'unknown')}, 错误: {e}"
+            )
             return feature
 
     def optimize_database_queries(self, query_configs: List[Dict]) -> List[Dict]:
@@ -161,9 +165,11 @@ class PerformanceOptimizer:
             self.performance_metrics["query_optimization"] = {
                 "total_queries": len(query_configs),
                 "optimization_time": optimization_time,
-                "queries_per_second": len(query_configs) / optimization_time
-                if optimization_time > 0
-                else 0,
+                "queries_per_second": (
+                    len(query_configs) / optimization_time
+                    if optimization_time > 0
+                    else 0
+                ),
             }
 
             logger.info(
@@ -249,7 +255,7 @@ class PerformanceOptimizer:
         """批量优化查询"""
         try:
             # 按表分组
-            table_groups = {}
+            table_groups: Any = {}
             for query in queries:
                 table = query.get("table", "unknown")
                 if table not in table_groups:
@@ -295,9 +301,9 @@ class PerformanceOptimizer:
                 "cpu": {
                     "percent": cpu_percent,
                     "count": psutil.cpu_count(),
-                    "load_avg": psutil.getloadavg()
-                    if hasattr(psutil, "getloadavg")
-                    else None,
+                    "load_avg": (
+                        psutil.getloadavg() if hasattr(psutil, "getloadavg") else None
+                    ),
                 },
                 "memory": {
                     "total": memory.total,
@@ -327,7 +333,9 @@ class PerformanceOptimizer:
             if memory.percent > 85:
                 warnings.append(f"内存使用率过高: {memory.percent}%")
             if (disk.used / disk.total) * 100 > 90:
-                warnings.append(f"磁盘使用率过高: {(disk.used / disk.total) * 100:.1f}%")
+                warnings.append(
+                    f"磁盘使用率过高: {(disk.used / disk.total) * 100:.1f}%"
+                )
 
             resource_info["warnings"] = warnings
 
@@ -432,12 +440,12 @@ class PerformanceOptimizer:
 
         return suggestions
 
-    def __del__(self):
+    def __del__(self) -> Any:
         """清理资源"""
         try:
             if hasattr(self, "executor"):
                 self.executor.shutdown(wait=True)
-        except:
+        except Exception:
             pass
 
 

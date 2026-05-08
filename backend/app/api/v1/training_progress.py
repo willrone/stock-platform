@@ -2,10 +2,11 @@
 训练进度API路由
 添加进度查询和报告接口，支持训练控制操作
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -20,9 +21,9 @@ from app.services.models.model_lifecycle_manager import model_lifecycle_manager
 def _get_task_manager() -> Any:
     """延迟加载 task_manager，兼容未启用旧任务系统的部署。"""
     try:
-        from app.services.tasks.task_manager import task_manager
+        from app.services.tasks import task_manager as task_manager_module
 
-        return task_manager
+        return getattr(task_manager_module, "task_manager", None)
     except Exception:
         return None
 
@@ -35,29 +36,29 @@ router = APIRouter(prefix="/training", tags=["训练进度"])
 
 # WebSocket连接管理
 class ConnectionManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_connections: List[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket) -> Any:
         await websocket.accept()
         self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
+    def disconnect(self, websocket: WebSocket) -> Any:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
 
-    async def send_personal_message(self, message: str, websocket: WebSocket):
+    async def send_personal_message(self, message: str, websocket: WebSocket) -> Any:
         try:
             await websocket.send_text(message)
-        except:
+        except Exception:
             self.disconnect(websocket)
 
-    async def broadcast(self, message: str):
+    async def broadcast(self, message: str) -> Any:
         disconnected = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
+            except Exception:
                 disconnected.append(connection)
 
         # 清理断开的连接
@@ -89,7 +90,7 @@ async def get_training_tasks(
     status: Optional[str] = Query(None, description="任务状态过滤"),
     model_type: Optional[str] = Query(None, description="模型类型过滤"),
     limit: int = Query(50, description="返回数量限制"),
-):
+) -> Any:
     """获取训练任务列表"""
     try:
         # 获取所有训练相关的任务
@@ -137,8 +138,10 @@ async def get_training_tasks(
         raise HTTPException(status_code=500, detail=f"获取训练任务失败: {str(e)}")
 
 
-@router.get("/tasks/{task_id}", response_model=StandardResponse, summary="获取训练任务详情")
-async def get_training_task(task_id: str):
+@router.get(
+    "/tasks/{task_id}", response_model=StandardResponse, summary="获取训练任务详情"
+)
+async def get_training_task(task_id: str) -> Any:
     """获取训练任务详情"""
     try:
         task = task_manager.get_task(task_id)
@@ -161,11 +164,18 @@ async def get_training_task(task_id: str):
         # 获取模型生命周期信息
         model_id = task.metadata.get("model_id")
         if model_id:
-            lifecycle_info = model_lifecycle_manager.get_model_lifecycle(model_id)
+            get_model_lifecycle = getattr(
+                model_lifecycle_manager, "get_model_lifecycle", None
+            )
+            lifecycle_info = (
+                get_model_lifecycle(model_id) if callable(get_model_lifecycle) else None
+            )
             if lifecycle_info:
                 task_dict["model_lifecycle"] = lifecycle_info.to_dict()
 
-        return StandardResponse(success=True, message="成功获取训练任务详情", data=task_dict)
+        return StandardResponse(
+            success=True, message="成功获取训练任务详情", data=task_dict
+        )
 
     except HTTPException:
         raise
@@ -176,7 +186,7 @@ async def get_training_task(task_id: str):
 @router.get(
     "/tasks/{task_id}/progress", response_model=StandardResponse, summary="获取训练进度"
 )
-async def get_training_progress(task_id: str):
+async def get_training_progress(task_id: str) -> Any:
     """获取训练进度（兼容 task_id / model_id 两种输入）。"""
     try:
         manager = _get_task_manager()
@@ -224,9 +234,7 @@ async def get_training_progress(task_id: str):
         session = SessionLocal()
         try:
             model = (
-                session.query(ModelInfo)
-                .filter(ModelInfo.model_id == task_id)
-                .first()
+                session.query(ModelInfo).filter(ModelInfo.model_id == task_id).first()
             )
             if not model:
                 raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
@@ -248,7 +256,7 @@ async def get_training_progress(task_id: str):
 @router.get(
     "/tasks/{task_id}/metrics", response_model=StandardResponse, summary="获取训练指标"
 )
-async def get_training_metrics(task_id: str):
+async def get_training_metrics(task_id: str) -> Any:
     """获取训练指标历史"""
     try:
         task = task_manager.get_task(task_id)
@@ -296,7 +304,9 @@ async def get_training_metrics(task_id: str):
                 "final_val_accuracy": val_acc_history[-1] if val_acc_history else None,
             }
 
-        return StandardResponse(success=True, message="成功获取训练指标", data=metrics_data)
+        return StandardResponse(
+            success=True, message="成功获取训练指标", data=metrics_data
+        )
 
     except HTTPException:
         raise
@@ -307,7 +317,7 @@ async def get_training_metrics(task_id: str):
 @router.post(
     "/tasks/{task_id}/control", response_model=StandardResponse, summary="控制训练任务"
 )
-async def control_training_task(task_id: str, request: TrainingControlRequest):
+async def control_training_task(task_id: str, request: TrainingControlRequest) -> Any:
     """控制训练任务（暂停、恢复、停止等）"""
     try:
         task = task_manager.get_task(task_id)
@@ -371,7 +381,7 @@ async def control_training_task(task_id: str, request: TrainingControlRequest):
 )
 async def get_model_training_history(
     model_id: str, limit: int = Query(10, description="返回数量限制")
-):
+) -> Any:
     """获取模型的训练历史"""
     try:
         # 获取模型相关的训练任务
@@ -384,9 +394,9 @@ async def get_model_training_history(
                     "task_id": task.task_id,
                     "status": task.status,
                     "created_at": task.created_at.isoformat(),
-                    "completed_at": task.completed_at.isoformat()
-                    if task.completed_at
-                    else None,
+                    "completed_at": (
+                        task.completed_at.isoformat() if task.completed_at else None
+                    ),
                     "progress_percentage": task.progress_percentage,
                     "final_metrics": getattr(task, "final_metrics", {}),
                     "training_config": task.metadata.get("training_config", {}),
@@ -411,14 +421,14 @@ async def get_model_training_history(
 
 
 @router.get("/stats", response_model=StandardResponse, summary="获取训练统计")
-async def get_training_stats():
+async def get_training_stats() -> Any:
     """获取训练统计信息"""
     try:
         # 获取所有训练任务
         all_tasks = task_manager.get_tasks_by_type("model_training")
 
         # 统计信息
-        stats = {
+        stats: Dict[str, Any] = {
             "total_tasks": len(all_tasks),
             "status_distribution": {},
             "model_type_distribution": {},
@@ -426,18 +436,18 @@ async def get_training_stats():
             "average_duration": 0,
             "success_rate": 0,
         }
+        status_distribution = cast(Dict[str, int], stats["status_distribution"])
+        model_type_distribution = cast(Dict[str, int], stats["model_type_distribution"])
 
         # 按状态统计
         for task in all_tasks:
-            status = task.status
-            stats["status_distribution"][status] = (
-                stats["status_distribution"].get(status, 0) + 1
-            )
+            status = str(task.status)
+            status_distribution[status] = status_distribution.get(status, 0) + 1
 
             # 按模型类型统计
-            model_type = task.metadata.get("model_type", "unknown")
-            stats["model_type_distribution"][model_type] = (
-                stats["model_type_distribution"].get(model_type, 0) + 1
+            model_type = str(task.metadata.get("model_type", "unknown"))
+            model_type_distribution[model_type] = (
+                model_type_distribution.get(model_type, 0) + 1
             )
 
         # 最近的任务
@@ -467,14 +477,16 @@ async def get_training_stats():
             ]
             stats["success_rate"] = len(successful_tasks) / len(completed_tasks) * 100
 
-        return StandardResponse(success=True, message="成功获取训练统计信息", data=stats)
+        return StandardResponse(
+            success=True, message="成功获取训练统计信息", data=stats
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取训练统计失败: {str(e)}")
 
 
 @router.post("/start", response_model=StandardResponse, summary="启动训练任务")
-async def start_training(request: TrainingConfigRequest):
+async def start_training(request: TrainingConfigRequest) -> Any:
     """启动新的训练任务"""
     try:
         # 创建训练任务
@@ -529,7 +541,7 @@ async def start_training(request: TrainingConfigRequest):
 
 
 @router.websocket("/ws/{task_id}")
-async def websocket_training_progress(websocket: WebSocket, task_id: str):
+async def websocket_training_progress(websocket: WebSocket, task_id: str) -> Any:
     """WebSocket实时训练进度推送"""
     await manager.connect(websocket)
 
@@ -608,13 +620,13 @@ async def websocket_training_progress(websocket: WebSocket, task_id: str):
         }
         try:
             await manager.send_personal_message(json.dumps(error_data), websocket)
-        except:
+        except Exception:
             pass
         manager.disconnect(websocket)
 
 
 @router.websocket("/ws/global")
-async def websocket_global_training_updates(websocket: WebSocket):
+async def websocket_global_training_updates(websocket: WebSocket) -> Any:
     """WebSocket全局训练更新推送"""
     await manager.connect(websocket)
 
@@ -639,5 +651,5 @@ async def websocket_global_training_updates(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-    except Exception as e:
+    except Exception:
         manager.disconnect(websocket)

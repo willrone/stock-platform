@@ -2,9 +2,9 @@
 Qlib Bin格式转换工具
 将Parquet格式的股票数据转换为Qlib Bin格式，供Alpha158 handler使用
 """
+
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -12,15 +12,12 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from app.core.config import settings
-
 
 class QlibBinConverter:
     """Qlib Bin格式转换器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化转换器"""
-        pass
 
     def convert_parquet_to_bin(
         self,
@@ -93,11 +90,13 @@ class QlibBinConverter:
             dates = pd.DatetimeIndex(data.index.unique()).sort_values()
             if calendar_file.exists():
                 raw_lines = [
-                    l.strip()
-                    for l in calendar_file.read_text().splitlines()
-                    if l.strip()
+                    line.strip()
+                    for line in calendar_file.read_text().splitlines()
+                    if line.strip()
                 ]
-                valid_lines = [l for l in raw_lines if len(l) == 8 and l.isdigit()]
+                valid_lines = [
+                    line for line in raw_lines if len(line) == 8 and line.isdigit()
+                ]
                 existing = pd.to_datetime(valid_lines, format="%Y%m%d", errors="coerce")
                 existing = pd.DatetimeIndex(existing).dropna()
                 calendar = existing.union(dates).sort_values()
@@ -137,9 +136,11 @@ class QlibBinConverter:
                 new_line = f"{instrument}\t{start_str}\t{end_str}\n"
                 if inst_file.exists():
                     lines = [
-                        l
-                        for l in inst_file.read_text(encoding="utf-8").splitlines()
-                        if l.strip()
+                        line
+                        for line in inst_file.read_text(
+                            encoding="utf-8"
+                        ).splitlines()
+                        if line.strip()
                     ]
                     updated = False
                     out_lines = []

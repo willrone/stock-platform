@@ -6,9 +6,7 @@
 """
 
 import asyncio
-import os
 from concurrent.futures import Future, ProcessPoolExecutor
-from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
 from loguru import logger
@@ -38,7 +36,7 @@ class ProcessTaskExecutor:
             "active_tasks": 0,
         }
 
-    def start(self):
+    def start(self) -> None:
         """启动进程池"""
         if self.is_running:
             logger.warning("进程池已经运行中")
@@ -48,7 +46,7 @@ class ProcessTaskExecutor:
         self.is_running = True
         logger.info(f"进程池执行器已启动，工作进程数: {self.max_workers}")
 
-    def shutdown(self, wait: bool = True, timeout: Optional[float] = None):
+    def shutdown(self, wait: bool = True, timeout: Optional[float] = None) -> Any:
         """关闭进程池"""
         if not self.is_running or not self.executor:
             return
@@ -62,16 +60,16 @@ class ProcessTaskExecutor:
                 # 获取所有活跃的Future
                 import concurrent.futures
 
+                future: Any
                 for future in concurrent.futures.as_completed([]):
                     try:
                         future.cancel()
-                    except:
-                        pass
+                    except Exception:
+                        continue
 
             # 关闭进程池
             if wait:
-                # 等待任务完成，但设置超时
-                actual_timeout = timeout or 30.0
+                # 等待任务完成
                 self.executor.shutdown(wait=True)
             else:
                 # 不等待，立即关闭
@@ -81,12 +79,12 @@ class ProcessTaskExecutor:
             # 强制关闭
             try:
                 self.executor.shutdown(wait=False)
-            except:
-                pass
+            except Exception:
+                logger.debug("进程池已不可用，跳过二次关闭")
 
         logger.info("进程池执行器已关闭")
 
-    def submit(self, fn: Callable, *args, **kwargs) -> Future:
+    def submit(self, fn: Callable, *args: Any, **kwargs: Any) -> Future:
         """
         提交任务到进程池
 
@@ -107,7 +105,7 @@ class ProcessTaskExecutor:
         future = self.executor.submit(fn, *args, **kwargs)
 
         # 添加回调来更新统计信息
-        def on_done(f: Future):
+        def on_done(f: Future) -> Any:
             self.stats["active_tasks"] -= 1
             try:
                 f.result()  # 获取结果，如果有异常会抛出
@@ -118,10 +116,12 @@ class ProcessTaskExecutor:
 
         future.add_done_callback(on_done)
 
-        logger.debug(f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}")
+        logger.debug(
+            f"任务已提交到进程池，当前活跃任务数: {self.stats['active_tasks']}"
+        )
         return future
 
-    async def submit_async(self, fn: Callable, *args, **kwargs) -> Any:
+    async def submit_async(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:
         """
         异步提交任务到进程池并等待结果
 
@@ -161,13 +161,13 @@ def get_process_executor() -> ProcessTaskExecutor:
     return _process_executor
 
 
-def start_process_executor():
+def start_process_executor() -> None:
     """启动全局进程池执行器"""
     executor = get_process_executor()
     executor.start()
 
 
-def shutdown_process_executor(wait: bool = True, timeout: Optional[float] = None):
+def shutdown_process_executor(wait: bool = True, timeout: Optional[float] = None) -> Any:
     """关闭全局进程池执行器"""
     global _process_executor
     if _process_executor:

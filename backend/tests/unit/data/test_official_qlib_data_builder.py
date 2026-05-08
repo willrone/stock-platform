@@ -30,7 +30,12 @@ class _FakeConverter:
 
     def convert_parquet_to_bin(self, parquet_data, stock_code, qlib_data_path):
         self.calls.append((stock_code, qlib_data_path, list(parquet_data.columns)))
-        return Path(qlib_data_path) / "features" / stock_code.replace('.', '_').lower() / "close.day.bin"
+        return (
+            Path(qlib_data_path)
+            / "features"
+            / stock_code.replace(".", "_").lower()
+            / "close.day.bin"
+        )
 
 
 def test_prepare_stocks_builds_clean_official_qlib_bins(tmp_path) -> None:
@@ -48,5 +53,8 @@ def test_prepare_stocks_builds_clean_official_qlib_bins(tmp_path) -> None:
     assert result["failed"] == []
     assert loader.calls == ["600036.SH", "601288.SH"]
     assert [call[0] for call in converter.calls] == ["600036.SH", "601288.SH"]
-    assert all(call[2] == ["open", "high", "low", "close", "volume"] for call in converter.calls)
+    assert all(
+        call[2] == ["open", "high", "low", "close", "volume"]
+        for call in converter.calls
+    )
     assert builder.official_qlib_data_path == tmp_path / "qlib_official_data"

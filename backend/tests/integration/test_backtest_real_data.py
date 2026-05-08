@@ -32,7 +32,9 @@ async def test_backtest_flow_with_real_data(monkeypatch):
         pytest.skip(f"预计算数据不存在: {precomputed_file}")
 
     # 确保测试进程使用正确的数据路径
-    monkeypatch.setattr(settings, "QLIB_DATA_PATH", "backend/data/qlib_data", raising=False)
+    monkeypatch.setattr(
+        settings, "QLIB_DATA_PATH", "backend/data/qlib_data", raising=False
+    )
 
     loader = StockDataLoader(data_root="backend/data")
     raw_df = loader.load_stock_data("000001.SZ")
@@ -53,7 +55,11 @@ async def test_backtest_flow_with_real_data(monkeypatch):
         stock_codes=["000001.SZ"],
         start_date=start_date,
         end_date=end_date,
-        strategy_config={"short_window": 5, "long_window": 20, "signal_threshold": 0.01},
+        strategy_config={
+            "short_window": 5,
+            "long_window": 20,
+            "signal_threshold": 0.01,
+        },
         backtest_config=None,
         task_id=None,
     )
@@ -64,7 +70,9 @@ async def test_backtest_flow_with_real_data(monkeypatch):
     assert "portfolio_history" in report
 
     # 强制回退 Parquet
-    monkeypatch.setattr(settings, "QLIB_DATA_PATH", "backend/data/qlib_data_missing", raising=False)
+    monkeypatch.setattr(
+        settings, "QLIB_DATA_PATH", "backend/data/qlib_data_missing", raising=False
+    )
     fallback_loader = DataLoader(data_dir="backend/data")
     fallback_df = fallback_loader.load_stock_data("000001.SZ", start_date, end_date)
     assert not fallback_df.empty

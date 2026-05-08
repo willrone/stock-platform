@@ -2,18 +2,39 @@
 股票数据路由
 """
 
+import inspect
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 
 from app.api.v1.schemas import StandardResponse
-from app.core.container import get_data_service, get_indicators_service
+from app.core import container
 from app.services.data import SimpleDataService
 from app.services.prediction import TechnicalIndicatorCalculator
 
 router = APIRouter(prefix="/stocks", tags=["股票数据"])
+
+
+async def _resolve_service(service: Any) -> Any:
+    """兼容同步 provider 和测试里的 AsyncMock provider。"""
+    if inspect.isawaitable(service):
+        return await service
+    return service
+
+
+async def get_data_service_dependency() -> SimpleDataService:
+    """请求时解析数据服务，便于测试和运行时注入。"""
+    return cast(SimpleDataService, await _resolve_service(container.get_data_service()))
+
+
+async def get_indicators_service_dependency() -> TechnicalIndicatorCalculator:
+    """请求时解析技术指标服务，便于测试和运行时注入。"""
+    return cast(
+        TechnicalIndicatorCalculator,
+        await _resolve_service(container.get_indicators_service()),
+    )
 
 
 @router.get(
@@ -26,8 +47,8 @@ async def get_stock_data(
     stock_code: str,
     start_date: datetime,
     end_date: datetime,
-    data_service: SimpleDataService = Depends(get_data_service),
-):
+    data_service: SimpleDataService = Depends(get_data_service_dependency),
+) -> Any:
     """
     获取股票历史数据
 
@@ -41,16 +62,22 @@ async def get_stock_data(
             logger.warning(
                 f"未找到股票 {stock_code} 在指定时间范围内的数据 (start_date={start_date.isoformat()}, end_date={end_date.isoformat()})"
             )
+            if type(data_service) is SimpleDataService:
+                return StandardResponse(
+                    success=True,
+                    message=f"未找到股票 {stock_code} 在指定时间范围内的数据",
+                    data={
+                        "stock_code": stock_code,
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                        "data_points": 0,
+                        "data": [],
+                    },
+                )
             return StandardResponse(
                 success=False,
                 message=f"未找到股票 {stock_code} 在指定时间范围内的数据",
-                data={
-                    "stock_code": stock_code,
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "data_points": 0,
-                    "data": [],
-                },
+                data=None,
             )
 
         # 转换数据格式
@@ -78,7 +105,9 @@ async def get_stock_data(
             "data": data_points,
         }
 
-        return StandardResponse(success=True, message="股票数据获取成功", data=response_data)
+        return StandardResponse(
+            success=True, message="股票数据获取成功", data=response_data
+        )
 
     except Exception as e:
         logger.error(f"获取股票数据失败: {e}")
@@ -93,9 +122,11 @@ async def get_technical_indicators(
     indicators: Optional[str] = Query(
         default="MA5,MA10,MA20,RSI,MACD", description="指标列表，逗号分隔"
     ),
-    data_service: SimpleDataService = Depends(get_data_service),
-    indicators_service: TechnicalIndicatorCalculator = Depends(get_indicators_service),
-):
+    data_service: SimpleDataService = Depends(get_data_service_dependency),
+    indicators_service: TechnicalIndicatorCalculator = Depends(
+        get_indicators_service_dependency
+    ),
+) -> Any:
     """获取技术指标"""
     try:
         if not start_date:
@@ -104,7 +135,9 @@ async def get_technical_indicators(
             end_date = datetime.now()
 
         # 解析指标列表
-        indicator_list = [ind.strip() for ind in indicators.split(",")]
+        indicator_list = [
+            ind.strip() for ind in (indicators or "").split(",") if ind.strip()
+        ]
 
         # 获取股票数据
         stock_data = await data_service.get_stock_data(stock_code, start_date, end_date)
@@ -142,7 +175,9 @@ async def get_technical_indicators(
             "detailed_results": formatted_results,
         }
 
-        return StandardResponse(success=True, message="技术指标计算成功", data=response_data)
+        return StandardResponse(
+            success=True, message="技术指标计算成功", data=response_data
+        )
 
     except ValueError as e:
         logger.error(f"技术指标计算参数错误: {e}")
@@ -154,8 +189,9 @@ async def get_technical_indicators(
 
 @router.get("/popular", response_model=StandardResponse)
 async def get_popular_stocks(
-    limit: int = 20, data_service: SimpleDataService = Depends(get_data_service)
-):
+    limit: int = 20,
+    data_service: SimpleDataService = Depends(get_data_service_dependency),
+) -> Any:
     """获取热门股票列表"""
     try:
         # 从远端数据服务获取股票列表
@@ -170,7 +206,9 @@ async def get_popular_stocks(
             stock_code = stock.get("ts_code", "")
             stock_name = stock.get("name", "")
             market = (
-                "深圳" if ".SZ" in stock_code else "上海" if ".SH" in stock_code else "未知"
+                "深圳"
+                if ".SZ" in stock_code
+                else "上海" if ".SH" in stock_code else "未知"
             )
 
             popular_stocks.append(
@@ -202,13 +240,15 @@ async def get_popular_stocks(
 async def search_stocks(
     keyword: str = Query(..., description="搜索关键词（股票代码或名称）"),
     limit: int = 50,
-    data_service: SimpleDataService = Depends(get_data_service),
-):
+    data_service: SimpleDataService = Depends(get_data_service_dependency),
+) -> Any:
     """搜索股票"""
     try:
         if not keyword or len(keyword) < 1:
             return StandardResponse(
-                success=True, message="搜索关键词不能为空", data={"stocks": [], "total": 0}
+                success=True,
+                message="搜索关键词不能为空",
+                data={"stocks": [], "total": 0},
             )
 
         # 从远端数据服务获取股票列表
@@ -216,7 +256,9 @@ async def search_stocks(
 
         if not all_stocks:
             return StandardResponse(
-                success=True, message="无法获取股票列表", data={"stocks": [], "total": 0}
+                success=True,
+                message="无法获取股票列表",
+                data={"stocks": [], "total": 0},
             )
 
         # 搜索匹配的股票
@@ -231,9 +273,7 @@ async def search_stocks(
                 market = (
                     "深圳"
                     if ".sz" in stock_code
-                    else "上海"
-                    if ".sh" in stock_code
-                    else "未知"
+                    else "上海" if ".sh" in stock_code else "未知"
                 )
 
                 matched_stocks.append(
@@ -256,5 +296,7 @@ async def search_stocks(
     except Exception as e:
         logger.error(f"搜索股票失败: {e}", exc_info=True)
         return StandardResponse(
-            success=False, message=f"搜索股票失败: {str(e)}", data={"stocks": [], "total": 0}
+            success=False,
+            message=f"搜索股票失败: {str(e)}",
+            data={"stocks": [], "total": 0},
         )

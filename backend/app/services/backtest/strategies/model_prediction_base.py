@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import pandas as pd
 
@@ -18,7 +18,7 @@ class BaseModelPredictionStrategy(BaseStrategy):
 
     def __init__(self, name: str, config: Dict[str, Any]):
         super().__init__(name, config)
-        self.model_id = config.get("model_id")
+        self.model_id = cast(str, config.get("model_id"))
         if not self.model_id:
             raise ValueError(f"{name.lower()} 策略要求提供 model_id")
 

@@ -2,18 +2,26 @@
 A/B测试流量分割管理器
 支持按比例分割用户流量，实现用户分组和标识
 """
+
 import hashlib
-import json
 import random
 import threading
-import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, cast
 
 from loguru import logger
+
+
+class TrafficSplitter(Protocol):
+    """Traffic splitter interface."""
+
+    def assign_variant(
+        self, user_id: str, experiment: Any, session_id: Optional[str] = None
+    ) -> Any:
+        raise NotImplementedError
 
 
 class TrafficSplitMethod(Enum):
@@ -237,7 +245,7 @@ class RandomSplitter:
 class StickySessionSplitter:
     """粘性会话分割器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.user_assignments: Dict[str, Dict[str, str]] = defaultdict(dict)
         self.lock = threading.Lock()
 
@@ -271,7 +279,7 @@ class StickySessionSplitter:
 class TrafficManager:
     """流量分割管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.experiments: Dict[str, ABExperiment] = {}
         self.user_assignments: Dict[str, List[UserAssignment]] = defaultdict(list)
         self.assignment_history: deque = deque(maxlen=10000)
@@ -300,7 +308,7 @@ class TrafficManager:
         logger.info(f"创建A/B测试实验: {experiment.name} ({experiment.experiment_id})")
         return experiment.experiment_id
 
-    def _validate_experiment(self, experiment: ABExperiment):
+    def _validate_experiment(self, experiment: ABExperiment) -> Any:
         """验证实验配置"""
         if not experiment.variants:
             raise ValueError("实验必须至少包含一个变体")
@@ -332,9 +340,9 @@ class TrafficManager:
 
             # 只允许更新特定字段
             allowed_fields = ["description", "end_time", "target_sample_size", "tags"]
-            for field, value in updates.items():
-                if field in allowed_fields:
-                    setattr(experiment, field, value)
+            for field_name, value in updates.items():
+                if field_name in allowed_fields:
+                    setattr(experiment, field_name, value)
 
             logger.info(f"更新实验配置: {experiment_id}")
             return True
@@ -437,7 +445,9 @@ class TrafficManager:
                 return None
 
             # 使用分割器分配变体
-            splitter = self.splitters.get(experiment.split_method)
+            splitter = cast(
+                Optional[TrafficSplitter], self.splitters.get(experiment.split_method)
+            )
             if not splitter:
                 logger.error(f"不支持的分割方法: {experiment.split_method}")
                 return None
@@ -569,7 +579,7 @@ class TrafficManager:
         assignments = self.get_experiment_assignments(experiment_id)
 
         # 按变体统计
-        variant_stats = defaultdict(int)
+        variant_stats: Any = defaultdict(int)
         for assignment in assignments:
             variant_stats[assignment.variant_id] += 1
 
@@ -595,12 +605,12 @@ class TrafficManager:
             "status": experiment.status.value,
             "total_users": total_assignments,
             "variant_allocation": actual_allocation,
-            "start_time": experiment.start_time.isoformat()
-            if experiment.start_time
-            else None,
-            "end_time": experiment.end_time.isoformat()
-            if experiment.end_time
-            else None,
+            "start_time": (
+                experiment.start_time.isoformat() if experiment.start_time else None
+            ),
+            "end_time": (
+                experiment.end_time.isoformat() if experiment.end_time else None
+            ),
         }
 
     def delete_experiment(self, experiment_id: str) -> bool:

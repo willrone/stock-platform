@@ -7,17 +7,16 @@ import asyncio
 import threading
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, AsyncIterator, Dict, Optional, cast
 
 import httpx
 import psutil
 from loguru import logger
 from sqlalchemy import create_engine, pool
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 
 class ConnectionStatus(Enum):
@@ -70,13 +69,13 @@ class HTTPConnectionPool:
         self._lock = asyncio.Lock()
 
         # 健康检查任务
-        self._health_check_task = None
+        self._health_check_task: Optional[asyncio.Task[None]] = None
         self._start_health_check()
 
-    def _start_health_check(self):
+    def _start_health_check(self) -> None:
         """启动健康检查任务"""
 
-        async def health_check_loop():
+        async def health_check_loop() -> None:
             while True:
                 try:
                     await self._perform_health_check()
@@ -87,7 +86,7 @@ class HTTPConnectionPool:
 
         self._health_check_task = asyncio.create_task(health_check_loop())
 
-    async def _perform_health_check(self):
+    async def _perform_health_check(self) -> None:
         """执行健康检查"""
         async with self._lock:
             for pool_name, client in self._clients.items():
@@ -100,7 +99,7 @@ class HTTPConnectionPool:
                 except Exception as e:
                     logger.error(f"HTTP客户端健康检查失败 {pool_name}: {e}")
 
-    async def _recreate_client(self, pool_name: str):
+    async def _recreate_client(self, pool_name: str) -> None:
         """重新创建HTTP客户端"""
         if pool_name in self._clients:
             old_client = self._clients[pool_name]
@@ -137,7 +136,7 @@ class HTTPConnectionPool:
 
             return client
 
-    async def _create_client(self, pool_name: str):
+    async def _create_client(self, pool_name: str) -> None:
         """创建HTTP客户端"""
         limits = httpx.Limits(
             max_connections=self.config.max_connections,
@@ -157,8 +156,12 @@ class HTTPConnectionPool:
 
     @asynccontextmanager
     async def request(
-        self, method: str, url: str, pool_name: str = "default", **kwargs
-    ):
+        self,
+        method: str,
+        url: str,
+        pool_name: str = "default",
+        **kwargs: Any,
+    ) -> AsyncIterator[httpx.Response]:
         """执行HTTP请求"""
         client = await self.get_client(pool_name)
         stats = self._client_stats.get(pool_name, ConnectionStats())
@@ -202,7 +205,7 @@ class HTTPConnectionPool:
 
         # 更新连接池利用率
         if pool_name in self._clients:
-            client = self._clients[pool_name]
+            self._clients[pool_name]
             # 这里需要根据httpx的实际API来获取连接信息
             # 由于httpx没有直接暴露连接池信息，我们使用估算值
             stats.pool_utilization = min(
@@ -211,8 +214,9 @@ class HTTPConnectionPool:
 
         return stats
 
-    async def close_all(self):
+    async def close_all(self) -> None:
         """关闭所有连接"""
+        health_task = self._health_check_task
         async with self._lock:
             for pool_name, client in self._clients.items():
                 try:
@@ -225,8 +229,8 @@ class HTTPConnectionPool:
             self._client_stats.clear()
 
         # 取消健康检查任务
-        if self._health_check_task:
-            self._health_check_task.cancel()
+        if health_task:
+            health_task.cancel()
 
 
 class DatabaseConnectionPool:
@@ -265,25 +269,24 @@ class DatabaseConnectionPool:
             )
 
         # 创建会话工厂
-        self.SessionLocal = sessionmaker(
+        self.SessionLocal: sessionmaker[Session] = sessionmaker(
             bind=self.sync_engine, autocommit=False, autoflush=False
         )
 
+        self.AsyncSessionLocal: Optional[async_sessionmaker[AsyncSession]] = None
         if self.async_engine:
-            self.AsyncSessionLocal = sessionmaker(
+            self.AsyncSessionLocal = async_sessionmaker(
                 bind=self.async_engine,
-                class_=AsyncSession,
-                autocommit=False,
-                autoflush=False,
+                expire_on_commit=False,
             )
 
         # 启动监控
         self._start_monitoring()
 
-    def _start_monitoring(self):
+    def _start_monitoring(self) -> None:
         """启动连接池监控"""
 
-        def monitor_loop():
+        def monitor_loop() -> None:
             while True:
                 try:
                     self._update_stats()
@@ -295,16 +298,21 @@ class DatabaseConnectionPool:
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
 
-    def _update_stats(self):
+    def _queue_pool(self) -> pool.QueuePool:
+        """返回底层 QueuePool，供统计方法读取连接池指标。"""
+        return cast(pool.QueuePool, self.sync_engine.pool)
+
+    def _update_stats(self) -> None:
         """更新连接池统计信息"""
         try:
-            pool_status = self.sync_engine.pool.status()
+            queue_pool = self._queue_pool()
+            pool_size = queue_pool.size()
+            overflow = queue_pool.overflow()
+            checked_out = queue_pool.checkedout()
 
-            self.stats.total_connections = pool_status.pool_size + pool_status.overflow
-            self.stats.active_connections = pool_status.checked_out
-            self.stats.idle_connections = (
-                pool_status.pool_size - pool_status.checked_out
-            )
+            self.stats.total_connections = pool_size + overflow
+            self.stats.active_connections = checked_out
+            self.stats.idle_connections = pool_size - checked_out
 
             # 更新峰值连接数
             self.stats.peak_connections = max(
@@ -321,9 +329,9 @@ class DatabaseConnectionPool:
             logger.error(f"更新数据库连接池统计失败: {e}")
 
     @asynccontextmanager
-    async def get_session(self):
+    async def get_session(self) -> AsyncIterator[Any]:
         """获取数据库会话"""
-        if self.async_engine:
+        if self.async_engine and self.AsyncSessionLocal is not None:
             # 使用异步会话
             async with self.AsyncSessionLocal() as session:
                 try:
@@ -334,34 +342,40 @@ class DatabaseConnectionPool:
                     raise
         else:
             # 使用同步会话（在线程池中执行）
-            session = self.SessionLocal()
+            sync_session = self.SessionLocal()
             try:
-                yield session
-                session.commit()
+                yield sync_session
+                sync_session.commit()
             except Exception:
-                session.rollback()
+                sync_session.rollback()
                 raise
             finally:
-                session.close()
+                sync_session.close()
 
-    def get_sync_session(self):
+    def get_sync_session(self) -> Session:
         """获取同步数据库会话"""
         return self.SessionLocal()
 
     def get_pool_info(self) -> Dict[str, Any]:
         """获取连接池信息"""
         try:
-            pool_status = self.sync_engine.pool.status()
+            queue_pool = self._queue_pool()
+            pool_size = queue_pool.size()
+            checked_out = queue_pool.checkedout()
+            overflow = queue_pool.overflow()
+            checked_in = queue_pool.checkedin()
 
             return {
-                "pool_size": pool_status.pool_size,
-                "checked_out": pool_status.checked_out,
-                "overflow": pool_status.overflow,
-                "checked_in": pool_status.checked_in,
-                "total_connections": pool_status.pool_size + pool_status.overflow,
-                "utilization": pool_status.checked_out / self.config.max_connections
-                if self.config.max_connections > 0
-                else 0,
+                "pool_size": pool_size,
+                "checked_out": checked_out,
+                "overflow": overflow,
+                "checked_in": checked_in,
+                "total_connections": pool_size + overflow,
+                "utilization": (
+                    checked_out / self.config.max_connections
+                    if self.config.max_connections > 0
+                    else 0
+                ),
                 "stats": self.stats,
             }
 
@@ -369,7 +383,7 @@ class DatabaseConnectionPool:
             logger.error(f"获取数据库连接池信息失败: {e}")
             return {"error": str(e)}
 
-    async def close(self):
+    async def close(self) -> None:
         """关闭连接池"""
         try:
             if self.async_engine:
@@ -385,7 +399,7 @@ class DatabaseConnectionPool:
 class ConnectionPoolManager:
     """连接池管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.http_pools: Dict[str, HTTPConnectionPool] = {}
         self.db_pools: Dict[str, DatabaseConnectionPool] = {}
         self._lock = asyncio.Lock()
@@ -440,29 +454,29 @@ class ConnectionPoolManager:
         }
 
         # HTTP连接池统计
-        for name, pool in self.http_pools.items():
-            stats["http_pools"][name] = await pool.get_pool_stats()
+        for name, http_pool in self.http_pools.items():
+            stats["http_pools"][name] = await http_pool.get_pool_stats()
 
         # 数据库连接池统计
-        for name, pool in self.db_pools.items():
-            stats["db_pools"][name] = pool.get_pool_info()
+        for name, db_pool in self.db_pools.items():
+            stats["db_pools"][name] = db_pool.get_pool_info()
 
         return stats
 
-    async def close_all(self):
+    async def close_all(self) -> None:
         """关闭所有连接池"""
         # 关闭HTTP连接池
-        for name, pool in self.http_pools.items():
+        for name, http_pool in self.http_pools.items():
             try:
-                await pool.close_all()
+                await http_pool.close_all()
                 logger.info(f"关闭HTTP连接池: {name}")
             except Exception as e:
                 logger.error(f"关闭HTTP连接池失败 {name}: {e}")
 
         # 关闭数据库连接池
-        for name, pool in self.db_pools.items():
+        for name, db_pool in self.db_pools.items():
             try:
-                await pool.close()
+                await db_pool.close()
                 logger.info(f"关闭数据库连接池: {name}")
             except Exception as e:
                 logger.error(f"关闭数据库连接池失败 {name}: {e}")

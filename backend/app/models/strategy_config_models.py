@@ -2,19 +2,17 @@
 策略配置数据模型
 """
 
-import uuid
-from datetime import UTC, datetime
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, Column, DateTime, String, Text
 
 from app.core.database import Base
 
 
 def utcnow() -> datetime:
     """Return naive UTC datetime for DB compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class StrategyConfig(Base):
@@ -29,9 +27,7 @@ class StrategyConfig(Base):
     description = Column(Text, nullable=True)
     user_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=utcnow, onupdate=utcnow, nullable=False
-    )
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""

@@ -2,8 +2,9 @@
 统一错误处理和恢复机制
 实现系统恢复和重试机制
 """
+
 import asyncio
-import json
+import logging
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -50,7 +51,7 @@ class ErrorInfo:
         error: Exception,
         category: ErrorCategory,
         severity: ErrorSeverity,
-        context: Dict[str, Any] = None,
+        context: Optional[Dict[str, Any]] = None,
         recoverable: bool = True,
     ):
         self.error = error
@@ -80,7 +81,7 @@ class ErrorInfo:
 class SystemErrorHandler:
     """系统错误处理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.error_history: List[ErrorInfo] = []
         self.recovery_strategies: Dict[ErrorCategory, Callable] = {}
         self.retry_configs: Dict[ErrorCategory, Dict] = {}
@@ -90,7 +91,7 @@ class SystemErrorHandler:
         # 初始化默认配置
         self._initialize_default_configs()
 
-    def _initialize_default_configs(self):
+    def _initialize_default_configs(self) -> None:
         """初始化默认配置"""
         # 默认重试配置
         self.retry_configs = {
@@ -123,17 +124,17 @@ class SystemErrorHandler:
         # 注册默认恢复策略
         self.recovery_strategies[ErrorCategory.DATABASE] = self._recover_database_error
         self.recovery_strategies[ErrorCategory.NETWORK] = self._recover_network_error
-        self.recovery_strategies[
-            ErrorCategory.EXTERNAL_API
-        ] = self._recover_external_api_error
+        self.recovery_strategies[ErrorCategory.EXTERNAL_API] = (
+            self._recover_external_api_error
+        )
 
     async def handle_error(
         self,
         error: Exception,
         category: ErrorCategory,
         severity: ErrorSeverity,
-        context: Dict[str, Any] = None,
-        operation: Callable = None,
+        context: Optional[Dict[str, Any]] = None,
+        operation: Optional[Callable[[], Any]] = None,
     ) -> Any:
         """处理错误"""
         try:
@@ -154,7 +155,7 @@ class SystemErrorHandler:
                 raise Exception(f"服务熔断: {category.value}")
 
             # 尝试恢复
-            if error_info.recoverable and operation:
+            if error_info.recoverable and operation is not None:
                 recovery_result = await self._attempt_recovery(error_info, operation)
                 if recovery_result is not None:
                     return recovery_result
@@ -204,7 +205,9 @@ class SystemErrorHandler:
                     return result
 
                 except Exception as retry_error:
-                    logger.warning(f"重试失败: 第 {attempt + 1} 次, 错误: {retry_error}")
+                    logger.warning(
+                        f"重试失败: 第 {attempt + 1} 次, 错误: {retry_error}"
+                    )
                     if attempt == max_retries - 1:
                         # 最后一次重试失败
                         logger.error(f"所有重试均失败: {category.value}")
@@ -233,7 +236,7 @@ class SystemErrorHandler:
         else:
             delay = base_delay
 
-        return min(delay, max_delay)
+        return float(min(float(delay), float(max_delay)))
 
     def _should_circuit_break(
         self, category: ErrorCategory, error_info: ErrorInfo
@@ -276,7 +279,7 @@ class SystemErrorHandler:
 
         return False
 
-    def reset_circuit_breaker(self, category: ErrorCategory):
+    def reset_circuit_breaker(self, category: ErrorCategory) -> None:
         """重置熔断器"""
         circuit_key = category.value
         if circuit_key in self.circuit_breakers:
@@ -289,7 +292,7 @@ class SystemErrorHandler:
             }
             logger.info(f"熔断器已重置: {circuit_key}")
 
-    async def _recover_database_error(self, error_info: ErrorInfo):
+    async def _recover_database_error(self, error_info: ErrorInfo) -> None:
         """数据库错误恢复策略"""
         try:
             logger.info("尝试数据库连接恢复")
@@ -304,7 +307,7 @@ class SystemErrorHandler:
             logger.error(f"数据库恢复失败: {e}")
             raise
 
-    async def _recover_network_error(self, error_info: ErrorInfo):
+    async def _recover_network_error(self, error_info: ErrorInfo) -> None:
         """网络错误恢复策略"""
         try:
             logger.info("尝试网络连接恢复")
@@ -319,7 +322,7 @@ class SystemErrorHandler:
             logger.error(f"网络恢复失败: {e}")
             raise
 
-    async def _recover_external_api_error(self, error_info: ErrorInfo):
+    async def _recover_external_api_error(self, error_info: ErrorInfo) -> None:
         """外部API错误恢复策略"""
         try:
             logger.info("尝试外部API连接恢复")
@@ -334,7 +337,7 @@ class SystemErrorHandler:
             logger.error(f"外部API恢复失败: {e}")
             raise
 
-    def _log_error(self, error_info: ErrorInfo):
+    def _log_error(self, error_info: ErrorInfo) -> None:
         """记录错误日志"""
         log_level = {
             ErrorSeverity.LOW: logging.INFO,
@@ -356,8 +359,8 @@ class SystemErrorHandler:
         """获取错误统计信息"""
         try:
             # 按类别统计
-            category_stats = {}
-            severity_stats = {}
+            category_stats: Dict[str, int] = {}
+            severity_stats: Dict[str, int] = {}
 
             for error_info in self.error_history:
                 # 按类别统计
@@ -387,9 +390,11 @@ class SystemErrorHandler:
                 circuit_breaker_status[key] = {
                     "state": circuit["state"],
                     "failure_count": circuit["failure_count"],
-                    "last_failure_time": circuit["last_failure_time"].isoformat()
-                    if circuit["last_failure_time"]
-                    else None,
+                    "last_failure_time": (
+                        circuit["last_failure_time"].isoformat()
+                        if circuit["last_failure_time"]
+                        else None
+                    ),
                 }
 
             return {
@@ -406,7 +411,7 @@ class SystemErrorHandler:
             logger.error(f"获取错误统计失败: {e}")
             return {"timestamp": datetime.now().isoformat(), "error": str(e)}
 
-    def clear_error_history(self, older_than_days: int = 7):
+    def clear_error_history(self, older_than_days: int = 7) -> Dict[str, Any]:
         """清理错误历史"""
         try:
             cutoff_time = datetime.now() - timedelta(days=older_than_days)
@@ -436,11 +441,11 @@ error_handler = SystemErrorHandler()
 # 装饰器：自动错误处理
 def handle_errors(
     category: ErrorCategory, severity: ErrorSeverity = ErrorSeverity.MEDIUM
-):
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """错误处理装饰器"""
 
-    def decorator(func):
-        async def async_wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
@@ -449,11 +454,15 @@ def handle_errors(
                     "args": str(args)[:200],  # 限制长度
                     "kwargs": str(kwargs)[:200],
                 }
+
+                async def retry_op() -> Any:
+                    return await func(*args, **kwargs)
+
                 return await error_handler.handle_error(
-                    e, category, severity, context, func
+                    e, category, severity, context, retry_op
                 )
 
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
@@ -472,7 +481,6 @@ def handle_errors(
 
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
-        else:
-            return sync_wrapper
+        return sync_wrapper
 
     return decorator

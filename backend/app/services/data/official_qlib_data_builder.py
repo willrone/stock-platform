@@ -9,7 +9,7 @@ locally enhanced technical indicators.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from loguru import logger
 
@@ -21,7 +21,7 @@ from app.services.data.stock_data_loader import StockDataLoader
 class OfficialQlibDataBuilder:
     def __init__(
         self,
-        official_qlib_data_path: Optional[str | Path] = None,
+        official_qlib_data_path: Optional[Union[str, Path]] = None,
         data_loader: Optional[Any] = None,
         bin_converter: Optional[Any] = None,
     ):
@@ -32,9 +32,9 @@ class OfficialQlibDataBuilder:
         self.data_loader = data_loader or StockDataLoader()
         self.bin_converter = bin_converter or QlibBinConverter()
 
-    def prepare_stocks(self, stock_codes: list[str]) -> dict[str, list[str]]:
-        success: list[str] = []
-        failed: list[str] = []
+    def prepare_stocks(self, stock_codes: List[str]) -> Dict[str, List[str]]:
+        success: List[str] = []
+        failed: List[str] = []
         for stock_code in stock_codes:
             try:
                 base_data = self.data_loader._load_base_data(stock_code)

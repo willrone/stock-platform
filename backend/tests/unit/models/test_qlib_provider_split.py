@@ -80,9 +80,7 @@ class TestQlibDataAdapter:
         is_valid, fixed = await adapter.validate_and_fix_qlib_format(raw_data)
 
         assert is_valid is True
-        assert {"$open", "$high", "$low", "$close", "$volume"}.issubset(
-            fixed.columns
-        )
+        assert {"$open", "$high", "$low", "$close", "$volume"}.issubset(fixed.columns)
 
 
 class TestEnhancedProviderDelegation:

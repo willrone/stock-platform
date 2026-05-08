@@ -7,7 +7,7 @@ import asyncio
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -20,7 +20,7 @@ class TechnicalIndicatorResult:
 
     stock_code: str
     date: datetime
-    indicators: Dict[str, float]
+    indicators: Dict[str, float | None]
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -54,7 +54,7 @@ class BatchIndicatorResponse:
 class TechnicalIndicatorCalculator:
     """技术指标计算器 - MLOps优化版本"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # 扩展支持的技术指标
         self.supported_indicators = {
             # 移动平均线
@@ -92,10 +92,11 @@ class TechnicalIndicatorCalculator:
         }
 
         # 指标计算缓存
-        self._calculation_cache = {}
+        self._calculation_cache: Dict[str, Any] = {}
 
         # 增量更新支持
-        self._incremental_data = {}
+        self._incremental_data: Dict[str, Any] = {}
+        self._cached_data: Dict[str, List[StockData]] = {}
 
     def validate_data(self, data: List[StockData]) -> bool:
         """验证输入数据"""
@@ -104,8 +105,6 @@ class TechnicalIndicatorCalculator:
 
         # 检查数据完整性
         for item in data:
-            if not isinstance(item, StockData):
-                return False
             if item.close <= 0 or item.high <= 0 or item.low <= 0 or item.open <= 0:
                 return False
             if item.high < item.low:
@@ -127,7 +126,7 @@ class TechnicalIndicatorCalculator:
         if len(data) < period:
             return [None] * len(data)
 
-        ma_values = []
+        ma_values: List[Optional[float]] = []
 
         for i in range(len(data)):
             if i < period - 1:
@@ -146,7 +145,7 @@ class TechnicalIndicatorCalculator:
         if len(data) < period:
             return [None] * len(data)
 
-        ema_values = []
+        ema_values: List[Optional[float]] = []
         multiplier = 2 / (period + 1)
 
         for i in range(len(data)):
@@ -158,8 +157,10 @@ class TechnicalIndicatorCalculator:
                 ema_values.append(round(sma, 4))
             else:
                 # EMA = (当前价格 * 乘数) + (前一日EMA * (1 - 乘数))
+                previous_ema = ema_values[i - 1]
+                assert previous_ema is not None
                 ema = (data[i].close * multiplier) + (
-                    ema_values[i - 1] * (1 - multiplier)
+                    previous_ema * (1 - multiplier)
                 )
                 ema_values.append(round(ema, 4))
 
@@ -172,14 +173,14 @@ class TechnicalIndicatorCalculator:
         if len(data) < period:
             return [None] * len(data)
 
-        wma_values = []
+        wma_values: List[Optional[float]] = []
 
         for i in range(len(data)):
             if i < period - 1:
                 wma_values.append(None)
             else:
                 # 计算加权平均
-                weighted_sum = 0
+                weighted_sum = 0.0
                 weight_sum = 0
 
                 for j in range(period):
@@ -199,7 +200,7 @@ class TechnicalIndicatorCalculator:
         if len(data) < k_period:
             return {"stoch_k": [None] * len(data), "stoch_d": [None] * len(data)}
 
-        stoch_k = []
+        stoch_k: List[Optional[float]] = []
 
         for i in range(len(data)):
             if i < k_period - 1:
@@ -214,7 +215,7 @@ class TechnicalIndicatorCalculator:
                 current_close = data[i].close
 
                 if highest_high == lowest_low:
-                    k_value = 50  # 避免除零
+                    k_value = 50.0  # 避免除零
                 else:
                     k_value = (
                         (current_close - lowest_low) / (highest_high - lowest_low)
@@ -223,16 +224,18 @@ class TechnicalIndicatorCalculator:
                 stoch_k.append(round(k_value, 4))
 
         # 计算%D（%K的移动平均）
-        stoch_d = []
+        stoch_d: List[Optional[float]] = []
         for i in range(len(data)):
             if i < k_period - 1 + d_period - 1:
                 stoch_d.append(None)
             else:
                 # 计算过去d_period天%K的平均值
                 k_values = [
-                    stoch_k[j]
-                    for j in range(i - d_period + 1, i + 1)
-                    if stoch_k[j] is not None
+                    value
+                    for value in (
+                        stoch_k[j] for j in range(i - d_period + 1, i + 1)
+                    )
+                    if value is not None
                 ]
                 if k_values:
                     d_value = sum(k_values) / len(k_values)
@@ -249,7 +252,7 @@ class TechnicalIndicatorCalculator:
         if len(data) < period:
             return [None] * len(data)
 
-        williams_r = []
+        williams_r: List[Optional[float]] = []
 
         for i in range(len(data)):
             if i < period - 1:
@@ -264,7 +267,7 @@ class TechnicalIndicatorCalculator:
                 current_close = data[i].close
 
                 if highest_high == lowest_low:
-                    wr_value = -50  # 避免除零
+                    wr_value = -50.0  # 避免除零
                 else:
                     wr_value = (
                         (highest_high - current_close) / (highest_high - lowest_low)
@@ -281,7 +284,7 @@ class TechnicalIndicatorCalculator:
         if len(data) < period:
             return [None] * len(data)
 
-        cci_values = []
+        cci_values: List[Optional[float]] = []
 
         for i in range(len(data)):
             if i < period - 1:
@@ -302,7 +305,7 @@ class TechnicalIndicatorCalculator:
                 # 计算CCI
                 current_tp = (data[i].high + data[i].low + data[i].close) / 3
                 if mean_deviation == 0:
-                    cci = 0
+                    cci = 0.0
                 else:
                     cci = (current_tp - sma_tp) / (0.015 * mean_deviation)
 
@@ -318,7 +321,7 @@ class TechnicalIndicatorCalculator:
             return [None] * len(data)
 
         # 计算真实波幅(TR)
-        true_ranges = []
+        true_ranges: List[float] = []
         for i in range(1, len(data)):
             high_low = data[i].high - data[i].low
             high_close_prev = abs(data[i].high - data[i - 1].close)
@@ -328,7 +331,7 @@ class TechnicalIndicatorCalculator:
             true_ranges.append(tr)
 
         # 计算ATR
-        atr_values = [None]  # 第一个值为None
+        atr_values: List[Optional[float]] = [None]  # 第一个值为None
 
         for i in range(len(true_ranges)):
             if i < period - 1:
@@ -340,6 +343,7 @@ class TechnicalIndicatorCalculator:
             else:
                 # 后续ATR值使用指数平滑
                 prev_atr = atr_values[-1]
+                assert prev_atr is not None
                 current_tr = true_ranges[i]
                 atr = (prev_atr * (period - 1) + current_tr) / period
                 atr_values.append(round(atr, 4))
@@ -348,9 +352,9 @@ class TechnicalIndicatorCalculator:
 
     def calculate_vwap(self, data: List[StockData]) -> List[Optional[float]]:
         """计算成交量加权平均价格(VWAP)"""
-        vwap_values = []
+        vwap_values: List[Optional[float]] = []
         cumulative_volume = 0
-        cumulative_pv = 0
+        cumulative_pv = 0.0
 
         for item in data:
             typical_price = (item.high + item.low + item.close) / 3
@@ -372,10 +376,11 @@ class TechnicalIndicatorCalculator:
         if len(data) < 2:
             return [None] * len(data)
 
-        obv_values = [0]  # 第一个值设为0
+        obv_values: List[Optional[float]] = [0.0]  # 第一个值设为0
 
         for i in range(1, len(data)):
             prev_obv = obv_values[-1]
+            assert prev_obv is not None
 
             if data[i].close > data[i - 1].close:
                 # 价格上涨，加上成交量
@@ -407,7 +412,7 @@ class TechnicalIndicatorCalculator:
             }
 
         # 计算RSV (Raw Stochastic Value)
-        rsv_values = []
+        rsv_values: List[Optional[float]] = []
         for i in range(len(data)):
             if i < k_period - 1:
                 rsv_values.append(None)
@@ -421,7 +426,7 @@ class TechnicalIndicatorCalculator:
                 current_close = data[i].close
 
                 if highest_high == lowest_low:
-                    rsv = 50  # 避免除零
+                    rsv = 50.0  # 避免除零
                 else:
                     rsv = (
                         (current_close - lowest_low) / (highest_high - lowest_low)
@@ -430,7 +435,7 @@ class TechnicalIndicatorCalculator:
                 rsv_values.append(rsv)
 
         # 计算K值
-        k_values = []
+        k_values: List[Optional[float]] = []
         for i in range(len(data)):
             if rsv_values[i] is None:
                 k_values.append(None)
@@ -438,11 +443,14 @@ class TechnicalIndicatorCalculator:
                 k_values.append(rsv_values[i])
             else:
                 # K = (2/3) * 前一日K值 + (1/3) * 当日RSV
-                k = (2 / 3) * k_values[i - 1] + (1 / 3) * rsv_values[i]
+                prev_k = k_values[i - 1]
+                current_rsv = rsv_values[i]
+                assert prev_k is not None and current_rsv is not None
+                k = (2 / 3) * prev_k + (1 / 3) * current_rsv
                 k_values.append(round(k, 4))
 
         # 计算D值
-        d_values = []
+        d_values: List[Optional[float]] = []
         for i in range(len(data)):
             if k_values[i] is None:
                 d_values.append(None)
@@ -450,17 +458,23 @@ class TechnicalIndicatorCalculator:
                 d_values.append(k_values[i])
             else:
                 # D = (2/3) * 前一日D值 + (1/3) * 当日K值
-                d = (2 / 3) * d_values[i - 1] + (1 / 3) * k_values[i]
+                prev_d = d_values[i - 1]
+                current_k = k_values[i]
+                assert prev_d is not None and current_k is not None
+                d = (2 / 3) * prev_d + (1 / 3) * current_k
                 d_values.append(round(d, 4))
 
         # 计算J值
-        j_values = []
+        j_values: List[Optional[float]] = []
         for i in range(len(data)):
             if k_values[i] is None or d_values[i] is None:
                 j_values.append(None)
             else:
                 # J = 3K - 2D
-                j = 3 * k_values[i] - 2 * d_values[i]
+                current_k = k_values[i]
+                current_d = d_values[i]
+                assert current_k is not None and current_d is not None
+                j = 3 * current_k - 2 * current_d
                 j_values.append(round(j, 4))
 
         return {"kdj_k": k_values, "kdj_d": d_values, "kdj_j": j_values}
@@ -479,7 +493,7 @@ class TechnicalIndicatorCalculator:
         if not hasattr(self, "_cached_data"):
             self._cached_data = {}
 
-        stock_code = new_data[0].stock_code if new_data else None
+        stock_code = new_data[0].stock_code if new_data else ""
         if stock_code not in self._cached_data:
             self._cached_data[stock_code] = []
 
@@ -492,7 +506,7 @@ class TechnicalIndicatorCalculator:
         )
 
         # 转换为字典格式
-        result_dict = {}
+        result_dict: Dict[str, List[Optional[float]]] = {}
         for indicator in indicators:
             result_dict[indicator] = []
             for result in updated_results:
@@ -502,21 +516,6 @@ class TechnicalIndicatorCalculator:
                     result_dict[indicator].append(None)
 
         return result_dict
-        """计算移动平均线"""
-        if len(data) < period:
-            return [None] * len(data)
-
-        ma_values = []
-
-        for i in range(len(data)):
-            if i < period - 1:
-                ma_values.append(None)
-            else:
-                # 计算过去period天的平均收盘价
-                sum_close = sum(data[j].close for j in range(i - period + 1, i + 1))
-                ma_values.append(round(sum_close / period, 4))
-
-        return ma_values
 
     def calculate_rsi(
         self, data: List[StockData], period: int = 14
@@ -525,7 +524,7 @@ class TechnicalIndicatorCalculator:
         if len(data) < period + 1:
             return [None] * len(data)
 
-        rsi_values = []
+        rsi_values: List[Optional[float]] = []
 
         # 计算价格变化
         price_changes = []
@@ -550,7 +549,7 @@ class TechnicalIndicatorCalculator:
 
                 # 计算RSI
                 if avg_loss == 0:
-                    rsi = 100
+                    rsi = 100.0
                 else:
                     rs = avg_gain / avg_loss
                     rsi = 100 - (100 / (1 + rs))
@@ -579,7 +578,7 @@ class TechnicalIndicatorCalculator:
             if len(prices) < period:
                 return [None] * len(prices)
 
-            ema_values = []
+            ema_values: List[Optional[float]] = []
             multiplier = 2 / (period + 1)
 
             for i in range(len(prices)):
@@ -591,8 +590,10 @@ class TechnicalIndicatorCalculator:
                     ema_values.append(sma)
                 else:
                     # EMA = (当前价格 * 乘数) + (前一日EMA * (1 - 乘数))
+                    previous_ema = ema_values[i - 1]
+                    assert previous_ema is not None
                     ema = (prices[i] * multiplier) + (
-                        ema_values[i - 1] * (1 - multiplier)
+                        previous_ema * (1 - multiplier)
                     )
                     ema_values.append(ema)
 
@@ -606,29 +607,38 @@ class TechnicalIndicatorCalculator:
         slow_ema = calculate_ema(closes, slow_period)
 
         # 计算MACD线
-        macd_line = []
+        macd_line: List[Optional[float]] = []
         for i in range(len(data)):
             if fast_ema[i] is None or slow_ema[i] is None:
                 macd_line.append(None)
             else:
-                macd_line.append(round(fast_ema[i] - slow_ema[i], 4))
+                fast_value = fast_ema[i]
+                slow_value = slow_ema[i]
+                assert fast_value is not None and slow_value is not None
+                macd_line.append(round(fast_value - slow_value, 4))
 
         # 计算信号线（MACD的EMA）
         macd_values = [v for v in macd_line if v is not None]
         if len(macd_values) >= signal_period:
             signal_ema = calculate_ema(macd_values, signal_period)
             # 调整信号线长度
-            signal_line = [None] * (len(macd_line) - len(signal_ema)) + signal_ema
+            signal_prefix: List[Optional[float]] = [None] * (
+                len(macd_line) - len(signal_ema)
+            )
+            signal_line: List[Optional[float]] = signal_prefix + signal_ema
         else:
             signal_line = [None] * len(data)
 
         # 计算柱状图
-        histogram = []
+        histogram: List[Optional[float]] = []
         for i in range(len(data)):
             if macd_line[i] is None or signal_line[i] is None:
                 histogram.append(None)
             else:
-                histogram.append(round(macd_line[i] - signal_line[i], 4))
+                macd_value = macd_line[i]
+                signal_value = signal_line[i]
+                assert macd_value is not None and signal_value is not None
+                histogram.append(round(macd_value - signal_value, 4))
 
         return {"macd": macd_line, "signal": signal_line, "histogram": histogram}
 
@@ -643,9 +653,9 @@ class TechnicalIndicatorCalculator:
                 "lower": [None] * len(data),
             }
 
-        upper_band = []
-        middle_band = []
-        lower_band = []
+        upper_band: List[Optional[float]] = []
+        middle_band: List[Optional[float]] = []
+        lower_band: List[Optional[float]] = []
 
         for i in range(len(data)):
             if i < period - 1:
@@ -688,11 +698,11 @@ class TechnicalIndicatorCalculator:
         if invalid_indicators:
             raise ValueError(f"不支持的指标: {invalid_indicators}")
 
-        results = []
+        results: List[TechnicalIndicatorResult] = []
         stock_code = data[0].stock_code
 
         # 计算各种指标
-        calculated_indicators = {}
+        calculated_indicators: Dict[str, List[Optional[float]]] = {}
 
         # 移动平均线
         if "MA5" in indicators:
@@ -757,7 +767,7 @@ class TechnicalIndicatorCalculator:
 
         # 组装结果
         for i, stock_data in enumerate(data):
-            indicator_values = {}
+            indicator_values: Dict[str, float | None] = {}
 
             for indicator_name, values in calculated_indicators.items():
                 if i < len(values) and values[i] is not None:
@@ -796,7 +806,7 @@ class TechnicalIndicatorCalculator:
         result_df = pd.DataFrame(index=stock_data.index)
 
         # 转换为StockData列表以便使用现有方法
-        stock_data_list = []
+        stock_data_list: List[StockData] = []
         for date, row in stock_data.iterrows():
             stock_data_list.append(
                 StockData(
@@ -806,7 +816,7 @@ class TechnicalIndicatorCalculator:
                     high=float(row["high"]),
                     low=float(row["low"]),
                     close=float(row["close"]),
-                    volume=float(row["volume"]),
+                    volume=int(float(row["volume"])),
                 )
             )
 
@@ -817,7 +827,7 @@ class TechnicalIndicatorCalculator:
         # 将结果转换为DataFrame
         if indicator_results:
             # 按日期组织指标
-            indicators_dict = {}
+            indicators_dict: Dict[datetime, Dict[str, Any]] = {}
             for result in indicator_results:
                 date_key = result.date
                 if date_key not in indicators_dict:
@@ -834,19 +844,19 @@ class TechnicalIndicatorCalculator:
         return result_df
 
     async def calculate_batch_indicators(
-        self, request: BatchIndicatorRequest, data_service
+        self, request: BatchIndicatorRequest, data_service: Any
     ) -> BatchIndicatorResponse:
         """批量计算多只股票的技术指标 - 优化版本"""
         print(f"开始批量计算技术指标: {len(request.stock_codes)} 只股票")
 
-        results = {}
-        failed_stocks = []
+        results: Dict[str, List[TechnicalIndicatorResult]] = {}
+        failed_stocks: List[str] = []
 
         # 并发控制 - 根据系统资源调整
         max_concurrent = min(5, len(request.stock_codes))  # 最多5个并发任务
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def calculate_single_stock(stock_code: str):
+        async def calculate_single_stock(stock_code: str) -> None:
             async with semaphore:
                 try:
                     # 获取股票数据
@@ -864,7 +874,9 @@ class TechnicalIndicatorCalculator:
                     )
                     results[stock_code] = indicators_result
 
-                    print(f"股票 {stock_code} 指标计算完成: {len(indicators_result)} 条记录")
+                    print(
+                        f"股票 {stock_code} 指标计算完成: {len(indicators_result)} 条记录"
+                    )
 
                 except Exception as e:
                     print(f"股票 {stock_code} 指标计算失败: {e}")
@@ -914,11 +926,17 @@ class TechnicalIndicatorCalculator:
             "VWAP": {"category": "成交量指标", "description": "成交量加权平均价格"},
             "OBV": {"category": "成交量指标", "description": "能量潮"},
             "AD_LINE": {"category": "成交量指标", "description": "累积/派发线"},
-            "VOLUME_RSI": {"category": "成交量指标", "description": "成交量相对强弱指数"},
+            "VOLUME_RSI": {
+                "category": "成交量指标",
+                "description": "成交量相对强弱指数",
+            },
             # 波动率指标
             "ATR": {"category": "波动率指标", "description": "平均真实波幅"},
             "VOLATILITY": {"category": "波动率指标", "description": "波动率"},
-            "HISTORICAL_VOLATILITY": {"category": "波动率指标", "description": "历史波动率"},
+            "HISTORICAL_VOLATILITY": {
+                "category": "波动率指标",
+                "description": "历史波动率",
+            },
             # 复合指标
             "KDJ": {"category": "复合指标", "description": "KDJ指标"},
         }

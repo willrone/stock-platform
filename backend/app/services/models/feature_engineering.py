@@ -5,47 +5,25 @@
 支持多模态特征工程和时间序列数据处理。
 """
 
-import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
 # 导入统一的错误处理机制
-try:
-    from app.core.error_handler import (
-        DataError,
-        ErrorContext,
-        ErrorSeverity,
-        handle_async_exception,
-    )
-except ImportError:
-    logger.warning("错误处理模块未找到，使用默认错误处理")
-    DataError = Exception
-    ErrorSeverity = None
-    ErrorContext = None
-    handle_async_exception = lambda func: func
+from app.core.error_handler import DataError, ErrorSeverity, handle_async_exception
 
 # 导入数据服务和指标计算
-try:
-    from ..data.simple_data_service import SimpleDataService
-    from ..prediction.technical_indicators import TechnicalIndicatorCalculator
-except ImportError:
-    logger.warning("数据服务或指标计算模块未找到")
-    SimpleDataService = None
-    TechnicalIndicatorCalculator = None
+from ..data.simple_data_service import SimpleDataService
+from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 
 # 导入Qlib相关模块
 try:
     import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    from qlib.config import REG_CN
 
     QLIB_AVAILABLE = True
 except ImportError:
@@ -56,7 +34,7 @@ except ImportError:
 class DataLoader:
     """数据加载器"""
 
-    def __init__(self, data_service: SimpleDataService, data_root: str):
+    def __init__(self, data_service: SimpleDataService, data_root: str) -> None:
         self.data_service = data_service
         self.data_root = data_root
 
@@ -111,9 +89,9 @@ class DataLoader:
 class FeatureCalculator:
     """特征计算器"""
 
-    def __init__(self):
-        self.indicator_calculator = (
-            TechnicalIndicatorCalculator() if TechnicalIndicatorCalculator else None
+    def __init__(self) -> None:
+        self.indicator_calculator: Optional[TechnicalIndicatorCalculator] = (
+            TechnicalIndicatorCalculator()
         )
 
     @handle_async_exception
@@ -189,7 +167,7 @@ class FeatureCalculator:
 class FeatureEngineer:
     """特征工程师"""
 
-    def __init__(self, data_service: SimpleDataService, data_root: str):
+    def __init__(self, data_service: SimpleDataService, data_root: str) -> None:
         self.data_loader = DataLoader(data_service, data_root)
         self.feature_calculator = FeatureCalculator()
 
@@ -269,24 +247,28 @@ class FeatureEngineer:
                 continue
 
         if not all_features:
-            raise DataError(message="没有成功处理任何股票数据", severity=ErrorSeverity.HIGH)
+            raise DataError(
+                message="没有成功处理任何股票数据", severity=ErrorSeverity.HIGH
+            )
 
         # 合并所有股票的特征
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
+        logger.info(
+            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
+        )
         return combined_features
 
 
 class QlibFeatureProvider:
     """Qlib特征提供器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.qlib_initialized = False
 
     @handle_async_exception
-    async def initialize_qlib(self):
+    async def initialize_qlib(self) -> bool:
         """初始化Qlib环境"""
         if not QLIB_AVAILABLE:
             logger.warning("Qlib未安装，跳过初始化")

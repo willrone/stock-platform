@@ -10,7 +10,7 @@ WebSocket支持
 
 import json
 from datetime import datetime
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
@@ -21,7 +21,7 @@ from loguru import logger
 class ConnectionManager:
     """WebSocket连接管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # 存储活跃连接
         self.active_connections: Set[WebSocket] = set()
         # 存储任务订阅关系
@@ -29,7 +29,7 @@ class ConnectionManager:
         # 存储系统状态订阅
         self.system_subscriptions: Set[WebSocket] = set()
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket) -> Any:
         """接受WebSocket连接"""
         await websocket.accept()
         self.active_connections.add(websocket)
@@ -45,12 +45,12 @@ class ConnectionManager:
             },
         )
 
-    def disconnect(self, websocket: WebSocket):
+    def disconnect(self, websocket: WebSocket) -> Any:
         """断开WebSocket连接"""
         self.active_connections.discard(websocket)
 
         # 清理任务订阅
-        for task_id, subscribers in self.task_subscriptions.items():
+        for _task_id, subscribers in self.task_subscriptions.items():
             subscribers.discard(websocket)
 
         # 清理系统状态订阅
@@ -60,7 +60,7 @@ class ConnectionManager:
 
     async def send_personal_message(
         self, websocket: WebSocket, message: Dict[str, Any]
-    ):
+    ) -> Any:
         """发送个人消息"""
         try:
             await websocket.send_text(json.dumps(message, ensure_ascii=False))
@@ -68,7 +68,7 @@ class ConnectionManager:
             logger.error(f"发送个人消息失败: {e}")
             self.disconnect(websocket)
 
-    async def broadcast(self, message: Dict[str, Any]):
+    async def broadcast(self, message: Dict[str, Any]) -> Any:
         """广播消息给所有连接"""
         if not self.active_connections:
             return
@@ -87,7 +87,9 @@ class ConnectionManager:
         for connection in disconnected:
             self.disconnect(connection)
 
-    async def send_to_task_subscribers(self, task_id: str, message: Dict[str, Any]):
+    async def send_to_task_subscribers(
+        self, task_id: str, message: Dict[str, Any]
+    ) -> Any:
         """发送消息给任务订阅者"""
         if task_id not in self.task_subscriptions:
             return
@@ -107,7 +109,7 @@ class ConnectionManager:
         for connection in disconnected:
             self.task_subscriptions[task_id].discard(connection)
 
-    async def send_to_system_subscribers(self, message: Dict[str, Any]):
+    async def send_to_system_subscribers(self, message: Dict[str, Any]) -> Any:
         """发送消息给系统状态订阅者"""
         if not self.system_subscriptions:
             return
@@ -126,14 +128,14 @@ class ConnectionManager:
         for connection in disconnected:
             self.system_subscriptions.discard(connection)
 
-    def subscribe_to_task(self, websocket: WebSocket, task_id: str):
+    def subscribe_to_task(self, websocket: WebSocket, task_id: str) -> Any:
         """订阅任务更新"""
         if task_id not in self.task_subscriptions:
             self.task_subscriptions[task_id] = set()
         self.task_subscriptions[task_id].add(websocket)
         logger.info(f"客户端订阅任务 {task_id}")
 
-    def subscribe_to_model_training(self, websocket: WebSocket, model_id: str):
+    def subscribe_to_model_training(self, websocket: WebSocket, model_id: str) -> Any:
         """订阅模型训练更新"""
         # 使用任务订阅机制，但用model_id作为key
         if model_id not in self.task_subscriptions:
@@ -141,7 +143,7 @@ class ConnectionManager:
         self.task_subscriptions[model_id].add(websocket)
         logger.info(f"客户端订阅模型训练 {model_id}")
 
-    def unsubscribe_from_task(self, websocket: WebSocket, task_id: str):
+    def unsubscribe_from_task(self, websocket: WebSocket, task_id: str) -> Any:
         """取消订阅任务更新"""
         if task_id in self.task_subscriptions:
             self.task_subscriptions[task_id].discard(websocket)
@@ -149,12 +151,12 @@ class ConnectionManager:
                 del self.task_subscriptions[task_id]
         logger.info(f"客户端取消订阅任务 {task_id}")
 
-    def subscribe_to_system(self, websocket: WebSocket):
+    def subscribe_to_system(self, websocket: WebSocket) -> Any:
         """订阅系统状态"""
         self.system_subscriptions.add(websocket)
         logger.info("客户端订阅系统状态")
 
-    def unsubscribe_from_system(self, websocket: WebSocket):
+    def unsubscribe_from_system(self, websocket: WebSocket) -> Any:
         """取消订阅系统状态"""
         self.system_subscriptions.discard(websocket)
         logger.info("客户端取消订阅系统状态")
@@ -177,7 +179,7 @@ ws_router = APIRouter()
 
 
 @ws_router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket) -> Any:
     """WebSocket端点"""
     await manager.connect(websocket)
 
@@ -216,7 +218,9 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-async def handle_websocket_message(websocket: WebSocket, message: Dict[str, Any]):
+async def handle_websocket_message(
+    websocket: WebSocket, message: Dict[str, Any]
+) -> Any:
     """处理WebSocket消息"""
     message_type = message.get("type")
 
@@ -307,7 +311,7 @@ async def handle_websocket_message(websocket: WebSocket, message: Dict[str, Any]
 
 
 # 任务状态更新通知函数
-async def notify_task_created(task_id: str, task_name: str):
+async def notify_task_created(task_id: str, task_name: str) -> Any:
     """通知任务创建"""
     await manager.send_to_task_subscribers(
         task_id,
@@ -321,8 +325,8 @@ async def notify_task_created(task_id: str, task_name: str):
 
 
 async def notify_task_progress(
-    task_id: str, progress: float, status: str, current_stock: str = None
-):
+    task_id: str, progress: float, status: str, current_stock: Optional[str] = None
+) -> Any:
     """通知任务进度更新"""
     message = {
         "type": "task:progress",
@@ -338,7 +342,7 @@ async def notify_task_progress(
     await manager.send_to_task_subscribers(task_id, message)
 
 
-async def notify_task_completed(task_id: str, results: Dict[str, Any]):
+async def notify_task_completed(task_id: str, results: Dict[str, Any]) -> Any:
     """通知任务完成"""
     await manager.send_to_task_subscribers(
         task_id,
@@ -351,7 +355,7 @@ async def notify_task_completed(task_id: str, results: Dict[str, Any]):
     )
 
 
-async def notify_task_failed(task_id: str, error: str):
+async def notify_task_failed(task_id: str, error: str) -> Any:
     """通知任务失败"""
     await manager.send_to_task_subscribers(
         task_id,
@@ -364,7 +368,7 @@ async def notify_task_failed(task_id: str, error: str):
     )
 
 
-async def notify_system_status(status: Dict[str, Any]):
+async def notify_system_status(status: Dict[str, Any]) -> Any:
     """通知系统状态更新"""
     await manager.send_to_system_subscribers(
         {
@@ -375,7 +379,7 @@ async def notify_system_status(status: Dict[str, Any]):
     )
 
 
-async def notify_system_alert(level: str, message: str):
+async def notify_system_alert(level: str, message: str) -> Any:
     """通知系统警告"""
     await manager.send_to_system_subscribers(
         {
@@ -387,7 +391,7 @@ async def notify_system_alert(level: str, message: str):
     )
 
 
-async def notify_data_updated(stock_code: str):
+async def notify_data_updated(stock_code: str) -> Any:
     """通知数据更新"""
     await manager.broadcast(
         {
@@ -402,9 +406,9 @@ async def notify_model_training_progress(
     model_id: str,
     progress: float,
     stage: str,
-    message: str = None,
-    metrics: Dict[str, Any] = None,
-):
+    message: Optional[str] = None,
+    metrics: Optional[Dict[str, Any]] = None,
+) -> Any:
     """通知模型训练进度"""
     await manager.send_to_task_subscribers(
         model_id,
@@ -420,7 +424,9 @@ async def notify_model_training_progress(
     )
 
 
-async def notify_model_training_completed(model_id: str, metrics: Dict[str, Any]):
+async def notify_model_training_completed(
+    model_id: str, metrics: Dict[str, Any]
+) -> Any:
     """通知模型训练完成"""
     await manager.send_to_task_subscribers(
         model_id,
@@ -433,7 +439,7 @@ async def notify_model_training_completed(model_id: str, metrics: Dict[str, Any]
     )
 
 
-async def notify_model_training_failed(model_id: str, error: str):
+async def notify_model_training_failed(model_id: str, error: str) -> Any:
     """通知模型训练失败"""
     await manager.send_to_task_subscribers(
         model_id,
@@ -446,7 +452,9 @@ async def notify_model_training_failed(model_id: str, error: str):
     )
 
 
-async def notify_model_training_cancelled(model_id: str, message: str = "训练已取消"):
+async def notify_model_training_cancelled(
+    model_id: str, message: str = "训练已取消"
+) -> Any:
     """通知模型训练取消"""
     await manager.send_to_task_subscribers(
         model_id,

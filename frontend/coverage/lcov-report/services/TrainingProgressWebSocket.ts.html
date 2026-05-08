@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/22</span>
+                <span class='fraction'>0/34</span>
             </div>
         
             
@@ -570,12 +570,12 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
    */
 <span class="fstat-no" title="function not covered" >  connect(): Promise&lt;void&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    return new Promise(<span class="fstat-no" title="function not covered" >(r</span>esolve, reject) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ws?.readyState === WebSocket.OPEN) {</span>
+<span class="cstat-no" title="statement not covered" >      if (this.ws?.readyState === WebSocket.OPEN) {</span>
 <span class="cstat-no" title="statement not covered" >        resolve();</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (this.isConnecting) {</span>
+<span class="cstat-no" title="statement not covered" >      if (this.isConnecting) {</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
@@ -606,7 +606,7 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
 <span class="cstat-no" title="statement not covered" >          this.ws = null;</span>
 &nbsp;
           // 自动重连
-<span class="cstat-no" title="statement not covered" >          <span class="missing-if-branch" title="if path not taken" >I</span>if (this.reconnectAttempts &lt; this.maxReconnectAttempts) {</span>
+<span class="cstat-no" title="statement not covered" >          if (this.reconnectAttempts &lt; this.maxReconnectAttempts) {</span>
 <span class="cstat-no" title="statement not covered" >            this.scheduleReconnect();</span>
           }
         };
@@ -627,7 +627,7 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
    * 断开WebSocket连接
    */
 <span class="fstat-no" title="function not covered" >  disconnect(): void {</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ws) {</span>
+<span class="cstat-no" title="statement not covered" >    if (this.ws) {</span>
 <span class="cstat-no" title="statement not covered" >      this.ws.close();</span>
 <span class="cstat-no" title="statement not covered" >      this.ws = null;</span>
     }
@@ -638,7 +638,7 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
    * 订阅特定模型的训练进度
    */
 <span class="fstat-no" title="function not covered" >  subscribeToModel(m</span>odelId: string, callback: ProgressCallback): () =&gt; void {
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!this.subscribers.has(modelId)) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!this.subscribers.has(modelId)) {</span>
 <span class="cstat-no" title="statement not covered" >      this.subscribers.set(modelId, []);</span>
     }
 &nbsp;
@@ -647,14 +647,14 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
     // 返回取消订阅函数
 <span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
       const callbacks = <span class="cstat-no" title="statement not covered" >this.subscribers.get(modelId);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (callbacks) {</span>
+<span class="cstat-no" title="statement not covered" >      if (callbacks) {</span>
         const index = <span class="cstat-no" title="statement not covered" >callbacks.indexOf(callback);</span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (index &gt; -1) {</span>
+<span class="cstat-no" title="statement not covered" >        if (index &gt; -1) {</span>
 <span class="cstat-no" title="statement not covered" >          callbacks.splice(index, 1);</span>
         }
 &nbsp;
         // 如果没有更多订阅者，删除该模型的订阅
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (callbacks.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >        if (callbacks.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >          this.subscribers.delete(modelId);</span>
         }
       }
@@ -688,7 +688,7 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
 <span class="fstat-no" title="function not covered" >  private handleMessage(</span>data: TrainingProgressData): void {
     // 通知特定模型的订阅者
     const modelCallbacks = <span class="cstat-no" title="statement not covered" >this.subscribers.get(data.model_id);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (modelCallbacks) {</span>
+<span class="cstat-no" title="statement not covered" >    if (modelCallbacks) {</span>
 <span class="cstat-no" title="statement not covered" >      modelCallbacks.forEach(<span class="fstat-no" title="function not covered" >callback =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          callback(data);</span>
@@ -700,7 +700,7 @@ export class <span class="cstat-no" title="statement not covered" >TrainingProgr
 &nbsp;
     // 通知全局订阅者
     const globalCallbacks = <span class="cstat-no" title="statement not covered" >this.subscribers.get('*');</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (globalCallbacks) {</span>
+<span class="cstat-no" title="statement not covered" >    if (globalCallbacks) {</span>
 <span class="cstat-no" title="statement not covered" >      globalCallbacks.forEach(<span class="fstat-no" title="function not covered" >callback =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          callback(data);</span>
@@ -735,7 +735,7 @@ let globalWebSocketInstance: TrainingProgressWebSocket | null = <span class="cst
  * 获取全局WebSocket实例
  */
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >getTrainingProgressWebSocket(</span></span>): TrainingProgressWebSocket {
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (!globalWebSocketInstance) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!globalWebSocketInstance) {</span>
 <span class="cstat-no" title="statement not covered" >    globalWebSocketInstance = new TrainingProgressWebSocket();</span>
   }
 <span class="cstat-no" title="statement not covered" >  return globalWebSocketInstance;</span>
@@ -745,7 +745,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
  * 清理全局WebSocket实例
  */
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >cleanupTrainingProgressWebSocket(</span></span>): void {
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (globalWebSocketInstance) {</span>
+<span class="cstat-no" title="statement not covered" >  if (globalWebSocketInstance) {</span>
 <span class="cstat-no" title="statement not covered" >    globalWebSocketInstance.disconnect();</span>
 <span class="cstat-no" title="statement not covered" >    globalWebSocketInstance = null;</span>
   }
@@ -757,7 +757,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../prettify.js"></script>
         <script>

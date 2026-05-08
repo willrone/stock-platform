@@ -92,7 +92,7 @@ export default function CreateTaskPage() {
     enable_performance_profiling: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [rebuildTaskName, setRebuildTaskName] = useState<string>("");
+  const [rebuildTaskName, setRebuildTaskName] = useState<string>('');
   const [isRebuild, setIsRebuild] = useState(false);
 
   // 加载模型列表
@@ -156,24 +156,28 @@ export default function CreateTaskPage() {
       updateFormData('model_id', modelIdParam);
     }
 
-    const rebuildTaskId = searchParams.get("rebuild");
-    if (!rebuildTaskId) return;
+    const rebuildTaskId = searchParams.get('rebuild');
+    if (!rebuildTaskId) {
+      return;
+    }
 
     const loadRebuildTask = async () => {
       try {
-        const response = await fetch("/api/v1/tasks/" + rebuildTaskId);
+        const response = await fetch('/api/v1/tasks/' + rebuildTaskId);
         const resp = await response.json();
         const data = resp.data || resp;
-        if (!data || !data.task_id) return;
+        if (!data || !data.task_id) {
+          return;
+        }
 
         setIsRebuild(true);
-        setRebuildTaskName(data.task_name || "");
+        setRebuildTaskName(data.task_name || '');
 
         // 设置任务类型
-        if (data.task_type === "backtest") {
-          setTaskType("backtest");
+        if (data.task_type === 'backtest') {
+          setTaskType('backtest');
         } else {
-          setTaskType("prediction");
+          setTaskType('prediction');
         }
 
         // 预填股票
@@ -186,13 +190,14 @@ export default function CreateTaskPage() {
         // 预填表单字段
         setFormData(prev => ({
           ...prev,
-          task_name: "重建 - " + (data.task_name || ""),
-          description: data.description || "",
+          task_name: '重建 - ' + (data.task_name || ''),
+          description: data.description || '',
           strategy_name: bc.strategy_name || prev.strategy_name,
           start_date: bc.start_date || prev.start_date,
           end_date: bc.end_date || prev.end_date,
           initial_cash: bc.initial_cash || prev.initial_cash,
-          commission_rate: bc.commission_rate !== undefined ? bc.commission_rate : prev.commission_rate,
+          commission_rate:
+            bc.commission_rate !== undefined ? bc.commission_rate : prev.commission_rate,
           slippage_rate: bc.slippage_rate !== undefined ? bc.slippage_rate : prev.slippage_rate,
           enable_performance_profiling: bc.enable_performance_profiling || false,
         }));
@@ -206,15 +211,15 @@ export default function CreateTaskPage() {
             horizon: bc.strategy_config?.horizon || prev.horizon,
             strategy_name: 'model_signal',
           }));
-        } else if (bc.strategy_name === "portfolio" && bc.strategy_config) {
-          setStrategyType("portfolio");
+        } else if (bc.strategy_name === 'portfolio' && bc.strategy_config) {
+          setStrategyType('portfolio');
           setPortfolioConfig({
             strategies: bc.strategy_config.strategies || [],
-            integration_method: bc.strategy_config.integration_method || "weighted_voting",
+            integration_method: bc.strategy_config.integration_method || 'weighted_voting',
           });
           setPortfolioConfigKey(prev => prev + 1);
         } else if (bc.strategy_config) {
-          setStrategyType("single");
+          setStrategyType('single');
           setStrategyConfig(bc.strategy_config);
           setConfigFormKey(prev => prev + 1);
         }
@@ -226,12 +231,15 @@ export default function CreateTaskPage() {
             ...prev,
             model_id: pc.model_id || prev.model_id,
             horizon: pc.horizon || prev.horizon,
-            confidence_level: pc.confidence_level ? pc.confidence_level * 100 : prev.confidence_level,
-            risk_assessment: pc.risk_assessment !== undefined ? pc.risk_assessment : prev.risk_assessment,
+            confidence_level: pc.confidence_level
+              ? pc.confidence_level * 100
+              : prev.confidence_level,
+            risk_assessment:
+              pc.risk_assessment !== undefined ? pc.risk_assessment : prev.risk_assessment,
           }));
         }
       } catch (error) {
-        console.error("加载重建任务失败:", error);
+        console.error('加载重建任务失败:', error);
       }
     };
 
@@ -431,10 +439,10 @@ export default function CreateTaskPage() {
         </IconButton>
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-            {isRebuild ? "重建任务" : "创建任务"}
+            {isRebuild ? '重建任务' : '创建任务'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {isRebuild ? "基于「" + rebuildTaskName + "」重建" : "配置股票预测或回测任务参数"}
+            {isRebuild ? '基于「' + rebuildTaskName + '」重建' : '配置股票预测或回测任务参数'}
           </Typography>
         </Box>
       </Box>
@@ -621,7 +629,9 @@ export default function CreateTaskPage() {
                     <MenuItem value="portfolio">组合策略</MenuItem>
                     <MenuItem value="model">模型驱动</MenuItem>
                   </Select>
-                  <FormHelperText>选择技术策略、组合策略，或直接用训练好的模型生成交易信号</FormHelperText>
+                  <FormHelperText>
+                    选择技术策略、组合策略，或直接用训练好的模型生成交易信号
+                  </FormHelperText>
                 </FormControl>
 
                 {strategyType === 'single' ? (
@@ -752,7 +762,8 @@ export default function CreateTaskPage() {
                                   {model.model_name}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  准确率: {(model.accuracy * 100).toFixed(1)}% | 类型: {model.model_type}
+                                  准确率: {(model.accuracy * 100).toFixed(1)}% | 类型:{' '}
+                                  {model.model_type}
                                 </Typography>
                               </Box>
                             </MenuItem>

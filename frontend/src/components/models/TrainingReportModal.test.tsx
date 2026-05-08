@@ -3,7 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { TrainingReportModal } from './TrainingReportModal';
 import { DataService } from '../../services/dataService';
 
-jest.mock('echarts-for-react', () => () => <div data-testid="echarts" />);
+jest.mock('echarts-for-react', () => {
+  const MockECharts = () => <div data-testid="echarts" />;
+  MockECharts.displayName = 'MockECharts';
+
+  return MockECharts;
+});
 
 jest.mock('../../services/dataService', () => ({
   DataService: {

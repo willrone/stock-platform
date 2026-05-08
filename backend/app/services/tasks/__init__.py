@@ -1,80 +1,50 @@
 """
-任务管理模块
+任务管理模块。
 
-该模块包含所有与异步任务调度、执行和通知相关的服务，包括：
-- 任务管理和生命周期控制
-- 任务队列和调度机制
-- 任务执行引擎和执行器
-- 任务通知和进度跟踪
-
-主要组件：
-- TaskManager: 任务管理器
-- TaskQueueManager: 任务队列管理器
-- TaskExecutionEngine: 任务执行引擎
-- TaskNotificationService: 任务通知服务
+该包对外保留历史聚合导出，但通过懒加载避免导入某个轻量子模块时
+连带加载 WebSocket、资源监控等可选/重依赖模块。
 """
 
-# 任务执行引擎
-from .task_execution_engine import (
-    BacktestTaskExecutor,
-    PredictionTaskExecutor,
-    ProgressTracker,
-    QlibPrecomputeTaskExecutor,
-    TaskExecutionEngine,
-    TaskProgress,
-    TrainingTaskExecutor,
-)
+from importlib import import_module
+from typing import Any
 
-# 任务管理器
-from .task_manager import (
-    TaskCreateRequest,
-    TaskManager,
-    TaskQuery,
-    TaskSummary,
-    TaskUpdateRequest,
-)
-
-# 任务通知服务
-from .task_notification_service import (
-    TaskNotificationService,
-    TaskProgressNotification,
-    TaskStatusNotification,
-)
-
-# 任务队列
-from .task_queue import (
-    QueuedTask,
-    TaskExecutionContext,
-    TaskExecutor,
-    TaskPriority,
-    TaskQueueManager,
-    TaskScheduler,
-)
-
-__all__ = [
+_TASK_EXPORTS = {
     # 任务管理器
-    "TaskManager",
-    "TaskCreateRequest",
-    "TaskUpdateRequest",
-    "TaskQuery",
-    "TaskSummary",
+    "TaskManager": "task_manager",
+    "TaskCreateRequest": "task_manager",
+    "TaskUpdateRequest": "task_manager",
+    "TaskQuery": "task_manager",
+    "TaskSummary": "task_manager",
     # 任务队列
-    "TaskQueueManager",
-    "TaskScheduler",
-    "TaskExecutor",
-    "TaskPriority",
-    "QueuedTask",
-    "TaskExecutionContext",
+    "TaskQueueManager": "task_queue",
+    "TaskScheduler": "task_queue",
+    "TaskExecutor": "task_queue",
+    "TaskPriority": "task_queue",
+    "QueuedTask": "task_queue",
+    "TaskExecutionContext": "task_queue",
     # 任务执行引擎
-    "TaskExecutionEngine",
-    "PredictionTaskExecutor",
-    "BacktestTaskExecutor",
-    "TrainingTaskExecutor",
-    "QlibPrecomputeTaskExecutor",
-    "ProgressTracker",
-    "TaskProgress",
+    "TaskExecutionEngine": "task_execution_engine",
+    "PredictionTaskExecutor": "task_execution_engine",
+    "BacktestTaskExecutor": "task_execution_engine",
+    "TrainingTaskExecutor": "task_execution_engine",
+    "QlibPrecomputeTaskExecutor": "task_execution_engine",
+    "ProgressTracker": "task_execution_engine",
+    "TaskProgress": "task_execution_engine",
     # 任务通知服务
-    "TaskNotificationService",
-    "TaskStatusNotification",
-    "TaskProgressNotification",
-]
+    "TaskNotificationService": "task_notification_service",
+    "TaskStatusNotification": "task_notification_service",
+    "TaskProgressNotification": "task_notification_service",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _TASK_EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+    exported = getattr(import_module(f".{module_name}", __name__), name)
+    globals()[name] = exported
+    return exported
+
+
+__all__ = list(_TASK_EXPORTS)

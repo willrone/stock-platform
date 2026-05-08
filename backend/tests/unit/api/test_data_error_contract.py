@@ -76,4 +76,6 @@ def test_mark_task_failed_after_submit_error_logs_compensation_failure():
     repository.update_task_status.assert_called_once()
     mock_log_best_effort.assert_called_once()
     assert mock_log_best_effort.call_args.kwargs["context"]["task_id"] == "qlib-task-1"
-    assert mock_log_best_effort.call_args.kwargs["context"]["submit_error"] == "pool down"
+    assert (
+        mock_log_best_effort.call_args.kwargs["context"]["submit_error"] == "pool down"
+    )

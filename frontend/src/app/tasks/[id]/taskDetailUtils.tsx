@@ -1,10 +1,6 @@
 import React from 'react';
 import { Box, Chip, Typography } from '@mui/material';
-import {
-  Minus,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
 
 import type { Task } from '../../../types/task';
 
@@ -73,7 +69,9 @@ export function renderStrategyParameters(parameters: Record<string, any>): React
           <Chip
             size="small"
             color="secondary"
-            label={`组合策略 · ${strategies.length} 个${rawStrategies?.length === 0 ? '（默认）' : ''}`}
+            label={`组合策略 · ${strategies.length} 个${
+              rawStrategies?.length === 0 ? '（默认）' : ''
+            }`}
           />
           <Chip
             size="small"

@@ -46,7 +46,11 @@ function wrap(ui: React.ReactElement) {
 describe('BacktestOverview (#24 信号执行统计)', () => {
   it('无 signal_execution_summary 时不渲染信号执行统计卡片', () => {
     render(
-      wrap(<BacktestOverview backtestData={BacktestDataAdapter.adaptOverviewData(minimalBacktestData)} />)
+      wrap(
+        <BacktestOverview
+          backtestData={BacktestDataAdapter.adaptOverviewData(minimalBacktestData)}
+        />
+      )
     );
     expect(screen.queryByText('信号执行统计')).not.toBeInTheDocument();
   });
@@ -102,7 +106,9 @@ describe('BacktestOverview (#24 信号执行统计)', () => {
       },
     };
     render(
-      wrap(<BacktestOverview backtestData={BacktestDataAdapter.adaptOverviewData(dataOnlyReasons)} />)
+      wrap(
+        <BacktestOverview backtestData={BacktestDataAdapter.adaptOverviewData(dataOnlyReasons)} />
+      )
     );
     expect(screen.getByText('信号执行统计')).toBeInTheDocument();
     expect(screen.getByText('Top 拒绝原因')).toBeInTheDocument();

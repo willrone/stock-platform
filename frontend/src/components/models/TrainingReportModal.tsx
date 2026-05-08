@@ -472,11 +472,12 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                 </Box>
               )}
 
-              <Box sx={{ mt: 2 }}>
-              </Box>
+              <Box sx={{ mt: 2 }}></Box>
 
               {report.early_stopping_info && (
-                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+                <Box
+                  sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}
+                >
                   <Chip
                     color={report.early_stopping_info.early_stopped ? 'warning' : 'success'}
                     label={report.early_stopping_info.early_stopped ? '已触发早停' : '未触发早停'}
@@ -1085,12 +1086,18 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                     <Chip
                       size="small"
                       color={report.ranking_overlap_summary?.available ? 'success' : 'default'}
-                      label={report.ranking_overlap_summary?.available ? '日频重合度已上线' : '日频重合度待上线'}
+                      label={
+                        report.ranking_overlap_summary?.available
+                          ? '日频重合度已上线'
+                          : '日频重合度待上线'
+                      }
                     />
                     <Chip
                       size="small"
                       color={report.event_replay_summary?.available ? 'success' : 'default'}
-                      label={report.event_replay_summary?.available ? '事件回放已上线' : '事件回放待上线'}
+                      label={
+                        report.event_replay_summary?.available ? '事件回放已上线' : '事件回放待上线'
+                      }
                     />
                   </Box>
                 </Box>
@@ -1118,7 +1125,8 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                           {report.cost_vs_gross_gap_summary?.largest_cost_gap?.task_name || 'N/A'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {report.cost_vs_gross_gap_summary?.largest_cost_gap?.window_label || '未记录窗口'}
+                          {report.cost_vs_gross_gap_summary?.largest_cost_gap?.window_label ||
+                            '未记录窗口'}
                         </Typography>
                         <Typography variant="body2">
                           成本吃掉：
@@ -1172,7 +1180,9 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                         </Typography>
                         <Typography variant="body2">
                           累计 PnL：
-                          {formatCurrency(report.per_stock_ranking_preference?.best_overall?.total_pnl)}
+                          {formatCurrency(
+                            report.per_stock_ranking_preference?.best_overall?.total_pnl
+                          )}
                         </Typography>
                       </Box>
                       <Box>
@@ -1191,7 +1201,11 @@ export const TrainingReportModal: React.FC<TrainingReportModalProps> = ({
                       </Box>
                       {highlightedStocks.length > 0 && (
                         <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mb: 1, display: 'block' }}
+                          >
                             高频出现股票
                           </Typography>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>

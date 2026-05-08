@@ -7,9 +7,9 @@ Qlib集成API接口
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.v1.schemas import StandardResponse
 from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
@@ -61,7 +61,7 @@ class QlibModelConfigRequest(BaseModel):
     """Qlib模型配置请求"""
 
     model_type: str
-    hyperparameters: Dict[str, Any] = {}
+    hyperparameters: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelRecommendationRequest(BaseModel):
@@ -73,7 +73,7 @@ class ModelRecommendationRequest(BaseModel):
 
 
 @router.post("/dataset/prepare", response_model=StandardResponse)
-async def prepare_qlib_dataset(request: QlibDatasetRequest):
+async def prepare_qlib_dataset(request: QlibDatasetRequest) -> Any:
     """准备Qlib标准格式的数据集"""
     try:
         provider = get_qlib_provider()
@@ -100,9 +100,9 @@ async def prepare_qlib_dataset(request: QlibDatasetRequest):
             data={
                 "dataset_shape": dataset.shape,
                 "columns": list(dataset.columns),
-                "index_levels": len(dataset.index.names)
-                if hasattr(dataset.index, "names")
-                else 1,
+                "index_levels": (
+                    len(dataset.index.names) if hasattr(dataset.index, "names") else 1
+                ),
                 "is_valid_format": is_valid,
                 "sample_data": dataset.head().to_dict() if not dataset.empty else {},
             },
@@ -114,7 +114,7 @@ async def prepare_qlib_dataset(request: QlibDatasetRequest):
 
 
 @router.post("/factors/alpha158", response_model=StandardResponse)
-async def calculate_alpha158_factors(request: AlphaFactorsRequest):
+async def calculate_alpha158_factors(request: AlphaFactorsRequest) -> Any:
     """计算Alpha158因子"""
     try:
         provider = get_qlib_provider()
@@ -149,9 +149,9 @@ async def calculate_alpha158_factors(request: AlphaFactorsRequest):
             data={
                 "factors_shape": alpha_factors.shape,
                 "factor_names": list(alpha_factors.columns),
-                "sample_factors": alpha_factors.head().to_dict()
-                if not alpha_factors.empty
-                else {},
+                "sample_factors": (
+                    alpha_factors.head().to_dict() if not alpha_factors.empty else {}
+                ),
                 "cache_used": request.use_cache,
             },
         )
@@ -164,7 +164,7 @@ async def calculate_alpha158_factors(request: AlphaFactorsRequest):
 
 
 @router.post("/model/config", response_model=StandardResponse)
-async def create_qlib_model_config(request: QlibModelConfigRequest):
+async def create_qlib_model_config(request: QlibModelConfigRequest) -> Any:
     """创建Qlib模型配置"""
     try:
         provider = get_qlib_provider()
@@ -190,13 +190,15 @@ async def create_qlib_model_config(request: QlibModelConfigRequest):
 
 
 @router.get("/cache/stats", response_model=StandardResponse)
-async def get_cache_stats():
+async def get_cache_stats() -> Any:
     """获取缓存统计信息"""
     try:
         provider = get_qlib_provider()
         stats = await provider.get_cache_stats()
 
-        return StandardResponse(success=True, message="缓存统计信息获取成功", data=stats)
+        return StandardResponse(
+            success=True, message="缓存统计信息获取成功", data=stats
+        )
 
     except Exception as e:
         logger.error(f"获取缓存统计失败: {e}", exc_info=True)
@@ -204,7 +206,7 @@ async def get_cache_stats():
 
 
 @router.delete("/cache/clear", response_model=StandardResponse)
-async def clear_cache():
+async def clear_cache() -> Any:
     """清空缓存"""
     try:
         provider = get_qlib_provider()
@@ -218,7 +220,7 @@ async def clear_cache():
 
 
 @router.get("/status", response_model=StandardResponse)
-async def get_qlib_status():
+async def get_qlib_status() -> Any:
     """获取Qlib集成状态"""
     try:
         provider = get_qlib_provider()
@@ -239,7 +241,9 @@ async def get_qlib_status():
         # 兼容旧字段 alpha_expressions，避免状态接口因属性名漂移而失败。
         alpha_names = getattr(provider.alpha_calculator, "alpha_names", None)
         if alpha_names is None:
-            alpha_expressions = getattr(provider.alpha_calculator, "alpha_expressions", None)
+            alpha_expressions = getattr(
+                provider.alpha_calculator, "alpha_expressions", None
+            )
             if isinstance(alpha_expressions, dict):
                 alpha_names = list(alpha_expressions.keys())
             else:
@@ -264,7 +268,7 @@ async def get_qlib_status():
 
 
 @router.get("/factors/list", response_model=StandardResponse)
-async def list_alpha_factors():
+async def list_alpha_factors() -> Any:
     """获取支持的Alpha因子列表"""
     try:
         provider = get_qlib_provider()
@@ -321,7 +325,7 @@ async def list_alpha_factors():
 
 
 @router.get("/models/supported", response_model=StandardResponse)
-async def get_supported_models():
+async def get_supported_models() -> Any:
     """获取支持的模型列表"""
     try:
         engine = get_training_engine()
@@ -364,16 +368,20 @@ async def get_supported_models():
 
 
 @router.get("/models/{model_name}/config", response_model=StandardResponse)
-async def get_model_config_template(model_name: str):
+async def get_model_config_template(model_name: str) -> Any:
     """获取模型配置模板"""
     try:
         engine = get_training_engine()
 
         template = engine.get_model_config_template(model_name)
         if not template:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
-        return StandardResponse(success=True, message="模型配置模板获取成功", data=template)
+        return StandardResponse(
+            success=True, message="模型配置模板获取成功", data=template
+        )
 
     except HTTPException:
         raise
@@ -383,14 +391,16 @@ async def get_model_config_template(model_name: str):
 
 
 @router.get("/models/{model_name}/hyperparameters", response_model=StandardResponse)
-async def get_model_hyperparameters(model_name: str):
+async def get_model_hyperparameters(model_name: str) -> Any:
     """获取模型超参数规格"""
     try:
         engine = get_training_engine()
 
         hyperparameter_specs = engine.model_manager.get_hyperparameter_specs(model_name)
         if not hyperparameter_specs:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
         specs_data = []
         for spec in hyperparameter_specs:
@@ -420,7 +430,7 @@ async def get_model_hyperparameters(model_name: str):
 
 
 @router.post("/models/recommend", response_model=StandardResponse)
-async def recommend_models(request: ModelRecommendationRequest):
+async def recommend_models(request: ModelRecommendationRequest) -> Any:
     """推荐适合的模型"""
     try:
         engine = get_training_engine()
@@ -471,14 +481,16 @@ async def recommend_models(request: ModelRecommendationRequest):
 
 
 @router.get("/models/{model_name}/training-tips", response_model=StandardResponse)
-async def get_training_tips(model_name: str):
+async def get_training_tips(model_name: str) -> Any:
     """获取模型训练建议"""
     try:
         engine = get_training_engine()
 
         recommendations = engine.get_training_recommendations(model_name)
         if not recommendations:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
         return StandardResponse(
             success=True,

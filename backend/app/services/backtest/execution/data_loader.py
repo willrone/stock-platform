@@ -32,19 +32,32 @@ class DataLoader:
         try:
             if data is None or data.empty:
                 return False
-            if len(data) < min_rows:
-                return False
-            # coverage ratio: rows / expected business days (rough)
-            total_days = (end_date.date() - start_date.date()).days + 1
-            expected = max(1, total_days * 5 // 7)
+            # coverage ratio: rows / expected business days. Short, fully-covered
+            # windows can legitimately contain fewer rows than the default
+            # long-window minimum. Treat coverage as the primary validity signal,
+            # while still rejecting obvious stale/truncated data.
+            expected_index = pd.bdate_range(
+                start=start_date.date(), end=end_date.date()
+            )
+            expected = max(1, len(expected_index))
             coverage = len(data) / expected
-            return coverage >= min_coverage_ratio
+            if coverage < min_coverage_ratio:
+                return False
+
+            data_index = pd.DatetimeIndex(data.index)
+            first_date = data_index.min().date()
+            last_date = data_index.max().date()
+            max_leading_gap_days = 7
+            if (first_date - start_date.date()).days > max_leading_gap_days:
+                return False
+            if last_date < end_date.date():
+                return False
+
+            return len(data) >= min_rows or coverage >= min_coverage_ratio
         except Exception:
             return False
 
-    def __init__(
-        self, data_dir: str = "data", max_workers: Optional[int] = None
-    ):
+    def __init__(self, data_dir: str = "data", max_workers: Optional[int] = None):
         # 确保使用绝对路径（多进程环境下相对路径会失效）
         data_path = Path(data_dir)
         if not data_path.is_absolute():
@@ -54,7 +67,7 @@ class DataLoader:
             # 数据目录是 willrone/data/
             project_root = Path(__file__).parent.parent.parent.parent.parent.parent
             data_path = (project_root / data_dir).resolve()
-        
+
         self.data_dir = data_path
         self.max_workers = max_workers  # 用于并行加载数据
         self.qlib_data_path = Path(settings.QLIB_DATA_PATH) / "features" / "day"
@@ -275,6 +288,7 @@ class DataLoader:
         # [性能优化] 预计算常用技术指标列，供策略复用，避免每个策略重复 rolling
         try:
             import time as _time
+
             _t_precomp = _time.perf_counter()
             close = data["close"]
 
@@ -299,7 +313,9 @@ class DataLoader:
 
             _precomp_ms = (_time.perf_counter() - _t_precomp) * 1000
             if _precomp_ms > 10:
-                logger.debug(f"📊 DataLoader预计算指标 [{stock_code}]: {_precomp_ms:.1f}ms, {len(data)}行, 列={list(data.columns)}")
+                logger.debug(
+                    f"📊 DataLoader预计算指标 [{stock_code}]: {_precomp_ms:.1f}ms, {len(data)}行, 列={list(data.columns)}"
+                )
         except Exception as e:
             logger.warning(f"预计算常用指标失败 {stock_code}: {e}")
 
@@ -331,7 +347,9 @@ class DataLoader:
         if parallel and len(stock_codes) > 1 and self.max_workers:
             # 并行加载多只股票数据
             max_workers = min(self.max_workers, len(stock_codes))
-            logger.info(f"并行加载 {len(stock_codes)} 只股票数据，使用 {max_workers} 个线程")
+            logger.info(
+                f"并行加载 {len(stock_codes)} 只股票数据，使用 {max_workers} 个线程"
+            )
 
             def load_single_stock(
                 stock_code: str,
@@ -381,7 +399,9 @@ class DataLoader:
                     continue
 
         if precomputed_count > 0:
-            logger.info(f"从预计算结果加载了 {precomputed_count}/{len(stock_data)} 只股票的数据")
+            logger.info(
+                f"从预计算结果加载了 {precomputed_count}/{len(stock_data)} 只股票的数据"
+            )
 
         if failed_stocks:
             logger.warning(f"部分股票数据加载失败: {failed_stocks}")

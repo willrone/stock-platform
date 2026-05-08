@@ -2,11 +2,13 @@
 监控和告警API路由
 添加监控指标查询接口，支持告警配置和历史查询
 """
-import json
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+# mypy: disable-error-code="untyped-decorator"
+
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, cast
+
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse
@@ -44,7 +46,7 @@ async def get_monitoring_metrics(
     model_id: Optional[str] = Query(None, description="模型ID过滤"),
     time_range: str = Query("1h", description="时间范围: 1h, 6h, 1d, 7d, 30d"),
     limit: int = Query(100, description="返回数量限制"),
-):
+) -> Any:
     """获取监控指标数据"""
     try:
         # 解析时间范围
@@ -57,7 +59,9 @@ async def get_monitoring_metrics(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持的时间范围: {time_range}"
+            )
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
@@ -104,12 +108,14 @@ async def get_monitoring_metrics(
         raise HTTPException(status_code=500, detail=f"获取监控指标失败: {str(e)}")
 
 
-@router.get("/metrics/{model_id}", response_model=StandardResponse, summary="获取模型监控指标")
+@router.get(
+    "/metrics/{model_id}", response_model=StandardResponse, summary="获取模型监控指标"
+)
 async def get_model_metrics(
     model_id: str,
     time_range: str = Query("1d", description="时间范围"),
     include_predictions: bool = Query(False, description="是否包含预测数据"),
-):
+) -> Any:
     """获取特定模型的监控指标"""
     try:
         # 解析时间范围
@@ -122,7 +128,9 @@ async def get_model_metrics(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持的时间范围: {time_range}"
+            )
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
@@ -175,7 +183,7 @@ async def get_model_metrics(
 async def get_alert_configs(
     alert_type: Optional[str] = Query(None, description="告警类型过滤"),
     enabled: Optional[bool] = Query(None, description="启用状态过滤"),
-):
+) -> Any:
     """获取告警配置列表"""
     try:
         alert_configs = alert_manager.get_alert_configs(
@@ -197,7 +205,7 @@ async def get_alert_configs(
 
 
 @router.post("/alerts", response_model=StandardResponse, summary="创建告警配置")
-async def create_alert_config(request: AlertConfigRequest):
+async def create_alert_config(request: AlertConfigRequest) -> Any:
     """创建新的告警配置"""
     try:
         alert_config = {
@@ -223,8 +231,10 @@ async def create_alert_config(request: AlertConfigRequest):
         raise HTTPException(status_code=500, detail=f"创建告警配置失败: {str(e)}")
 
 
-@router.get("/alerts/{alert_id}", response_model=StandardResponse, summary="获取告警配置详情")
-async def get_alert_config(alert_id: str):
+@router.get(
+    "/alerts/{alert_id}", response_model=StandardResponse, summary="获取告警配置详情"
+)
+async def get_alert_config(alert_id: str) -> Any:
     """获取告警配置详情"""
     try:
         alert_config = alert_manager.get_alert_config(alert_id)
@@ -232,7 +242,9 @@ async def get_alert_config(alert_id: str):
         if not alert_config:
             raise HTTPException(status_code=404, detail=f"告警配置不存在: {alert_id}")
 
-        return StandardResponse(success=True, message="成功获取告警配置详情", data=alert_config)
+        return StandardResponse(
+            success=True, message="成功获取告警配置详情", data=alert_config
+        )
 
     except HTTPException:
         raise
@@ -240,8 +252,10 @@ async def get_alert_config(alert_id: str):
         raise HTTPException(status_code=500, detail=f"获取告警配置详情失败: {str(e)}")
 
 
-@router.put("/alerts/{alert_id}", response_model=StandardResponse, summary="更新告警配置")
-async def update_alert_config(alert_id: str, request: AlertUpdateRequest):
+@router.put(
+    "/alerts/{alert_id}", response_model=StandardResponse, summary="更新告警配置"
+)
+async def update_alert_config(alert_id: str, request: AlertUpdateRequest) -> Any:
     """更新告警配置"""
     try:
         # 获取现有配置
@@ -250,7 +264,7 @@ async def update_alert_config(alert_id: str, request: AlertUpdateRequest):
             raise HTTPException(status_code=404, detail=f"告警配置不存在: {alert_id}")
 
         # 更新配置
-        update_data = {}
+        update_data: Dict[str, Any] = {}
         if request.threshold is not None:
             update_data["threshold"] = request.threshold
         if request.comparison is not None:
@@ -282,8 +296,10 @@ async def update_alert_config(alert_id: str, request: AlertUpdateRequest):
         raise HTTPException(status_code=500, detail=f"更新告警配置失败: {str(e)}")
 
 
-@router.delete("/alerts/{alert_id}", response_model=StandardResponse, summary="删除告警配置")
-async def delete_alert_config(alert_id: str):
+@router.delete(
+    "/alerts/{alert_id}", response_model=StandardResponse, summary="删除告警配置"
+)
+async def delete_alert_config(alert_id: str) -> Any:
     """删除告警配置"""
     try:
         success = alert_manager.delete_alert_config(alert_id)
@@ -309,7 +325,7 @@ async def get_alert_history(
     severity: Optional[str] = Query(None, description="严重程度过滤"),
     time_range: str = Query("7d", description="时间范围"),
     limit: int = Query(100, description="返回数量限制"),
-):
+) -> Any:
     """获取告警历史记录"""
     try:
         # 解析时间范围
@@ -322,7 +338,9 @@ async def get_alert_history(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持的时间范围: {time_range}"
+            )
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]
@@ -337,7 +355,7 @@ async def get_alert_history(
         )
 
         # 统计信息
-        stats = {
+        stats: Dict[str, Any] = {
             "total_alerts": len(alert_history),
             "severity_distribution": {},
             "type_distribution": {},
@@ -347,22 +365,24 @@ async def get_alert_history(
 
         for alert in alert_history:
             # 按严重程度统计
-            alert_severity = alert.get("severity", "unknown")
-            stats["severity_distribution"][alert_severity] = (
-                stats["severity_distribution"].get(alert_severity, 0) + 1
+            alert_severity = str(alert.get("severity", "unknown"))
+            severity_distribution = cast(Dict[str, int], stats["severity_distribution"])
+            severity_distribution[alert_severity] = (
+                severity_distribution.get(alert_severity, 0) + 1
             )
 
             # 按类型统计
-            alert_type_val = alert.get("alert_type", "unknown")
-            stats["type_distribution"][alert_type_val] = (
-                stats["type_distribution"].get(alert_type_val, 0) + 1
+            alert_type_val = str(alert.get("alert_type", "unknown"))
+            type_distribution = cast(Dict[str, int], stats["type_distribution"])
+            type_distribution[alert_type_val] = (
+                type_distribution.get(alert_type_val, 0) + 1
             )
 
             # 按状态统计
-            if alert.get("resolved", False):
-                stats["resolved_count"] += 1
+            if bool(alert.get("resolved", False)):
+                stats["resolved_count"] = int(stats["resolved_count"]) + 1
             else:
-                stats["active_count"] += 1
+                stats["active_count"] = int(stats["active_count"]) + 1
 
         return StandardResponse(
             success=True,
@@ -387,7 +407,7 @@ async def get_alert_history(
 @router.post(
     "/alerts/{alert_id}/resolve", response_model=StandardResponse, summary="解决告警"
 )
-async def resolve_alert(alert_id: str, resolution_note: Optional[str] = None):
+async def resolve_alert(alert_id: str, resolution_note: Optional[str] = None) -> Any:
     """标记告警为已解决"""
     try:
         success = alert_manager.resolve_alert(alert_id, resolution_note)
@@ -412,7 +432,7 @@ async def resolve_alert(alert_id: str, resolution_note: Optional[str] = None):
 
 
 @router.get("/dashboard", response_model=StandardResponse, summary="获取监控仪表板数据")
-async def get_monitoring_dashboard():
+async def get_monitoring_dashboard() -> Any:
     """获取监控仪表板数据"""
     try:
         # 获取系统整体状态
@@ -427,7 +447,7 @@ async def get_monitoring_dashboard():
         # 获取漂移检测状态
         drift_status = drift_detector.get_overall_drift_status()
 
-        dashboard_data = {
+        dashboard_data: Dict[str, Any] = {
             "system_status": system_status,
             "active_alerts": {
                 "count": len(active_alerts),
@@ -441,17 +461,17 @@ async def get_monitoring_dashboard():
                 "error_rate": system_status.get("error_rate", 0),
             },
             "drift_overview": drift_status,
-            "recent_metrics": recent_metrics[-20:]
-            if recent_metrics
-            else [],  # 最近20个指标点
+            "recent_metrics": (
+                recent_metrics[-20:] if recent_metrics else []
+            ),  # 最近20个指标点
         }
 
         # 统计告警严重程度
+        active_alerts_data = cast(Dict[str, Any], dashboard_data["active_alerts"])
+        severity_counts = cast(Dict[str, int], active_alerts_data["severity_counts"])
         for alert in active_alerts:
-            severity = alert.get("severity", "unknown")
-            dashboard_data["active_alerts"]["severity_counts"][severity] = (
-                dashboard_data["active_alerts"]["severity_counts"].get(severity, 0) + 1
-            )
+            severity = str(alert.get("severity", "unknown"))
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
 
         return StandardResponse(
             success=True, message="成功获取监控仪表板数据", data=dashboard_data
@@ -466,7 +486,7 @@ async def test_alert(
     alert_type: str = Query(..., description="告警类型"),
     metric_name: str = Query(..., description="指标名称"),
     test_value: float = Query(..., description="测试值"),
-):
+) -> Any:
     """测试告警配置"""
     try:
         # 触发测试告警

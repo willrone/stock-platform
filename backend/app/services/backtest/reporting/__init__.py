@@ -5,8 +5,8 @@
 """
 
 from .backtest_report_builder import (
-    BacktestReportBuildInput,
     BacktestReportBuilder,
+    BacktestReportBuildInput,
 )
 from .chart_data_generator import ChartDataGenerator
 from .report_generator import BacktestReportGenerator

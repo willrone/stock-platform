@@ -271,7 +271,12 @@ def flatten_payload(value: Any, prefix: str = "") -> dict[str, Any]:
 def build_comparable_map(document: dict[str, Any]) -> dict[str, Any]:
     """Build a flattened map for compare-only sections."""
     comparable: dict[str, Any] = {}
-    for section in ("strategy_name", "config_snapshot", "metric_snapshot", "fingerprints"):
+    for section in (
+        "strategy_name",
+        "config_snapshot",
+        "metric_snapshot",
+        "fingerprints",
+    ):
         comparable.update(flatten_payload(document[section], section))
     return comparable
 
@@ -310,7 +315,9 @@ def compare_documents(
         tolerance = tolerance_for_field(path, expected_value)
         if tolerance is None:
             if expected_value != actual_value:
-                mismatches.append(f"{path}: 期望 {expected_value!r}，实际 {actual_value!r}")
+                mismatches.append(
+                    f"{path}: 期望 {expected_value!r}，实际 {actual_value!r}"
+                )
             continue
         if not math.isclose(expected_value, actual_value, abs_tol=tolerance):
             mismatches.append(

@@ -3,6 +3,7 @@
 """
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/predictions", tags=["预测服务"])
 
 
 @router.post("", response_model=StandardResponse)
-async def create_prediction(request: PredictionRequest):
+async def create_prediction(request: PredictionRequest) -> Any:
     """创建预测任务"""
     try:
         prediction_engine = PredictionEngine(
@@ -36,6 +37,12 @@ async def create_prediction(request: PredictionRequest):
         from app.services.data.stock_data_loader import StockDataLoader
 
         loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+
+        if not results:
+            raise HTTPException(
+                status_code=404,
+                detail="未生成任何预测结果，请检查股票代码或数据可用性",
+            )
 
         predictions = []
         for result in results:
@@ -86,7 +93,7 @@ async def create_prediction(request: PredictionRequest):
 
 
 @router.get("/{prediction_id}", response_model=StandardResponse)
-async def get_prediction_result(prediction_id: str):
+async def get_prediction_result(prediction_id: str) -> Any:
     """获取预测结果"""
     try:
         from app.core.database import SessionLocal
@@ -122,7 +129,9 @@ async def get_prediction_result(prediction_id: str):
             ],
         }
 
-        return StandardResponse(success=True, message="预测结果获取成功", data=response_data)
+        return StandardResponse(
+            success=True, message="预测结果获取成功", data=response_data
+        )
 
     except Exception as e:
         logger.error(f"获取预测结果失败: {e}")

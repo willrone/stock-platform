@@ -4,9 +4,8 @@
 
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -56,7 +55,7 @@ class RetryConfig:
 class PredictionFallbackEngine:
     """预测降级引擎"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.fallback_strategies = {
             FallbackStrategy.SIMPLE_LINEAR: self._simple_linear_prediction,
             FallbackStrategy.MOVING_AVERAGE: self._moving_average_prediction,
@@ -347,7 +346,7 @@ class RetryManager:
     def __init__(self, config: Optional[RetryConfig] = None):
         self.config = config or RetryConfig()
 
-    def execute_with_retry(self, func, *args, **kwargs):
+    def execute_with_retry(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """带重试的函数执行"""
         last_exception = None
 
@@ -367,7 +366,9 @@ class RetryManager:
                     logger.error(f"重试次数已用完，最终失败: {e}")
 
         # 所有重试都失败了
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError("重试执行失败，但未捕获到具体异常")
 
     def _calculate_delay(self, attempt: int) -> float:
         """计算重试延迟"""
@@ -386,7 +387,7 @@ class RetryManager:
 class PredictionErrorHandler:
     """预测错误处理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.fallback_engine = PredictionFallbackEngine()
         self.retry_manager = RetryManager()
 

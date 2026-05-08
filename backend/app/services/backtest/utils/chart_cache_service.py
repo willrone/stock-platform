@@ -5,12 +5,11 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, cast
 
 from loguru import logger
-from sqlalchemy import and_, delete, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, delete, select
 
 from app.core.database import get_async_session_context, retry_db_operation
 from app.models.backtest_detailed_models import BacktestChartCache
@@ -34,7 +33,7 @@ class ChartCacheService:
         "benchmark_comparison",  # 基准对比图
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logger.bind(service="chart_cache")
 
     async def get_cached_chart_data(
@@ -49,7 +48,7 @@ class ChartCacheService:
         async with get_async_session_context() as session:
             try:
 
-                async def _get_cache():
+                async def _get_cache() -> Optional[Dict[str, Any]]:
                     # 查询缓存记录
                     stmt = select(BacktestChartCache).where(
                         and_(
@@ -78,14 +77,15 @@ class ChartCacheService:
                     self.logger.info(
                         f"命中缓存: task_id={task_id}, chart_type={chart_type}"
                     )
-                    return cache_record.chart_data
+                    return cast(Optional[Dict[str, Any]], cache_record.chart_data)
 
-                return await retry_db_operation(
+                cached_data = await retry_db_operation(
                     _get_cache,
                     max_retries=3,
                     retry_delay=0.1,
                     operation_name=f"获取缓存数据 (task_id={task_id}, chart_type={chart_type})",
                 )
+                return cast(Optional[Dict[str, Any]], cached_data)
 
             except Exception as e:
                 self.logger.error(f"获取缓存数据失败: {e}", exc_info=True)
@@ -108,13 +108,17 @@ class ChartCacheService:
         async with get_async_session_context() as session:
             try:
 
-                async def _cache_data():
+                async def _cache_data() -> bool:
                     # 计算数据哈希值
                     data_hash = self._calculate_data_hash(chart_data)
 
                     # 计算过期时间（避免闭包内同名赋值导致 UnboundLocalError）
-                    hours = expiry_hours if expiry_hours is not None else self.DEFAULT_CACHE_EXPIRY_HOURS
-                    expires_at = datetime.now(UTC) + timedelta(hours=hours)
+                    hours = (
+                        expiry_hours
+                        if expiry_hours is not None
+                        else self.DEFAULT_CACHE_EXPIRY_HOURS
+                    )
+                    expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
 
                     # 查找现有记录
                     stmt = select(BacktestChartCache).where(
@@ -128,10 +132,11 @@ class ChartCacheService:
 
                     if existing_record:
                         # 更新现有记录
-                        existing_record.chart_data = chart_data
-                        existing_record.data_hash = data_hash
-                        existing_record.expires_at = expires_at
-                        existing_record.created_at = datetime.now(UTC)
+                        existing_obj = cast(Any, existing_record)
+                        existing_obj.chart_data = chart_data
+                        existing_obj.data_hash = data_hash
+                        existing_obj.expires_at = expires_at
+                        existing_obj.created_at = datetime.now(timezone.utc)
                         self.logger.info(
                             f"更新缓存: task_id={task_id}, chart_type={chart_type}"
                         )
@@ -152,12 +157,12 @@ class ChartCacheService:
                     await session.commit()
                     return True
 
-                return await retry_db_operation(
+                return bool(await retry_db_operation(
                     _cache_data,
                     max_retries=3,
                     retry_delay=0.1,
                     operation_name=f"缓存图表数据 (task_id={task_id}, chart_type={chart_type})",
-                )
+                ))
 
             except Exception as e:
                 self.logger.error(f"缓存图表数据失败: {e}", exc_info=True)
@@ -172,7 +177,7 @@ class ChartCacheService:
         async with get_async_session_context() as session:
             try:
 
-                async def _invalidate():
+                async def _invalidate() -> bool:
                     if chart_type:
                         # 删除特定图表类型的缓存
                         stmt = delete(BacktestChartCache).where(
@@ -194,16 +199,16 @@ class ChartCacheService:
                     result = await session.execute(stmt)
                     await session.commit()
 
-                    deleted_count = result.rowcount
+                    deleted_count = int(getattr(result, "rowcount", 0) or 0)
                     self.logger.info(f"删除了 {deleted_count} 条缓存记录")
                     return True
 
-                return await retry_db_operation(
+                return bool(await retry_db_operation(
                     _invalidate,
                     max_retries=3,
                     retry_delay=0.1,
                     operation_name=f"删除缓存 (task_id={task_id}, chart_type={chart_type})",
-                )
+                ))
 
             except Exception as e:
                 self.logger.error(f"删除缓存失败: {e}", exc_info=True)
@@ -216,27 +221,30 @@ class ChartCacheService:
         async with get_async_session_context() as session:
             try:
 
-                async def _cleanup():
+                async def _cleanup() -> int:
                     # 删除过期的缓存记录
                     stmt = delete(BacktestChartCache).where(
                         and_(
                             BacktestChartCache.expires_at.isnot(None),
-                            BacktestChartCache.expires_at < datetime.now(UTC),
+                            BacktestChartCache.expires_at < datetime.now(timezone.utc),
                         )
                     )
 
                     result = await session.execute(stmt)
                     await session.commit()
 
-                    deleted_count = result.rowcount
+                    deleted_count = int(getattr(result, "rowcount", 0) or 0)
                     if deleted_count > 0:
                         self.logger.info(f"清理了 {deleted_count} 条过期缓存记录")
 
                     return deleted_count
 
-                return await retry_db_operation(
-                    _cleanup, max_retries=3, retry_delay=0.1, operation_name="清理过期缓存"
-                )
+                return int(await retry_db_operation(
+                    _cleanup,
+                    max_retries=3,
+                    retry_delay=0.1,
+                    operation_name="清理过期缓存",
+                ) or 0)
 
             except Exception as e:
                 self.logger.error(f"清理过期缓存失败: {e}", exc_info=True)
@@ -257,7 +265,7 @@ class ChartCacheService:
                 expired_stmt = select(BacktestChartCache).where(
                     and_(
                         BacktestChartCache.expires_at.isnot(None),
-                        BacktestChartCache.expires_at < datetime.now(UTC),
+                        BacktestChartCache.expires_at < datetime.now(timezone.utc),
                     )
                 )
                 expired_result = await session.execute(expired_stmt)
@@ -303,9 +311,11 @@ class ChartCacheService:
                         {
                             "chart_type": record.chart_type,
                             "created_at": record.created_at.isoformat(),
-                            "expires_at": record.expires_at.isoformat()
-                            if record.expires_at
-                            else None,
+                            "expires_at": (
+                                record.expires_at.isoformat()
+                                if record.expires_at
+                                else None
+                            ),
                             "is_expired": record.is_expired(),
                             "data_hash": record.data_hash,
                         }
@@ -325,7 +335,8 @@ class ChartCacheService:
         """计算数据的哈希值（优先 orjson 加速）"""
         try:
             try:
-                import orjson
+                import orjson  # type: ignore[import-not-found,unused-ignore]
+
                 data_bytes = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
                 return hashlib.md5(data_bytes).hexdigest()
             except (ImportError, TypeError):
@@ -343,7 +354,7 @@ class ChartCacheService:
     ) -> Dict[str, bool]:
         """批量缓存多个图表数据"""
 
-        results = {}
+        results: Dict[str, bool] = {}
 
         for chart_type, chart_data in charts_data.items():
             success = await self.cache_chart_data(

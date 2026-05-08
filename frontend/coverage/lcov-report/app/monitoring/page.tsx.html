@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/48</span>
-            </div>
-        
-            
-            <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
-                <span class="quiet">Branches</span>
                 <span class='fraction'>0/50</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/53</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/10</span>
+                <span class='fraction'>0/11</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/47</span>
+                <span class='fraction'>0/49</span>
             </div>
         
             
@@ -640,7 +640,24 @@
 <a name='L575'></a><a href='#L575'>575</a>
 <a name='L576'></a><a href='#L576'>576</a>
 <a name='L577'></a><a href='#L577'>577</a>
-<a name='L578'></a><a href='#L578'>578</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L578'></a><a href='#L578'>578</a>
+<a name='L579'></a><a href='#L579'>579</a>
+<a name='L580'></a><a href='#L580'>580</a>
+<a name='L581'></a><a href='#L581'>581</a>
+<a name='L582'></a><a href='#L582'>582</a>
+<a name='L583'></a><a href='#L583'>583</a>
+<a name='L584'></a><a href='#L584'>584</a>
+<a name='L585'></a><a href='#L585'>585</a>
+<a name='L586'></a><a href='#L586'>586</a>
+<a name='L587'></a><a href='#L587'>587</a>
+<a name='L588'></a><a href='#L588'>588</a>
+<a name='L589'></a><a href='#L589'>589</a>
+<a name='L590'></a><a href='#L590'>590</a>
+<a name='L591'></a><a href='#L591'>591</a>
+<a name='L592'></a><a href='#L592'>592</a>
+<a name='L593'></a><a href='#L593'>593</a>
+<a name='L594'></a><a href='#L594'>594</a>
+<a name='L595'></a><a href='#L595'>595</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -679,6 +696,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -983,6 +1001,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1256,6 +1290,7 @@ import { DataService } from <span class="cstat-no" title="statement not covered"
 import { LoadingSpinner } from <span class="cstat-no" title="statement not covered" >'../../components/common/LoadingSpinner';</span>
 import { SystemHealthCard } from <span class="cstat-no" title="statement not covered" >'../../components/monitoring/SystemHealthCard';</span>
 import { PerformanceMetricsCard } from <span class="cstat-no" title="statement not covered" >'../../components/monitoring/PerformanceMetricsCard';</span>
+import { MobileErrorCard } from <span class="cstat-no" title="statement not covered" >'../../components/mobile/MobileErrorCard';</span>
 &nbsp;
 interface ErrorStatistics {
   time_range_hours: number;
@@ -1348,7 +1383,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     }
   };
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (loading &amp;&amp; !errorStats) {</span>
+<span class="cstat-no" title="statement not covered" >  if (loading &amp;&amp; !errorStats) {</span>
     return &lt;LoadingSpinner text="加载监控数据..." /&gt;;
   }
 &nbsp;
@@ -1565,7 +1600,23 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             &lt;Card&gt;
               &lt;CardHeader title="错误详情" /&gt;
               &lt;CardContent&gt;
-                &lt;Box sx={{ overflowX: 'auto' }}&gt;
+                {/* 移动端：卡片列表 */}
+                &lt;Box sx={{ display: { xs: 'block', md: 'none' } }}&gt;
+                  {errorStats?.error_statistics.length === 0 ? (
+                    &lt;Box sx={{ textAlign: 'center', py: 4 }}&gt;
+                      &lt;Typography variant="body2" color="text.secondary"&gt;
+                        暂无错误记录
+                      &lt;/Typography&gt;
+                    &lt;/Box&gt;
+                  ) : (
+                    errorStats?.error_statistics.map(<span class="fstat-no" title="function not covered" >(e</span>rror, index) =&gt; (
+<span class="cstat-no" title="statement not covered" >                      &lt;MobileErrorCard key={index} e</span>rror={error} /&gt;
+                    ))
+                  )}
+                &lt;/Box&gt;
+&nbsp;
+                {/* 桌面端：表格 */}
+                &lt;Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}&gt;
                   &lt;Table&gt;
                     &lt;TableHead&gt;
                       &lt;TableRow&gt;
@@ -1801,7 +1852,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

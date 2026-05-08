@@ -5,12 +5,10 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, cast
 
-from sqlalchemy import and_, case, distinct, func, select
+from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import func as sql_func
 
 from app.models.backtest_detailed_models import (
     BacktestStatistics,
@@ -24,7 +22,7 @@ logger = logging.getLogger(__name__)
 class StatisticsCalculator:
     """回测统计计算器"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.logger = logger
 
@@ -77,7 +75,7 @@ class StatisticsCalculator:
                 )
                 await self.session.flush()
                 self.logger.info(f"更新统计信息成功: task_id={task_id}")
-                return existing_stats
+                return cast(BacktestStatistics, existing_stats)
             else:
                 # 创建新记录
                 new_stats = BacktestStatistics(task_id=task_id, backtest_id=backtest_id)
@@ -98,7 +96,9 @@ class StatisticsCalculator:
                 return new_stats
 
         except Exception as e:
-            self.logger.error(f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True)
+            self.logger.error(
+                f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True
+            )
             raise
 
     def _update_statistics_object(
@@ -112,66 +112,71 @@ class StatisticsCalculator:
         time_range_stats: Dict[str, Any],
         stock_distribution_stats: Dict[str, Any],
         performance_stats: Dict[str, Any],
-    ):
+    ) -> None:
         """更新统计对象"""
-        stats.task_id = task_id
-        stats.backtest_id = backtest_id
+        stats_obj = cast(Any, stats)
+        stats_obj.task_id = task_id
+        stats_obj.backtest_id = backtest_id
 
         # 信号统计
-        stats.total_signals = signal_stats.get("total_signals", 0)
-        stats.buy_signals = signal_stats.get("buy_signals", 0)
-        stats.sell_signals = signal_stats.get("sell_signals", 0)
-        stats.executed_signals = signal_stats.get("executed_signals", 0)
-        stats.unexecuted_signals = signal_stats.get("unexecuted_signals", 0)
-        stats.execution_rate = signal_stats.get("execution_rate", 0.0)
-        stats.avg_signal_strength = signal_stats.get("avg_strength", 0.0)
+        stats_obj.total_signals = signal_stats.get("total_signals", 0)
+        stats_obj.buy_signals = signal_stats.get("buy_signals", 0)
+        stats_obj.sell_signals = signal_stats.get("sell_signals", 0)
+        stats_obj.executed_signals = signal_stats.get("executed_signals", 0)
+        stats_obj.unexecuted_signals = signal_stats.get("unexecuted_signals", 0)
+        stats_obj.execution_rate = signal_stats.get("execution_rate", 0.0)
+        stats_obj.avg_signal_strength = signal_stats.get("avg_strength", 0.0)
 
         # 交易统计
-        stats.total_trades = trade_stats.get("total_trades", 0)
-        stats.buy_trades = trade_stats.get("buy_trades", 0)
-        stats.sell_trades = trade_stats.get("sell_trades", 0)
-        stats.winning_trades = trade_stats.get("winning_trades", 0)
-        stats.losing_trades = trade_stats.get("losing_trades", 0)
-        stats.win_rate = trade_stats.get("win_rate", 0.0)
-        stats.avg_profit = trade_stats.get("avg_profit", 0.0)
-        stats.avg_loss = trade_stats.get("avg_loss", 0.0)
-        stats.profit_factor = trade_stats.get("profit_factor", 0.0)
-        stats.total_commission = trade_stats.get("total_commission", 0.0)
-        stats.total_pnl = trade_stats.get("total_pnl", 0.0)
-        stats.avg_holding_days = trade_stats.get("avg_holding_days", 0.0)
+        stats_obj.total_trades = trade_stats.get("total_trades", 0)
+        stats_obj.buy_trades = trade_stats.get("buy_trades", 0)
+        stats_obj.sell_trades = trade_stats.get("sell_trades", 0)
+        stats_obj.winning_trades = trade_stats.get("winning_trades", 0)
+        stats_obj.losing_trades = trade_stats.get("losing_trades", 0)
+        stats_obj.win_rate = trade_stats.get("win_rate", 0.0)
+        stats_obj.avg_profit = trade_stats.get("avg_profit", 0.0)
+        stats_obj.avg_loss = trade_stats.get("avg_loss", 0.0)
+        stats_obj.profit_factor = trade_stats.get("profit_factor", 0.0)
+        stats_obj.total_commission = trade_stats.get("total_commission", 0.0)
+        stats_obj.total_pnl = trade_stats.get("total_pnl", 0.0)
+        stats_obj.avg_holding_days = trade_stats.get("avg_holding_days", 0.0)
 
         # 持仓统计
-        stats.total_stocks = position_stats.get("total_stocks", 0)
-        stats.profitable_stocks = position_stats.get("profitable_stocks", 0)
-        stats.avg_stock_return = position_stats.get("avg_stock_return", 0.0)
-        stats.max_stock_return = position_stats.get("max_stock_return")
-        stats.min_stock_return = position_stats.get("min_stock_return")
+        stats_obj.total_stocks = position_stats.get("total_stocks", 0)
+        stats_obj.profitable_stocks = position_stats.get("profitable_stocks", 0)
+        stats_obj.avg_stock_return = position_stats.get("avg_stock_return", 0.0)
+        stats_obj.max_stock_return = position_stats.get("max_stock_return")
+        stats_obj.min_stock_return = position_stats.get("min_stock_return")
 
         # 时间范围统计
-        stats.first_signal_date = time_range_stats.get("first_signal_date")
-        stats.last_signal_date = time_range_stats.get("last_signal_date")
-        stats.first_trade_date = time_range_stats.get("first_trade_date")
-        stats.last_trade_date = time_range_stats.get("last_trade_date")
-        stats.trading_days = time_range_stats.get("trading_days", 0)
+        stats_obj.first_signal_date = time_range_stats.get("first_signal_date")
+        stats_obj.last_signal_date = time_range_stats.get("last_signal_date")
+        stats_obj.first_trade_date = time_range_stats.get("first_trade_date")
+        stats_obj.last_trade_date = time_range_stats.get("last_trade_date")
+        stats_obj.trading_days = time_range_stats.get("trading_days", 0)
 
         # 股票分布统计
-        stats.unique_stocks_signaled = stock_distribution_stats.get(
+        stats_obj.unique_stocks_signaled = stock_distribution_stats.get(
             "unique_stocks_signaled", 0
         )
-        stats.unique_stocks_traded = stock_distribution_stats.get(
+        stats_obj.unique_stocks_traded = stock_distribution_stats.get(
             "unique_stocks_traded", 0
         )
-        stats.most_signaled_stock = stock_distribution_stats.get("most_signaled_stock")
-        stats.most_traded_stock = stock_distribution_stats.get("most_traded_stock")
+        stats_obj.most_signaled_stock = stock_distribution_stats.get(
+            "most_signaled_stock"
+        )
+        stats_obj.most_traded_stock = stock_distribution_stats.get("most_traded_stock")
 
         # 性能指标统计
-        stats.max_single_profit = performance_stats.get("max_single_profit")
-        stats.max_single_loss = performance_stats.get("max_single_loss")
-        stats.max_consecutive_wins = performance_stats.get("max_consecutive_wins", 0)
-        stats.max_consecutive_losses = performance_stats.get(
+        stats_obj.max_single_profit = performance_stats.get("max_single_profit")
+        stats_obj.max_single_loss = performance_stats.get("max_single_loss")
+        stats_obj.max_consecutive_wins = performance_stats.get(
+            "max_consecutive_wins", 0
+        )
+        stats_obj.max_consecutive_losses = performance_stats.get(
             "max_consecutive_losses", 0
         )
-        stats.largest_position_size = performance_stats.get("largest_position_size")
+        stats_obj.largest_position_size = performance_stats.get("largest_position_size")
 
     async def _calculate_signal_statistics(self, task_id: str) -> Dict[str, Any]:
         """计算信号统计信息"""
@@ -187,7 +192,7 @@ class StatisticsCalculator:
                 and_(base_where, SignalRecord.signal_type == "SELL")
             )
             executed_stmt = select(func.count(SignalRecord.id)).where(
-                and_(base_where, SignalRecord.executed == True)
+                and_(base_where, SignalRecord.executed.is_(True))
             )
             avg_strength_stmt = select(func.avg(SignalRecord.strength)).where(
                 base_where
@@ -211,9 +216,9 @@ class StatisticsCalculator:
                 "sell_signals": sell_signals,
                 "executed_signals": executed_signals,
                 "unexecuted_signals": total_signals - executed_signals,
-                "execution_rate": executed_signals / total_signals
-                if total_signals > 0
-                else 0.0,
+                "execution_rate": (
+                    executed_signals / total_signals if total_signals > 0 else 0.0
+                ),
                 "avg_strength": float(avg_strength) if avg_strength else 0.0,
             }
         except Exception as e:
@@ -323,10 +328,11 @@ class StatisticsCalculator:
                 }
 
             # 按股票分组计算收益
-            stock_returns = defaultdict(float)
+            stock_returns: defaultdict[str, float] = defaultdict(float)
             for trade in trades:
-                if trade.pnl is not None:
-                    stock_returns[trade.stock_code] += trade.pnl
+                trade_obj = cast(Any, trade)
+                if trade_obj.pnl is not None:
+                    stock_returns[str(trade_obj.stock_code)] += float(trade_obj.pnl)
 
             if not stock_returns:
                 return {
@@ -343,9 +349,9 @@ class StatisticsCalculator:
             return {
                 "total_stocks": len(stock_returns),
                 "profitable_stocks": profitable_count,
-                "avg_stock_return": sum(returns_list) / len(returns_list)
-                if returns_list
-                else 0.0,
+                "avg_stock_return": (
+                    sum(returns_list) / len(returns_list) if returns_list else 0.0
+                ),
                 "max_stock_return": max(returns_list) if returns_list else None,
                 "min_stock_return": min(returns_list) if returns_list else None,
             }
@@ -515,15 +521,15 @@ class StatisticsCalculator:
                     largest_position = position_size
 
             return {
-                "max_single_profit": float(max_profit)
-                if max_profit is not None
-                else None,
+                "max_single_profit": (
+                    float(max_profit) if max_profit is not None else None
+                ),
                 "max_single_loss": float(max_loss) if max_loss is not None else None,
                 "max_consecutive_wins": max_consecutive_wins,
                 "max_consecutive_losses": max_consecutive_losses,
-                "largest_position_size": float(largest_position)
-                if largest_position is not None
-                else None,
+                "largest_position_size": (
+                    float(largest_position) if largest_position is not None else None
+                ),
             }
         except Exception as e:
             self.logger.error(f"计算性能指标统计失败: {e}", exc_info=True)

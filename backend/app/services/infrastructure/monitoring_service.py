@@ -8,9 +8,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
-
-from loguru import logger
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 # 使用TYPE_CHECKING避免循环导入
 if TYPE_CHECKING:
@@ -42,6 +40,19 @@ class PerformanceMetrics:
     success_rate: float
     timestamp: datetime
 
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "service_name": self.service_name,
+            "avg_response_time": self.avg_response_time,
+            "max_response_time": self.max_response_time,
+            "min_response_time": self.min_response_time,
+            "request_count": self.request_count,
+            "error_count": self.error_count,
+            "success_rate": self.success_rate,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
 
 @dataclass
 class ErrorStatistics:
@@ -65,6 +76,7 @@ class DataMonitoringService:
         self.data_service = data_service
         self.indicators_service = indicators_service
         self.parquet_manager = parquet_manager
+        self.sync_engine: Optional[Any] = None
         from loguru import logger
 
         self.logger = logger
@@ -83,12 +95,12 @@ class DataMonitoringService:
         self._monitoring_task: Optional[asyncio.Task] = None
         self._shutdown = False
 
-    async def start_monitoring(self):
+    async def start_monitoring(self) -> None:
         """启动监控任务"""
         if self._monitoring_task is None or self._monitoring_task.done():
             self._monitoring_task = asyncio.create_task(self._monitoring_loop())
 
-    async def stop_monitoring(self):
+    async def stop_monitoring(self) -> None:
         """停止监控任务"""
         self._shutdown = True
         if self._monitoring_task and not self._monitoring_task.done():
@@ -98,7 +110,7 @@ class DataMonitoringService:
             except asyncio.CancelledError:
                 pass
 
-    async def _monitoring_loop(self):
+    async def _monitoring_loop(self) -> None:
         """监控循环"""
         while not self._shutdown:
             try:
@@ -213,7 +225,7 @@ class DataMonitoringService:
 
         return status
 
-    async def _perform_health_checks(self):
+    async def _perform_health_checks(self) -> None:
         """执行所有服务的健康检查"""
         services = ["data_service", "indicators_service", "parquet_manager"]
         if self.sync_engine:
@@ -227,7 +239,7 @@ class DataMonitoringService:
 
     def record_request(
         self, service_name: str, response_time_ms: float, success: bool = True
-    ):
+    ) -> Any:
         """
         记录请求性能数据
 
@@ -242,7 +254,9 @@ class DataMonitoringService:
         if not success:
             self._error_counts[service_name] += 1
 
-    def record_error(self, service_name: str, error_type: str, error_message: str):
+    def record_error(
+        self, service_name: str, error_type: str, error_message: str
+    ) -> Any:
         """
         记录错误信息
 
@@ -348,7 +362,7 @@ class DataMonitoringService:
         Returns:
             Dict[str, Any]: 系统概览数据
         """
-        overview = {
+        overview: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "services": {},
             "overall_health": True,
@@ -369,7 +383,8 @@ class DataMonitoringService:
                 health = self._health_cache[service_name]
                 metrics = self.get_performance_metrics(service_name)
 
-                overview["services"][service_name] = {
+                services_overview = cast(Dict[str, Any], overview["services"])
+                services_overview[service_name] = {
                     "healthy": health.is_healthy,
                     "response_time": health.response_time_ms,
                     "last_check": health.last_check.isoformat(),
@@ -541,7 +556,7 @@ class DataMonitoringService:
                 recommendations.append("增加更多股票的数据同步")
 
             # 计算总体评分
-            scores = [check["score"] for check in checks.values()]
+            scores = [float(cast(Any, check)["score"]) for check in checks.values()]
             overall_score = sum(scores) / len(scores) if scores else 0.0
 
             quality_report.update(
@@ -555,7 +570,8 @@ class DataMonitoringService:
 
         except Exception as e:
             self.logger.error(f"数据质量检查失败: {e}")
-            quality_report["checks"]["system_error"] = {
+            checks_report = cast(Dict[str, Any], quality_report["checks"])
+            checks_report["system_error"] = {
                 "score": 0.0,
                 "status": "error",
                 "message": f"质量检查失败: {str(e)}",
@@ -628,7 +644,7 @@ class DataMonitoringService:
                             "type": "service_unhealthy",
                             "service": service_name,
                             "severity": "high",
-                            "value": health_status.error_message,
+                            "value": health_status.error_message or "",
                             "message": f"{service_name} 服务不健康: {health_status.error_message}",
                             "detected_at": datetime.now().isoformat(),
                         }
@@ -649,14 +665,14 @@ class DataMonitoringService:
 
         return anomalies
 
-    def _cleanup_old_logs(self):
+    def _cleanup_old_logs(self) -> None:
         """清理旧的错误日志"""
         cutoff_time = datetime.now() - timedelta(days=7)  # 保留7天
         self._error_logs = [
             log for log in self._error_logs if log["timestamp"] >= cutoff_time
         ]
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """清理资源"""
         await self.stop_monitoring()
         self._health_cache.clear()
@@ -664,27 +680,3 @@ class DataMonitoringService:
         self._error_counts.clear()
         self._request_counts.clear()
         self._error_logs.clear()
-
-
-# 扩展PerformanceMetrics类的方法
-def _extend_performance_metrics():
-    """扩展PerformanceMetrics类"""
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
-        return {
-            "service_name": self.service_name,
-            "avg_response_time": self.avg_response_time,
-            "max_response_time": self.max_response_time,
-            "min_response_time": self.min_response_time,
-            "request_count": self.request_count,
-            "error_count": self.error_count,
-            "success_rate": self.success_rate,
-            "timestamp": self.timestamp.isoformat(),
-        }
-
-    PerformanceMetrics.to_dict = to_dict
-
-
-# 执行扩展
-_extend_performance_metrics()

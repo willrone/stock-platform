@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
-from qlib.contrib.evaluate import risk_analysis
+
+risk_analysis = pytest.importorskip("qlib.contrib.evaluate").risk_analysis
 
 from app.services.backtest.reporting import (
     BacktestReportBuilder,

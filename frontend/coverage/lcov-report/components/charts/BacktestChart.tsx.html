@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/114</span>
+                <span class='fraction'>0/128</span>
             </div>
         
             
@@ -1349,7 +1349,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
         backtestData.total_return !== undefined ||
         backtestData.sharpe_ratio !== undefined);
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (hasRealData) {</span>
+<span class="cstat-no" title="statement not covered" >    if (hasRealData) {</span>
 <span class="cstat-no" title="statement not covered" >      console.log('BacktestChart - 使用真实回测数据');</span>
       // 兼容多种数据格式
       const portfolio = <span class="cstat-no" title="statement not covered" >backtestData.portfolio || {</span>
@@ -1444,7 +1444,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >      if (position === 0 &amp;&amp; Math.random() &lt; 0.05) {</span>
         // 买入信号
         const quantity = <span class="cstat-no" title="statement not covered" >Math.floor((currentEquity * 0.1) / currentPrice);</span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (quantity &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >        if (quantity &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >          position = quantity;</span>
 <span class="cstat-no" title="statement not covered" >          trades.push({</span>
             date: dates[i],
@@ -1454,7 +1454,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             pnl: 0,
           });
         }
-      } else <span class="cstat-no" title="statement not covered" ><span class="missing-if-branch" title="if path not taken" >I</span>if (position &gt; 0 &amp;&amp; Math.random() &lt; 0.03) {</span>
+      } else <span class="cstat-no" title="statement not covered" >if (position &gt; 0 &amp;&amp; Math.random() &lt; 0.03) {</span>
         // 卖出信号
         const sellValue = <span class="cstat-no" title="statement not covered" >position * currentPrice;</span>
         const buyValue = <span class="cstat-no" title="statement not covered" >position * trades[trades.length - 1].price;</span>
@@ -1473,7 +1473,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       }
 &nbsp;
       // 计算当前权益
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (position &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      if (position &gt; 0) {</span>
         const positionValue = <span class="cstat-no" title="statement not covered" >position * currentPrice;</span>
         const cash = <span class="cstat-no" title="statement not covered" >currentEquity - position * trades[trades.length - 1].price;</span>
 <span class="cstat-no" title="statement not covered" >        currentEquity = cash + positionValue;</span>
@@ -1482,7 +1482,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >      equityCurve.push(currentEquity);</span>
 &nbsp;
       // 计算回撤
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (currentEquity &gt; peak) {</span>
+<span class="cstat-no" title="statement not covered" >      if (currentEquity &gt; peak) {</span>
 <span class="cstat-no" title="statement not covered" >        peak = currentEquity;</span>
       }
       const drawdown = <span class="cstat-no" title="statement not covered" >((peak - currentEquity) / peak) * 100;</span>
@@ -1533,8 +1533,8 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     const data = <span class="cstat-no" title="statement not covered" >processBacktestData();</span>
 &nbsp;
     // 权益曲线图表
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (equityChartRef.current) {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (equityChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (equityChartRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (equityChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        equityChartInstance.current.dispose();</span>
       }
 &nbsp;
@@ -1614,8 +1614,8 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     }
 &nbsp;
     // 回撤图表
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (drawdownChartRef.current) {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (drawdownChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (drawdownChartRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (drawdownChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        drawdownChartInstance.current.dispose();</span>
       }
 &nbsp;
@@ -1698,10 +1698,10 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
     // 响应式调整
     const handleResize = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (equityChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (equityChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        equityChartInstance.current.resize();</span>
       }
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (drawdownChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (drawdownChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        drawdownChartInstance.current.resize();</span>
       }
     };
@@ -1710,10 +1710,10 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >      window.removeEventListener('resize', handleResize);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (equityChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (equityChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        equityChartInstance.current.dispose();</span>
       }
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (drawdownChartInstance.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (drawdownChartInstance.current) {</span>
 <span class="cstat-no" title="statement not covered" >        drawdownChartInstance.current.dispose();</span>
       }
     };
@@ -1721,7 +1721,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   const data = <span class="cstat-no" title="statement not covered" >processBacktestData();</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (!backtestData &amp;&amp; !data) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!backtestData &amp;&amp; !data) {</span>
     return (
       &lt;Card&gt;
         &lt;CardContent&gt;
@@ -1897,7 +1897,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

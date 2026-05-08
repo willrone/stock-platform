@@ -125,9 +125,7 @@ class QlibDataAdapter:
             duplicate_columns = df_renamed.columns[
                 df_renamed.columns.duplicated(keep=False)
             ].tolist()
-            logger.warning(
-                f"列名标准化后发现重复列，保留最后一个: {duplicate_columns}"
-            )
+            logger.warning(f"列名标准化后发现重复列，保留最后一个: {duplicate_columns}")
             df_renamed = df_renamed.loc[:, ~df_renamed.columns.duplicated(keep="last")]
 
         # 确保基础OHLCV列存在
@@ -196,27 +194,27 @@ class QlibDataAdapter:
         indicator_cols = [
             col for col in df_filled.columns if col not in price_cols + ["label"]
         ]
-        
+
         for col in indicator_cols:
             if col not in df_filled.columns:
                 continue
-                
+
             col_data = df_filled[col]
             missing_mask = col_data.isna()
-            
+
             if not missing_mask.any():
                 continue
-            
+
             missing_count = missing_mask.sum()
             total_count = len(col_data)
             missing_ratio = missing_count / total_count if total_count > 0 else 0
-            
+
             # 判断缺失原因：
             # 1. 如果缺失比例很高（>50%），可能是计算窗口不足，使用中位数填充
             # 2. 如果缺失比例较低，可能是数据缺失，使用前向填充
             # 3. 对于技术指标，如果开头缺失（计算窗口不足），使用NaN或中位数
             # 4. 对于中间缺失（数据缺失），使用前向填充
-            
+
             if missing_ratio > 0.5:
                 # 高缺失率：可能是计算窗口不足，使用中位数填充
                 median_value = col_data.median()
@@ -225,14 +223,12 @@ class QlibDataAdapter:
                 else:
                     # 如果中位数也是NaN，使用0（作为最后手段）
                     df_filled[col] = col_data.fillna(0)
-                logger.debug(
-                    f"列 {col} 缺失率 {missing_ratio:.2%}，使用中位数填充"
-                )
+                logger.debug(f"列 {col} 缺失率 {missing_ratio:.2%}，使用中位数填充")
             else:
                 # 低缺失率：可能是数据缺失，使用前向填充
                 # 先前向填充，然后后向填充（处理开头缺失）
                 df_filled[col] = col_data.ffill().bfill()
-                
+
                 # 如果仍有缺失（开头），使用中位数
                 if df_filled[col].isna().any():
                     median_value = df_filled[col].median()
@@ -240,7 +236,7 @@ class QlibDataAdapter:
                         df_filled[col] = df_filled[col].fillna(median_value)
                     else:
                         df_filled[col] = df_filled[col].fillna(0)
-                
+
                 logger.debug(
                     f"列 {col} 缺失率 {missing_ratio:.2%}，使用前向填充+中位数"
                 )
@@ -248,7 +244,7 @@ class QlibDataAdapter:
         # 记录缺失值处理情况
         missing_counts_before = df.isnull().sum()
         missing_counts_after = df_filled.isnull().sum()
-        
+
         if missing_counts_before.sum() > 0:
             logger.debug(
                 f"缺失值处理完成 - 处理前: {missing_counts_before[missing_counts_before > 0].to_dict()}, "
@@ -299,21 +295,23 @@ class QlibDataAdapter:
         self, model_type: str, hyperparameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """创建Qlib模型配置。"""
-        base_config = {
+        kwargs: Dict[str, Any] = {
+            # 使用 Huber 损失提高对异常标签的鲁棒性。
+            "loss": "huber",
+            "huber_delta": 0.1,
+            "colsample_bytree": 0.8879,
+            "learning_rate": 0.0421,
+            "subsample": 0.8789,
+            "lambda_l1": 205.6999,
+            "lambda_l2": 580.9768,
+            "max_depth": 8,
+            "num_leaves": 210,
+            "num_threads": 20,
+        }
+        base_config: Dict[str, Any] = {
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
-            "kwargs": {
-                # qlib 默认 LGBModel 不支持 huber，仅支持 mse/binary
-                "loss": "mse",
-                "colsample_bytree": 0.8879,
-                "learning_rate": 0.0421,
-                "subsample": 0.8789,
-                "lambda_l1": 205.6999,
-                "lambda_l2": 580.9768,
-                "max_depth": 8,
-                "num_leaves": 210,
-                "num_threads": 20,
-            },
+            "kwargs": kwargs,
         }
 
         if model_type.lower() == "lightgbm":
@@ -327,7 +325,7 @@ class QlibDataAdapter:
             base_config["module_path"] = "qlib.contrib.model.pytorch_nn"
 
         if hyperparameters:
-            base_config["kwargs"].update(hyperparameters)
+            kwargs.update(hyperparameters)
 
         return base_config
 
@@ -354,7 +352,9 @@ class QlibDataAdapter:
             if missing_cols:
                 logger.warning(f"缺少必要的列: {missing_cols}")
                 data = self._fix_missing_columns(data, missing_cols)
-                still_missing = [col for col in required_cols if col not in data.columns]
+                still_missing = [
+                    col for col in required_cols if col not in data.columns
+                ]
                 if still_missing:
                     logger.error(f"无法修复缺少的列: {still_missing}")
                     return False, data
@@ -421,7 +421,10 @@ class QlibDataAdapter:
             data_fixed["$volume"] = data_fixed["$volume"].fillna(0).astype("int64")
 
         for col in data_fixed.columns:
-            if col not in price_cols + ["$volume"] and data_fixed[col].dtype == "object":
+            if (
+                col not in price_cols + ["$volume"]
+                and data_fixed[col].dtype == "object"
+            ):
                 data_fixed[col] = pd.to_numeric(data_fixed[col], errors="coerce")
 
         return data_fixed
@@ -540,7 +543,9 @@ class QlibDataAdapter:
             conversion_info["output_columns"] = list(converted_df.columns)
 
             if validate or fix_issues:
-                is_valid, fixed_df = await self.validate_and_fix_qlib_format(converted_df)
+                is_valid, fixed_df = await self.validate_and_fix_qlib_format(
+                    converted_df
+                )
                 conversion_info["is_valid_before_fix"] = is_valid
                 if fix_issues and not is_valid:
                     converted_df = fixed_df

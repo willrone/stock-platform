@@ -8,27 +8,24 @@
 - 模型继承关系
 """
 
-import asyncio
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, cast
 
 from loguru import logger
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...core.config import settings
 from ...core.database import get_async_session_context
-from ...models.task_models import ModelInfo, Task
+from ...models.task_models import ModelInfo
 
 
 class LineageTracker:
     """训练血缘追踪器"""
 
-    def __init__(self):
-        self.lineage_cache = {}  # 血缘关系缓存
+    def __init__(self) -> None:
+        self.lineage_cache: Dict[str, Dict[str, Any]] = {}  # 血缘关系缓存
 
     async def record_training_lineage(
         self,
@@ -85,7 +82,7 @@ class LineageTracker:
         """记录训练血缘信息实现"""
         try:
             # 构建血缘信息
-            lineage_info = {
+            lineage_info: Dict[str, Any] = {
                 "training_config": training_config,
                 "data_sources": data_sources,
                 "feature_config": feature_config,
@@ -108,7 +105,7 @@ class LineageTracker:
                 return False
 
             # 更新模型的超参数字段来存储血缘信息
-            current_hyperparams = model.hyperparameters or {}
+            current_hyperparams: Dict[str, Any] = dict(model.hyperparameters or {})
             current_hyperparams["lineage"] = lineage_info
 
             await db.execute(
@@ -203,20 +200,21 @@ class LineageTracker:
         """获取模型血缘信息实现"""
         try:
             # 获取当前模型信息
-            result = await db.execute(
+            query_result = await db.execute(
                 select(ModelInfo).where(ModelInfo.model_id == model_id)
             )
-            model = result.scalar_one_or_none()
+            model = query_result.scalar_one_or_none()
 
             if not model:
                 return {"error": f"模型不存在: {model_id}"}
 
             # 提取血缘信息
-            lineage_info = {}
-            if model.hyperparameters and "lineage" in model.hyperparameters:
-                lineage_info = model.hyperparameters["lineage"]
+            lineage_info: Dict[str, Any] = {}
+            hyperparameters = cast(Dict[str, Any], model.hyperparameters or {})
+            if "lineage" in hyperparameters:
+                lineage_info = cast(Dict[str, Any], hyperparameters["lineage"])
 
-            result = {
+            lineage_result: Dict[str, Any] = {
                 "model_id": model_id,
                 "model_name": model.model_name,
                 "model_type": model.model_type,
@@ -228,14 +226,14 @@ class LineageTracker:
             # 获取祖先模型
             if include_ancestors:
                 ancestors = await self._get_ancestor_models(db, model_id)
-                result["ancestors"] = ancestors
+                lineage_result["ancestors"] = ancestors
 
             # 获取后代模型
             if include_descendants:
                 descendants = await self._get_descendant_models(db, model_id)
-                result["descendants"] = descendants
+                lineage_result["descendants"] = descendants
 
-            return result
+            return lineage_result
 
         except Exception as e:
             logger.error(f"获取模型血缘失败: {e}")
@@ -252,7 +250,7 @@ class LineageTracker:
             return []  # 避免循环引用
 
         visited.add(model_id)
-        ancestors = []
+        ancestors: List[Dict[str, Any]] = []
 
         try:
             # 获取当前模型
@@ -282,14 +280,14 @@ class LineageTracker:
 
                     # 递归获取更上层的祖先
                     upper_ancestors = await self._get_ancestor_models(
-                        db, parent_model.model_id, visited
+                        db, str(parent_model.model_id), visited
                     )
                     ancestors.extend(upper_ancestors)
 
             # 检查血缘信息中的父模型
             if model.hyperparameters and "lineage" in model.hyperparameters:
-                lineage = model.hyperparameters["lineage"]
-                parent_models = lineage.get("parent_models", [])
+                lineage = cast(Dict[str, Any], model.hyperparameters["lineage"])
+                parent_models = cast(List[str], lineage.get("parent_models", []))
 
                 for parent_id in parent_models:
                     if parent_id not in visited:
@@ -317,7 +315,7 @@ class LineageTracker:
         self, db: AsyncSession, model_id: str
     ) -> List[Dict[str, Any]]:
         """获取后代模型"""
-        descendants = []
+        descendants: List[Dict[str, Any]] = []
 
         try:
             # 查找以当前模型为父模型的模型
@@ -341,8 +339,8 @@ class LineageTracker:
 
             for model in all_models:
                 if model.hyperparameters and "lineage" in model.hyperparameters:
-                    lineage = model.hyperparameters["lineage"]
-                    parent_models = lineage.get("parent_models", [])
+                    lineage = cast(Dict[str, Any], model.hyperparameters["lineage"])
+                    parent_models = cast(List[str], lineage.get("parent_models", []))
 
                     if model_id in parent_models:
                         descendant_info = {
@@ -396,7 +394,7 @@ class LineageTracker:
         threshold: float,
     ) -> List[Dict[str, Any]]:
         """查找相似模型实现"""
-        similar_models = []
+        similar_models: List[Dict[str, Any]] = []
 
         try:
             # 获取所有模型
@@ -407,7 +405,7 @@ class LineageTracker:
                 if not model.hyperparameters or "lineage" not in model.hyperparameters:
                     continue
 
-                lineage = model.hyperparameters["lineage"]
+                lineage = cast(Dict[str, Any], model.hyperparameters["lineage"])
                 model_data_fp = lineage.get("data_fingerprint", "")
                 model_config_fp = lineage.get("config_fingerprint", "")
 
@@ -492,8 +490,8 @@ class LineageTracker:
 
             models = result.scalars().all()
 
-            nodes = []
-            edges = []
+            nodes: List[Dict[str, Any]] = []
+            edges: List[Dict[str, Any]] = []
 
             for model in models:
                 # 添加节点
@@ -502,9 +500,9 @@ class LineageTracker:
                     "label": model.model_name,
                     "type": model.model_type,
                     "status": model.status,
-                    "created_at": model.created_at.isoformat()
-                    if model.created_at
-                    else None,
+                    "created_at": (
+                        model.created_at.isoformat() if model.created_at else None
+                    ),
                 }
                 nodes.append(node)
 
@@ -520,8 +518,8 @@ class LineageTracker:
 
                 # 添加血缘关系边
                 if model.hyperparameters and "lineage" in model.hyperparameters:
-                    lineage = model.hyperparameters["lineage"]
-                    parent_models = lineage.get("parent_models", [])
+                    lineage = cast(Dict[str, Any], model.hyperparameters["lineage"])
+                    parent_models = cast(List[str], lineage.get("parent_models", []))
 
                     for parent_id in parent_models:
                         edge = {

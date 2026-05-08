@@ -1,13 +1,7 @@
 'use client';
 
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Box, 
-  Typography, 
-  Chip,
-} from '@mui/material';
+import { Card, CardContent, Box, Typography, Chip } from '@mui/material';
 import { TrendingUp, Calendar, Database } from 'lucide-react';
 
 interface RemoteStock {
@@ -46,20 +40,24 @@ export const MobileStockCard: React.FC<MobileStockCardProps> = ({ stock, type })
   const localStock = !isRemote ? (stock as LocalStock) : undefined;
 
   const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '-';
+    if (!dateStr) {
+      return '-';
+    }
     return dateStr.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
   };
 
   const formatSize = (bytes?: number) => {
-    if (!bytes) return '-';
+    if (!bytes) {
+      return '-';
+    }
     const mb = bytes / (1024 * 1024);
     return mb >= 1 ? `${mb.toFixed(2)} MB` : `${(bytes / 1024).toFixed(2)} KB`;
   };
 
   return (
-    <Card 
-      sx={{ 
-        mb: 1.5, 
+    <Card
+      sx={{
+        mb: 1.5,
         borderRadius: 2,
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       }}
@@ -78,8 +76,8 @@ export const MobileStockCard: React.FC<MobileStockCardProps> = ({ stock, type })
             )}
           </Box>
           {remoteStock?.status && (
-            <Chip 
-              label={remoteStock.status} 
+            <Chip
+              label={remoteStock.status}
               size="small"
               color={remoteStock.status === 'active' ? 'success' : 'default'}
               sx={{ fontSize: '0.7rem', height: 20 }}

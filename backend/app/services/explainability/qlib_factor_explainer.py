@@ -2,13 +2,14 @@
 量化因子解释功能
 支持Qlib因子的解释性分析，实现因子贡献度可视化
 """
+
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, cast
 
 import numpy as np
 import pandas as pd
@@ -43,6 +44,12 @@ class ExplanationLevel(Enum):
     PORTFOLIO = "portfolio"  # 组合级别
 
 
+class PortfolioFactorContributionAccumulator(TypedDict):
+    contribution_score: float
+    factor_category: FactorCategory
+    weighted_count: float
+
+
 @dataclass
 class FactorContribution:
     """因子贡献度"""
@@ -63,9 +70,9 @@ class FactorContribution:
             "contribution_score": self.contribution_score,
             "contribution_percentage": self.contribution_percentage,
             "statistical_significance": self.statistical_significance,
-            "confidence_interval": list(self.confidence_interval)
-            if self.confidence_interval
-            else None,
+            "confidence_interval": (
+                list(self.confidence_interval) if self.confidence_interval else None
+            ),
             "factor_value": self.factor_value,
             "normalized_value": self.normalized_value,
         }
@@ -137,7 +144,6 @@ class QlibFactorMapper:
         # 波动率因子
         "STD": FactorCategory.VOLATILITY,
         "BETA": FactorCategory.VOLATILITY,
-        "RSQR": FactorCategory.VOLATILITY,
         # 技术因子
         "RSI": FactorCategory.TECHNICAL,
         "PSY": FactorCategory.TECHNICAL,
@@ -189,7 +195,7 @@ class QlibFactorMapper:
 class FactorAttributionAnalyzer:
     """因子归因分析器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.factor_mapper = QlibFactorMapper()
         self.scaler = StandardScaler()
 
@@ -300,7 +306,7 @@ class FactorAttributionAnalyzer:
             model = LinearRegression()
             model.fit(clean_factors, clean_predictions)
 
-            return model.coef_
+            return cast(np.ndarray, model.coef_)
 
         except Exception as e:
             logger.warning(f"估计因子权重失败: {e}")
@@ -322,7 +328,7 @@ class FactorAttributionAnalyzer:
                 aligned_data.iloc[:, 0], aligned_data.iloc[:, 1]
             )
 
-            return p_value
+            return float(p_value)
 
         except Exception as e:
             logger.warning(f"计算因子显著性失败: {e}")
@@ -522,23 +528,25 @@ class QlibFactorExplainer:
                 actual_return=actual_return,
                 factor_contributions=factor_contributions,
                 category_contributions=category_contributions,
-                explanation_level=ExplanationLevel.STOCK
-                if stock_code
-                else ExplanationLevel.PORTFOLIO,
+                explanation_level=(
+                    ExplanationLevel.STOCK if stock_code else ExplanationLevel.PORTFOLIO
+                ),
                 base_return=base_return,
                 total_attribution=total_attribution,
                 unexplained_variance=unexplained_variance,
                 created_at=datetime.now(),
                 metadata={
                     "num_factors": len(factor_contributions),
-                    "top_factor": factor_contributions[0].factor_name
-                    if factor_contributions
-                    else None,
-                    "attribution_coverage": abs(
-                        total_attribution / (prediction - base_return)
-                    )
-                    if prediction != base_return
-                    else 0,
+                    "top_factor": (
+                        factor_contributions[0].factor_name
+                        if factor_contributions
+                        else None
+                    ),
+                    "attribution_coverage": (
+                        abs(total_attribution / (prediction - base_return))
+                        if prediction != base_return
+                        else 0
+                    ),
                 },
             )
 
@@ -594,7 +602,9 @@ class QlibFactorExplainer:
 
         try:
             # 聚合组合级别的因子贡献
-            portfolio_factor_contributions = {}
+            portfolio_factor_contributions: Dict[
+                str, PortfolioFactorContributionAccumulator
+            ] = {}
             total_portfolio_prediction = 0.0
 
             for stock_code, weight in portfolio_weights.items():
@@ -640,7 +650,7 @@ class QlibFactorExplainer:
                 contribution = FactorContribution(
                     factor_name=factor_name,
                     factor_category=data["factor_category"],
-                    contribution_score=data["contribution_score"],
+                    contribution_score=float(data["contribution_score"]),
                     contribution_percentage=0.0,  # 稍后计算
                 )
                 factor_contributions.append(contribution)
@@ -849,14 +859,20 @@ class QlibFactorExplainer:
 
         if predictions_with_actual:
             predicted_returns = [e.predicted_return for e in predictions_with_actual]
-            actual_returns = [e.actual_return for e in predictions_with_actual]
+            actual_returns: List[float] = [
+                float(e.actual_return)
+                for e in predictions_with_actual
+                if e.actual_return is not None
+            ]
 
-            correlation = np.corrcoef(predicted_returns, actual_returns)[0, 1]
-            mse = np.mean(
-                [(p - a) ** 2 for p, a in zip(predicted_returns, actual_returns)]
+            correlation = float(np.corrcoef(predicted_returns, actual_returns)[0, 1])
+            mse = float(
+                np.mean(
+                    [(p - a) ** 2 for p, a in zip(predicted_returns, actual_returns)]
+                )
             )
-            mae = np.mean(
-                [abs(p - a) for p, a in zip(predicted_returns, actual_returns)]
+            mae = float(
+                np.mean([abs(p - a) for p, a in zip(predicted_returns, actual_returns)])
             )
 
             accuracy_stats = {
@@ -902,7 +918,7 @@ class QlibFactorExplainer:
 
         # 聚合所有因子贡献度
         all_factor_contributions = []
-        factor_names = set()
+        factor_names: Any = set()
 
         for explanation in explanations:
             all_factor_contributions.extend(explanation.factor_contributions)
@@ -925,7 +941,7 @@ class QlibFactorExplainer:
 
         return cluster_result
 
-    def _save_explanation(self, explanation: FactorExplanation):
+    def _save_explanation(self, explanation: FactorExplanation) -> Any:
         """保存解释结果"""
         try:
             explanation_file = self.storage_path / f"{explanation.explanation_id}.json"

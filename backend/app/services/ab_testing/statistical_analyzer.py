@@ -2,9 +2,8 @@
 统计显著性分析器
 实现A/B测试结果分析，提供统计显著性检验
 """
-import json
-import math
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -72,13 +71,13 @@ class StatisticalTestResult:
             "p_value": self.p_value,
             "degrees_of_freedom": self.degrees_of_freedom,
             "confidence_level": self.confidence_level,
-            "confidence_interval": list(self.confidence_interval)
-            if self.confidence_interval
-            else None,
+            "confidence_interval": (
+                list(self.confidence_interval) if self.confidence_interval else None
+            ),
             "effect_size": self.effect_size,
-            "effect_size_type": self.effect_size_type.value
-            if self.effect_size_type
-            else None,
+            "effect_size_type": (
+                self.effect_size_type.value if self.effect_size_type else None
+            ),
             "power": self.power,
             "sample_size_control": self.sample_size_control,
             "sample_size_treatment": self.sample_size_treatment,
@@ -127,7 +126,7 @@ class ExperimentAnalysisResult:
 class StatisticalTestEngine:
     """统计检验引擎"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.alpha = 0.05  # 显著性水平
         self.power_threshold = 0.8  # 统计功效阈值
 
@@ -142,15 +141,15 @@ class StatisticalTestEngine:
         if equal_var:
             statistic, p_value = ttest_ind(control_data, treatment_data, equal_var=True)
             test_type = TestType.T_TEST
-            df = len(control_data) + len(treatment_data) - 2
+            df: float = float(len(control_data) + len(treatment_data) - 2)
         else:
             statistic, p_value = ttest_ind(
                 control_data, treatment_data, equal_var=False
             )
             test_type = TestType.WELCH_T_TEST
             # Welch-Satterthwaite方程计算自由度
-            s1_sq = np.var(control_data, ddof=1)
-            s2_sq = np.var(treatment_data, ddof=1)
+            s1_sq = float(np.var(control_data, ddof=1))
+            s2_sq = float(np.var(treatment_data, ddof=1))
             n1, n2 = len(control_data), len(treatment_data)
             df = (s1_sq / n1 + s2_sq / n2) ** 2 / (
                 (s1_sq / n1) ** 2 / (n1 - 1) + (s2_sq / n2) ** 2 / (n2 - 1)
@@ -319,7 +318,7 @@ class StatisticalTestEngine:
         chi2_stat, p_value, dof, expected = chi2_contingency(contingency_table)
 
         # 计算Cramér's V
-        n = np.sum(contingency_table)
+        n: float = float(np.sum(contingency_table))
         cramers_v = np.sqrt(chi2_stat / (n * (min(contingency_table.shape) - 1)))
 
         is_significant = p_value < self.alpha
@@ -359,8 +358,8 @@ class StatisticalTestEngine:
 
             # 功效计算
             power = 1 - nct.cdf(t_critical, df, delta) + nct.cdf(-t_critical, df, delta)
-            return min(max(power, 0), 1)
-        except:
+            return float(min(max(power, 0), 1))
+        except Exception:
             return 0.5  # 默认值
 
     def _calculate_power_proportion_test(
@@ -382,8 +381,8 @@ class StatisticalTestEngine:
             z_beta = (abs(p2 - p1) - z_critical * se_null) / se_alt
             power = stats.norm.cdf(z_beta)
 
-            return min(max(power, 0), 1)
-        except:
+            return float(min(max(power, 0), 1))
+        except Exception:
             return 0.5  # 默认值
 
     def _interpret_t_test_result(
@@ -500,7 +499,7 @@ class ExperimentAnalyzer:
             variant_comparisons.append(comparison_result)
 
             # 收集获胜者信息
-            for metric_id, analysis in comparison_result["metric_results"].items():
+            for _metric_id, analysis in comparison_result["metric_results"].items():
                 if (
                     analysis["is_significant"]
                     and analysis["winner"] == treatment_variant.variant_id
@@ -524,7 +523,7 @@ class ExperimentAnalyzer:
 
             winner_counts = Counter(overall_winners)
             overall_winner = winner_counts.most_common(1)[0][0]
-            overall_confidence = np.mean(confidence_scores)
+            overall_confidence = float(np.mean(confidence_scores))
 
         # 生成建议
         recommendation = self._generate_recommendation(
@@ -592,12 +591,14 @@ class ExperimentAnalyzer:
                 "control_value": control_metric.value,
                 "treatment_value": treatment_metric.value,
                 "relative_change": (
-                    (treatment_metric.value - control_metric.value)
-                    / control_metric.value
-                    * 100
-                )
-                if control_metric.value != 0
-                else 0,
+                    (
+                        (treatment_metric.value - control_metric.value)
+                        / control_metric.value
+                        * 100
+                    )
+                    if control_metric.value != 0
+                    else 0
+                ),
                 "test_result": test_result.to_dict(),
                 "winner": winner,
                 "is_significant": test_result.is_significant,
@@ -693,7 +694,9 @@ class ExperimentAnalyzer:
         ci_upper = mean_diff + t_critical * pooled_se
 
         is_significant = p_value < 0.05
-        interpretation = f"{'显著' if is_significant else '不显著'}差异 (p = {p_value:.3f})"
+        interpretation = (
+            f"{'显著' if is_significant else '不显著'}差异 (p = {p_value:.3f})"
+        )
 
         return StatisticalTestResult(
             test_type=TestType.T_TEST,
@@ -715,7 +718,7 @@ class ExperimentAnalyzer:
         self, experiment: ABExperiment, metric_id: str, confidence_level: float
     ) -> Dict[str, Any]:
         """分析指标在所有变体中的表现"""
-        variant_values = {}
+        variant_values: Dict[str, Dict[str, Any]] = {}
 
         for variant in experiment.variants:
             metric_value = self.metrics_collector.calculate_metric(
@@ -731,12 +734,13 @@ class ExperimentAnalyzer:
 
         # 找出最佳表现的变体
         best_variant = None
-        best_value = None
+        best_value: Optional[float] = None
 
         for variant_id, data in variant_values.items():
-            if best_value is None or data["value"] > best_value:
+            value = float(data["value"])
+            if best_value is None or value > best_value:
                 best_variant = variant_id
-                best_value = data["value"]
+                best_value = value
 
         return {
             "metric_id": metric_id,
@@ -757,9 +761,7 @@ class ExperimentAnalyzer:
             return "实验结果无显著差异，建议继续收集数据或重新设计实验"
 
         if overall_confidence < 0.8:
-            return (
-                f"实验组 {overall_winner} 表现较好，但置信度较低（{overall_confidence:.2f}），建议延长实验时间"
-            )
+            return f"实验组 {overall_winner} 表现较好，但置信度较低（{overall_confidence:.2f}），建议延长实验时间"
 
         elif overall_confidence < 0.95:
             return f"实验组 {overall_winner} 表现显著优于对照组，建议谨慎推广"
@@ -785,7 +787,9 @@ class ExperimentAnalyzer:
             "minimum_detectable_effect": 0.05,  # 5%的最小可检测效应
             "statistical_power": 0.8,  # 期望的统计功效
             "significance_level": 0.05,  # 显著性水平
-            "recommendation": "样本量充足" if total_sample_size > 1000 else "建议增加样本量",
+            "recommendation": (
+                "样本量充足" if total_sample_size > 1000 else "建议增加样本量"
+            ),
         }
 
     def _get_total_users(self, experiment: ABExperiment) -> int:

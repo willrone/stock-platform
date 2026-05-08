@@ -5,10 +5,11 @@ FastAPI 应用程序入口点
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.api import api_router
 from app.core.config import settings
@@ -229,9 +230,9 @@ def create_application() -> FastAPI:
 
     # 4. 限流中间件
     rate_limit_config = RateLimitConfig(
-        requests_per_minute=120,  # 增加到120次/分钟
-        requests_per_hour=2000,  # 增加到2000次/小时
-        burst_size=20,  # 增加突发限制到20
+        requests_per_minute=60,
+        requests_per_hour=1000,
+        burst_size=10,
     )
     app.add_middleware(RateLimitMiddleware, config=rate_limit_config)
 
@@ -257,19 +258,35 @@ def create_application() -> FastAPI:
 
     # 添加异常处理器
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request, exc):
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
         """HTTP异常处理"""
         from app.api.v1.schemas import StandardResponse
 
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=StandardResponse(
-                success=False, message=exc.detail, data=None
-            ).model_dump(),
-        )
+        content = StandardResponse(
+            success=False, message=exc.detail, data=None
+        ).model_dump(mode="json")
+        content["detail"] = exc.detail
+        return JSONResponse(status_code=exc.status_code, content=content)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def starlette_http_exception_handler(
+        request: Request, exc: StarletteHTTPException
+    ) -> JSONResponse:
+        """Starlette HTTP异常处理（404/405等路由层异常）"""
+        from app.api.v1.schemas import StandardResponse
+
+        content = StandardResponse(
+            success=False, message=str(exc.detail), data=None
+        ).model_dump(mode="json")
+        content["detail"] = exc.detail
+        return JSONResponse(status_code=exc.status_code, content=content)
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request, exc):
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         """通用异常处理"""
         import logging
 

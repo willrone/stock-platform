@@ -5,9 +5,11 @@ from datetime import datetime
 import pandas as pd
 import pytest
 
-from app.services.qlib.training_engine.pipeline import QlibTrainingPipeline
-from app.services.qlib.training_engine.result_assembler import QlibTrainingResultAssembler
 from app.services.qlib import unified_qlib_training_engine as training_engine_module
+from app.services.qlib.training_engine.pipeline import QlibTrainingPipeline
+from app.services.qlib.training_engine.result_assembler import (
+    QlibTrainingResultAssembler,
+)
 from app.services.qlib.unified_qlib_training_engine import (
     QlibModelType,
     QlibTrainingConfig,
@@ -70,7 +72,10 @@ class TestResultAssembler:
         """两段式旧训练输出应补齐 early stopping 并回填准确率。"""
         assembler = QlibTrainingResultAssembler(QlibTrainingResult)
         model, history, early_stopping = assembler.normalize_training_output(
-            ("mock-model", [{"epoch": 1}],)
+            (
+                "mock-model",
+                [{"epoch": 1}],
+            )
         )
 
         assert model == "mock-model"
@@ -108,7 +113,9 @@ class TestPrepareTrainingDatasetsAdapter:
     """验证训练/验证数据适配器不会把验证集伪装成训练集。"""
 
     @pytest.mark.asyncio
-    async def test_validation_adapter_exposes_valid_segment_lengths(self, monkeypatch) -> None:
+    async def test_validation_adapter_exposes_valid_segment_lengths(
+        self, monkeypatch
+    ) -> None:
         monkeypatch.setattr(training_engine_module, "QLIB_AVAILABLE", True)
         engine = UnifiedQlibTrainingEngine()
         config = QlibTrainingConfig(
@@ -146,7 +153,9 @@ class TestPrepareTrainingDatasetsAdapter:
         assert val_dataset.segments["valid"].shape[0] == 2
 
     @pytest.mark.asyncio
-    async def test_label_normalization_can_follow_qlib_csranknorm(self, monkeypatch) -> None:
+    async def test_label_normalization_can_follow_qlib_csranknorm(
+        self, monkeypatch
+    ) -> None:
         monkeypatch.setattr(training_engine_module, "QLIB_AVAILABLE", True)
         engine = UnifiedQlibTrainingEngine()
         config = QlibTrainingConfig(
@@ -165,7 +174,11 @@ class TestPrepareTrainingDatasetsAdapter:
         base_prices = {"000001.SZ": 10.0, "000002.SZ": 20.0, "000003.SZ": 30.0}
         for code in ["000001.SZ", "000002.SZ", "000003.SZ"]:
             for step in range(4):
-                close_values.append(base_prices[code] + step * (1 if code == "000001.SZ" else 2 if code == "000002.SZ" else 3))
+                close_values.append(
+                    base_prices[code]
+                    + step
+                    * (1 if code == "000001.SZ" else 2 if code == "000002.SZ" else 3)
+                )
         dataset = pd.DataFrame(
             {
                 "$close": close_values,
@@ -176,13 +189,17 @@ class TestPrepareTrainingDatasetsAdapter:
 
         train_dataset, _ = await engine._prepare_training_datasets(dataset, 0.5, config)
         train_labels = train_dataset.segments["train"]["label"]
-        expected = train_labels.groupby(level="datetime", group_keys=False).rank(pct=True)
+        expected = train_labels.groupby(level="datetime", group_keys=False).rank(
+            pct=True
+        )
         expected = (expected - 0.5) * 3.46
 
         pd.testing.assert_series_equal(train_labels, expected, check_names=False)
 
     @pytest.mark.asyncio
-    async def test_label_definition_can_use_cross_sectional_excess_return(self, monkeypatch) -> None:
+    async def test_label_definition_can_use_cross_sectional_excess_return(
+        self, monkeypatch
+    ) -> None:
         monkeypatch.setattr(training_engine_module, "QLIB_AVAILABLE", True)
         engine = UnifiedQlibTrainingEngine()
         config = QlibTrainingConfig(
@@ -214,13 +231,17 @@ class TestPrepareTrainingDatasetsAdapter:
         train_labels = train_dataset.segments["train"]["label"].sort_index()
 
         raw = dataset.copy()
-        raw["label"] = raw.groupby(level="instrument")["$close"].shift(-1) / raw["$close"] - 1
+        raw["label"] = (
+            raw.groupby(level="instrument")["$close"].shift(-1) / raw["$close"] - 1
+        )
         raw = raw.fillna(0.0)
         train_raw = raw[raw.index.get_level_values("datetime").isin(dates[:2])].copy()
         lower = train_raw["label"].quantile(0.01)
         upper = train_raw["label"].quantile(0.99)
         train_raw["label"] = train_raw["label"].clip(lower=lower, upper=upper)
-        expected = train_raw["label"] - train_raw.groupby(level="datetime")["label"].transform("mean")
+        expected = train_raw["label"] - train_raw.groupby(level="datetime")[
+            "label"
+        ].transform("mean")
         expected = expected.sort_index()
 
         pd.testing.assert_series_equal(train_labels, expected, check_names=False)
@@ -243,7 +264,9 @@ class _FakeOfficialAdapter:
 
 
 class TestOfficialEvaluationInputs:
-    def test_extract_evaluation_inputs_reads_single_label_column_from_official_adapter(self) -> None:
+    def test_extract_evaluation_inputs_reads_single_label_column_from_official_adapter(
+        self,
+    ) -> None:
         engine = UnifiedQlibTrainingEngine()
         index = pd.MultiIndex.from_tuples(
             [
@@ -286,18 +309,24 @@ class TestOfficialEvaluationInputs:
         frame = pd.DataFrame(
             {
                 ("feature", "KMID"): [0.1, 0.2, 0.3, 0.4],
-                ("label", "Ref($close, -2) / Ref($close, -1) - 1"): [0.01, -0.02, 0.03, -0.01],
+                ("label", "Ref($close, -2) / Ref($close, -1) - 1"): [
+                    0.01,
+                    -0.02,
+                    0.03,
+                    -0.01,
+                ],
             },
             index=index,
         )
         adapter = _FakeOfficialAdapter(frame)
         predictions = pd.Series([0.02, -0.01, 0.01, -0.03], index=index)
 
-        signal_quality = engine._calculate_signal_quality(adapter, predictions, "验证集")
+        signal_quality = engine._calculate_signal_quality(
+            adapter, predictions, "验证集"
+        )
 
         assert signal_quality["sample_count"] == 4
         assert signal_quality["rank_ic"] is not None
-
 
 
 def test_official_signal_quality_marks_test_scope() -> None:

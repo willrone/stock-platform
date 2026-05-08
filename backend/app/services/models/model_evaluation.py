@@ -9,41 +9,30 @@ import hashlib
 import json
 import pickle
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 
 import numpy as np
-import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from sklearn.model_selection import TimeSeriesSplit
 
-from app.core.database import SessionLocal
+from app.core.error_handler import handle_async_exception
 from app.core.logging import logger as app_logger
 
 logger = app_logger
 
-# 导入统一的错误处理机制
-try:
-    from app.core.error_handler import (
-        DataError,
-        ErrorContext,
-        ErrorSeverity,
-        ModelError,
-        TaskError,
-        handle_async_exception,
-    )
-except ImportError:
-    logger.warning("错误处理模块未找到，使用默认错误处理")
-    ModelError = Exception
-    DataError = Exception
-    TaskError = Exception
-    ErrorSeverity = None
-    ErrorContext = None
-    handle_async_exception = lambda func: func
-
+if TYPE_CHECKING:
+    from .model_storage import ModelStorage
 
 # 从shared_types.py导入共享类型
 try:
@@ -54,7 +43,7 @@ except ImportError:
     SHARED_TYPES_AVAILABLE = False
 
     # 如果导入失败，使用本地定义作为备选
-    class ModelStatus(Enum):
+    class ModelStatus(Enum):  # type: ignore[no-redef]
         """模型状态"""
 
         TRAINING = "training"
@@ -64,7 +53,7 @@ except ImportError:
         ARCHIVED = "archived"
 
     @dataclass
-    class BacktestMetrics:
+    class BacktestMetrics:  # type: ignore[no-redef]
         """回测评估指标"""
 
         # 基础分类指标
@@ -94,7 +83,7 @@ except ImportError:
             return asdict(self)
 
     @dataclass
-    class ModelVersion:
+    class ModelVersion:  # type: ignore[no-redef]
         """模型版本信息"""
 
         model_id: str
@@ -114,7 +103,7 @@ except ImportError:
             result["metrics"] = self.metrics.to_dict()
 
             # 递归转换parameters中的枚举类型
-            def convert_enums(obj):
+            def convert_enums(obj: Any) -> Any:
                 if isinstance(obj, dict):
                     return {k: convert_enums(v) for k, v in obj.items()}
                 elif isinstance(obj, list):
@@ -210,7 +199,7 @@ class FinancialMetricsCalculator:
                 else:  # 预测下跌，持现金
                     trading_returns.append(0.0)
 
-        return np.array(trading_returns)
+        return cast(np.ndarray, np.array(trading_returns, dtype=float))
 
     @staticmethod
     def calculate_sharpe_ratio(
@@ -221,7 +210,7 @@ class FinancialMetricsCalculator:
             return 0.0
 
         excess_returns = returns - risk_free_rate / 252  # 日化无风险利率
-        return np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252)
+        return float(np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252))
 
     @staticmethod
     def calculate_max_drawdown(returns: np.ndarray) -> float:
@@ -232,7 +221,7 @@ class FinancialMetricsCalculator:
         cumulative_returns = np.cumprod(1 + returns)
         running_max = np.maximum.accumulate(cumulative_returns)
         drawdown = (cumulative_returns - running_max) / running_max
-        return np.min(drawdown)
+        return float(np.min(drawdown))
 
     @staticmethod
     def calculate_var(returns: np.ndarray, confidence_level: float = 0.95) -> float:
@@ -240,7 +229,7 @@ class FinancialMetricsCalculator:
         if len(returns) == 0:
             return 0.0
 
-        return np.percentile(returns, (1 - confidence_level) * 100)
+        return float(np.percentile(returns, (1 - confidence_level) * 100))
 
     @staticmethod
     def calculate_calmar_ratio(returns: np.ndarray) -> float:
@@ -254,13 +243,13 @@ class FinancialMetricsCalculator:
         if max_dd == 0:
             return float("inf") if annual_return > 0 else 0.0
 
-        return annual_return / max_dd
+        return float(annual_return / max_dd)
 
 
 class ModelEvaluator:
     """模型评估器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.validator = TimeSeriesValidator(n_splits=5)
         self.metrics_calculator = FinancialMetricsCalculator()
 
@@ -291,11 +280,11 @@ class ModelEvaluator:
         # 时间序列交叉验证
         splits = self.validator.split(X, y)
 
-        all_predictions = []
-        all_true_labels = []
-        all_returns = []
+        all_predictions: List[Any] = []
+        all_true_labels: List[Any] = []
+        all_returns: List[float] = []
 
-        for fold, (train_idx, test_idx) in enumerate(splits):
+        for fold, (_train_idx, test_idx) in enumerate(splits):
             logger.info(f"评估第 {fold + 1}/{len(splits)} 折")
 
             X_test = X[test_idx]
@@ -327,56 +316,76 @@ class ModelEvaluator:
                     outputs = model(X_test_tensor)
                     predictions = torch.argmax(outputs, dim=1).cpu().numpy()
 
+            predictions_array = np.asarray(predictions)
+            y_test_array = np.asarray(y_test).flatten()
+            aligned_length = min(len(predictions_array), len(y_test_array))
+            predictions_array = predictions_array[:aligned_length]
+            y_test_array = y_test_array[:aligned_length]
+
             # 计算收益率
             fold_returns = self.metrics_calculator.calculate_returns(
-                predictions, prices_test
+                predictions_array, prices_test
             )
 
-            all_predictions.extend(predictions)
-            all_true_labels.extend(y_test)
+            all_predictions.extend(predictions_array)
+            all_true_labels.extend(y_test_array)
             all_returns.extend(fold_returns)
 
         # 转换为numpy数组
-        all_predictions = np.array(all_predictions)
-        all_true_labels = np.array(all_true_labels)
-        all_returns = np.array(all_returns)
+        all_predictions_array = np.array(all_predictions)
+        all_true_labels_array = np.array(all_true_labels)
+        all_returns_array = np.array(all_returns, dtype=float)
 
         # 计算分类指标
-        accuracy = accuracy_score(all_true_labels, all_predictions)
-        precision = precision_score(all_true_labels, all_predictions, zero_division=0)
-        recall = recall_score(all_true_labels, all_predictions, zero_division=0)
-        f1 = f1_score(all_true_labels, all_predictions, zero_division=0)
+        accuracy = float(accuracy_score(all_true_labels_array, all_predictions_array))
+        precision = float(
+            precision_score(
+                all_true_labels_array, all_predictions_array, zero_division=0
+            )
+        )
+        recall = float(
+            recall_score(all_true_labels_array, all_predictions_array, zero_division=0)
+        )
+        f1 = float(
+            f1_score(all_true_labels_array, all_predictions_array, zero_division=0)
+        )
 
         # 计算金融指标
-        total_return = np.prod(1 + all_returns) - 1
-        sharpe_ratio = self.metrics_calculator.calculate_sharpe_ratio(all_returns)
-        max_drawdown = self.metrics_calculator.calculate_max_drawdown(all_returns)
+        total_return = float(np.prod(1 + all_returns_array) - 1)
+        sharpe_ratio = self.metrics_calculator.calculate_sharpe_ratio(all_returns_array)
+        max_drawdown = self.metrics_calculator.calculate_max_drawdown(all_returns_array)
         win_rate = (
-            np.sum(all_returns > 0) / len(all_returns) if len(all_returns) > 0 else 0
+            float(np.sum(all_returns_array > 0) / len(all_returns_array))
+            if len(all_returns_array) > 0
+            else 0.0
         )
 
         # 计算盈亏比
-        winning_trades = all_returns[all_returns > 0]
-        losing_trades = all_returns[all_returns < 0]
+        winning_trades = all_returns_array[all_returns_array > 0]
+        losing_trades = all_returns_array[all_returns_array < 0]
 
         if len(losing_trades) > 0 and np.mean(losing_trades) != 0:
-            profit_factor = abs(np.sum(winning_trades) / np.sum(losing_trades))
+            profit_factor: float = float(
+                abs(np.sum(winning_trades) / np.sum(losing_trades))
+            )
         else:
             profit_factor = float("inf") if len(winning_trades) > 0 else 0.0
 
         # 计算风险指标
-        volatility = np.std(all_returns) * np.sqrt(252)
-        var_95 = self.metrics_calculator.calculate_var(all_returns)
-        calmar_ratio = self.metrics_calculator.calculate_calmar_ratio(all_returns)
+        volatility = float(np.std(all_returns_array) * np.sqrt(252))
+        var_95 = self.metrics_calculator.calculate_var(all_returns_array)
+        calmar_ratio = self.metrics_calculator.calculate_calmar_ratio(all_returns_array)
 
         # 计算交易指标
-        total_trades = len(all_returns)
-        avg_trade_return = np.mean(all_returns) if len(all_returns) > 0 else 0
+        total_trades = len(all_returns_array)
+        avg_trade_return = (
+            float(np.mean(all_returns_array)) if len(all_returns_array) > 0 else 0.0
+        )
 
         # 计算最大连续亏损
         consecutive_losses = 0
         max_consecutive_losses = 0
-        for ret in all_returns:
+        for ret in all_returns_array:
             if ret < 0:
                 consecutive_losses += 1
                 max_consecutive_losses = max(max_consecutive_losses, consecutive_losses)
@@ -401,14 +410,20 @@ class ModelEvaluator:
             max_consecutive_losses=max_consecutive_losses,
         )
 
-        logger.info(f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}")
+        logger.info(
+            f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}"
+        )
         return metrics
 
 
 class ModelVersionManager:
     """模型版本管理器"""
 
-    def __init__(self, models_dir: str = None, storage: "ModelStorage" = None):
+    def __init__(
+        self,
+        models_dir: Optional[str] = None,
+        storage: Optional["ModelStorage"] = None,
+    ) -> None:
         # 使用配置中的路径，如果没有提供则使用默认配置
         from app.core.config import settings
 
@@ -429,12 +444,12 @@ class ModelVersionManager:
         self.versions_dir = self.models_dir / "versions"
         self.versions_dir.mkdir(parents=True, exist_ok=True)
 
-    def _load_versions(self) -> Dict[str, List[Dict]]:
+    def _load_versions(self) -> Dict[str, List[Dict[str, Any]]]:
         """加载版本信息"""
         if self.versions_file.exists():
             try:
                 with open(self.versions_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast(Dict[str, List[Dict[str, Any]]], json.load(f))
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"版本文件格式错误，将备份并重新创建: {e}")
                 # 备份损坏的文件
@@ -450,11 +465,11 @@ class ModelVersionManager:
                 return {}
         return {}
 
-    def _save_versions(self, versions: Dict[str, List[Dict]]):
+    def _save_versions(self, versions: Dict[str, List[Dict[str, Any]]]) -> None:
         """保存版本信息"""
 
         # 递归转换不可序列化的对象（如枚举）
-        def convert_to_serializable(obj):
+        def convert_to_serializable(obj: Any) -> Any:
             if isinstance(obj, dict):
                 return {k: convert_to_serializable(v) for k, v in obj.items()}
             elif isinstance(obj, list):

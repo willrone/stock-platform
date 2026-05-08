@@ -36,7 +36,9 @@ class RegressionCaseResult:
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="运行 strict-baseline regression runner")
+    parser = argparse.ArgumentParser(
+        description="运行 strict-baseline regression runner"
+    )
     parser.add_argument("--db-path", type=Path, default=None, help="SQLite 数据库路径")
     parser.add_argument(
         "--manifest-path",
@@ -52,7 +54,9 @@ def parse_args() -> argparse.Namespace:
         help="忽略 sha256 指纹，只校验配置、指标与长度",
     )
     parser.add_argument("--summary-json", type=Path, default=None, help="JSON 摘要输出")
-    parser.add_argument("--summary-md", type=Path, default=None, help="Markdown 摘要输出")
+    parser.add_argument(
+        "--summary-md", type=Path, default=None, help="Markdown 摘要输出"
+    )
     parser.add_argument("--junit-xml", type=Path, default=None, help="JUnit XML 输出")
     return parser.parse_args()
 

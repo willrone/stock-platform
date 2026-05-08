@@ -9,26 +9,26 @@ local enhanced pipeline.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 
-class OfficialDataset(StrEnum):
+class OfficialDataset(str, Enum):
     ALPHA158 = "alpha158"
     ALPHA360 = "alpha360"
 
 
-class OfficialMarket(StrEnum):
+class OfficialMarket(str, Enum):
     CSI300 = "csi300"
     CSI500 = "csi500"
 
 
 @dataclass(frozen=True)
 class OfficialSegments:
-    train: tuple[str, str]
-    valid: tuple[str, str]
-    test: tuple[str, str]
+    train: Tuple[str, str]
+    valid: Tuple[str, str]
+    test: Tuple[str, str]
 
 
 @dataclass(frozen=True)
@@ -39,8 +39,8 @@ class OfficialWorkflowConfig:
     handler_class: str
     feature_count: int
     label_expression: str
-    infer_processors: list[dict]
-    learn_processors: list[dict]
+    infer_processors: List[Dict[str, Any]]
+    learn_processors: List[Dict[str, Any]]
     segments: OfficialSegments
     topk: int
     n_drop: int
@@ -59,13 +59,13 @@ DEFAULT_OFFICIAL_SEGMENTS = OfficialSegments(
     test=("2017-01-01", "2020-08-01"),
 )
 
-_DEFAULT_ALPHA158_LEARN_PROCESSORS = [
+_DEFAULT_ALPHA158_LEARN_PROCESSORS: List[Dict[str, Any]] = [
     {"class": "DropnaLabel"},
     {"class": "CSZScoreNorm", "kwargs": {"fields_group": "label"}},
 ]
 
-_DEFAULT_ALPHA360_INFER_PROCESSORS = []
-_DEFAULT_ALPHA360_LEARN_PROCESSORS = [
+_DEFAULT_ALPHA360_INFER_PROCESSORS: List[Dict[str, Any]] = []
+_DEFAULT_ALPHA360_LEARN_PROCESSORS: List[Dict[str, Any]] = [
     {"class": "DropnaLabel"},
     {"class": "CSRankNorm", "kwargs": {"fields_group": "label"}},
 ]
@@ -77,11 +77,11 @@ _DEFAULT_LABEL_EXPRESSION = "Ref($close, -2) / Ref($close, -1) - 1"
 class OfficialDatasetAdapter:
     dataset: Any
     workflow_config: OfficialWorkflowConfig
-    segment_lengths: dict[str, int]
+    segment_lengths: Dict[str, int]
     primary_segment: str = "train"
 
     @property
-    def shape(self) -> tuple[int, int]:
+    def shape(self) -> Tuple[int, int]:
         return (sum(self.segment_lengths.values()), self.workflow_config.feature_count)
 
     @property
@@ -154,11 +154,13 @@ def build_official_lightgbm_workflow_config(
     )
 
 
-def _normalize_instruments_override(instruments_override: Optional[Sequence[str]]) -> Optional[list[str]]:
+def _normalize_instruments_override(
+    instruments_override: Optional[Sequence[str]],
+) -> Optional[List[str]]:
     if not instruments_override:
         return None
 
-    normalized: list[str] = []
+    normalized: List[str] = []
     for instrument in instruments_override:
         value = (instrument or "").strip()
         if not value:
@@ -169,8 +171,8 @@ def _normalize_instruments_override(instruments_override: Optional[Sequence[str]
 
 def build_official_dataset_config(
     workflow: OfficialWorkflowConfig,
-    instruments_override: Optional[list[str]] = None,
-) -> dict[str, Any]:
+    instruments_override: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """Build a DatasetH config mirroring the public Qlib benchmark workflow."""
 
     normalized_instruments = _normalize_instruments_override(instruments_override)
@@ -203,8 +205,10 @@ def build_official_dataset_config(
 
 
 def _count_rows(segment_data: Any) -> int:
-    if hasattr(segment_data, "shape") and getattr(segment_data, "shape"):
-        return int(segment_data.shape[0])
+    if hasattr(segment_data, "shape"):
+        shape = segment_data.shape
+        if shape:
+            return int(shape[0])
     if hasattr(segment_data, "__len__"):
         return int(len(segment_data))
     return 0
@@ -212,20 +216,22 @@ def _count_rows(segment_data: Any) -> int:
 
 def create_official_dataset_adapter(
     workflow: OfficialWorkflowConfig,
-    stock_codes: Optional[list[str]] = None,
-    provider_uri: Optional[str | Path] = None,
-    dataset_factory: Callable[[dict[str, Any]], Any] | None = None,
-    qlib_initializer: Callable[[str | Path], None] | None = None,
+    stock_codes: Optional[List[str]] = None,
+    provider_uri: Optional[Union[str, Path]] = None,
+    dataset_factory: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    qlib_initializer: Optional[Callable[[Union[str, Path]], None]] = None,
 ) -> OfficialDatasetAdapter:
     """Instantiate the official DatasetH and wrap it with lightweight metadata."""
 
-    dataset_config = build_official_dataset_config(workflow, instruments_override=stock_codes)
+    dataset_config = build_official_dataset_config(
+        workflow, instruments_override=stock_codes
+    )
     if provider_uri is not None:
         if qlib_initializer is None:
             import qlib
             from qlib.config import REG_CN
 
-            def qlib_initializer(uri: str | Path) -> None:
+            def qlib_initializer(uri: Union[str, Path]) -> None:
                 qlib.init(provider_uri=str(uri), region=REG_CN, auto_mount=False)
 
         qlib_initializer(provider_uri)
@@ -236,9 +242,11 @@ def create_official_dataset_adapter(
         dataset_factory = init_instance_by_config
 
     dataset = dataset_factory(dataset_config)
-    segment_lengths: dict[str, int] = {}
+    segment_lengths: Dict[str, int] = {}
     for segment in ("train", "valid", "test"):
-        segment_lengths[segment] = _count_rows(dataset.prepare(segment, col_set="label"))
+        segment_lengths[segment] = _count_rows(
+            dataset.prepare(segment, col_set="label")
+        )
 
     return OfficialDatasetAdapter(
         dataset=dataset,

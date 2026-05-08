@@ -2,26 +2,23 @@
 数据版本控制集成服务
 复用现有存储基础设施，添加版本控制接口
 """
+
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, cast
 
 from loguru import logger
 
-from app.services.data.parquet_manager import ParquetManager
 from app.services.data_versioning.lineage_tracker import (
-    DataLineageTracker,
     NodeType,
-    TransformationType,
     data_lineage_tracker,
 )
 from app.services.data_versioning.version_manager import (
     DataType,
-    DataVersionManager,
-    VersionStatus,
     data_version_manager,
 )
 from app.services.events.data_sync_events import (
+    DataSyncEvent,
     DataSyncEventType,
     get_data_sync_event_manager,
 )
@@ -30,7 +27,7 @@ from app.services.events.data_sync_events import (
 class DataVersioningIntegrationService:
     """数据版本控制集成服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.version_manager = data_version_manager
         self.lineage_tracker = data_lineage_tracker
         self.event_manager = get_data_sync_event_manager()
@@ -40,14 +37,22 @@ class DataVersioningIntegrationService:
 
         logger.info("数据版本控制集成服务初始化完成")
 
-    def _register_event_listeners(self):
+    def _register_event_listeners(self) -> None:
         """注册事件监听器"""
         # 监听数据同步事件，自动创建版本
         self.event_manager.register_listener(
-            DataSyncEventType.SYNC_COMPLETED, self._on_data_sync_completed
+            DataSyncEventType.SYNC_COMPLETED,
+            self._on_data_sync_completed_event,
         )
 
-    def _on_data_sync_completed(self, event_data: Dict[str, Any]):
+    def _on_data_sync_completed_event(self, event: DataSyncEvent) -> Any:
+        """数据同步完成事件适配器。"""
+        event_data = event.to_dict()
+        if event.metadata:
+            event_data.update(event.metadata)
+        return self._on_data_sync_completed(event_data)
+
+    def _on_data_sync_completed(self, event_data: Dict[str, Any]) -> Any:
         """数据同步完成事件处理"""
         try:
             stock_code = event_data.get("stock_code")
@@ -64,7 +69,7 @@ class DataVersioningIntegrationService:
         except Exception as e:
             logger.error(f"处理数据同步完成事件失败: {e}")
 
-    def _on_file_downloaded(self, event_data: Dict[str, Any]):
+    def _on_file_downloaded(self, event_data: Dict[str, Any]) -> Any:
         """文件下载事件处理"""
         try:
             file_path = event_data.get("file_path")
@@ -190,7 +195,7 @@ class DataVersioningIntegrationService:
 
     def _create_data_source_node(
         self, stock_code: str, file_path: str, metadata: Dict[str, Any]
-    ):
+    ) -> Any:
         """创建数据源节点"""
         node_id = f"data_source_{stock_code}_{Path(file_path).stem}"
 
@@ -219,7 +224,7 @@ class DataVersioningIntegrationService:
     ) -> List[str]:
         """使用版本ID追踪模型训练"""
         # 在血缘追踪器中记录模型训练
-        lineage_ids = self.lineage_tracker.track_model_training(
+        _ = self.lineage_tracker.track_model_training(
             training_data_ids=training_data_version_ids,
             feature_ids=feature_version_ids,
             model_id=model_id,
@@ -288,7 +293,9 @@ class DataVersioningIntegrationService:
                 feature_version.version_id
             )
             if feature_lineage:
-                lineage_info["feature_lineages"].append(feature_lineage)
+                cast(List[Any], lineage_info["feature_lineages"]).append(
+                    feature_lineage
+                )
 
         return lineage_info
 

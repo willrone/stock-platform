@@ -89,97 +89,93 @@ export default function OptimizationTaskList({
           {/* 移动端：卡片列表 */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {tasks.map(task => (
-              <MobileOptimizationCard
-                key={task.task_id}
-                task={task}
-                onViewDetails={onTaskSelect}
-              />
+              <MobileOptimizationCard key={task.task_id} task={task} onViewDetails={onTaskSelect} />
             ))}
           </Box>
 
           {/* 桌面端：表格 */}
           <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>任务名称</TableCell>
-                <TableCell>策略</TableCell>
-                <TableCell>状态</TableCell>
-                <TableCell>进度</TableCell>
-                <TableCell>试验数</TableCell>
-                <TableCell>最佳得分</TableCell>
-                <TableCell>创建时间</TableCell>
-                <TableCell>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {tasks.map(task => (
-                <TableRow key={task.task_id} hover>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {task.task_name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={task.strategy_name} size="small" />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={getStatusText(task.status)}
-                      color={getStatusColor(task.status)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ width: 96 }}>
-                      <LinearProgress
-                        variant="determinate"
-                        value={task.progress ?? 0}
-                        color={task.status === 'failed' ? 'error' : 'primary'}
-                        sx={{ height: 6, borderRadius: 3 }}
-                      />
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    {task.status === 'completed' ? (
-                      <Typography variant="body2">
-                        {task.n_trials ?? 0} / {task.n_trials ?? 0}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        - / {task.n_trials ?? 0}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {task.best_score !== undefined && task.best_score !== null ? (
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                        {typeof task.best_score === 'number'
-                          ? task.best_score.toFixed(4)
-                          : String(task.best_score)}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        -
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="查看详情">
-                      <IconButton size="small" onClick={() => onTaskSelect(task.task_id)}>
-                        <Eye size={16} />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>任务名称</TableCell>
+                  <TableCell>策略</TableCell>
+                  <TableCell>状态</TableCell>
+                  <TableCell>进度</TableCell>
+                  <TableCell>试验数</TableCell>
+                  <TableCell>最佳得分</TableCell>
+                  <TableCell>创建时间</TableCell>
+                  <TableCell>操作</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {tasks.map(task => (
+                  <TableRow key={task.task_id} hover>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {task.task_name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={task.strategy_name} size="small" />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={getStatusText(task.status)}
+                        color={getStatusColor(task.status)}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ width: 96 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={task.progress ?? 0}
+                          color={task.status === 'failed' ? 'error' : 'primary'}
+                          sx={{ height: 6, borderRadius: 3 }}
+                        />
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {task.status === 'completed' ? (
+                        <Typography variant="body2">
+                          {task.n_trials ?? 0} / {task.n_trials ?? 0}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          - / {task.n_trials ?? 0}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {task.best_score !== undefined && task.best_score !== null ? (
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
+                          {typeof task.best_score === 'number'
+                            ? task.best_score.toFixed(4)
+                            : String(task.best_score)}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          -
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title="查看详情">
+                        <IconButton size="small" onClick={() => onTaskSelect(task.task_id)}>
+                          <Eye size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </Box>
         </Box>
       )}

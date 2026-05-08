@@ -2,15 +2,15 @@
 健康检查和性能测试服务
 提供部署后的自动验证和性能基准测试
 """
+
 import asyncio
-import json
 import statistics
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict
 
 import numpy as np
 from loguru import logger
@@ -103,9 +103,9 @@ class PerformanceTestResult:
             "test_type": self.test_type.value,
             "duration_seconds": self.duration_seconds,
             "metrics": self.metrics.to_dict(),
-            "baseline_metrics": self.baseline_metrics.to_dict()
-            if self.baseline_metrics
-            else None,
+            "baseline_metrics": (
+                self.baseline_metrics.to_dict() if self.baseline_metrics else None
+            ),
             "passed": self.passed,
             "message": self.message,
             "timestamp": self.timestamp.isoformat(),
@@ -113,19 +113,31 @@ class PerformanceTestResult:
         }
 
 
+class _HealthCheckRegistration(TypedDict):
+    func: Callable[..., Any]
+    description: str
+
+
+class _PerformanceTestRegistration(TypedDict):
+    func: Callable[..., Any]
+    description: str
+
+
 class ModelHealthChecker:
     """模型健康检查器"""
 
-    def __init__(self):
-        self.checks: Dict[str, Callable] = {}
+    def __init__(self) -> None:
+        self.checks: Dict[str, _HealthCheckRegistration] = {}
         self.check_history: List[HealthCheckResult] = []
 
-    def register_check(self, name: str, check_func: Callable, description: str = ""):
+    def register_check(
+        self, name: str, check_func: Callable[..., Any], description: str = ""
+    ) -> None:
         """注册健康检查函数"""
         self.checks[name] = {"func": check_func, "description": description}
         logger.info(f"注册健康检查: {name}")
 
-    async def run_check(self, check_name: str, **kwargs) -> HealthCheckResult:
+    async def run_check(self, check_name: str, **kwargs: Any) -> HealthCheckResult:
         """运行单个健康检查"""
         if check_name not in self.checks:
             return HealthCheckResult(
@@ -140,7 +152,7 @@ class ModelHealthChecker:
 
         try:
             check_info = self.checks[check_name]
-            check_func = check_info["func"]
+            check_func: Callable[..., Any] = check_info["func"]
 
             if asyncio.iscoroutinefunction(check_func):
                 result = await check_func(**kwargs)
@@ -191,7 +203,7 @@ class ModelHealthChecker:
             logger.error(f"健康检查失败 {check_name}: {e}")
             return health_result
 
-    async def run_all_checks(self, **kwargs) -> Dict[str, HealthCheckResult]:
+    async def run_all_checks(self, **kwargs: Any) -> Dict[str, HealthCheckResult]:
         """运行所有健康检查"""
         results = {}
 
@@ -232,17 +244,19 @@ class ModelHealthChecker:
 class PerformanceTester:
     """性能测试器"""
 
-    def __init__(self):
-        self.test_functions: Dict[str, Callable] = {}
+    def __init__(self) -> None:
+        self.test_functions: Dict[str, _PerformanceTestRegistration] = {}
         self.baseline_metrics: Dict[str, PerformanceMetrics] = {}
         self.test_history: List[PerformanceTestResult] = []
 
-    def register_test(self, name: str, test_func: Callable, description: str = ""):
+    def register_test(
+        self, name: str, test_func: Callable[..., Any], description: str = ""
+    ) -> None:
         """注册性能测试函数"""
         self.test_functions[name] = {"func": test_func, "description": description}
         logger.info(f"注册性能测试: {name}")
 
-    def set_baseline(self, test_name: str, metrics: PerformanceMetrics):
+    def set_baseline(self, test_name: str, metrics: PerformanceMetrics) -> None:
         """设置基准指标"""
         self.baseline_metrics[test_name] = metrics
         logger.info(f"设置基准指标: {test_name}")
@@ -252,7 +266,7 @@ class PerformanceTester:
         test_name: str,
         duration_seconds: int = 60,
         concurrent_users: int = 1,
-        **kwargs,
+        **kwargs: Any,
     ) -> PerformanceTestResult:
         """运行性能测试"""
         if test_name not in self.test_functions:
@@ -271,7 +285,7 @@ class PerformanceTester:
 
         try:
             test_info = self.test_functions[test_name]
-            test_func = test_info["func"]
+            test_func: Callable[..., Any] = test_info["func"]
 
             # 运行性能测试
             if asyncio.iscoroutinefunction(test_func):
@@ -371,7 +385,11 @@ class PerformanceTester:
             return True, "性能测试通过（符合基准要求）"
 
     async def run_load_test(
-        self, test_name: str, max_users: int = 100, ramp_up_seconds: int = 60, **kwargs
+        self,
+        test_name: str,
+        max_users: int = 100,
+        ramp_up_seconds: int = 60,
+        **kwargs: Any,
     ) -> PerformanceTestResult:
         """运行负载测试"""
         logger.info(f"开始负载测试: {test_name}, 最大用户数: {max_users}")
@@ -489,7 +507,7 @@ class PerformanceTester:
 class HealthMonitor:
     """健康监控服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.health_checker = ModelHealthChecker()
         self.performance_tester = PerformanceTester()
 
@@ -499,37 +517,47 @@ class HealthMonitor:
 
         logger.info("健康监控服务初始化完成")
 
-    def _register_default_checks(self):
+    def _register_default_checks(self) -> None:
         """注册默认健康检查"""
 
         # 模型文件检查
-        async def model_file_check(model_path: str = None, **kwargs) -> Dict[str, Any]:
+        async def model_file_check(
+            model_path: Optional[str] = None, **kwargs: Any
+        ) -> Dict[str, Any]:
             if not model_path:
-                return {"status": "unhealthy", "message": "未提供模型路径", "details": {}}
-
-            model_path = Path(model_path)
-            if not model_path.exists():
                 return {
                     "status": "unhealthy",
-                    "message": f"模型文件不存在: {model_path}",
-                    "details": {"model_path": str(model_path)},
+                    "message": "未提供模型路径",
+                    "details": {},
                 }
 
-            file_size = model_path.stat().st_size
+            model_file = Path(model_path)
+            if not model_file.exists():
+                return {
+                    "status": "unhealthy",
+                    "message": f"模型文件不存在: {model_file}",
+                    "details": {"model_path": str(model_file)},
+                }
+
+            file_size = model_file.stat().st_size
             return {
                 "status": "healthy",
                 "message": "模型文件存在",
                 "details": {
-                    "model_path": str(model_path),
+                    "model_path": str(model_file),
                     "file_size_bytes": file_size,
                     "file_size_mb": file_size / (1024 * 1024),
                 },
             }
 
-        self.health_checker.register_check("model_file", model_file_check, "检查模型文件是否存在")
+        self.health_checker.register_check(
+            "model_file", model_file_check, "检查模型文件是否存在"
+        )
 
         # 模型加载检查
-        async def model_load_check(model_path: str = None, **kwargs) -> Dict[str, Any]:
+        async def model_load_check(
+            model_path: Optional[str] = None, **kwargs: Any
+        ) -> Dict[str, Any]:
             if not model_path:
                 return {"status": "unhealthy", "message": "未提供模型路径"}
 
@@ -560,7 +588,7 @@ class HealthMonitor:
         )
 
         # API连通性检查
-        async def api_connectivity_check(**kwargs) -> Dict[str, Any]:
+        async def api_connectivity_check(**kwargs: Any) -> Dict[str, Any]:
             try:
                 # 模拟API连通性检查
                 await asyncio.sleep(0.1)  # 模拟网络延迟
@@ -581,15 +609,15 @@ class HealthMonitor:
             "api_connectivity", api_connectivity_check, "检查API连通性"
         )
 
-    def _register_default_tests(self):
+    def _register_default_tests(self) -> None:
         """注册默认性能测试"""
 
         # 模型预测性能测试
         async def model_prediction_test(
             duration_seconds: int = 60,
             concurrent_users: int = 1,
-            model_path: str = None,
-            **kwargs,
+            model_path: Optional[str] = None,
+            **kwargs: Any,
         ) -> PerformanceMetrics:
             if not model_path:
                 raise ValueError("未提供模型路径")
@@ -615,11 +643,11 @@ class HealthMonitor:
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
                     for result in results:
-                        if isinstance(result, Exception):
+                        if isinstance(result, BaseException):
                             error_count += 1
                         else:
                             success_count += 1
-                            response_times.append(result)
+                            response_times.append(float(result))
 
                     await asyncio.sleep(0.1)  # 控制请求频率
 
@@ -659,10 +687,10 @@ class HealthMonitor:
             await asyncio.sleep(0.01 + np.random.exponential(0.05))  # 模拟预测时间
 
             # 随机选择测试数据
-            sample_data = test_data[np.random.randint(0, len(test_data))]
+            test_data[np.random.randint(0, len(test_data))]
 
             # 模拟预测结果
-            prediction = np.random.random()
+            np.random.random()
 
             return (time.time() - start_time) * 1000  # 返回响应时间（毫秒）
 
@@ -670,7 +698,7 @@ class HealthMonitor:
             logger.error(f"模拟预测请求失败: {e}")
             raise
 
-    async def run_health_checks(self, **kwargs) -> Dict[str, Any]:
+    async def run_health_checks(self, **kwargs: Any) -> Dict[str, Any]:
         """运行健康检查"""
         results = await self.health_checker.run_all_checks(**kwargs)
         overall_status = self.health_checker.get_overall_health(results)
@@ -681,17 +709,21 @@ class HealthMonitor:
             "timestamp": datetime.now().isoformat(),
         }
 
-    async def run_performance_test(self, test_name: str, **kwargs) -> Dict[str, Any]:
+    async def run_performance_test(
+        self, test_name: str, **kwargs: Any
+    ) -> Dict[str, Any]:
         """运行性能测试"""
         result = await self.performance_tester.run_performance_test(test_name, **kwargs)
         return result.to_dict()
 
-    async def run_load_test(self, test_name: str, **kwargs) -> Dict[str, Any]:
+    async def run_load_test(self, test_name: str, **kwargs: Any) -> Dict[str, Any]:
         """运行负载测试"""
         result = await self.performance_tester.run_load_test(test_name, **kwargs)
         return result.to_dict()
 
-    def set_performance_baseline(self, test_name: str, metrics: Dict[str, Any]):
+    def set_performance_baseline(
+        self, test_name: str, metrics: Dict[str, Any]
+    ) -> None:
         """设置性能基准"""
         baseline_metrics = PerformanceMetrics(**metrics)
         self.performance_tester.set_baseline(test_name, baseline_metrics)

@@ -5,9 +5,9 @@
 
 from __future__ import annotations  # 延迟评估类型注解
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from loguru import logger
@@ -20,7 +20,7 @@ from app.services.data.stock_data_loader import StockDataLoader
 class IncrementalUpdater:
     """增量更新器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.data_loader = StockDataLoader()
         self.format_converter = QlibFormatConverter()
 

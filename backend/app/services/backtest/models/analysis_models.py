@@ -79,7 +79,7 @@ class EnhancedPositionAnalysis:
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        result = {
+        result: Dict[str, Any] = {
             "stock_performance": self.stock_performance,
         }
         if self.position_weights:
@@ -140,9 +140,9 @@ class EnhancedBacktestResult:
     # 月度收益分析
     monthly_returns: Optional[List[MonthlyReturnsAnalysis]] = None
     # 持仓分析（支持增强格式）
-    position_analysis: Optional[
-        Any
-    ] = None  # 可以是List[PositionAnalysis]或EnhancedPositionAnalysis
+    position_analysis: Optional[Any] = (
+        None  # 可以是List[PositionAnalysis]或EnhancedPositionAnalysis
+    )
     # 基准对比数据
     benchmark_data: Optional[Dict[str, Any]] = None
     # 回撤详细分析

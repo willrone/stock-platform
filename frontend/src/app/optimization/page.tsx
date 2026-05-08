@@ -19,9 +19,12 @@ const CreateOptimizationTaskForm = dynamic(
   () => import('../../components/optimization/CreateOptimizationTaskForm'),
   { ssr: false }
 );
-const OptimizationTaskList = dynamic(() => import('../../components/optimization/OptimizationTaskList'), {
-  ssr: false,
-});
+const OptimizationTaskList = dynamic(
+  () => import('../../components/optimization/OptimizationTaskList'),
+  {
+    ssr: false,
+  }
+);
 const OptimizationTaskDetail = dynamic(
   () => import('../../components/optimization/OptimizationTaskDetail'),
   { ssr: false }

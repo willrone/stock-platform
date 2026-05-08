@@ -10,12 +10,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional, Union
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union, cast
 
-import numpy as np
 import pandas as pd
 import psutil
-import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
@@ -45,7 +43,7 @@ class MemoryMonitor:
 
     def get_current_usage(self) -> int:
         """获取当前内存使用量（字节）"""
-        return self.process.memory_info().rss
+        return cast(int, self.process.memory_info().rss)
 
     def check_memory(self) -> Dict[str, Any]:
         """检查内存状态"""
@@ -66,7 +64,7 @@ class MemoryMonitor:
             "critical_threshold_mb": self.critical_threshold / (1024 * 1024),
         }
 
-    def force_gc(self):
+    def force_gc(self) -> None:
         """强制垃圾回收"""
         gc.collect()
 
@@ -103,8 +101,10 @@ class ChunkedDataReader:
                     await asyncio.sleep(0.1)  # 让出控制权
 
                 # 读取数据块
-                table = parquet_file.read_row_group_batch(
-                    row_groups=range(batch_start // 10000, (batch_end - 1) // 10000 + 1)
+                table = parquet_file.read_row_groups(
+                    row_groups=list(
+                        range(batch_start // 10000, (batch_end - 1) // 10000 + 1)
+                    )
                 )
                 df_chunk = table.to_pandas()
 
@@ -112,7 +112,9 @@ class ChunkedDataReader:
                 if len(df_chunk) > self.chunk_size:
                     df_chunk = df_chunk.iloc[: self.chunk_size]
 
-                logger.debug(f"读取数据块: {batch_start}-{batch_end}, 大小: {len(df_chunk)}")
+                logger.debug(
+                    f"读取数据块: {batch_start}-{batch_end}, 大小: {len(df_chunk)}"
+                )
                 yield df_chunk
 
                 # 让出控制权，避免阻塞
@@ -123,7 +125,7 @@ class ChunkedDataReader:
             raise
 
     async def read_csv_chunks(
-        self, file_path: Path, **kwargs
+        self, file_path: Path, **kwargs: Any
     ) -> AsyncIterator[pd.DataFrame]:
         """异步读取CSV文件分块"""
         try:
@@ -254,7 +256,7 @@ class StreamProcessor:
 
     async def _flush_chunks(
         self, chunks: List[pd.DataFrame], output_path: Optional[Path]
-    ):
+    ) -> Any:
         """刷新数据块到文件"""
         if not chunks or not output_path:
             return
@@ -369,7 +371,7 @@ class StreamProcessor:
         """获取内存统计信息"""
         return self.memory_monitor.check_memory()
 
-    async def close(self):
+    async def close(self) -> None:
         """关闭处理器"""
         self.executor.shutdown(wait=True)
 

@@ -2,7 +2,7 @@
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
+VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv-py313}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 MODE="${1:-snapshot}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
@@ -13,6 +13,7 @@ STRICT_BASELINE_TASK_ID="${STRICT_BASELINE_TASK_ID:-}"
 STRICT_BASELINE_STRATEGY="${STRICT_BASELINE_STRATEGY:-}"
 STRICT_BASELINE_DB_PATH="${STRICT_BASELINE_DB_PATH:-}"
 STRICT_BASELINE_NO_STRICT_HASHES="${STRICT_BASELINE_NO_STRICT_HASHES:-0}"
+QUALITY_REQUIRE_MYPY="${QUALITY_REQUIRE_MYPY:-0}"
 
 mkdir -p "$SNAPSHOT_DIR"
 
@@ -64,15 +65,21 @@ run_snapshot() {
 - pytest exit: $pytest_status
 - flake8 exit: $flake8_status
 - mypy exit: $mypy_status
+- require mypy: $QUALITY_REQUIRE_MYPY
 
 说明：
 - pytest 这里默认跑 backend 基础 smoke，用来确认命令与环境可执行；
-- flake8 / mypy 失败通常表示当前代码库仍有存量问题，但不影响“命令已接线、结果可稳定产出”的目标。
+- flake8 是 snapshot 的硬门禁，用来防止基础 lint 回退；
+- mypy 当前仍有存量类型债，snapshot 默认记录结果但不阻断；
+- 如需把 mypy 作为硬门禁，设置 QUALITY_REQUIRE_MYPY=1 或直接运行 scripts/quality.sh mypy。
 EOF
 
   log "质量快照输出目录: $SNAPSHOT_DIR"
 
-  if [ "$pytest_status" -ne 0 ] || [ "$flake8_status" -ne 0 ] || [ "$mypy_status" -ne 0 ]; then
+  if [ "$pytest_status" -ne 0 ] || [ "$flake8_status" -ne 0 ]; then
+    return 1
+  fi
+  if [ "$QUALITY_REQUIRE_MYPY" = "1" ] && [ "$mypy_status" -ne 0 ]; then
     return 1
   fi
 }

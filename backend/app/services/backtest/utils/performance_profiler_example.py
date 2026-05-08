@@ -5,7 +5,8 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any, Callable, TypeVar, cast
 
 from ..core.backtest_engine import BacktestConfig
 from ..execution.backtest_executor import BacktestExecutor
@@ -15,8 +16,10 @@ from .performance_profiler import (
     profile_function,
 )
 
+F = TypeVar("F", bound=Callable[..., Any])
 
-async def example_basic_usage():
+
+async def example_basic_usage() -> None:
     """基础使用示例"""
     # 创建性能分析器
     profiler = BacktestPerformanceProfiler(enable_memory_tracking=True)
@@ -50,7 +53,7 @@ async def example_basic_usage():
     profiler.save_report("backtest_performance.json")
 
 
-async def example_with_context_manager():
+async def example_with_context_manager() -> None:
     """使用上下文管理器示例"""
     profiler = BacktestPerformanceProfiler()
     profiler.start_backtest()
@@ -71,13 +74,15 @@ async def example_with_context_manager():
     profiler.print_summary()
 
 
-async def example_with_decorator():
+async def example_with_decorator() -> None:
     """使用装饰器示例"""
     profiler = BacktestPerformanceProfiler()
 
     # 使用装饰器监控函数调用
-    @profile_function(profiler)
-    def expensive_operation():
+    expensive_operation_decorator = cast(Callable[[F], F], profile_function(profiler))
+
+    @expensive_operation_decorator
+    def expensive_operation() -> None:
         # ... 耗时操作 ...
         pass
 
@@ -85,7 +90,7 @@ async def example_with_decorator():
     expensive_operation()
 
 
-async def example_integrated_with_executor():
+async def example_integrated_with_executor() -> tuple[Any, Any]:
     """与回测执行器集成的示例"""
     profiler = BacktestPerformanceProfiler(enable_memory_tracking=True)
     executor = BacktestExecutor(data_dir="backend/data")
@@ -122,14 +127,14 @@ async def example_integrated_with_executor():
     return result, report
 
 
-async def example_parallel_efficiency_analysis():
+async def example_parallel_efficiency_analysis() -> None:
     """并行化效率分析示例"""
     profiler = BacktestPerformanceProfiler()
 
     import time
     from concurrent.futures import ThreadPoolExecutor
 
-    def process_stock(stock_code: str):
+    def process_stock(stock_code: str) -> str:
         """处理单只股票"""
         time.sleep(0.1)  # 模拟处理时间
         return f"Processed {stock_code}"
@@ -138,13 +143,13 @@ async def example_parallel_efficiency_analysis():
 
     # 顺序执行
     start = time.perf_counter()
-    results_sequential = [process_stock(code) for code in stock_codes]
+    [process_stock(code) for code in stock_codes]
     sequential_time = time.perf_counter() - start
 
     # 并行执行
     start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=4) as executor:
-        results_parallel = list(executor.map(process_stock, stock_codes))
+        list(executor.map(process_stock, stock_codes))
     parallel_time = time.perf_counter() - start
 
     # 记录并行化效率
@@ -159,13 +164,15 @@ async def example_parallel_efficiency_analysis():
     report = profiler.generate_report()
     print(f"顺序执行时间: {sequential_time:.2f}秒")
     print(f"并行执行时间: {parallel_time:.2f}秒")
-    print(f"加速比: {report['parallel_efficiency']['stock_processing']['speedup']:.2f}x")
+    print(
+        f"加速比: {report['parallel_efficiency']['stock_processing']['speedup']:.2f}x"
+    )
     print(
         f"效率: {report['parallel_efficiency']['stock_processing']['efficiency_percent']:.1f}%"
     )
 
 
-async def example_memory_analysis():
+async def example_memory_analysis() -> None:
     """内存分析示例"""
     profiler = BacktestPerformanceProfiler(enable_memory_tracking=True)
 

@@ -2,15 +2,15 @@
 部署策略管理器
 支持蓝绿部署、金丝雀发布和自动回滚机制
 """
+
 import asyncio
 import hashlib
-import json
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 from loguru import logger
 
@@ -136,28 +136,34 @@ class DeploymentRecord:
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "error_message": self.error_message,
             "rollback_info": self.rollback_info,
         }
 
 
+HealthCheckFunc = Callable[
+    [DeploymentEnvironment],
+    Union[Dict[str, Any], Awaitable[Dict[str, Any]]],
+]
+
+
 class HealthChecker:
     """健康检查器"""
 
-    def __init__(self):
-        self.checks: Dict[str, Callable] = {}
+    def __init__(self) -> None:
+        self.checks: Dict[str, HealthCheckFunc] = {}
 
-    def register_check(self, name: str, check_func: Callable):
+    def register_check(self, name: str, check_func: HealthCheckFunc) -> None:
         """注册健康检查函数"""
         self.checks[name] = check_func
         logger.info(f"注册健康检查: {name}")
 
     async def run_checks(self, environment: DeploymentEnvironment) -> Dict[str, Any]:
         """运行所有健康检查"""
-        results = {}
+        results: Dict[str, Any] = {}
         overall_healthy = True
 
         for name, check_func in self.checks.items():
@@ -180,13 +186,19 @@ class HealthChecker:
         return results
 
 
+MetricsCollectorFunc = Callable[
+    [DeploymentEnvironment],
+    Union[float, Awaitable[float]],
+]
+
+
 class MetricsCollector:
     """指标收集器"""
 
-    def __init__(self):
-        self.collectors: Dict[str, Callable] = {}
+    def __init__(self) -> None:
+        self.collectors: Dict[str, MetricsCollectorFunc] = {}
 
-    def register_collector(self, name: str, collector_func: Callable):
+    def register_collector(self, name: str, collector_func: MetricsCollectorFunc) -> None:
         """注册指标收集函数"""
         self.collectors[name] = collector_func
         logger.info(f"注册指标收集器: {name}")
@@ -195,7 +207,7 @@ class MetricsCollector:
         self, environment: DeploymentEnvironment
     ) -> Dict[str, float]:
         """收集所有指标"""
-        metrics = {}
+        metrics: Dict[str, float] = {}
 
         for name, collector_func in self.collectors.items():
             try:
@@ -235,7 +247,7 @@ class DeploymentManager:
         self.metrics_collector = MetricsCollector()
 
         # 回调函数
-        self.callbacks: Dict[str, List[Callable]] = {
+        self.callbacks: Dict[str, List[Callable[..., Any]]] = {
             "deployment_started": [],
             "deployment_completed": [],
             "deployment_failed": [],
@@ -248,7 +260,7 @@ class DeploymentManager:
 
         logger.info("部署管理器初始化完成")
 
-    def _register_default_checks(self):
+    def _register_default_checks(self) -> None:
         """注册默认的健康检查和指标收集"""
 
         # 模型文件存在检查
@@ -258,7 +270,10 @@ class DeploymentManager:
 
             model_path = Path(env.model_path)
             if not model_path.exists():
-                return {"healthy": False, "message": f"模型文件不存在: {env.model_path}"}
+                return {
+                    "healthy": False,
+                    "message": f"模型文件不存在: {env.model_path}",
+                }
 
             return {"healthy": True, "message": "模型文件存在"}
 
@@ -295,12 +310,14 @@ class DeploymentManager:
 
         self.metrics_collector.register_collector("error_rate", error_rate_collector)
 
-    def add_callback(self, event: str, callback: Callable):
+    def add_callback(self, event: str, callback: Callable[..., Any]) -> None:
         """添加事件回调函数"""
         if event in self.callbacks:
             self.callbacks[event].append(callback)
 
-    async def _notify_callbacks(self, event: str, *args, **kwargs):
+    async def _notify_callbacks(
+        self, event: str, *args: Any, **kwargs: Any
+    ) -> None:
         """通知回调函数"""
         for callback in self.callbacks.get(event, []):
             try:
@@ -379,7 +396,7 @@ class DeploymentManager:
         ).hexdigest()[:8]
         return f"deploy_{timestamp}_{model_hash}"
 
-    async def _deploy_blue_green(self, deployment: DeploymentRecord):
+    async def _deploy_blue_green(self, deployment: DeploymentRecord) -> None:
         """蓝绿部署"""
         config = deployment.config
 
@@ -421,7 +438,7 @@ class DeploymentManager:
         self.active_deployment = deployment.deployment_id
         logger.info("蓝绿部署完成")
 
-    async def _deploy_canary(self, deployment: DeploymentRecord):
+    async def _deploy_canary(self, deployment: DeploymentRecord) -> None:
         """金丝雀部署"""
         config = deployment.config
 
@@ -471,7 +488,7 @@ class DeploymentManager:
         self.active_deployment = deployment.deployment_id
         logger.info("金丝雀部署完成")
 
-    async def _deploy_rolling(self, deployment: DeploymentRecord):
+    async def _deploy_rolling(self, deployment: DeploymentRecord) -> None:
         """滚动部署"""
         config = deployment.config
 
@@ -494,14 +511,16 @@ class DeploymentManager:
 
         # 逐批部署
         for i, (env_name, env) in enumerate(environments.items()):
-            logger.info(f"滚动部署批次 {i+1}/{len(environments)}: {env_name}")
+            logger.info(f"滚动部署批次 {i + 1}/{len(environments)}: {env_name}")
 
             await self._deploy_to_environment(env, config)
 
             if config.health_check_enabled:
                 health_results = await self._run_health_checks(env, config)
                 if not health_results.get("overall_healthy", False):
-                    raise RuntimeError(f"实例 {env_name} 健康检查失败: {health_results}")
+                    raise RuntimeError(
+                        f"实例 {env_name} 健康检查失败: {health_results}"
+                    )
 
             env.status = DeploymentStatus.ACTIVE
 
@@ -513,7 +532,7 @@ class DeploymentManager:
         self.active_deployment = deployment.deployment_id
         logger.info("滚动部署完成")
 
-    async def _deploy_immediate(self, deployment: DeploymentRecord):
+    async def _deploy_immediate(self, deployment: DeploymentRecord) -> None:
         """立即部署"""
         config = deployment.config
 
@@ -545,7 +564,7 @@ class DeploymentManager:
 
     async def _deploy_to_environment(
         self, environment: DeploymentEnvironment, config: DeploymentConfig
-    ):
+    ) -> None:
         """部署到指定环境"""
         try:
             # 1. 复制模型文件
@@ -609,7 +628,7 @@ class DeploymentManager:
 
     async def _monitor_canary(
         self, canary_env: DeploymentEnvironment, config: DeploymentConfig
-    ):
+    ) -> None:
         """监控金丝雀环境"""
         duration = timedelta(minutes=config.canary_duration_minutes)
         start_time = datetime.now()
@@ -656,7 +675,7 @@ class DeploymentManager:
 
         return False
 
-    async def _auto_rollback(self, deployment: DeploymentRecord):
+    async def _auto_rollback(self, deployment: DeploymentRecord) -> None:
         """自动回滚"""
         logger.info(f"开始自动回滚: {deployment.deployment_id}")
 

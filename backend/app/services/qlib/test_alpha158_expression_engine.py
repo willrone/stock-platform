@@ -3,10 +3,12 @@ Alpha158表达式引擎单元测试
 
 测试表达式引擎能否正确计算所有158个Alpha158因子
 """
+
 import os
 import sys
 import unittest
 from pathlib import Path
+from typing import ClassVar, cast
 
 import numpy as np
 import pandas as pd
@@ -21,8 +23,11 @@ from app.services.qlib.enhanced_qlib_provider import Alpha158Calculator
 class TestAlpha158ExpressionEngine(unittest.TestCase):
     """Alpha158表达式引擎测试类"""
 
+    calculator: ClassVar[Alpha158Calculator]
+    test_data: ClassVar[pd.DataFrame]
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """测试类初始化"""
         cls.calculator = Alpha158Calculator()
         # 创建测试数据
@@ -43,7 +48,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         cls.test_data["$low"] = cls.test_data["$close"] * 0.9
         cls.test_data["$open"] = cls.test_data["$close"] * 0.95
 
-    def test_basic_expressions(self):
+    def test_basic_expressions(self) -> None:
         """测试基础表达式"""
         # 测试Ref函数
         result = self.calculator._evaluate_qlib_expression(
@@ -51,6 +56,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         )
         self.assertIsNotNone(result)
         self.assertIsInstance(result, pd.Series)
+        result = cast(pd.Series, result)
         self.assertEqual(len(result), len(self.test_data))
 
         # 测试Abs函数
@@ -67,7 +73,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIsInstance(result, pd.Series)
 
-    def test_sum_function(self):
+    def test_sum_function(self) -> None:
         """测试Sum函数（之前失败的SUMP因子）"""
         # 测试SUMP5表达式
         expr = "Sum(Greater($close-Ref($close, 1), 0), 5)/(Sum(Abs($close-Ref($close, 1)), 5)+1e-12)"
@@ -75,6 +81,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
 
         self.assertIsNotNone(result, "SUMP5表达式应该返回结果")
         self.assertIsInstance(result, pd.Series)
+        result = cast(pd.Series, result)
         self.assertEqual(len(result), len(self.test_data))
 
         # 检查是否有有效值（不是全部NaN）
@@ -87,7 +94,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
             self.assertGreaterEqual(valid_values.min(), 0, "SUMP5值应该>=0")
             self.assertLessEqual(valid_values.max(), 1, "SUMP5值应该<=1")
 
-    def test_std_function(self):
+    def test_std_function(self) -> None:
         """测试Std函数（之前失败的Std因子）"""
         # 测试嵌套Std表达式
         expr = "Std(Abs($close/Ref($close, 1)-1)*$volume, 5)/(Mean(Abs($close/Ref($close, 1)-1)*$volume, 5)+1e-12)"
@@ -105,9 +112,9 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
             # 暂时允许返回None，记录警告
             import warnings
 
-            warnings.warn("Std函数表达式返回None，需要进一步修复")
+            warnings.warn("Std函数表达式返回None，需要进一步修复", stacklevel=2)
 
-    def test_idxmax_idxmin(self):
+    def test_idxmax_idxmin(self) -> None:
         """测试IdxMax和IdxMin函数"""
         # 测试IMAX5
         expr = "IdxMax($high, 5)/5"
@@ -130,7 +137,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIsInstance(result, pd.Series)
 
-    def test_greater_less_functions(self):
+    def test_greater_less_functions(self) -> None:
         """测试Greater和Less函数"""
         # 测试Greater
         expr = "Greater($close-Ref($close, 1), 0)"
@@ -146,7 +153,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIsInstance(result, pd.Series)
 
-    def test_column_name_standardization(self):
+    def test_column_name_standardization(self) -> None:
         """测试列名标准化（不带$前缀的数据）"""
         # 创建不带$前缀的数据
         data_no_prefix = self.test_data.copy()
@@ -160,7 +167,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         self.assertIsNotNone(result, "应该能处理不带$前缀的列名")
         self.assertIsInstance(result, pd.Series)
 
-    def test_all_alpha158_factors(self):
+    def test_all_alpha158_factors(self) -> None:
         """测试所有158个Alpha158因子（优先使用Qlib handler + bin格式）"""
         print("\n开始计算所有158个Alpha158因子（Qlib handler）...")
         import time
@@ -203,7 +210,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
         self.assertEqual(len(factors.columns), 158, "应该有158个因子")
         self.assertFalse(factors.empty, "因子结果不应为空")
 
-    def test_real_stock_data(self):
+    def test_real_stock_data(self) -> None:
         """测试真实股票数据（Qlib handler + bin）"""
         parquet_path = (
             backend_path / "data" / "parquet" / "stock_data" / "002463_SZ.parquet"
@@ -260,7 +267,7 @@ class TestAlpha158ExpressionEngine(unittest.TestCase):
             f"真实数据测试：所有158个因子都应该能计算出来，但失败了{fail_count}个。失败的因子: {zero_cols}",
         )
 
-        print(f"\n真实数据测试统计:")
+        print("\n真实数据测试统计:")
         print(f"  数据形状: {data.shape}")
         print(f"  总因子数: {len(factors.columns)}")
         print(f"  成功因子数: {len(factors.columns) - fail_count}")

@@ -4,14 +4,12 @@
 
 import hashlib
 import json
-import os
-import pickle
 import shutil
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 try:
     import joblib
@@ -30,13 +28,7 @@ from app.core.error_handler import (
 )
 from app.core.logging_config import AuditLogger
 
-# 导入统一的错误处理机制
-try:
-    from app.core.error_handler import DataError, TaskError
-except ImportError:
-    DataError = Exception
-    TaskError = Exception
-
+# 统一错误处理类型由 app.core.error_handler 提供；本模块只使用 ModelError。
 
 # 从shared_types.py导入共享类型
 try:
@@ -47,7 +39,7 @@ except ImportError:
     SHARED_TYPES_AVAILABLE = False
 
     # 如果导入失败，使用本地定义作为备选
-    class ModelStatus(Enum):
+    class ModelStatus(Enum):  # type: ignore[no-redef]
         """模型状态"""
 
         TRAINING = "training"
@@ -58,7 +50,7 @@ except ImportError:
         DEPRECATED = "deprecated"
         FAILED = "failed"
 
-    class ModelType(Enum):
+    class ModelType(Enum):  # type: ignore[no-redef]
         """模型类型"""
 
         XGBOOST = "xgboost"
@@ -69,7 +61,7 @@ except ImportError:
         ENSEMBLE = "ensemble"
 
     @dataclass
-    class ModelMetadata:
+    class ModelMetadata:  # type: ignore[no-redef]
         """模型元数据"""
 
         model_id: str
@@ -120,13 +112,13 @@ except ImportError:
             data["status"] = ModelStatus(data["status"])
             data["created_at"] = datetime.fromisoformat(data["created_at"])
             data["updated_at"] = datetime.fromisoformat(data["updated_at"])
-            return cls(**data)
+            return cast("ModelMetadata", cls(**data))
 
 
 class ModelStorage:
     """模型存储管理器"""
 
-    def __init__(self, storage_root: str = None):
+    def __init__(self, storage_root: Optional[str] = None):
         # 使用配置中的路径，如果没有提供则使用默认配置
         from app.core.config import settings
 
@@ -180,7 +172,9 @@ class ModelStorage:
             # 清理model_id，移除不允许的文件名字符
             import re
 
-            safe_model_id = re.sub(r'[<>:"/\\|?*]', "_", model_id)  # 替换不允许的字符为下划线
+            safe_model_id = re.sub(
+                r'[<>:"/\\|?*]', "_", model_id
+            )  # 替换不允许的字符为下划线
             safe_model_id = re.sub(r"\s+", "_", safe_model_id)  # 替换空格为下划线
 
             # 生成文件路径
@@ -394,7 +388,7 @@ class ModelStorage:
         metadata_file = self.metadata_dir / f"{model_id}.json"
         return metadata_file.exists()
 
-    def _backup_model(self, model_id: str):
+    def _backup_model(self, model_id: str) -> None:
         """备份模型"""
         try:
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -427,7 +421,7 @@ class ModelStorage:
     def get_storage_stats(self) -> Dict[str, Any]:
         """获取存储统计信息"""
         try:
-            stats = {
+            stats: Dict[str, Any] = {
                 "total_models": 0,
                 "models_by_type": {},
                 "models_by_status": {},

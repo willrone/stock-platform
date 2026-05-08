@@ -153,9 +153,7 @@ function ModelsPage() {
         delete updated[data.model_id];
         return updated;
       });
-      setStoppingTrainingModelId(current =>
-        current === data.model_id ? null : current
-      );
+      setStoppingTrainingModelId(current => (current === data.model_id ? null : current));
     } else if (data.type === 'model:training:failed') {
       // 训练失败，更新状态
       const updatedModels = models.map(
@@ -170,9 +168,7 @@ function ModelsPage() {
         delete updated[data.model_id];
         return updated;
       });
-      setStoppingTrainingModelId(current =>
-        current === data.model_id ? null : current
-      );
+      setStoppingTrainingModelId(current => (current === data.model_id ? null : current));
     } else if (data.type === 'model:training:cancelled') {
       const updatedModels = models.map(
         (model: Model): Model =>
@@ -186,9 +182,7 @@ function ModelsPage() {
         delete updated[data.model_id];
         return updated;
       });
-      setStoppingTrainingModelId(current =>
-        current === data.model_id ? null : current
-      );
+      setStoppingTrainingModelId(current => (current === data.model_id ? null : current));
     }
   };
 

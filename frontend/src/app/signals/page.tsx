@@ -720,9 +720,11 @@ export default function SignalsPage() {
                 const signals = selectedStrategyNames
                   .map(name => ({ name, value: row.per_strategy?.[name] || null }))
                   .filter(
-                    (entry): entry is {
+                    (
+                      entry
+                    ): entry is {
                       name: string;
-                      value: NonNullable<typeof entry['value']>;
+                      value: NonNullable<(typeof entry)['value']>;
                     } => entry.value !== null
                   );
                 if (signals.length === 0) {

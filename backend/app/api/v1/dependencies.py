@@ -6,10 +6,9 @@ API依赖注入和共享函数
 """
 
 import os
-from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple, cast
 
-from fastapi import Header, Request
+from fastapi import Header
 from loguru import logger
 
 from app.core.database import SessionLocal
@@ -20,6 +19,9 @@ from app.repositories.task_repository import (
     TaskRepository,
 )
 from app.services.tasks import TaskQueueManager
+from app.services.backtest.utils.official_style_params import (
+    apply_official_style_topk_dropout_params,
+)
 
 
 # 用户认证依赖
@@ -74,9 +76,18 @@ except Exception as e:
     logger.warning(f"任务队列管理器启动失败: {e}")
 
 
+def _apply_nest_asyncio_if_available() -> None:
+    """Apply nest_asyncio when installed; keep task execution usable without it."""
+    try:
+        import nest_asyncio
+    except ImportError:
+        return
+    nest_asyncio.apply()
+
+
 def _resolve_backtest_config_value(
-    config: dict[str, Any],
-    strategy_config: dict[str, Any],
+    config: Dict[str, Any],
+    strategy_config: Dict[str, Any],
     key: str,
     default: Any,
 ) -> Any:
@@ -88,32 +99,32 @@ def _resolve_backtest_config_value(
     return default
 
 
-def get_task_repository():
+def get_task_repository() -> Any:
     """获取任务仓库（使用同步会话）"""
     session = SessionLocal()
     try:
         return TaskRepository(session), session
-    except:
+    except Exception:
         session.close()
         raise
 
 
-def get_prediction_result_repository():
+def get_prediction_result_repository() -> Any:
     """获取预测结果仓库（使用同步会话）"""
     session = SessionLocal()
     try:
         return PredictionResultRepository(session), session
-    except:
+    except Exception:
         session.close()
         raise
 
 
-def get_model_info_repository():
+def get_model_info_repository() -> Any:
     """获取模型信息仓库（使用同步会话）"""
     session = SessionLocal()
     try:
         return ModelInfoRepository(session), session
-    except:
+    except Exception:
         session.close()
         raise
 
@@ -126,16 +137,20 @@ def _parse_bool_env(var_name: str, default: bool = False) -> bool:
     return val.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _normalize_task_backtest_strategy_config(config: dict | None) -> tuple[str, dict]:
+def _normalize_task_backtest_strategy_config(
+    config: Optional[Dict[str, Any]],
+) -> Tuple[str, Dict[str, Any]]:
     """规范化任务回测配置，补齐模型驱动回测所需的 strategy_config.model_id。"""
     normalized = dict(config or {})
-    strategy_name = str(normalized.get("strategy_name", "default_strategy") or "default_strategy")
+    strategy_name = str(
+        normalized.get("strategy_name", "default_strategy") or "default_strategy"
+    )
     strategy_config = dict(normalized.get("strategy_config") or {})
 
     model_id = normalized.get("model_id")
+    normalized_name = strategy_name.lower()
     if model_id:
         strategy_config.setdefault("model_id", model_id)
-        normalized_name = strategy_name.lower()
         if normalized_name in {"model", "signal", "model_signal"}:
             strategy_name = "model_signal"
         elif normalized_name in {
@@ -147,12 +162,19 @@ def _normalize_task_backtest_strategy_config(config: dict | None) -> tuple[str, 
         }:
             strategy_name = "model_topk_dropout"
 
+    stock_codes = cast(Optional[List[str]], normalized.get("stock_codes"))
+    strategy_config = apply_official_style_topk_dropout_params(
+        strategy_name=strategy_name,
+        stock_codes=stock_codes,
+        strategy_config=strategy_config,
+    )
+
     return strategy_name, strategy_config
 
 
 # 简化的任务执行函数（用于进程池执行）
 # 注意：此函数在独立进程中执行，不能使用全局变量或单例
-def execute_prediction_task_simple(task_id: str):
+def execute_prediction_task_simple(task_id: str) -> Any:
     """
     简化的预测任务执行函数（进程池执行）
 
@@ -189,7 +211,7 @@ def execute_prediction_task_simple(task_id: str):
             raise
 
         # 解析任务配置
-        config = task.config or {}
+        config: Any = task.config or {}
         stock_codes = config.get("stock_codes", [])
         model_id = config.get("model_id", "default_model")
 
@@ -290,7 +312,7 @@ def execute_prediction_task_simple(task_id: str):
             session.close()
 
 
-def execute_backtest_task_simple(task_id: str):
+def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
     """
     简化的回测任务执行函数（进程池执行）
 
@@ -332,8 +354,10 @@ def execute_backtest_task_simple(task_id: str):
         )
 
         # 解析任务配置
-        config = task.config or {}
-        strategy_name, strategy_config = _normalize_task_backtest_strategy_config(config)
+        config: Any = task.config or {}
+        strategy_name, strategy_config = _normalize_task_backtest_strategy_config(
+            config
+        )
         task_logger.info(f"任务配置: {config}")
         task_logger.info(f"配置键: {list(config.keys())}")
         task_logger.info(f"策略配置 (strategy_config): {strategy_config}")
@@ -483,6 +507,19 @@ def execute_backtest_task_simple(task_id: str):
                     config, strategy_config, "rebalance_frequency", "daily"
                 )
             ),
+            open_cost=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "open_cost", 0.0
+                )
+            ),
+            close_cost=float(
+                _resolve_backtest_config_value(
+                    config, strategy_config, "close_cost", 0.0
+                )
+            ),
+            min_cost=float(
+                _resolve_backtest_config_value(config, strategy_config, "min_cost", 0.0)
+            ),
         )
 
         # 执行回测
@@ -492,7 +529,7 @@ def execute_backtest_task_simple(task_id: str):
 
         try:
             # 创建异步任务并等待完成
-            async def run_async_backtest():
+            async def run_async_backtest() -> Any:
                 return await executor.run_backtest(
                     strategy_name=strategy_name,
                     stock_codes=stock_codes,
@@ -503,10 +540,8 @@ def execute_backtest_task_simple(task_id: str):
                     task_id=task_id,
                 )
 
-            # 在新的事件循环中运行异步任务
-            import nest_asyncio
-
-            nest_asyncio.apply()
+            # 在新的事件循环中运行异步任务；nest_asyncio 是可选依赖。
+            _apply_nest_asyncio_if_available()
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -536,7 +571,7 @@ def execute_backtest_task_simple(task_id: str):
             try:
                 task_logger.info(f"开始保存回测详细数据: {task_id}")
 
-                async def save_detailed_data():
+                async def save_detailed_data() -> Any:
                     """异步保存详细数据"""
                     from app.core.database import (
                         get_async_session_context,
@@ -569,20 +604,21 @@ def execute_backtest_task_simple(task_id: str):
                     async with get_async_session_context() as session:
                         try:
 
-                            async def _save_data():
+                            async def _save_data() -> Any:
                                 repository = BacktestDetailedRepository(session)
 
                                 # 辅助函数：将numpy类型转换为Python原生类型
-                                def to_python_type(value):
+                                def to_python_type(value: Any) -> Any:
                                     """将numpy/pandas类型转换为Python原生类型"""
-                                    import numpy as np
                                     from datetime import datetime
-                                    
+
+                                    import numpy as np
+
                                     if isinstance(value, (np.integer, np.floating)):
                                         return value.item()
                                     elif isinstance(value, np.ndarray):
                                         return value.tolist()
-                                    elif hasattr(value, 'to_pydatetime'):
+                                    elif hasattr(value, "to_pydatetime"):
                                         # pandas Timestamp 转换为 Python datetime，然后转为 ISO 字符串
                                         return value.to_pydatetime().isoformat()
                                     elif isinstance(value, datetime):
@@ -590,7 +626,10 @@ def execute_backtest_task_simple(task_id: str):
                                         return value.isoformat()
                                     elif isinstance(value, dict):
                                         # 处理字典的 key 和 value（key 也可能是 Timestamp）
-                                        return {to_python_type(k): to_python_type(v) for k, v in value.items()}
+                                        return {
+                                            to_python_type(k): to_python_type(v)
+                                            for k, v in value.items()
+                                        }
                                     elif isinstance(value, (list, tuple)):
                                         return [to_python_type(v) for v in value]
                                     return value
@@ -599,16 +638,26 @@ def execute_backtest_task_simple(task_id: str):
                                 extended_metrics = {}
                                 if enhanced_result.extended_risk_metrics:
                                     extended_metrics = {
-                                        "sortino_ratio": to_python_type(enhanced_result.extended_risk_metrics.sortino_ratio),
-                                        "calmar_ratio": to_python_type(enhanced_result.extended_risk_metrics.calmar_ratio),
-                                        "max_drawdown_duration": to_python_type(enhanced_result.extended_risk_metrics.max_drawdown_duration),
-                                        "var_95": to_python_type(enhanced_result.extended_risk_metrics.var_95),
-                                        "downside_deviation": to_python_type(enhanced_result.extended_risk_metrics.downside_deviation),
+                                        "sortino_ratio": to_python_type(
+                                            enhanced_result.extended_risk_metrics.sortino_ratio
+                                        ),
+                                        "calmar_ratio": to_python_type(
+                                            enhanced_result.extended_risk_metrics.calmar_ratio
+                                        ),
+                                        "max_drawdown_duration": to_python_type(
+                                            enhanced_result.extended_risk_metrics.max_drawdown_duration
+                                        ),
+                                        "var_95": to_python_type(
+                                            enhanced_result.extended_risk_metrics.var_95
+                                        ),
+                                        "downside_deviation": to_python_type(
+                                            enhanced_result.extended_risk_metrics.downside_deviation
+                                        ),
                                     }
 
                                 # 准备分析数据
                                 # 处理 position_analysis（可能是 EnhancedPositionAnalysis 对象或列表）
-                                position_analysis_data = None
+                                position_analysis_data: Any = None
                                 task_logger.info(
                                     f"检查 position_analysis: type={type(enhanced_result.position_analysis)}, value={enhanced_result.position_analysis is not None}"
                                 )
@@ -645,23 +694,37 @@ def execute_backtest_task_simple(task_id: str):
                                         )
                                 else:
                                     task_logger.warning(
-                                        f"enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据"
+                                        "enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据"
                                     )
 
                                 analysis_data = {
-                                    "drawdown_analysis": to_python_type(enhanced_result.drawdown_analysis.to_dict())
-                                    if enhanced_result.drawdown_analysis
-                                    else {},
-                                    "monthly_returns": to_python_type([
-                                        mr.to_dict()
-                                        for mr in enhanced_result.monthly_returns
-                                    ])
-                                    if enhanced_result.monthly_returns
-                                    else [],
-                                    "position_analysis": to_python_type(position_analysis_data) if position_analysis_data else None,
-                                    "benchmark_comparison": to_python_type(enhanced_result.benchmark_data)
-                                    if enhanced_result.benchmark_data
-                                    else {},
+                                    "drawdown_analysis": (
+                                        to_python_type(
+                                            enhanced_result.drawdown_analysis.to_dict()
+                                        )
+                                        if enhanced_result.drawdown_analysis
+                                        else {}
+                                    ),
+                                    "monthly_returns": (
+                                        to_python_type(
+                                            [
+                                                mr.to_dict()
+                                                for mr in enhanced_result.monthly_returns
+                                            ]
+                                        )
+                                        if enhanced_result.monthly_returns
+                                        else []
+                                    ),
+                                    "position_analysis": (
+                                        to_python_type(position_analysis_data)
+                                        if position_analysis_data
+                                        else None
+                                    ),
+                                    "benchmark_comparison": (
+                                        to_python_type(enhanced_result.benchmark_data)
+                                        if enhanced_result.benchmark_data
+                                        else {}
+                                    ),
                                     "rolling_metrics": {},
                                 }
 
@@ -693,7 +756,7 @@ def execute_backtest_task_simple(task_id: str):
                                                 date_value = datetime.fromisoformat(
                                                     date_value.replace("Z", "+00:00")
                                                 )
-                                            except:
+                                            except Exception:
                                                 task_logger.warning(
                                                     f"无法解析日期: {date_value}"
                                                 )
@@ -702,20 +765,22 @@ def execute_backtest_task_simple(task_id: str):
                                         snapshots_data.append(
                                             {
                                                 "date": date_value,
-                                                "portfolio_value": to_python_type(snapshot.get(
-                                                    "portfolio_value", 0
-                                                )),
-                                                "cash": to_python_type(snapshot.get("cash", 0)),
-                                                "positions_count": to_python_type(snapshot.get(
-                                                    "positions_count", 0
-                                                )),
-                                                "total_return": to_python_type(snapshot.get(
-                                                    "total_return", 0
-                                                )),
+                                                "portfolio_value": to_python_type(
+                                                    snapshot.get("portfolio_value", 0)
+                                                ),
+                                                "cash": to_python_type(
+                                                    snapshot.get("cash", 0)
+                                                ),
+                                                "positions_count": to_python_type(
+                                                    snapshot.get("positions_count", 0)
+                                                ),
+                                                "total_return": to_python_type(
+                                                    snapshot.get("total_return", 0)
+                                                ),
                                                 "drawdown": 0,
-                                                "positions": to_python_type(snapshot.get(
-                                                    "positions", {}
-                                                )),
+                                                "positions": to_python_type(
+                                                    snapshot.get("positions", {})
+                                                ),
                                             }
                                         )
 
@@ -738,7 +803,9 @@ def execute_backtest_task_simple(task_id: str):
                                             f"组合快照数据为空: task_id={task_id}"
                                         )
                                 else:
-                                    task_logger.warning(f"没有组合历史数据: task_id={task_id}")
+                                    task_logger.warning(
+                                        f"没有组合历史数据: task_id={task_id}"
+                                    )
 
                                 # 批量创建交易记录
                                 trade_history = enhanced_result.trade_history or []
@@ -762,7 +829,7 @@ def execute_backtest_task_simple(task_id: str):
                                                         )
                                                     )
                                                 )
-                                            except:
+                                            except Exception:
                                                 task_logger.warning(
                                                     f"无法解析时间戳: {timestamp_value}"
                                                 )
@@ -778,16 +845,22 @@ def execute_backtest_task_simple(task_id: str):
                                                     "stock_code", ""
                                                 ),
                                                 "action": trade.get("action", ""),
-                                                "quantity": to_python_type(trade.get("quantity", 0)),
-                                                "price": to_python_type(trade.get("price", 0)),
+                                                "quantity": to_python_type(
+                                                    trade.get("quantity", 0)
+                                                ),
+                                                "price": to_python_type(
+                                                    trade.get("price", 0)
+                                                ),
                                                 "timestamp": timestamp_value,
-                                                "commission": to_python_type(trade.get(
-                                                    "commission", 0
-                                                )),
-                                                "pnl": to_python_type(trade.get("pnl", 0)),
-                                                "holding_days": to_python_type(trade.get(
-                                                    "holding_days", 0
-                                                )),
+                                                "commission": to_python_type(
+                                                    trade.get("commission", 0)
+                                                ),
+                                                "pnl": to_python_type(
+                                                    trade.get("pnl", 0)
+                                                ),
+                                                "holding_days": to_python_type(
+                                                    trade.get("holding_days", 0)
+                                                ),
                                                 "technical_indicators": {},
                                             }
                                         )
@@ -813,7 +886,9 @@ def execute_backtest_task_simple(task_id: str):
                                             f"交易记录数据为空: task_id={task_id}"
                                         )
                                 else:
-                                    task_logger.warning(f"没有交易历史数据: task_id={task_id}")
+                                    task_logger.warning(
+                                        f"没有交易历史数据: task_id={task_id}"
+                                    )
 
                                 # 先提交主数据，确保立即可查询
                                 await session.commit()
@@ -821,7 +896,9 @@ def execute_backtest_task_simple(task_id: str):
 
                                 # 计算并保存统计信息（在单独的事务中，不阻塞主数据查询）
                                 try:
-                                    task_logger.info(f"开始计算统计信息: task_id={task_id}")
+                                    task_logger.info(
+                                        f"开始计算统计信息: task_id={task_id}"
+                                    )
                                     calculator = StatisticsCalculator(session)
                                     backtest_id = f"bt_{task_id[:8]}"
                                     stats = await calculator.calculate_all_statistics(
@@ -850,7 +927,8 @@ def execute_backtest_task_simple(task_id: str):
                         except Exception as e:
                             await session.rollback()
                             task_logger.error(
-                                f"保存回测详细数据失败: {task_id}, 错误: {e}", exc_info=True
+                                f"保存回测详细数据失败: {task_id}, 错误: {e}",
+                                exc_info=True,
                             )
 
                 # 在新的事件循环中运行
@@ -871,12 +949,17 @@ def execute_backtest_task_simple(task_id: str):
             # 处理任务错误（如任务被删除）
             if task_error.severity == ErrorSeverity.LOW:
                 # 低严重程度错误（如任务被删除），直接退出，不更新任务状态
-                task_logger.info("任务被取消或删除: {}, 原因: {}", task_id, task_error.message)
+                task_logger.info(
+                    "任务被取消或删除: {}, 原因: {}", task_id, task_error.message
+                )
                 return
             else:
                 # 其他任务错误，标记为失败
                 task_logger.error(
-                    "回测任务错误: {}, 错误: {}", task_id, task_error.message, exc_info=True
+                    "回测任务错误: {}, 错误: {}",
+                    task_id,
+                    task_error.message,
+                    exc_info=True,
                 )
                 try:
                     task_repository.update_task_status(
@@ -889,7 +972,9 @@ def execute_backtest_task_simple(task_id: str):
                     pass
                 raise task_error
         except Exception as backtest_error:
-            task_logger.error(f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True)
+            task_logger.error(
+                f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True
+            )
             # 如果回测执行失败，尝试标记任务为失败
             try:
                 # 先检查任务是否还存在
@@ -934,7 +1019,8 @@ def execute_backtest_task_simple(task_id: str):
 
     except Exception as e:
         task_logger.error(
-            f"执行回测任务失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}", exc_info=True
+            f"执行回测任务失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}",
+            exc_info=True,
         )
         import traceback
 
@@ -943,7 +1029,7 @@ def execute_backtest_task_simple(task_id: str):
 
         if "config" in locals():
             task_logger.error(f"配置内容: {config}")
-        if "task" in locals():
+        if "task" in locals() and task is not None:
             task_logger.error(
                 f"任务对象: task_id={task.task_id}, task_type={task.task_type}, status={task.status}"
             )
@@ -963,7 +1049,7 @@ def execute_backtest_task_simple(task_id: str):
             session.close()
 
 
-def execute_qlib_precompute_task_simple(task_id: str):
+def execute_qlib_precompute_task_simple(task_id: str) -> Any:
     """
     简化的Qlib预计算任务执行函数（进程池执行）
 
@@ -973,7 +1059,6 @@ def execute_qlib_precompute_task_simple(task_id: str):
     3. 独立创建所需服务实例
     4. 添加进程ID到日志上下文
     """
-    import asyncio
 
     # 绑定进程ID到日志上下文
     process_id = os.getpid()
@@ -988,10 +1073,13 @@ def execute_qlib_precompute_task_simple(task_id: str):
         # 在独立进程中，确保所有类型都正确导入
         import threading
         from datetime import datetime
-        from typing import Any, Dict, List, Optional
 
         from app.services.tasks.task_execution_engine import QlibPrecomputeTaskExecutor
-        from app.services.tasks.task_queue import QueuedTask, TaskExecutionContext
+        from app.services.tasks.task_queue import (
+            QueuedTask,
+            TaskExecutionContext,
+            TaskPriority,
+        )
 
         task_repository = TaskRepository(session)
 
@@ -1010,21 +1098,19 @@ def execute_qlib_precompute_task_simple(task_id: str):
         from app.models.task_models import TaskType
 
         queued_task = QueuedTask(
-            task_id=task.task_id,
+            task_id=cast(str, task.task_id),
             task_type=TaskType.QLIB_PRECOMPUTE,
-            user_id=task.user_id,
-            priority=1,  # 默认优先级
-            config=task.config or {},
-            created_at=task.created_at or datetime.utcnow(),
+            user_id=cast(str, task.user_id),
+            priority=TaskPriority.NORMAL,
+            config=cast(Dict[str, Any], task.config or {}),
+            created_at=cast(Optional[datetime], task.created_at) or datetime.utcnow(),
         )
 
         # 创建执行上下文
         cancel_event = threading.Event()
-        progress_callback = (
-            lambda progress, message: task_repository.update_task_progress(
-                task_id, progress
-            )
-        )
+
+        def progress_callback(progress: float, message: str = "") -> None:
+            task_repository.update_task_progress(task_id, progress)
 
         context = TaskExecutionContext(
             task_id=task_id,
@@ -1046,7 +1132,9 @@ def execute_qlib_precompute_task_simple(task_id: str):
         )
 
     except Exception as e:
-        task_logger.error(f"Qlib预计算任务执行失败: {task_id}, 错误: {e}", exc_info=True)
+        task_logger.error(
+            f"Qlib预计算任务执行失败: {task_id}, 错误: {e}", exc_info=True
+        )
         try:
             if "task_repository" in locals():
                 task_repository.update_task_status(

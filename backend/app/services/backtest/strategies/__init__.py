@@ -4,6 +4,9 @@
 包含所有交易策略实现
 """
 
+from .model_prediction_strategy import ModelPredictionStrategy
+from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
+
 # 高级策略
 from .strategies import (  # 技术分析策略; 统计套利策略; 因子投资策略; 高级策略工厂（向后兼容）
     AdvancedStrategyFactory,
@@ -23,8 +26,6 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 
 # 统一的策略工厂
 from .strategy_factory import StrategyFactory
-from .model_prediction_strategy import ModelPredictionStrategy
-from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
 
 # 基础技术分析策略
 from .technical import MACDStrategy, MovingAverageStrategy, RSIStrategy

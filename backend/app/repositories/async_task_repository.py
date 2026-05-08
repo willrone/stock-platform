@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from loguru import logger
-from sqlalchemy import and_, asc, desc, func, or_, delete as sql_delete
+from sqlalchemy import and_, asc
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm.attributes import flag_modified
@@ -16,7 +18,6 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.core.logging_config import AuditLogger
 from app.models.task_models import (
-    BacktestResult,
     Task,
     TaskStatus,
     TaskType,
@@ -31,14 +32,20 @@ class AsyncTaskRepository:
 
     def _to_json_safe(self, value: Any) -> Any:
         """递归转换为可 JSON 序列化的类型"""
+        np: Any = None
+        pd: Any = None
         try:
-            import numpy as np
+            import numpy as _np
+
+            np = _np
         except Exception:
-            np = None
+            pass
         try:
-            import pandas as pd
+            import pandas as _pd
+
+            pd = _pd
         except Exception:
-            pd = None
+            pass
 
         from datetime import date, datetime
         from enum import Enum
@@ -120,11 +127,9 @@ class AsyncTaskRepository:
     async def get_task_by_id(self, task_id: str) -> Optional[Task]:
         """根据ID获取任务"""
         try:
-            result = await self.db.execute(
-                select(Task).filter(Task.task_id == task_id)
-            )
+            result = await self.db.execute(select(Task).filter(Task.task_id == task_id))
             task = result.scalar_one_or_none()
-            return task
+            return cast(Optional[Task], task)
         except Exception as e:
             raise TaskError(
                 message=f"获取任务失败: {str(e)}",
@@ -165,7 +170,9 @@ class AsyncTaskRepository:
                 original_exception=e,
             )
 
-    async def get_tasks_by_status(self, status: TaskStatus, limit: int = 100) -> List[Task]:
+    async def get_tasks_by_status(
+        self, status: TaskStatus, limit: int = 100
+    ) -> List[Task]:
         """根据状态获取任务列表"""
         try:
             query = (
@@ -189,7 +196,7 @@ class AsyncTaskRepository:
         task_id: str,
         status: TaskStatus,
         progress: Optional[float] = None,
-        result=None,
+        result: Any = None,
         error_message: Optional[str] = None,
     ) -> Task:
         """更新任务状态"""
@@ -205,28 +212,31 @@ class AsyncTaskRepository:
                     context=ErrorContext(task_id=task_id),
                 )
 
-            old_status = task.status
-            task.status = status.value
+            task_record = cast(Any, task)
+            old_status = cast(str, task.status)
+            task_record.status = status.value
 
             if progress is not None:
-                task.progress = progress
+                task_record.progress = progress
 
             if result is not None:
-                task.result = self._to_json_safe(result)
+                task_record.result = self._to_json_safe(result)
                 flag_modified(task, "result")
 
             if error_message is not None:
-                task.error_message = error_message
+                task_record.error_message = error_message
 
             # 更新时间戳
-            if status == TaskStatus.RUNNING and not task.started_at:
-                task.started_at = datetime.utcnow()
+            if status == TaskStatus.RUNNING and not cast(
+                Optional[datetime], task.started_at
+            ):
+                task_record.started_at = datetime.utcnow()
             elif status in [
                 TaskStatus.COMPLETED,
                 TaskStatus.FAILED,
                 TaskStatus.CANCELLED,
             ]:
-                task.completed_at = datetime.utcnow()
+                task_record.completed_at = datetime.utcnow()
 
             await self.db.commit()
             await self.db.refresh(task)
@@ -238,7 +248,7 @@ class AsyncTaskRepository:
                 record_id=task_id,
                 old_values={"status": old_status},
                 new_values={"status": status.value},
-                user_id=task.user_id,
+                user_id=cast(Optional[str], task.user_id),
             )
 
             logger.info(f"任务状态更新: {task_id}, {old_status} -> {status.value}")
@@ -266,13 +276,16 @@ class AsyncTaskRepository:
                     context=ErrorContext(task_id=task_id),
                 )
 
-            old_progress = task.progress
-            task.progress = progress
+            task_record = cast(Any, task)
+            old_progress = cast(float, task.progress)
+            task_record.progress = progress
 
             await self.db.commit()
             await self.db.refresh(task)
 
-            logger.debug(f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%")
+            logger.debug(
+                f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%"
+            )
             return task
 
         except TaskError:
@@ -286,7 +299,9 @@ class AsyncTaskRepository:
                 original_exception=e,
             )
 
-    async def delete_task(self, task_id: str, user_id: str, force: bool = False) -> bool:
+    async def delete_task(
+        self, task_id: str, user_id: str, force: bool = False
+    ) -> bool:
         """删除任务"""
         try:
             task = await self.get_task_by_id(task_id)
@@ -360,11 +375,10 @@ class AsyncTaskRepository:
                 total_deleted = 0
                 for model_class, table_name in related_tables:
                     try:
-                        stmt = sql_delete(model_class).where(
-                            model_class.task_id == task_id
-                        )
+                        model = cast(Any, model_class)
+                        stmt = sql_delete(model_class).where(model.task_id == task_id)
                         result = await self.db.execute(stmt)
-                        deleted_count = result.rowcount
+                        deleted_count = cast(Any, result).rowcount or 0
                         if deleted_count > 0:
                             logger.info(f"删除{table_name}: {deleted_count}条记录")
                             total_deleted += deleted_count
@@ -372,7 +386,9 @@ class AsyncTaskRepository:
                         logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
 
                 if total_deleted > 0:
-                    logger.info(f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录")
+                    logger.info(
+                        f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录"
+                    )
                     await self.db.flush()
             except Exception as e:
                 logger.warning(f"删除任务详细数据时出错（继续删除主任务）: {e}")
@@ -402,7 +418,9 @@ class AsyncTaskRepository:
             await self.db.rollback()
             error_msg = str(e)
             if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
-                logger.error(f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}")
+                logger.error(
+                    f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}"
+                )
                 raise TaskError(
                     message=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除。错误详情: {error_msg}",
                     severity=ErrorSeverity.HIGH,
@@ -432,8 +450,8 @@ class AsyncTaskRepository:
             tasks = result.scalars().all()
 
             # 统计各种状态的任务数量
-            status_counts = {}
-            type_counts = {}
+            status_counts: Any = {}
+            type_counts: Any = {}
 
             for task in tasks:
                 status_counts[task.status] = status_counts.get(task.status, 0) + 1
@@ -485,7 +503,7 @@ class AsyncTaskRepository:
             )
 
             result = await self.db.execute(stmt)
-            deleted_count = result.rowcount
+            deleted_count = int(cast(Any, result).rowcount or 0)
 
             await self.db.commit()
 

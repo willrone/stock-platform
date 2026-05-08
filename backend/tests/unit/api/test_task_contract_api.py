@@ -278,7 +278,9 @@ class TestTaskContractAPI:
         mock_repository_cls.return_value = mock_repository
 
         mock_prediction_repository = MagicMock()
-        mock_prediction_repository.get_prediction_results_by_task.return_value = [prediction_row]
+        mock_prediction_repository.get_prediction_results_by_task.return_value = [
+            prediction_row
+        ]
         mock_prediction_repository_cls.return_value = mock_prediction_repository
 
         fake_stock_loader_module = ModuleType("app.services.data.stock_data_loader")
@@ -333,7 +335,9 @@ class TestTaskContractAPI:
         mock_repository_cls.return_value = mock_repository
 
         mock_prediction_repository = MagicMock()
-        mock_prediction_repository.get_prediction_results_by_task.return_value = [prediction_row]
+        mock_prediction_repository.get_prediction_results_by_task.return_value = [
+            prediction_row
+        ]
         mock_prediction_repository_cls.return_value = mock_prediction_repository
 
         fake_stock_loader_module = ModuleType("app.services.data.stock_data_loader")
@@ -357,7 +361,10 @@ class TestTaskContractAPI:
         payload = response.json()["data"]
         assert payload["results"]["predictions"][0]["stock_code"] == "000001.SZ"
         mock_log_best_effort_failure.assert_called_once()
-        assert mock_log_best_effort_failure.call_args.kwargs["context"]["stock_code"] == "000001.SZ"
+        assert (
+            mock_log_best_effort_failure.call_args.kwargs["context"]["stock_code"]
+            == "000001.SZ"
+        )
 
     @patch("app.api.v1.tasks.get_process_executor")
     @patch("app.api.v1.tasks.deep_merge")
@@ -399,7 +406,10 @@ class TestTaskContractAPI:
 
         response = client.post(
             "/tasks/task-bt-1/rebuild",
-            json={"task_name": "[重建] 回测任务", "config_override": {"initial_cash": 200000}},
+            json={
+                "task_name": "[重建] 回测任务",
+                "config_override": {"initial_cash": 200000},
+            },
         )
 
         assert response.status_code == 200

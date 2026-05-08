@@ -6,29 +6,40 @@ Qlib 性能监控模块
 
 import datetime
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union, cast
 
 import pandas as pd
-import psutil
 from loguru import logger
+
+try:
+    import psutil
+
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
 
 
 class PerformanceMonitor:
     """性能监控器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.start_time = time.time()
-        self.stages = {}
-        self.metrics = {
+        self.stages: Dict[str, Dict[str, float]] = {}
+        self.metrics: Dict[str, Any] = {
             "execution_time": 0.0,
             "memory_usage": 0.0,
             "cpu_usage": 0.0,
             "stages": {},
         }
-        self.process = psutil.Process()
+        if PSUTIL_AVAILABLE:
+            self.process = psutil.Process()
+        else:
+            self.process = None
+            logger.warning("psutil 未安装，性能监控将使用降级模式（CPU/内存指标为0）")
         logger.info("性能监控器初始化完成")
 
-    def start_stage(self, stage_name: str):
+    def start_stage(self, stage_name: str) -> None:
         """开始监控一个阶段"""
         self.stages[stage_name] = {
             "start_time": time.time(),
@@ -71,16 +82,20 @@ class PerformanceMonitor:
 
     def _get_memory_usage(self) -> float:
         """获取当前内存使用情况（MB）"""
+        if not PSUTIL_AVAILABLE or self.process is None:
+            return 0.0
         try:
-            return self.process.memory_info().rss / 1024 / 1024
+            return float(self.process.memory_info().rss / 1024 / 1024)
         except Exception as e:
             logger.warning(f"获取内存使用情况失败: {e}")
             return 0.0
 
     def _get_cpu_usage(self) -> float:
         """获取当前CPU使用情况（%）"""
+        if not PSUTIL_AVAILABLE or self.process is None:
+            return 0.0
         try:
-            return self.process.cpu_percent(interval=0.1)
+            return float(self.process.cpu_percent(interval=0.1))
         except Exception as e:
             logger.warning(f"获取CPU使用情况失败: {e}")
             return 0.0
@@ -93,7 +108,7 @@ class PerformanceMonitor:
 
         return self.metrics
 
-    def print_summary(self):
+    def print_summary(self) -> None:
         """打印性能摘要"""
         overall = self.get_overall_metrics()
 
@@ -109,7 +124,7 @@ class PerformanceMonitor:
             logger.info(f"  {stage_name}:")
             logger.info(f"    耗时: {metrics['duration']:.2f}秒")
             logger.info(f"    内存: {metrics['memory_usage_mb']:.2f}MB")
-            logger.info(f"    CPU: {metrics['cpu_usage_percent']:.1f}%")
+            logger.info("    CPU: {metrics['cpu_usage_percent']:.1f}%")
 
         logger.info("=" * 60)
 
@@ -117,12 +132,12 @@ class PerformanceMonitor:
 class BenchmarkRunner:
     """基准测试运行器"""
 
-    def __init__(self):
-        self.benchmark_results = []
+    def __init__(self) -> None:
+        self.benchmark_results: List[Dict[str, Any]] = []
         logger.info("基准测试运行器初始化完成")
 
     async def run_benchmark(
-        self, test_name: str, func, *args, **kwargs
+        self, test_name: str, func: Callable[..., Union[Any, Awaitable[Any]]], *args: Any, **kwargs: Any
     ) -> Dict[str, Any]:
         """运行基准测试"""
         monitor = PerformanceMonitor()
@@ -131,16 +146,12 @@ class BenchmarkRunner:
         monitor.start_stage(test_name)
 
         # 执行测试函数
-        result = None
         error = None
 
         try:
-            if hasattr(func, "__await__"):
-                # 异步函数
-                result = await func(*args, **kwargs)
-            else:
-                # 同步函数
-                result = func(*args, **kwargs)
+            value = func(*args, **kwargs)
+            if hasattr(value, "__await__"):
+                await cast(Awaitable[Any], value)
         except Exception as e:
             error = str(e)
             logger.error(f"基准测试执行失败: {error}")
@@ -198,7 +209,7 @@ class BenchmarkRunner:
         df = pd.DataFrame(data)
         return df
 
-    def save_results(self, filename: str):
+    def save_results(self, filename: str) -> None:
         """保存基准测试结果到文件"""
         if not self.benchmark_results:
             logger.warning("没有基准测试结果可保存")
@@ -213,8 +224,8 @@ class BenchmarkRunner:
 
 
 # 全局性能监控器实例
-_global_performance_monitor = None
-_global_benchmark_runner = None
+_global_performance_monitor: Optional[PerformanceMonitor] = None
+_global_benchmark_runner: Optional[BenchmarkRunner] = None
 
 
 def get_performance_monitor() -> PerformanceMonitor:

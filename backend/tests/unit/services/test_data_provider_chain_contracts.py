@@ -121,9 +121,7 @@ class TestQlibAdapterContracts:
 
         assert is_valid is True
         assert fixed.index.names == ["instrument", "datetime"]
-        assert {"$open", "$high", "$low", "$close", "$volume"}.issubset(
-            fixed.columns
-        )
+        assert {"$open", "$high", "$low", "$close", "$volume"}.issubset(fixed.columns)
         assert (fixed["$high"] >= fixed["$low"]).all()
         assert (fixed["$volume"] >= 0).all()
         assert pd.api.types.is_integer_dtype(fixed["$volume"])

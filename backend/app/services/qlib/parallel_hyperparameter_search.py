@@ -4,12 +4,11 @@
 基于多进程的并行超参数搜索，突破GIL限制，显著提升搜索速度
 """
 
-import logging
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
@@ -45,7 +44,9 @@ class ParallelHyperparameterSearch:
         if self.config.max_workers is None:
             self.config.max_workers = mp.cpu_count()
 
-        logger.info(f"并行超参数搜索器初始化完成，最大工作进程数: {self.config.max_workers}")
+        logger.info(
+            f"并行超参数搜索器初始化完成，最大工作进程数: {self.config.max_workers}"
+        )
 
     def parallel_random_search(
         self,
@@ -66,7 +67,9 @@ class ParallelHyperparameterSearch:
         Returns:
             最优超参数试验结果
         """
-        logger.info(f"开始并行随机搜索，试验次数: {n_trials}, 工作进程数: {self.config.max_workers}")
+        logger.info(
+            f"开始并行随机搜索，试验次数: {n_trials}, 工作进程数: {self.config.max_workers}"
+        )
 
         # 生成超参数组合
         trials_params = self._generate_random_trials(param_space, n_trials)
@@ -192,9 +195,9 @@ class ParallelHyperparameterSearch:
                                 completed=completed_trials,
                                 failed=failed_trials,
                                 best_score=best_score,
-                                best_params=best_trial.hyperparameters
-                                if best_trial
-                                else None,
+                                best_params=(
+                                    best_trial.hyperparameters if best_trial else None
+                                ),
                             )
                     else:
                         failed_trials += 1
@@ -283,15 +286,16 @@ class ParallelHyperparameterSearch:
             params = {}
             for param_name, space in param_space.items():
                 if space.param_type == "float":
-                    params[param_name] = round(
-                        random.uniform(space.min_value, space.max_value), 4
-                    )
+                    min_value = float(space.min_value or 0.0)
+                    max_value = float(space.max_value or min_value)
+                    params[param_name] = round(random.uniform(min_value, max_value), 4)
                 elif space.param_type == "int":
-                    params[param_name] = random.randint(
-                        space.min_value, space.max_value
-                    )
+                    min_value = int(space.min_value or 0)
+                    max_value = int(space.max_value or min_value)
+                    params[param_name] = random.randint(min_value, max_value)
                 elif space.param_type == "categorical":
-                    params[param_name] = random.choice(space.choices)
+                    choices = space.choices or []
+                    params[param_name] = random.choice(choices)
             trials.append(params)
 
         return trials
@@ -309,19 +313,23 @@ class ParallelHyperparameterSearch:
             space = param_space[param_name]
             if space.param_type == "float":
                 # 生成浮点数范围
-                step = (space.max_value - space.min_value) / (space.step or 10)
+                min_value = float(space.min_value or 0.0)
+                max_value = float(space.max_value or min_value)
+                step = (max_value - min_value) / float(space.step or 10)
                 values = [
-                    round(space.min_value + i * step, 4)
-                    for i in range(int((space.max_value - space.min_value) / step) + 1)
+                    round(min_value + i * step, 4)
+                    for i in range(int((max_value - min_value) / step) + 1)
                 ]
             elif space.param_type == "int":
                 # 生成整数范围
-                step = space.step or 1
-                values = list(range(space.min_value, space.max_value + 1, step))
+                min_value = int(space.min_value or 0)
+                max_value = int(space.max_value or min_value)
+                step = int(space.step or 1)
+                values = list(range(min_value, max_value + 1, step))
             elif space.param_type == "categorical":
-                values = space.choices
+                values = space.choices or []
             else:
-                values = [space.min_value]  # 默认值
+                values = [float(space.min_value or 0.0)]  # 默认值
 
             param_values_list.append(values)
 

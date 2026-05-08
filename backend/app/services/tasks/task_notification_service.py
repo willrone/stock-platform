@@ -2,15 +2,12 @@
 任务状态通知服务 - 集成WebSocket实现任务状态的实时推送
 """
 
-import asyncio
-import json
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
-from app.core.error_handler import ErrorContext, ErrorSeverity, TaskError
 from app.models.task_models import TaskStatus, TaskType
 from app.services.infrastructure import WebSocketMessage, websocket_manager
 
@@ -44,15 +41,16 @@ class TaskProgressNotification:
     estimated_remaining_seconds: Optional[int] = None
     details: Optional[Dict[str, Any]] = None
 
+
 def utcnow() -> datetime:
     """Return naive UTC datetime for runtime compatibility."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TaskNotificationService:
     """任务通知服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.websocket_manager = websocket_manager
 
         # 任务订阅管理
@@ -78,7 +76,7 @@ class TaskNotificationService:
         task_type: TaskType,
         user_id: str,
         config: Dict[str, Any],
-    ):
+    ) -> None:
         """通知任务创建"""
         try:
             notification = TaskStatusNotification(
@@ -119,7 +117,7 @@ class TaskNotificationService:
         completed_at: Optional[datetime] = None,
         result: Optional[Dict[str, Any]] = None,
         error_message: Optional[str] = None,
-    ):
+    ) -> None:
         """通知任务状态变化"""
         try:
             notification = TaskStatusNotification(
@@ -142,7 +140,9 @@ class TaskNotificationService:
             if new_status in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value]:
                 await self._send_task_completion_notification(notification)
 
-            logger.info(f"任务状态变化通知已发送: {task_id}, {old_status} -> {new_status}")
+            logger.info(
+                f"任务状态变化通知已发送: {task_id}, {old_status} -> {new_status}"
+            )
 
         except Exception as e:
             logger.error(f"发送任务状态变化通知失败: {task_id}, 错误: {e}")
@@ -155,7 +155,7 @@ class TaskNotificationService:
         current_step: str,
         estimated_remaining_seconds: Optional[int] = None,
         details: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> None:
         """通知任务进度更新"""
         try:
             notification = TaskProgressNotification(
@@ -169,16 +169,11 @@ class TaskNotificationService:
             # 发送给订阅该任务的用户
             subscribers = self.task_subscribers.get(task_id, set())
             if subscribers:
+                notification_data = asdict(notification)
+                notification_data["timestamp"] = utcnow().isoformat()
                 message = WebSocketMessage(
                     type="task_progress",
-                    data={
-                        "task_id": task_id,
-                        "progress": progress,
-                        "current_step": current_step,
-                        "estimated_remaining_seconds": estimated_remaining_seconds,
-                        "details": details,
-                        "timestamp": utcnow().isoformat(),
-                    },
+                    data=notification_data,
                 )
 
                 # 发送给所有订阅用户
@@ -189,14 +184,16 @@ class TaskNotificationService:
 
                 self.notification_stats["progress_notifications"] += 1
                 logger.debug(
-                    f"任务进度通知已发送: {task_id}, 进度: {progress:.1f}%, 订阅者: {len(subscribers)}"
+                    "任务进度通知已发送: "
+                    f"{task_id}, 进度: {progress:.1f}%, "
+                    f"订阅者: {len(subscribers)}"
                 )
 
         except Exception as e:
             logger.error(f"发送任务进度通知失败: {task_id}, 错误: {e}")
             self.notification_stats["failed_notifications"] += 1
 
-    async def subscribe_user_to_task(self, user_id: str, task_id: str):
+    async def subscribe_user_to_task(self, user_id: str, task_id: str) -> None:
         """订阅用户到任务通知"""
         try:
             # 添加到任务订阅者列表
@@ -214,7 +211,7 @@ class TaskNotificationService:
         except Exception as e:
             logger.error(f"订阅任务通知失败: {user_id} -> {task_id}, 错误: {e}")
 
-    async def unsubscribe_user_from_task(self, user_id: str, task_id: str):
+    async def unsubscribe_user_from_task(self, user_id: str, task_id: str) -> None:
         """取消用户对任务的订阅"""
         try:
             # 从任务订阅者列表移除
@@ -247,7 +244,7 @@ class TaskNotificationService:
         message: str,
         notification_type: str = "info",
         target_users: Optional[List[str]] = None,
-    ):
+    ) -> None:
         """发送系统通知"""
         try:
             notification_data = {
@@ -272,7 +269,9 @@ class TaskNotificationService:
                 )
 
             logger.info(
-                f"系统通知已发送: {message}, 目标用户: {len(target_users) if target_users else '所有用户'}"
+                "系统通知已发送: "
+                f"{message}, 目标用户: "
+                f"{len(target_users) if target_users else '所有用户'}"
             )
 
         except Exception as e:
@@ -281,7 +280,7 @@ class TaskNotificationService:
 
     async def _send_task_notification(
         self, notification: TaskStatusNotification, notification_type: str
-    ):
+    ) -> None:
         """发送任务通知"""
         try:
             # 添加到历史记录
@@ -314,7 +313,7 @@ class TaskNotificationService:
 
     async def _send_task_completion_notification(
         self, notification: TaskStatusNotification
-    ):
+    ) -> None:
         """发送任务完成特殊通知"""
         try:
             completion_type = (
@@ -341,12 +340,14 @@ class TaskNotificationService:
                 notification.user_id, completion_type, completion_message
             )
 
-            logger.info(f"任务完成通知已发送: {notification.task_id}, 状态: {notification.status}")
+            logger.info(
+                f"任务完成通知已发送: {notification.task_id}, 状态: {notification.status}"
+            )
 
         except Exception as e:
             logger.error(f"发送任务完成通知失败: {notification.task_id}, 错误: {e}")
 
-    def _add_to_history(self, notification: TaskStatusNotification):
+    def _add_to_history(self, notification: TaskStatusNotification) -> None:
         """添加通知到历史记录"""
         user_id = notification.user_id
 
@@ -377,7 +378,9 @@ class TaskNotificationService:
             summary = {
                 "strategy": config.get("strategy_name", "unknown"),
                 "stock_count": len(config.get("stock_codes", [])),
-                "period": f"{config.get('start_date', '')} - {config.get('end_date', '')}",
+                "period": (
+                    f"{config.get('start_date', '')} - " f"{config.get('end_date', '')}"
+                ),
             }
         elif task_type == TaskType.TRAINING:
             summary = {
@@ -403,14 +406,14 @@ class TaskNotificationService:
 
         # 回测任务结果
         if "total_return" in result:
-            summary["total_return"] = f"{result['total_return']:.2%}"
-            summary["sharpe_ratio"] = f"{result.get('sharpe_ratio', 0):.2f}"
+            summary["total_return"] = "{result['total_return']:.2%}"
+            summary["sharpe_ratio"] = "{result.get('sharpe_ratio', 0):.2f}"
 
         # 训练任务结果
         if "performance_metrics" in result:
-            metrics = result["performance_metrics"]
-            summary["accuracy"] = f"{metrics.get('accuracy', 0):.3f}"
-            summary["mse"] = f"{metrics.get('mse', 0):.4f}"
+            _ = result["performance_metrics"]
+            summary["accuracy"] = "{metrics.get('accuracy', 0):.3f}"
+            summary["mse"] = "{metrics.get('mse', 0):.4f}"
 
         return summary
 
@@ -427,9 +430,9 @@ class TaskNotificationService:
                 if duration < 60:
                     return f"{duration:.1f}秒"
                 elif duration < 3600:
-                    return f"{duration/60:.1f}分钟"
+                    return f"{duration / 60:.1f}分钟"
                 else:
-                    return f"{duration/3600:.1f}小时"
+                    return f"{duration / 3600:.1f}小时"
 
             return None
 
@@ -460,7 +463,7 @@ class TaskNotificationService:
             "websocket_stats": self.websocket_manager.get_connection_stats(),
         }
 
-    async def cleanup_completed_task_subscriptions(self, task_id: str):
+    async def cleanup_completed_task_subscriptions(self, task_id: str) -> None:
         """清理已完成任务的订阅"""
         try:
             # 移除任务订阅

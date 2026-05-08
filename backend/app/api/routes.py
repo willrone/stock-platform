@@ -15,7 +15,6 @@ API路由定义（已废弃）
 请使用 app.api.v1.api.api_router 替代此文件中的 api_router
 """
 
-from fastapi import APIRouter
 
 # 为了向后兼容，从新的模块化路由导入
 from app.api.v1.api import api_router

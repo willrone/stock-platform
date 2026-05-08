@@ -2,13 +2,14 @@
 技术指标影响分析器
 分析RSI、MACD等指标对预测的影响，提供指标重要性排序
 """
+
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -55,7 +56,7 @@ class IndicatorImportance:
     analysis_method: AnalysisMethod
     confidence_interval: Optional[Tuple[float, float]] = None
     p_value: Optional[float] = None
-    additional_metrics: Dict[str, float] = field(default_factory=dict)
+    additional_metrics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -63,9 +64,9 @@ class IndicatorImportance:
             "indicator_type": self.indicator_type.value,
             "importance_score": self.importance_score,
             "analysis_method": self.analysis_method.value,
-            "confidence_interval": list(self.confidence_interval)
-            if self.confidence_interval
-            else None,
+            "confidence_interval": (
+                list(self.confidence_interval) if self.confidence_interval else None
+            ),
             "p_value": self.p_value,
             "additional_metrics": self.additional_metrics,
         }
@@ -219,7 +220,7 @@ class TechnicalIndicatorCalculator:
 class IndicatorImpactAnalyzer:
     """指标影响分析器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.calculator = TechnicalIndicatorCalculator()
 
     def analyze_correlation(
@@ -715,7 +716,7 @@ class TechnicalAnalyzer:
     ) -> List[IndicatorImportance]:
         """聚合重要性结果"""
         # 按指标名称分组
-        indicator_groups = {}
+        indicator_groups: Any = {}
         for importance in importance_results:
             name = importance.indicator_name
             if name not in indicator_groups:
@@ -729,7 +730,7 @@ class TechnicalAnalyzer:
                 aggregated_results.append(group[0])
             else:
                 # 计算平均重要性分数
-                avg_score = np.mean([imp.importance_score for imp in group])
+                avg_score = float(np.mean([imp.importance_score for imp in group]))
 
                 # 使用第一个结果作为模板
                 template = group[0]
@@ -742,7 +743,9 @@ class TechnicalAnalyzer:
                     additional_metrics={
                         "aggregated_from": [imp.analysis_method.value for imp in group],
                         "individual_scores": [imp.importance_score for imp in group],
-                        "score_std": np.std([imp.importance_score for imp in group]),
+                        "score_std": float(
+                            np.std([imp.importance_score for imp in group])
+                        ),
                     },
                 )
 
@@ -762,14 +765,16 @@ class TechnicalAnalyzer:
         scores = [imp.importance_score for imp in importance_results]
 
         # 按指标类型分组统计
-        type_stats = {}
+        type_stats: Any = {}
         for imp in importance_results:
             indicator_type = imp.indicator_type.value
             if indicator_type not in type_stats:
                 type_stats[indicator_type] = []
             type_stats[indicator_type].append(imp.importance_score)
 
-        type_avg_scores = {k: np.mean(v) for k, v in type_stats.items()}
+        type_avg_scores: Dict[str, float] = {
+            k: float(np.mean(v)) for k, v in type_stats.items()
+        }
 
         return {
             "total_indicators": len(importance_results),
@@ -802,7 +807,7 @@ class TechnicalAnalyzer:
         recommendations.append(f"重点关注以下技术指标: {', '.join(top_names)}")
 
         # 按指标类型分析
-        type_counts = {}
+        type_counts: Any = {}
         for imp in top_indicators:
             indicator_type = imp.indicator_type.value
             type_counts[indicator_type] = type_counts.get(indicator_type, 0) + 1
@@ -877,22 +882,24 @@ class TechnicalAnalyzer:
                 score = importance.importance_score
 
                 if name not in indicator_scores:
-                    indicator_scores[name] = 0
+                    indicator_scores[name] = 0.0
                     indicator_counts[name] = 0
 
-                indicator_scores[name] += score
-                indicator_counts[name] += 1
+                indicator_scores[name] = indicator_scores[name] + float(score)
+                indicator_counts[name] = indicator_counts[name] + 1
 
         # 计算平均分数
-        avg_scores = {}
+        avg_scores: Dict[str, float] = {}
         for name in indicator_scores:
-            avg_scores[name] = indicator_scores[name] / indicator_counts[name]
+            avg_scores[name] = float(indicator_scores[name]) / float(
+                indicator_counts[name]
+            )
 
         # 排序并返回前K个
         sorted_indicators = sorted(avg_scores.items(), key=lambda x: x[1], reverse=True)
-        return sorted_indicators[:top_k]
+        return [(str(name), float(score)) for name, score in sorted_indicators[:top_k]]
 
-    def _save_analysis_result(self, analysis_result: IndicatorAnalysisResult):
+    def _save_analysis_result(self, analysis_result: IndicatorAnalysisResult) -> Any:
         """保存分析结果"""
         try:
             result_file = self.storage_path / f"{analysis_result.analysis_id}.json"

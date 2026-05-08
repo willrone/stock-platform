@@ -4,7 +4,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -155,8 +155,10 @@ class DataValidator:
         self, df: pd.DataFrame, rule: ValidationRule, stock_code: str
     ) -> Dict[str, Any]:
         """应用单个验证规则"""
-        issues = []
+        issues: List[Dict[str, Any]] = []
         modified_count = 0
+        rule_issues: List[Dict[str, Any]] = []
+        rule_modified = 0
 
         if rule == ValidationRule.POSITIVE_PRICES:
             df, rule_issues, rule_modified = self._validate_positive_prices(
@@ -184,9 +186,6 @@ class DataValidator:
             )
         elif rule == ValidationRule.OUTLIER_DETECTION:
             df, rule_issues, rule_modified = self._detect_outliers(df, stock_code)
-        else:
-            rule_issues = []
-            rule_modified = 0
 
         issues.extend(rule_issues)
         modified_count += rule_modified
@@ -342,9 +341,9 @@ class DataValidator:
                         "message": "发现较大的日期间隔",
                         "affected_records": large_gaps.sum(),
                         "details": {
-                            "max_gap_days": date_diff.max().days
-                            if date_diff.max()
-                            else 0
+                            "max_gap_days": (
+                                date_diff.max().days if date_diff.max() else 0
+                            )
                         },
                     }
                 )
@@ -509,9 +508,9 @@ class DataValidator:
         return {
             "is_valid": result.is_valid,
             "quality_score": result.quality_score,
-            "records_processed": len(result.cleaned_data)
-            if result.cleaned_data is not None
-            else 0,
+            "records_processed": (
+                len(result.cleaned_data) if result.cleaned_data is not None else 0
+            ),
             "records_removed": result.records_removed,
             "records_modified": result.records_modified,
             "issues_by_severity": {

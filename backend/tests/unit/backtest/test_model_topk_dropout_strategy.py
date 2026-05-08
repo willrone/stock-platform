@@ -10,7 +10,9 @@ from app.services.backtest.strategies.strategy_factory import StrategyFactory
 
 
 @pytest.mark.asyncio
-async def test_model_topk_dropout_strategy_emits_ranking_scores_for_each_stock_date() -> None:
+async def test_model_topk_dropout_strategy_emits_ranking_scores_for_each_stock_date() -> (
+    None
+):
     strategy = StrategyFactory.create_strategy(
         "model_topk_dropout",
         {
@@ -58,7 +60,9 @@ async def test_model_topk_dropout_strategy_emits_ranking_scores_for_each_stock_d
     ) as mock_engine_cls:
         mock_engine = mock_engine_cls.return_value
         mock_engine.predict_return_series = AsyncMock(
-            side_effect=lambda stock_code, config, start_date, end_date: predicted_returns[stock_code]
+            side_effect=lambda stock_code, config, start_date, end_date: predicted_returns[
+                stock_code
+            ]
         )
 
         await strategy.prepare_backtest_data(

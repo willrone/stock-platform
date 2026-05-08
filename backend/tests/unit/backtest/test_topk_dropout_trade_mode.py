@@ -15,14 +15,16 @@ class _AlwaysValidStrategy:
         return True, None
 
 
-def _build_signal(current_date: datetime, stock_code: str, score: float, price: float) -> TradingSignal:
+def _build_signal(
+    current_date: datetime, stock_code: str, score: float, price: float
+) -> TradingSignal:
     return TradingSignal(
         timestamp=current_date,
         stock_code=stock_code,
         signal_type=SignalType.BUY,
         strength=min(1.0, abs(score) * 100),
         price=price,
-        reason=f"ranking score {score:.4f}",
+        reason="ranking score {score:.4f}",
         metadata={
             "ranking_score": score,
             "signal_role": "ranking_score",
@@ -85,7 +87,10 @@ def test_topk_dropout_trade_mode_rotates_worst_holding_into_best_new_name() -> N
 
     assert second_result.trades_this_day == 2
     assert set(portfolio_manager.positions.keys()) == {"BBB", "CCC"}
-    assert {item["signal_type"] for item in second_result.executed_trade_signals} == {"BUY", "SELL"}
+    assert {item["signal_type"] for item in second_result.executed_trade_signals} == {
+        "BUY",
+        "SELL",
+    }
 
 
 def test_topk_dropout_trade_mode_ignores_candidates_without_current_price() -> None:

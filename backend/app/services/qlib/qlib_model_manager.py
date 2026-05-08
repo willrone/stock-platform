@@ -9,15 +9,13 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Union
 
 from loguru import logger
 
 # 检测可用的深度学习框架
 try:
-    import torch
-    import torch.nn as nn
+    pass
 
     PYTORCH_AVAILABLE = True
 except ImportError:
@@ -25,7 +23,7 @@ except ImportError:
     logger.warning("PyTorch不可用，深度学习模型将不可用")
 
 try:
-    import qlib
+    pass
 
     QLIB_AVAILABLE = True
 except ImportError:
@@ -58,7 +56,9 @@ class ModelMetadata:
     category: ModelCategory
     complexity: ModelComplexity
     description: str
-    supported_tasks: List[str]  # 支持的任务类型：regression, classification, forecasting
+    supported_tasks: List[
+        str
+    ]  # 支持的任务类型：regression, classification, forecasting
     min_samples: int  # 最小样本数要求
     recommended_features: int  # 推荐特征数
     training_time_estimate: str  # 训练时间估计
@@ -92,22 +92,18 @@ class BaseModelAdapter(ABC):
     @abstractmethod
     def get_metadata(self) -> ModelMetadata:
         """获取模型元数据"""
-        pass
 
     @abstractmethod
     def get_hyperparameter_specs(self) -> List[HyperparameterSpec]:
         """获取超参数规格"""
-        pass
 
     @abstractmethod
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
         """创建Qlib配置"""
-        pass
 
     @abstractmethod
     def validate_hyperparameters(self, hyperparameters: Dict[str, Any]) -> bool:
         """验证超参数"""
-        pass
 
 
 class LightGBMAdapter(BaseModelAdapter):
@@ -204,24 +200,25 @@ class LightGBMAdapter(BaseModelAdapter):
         ]
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
-        config = {
+        kwargs: Dict[str, Any] = {
+            # 使用 Huber 损失提高对异常标签的鲁棒性。
+            "loss": "huber",
+            "huber_delta": 0.1,
+            "learning_rate": hyperparameters.get("learning_rate", 0.1),
+            "num_leaves": hyperparameters.get("num_leaves", 31),
+            "max_depth": hyperparameters.get("max_depth", -1),
+            "min_data_in_leaf": hyperparameters.get("min_data_in_leaf", 20),
+            "feature_fraction": hyperparameters.get("feature_fraction", 0.9),
+            "bagging_fraction": hyperparameters.get("bagging_fraction", 0.8),
+            "lambda_l1": hyperparameters.get("lambda_l1", 0.0),
+            "lambda_l2": hyperparameters.get("lambda_l2", 0.0),
+            "num_threads": 20,
+            "verbose": -1,  # 禁用LightGBM的默认输出，但保留训练历史
+        }
+        config: Dict[str, Any] = {
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
-            "kwargs": {
-                # qlib.contrib.model.gbdt.LGBModel 仅支持 loss in {"mse", "binary"}
-                # 这里使用 mse；如需更鲁棒的损失，需走自定义 LightGBM 训练器而不是 Qlib 默认适配器。
-                "loss": "mse",
-                "learning_rate": hyperparameters.get("learning_rate", 0.1),
-                "num_leaves": hyperparameters.get("num_leaves", 31),
-                "max_depth": hyperparameters.get("max_depth", -1),
-                "min_data_in_leaf": hyperparameters.get("min_data_in_leaf", 20),
-                "feature_fraction": hyperparameters.get("feature_fraction", 0.9),
-                "bagging_fraction": hyperparameters.get("bagging_fraction", 0.8),
-                "lambda_l1": hyperparameters.get("lambda_l1", 0.0),
-                "lambda_l2": hyperparameters.get("lambda_l2", 0.0),
-                "num_threads": 20,
-                "verbose": -1,  # 禁用LightGBM的默认输出，但保留训练历史
-            },
+            "kwargs": kwargs,
         }
 
         # 训练轮数需要映射到 qlib LGBModel.__init__(num_boost_round=...)
@@ -234,7 +231,7 @@ class LightGBMAdapter(BaseModelAdapter):
             num_iterations = hyperparameters["epochs"]
 
         if num_iterations:
-            config["kwargs"]["num_boost_round"] = num_iterations
+            kwargs["num_boost_round"] = num_iterations
 
         return config
 
@@ -250,7 +247,7 @@ class LightGBMAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -312,7 +309,7 @@ class LinearAdapter(BaseModelAdapter):
             if not (0.0001 <= alpha <= 1.0):
                 return False
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -378,24 +375,25 @@ class XGBoostAdapter(BaseModelAdapter):
         ]
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
-        config = {
+        kwargs: Dict[str, Any] = {
+            "learning_rate": hyperparameters.get("learning_rate", 0.1),
+            "max_depth": hyperparameters.get("max_depth", 6),
+            "n_estimators": hyperparameters.get("n_estimators", 100),
+            "subsample": hyperparameters.get("subsample", 0.8),
+            "colsample_bytree": hyperparameters.get("colsample_bytree", 0.8),
+            "random_state": 42,
+        }
+        config: Dict[str, Any] = {
             "class": "XGBModel",
             "module_path": "qlib.contrib.model.xgboost",
-            "kwargs": {
-                "learning_rate": hyperparameters.get("learning_rate", 0.1),
-                "max_depth": hyperparameters.get("max_depth", 6),
-                "n_estimators": hyperparameters.get("n_estimators", 100),
-                "subsample": hyperparameters.get("subsample", 0.8),
-                "colsample_bytree": hyperparameters.get("colsample_bytree", 0.8),
-                "random_state": 42,
-            },
+            "kwargs": kwargs,
         }
 
         # 支持num_iterations或epochs作为n_estimators的别名
         if "num_iterations" in hyperparameters:
-            config["kwargs"]["n_estimators"] = hyperparameters["num_iterations"]
+            kwargs["n_estimators"] = hyperparameters["num_iterations"]
         elif "epochs" in hyperparameters:
-            config["kwargs"]["n_estimators"] = hyperparameters["epochs"]
+            kwargs["n_estimators"] = hyperparameters["epochs"]
 
         return config
 
@@ -405,7 +403,7 @@ class XGBoostAdapter(BaseModelAdapter):
             if not (0.01 <= lr <= 0.3):
                 return False
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -481,7 +479,7 @@ class MLPAdapter(BaseModelAdapter):
             if not (0.0001 <= lr <= 0.01):
                 return False
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -569,7 +567,7 @@ class TransformerAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -649,7 +647,7 @@ class InformerAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -794,20 +792,20 @@ class PatchTSTAdapter(BaseModelAdapter):
                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
 
 class QlibModelManager:
     """Qlib模型配置管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.adapters: Dict[str, BaseModelAdapter] = {}
         self._register_default_adapters()
 
         logger.info(f"Qlib模型管理器初始化完成，支持 {len(self.adapters)} 种模型")
 
-    def _register_default_adapters(self):
+    def _register_default_adapters(self) -> None:
         """注册默认的模型适配器"""
         # 传统ML模型
         self.adapters["lightgbm"] = LightGBMAdapter()
@@ -824,7 +822,7 @@ class QlibModelManager:
         else:
             logger.warning("PyTorch不可用，深度学习模型将不可用")
 
-    def register_adapter(self, name: str, adapter: BaseModelAdapter):
+    def register_adapter(self, name: str, adapter: BaseModelAdapter) -> Any:
         """注册自定义模型适配器"""
         self.adapters[name] = adapter
         logger.info(f"注册自定义模型适配器: {name}")
@@ -938,7 +936,7 @@ class QlibModelManager:
         recommendations.sort(key=lambda x: x[1], reverse=True)
         return [name for name, _ in recommendations]
 
-    def export_config_template(self, model_name: str, file_path: str):
+    def export_config_template(self, model_name: str, file_path: str) -> Any:
         """导出模型配置模板"""
         adapter = self.adapters.get(model_name)
         if not adapter:
@@ -987,10 +985,26 @@ class QlibModelManager:
     def _get_training_tips(self, model_name: str) -> List[str]:
         """获取训练提示"""
         tips_map = {
-            "lightgbm": ["适合大规模数据和高维特征", "建议使用特征工程提升效果", "可以通过调整num_leaves控制过拟合"],
-            "xgboost": ["在结构化数据上表现优异", "建议使用交叉验证选择参数", "注意调整正则化参数防止过拟合"],
-            "transformer": ["需要大量数据才能发挥优势", "建议使用GPU加速训练", "注意序列长度对内存的影响"],
-            "informer": ["专门用于长序列预测", "需要充足的GPU内存", "适合处理复杂的时间模式"],
+            "lightgbm": [
+                "适合大规模数据和高维特征",
+                "建议使用特征工程提升效果",
+                "可以通过调整num_leaves控制过拟合",
+            ],
+            "xgboost": [
+                "在结构化数据上表现优异",
+                "建议使用交叉验证选择参数",
+                "注意调整正则化参数防止过拟合",
+            ],
+            "transformer": [
+                "需要大量数据才能发挥优势",
+                "建议使用GPU加速训练",
+                "注意序列长度对内存的影响",
+            ],
+            "informer": [
+                "专门用于长序列预测",
+                "需要充足的GPU内存",
+                "适合处理复杂的时间模式",
+            ],
         }
 
         return tips_map.get(model_name, ["请参考模型文档进行配置"])

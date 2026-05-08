@@ -2,21 +2,50 @@
 数据漂移检测器
 检测输入数据分布变化，量化漂移程度并生成报告
 """
-import json
+
+import logging
 import threading
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
-import pandas as pd
-from loguru import logger
-from scipy import stats
-from scipy.stats import wasserstein_distance
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+
+logger: Any = logging.getLogger(__name__)
+
+try:
+    from scipy import stats
+    from scipy.stats import wasserstein_distance
+except ImportError:
+    stats = None
+    wasserstein_distance = None
+
+try:
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
+except ImportError:
+    PCA = None
+    StandardScaler = None
+
+
+def _require_scipy_stats() -> Any:
+    if stats is None:
+        raise ImportError("漂移检测依赖 scipy，请先安装 scipy。")
+    return stats
+
+
+def _require_wasserstein_distance() -> Any:
+    if wasserstein_distance is None:
+        raise ImportError("Wasserstein 距离计算依赖 scipy，请先安装 scipy。")
+    return wasserstein_distance
+
+
+def _require_sklearn_components() -> Tuple[Any, Any]:
+    if PCA is None or StandardScaler is None:
+        raise ImportError("多变量漂移检测依赖 scikit-learn，请先安装 scikit-learn。")
+    return PCA, StandardScaler
 
 
 class DriftType(Enum):
@@ -45,6 +74,10 @@ class DriftMethod(Enum):
     PSI = "psi"  # Population Stability Index
     JENSEN_SHANNON = "jensen_shannon"  # Jensen-Shannon散度
     PCA_RECONSTRUCTION = "pca_reconstruction"  # PCA重构误差
+
+
+class DriftDetectionUnavailableError(RuntimeError):
+    """漂移检测依赖或检测器本身不可用。"""
 
 
 @dataclass
@@ -110,7 +143,7 @@ class DriftReport:
 class StatisticalDriftDetector:
     """统计漂移检测器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.methods = {
             DriftMethod.KS_TEST: self._ks_test,
             DriftMethod.WASSERSTEIN: self._wasserstein_distance,
@@ -152,14 +185,16 @@ class StatisticalDriftDetector:
         self, ref_data: np.ndarray, cur_data: np.ndarray
     ) -> Tuple[float, float]:
         """Kolmogorov-Smirnov检验"""
-        statistic, p_value = stats.ks_2samp(ref_data, cur_data)
+        scipy_stats = _require_scipy_stats()
+        statistic, p_value = scipy_stats.ks_2samp(ref_data, cur_data)
         return float(statistic), float(p_value)
 
     def _wasserstein_distance(
         self, ref_data: np.ndarray, cur_data: np.ndarray
     ) -> Tuple[float, None]:
         """Wasserstein距离"""
-        distance = wasserstein_distance(ref_data, cur_data)
+        distance_fn = _require_wasserstein_distance()
+        distance = distance_fn(ref_data, cur_data)
         return float(distance), None
 
     def _psi_score(
@@ -182,9 +217,11 @@ class StatisticalDriftDetector:
         cur_probs = np.where(cur_probs == 0, 1e-6, cur_probs)
 
         # 计算PSI
-        psi = np.sum((cur_probs - ref_probs) * np.log(cur_probs / ref_probs))
+        psi: float = float(
+            np.sum((cur_probs - ref_probs) * np.log(cur_probs / ref_probs))
+        )
 
-        return float(psi), None
+        return psi, None
 
     def _jensen_shannon_divergence(
         self, ref_data: np.ndarray, cur_data: np.ndarray, bins: int = 10
@@ -207,7 +244,10 @@ class StatisticalDriftDetector:
 
         # 计算JS散度
         m = 0.5 * (ref_probs + cur_probs)
-        js_div = 0.5 * stats.entropy(ref_probs, m) + 0.5 * stats.entropy(cur_probs, m)
+        scipy_stats = _require_scipy_stats()
+        js_div = 0.5 * scipy_stats.entropy(ref_probs, m) + 0.5 * scipy_stats.entropy(
+            cur_probs, m
+        )
 
         return float(js_div), None
 
@@ -222,56 +262,66 @@ class StatisticalDriftDetector:
         if method == DriftMethod.KS_TEST:
             if p_value is None:
                 return DriftSeverity.NONE
+            return self._severity_from_descending_thresholds(
+                p_value,
+                (
+                    (0.1, DriftSeverity.NONE),
+                    (0.05, DriftSeverity.LOW),
+                    (0.01, DriftSeverity.MEDIUM),
+                    (0.001, DriftSeverity.HIGH),
+                ),
+            )
 
-            if p_value > 0.1:
-                return DriftSeverity.NONE
-            elif p_value > 0.05:
-                return DriftSeverity.LOW
-            elif p_value > 0.01:
-                return DriftSeverity.MEDIUM
-            elif p_value > 0.001:
-                return DriftSeverity.HIGH
-            else:
-                return DriftSeverity.CRITICAL
+        ascending_thresholds = {
+            DriftMethod.PSI: (
+                (0.1, DriftSeverity.NONE),
+                (0.2, DriftSeverity.LOW),
+                (0.3, DriftSeverity.MEDIUM),
+                (0.5, DriftSeverity.HIGH),
+            ),
+            DriftMethod.WASSERSTEIN: (
+                (threshold * 0.5, DriftSeverity.NONE),
+                (threshold, DriftSeverity.LOW),
+                (threshold * 2, DriftSeverity.MEDIUM),
+                (threshold * 5, DriftSeverity.HIGH),
+            ),
+            DriftMethod.JENSEN_SHANNON: (
+                (0.1, DriftSeverity.NONE),
+                (0.2, DriftSeverity.LOW),
+                (0.4, DriftSeverity.MEDIUM),
+                (0.6, DriftSeverity.HIGH),
+            ),
+        }
 
-        elif method == DriftMethod.PSI:
-            if drift_score < 0.1:
-                return DriftSeverity.NONE
-            elif drift_score < 0.2:
-                return DriftSeverity.LOW
-            elif drift_score < 0.3:
-                return DriftSeverity.MEDIUM
-            elif drift_score < 0.5:
-                return DriftSeverity.HIGH
-            else:
-                return DriftSeverity.CRITICAL
-
-        elif method == DriftMethod.WASSERSTEIN:
-            # 基于数据范围的相对距离
-            if drift_score < threshold * 0.5:
-                return DriftSeverity.NONE
-            elif drift_score < threshold:
-                return DriftSeverity.LOW
-            elif drift_score < threshold * 2:
-                return DriftSeverity.MEDIUM
-            elif drift_score < threshold * 5:
-                return DriftSeverity.HIGH
-            else:
-                return DriftSeverity.CRITICAL
-
-        elif method == DriftMethod.JENSEN_SHANNON:
-            if drift_score < 0.1:
-                return DriftSeverity.NONE
-            elif drift_score < 0.2:
-                return DriftSeverity.LOW
-            elif drift_score < 0.4:
-                return DriftSeverity.MEDIUM
-            elif drift_score < 0.6:
-                return DriftSeverity.HIGH
-            else:
-                return DriftSeverity.CRITICAL
+        method_thresholds = ascending_thresholds.get(method)
+        if method_thresholds is not None:
+            return self._severity_from_ascending_thresholds(
+                drift_score, method_thresholds
+            )
 
         return DriftSeverity.NONE
+
+    def _severity_from_descending_thresholds(
+        self,
+        value: float,
+        thresholds: Tuple[Tuple[float, DriftSeverity], ...],
+    ) -> DriftSeverity:
+        """按从高到低的阈值区间映射严重程度。"""
+        for lower_bound, severity in thresholds:
+            if value > lower_bound:
+                return severity
+        return DriftSeverity.CRITICAL
+
+    def _severity_from_ascending_thresholds(
+        self,
+        value: float,
+        thresholds: Tuple[Tuple[float, DriftSeverity], ...],
+    ) -> DriftSeverity:
+        """按从低到高的阈值区间映射严重程度。"""
+        for upper_bound, severity in thresholds:
+            if value < upper_bound:
+                return severity
+        return DriftSeverity.CRITICAL
 
 
 class MultivariateDriftDetector:
@@ -285,26 +335,30 @@ class MultivariateDriftDetector:
             n_components: PCA主成分数量
         """
         self.n_components = n_components
-        self.pca = None
-        self.scaler = None
-        self.reference_reconstructed = None
+        self.pca: Any = None
+        self.scaler: Any = None
+        self.reference_reconstructed: Any = None
 
-    def fit_reference(self, reference_data: np.ndarray):
+    def fit_reference(self, reference_data: np.ndarray) -> None:
         """拟合参考数据"""
+        pca_class, scaler_class = _require_sklearn_components()
+
         # 标准化
-        self.scaler = StandardScaler()
-        scaled_data = self.scaler.fit_transform(reference_data)
+        self.scaler = scaler_class()
+        scaled_data = cast(Any, self.scaler).fit_transform(reference_data)
 
         # PCA降维
-        self.pca = PCA(n_components=min(self.n_components, scaled_data.shape[1]))
-        self.pca.fit(scaled_data)
+        self.pca = pca_class(n_components=min(self.n_components, scaled_data.shape[1]))
+        cast(Any, self.pca).fit(scaled_data)
 
         # 计算重构数据
-        transformed = self.pca.transform(scaled_data)
-        self.reference_reconstructed = self.pca.inverse_transform(transformed)
+        transformed = cast(Any, self.pca).transform(scaled_data)
+        self.reference_reconstructed = cast(Any, self.pca).inverse_transform(
+            transformed
+        )
 
         logger.info(
-            f"多变量漂移检测器已拟合，解释方差比: {self.pca.explained_variance_ratio_.sum():.3f}"
+            f"多变量漂移检测器已拟合，解释方差比: {cast(Any, self.pca).explained_variance_ratio_.sum():.3f}"
         )
 
     def detect_drift(self, current_data: np.ndarray) -> Tuple[float, DriftSeverity]:
@@ -320,12 +374,15 @@ class MultivariateDriftDetector:
         if self.pca is None or self.scaler is None:
             raise ValueError("需要先调用fit_reference方法")
 
+        scaler = cast(Any, self.scaler)
+        pca = cast(Any, self.pca)
+
         # 标准化当前数据
-        scaled_current = self.scaler.transform(current_data)
+        scaled_current = scaler.transform(current_data)
 
         # PCA变换和重构
-        transformed_current = self.pca.transform(scaled_current)
-        reconstructed_current = self.pca.inverse_transform(transformed_current)
+        transformed_current = pca.transform(scaled_current)
+        reconstructed_current = pca.inverse_transform(transformed_current)
 
         # 计算重构误差
         ref_error = np.mean(
@@ -387,18 +444,17 @@ class DriftDetector:
 
         # 检测器
         self.statistical_detector = StatisticalDriftDetector()
-        self.multivariate_detector = MultivariateDriftDetector()
+        self.multivariate_detectors: Dict[str, MultivariateDriftDetector] = {}
 
         # 参考数据
-        self.reference_data: Dict[str, np.ndarray] = {}
-        self.reference_fitted = False
+        self.reference_data: Dict[str, Any] = {}
 
         # 检测历史
         self.drift_reports: List[DriftReport] = []
         self.max_reports = 1000
 
         # 线程锁
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
 
         logger.info("数据漂移检测器初始化完成")
 
@@ -409,7 +465,7 @@ class DriftDetector:
         features: Dict[str, float],
         prediction: Optional[float] = None,
         timestamp: Optional[datetime] = None,
-    ):
+    ) -> None:
         """添加样本数据"""
         if timestamp is None:
             timestamp = datetime.now()
@@ -430,7 +486,7 @@ class DriftDetector:
                     {"timestamp": timestamp, "prediction": prediction}
                 )
 
-    def fit_reference_data(self, model_id: str, model_version: str):
+    def fit_reference_data(self, model_id: str, model_version: str) -> None:
         """拟合参考数据"""
         key = f"{model_id}_{model_version}"
 
@@ -469,17 +525,19 @@ class DriftDetector:
 
             # 拟合多变量检测器
             try:
-                self.multivariate_detector.fit_reference(feature_matrix)
-                self.reference_fitted = True
+                multivariate_detector = MultivariateDriftDetector()
+                multivariate_detector.fit_reference(feature_matrix)
+                self.multivariate_detectors[key] = multivariate_detector
                 logger.info(f"已拟合模型 {key} 的参考数据")
             except Exception as e:
+                self.multivariate_detectors.pop(key, None)
                 logger.error(f"拟合参考数据失败: {e}")
 
     def detect_drift(
         self,
         model_id: str,
         model_version: str,
-        methods: List[DriftMethod] = None,
+        methods: Optional[List[DriftMethod]] = None,
         detection_window_hours: int = 1,
     ) -> Optional[DriftReport]:
         """
@@ -496,6 +554,11 @@ class DriftDetector:
         """
         if methods is None:
             methods = [DriftMethod.KS_TEST, DriftMethod.PSI]
+
+        statistical_methods = [
+            method for method in methods if method != DriftMethod.PCA_RECONSTRUCTION
+        ]
+        run_multivariate_detection = DriftMethod.PCA_RECONSTRUCTION in methods
 
         key = f"{model_id}_{model_version}"
 
@@ -532,13 +595,14 @@ class DriftDetector:
 
             # 执行漂移检测
             feature_results = []
+            detector_unavailable_errors: List[ImportError] = []
 
             # 单变量检测
             for i, feature_name in enumerate(feature_names):
                 ref_feature = reference_info["features"][:, i]
                 cur_feature = current_matrix[:, i]
 
-                for method in methods:
+                for method in statistical_methods:
                     try:
                         (
                             drift_score,
@@ -571,16 +635,25 @@ class DriftDetector:
 
                         feature_results.append(result)
 
+                    except ImportError as e:
+                        detector_unavailable_errors.append(e)
+                        logger.warning(
+                            f"特征 {feature_name} 的 {method.value} 检测暂不可用: {e}"
+                        )
                     except Exception as e:
-                        logger.error(f"特征 {feature_name} 的 {method.value} 检测失败: {e}")
+                        logger.error(
+                            f"特征 {feature_name} 的 {method.value} 检测失败: {e}"
+                        )
+
+            multivariate_detector = self.multivariate_detectors.get(key)
 
             # 多变量检测
-            if self.reference_fitted:
+            if run_multivariate_detection and multivariate_detector is not None:
                 try:
                     (
                         mv_drift_score,
                         mv_severity,
-                    ) = self.multivariate_detector.detect_drift(current_matrix)
+                    ) = multivariate_detector.detect_drift(current_matrix)
 
                     mv_result = DriftResult(
                         feature_name="multivariate",
@@ -595,24 +668,45 @@ class DriftDetector:
                         detection_period=f"{detection_window_hours}小时内",
                         details={
                             "n_features": len(feature_names),
-                            "pca_components": self.multivariate_detector.n_components,
+                            "pca_components": multivariate_detector.n_components,
                             "explained_variance": float(
-                                self.multivariate_detector.pca.explained_variance_ratio_.sum()
+                                cast(
+                                    Any, multivariate_detector.pca
+                                ).explained_variance_ratio_.sum()
                             ),
                         },
                     )
 
                     feature_results.append(mv_result)
 
+                except ImportError as e:
+                    detector_unavailable_errors.append(e)
+                    logger.warning(f"多变量漂移检测暂不可用: {e}")
                 except Exception as e:
                     logger.error(f"多变量漂移检测失败: {e}")
+
+            if run_multivariate_detection and multivariate_detector is None:
+                raise DriftDetectionUnavailableError(
+                    "漂移检测不可用: PCA 重构检测器尚未完成参考数据拟合"
+                )
+
+            if detector_unavailable_errors:
+                unique_errors = list(
+                    dict.fromkeys(str(error) for error in detector_unavailable_errors)
+                )
+                message = "；".join(unique_errors)
+                raise DriftDetectionUnavailableError(
+                    f"漂移检测不可用: {message}"
+                ) from detector_unavailable_errors[0]
 
             # 计算总体漂移分数和严重程度
             if feature_results:
                 drift_scores = [
                     r.drift_score for r in feature_results if r.drift_score is not None
                 ]
-                overall_drift_score = np.mean(drift_scores) if drift_scores else 0.0
+                overall_drift_score = (
+                    float(np.mean(drift_scores)) if drift_scores else 0.0
+                )
 
                 severities = [r.severity for r in feature_results]
                 severity_levels = {
@@ -655,7 +749,9 @@ class DriftDetector:
             if len(self.drift_reports) > self.max_reports:
                 self.drift_reports = self.drift_reports[-self.max_reports :]
 
-            logger.info(f"完成漂移检测: {model_id}, 总体严重程度: {overall_severity.value}")
+            logger.info(
+                f"完成漂移检测: {model_id}, 总体严重程度: {overall_severity.value}"
+            )
             return report
 
     def _generate_summary(self, results: List[DriftResult]) -> Dict[str, Any]:
@@ -663,9 +759,9 @@ class DriftDetector:
         if not results:
             return {}
 
-        severity_counts = defaultdict(int)
-        method_counts = defaultdict(int)
-        drift_type_counts = defaultdict(int)
+        severity_counts: Any = defaultdict(int)
+        method_counts: Any = defaultdict(int)
+        drift_type_counts: Any = defaultdict(int)
 
         for result in results:
             severity_counts[result.severity.value] += 1
@@ -712,7 +808,9 @@ class DriftDetector:
             if r.severity in [DriftSeverity.HIGH, DriftSeverity.CRITICAL]
         ]
         if high_drift_features:
-            recommendations.append(f"重点关注漂移严重的特征: {', '.join(high_drift_features)}")
+            recommendations.append(
+                f"重点关注漂移严重的特征: {', '.join(high_drift_features)}"
+            )
 
         return recommendations
 
@@ -741,7 +839,7 @@ class DriftDetector:
         reports = self.get_drift_history(model_id, model_version, limit=1)
         return reports[0] if reports else None
 
-    def clear_reference_data(self, model_id: str, model_version: str):
+    def clear_reference_data(self, model_id: str, model_version: str) -> Any:
         """清除参考数据"""
         key = f"{model_id}_{model_version}"
         with self.lock:
@@ -759,17 +857,17 @@ class DriftDetector:
         """获取漂移检测指标（API 兼容方法）"""
         with self.lock:
             reports = self.drift_reports.copy()
-        
+
         # 时间过滤
         if start_time:
             reports = [r for r in reports if r.timestamp >= start_time]
         if end_time:
             reports = [r for r in reports if r.timestamp <= end_time]
-        
+
         # 模型过滤
         if model_id:
             reports = [r for r in reports if r.model_id == model_id]
-        
+
         return [r.to_dict() for r in reports[-limit:]]
 
     def get_model_drift_status(
@@ -781,13 +879,13 @@ class DriftDetector:
         """获取模型漂移状态（API 兼容方法）"""
         with self.lock:
             reports = [r for r in self.drift_reports if r.model_id == model_id]
-        
+
         # 时间过滤
         if start_time:
             reports = [r for r in reports if r.timestamp >= start_time]
         if end_time:
             reports = [r for r in reports if r.timestamp <= end_time]
-        
+
         if not reports:
             return {
                 "model_id": model_id,
@@ -795,16 +893,21 @@ class DriftDetector:
                 "drift_score": 0,
                 "last_drift_time": None,
             }
-        
+
         latest_report = reports[-1]
-        drift_detected = latest_report.overall_severity not in [DriftSeverity.NONE, DriftSeverity.LOW]
-        
+        drift_detected = latest_report.overall_severity not in [
+            DriftSeverity.NONE,
+            DriftSeverity.LOW,
+        ]
+
         return {
             "model_id": model_id,
             "drift_detected": drift_detected,
             "drift_score": latest_report.overall_drift_score,
             "severity": latest_report.overall_severity.value,
-            "last_drift_time": latest_report.timestamp.isoformat() if drift_detected else None,
+            "last_drift_time": (
+                latest_report.timestamp.isoformat() if drift_detected else None
+            ),
             "total_reports": len(reports),
         }
 
@@ -818,19 +921,20 @@ class DriftDetector:
                     "overall_health": "healthy",
                     "last_check": None,
                 }
-            
+
             # 获取最近的报告（每个模型最新的一个）
             latest_by_model: Dict[str, DriftReport] = {}
             for report in self.drift_reports:
                 key = f"{report.model_id}_{report.model_version}"
                 latest_by_model[key] = report
-            
+
             # 统计
             models_with_drift = sum(
-                1 for r in latest_by_model.values()
+                1
+                for r in latest_by_model.values()
                 if r.overall_severity not in [DriftSeverity.NONE, DriftSeverity.LOW]
             )
-            
+
             # 确定整体健康状态
             severities = [r.overall_severity for r in latest_by_model.values()]
             if any(s == DriftSeverity.CRITICAL for s in severities):
@@ -841,16 +945,18 @@ class DriftDetector:
                 overall_health = "attention"
             else:
                 overall_health = "healthy"
-            
+
             latest_report = max(self.drift_reports, key=lambda r: r.timestamp)
-            
+
             return {
                 "total_models_monitored": len(latest_by_model),
                 "models_with_drift": models_with_drift,
                 "overall_health": overall_health,
                 "last_check": latest_report.timestamp.isoformat(),
                 "severity_distribution": {
-                    s.value: sum(1 for r in latest_by_model.values() if r.overall_severity == s)
+                    s.value: sum(
+                        1 for r in latest_by_model.values() if r.overall_severity == s
+                    )
                     for s in DriftSeverity
                 },
             }

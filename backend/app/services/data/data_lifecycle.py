@@ -7,11 +7,9 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from loguru import logger
-
-from app.models.database import DatabaseManager, TaskStatus
+from app.models.database import DatabaseManager
 
 from .parquet_manager import ParquetManager
 
@@ -26,7 +24,7 @@ class CleanupResult:
     deleted_logs: int
     errors: List[str]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
             "deleted_files": self.deleted_files,
@@ -70,7 +68,7 @@ class DataLifecycleManager:
         parquet_manager: ParquetManager,
         retention_policy: Optional[RetentionPolicy] = None,
         base_path: str = "data",
-    ):
+    ) -> None:
         self.db_manager = db_manager
         self.parquet_manager = parquet_manager
         self.retention_policy = retention_policy or RetentionPolicy()
@@ -146,11 +144,11 @@ class DataLifecycleManager:
 
         return result
 
-    def _cleanup_parquet_files(self, dry_run: bool) -> Dict:
+    def _cleanup_parquet_files(self, dry_run: bool) -> Dict[str, Any]:
         """清理Parquet数据文件"""
         self.logger.info("开始清理Parquet文件")
 
-        result = {"deleted_files": 0, "deleted_size": 0, "errors": []}
+        result: Dict[str, Any] = {"deleted_files": 0, "deleted_size": 0, "errors": []}
 
         try:
             if dry_run:
@@ -179,11 +177,11 @@ class DataLifecycleManager:
 
         return result
 
-    def _cleanup_old_tasks(self, dry_run: bool) -> Dict:
+    def _cleanup_old_tasks(self, dry_run: bool) -> Dict[str, Any]:
         """清理数据库中的旧任务"""
         self.logger.info("开始清理旧任务记录")
 
-        result = {"deleted_tasks": 0, "errors": []}
+        result: Dict[str, Any] = {"deleted_tasks": 0, "errors": []}
 
         try:
             # 计算截止日期
@@ -199,7 +197,7 @@ class DataLifecycleManager:
                 # 统计普通任务
                 normal_tasks = self.db_manager.fetch_all(
                     """
-                    SELECT COUNT(*) as count FROM tasks 
+                    SELECT COUNT(*) as count FROM tasks
                     WHERE created_at < ? AND status NOT IN ('failed', 'cancelled')
                 """,
                     (task_cutoff,),
@@ -208,7 +206,7 @@ class DataLifecycleManager:
                 # 统计失败任务
                 failed_tasks = self.db_manager.fetch_all(
                     """
-                    SELECT COUNT(*) as count FROM tasks 
+                    SELECT COUNT(*) as count FROM tasks
                     WHERE created_at < ? AND status IN ('failed', 'cancelled')
                 """,
                     (failed_task_cutoff,),
@@ -221,11 +219,11 @@ class DataLifecycleManager:
                 # 实际删除
                 with self.db_manager.get_connection() as conn:
                     # 删除旧的普通任务及其结果
-                    cursor1 = conn.execute(
+                    _ = conn.execute(
                         """
-                        DELETE FROM task_results 
+                        DELETE FROM task_results
                         WHERE task_id IN (
-                            SELECT id FROM tasks 
+                            SELECT id FROM tasks
                             WHERE created_at < ? AND status NOT IN ('failed', 'cancelled')
                         )
                     """,
@@ -234,18 +232,18 @@ class DataLifecycleManager:
 
                     cursor2 = conn.execute(
                         """
-                        DELETE FROM tasks 
+                        DELETE FROM tasks
                         WHERE created_at < ? AND status NOT IN ('failed', 'cancelled')
                     """,
                         (task_cutoff,),
                     )
 
                     # 删除旧的失败任务及其结果
-                    cursor3 = conn.execute(
+                    _ = conn.execute(
                         """
-                        DELETE FROM task_results 
+                        DELETE FROM task_results
                         WHERE task_id IN (
-                            SELECT id FROM tasks 
+                            SELECT id FROM tasks
                             WHERE created_at < ? AND status IN ('failed', 'cancelled')
                         )
                     """,
@@ -254,7 +252,7 @@ class DataLifecycleManager:
 
                     cursor4 = conn.execute(
                         """
-                        DELETE FROM tasks 
+                        DELETE FROM tasks
                         WHERE created_at < ? AND status IN ('failed', 'cancelled')
                     """,
                         (failed_task_cutoff,),
@@ -269,11 +267,11 @@ class DataLifecycleManager:
 
         return result
 
-    def _cleanup_log_files(self, dry_run: bool) -> Dict:
+    def _cleanup_log_files(self, dry_run: bool) -> Dict[str, Any]:
         """清理日志文件"""
         self.logger.info("开始清理日志文件")
 
-        result = {"deleted_files": 0, "deleted_size": 0, "errors": []}
+        result: Dict[str, Any] = {"deleted_files": 0, "deleted_size": 0, "errors": []}
 
         try:
             cutoff_date = datetime.now() - timedelta(
@@ -304,11 +302,11 @@ class DataLifecycleManager:
 
         return result
 
-    def _cleanup_temp_files(self, dry_run: bool) -> Dict:
+    def _cleanup_temp_files(self, dry_run: bool) -> Dict[str, Any]:
         """清理临时文件"""
         self.logger.info("开始清理临时文件")
 
-        result = {"deleted_files": 0, "deleted_size": 0, "errors": []}
+        result: Dict[str, Any] = {"deleted_files": 0, "deleted_size": 0, "errors": []}
 
         try:
             cutoff_date = datetime.now() - timedelta(
@@ -341,11 +339,11 @@ class DataLifecycleManager:
 
         return result
 
-    def _cleanup_model_files(self, dry_run: bool) -> Dict:
+    def _cleanup_model_files(self, dry_run: bool) -> Dict[str, Any]:
         """清理旧模型文件"""
         self.logger.info("开始清理模型文件")
 
-        result = {"deleted_files": 0, "deleted_size": 0, "errors": []}
+        result: Dict[str, Any] = {"deleted_files": 0, "deleted_size": 0, "errors": []}
 
         try:
             cutoff_date = datetime.now() - timedelta(
@@ -388,10 +386,10 @@ class DataLifecycleManager:
 
         return result
 
-    def _cleanup_empty_directories(self, root_path: Path):
+    def _cleanup_empty_directories(self, root_path: Path) -> None:
         """清理空目录"""
         try:
-            for dirpath, dirnames, filenames in os.walk(root_path, topdown=False):
+            for dirpath, dirnames, _filenames in os.walk(root_path, topdown=False):
                 for dirname in dirnames:
                     dir_path = Path(dirpath) / dirname
                     try:
@@ -403,9 +401,9 @@ class DataLifecycleManager:
         except Exception as e:
             self.logger.warning(f"清理空目录失败: {e}")
 
-    def get_storage_usage(self) -> Dict:
+    def get_storage_usage(self) -> Dict[str, Any]:
         """获取存储使用情况"""
-        usage = {
+        usage: Dict[str, Any] = {
             "parquet": {"size": 0, "files": 0},
             "database": {"size": 0, "files": 1},
             "logs": {"size": 0, "files": 0},
@@ -454,8 +452,8 @@ class DataLifecycleManager:
             # 转换为MB
             for category in usage:
                 if isinstance(usage[category], dict) and "size" in usage[category]:
-                    usage[category]["size_mb"] = round(
-                        usage[category]["size"] / (1024 * 1024), 2
+                    usage[category]["size_mb"] = float(
+                        round(usage[category]["size"] / (1024 * 1024), 2)
                     )
 
         except Exception as e:

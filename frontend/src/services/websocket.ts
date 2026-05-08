@@ -9,21 +9,52 @@
  */
 
 // WebSocket事件类型
+type TaskCreatedData = { task_id: string; task_name: string };
+type TaskProgressData = { task_id: string; progress: number; status: string };
+type TaskCompletedData = { task_id: string; results: unknown };
+type TaskFailedData = { task_id: string; error: string };
+type SystemStatusData = Record<string, unknown>;
+type SystemAlertData = { level: 'info' | 'warning' | 'error'; message: string };
+type DataUpdatedData = { stock_code: string; timestamp: string };
+type PredictionResultData = { prediction_id: string; results: unknown };
+
 export interface WebSocketEvents {
   // 任务相关事件
-  'task:created': (data: { task_id: string; task_name: string }) => void;
-  'task:progress': (data: { task_id: string; progress: number; status: string }) => void;
-  'task:completed': (data: { task_id: string; results: any }) => void;
-  'task:failed': (data: { task_id: string; error: string }) => void;
+  'task:created': (data: TaskCreatedData) => void;
+  'task:progress': (data: TaskProgressData) => void;
+  'task:completed': (data: TaskCompletedData) => void;
+  'task:failed': (data: TaskFailedData) => void;
 
   // 系统状态事件
-  'system:status': (data: any) => void;
-  'system:alert': (data: { level: 'info' | 'warning' | 'error'; message: string }) => void;
+  'system:status': (data: SystemStatusData) => void;
+  'system:alert': (data: SystemAlertData) => void;
 
   // 数据更新事件
-  'data:updated': (data: { stock_code: string; timestamp: string }) => void;
-  'prediction:result': (data: { prediction_id: string; results: any }) => void;
+  'data:updated': (data: DataUpdatedData) => void;
+  'prediction:result': (data: PredictionResultData) => void;
 }
+
+type ServerMessage = Record<string, unknown> & { type?: string };
+type GenericEventHandler = (data: unknown) => void;
+
+const wsLogger = {
+  debug: (...args: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      globalThis.console.log(...args);
+    }
+  },
+  info: (...args: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      globalThis.console.info(...args);
+    }
+  },
+  warn: (...args: unknown[]) => {
+    globalThis.console.warn(...args);
+  },
+  error: (...args: unknown[]) => {
+    globalThis.console.error(...args);
+  },
+};
 
 // WebSocket管理类
 export class WebSocketService {
@@ -31,7 +62,7 @@ export class WebSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private eventHandlers: Map<string, Function[]> = new Map();
+  private eventHandlers = new Map<keyof WebSocketEvents, Set<GenericEventHandler>>();
 
   constructor() {
     this.connect();
@@ -61,13 +92,13 @@ export class WebSocketService {
       wsUrl = 'ws://localhost:8000/ws';
     }
 
-    console.log('[WebSocket] 连接到:', wsUrl);
+    wsLogger.debug('[WebSocket] 连接到:', wsUrl);
 
     try {
       this.socket = new WebSocket(wsUrl);
       this.setupEventListeners();
     } catch (error) {
-      console.error('[WebSocket] 连接创建失败:', error);
+      wsLogger.error('[WebSocket] 连接创建失败:', error);
       this.handleReconnect();
     }
   }
@@ -82,15 +113,15 @@ export class WebSocketService {
 
     // 连接成功
     this.socket.onopen = () => {
-      console.log('[WebSocket] 连接成功');
+      wsLogger.debug('[WebSocket] 连接成功');
       this.reconnectAttempts = 0;
-      console.log('实时连接已建立');
+      wsLogger.info('实时连接已建立');
     };
 
     // 连接断开
     this.socket.onclose = event => {
-      console.log('[WebSocket] 连接断开:', event.code, event.reason);
-      console.log('实时连接已断开');
+      wsLogger.debug('[WebSocket] 连接断开:', event.code, event.reason);
+      wsLogger.info('实时连接已断开');
 
       // 自动重连（除非是正常关闭）
       if (event.code !== 1000) {
@@ -100,17 +131,17 @@ export class WebSocketService {
 
     // 连接错误
     this.socket.onerror = error => {
-      console.error('[WebSocket] 连接错误:', error);
+      wsLogger.error('[WebSocket] 连接错误:', error);
       this.handleReconnect();
     };
 
     // 接收消息
     this.socket.onmessage = event => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(event.data) as ServerMessage;
         this.handleMessage(data);
       } catch (error) {
-        console.error('[WebSocket] 消息解析失败:', error);
+        wsLogger.error('[WebSocket] 消息解析失败:', error);
       }
     };
   }
@@ -118,68 +149,72 @@ export class WebSocketService {
   /**
    * 处理接收到的消息
    */
-  private handleMessage(data: any): void {
+  private handleMessage(data: ServerMessage): void {
     const { type } = data;
+    if (typeof type !== 'string') {
+      wsLogger.warn('[WebSocket] 消息缺少有效 type:', data);
+      return;
+    }
 
     switch (type) {
       case 'connection':
-        console.log('[WebSocket] 连接确认:', data.message);
+        wsLogger.debug('[WebSocket] 连接确认:', data.message);
         break;
 
       case 'task:created':
-        console.log('[WebSocket] 任务创建:', data);
-        this.emit('task:created', data);
+        wsLogger.debug('[WebSocket] 任务创建:', data);
+        this.emit('task:created', data as TaskCreatedData);
         break;
 
       case 'task:progress':
-        console.log('[WebSocket] 任务进度:', data);
-        this.emit('task:progress', data);
+        wsLogger.debug('[WebSocket] 任务进度:', data);
+        this.emit('task:progress', data as TaskProgressData);
         break;
 
       case 'task:completed':
-        console.log('[WebSocket] 任务完成:', data);
-        this.emit('task:completed', data);
-        console.log(`任务 ${data.task_id} 已完成`);
+        wsLogger.debug('[WebSocket] 任务完成:', data);
+        this.emit('task:completed', data as TaskCompletedData);
+        wsLogger.info(`任务 ${String(data.task_id)} 已完成`);
         break;
 
       case 'task:failed':
-        console.log('[WebSocket] 任务失败:', data);
-        this.emit('task:failed', data);
-        console.error(`任务 ${data.task_id} 执行失败: ${data.error}`);
+        wsLogger.debug('[WebSocket] 任务失败:', data);
+        this.emit('task:failed', data as TaskFailedData);
+        wsLogger.error(`任务 ${String(data.task_id)} 执行失败: ${String(data.error)}`);
         break;
 
       case 'system:status':
-        this.emit('system:status', data);
+        this.emit('system:status', data as SystemStatusData);
         break;
 
       case 'system:alert':
-        this.emit('system:alert', data);
+        this.emit('system:alert', data as SystemAlertData);
 
         // 显示系统警告
-        switch (data.level) {
+        switch ((data as SystemAlertData).level) {
           case 'info':
-            console.info(data.message);
+            wsLogger.info((data as SystemAlertData).message);
             break;
           case 'warning':
-            console.warn(data.message);
+            wsLogger.warn((data as SystemAlertData).message);
             break;
           case 'error':
-            console.error(data.message);
+            wsLogger.error((data as SystemAlertData).message);
             break;
         }
         break;
 
       case 'data:updated':
-        this.emit('data:updated', data);
+        this.emit('data:updated', data as DataUpdatedData);
         break;
 
       case 'prediction:result':
-        this.emit('prediction:result', data);
+        this.emit('prediction:result', data as PredictionResultData);
         break;
 
       case 'subscription':
       case 'unsubscription':
-        console.log('[WebSocket] 订阅状态:', data.message);
+        wsLogger.debug('[WebSocket] 订阅状态:', data.message);
         break;
 
       case 'pong':
@@ -187,11 +222,11 @@ export class WebSocketService {
         break;
 
       case 'error':
-        console.error('[WebSocket] 服务器错误:', data.message);
+        wsLogger.error('[WebSocket] 服务器错误:', data.message);
         break;
 
       default:
-        console.warn('[WebSocket] 未知消息类型:', type, data);
+        wsLogger.warn('[WebSocket] 未知消息类型:', type, data);
     }
   }
 
@@ -200,15 +235,15 @@ export class WebSocketService {
    */
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[WebSocket] 重连次数已达上限');
-      console.error('无法建立实时连接，请刷新页面重试');
+      wsLogger.error('[WebSocket] 重连次数已达上限');
+      wsLogger.error('无法建立实时连接，请刷新页面重试');
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
-    console.log(`[WebSocket] ${delay}ms 后尝试第 ${this.reconnectAttempts} 次重连`);
+    wsLogger.debug(`[WebSocket] ${delay}ms 后尝试第 ${this.reconnectAttempts} 次重连`);
 
     setTimeout(() => {
       this.connect();
@@ -219,10 +254,12 @@ export class WebSocketService {
    * 订阅事件
    */
   public on<K extends keyof WebSocketEvents>(event: K, handler: WebSocketEvents[K]): void {
-    if (!this.eventHandlers.has(event)) {
-      this.eventHandlers.set(event, []);
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      handlers.add(handler as GenericEventHandler);
+      return;
     }
-    this.eventHandlers.get(event)!.push(handler);
+    this.eventHandlers.set(event, new Set<GenericEventHandler>([handler as GenericEventHandler]));
   }
 
   /**
@@ -231,9 +268,9 @@ export class WebSocketService {
   public off<K extends keyof WebSocketEvents>(event: K, handler: WebSocketEvents[K]): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
-      const index = handlers.indexOf(handler);
-      if (index > -1) {
-        handlers.splice(index, 1);
+      handlers.delete(handler as GenericEventHandler);
+      if (handlers.size === 0) {
+        this.eventHandlers.delete(event);
       }
     }
   }
@@ -241,14 +278,17 @@ export class WebSocketService {
   /**
    * 触发事件
    */
-  private emit(event: string, data: any): void {
+  private emit<K extends keyof WebSocketEvents>(
+    event: K,
+    data: Parameters<WebSocketEvents[K]>[0]
+  ): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.forEach(handler => {
         try {
           handler(data);
         } catch (error) {
-          console.error(`[WebSocket] 事件处理器错误 (${event}):`, error);
+          wsLogger.error(`[WebSocket] 事件处理器错误 (${event}):`, error);
         }
       });
     }
@@ -257,7 +297,7 @@ export class WebSocketService {
   /**
    * 发送消息到服务器
    */
-  public send(event: string, data?: any): void {
+  public send(event: string, data?: Record<string, unknown>): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       const message = {
         type: event,
@@ -265,7 +305,7 @@ export class WebSocketService {
       };
       this.socket.send(JSON.stringify(message));
     } else {
-      console.warn('[WebSocket] 连接未建立，无法发送消息');
+      wsLogger.warn('[WebSocket] 连接未建立，无法发送消息');
     }
   }
 

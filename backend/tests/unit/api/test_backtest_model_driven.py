@@ -23,7 +23,9 @@ from app.api.v1.schemas import BacktestRequest
 
 
 @pytest.mark.asyncio
-async def test_run_backtest_model_request_injects_model_id_into_strategy_config() -> None:
+async def test_run_backtest_model_request_injects_model_id_into_strategy_config() -> (
+    None
+):
     request = BacktestRequest(
         strategy_name="model",
         model_id="bank-core3",
@@ -58,9 +60,12 @@ async def test_run_backtest_model_request_injects_model_id_into_strategy_config(
         }
     )
 
-    with patch("app.api.v1.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.api.v1.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+    with (
+        patch("app.api.v1.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.api.v1.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+        ),
     ):
         response = await run_backtest(request)
 
@@ -77,7 +82,9 @@ async def test_run_backtest_model_request_injects_model_id_into_strategy_config(
 
 
 @pytest.mark.asyncio
-async def test_run_backtest_topk_dropout_alias_normalizes_to_model_topk_dropout() -> None:
+async def test_run_backtest_topk_dropout_alias_normalizes_to_model_topk_dropout() -> (
+    None
+):
     request = BacktestRequest(
         strategy_name="topk_dropout",
         model_id="bank-core3",
@@ -114,9 +121,12 @@ async def test_run_backtest_topk_dropout_alias_normalizes_to_model_topk_dropout(
         }
     )
 
-    with patch("app.api.v1.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.api.v1.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+    with (
+        patch("app.api.v1.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.api.v1.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+        ),
     ):
         response = await run_backtest(request)
 
@@ -179,9 +189,12 @@ async def test_run_backtest_propagates_runtime_portfolio_constraints() -> None:
         }
     )
 
-    with patch("app.api.v1.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.api.v1.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+    with (
+        patch("app.api.v1.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.api.v1.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+        ),
     ):
         response = await run_backtest(request)
 
@@ -237,9 +250,12 @@ async def test_run_backtest_propagates_official_style_cost_fields() -> None:
         }
     )
 
-    with patch("app.api.v1.backtest.BacktestExecutor", return_value=executor), patch(
-        "app.api.v1.backtest.BacktestConfig",
-        side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+    with (
+        patch("app.api.v1.backtest.BacktestExecutor", return_value=executor),
+        patch(
+            "app.api.v1.backtest.BacktestConfig",
+            side_effect=lambda **kwargs: type("DummyBacktestConfig", (), kwargs)(),
+        ),
     ):
         response = await run_backtest(request)
 

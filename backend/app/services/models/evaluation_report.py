@@ -12,10 +12,7 @@
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-
-from loguru import logger
-
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 DEFAULT_EARLY_STOPPING_INFO = {
     "early_stopped": False,
@@ -37,20 +34,149 @@ DEFAULT_SIGNAL_QUALITY = {
     "analysis_scope": None,
 }
 
+SEGMENT_NAMES = ("train", "validation", "test")
 
-def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
+
+def _default_portfolio_bridge_summary(model_id: Optional[str] = None) -> Dict[str, Any]:
+    return {
+        "model_id": None,
+        "task_count": 0,
+        "tasks": [],
+        "best_by_total_return": None,
+        "best_by_sharpe": None,
+        "smallest_drawdown": None,
+    }
+
+
+def _normalize_signal_quality(
+    signal_quality: Optional[Dict[str, Any]], analysis_scope: Optional[str] = None
+) -> Dict[str, Any]:
+    normalized = dict(signal_quality) if isinstance(signal_quality, dict) else {}
+    merged = {
+        **DEFAULT_SIGNAL_QUALITY,
+        **normalized,
+    }
+    if merged.get("analysis_scope") is None and analysis_scope is not None:
+        merged["analysis_scope"] = analysis_scope
+    return merged
+
+
+def _normalize_segment_evaluation(
+    segment_evaluation: Optional[Dict[str, Any]], training_summary: Dict[str, Any]
+) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+    source = segment_evaluation if isinstance(segment_evaluation, dict) else {}
+
+    for segment_name in SEGMENT_NAMES:
+        segment_payload = source.get(segment_name)
+        segment_payload = segment_payload if isinstance(segment_payload, dict) else {}
+        dataset_samples = int(
+            segment_payload.get(
+                "dataset_samples",
+                training_summary.get(f"{segment_name}_samples", 0) or 0,
+            )
+            or 0
+        )
+        evaluated_samples = int(
+            segment_payload.get(
+                "evaluated_samples", segment_payload.get("dataset_samples", 0)
+            )
+            or 0
+        )
+        performance_metrics = segment_payload.get("performance_metrics")
+        performance_metrics = (
+            dict(performance_metrics) if isinstance(performance_metrics, dict) else {}
+        )
+
+        normalized[segment_name] = {
+            "dataset_samples": dataset_samples,
+            "evaluated_samples": evaluated_samples,
+            "performance_metrics": performance_metrics,
+            "signal_quality": _normalize_signal_quality(
+                segment_payload.get("signal_quality"), analysis_scope=None
+            ),
+        }
+
+    return normalized
+
+
+def build_official_record_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    segment_evaluation = report.get("segment_evaluation")
+    segment_evaluation = (
+        segment_evaluation if isinstance(segment_evaluation, dict) else {}
+    )
+
+    signal_record: Dict[str, Dict[str, Any]] = {}
+    sig_ana_record: Dict[str, Dict[str, Any]] = {}
+
+    for segment_name in SEGMENT_NAMES:
+        segment_payload = segment_evaluation.get(segment_name)
+        segment_payload = segment_payload if isinstance(segment_payload, dict) else {}
+        raw_signal_quality = segment_payload.get("signal_quality")
+        signal_quality = (
+            _normalize_signal_quality(raw_signal_quality, analysis_scope=segment_name)
+            if isinstance(raw_signal_quality, dict)
+            else _normalize_signal_quality(None, analysis_scope=segment_name)
+        )
+        has_signal_quality = isinstance(raw_signal_quality, dict) and any(
+            value is not None
+            for key, value in signal_quality.items()
+            if key != "analysis_scope"
+        )
+
+        signal_record_item = {
+            "dataset_samples": int(segment_payload.get("dataset_samples", 0) or 0),
+            "evaluated_samples": int(segment_payload.get("evaluated_samples", 0) or 0),
+            "has_signal_quality": has_signal_quality,
+        }
+        if has_signal_quality and signal_quality.get("analysis_scope") is not None:
+            signal_record_item["analysis_scope"] = signal_quality["analysis_scope"]
+
+        signal_record[segment_name] = signal_record_item
+        sig_ana_record[segment_name] = signal_quality
+
+    portfolio_bridge_summary = report.get("portfolio_bridge_summary")
+    portfolio_bridge_summary = (
+        dict(portfolio_bridge_summary)
+        if isinstance(portfolio_bridge_summary, dict)
+        else _default_portfolio_bridge_summary(report.get("model_id"))
+    )
+
+    return {
+        "signal_record": signal_record,
+        "sig_ana_record": sig_ana_record,
+        "port_ana_record": {
+            "task_count": int(portfolio_bridge_summary.get("task_count", 0) or 0),
+            "best_by_total_return": portfolio_bridge_summary.get(
+                "best_by_total_return"
+            ),
+            "best_by_sharpe": portfolio_bridge_summary.get("best_by_sharpe"),
+            "smallest_drawdown": portfolio_bridge_summary.get("smallest_drawdown"),
+            "tasks": list(portfolio_bridge_summary.get("tasks") or []),
+        },
+    }
+
+
+def normalize_report_payload(report: Mapping[str, Any]) -> Dict[str, Any]:
     """兼容并补齐评估报告字段，保证前端/导出结构稳定。"""
-    if not isinstance(report, dict):
-        return report
-
     normalized = dict(report)
     training_summary = normalized.get("training_summary")
     training_summary = training_summary if isinstance(training_summary, dict) else {}
 
     training_data_info = normalized.get("training_data_info")
-    training_data_info = dict(training_data_info) if isinstance(training_data_info, dict) else {}
-    for field in ("total_samples", "train_samples", "validation_samples", "test_samples"):
-        if training_data_info.get(field) is None and training_summary.get(field) is not None:
+    training_data_info = (
+        dict(training_data_info) if isinstance(training_data_info, dict) else {}
+    )
+    for field in (
+        "total_samples",
+        "train_samples",
+        "validation_samples",
+        "test_samples",
+    ):
+        if (
+            training_data_info.get(field) is None
+            and training_summary.get(field) is not None
+        ):
             training_data_info[field] = training_summary.get(field)
     normalized["training_data_info"] = training_data_info
 
@@ -65,10 +191,29 @@ def normalize_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     signal_quality = normalized.get("signal_quality")
     if not isinstance(signal_quality, dict):
         signal_quality = {}
-    normalized["signal_quality"] = {
-        **DEFAULT_SIGNAL_QUALITY,
-        **signal_quality,
-    }
+    normalized["signal_quality"] = _normalize_signal_quality(signal_quality)
+
+    source_segment_evaluation = normalized.get("segment_evaluation")
+    normalized["segment_evaluation"] = _normalize_segment_evaluation(
+        source_segment_evaluation, training_summary
+    )
+
+    portfolio_bridge_summary = normalized.get("portfolio_bridge_summary")
+    if not isinstance(portfolio_bridge_summary, dict):
+        portfolio_bridge_summary = _default_portfolio_bridge_summary(
+            normalized.get("model_id")
+        )
+    normalized["portfolio_bridge_summary"] = portfolio_bridge_summary
+
+    official_record_summary = normalized.get("official_record_summary")
+    if not isinstance(official_record_summary, dict):
+        official_record_summary = build_official_record_summary(
+            {
+                "model_id": normalized.get("model_id"),
+                "portfolio_bridge_summary": portfolio_bridge_summary,
+            }
+        )
+    normalized["official_record_summary"] = official_record_summary
 
     return normalized
 
@@ -176,11 +321,17 @@ class ModelEvaluationReport:
     # 官方风格信号质量评估
     signal_quality: Optional[Dict[str, Any]] = None
 
+    # 分段评估信息
+    segment_evaluation: Optional[Dict[str, Any]] = None
+
+    # 与正式任务桥接后的摘要
+    portfolio_bridge_summary: Optional[Dict[str, Any]] = None
+
 
 class EvaluationReportGenerator:
     """评估报告生成器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.reports: Dict[str, ModelEvaluationReport] = {}
 
     def generate_report(
@@ -191,7 +342,7 @@ class EvaluationReportGenerator:
         version: str,
         training_summary: Dict[str, Any],
         performance_metrics: Dict[str, Any],
-        feature_importance: List[Dict[str, Any]],
+        feature_importance: Mapping[str, float] | Sequence[Mapping[str, Any] | str],
         training_history: List[Dict[str, Any]],
         hyperparameters: Dict[str, Any],
         training_data_info: Dict[str, Any],
@@ -200,6 +351,8 @@ class EvaluationReportGenerator:
         hyperparameter_tuning: Optional[Dict[str, Any]] = None,
         early_stopping_info: Optional[Dict[str, Any]] = None,
         signal_quality: Optional[Dict[str, Any]] = None,
+        segment_evaluation: Optional[Dict[str, Any]] = None,
+        portfolio_bridge_summary: Optional[Dict[str, Any]] = None,
     ) -> ModelEvaluationReport:
         """生成评估报告"""
 
@@ -233,12 +386,12 @@ class EvaluationReportGenerator:
         )
 
         # 构建特征重要性
-        features = []
+        features: List[FeatureImportance] = []
         # 处理不同的特征重要性格式
-        if isinstance(feature_importance, dict):
+        if isinstance(feature_importance, Mapping):
             # 如果是字典格式 {feature_name: importance}
             sorted_features = sorted(
-                feature_importance.items(), key=lambda x: x[1], reverse=True
+                feature_importance.items(), key=lambda item: item[1], reverse=True
             )
             for i, (feat_name, importance) in enumerate(sorted_features):
                 features.append(
@@ -246,13 +399,13 @@ class EvaluationReportGenerator:
                         feature_name=feat_name, importance=float(importance), rank=i + 1
                     )
                 )
-        elif isinstance(feature_importance, list):
+        else:
             # 如果是列表格式
             for i, feat in enumerate(feature_importance):
-                if isinstance(feat, dict):
+                if isinstance(feat, Mapping):
                     features.append(
                         FeatureImportance(
-                            feature_name=feat.get("name", f"feature_{i}"),
+                            feature_name=str(feat.get("name", f"feature_{i}")),
                             importance=float(feat.get("importance", 0.0)),
                             rank=i + 1,
                         )
@@ -264,16 +417,16 @@ class EvaluationReportGenerator:
                     )
 
         # 构建训练历史
-        history = []
+        history: List[TrainingHistory] = []
         for hist in training_history:
             history.append(
                 TrainingHistory(
                     epoch=int(hist.get("epoch", 0) or 0),
-                    train_loss=(None if hist.get("train_loss") is None else float(hist.get("train_loss", 0.0))),
-                    val_loss=(None if hist.get("val_loss") is None else float(hist.get("val_loss", 0.0))),
+                    train_loss=float(hist.get("train_loss") or 0.0),
+                    val_loss=float(hist.get("val_loss") or 0.0),
                     train_accuracy=float(hist.get("train_accuracy", 0.0) or 0.0),
                     val_accuracy=float(hist.get("val_accuracy", 0.0) or 0.0),
-                    timestamp=hist.get("timestamp", datetime.now().isoformat()),
+                    timestamp=str(hist.get("timestamp", datetime.now().isoformat())),
                 )
             )
 
@@ -296,6 +449,8 @@ class EvaluationReportGenerator:
             hyperparameter_tuning=hyperparameter_tuning,
             early_stopping_info=early_stopping_info,
             signal_quality=signal_quality,
+            segment_evaluation=segment_evaluation,
+            portfolio_bridge_summary=portfolio_bridge_summary,
             training_data_info=training_data_info,
             prediction_analysis=prediction_analysis,
             recommendations=recommendations,
@@ -312,13 +467,19 @@ class EvaluationReportGenerator:
 
         # 基于准确率的建议
         if metrics.accuracy < 0.6:
-            recommendations.append("模型准确率较低，建议：增加训练数据、调整模型架构或进行特征工程")
+            recommendations.append(
+                "模型准确率较低，建议：增加训练数据、调整模型架构或进行特征工程"
+            )
         elif metrics.accuracy < 0.75:
-            recommendations.append("模型准确率中等，可以通过超参数调优或集成学习提升性能")
+            recommendations.append(
+                "模型准确率中等，可以通过超参数调优或集成学习提升性能"
+            )
 
         # 基于过拟合的建议
         if metrics.precision > 0.9 and metrics.recall < 0.5:
-            recommendations.append("模型可能存在过拟合，建议增加正则化或使用更多训练数据")
+            recommendations.append(
+                "模型可能存在过拟合，建议增加正则化或使用更多训练数据"
+            )
 
         # 基于特征重要性的建议
         if features:
@@ -331,7 +492,9 @@ class EvaluationReportGenerator:
             recommendations.append("夏普比率较低，建议优化风险控制策略或调整预测阈值")
 
         if not recommendations:
-            recommendations.append("模型性能良好，可以尝试进一步优化超参数或使用集成方法")
+            recommendations.append(
+                "模型性能良好，可以尝试进一步优化超参数或使用集成方法"
+            )
 
         return recommendations
 
@@ -353,6 +516,8 @@ class EvaluationReportGenerator:
                 "hyperparameter_tuning": report.hyperparameter_tuning,
                 "early_stopping_info": report.early_stopping_info,
                 "signal_quality": report.signal_quality,
+                "segment_evaluation": report.segment_evaluation,
+                "portfolio_bridge_summary": report.portfolio_bridge_summary,
                 "training_data_info": report.training_data_info,
                 "prediction_analysis": report.prediction_analysis,
                 "model_comparison": report.model_comparison,

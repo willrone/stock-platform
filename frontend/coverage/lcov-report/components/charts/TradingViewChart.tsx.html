@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">2.35% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/212</span>
+                <span class='fraction'>5/212</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/163</span>
+                <span class='fraction'>0/190</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">2.42% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/206</span>
+                <span class='fraction'>5/206</span>
             </div>
         
             
@@ -822,7 +822,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -830,7 +830,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -839,9 +839,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1574,7 +1574,7 @@
 &nbsp;
 'use client';
 &nbsp;
-import React, { useEffect, useRef, useState } from <span class="cstat-no" title="statement not covered" >'react';</span>
+import React, { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   IChartApi,
@@ -1582,7 +1582,7 @@ import {
   ColorType,
   SeriesMarkerPosition,
   SeriesMarkerShape,
-} from <span class="cstat-no" title="statement not covered" >'lightweight-charts';</span>
+} from 'lightweight-charts';
 import {
   Card,
   CardContent,
@@ -1591,9 +1591,9 @@ import {
   CircularProgress,
   Box,
   Typography,
-} from <span class="cstat-no" title="statement not covered" >'@mui/material';</span>
-import { TrendingUp, BarChart3, AlertCircle } from <span class="cstat-no" title="statement not covered" >'lucide-react';</span>
-import { DataService } from <span class="cstat-no" title="statement not covered" >'@/services/dataService';</span>
+} from '@mui/material';
+import { TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
+import { DataService } from '@/services/dataService';
 &nbsp;
 import { PredictionResult } from '../../services/taskService';
 &nbsp;
@@ -1658,7 +1658,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 获取股票数据
   const fetchStockData = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >async () =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!stockCode) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!stockCode) {</span>
 <span class="cstat-no" title="statement not covered" >      console.warn('[TradingViewChart] 股票代码为空，无法加载数据');</span>
 <span class="cstat-no" title="statement not covered" >      setPriceData([]);</span>
 <span class="cstat-no" title="statement not covered" >      setLoading(false);</span>
@@ -1677,7 +1677,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       // 处理startDate：可能是ISO字符串或undefined
 <span class="cstat-no" title="statement not covered" >      if (startDate) {</span>
 <span class="cstat-no" title="statement not covered" >        resolvedStart = new Date(startDate);</span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (isNaN(resolvedStart.getTime())) {</span>
+<span class="cstat-no" title="statement not covered" >        if (isNaN(resolvedStart.getTime())) {</span>
 <span class="cstat-no" title="statement not covered" >          console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);</span>
 <span class="cstat-no" title="statement not covered" >          resolvedStart = fallbackStart;</span>
         }
@@ -1688,7 +1688,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
       // 处理endDate：可能是ISO字符串或undefined
 <span class="cstat-no" title="statement not covered" >      if (endDate) {</span>
 <span class="cstat-no" title="statement not covered" >        resolvedEnd = new Date(endDate);</span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (isNaN(resolvedEnd.getTime())) {</span>
+<span class="cstat-no" title="statement not covered" >        if (isNaN(resolvedEnd.getTime())) {</span>
 <span class="cstat-no" title="statement not covered" >          console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);</span>
 <span class="cstat-no" title="statement not covered" >          resolvedEnd = fallbackEnd;</span>
         }
@@ -1747,8 +1747,8 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             const date = <span class="cstat-no" title="statement not covered" >new Date(item.time);</span>
             const weekKey = <span class="cstat-no" title="statement not covered" >`${date.getFullYear()}-W${getWeekNumber(date)}`;</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (weekKey !== currentWeek) {</span>
-<span class="cstat-no" title="statement not covered" >              <span class="missing-if-branch" title="if path not taken" >I</span>if (currentWeek &amp;&amp; lastItem) {</span>
+<span class="cstat-no" title="statement not covered" >            if (weekKey !== currentWeek) {</span>
+<span class="cstat-no" title="statement not covered" >              if (currentWeek &amp;&amp; lastItem) {</span>
                 // 保存上一周的最后一条数据
 <span class="cstat-no" title="statement not covered" >                weeklyData.push(lastItem);</span>
               }
@@ -1757,11 +1757,11 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >            lastItem = item;</span>
           }
           // 添加最后一周的数据
-<span class="cstat-no" title="statement not covered" >          <span class="missing-if-branch" title="if path not taken" >I</span>if (lastItem) {</span>
+<span class="cstat-no" title="statement not covered" >          if (lastItem) {</span>
 <span class="cstat-no" title="statement not covered" >            weeklyData.push(lastItem);</span>
           }
 <span class="cstat-no" title="statement not covered" >          formattedData = weeklyData;</span>
-        } else <span class="cstat-no" title="statement not covered" ><span class="missing-if-branch" title="if path not taken" >I</span>if (timeframe === '1M' &amp;&amp; formattedData.length &gt; 0) {</span>
+        } else <span class="cstat-no" title="statement not covered" >if (timeframe === '1M' &amp;&amp; formattedData.length &gt; 0) {</span>
           // 月线：每月取最后一个交易日的数据
           const monthlyData: PriceData[] = <span class="cstat-no" title="statement not covered" >[];</span>
           let currentMonth = <span class="cstat-no" title="statement not covered" >'';</span>
@@ -1774,8 +1774,8 @@ export default function <span class="cstat-no" title="statement not covered" ><s
               '0'
             )}`;
 &nbsp;
-<span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (monthKey !== currentMonth) {</span>
-<span class="cstat-no" title="statement not covered" >              <span class="missing-if-branch" title="if path not taken" >I</span>if (currentMonth &amp;&amp; lastItem) {</span>
+<span class="cstat-no" title="statement not covered" >            if (monthKey !== currentMonth) {</span>
+<span class="cstat-no" title="statement not covered" >              if (currentMonth &amp;&amp; lastItem) {</span>
                 // 保存上一月的最后一条数据
 <span class="cstat-no" title="statement not covered" >                monthlyData.push(lastItem);</span>
               }
@@ -1784,7 +1784,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >            lastItem = item;</span>
           }
           // 添加最后一月的数据
-<span class="cstat-no" title="statement not covered" >          <span class="missing-if-branch" title="if path not taken" >I</span>if (lastItem) {</span>
+<span class="cstat-no" title="statement not covered" >          if (lastItem) {</span>
 <span class="cstat-no" title="statement not covered" >            monthlyData.push(lastItem);</span>
           }
 <span class="cstat-no" title="statement not covered" >          formattedData = monthlyData;</span>
@@ -1836,7 +1836,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 添加买卖标记的辅助函数
   const addTradingMarkers = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!prediction || !candlestickSeriesRef.current || priceData.length === 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!prediction || !candlestickSeriesRef.current || priceData.length === 0) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -1844,7 +1844,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     const confidenceThreshold = <span class="cstat-no" title="statement not covered" >0.6; /</span>/ 60%置信度阈值
 &nbsp;
     // 买入信号
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (</span>
+<span class="cstat-no" title="statement not covered" >    if (</span>
       prediction.predicted_direction &gt; 0 &amp;&amp;
       prediction.predicted_return &gt; buyThreshold &amp;&amp;
       prediction.confidence_score &gt; confidenceThreshold
@@ -1861,7 +1861,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     }
 &nbsp;
     // 卖出信号
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (</span>
+<span class="cstat-no" title="statement not covered" >    if (</span>
       prediction.predicted_direction &lt; 0 &amp;&amp;
       prediction.predicted_return &lt; -buyThreshold &amp;&amp;
       prediction.confidence_score &gt; confidenceThreshold
@@ -1881,13 +1881,13 @@ export default function <span class="cstat-no" title="statement not covered" ><s
   const addTradeMarkers = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
     // 这个函数现在被addSignalMarkers取代，因为它会合并交易和信号标记
     // 保留函数签名以防其他地方调用，但实际逻辑在addSignalMarkers中
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (candlestickSeriesRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (candlestickSeriesRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      addSignalMarkers();</span>
     }
   };
 &nbsp;
   const addSignalMarkers = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!candlestickSeriesRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!candlestickSeriesRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -1961,10 +1961,10 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
     const strategyColorMap: Record&lt;string, string&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
     const strategyKeys: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (internalShowSignals &amp;&amp; signals &amp;&amp; signals.length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (internalShowSignals &amp;&amp; signals &amp;&amp; signals.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >      for (const s of signals) {</span>
         const key = <span class="cstat-no" title="statement not covered" >s.strategy_id || s.strategy_name;</span>
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (key &amp;&amp; !strategyKeys.includes(key)) {</span>
+<span class="cstat-no" title="statement not covered" >        if (key &amp;&amp; !strategyKeys.includes(key)) {</span>
 <span class="cstat-no" title="statement not covered" >          strategyKeys.push(key);</span>
         }
       }
@@ -1983,7 +1983,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     });
 &nbsp;
     // 先添加交易标记（如果显示）
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (internalShowTrades &amp;&amp; trades &amp;&amp; trades.length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (internalShowTrades &amp;&amp; trades &amp;&amp; trades.length &gt; 0) {</span>
       const tradeMarkers = <span class="cstat-no" title="statement not covered" >trades</span>
         .filter(<span class="fstat-no" title="function not covered" >trade =&gt; <span class="cstat-no" title="statement not covered" >t</span>rade.timestamp)</span>
         .map(<span class="fstat-no" title="function not covered" >trade =&gt; (<span class="cstat-no" title="statement not covered" >{</span></span>
@@ -1997,7 +1997,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
     }
 &nbsp;
     // 添加信号标记（如果显示）
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (internalShowSignals &amp;&amp; signals &amp;&amp; signals.length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >    if (internalShowSignals &amp;&amp; signals &amp;&amp; signals.length &gt; 0) {</span>
       const signalMarkers = <span class="cstat-no" title="statement not covered" >signals</span>
         .filter(<span class="fstat-no" title="function not covered" >signal =&gt; <span class="cstat-no" title="statement not covered" >s</span>ignal.timestamp)</span>
         .map(<span class="fstat-no" title="function not covered" >signal =&gt; (<span class="cstat-no" title="statement not covered" >{</span></span>
@@ -2008,10 +2008,10 @@ export default function <span class="cstat-no" title="statement not covered" ><s
           shape: (signal.signal_type === 'BUY' ? 'circle' : 'circle') as SeriesMarkerShape, // 使用圆形区分信号
           color: (<span class="fstat-no" title="function not covered" >() =&gt; {</span>
             const key = <span class="cstat-no" title="statement not covered" >signal.strategy_id || signal.strategy_name;</span>
-<span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (key &amp;&amp; strategyColorMap[key]) {</span>
+<span class="cstat-no" title="statement not covered" >            if (key &amp;&amp; strategyColorMap[key]) {</span>
               // 根据执行与否调整透明度
               const base = <span class="cstat-no" title="statement not covered" >strategyColorMap[key];</span>
-<span class="cstat-no" title="statement not covered" >              <span class="missing-if-branch" title="if path not taken" >I</span>if (signal.executed === false) {</span>
+<span class="cstat-no" title="statement not covered" >              if (signal.executed === false) {</span>
                 // 未执行加一点透明度
 <span class="cstat-no" title="statement not covered" >                return base + '80';</span>
               }
@@ -2046,12 +2046,12 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 初始化图表
   const initChart = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!chartContainerRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!chartContainerRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
     // 清理现有图表
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (chartRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (chartRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      chartRef.current.remove();</span>
     }
 &nbsp;
@@ -2130,7 +2130,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
     // 响应式调整
     const handleResize = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (chartContainerRef.current &amp;&amp; chartRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >      if (chartContainerRef.current &amp;&amp; chartRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >        chartRef.current.applyOptions({</span>
           width: chartContainerRef.current.clientWidth,
         });
@@ -2143,7 +2143,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   // 更新图表数据
   const updateChartData = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!candlestickSeriesRef.current || !volumeSeriesRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!candlestickSeriesRef.current || !volumeSeriesRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -2179,7 +2179,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
     // 即使数据为空也初始化图表，以便显示空状态
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (chartContainerRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (chartContainerRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      initChart();</span>
     }
   }, [priceData.length &gt; 0, chartType, height]); // 当有数据时重新初始化
@@ -2187,7 +2187,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >() =&gt; {</span></span>
 <span class="cstat-no" title="statement not covered" >    updateChartData();</span>
     // 当数据或预测结果更新时，重新添加买卖标记
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (priceData.length &gt; 0 &amp;&amp; candlestickSeriesRef.current) {</span>
+<span class="cstat-no" title="statement not covered" >    if (priceData.length &gt; 0 &amp;&amp; candlestickSeriesRef.current) {</span>
 <span class="cstat-no" title="statement not covered" >      addTradingMarkers();</span>
 <span class="cstat-no" title="statement not covered" >      addTradeMarkers();</span>
 <span class="cstat-no" title="statement not covered" >      addSignalMarkers();</span>
@@ -2326,7 +2326,7 @@ export default function <span class="cstat-no" title="statement not covered" ><s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

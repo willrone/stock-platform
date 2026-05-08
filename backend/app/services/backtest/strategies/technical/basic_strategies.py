@@ -7,7 +7,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -60,14 +59,24 @@ class MovingAverageStrategy(BaseStrategy):
             prev_ma_diff = ma_diff.shift(1)
 
             # 向量化逻辑判断
-            buy_mask = (prev_ma_diff <= 0) & (ma_diff > 0) & (abs(ma_diff) > self.signal_threshold)
-            sell_mask = (prev_ma_diff >= 0) & (ma_diff < 0) & (abs(ma_diff) > self.signal_threshold)
+            buy_mask = (
+                (prev_ma_diff <= 0)
+                & (ma_diff > 0)
+                & (abs(ma_diff) > self.signal_threshold)
+            )
+            sell_mask = (
+                (prev_ma_diff >= 0)
+                & (ma_diff < 0)
+                & (abs(ma_diff) > self.signal_threshold)
+            )
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
-            
+
             return signals
         except Exception as e:
             logger.error(f"MA策略向量化计算失败: {e}")
@@ -88,24 +97,26 @@ class MovingAverageStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_ma_diff = indicators["ma_diff"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=min(1.0, abs(current_ma_diff) * 10),
-                        price=current_price,
-                        reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
-                        metadata={
-                            "sma_short": indicators["sma_short"].iloc[current_idx],
-                            "sma_long": indicators["sma_long"].iloc[current_idx],
-                            "ma_diff": current_ma_diff,
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=min(1.0, abs(current_ma_diff) * 10),
+                            price=current_price,
+                            reason=f"[向量化] 均线交叉，差值: {current_ma_diff:.3f}",
+                            metadata={
+                                "sma_short": indicators["sma_short"].iloc[current_idx],
+                                "sma_long": indicators["sma_long"].iloc[current_idx],
+                                "ma_diff": current_ma_diff,
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             # 计算指标（按 DataFrame 缓存，避免每个交易日重复计算整段 rolling 指标）
@@ -171,8 +182,6 @@ class MovingAverageStrategy(BaseStrategy):
             return []
 
 
-
-
 class MACDStrategy(BaseStrategy):
     """MACD策略"""
 
@@ -224,7 +233,9 @@ class MACDStrategy(BaseStrategy):
             sell_mask = (prev_hist >= 0) & (macd_hist < 0)
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -248,24 +259,28 @@ class MACDStrategy(BaseStrategy):
                     stock_code = data.attrs.get("stock_code", "UNKNOWN")
                     current_price = indicators["price"].iloc[current_idx]
                     current_hist = indicators["macd_hist"].iloc[current_idx]
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=min(1.0, abs(current_hist) * 100),
-                        price=current_price,
-                        reason=f"[向量化] MACD{'金叉' if sig_type == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
-                        metadata={
-                            "macd": indicators["macd"].iloc[current_idx],
-                            "macd_signal": indicators["macd_signal"].iloc[current_idx],
-                            "macd_hist": current_hist,
-                        },
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=min(1.0, abs(current_hist) * 100),
+                            price=current_price,
+                            reason=f"[向量化] MACD{'金叉' if sig_type == SignalType.BUY else '死叉'}，柱状图: {current_hist:.4f}",
+                            metadata={
+                                "macd": indicators["macd"].iloc[current_idx],
+                                "macd_signal": indicators["macd_signal"].iloc[
+                                    current_idx
+                                ],
+                                "macd_hist": current_hist,
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)

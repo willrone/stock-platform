@@ -2,13 +2,14 @@
 数据血缘追踪器
 追踪从原始数据到特征的转换，记录特征计算依赖关系
 """
+
 import json
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 import networkx as nx
 from loguru import logger
@@ -230,7 +231,7 @@ class LineageAnalyzer:
         try:
             cycles = list(nx.simple_cycles(self.nx_graph))
             return cycles
-        except:
+        except Exception:
             return []
 
     def get_impact_analysis(self, node_id: str) -> Dict[str, Any]:
@@ -296,7 +297,7 @@ class DataLineageTracker:
 
         logger.info(f"数据血缘追踪器初始化完成，存储路径: {self.storage_path}")
 
-    def _initialize_default_graph(self):
+    def _initialize_default_graph(self) -> None:
         """初始化默认血缘图"""
         default_graph = LineageGraph(
             graph_id=self.default_graph_id,
@@ -316,7 +317,7 @@ class DataLineageTracker:
         properties: Optional[Dict[str, Any]] = None,
         created_by: str = "",
         tags: Optional[List[str]] = None,
-        graph_id: str = None,
+        graph_id: Optional[str] = None,
     ) -> str:
         """
         创建血缘节点
@@ -370,7 +371,7 @@ class DataLineageTracker:
         transformation_config: Optional[Dict[str, Any]] = None,
         created_by: str = "",
         description: str = "",
-        graph_id: str = None,
+        graph_id: Optional[str] = None,
     ) -> str:
         """
         创建血缘边
@@ -614,13 +615,13 @@ class DataLineageTracker:
         """获取边"""
         return self.all_edges.get(edge_id)
 
-    def get_graph(self, graph_id: str = None) -> Optional[LineageGraph]:
+    def get_graph(self, graph_id: Optional[str] = None) -> Optional[LineageGraph]:
         """获取血缘图"""
         if graph_id is None:
             graph_id = self.default_graph_id
         return self.graphs.get(graph_id)
 
-    def get_analyzer(self, graph_id: str = None) -> LineageAnalyzer:
+    def get_analyzer(self, graph_id: Optional[str] = None) -> LineageAnalyzer:
         """获取血缘分析器"""
         if graph_id is None:
             graph_id = self.default_graph_id
@@ -718,7 +719,7 @@ class DataLineageTracker:
 
         return nodes
 
-    def get_lineage_summary(self, graph_id: str = None) -> Dict[str, Any]:
+    def get_lineage_summary(self, graph_id: Optional[str] = None) -> Dict[str, Any]:
         """获取血缘摘要"""
         if graph_id is None:
             graph_id = self.default_graph_id
@@ -727,13 +728,13 @@ class DataLineageTracker:
         metrics = analyzer.get_graph_metrics()
 
         # 按类型统计节点
-        node_type_counts = {}
+        node_type_counts: Dict[str, int] = {}
         for node in self.all_nodes.values():
             node_type = node.node_type.value
             node_type_counts[node_type] = node_type_counts.get(node_type, 0) + 1
 
         # 按类型统计转换
-        transformation_type_counts = {}
+        transformation_type_counts: Dict[str, int] = {}
         for edge in self.all_edges.values():
             trans_type = edge.transformation_type.value
             transformation_type_counts[trans_type] = (
@@ -748,7 +749,7 @@ class DataLineageTracker:
             "total_edges": len(self.all_edges),
         }
 
-    def export_lineage_graph(self, graph_id: str = None, format: str = "json") -> str:
+    def export_lineage_graph(self, graph_id: Optional[str] = None, format: str = "json") -> str:
         """导出血缘图"""
         if graph_id is None:
             graph_id = self.default_graph_id
@@ -762,7 +763,7 @@ class DataLineageTracker:
         else:
             raise ValueError(f"不支持的格式: {format}")
 
-    def _load_lineage_data(self):
+    def _load_lineage_data(self) -> None:
         """加载血缘数据"""
         try:
             lineage_file = self.storage_path / "lineage.json"
@@ -807,12 +808,14 @@ class DataLineageTracker:
                 default_graph.nodes = self.all_nodes.copy()
                 default_graph.edges = self.all_edges.copy()
 
-                logger.info(f"加载了 {len(self.all_nodes)} 个节点，{len(self.all_edges)} 条边")
+                logger.info(
+                    f"加载了 {len(self.all_nodes)} 个节点，{len(self.all_edges)} 条边"
+                )
 
         except Exception as e:
             logger.error(f"加载血缘数据失败: {e}")
 
-    def _save_lineage_data(self):
+    def _save_lineage_data(self) -> None:
         """保存血缘数据"""
         try:
             data = {

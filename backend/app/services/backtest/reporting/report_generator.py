@@ -7,7 +7,6 @@ import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -17,7 +16,7 @@ from app.core.error_handler import ErrorSeverity, TaskError
 class BacktestReportGenerator:
     """回测报告生成器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.temp_dir = tempfile.gettempdir()
         self.reports_dir = os.path.join(self.temp_dir, "backtest_reports")
         os.makedirs(self.reports_dir, exist_ok=True)
@@ -38,7 +37,7 @@ class BacktestReportGenerator:
 
             # 使用reportlab生成PDF
             from reportlab.lib import colors
-            from reportlab.lib.pagesizes import A4, letter
+            from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
             from reportlab.lib.units import inch
             from reportlab.platypus import (
@@ -102,7 +101,10 @@ class BacktestReportGenerator:
             performance_data = [
                 ["指标", "数值"],
                 ["总收益率", f"{backtest_result.get('total_return', 0) * 100:.2f}%"],
-                ["年化收益率", f"{backtest_result.get('annualized_return', 0) * 100:.2f}%"],
+                [
+                    "年化收益率",
+                    "{backtest_result.get('annualized_return', 0) * 100:.2f}%",
+                ],
                 ["波动率", f"{backtest_result.get('volatility', 0) * 100:.2f}%"],
                 ["夏普比率", f"{backtest_result.get('sharpe_ratio', 0):.3f}"],
                 ["最大回撤", f"{backtest_result.get('max_drawdown', 0) * 100:.2f}%"],
@@ -218,7 +220,15 @@ class BacktestReportGenerator:
             with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
                 # 1. 基本信息工作表
                 basic_info_data = {
-                    "项目": ["策略名称", "股票代码", "回测开始日期", "回测结束日期", "初始资金", "最终价值", "生成时间"],
+                    "项目": [
+                        "策略名称",
+                        "股票代码",
+                        "回测开始日期",
+                        "回测结束日期",
+                        "初始资金",
+                        "最终价值",
+                        "生成时间",
+                    ],
                     "数值": [
                         backtest_result.get("strategy_name", ""),
                         ", ".join(backtest_result.get("stock_codes", [])),
@@ -259,13 +269,13 @@ class BacktestReportGenerator:
                         backtest_result.get("losing_trades", 0),
                     ],
                     "格式化显示": [
-                        f"{backtest_result.get('total_return', 0) * 100:.2f}%",
-                        f"{backtest_result.get('annualized_return', 0) * 100:.2f}%",
-                        f"{backtest_result.get('volatility', 0) * 100:.2f}%",
-                        f"{backtest_result.get('sharpe_ratio', 0):.3f}",
-                        f"{backtest_result.get('max_drawdown', 0) * 100:.2f}%",
-                        f"{backtest_result.get('win_rate', 0) * 100:.2f}%",
-                        f"{backtest_result.get('profit_factor', 0):.3f}",
+                        "{backtest_result.get('total_return', 0) * 100:.2f}%",
+                        "{backtest_result.get('annualized_return', 0) * 100:.2f}%",
+                        "{backtest_result.get('volatility', 0) * 100:.2f}%",
+                        "{backtest_result.get('sharpe_ratio', 0):.3f}",
+                        "{backtest_result.get('max_drawdown', 0) * 100:.2f}%",
+                        "{backtest_result.get('win_rate', 0) * 100:.2f}%",
+                        "{backtest_result.get('profit_factor', 0):.3f}",
                         str(backtest_result.get("total_trades", 0)),
                         str(backtest_result.get("winning_trades", 0)),
                         str(backtest_result.get("losing_trades", 0)),
@@ -329,7 +339,9 @@ class BacktestReportGenerator:
 
                         if config_items:
                             config_df = pd.DataFrame(config_items)
-                            config_df.to_excel(writer, sheet_name="配置信息", index=False)
+                            config_df.to_excel(
+                                writer, sheet_name="配置信息", index=False
+                            )
 
             logger.info(f"Excel报告生成成功: {filepath}")
             return filepath

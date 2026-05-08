@@ -20,11 +20,11 @@ task_id_var: ContextVar[Optional[str]] = ContextVar("task_id", default=None)
 class StructuredFormatter:
     """结构化日志格式化器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.service_name = "stock-prediction-platform"
         self.version = "1.0.0"
 
-    def format(self, record):
+    def format(self, record: Dict[str, Any]) -> str:
         """格式化日志记录"""
         # 基础日志信息
         log_entry = {
@@ -60,15 +60,21 @@ class StructuredFormatter:
         # 添加异常信息
         if record["exception"]:
             log_entry["exception"] = {
-                "type": record["exception"].type.__name__
-                if record["exception"].type
-                else None,
-                "value": str(record["exception"].value)
-                if record["exception"].value
-                else None,
-                "traceback": record["exception"].traceback
-                if record["exception"].traceback
-                else None,
+                "type": (
+                    record["exception"].type.__name__
+                    if record["exception"].type
+                    else None
+                ),
+                "value": (
+                    str(record["exception"].value)
+                    if record["exception"].value
+                    else None
+                ),
+                "traceback": (
+                    record["exception"].traceback
+                    if record["exception"].traceback
+                    else None
+                ),
             }
 
         return json.dumps(log_entry, ensure_ascii=False)
@@ -83,7 +89,7 @@ class LoggingConfig:
         self.formatter = StructuredFormatter()
         self._setup_logger()
 
-    def _setup_logger(self):
+    def _setup_logger(self) -> None:
         """设置日志配置"""
         # 移除默认处理器
         logger.remove()
@@ -177,10 +183,10 @@ class AuditLogger:
     def log_user_action(
         action: str,
         user_id: str,
-        resource: str = None,
-        details: Dict[str, Any] = None,
+        resource: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
         success: bool = True,
-    ):
+    ) -> None:
         """记录用户操作"""
         audit_data = {
             "audit": True,
@@ -200,10 +206,10 @@ class AuditLogger:
         table: str,
         operation: str,
         record_id: str,
-        old_values: Dict[str, Any] = None,
-        new_values: Dict[str, Any] = None,
-        user_id: str = None,
-    ):
+        old_values: Optional[Dict[str, Any]] = None,
+        new_values: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,
+    ) -> None:
         """记录数据变更"""
         audit_data = {
             "audit": True,
@@ -225,8 +231,8 @@ class AuditLogger:
         event_type: str,
         description: str,
         severity: str = "info",
-        details: Dict[str, Any] = None,
-    ):
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """记录系统事件"""
         audit_data = {
             "audit": True,
@@ -243,10 +249,10 @@ class AuditLogger:
     @staticmethod
     def log_security_event(
         event_type: str,
-        user_id: str = None,
-        ip_address: str = None,
-        details: Dict[str, Any] = None,
-    ):
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """记录安全事件"""
         audit_data = {
             "audit": True,
@@ -271,8 +277,8 @@ class PerformanceLogger:
         method: str,
         duration_ms: float,
         status_code: int,
-        user_id: str = None,
-    ):
+        user_id: Optional[str] = None,
+    ) -> None:
         """记录API性能"""
         perf_data = {
             "performance": True,
@@ -294,8 +300,8 @@ class PerformanceLogger:
         task_type: str,
         duration_seconds: float,
         success: bool,
-        details: Dict[str, Any] = None,
-    ):
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """记录任务性能"""
         perf_data = {
             "performance": True,
@@ -315,9 +321,9 @@ class PerformanceLogger:
         model_id: str,
         operation: str,
         duration_ms: float,
-        input_size: int = None,
-        details: Dict[str, Any] = None,
-    ):
+        input_size: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """记录模型性能"""
         perf_data = {
             "performance": True,
@@ -330,21 +336,26 @@ class PerformanceLogger:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        logger.info(f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data)
+        logger.info(
+            f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data
+        )
 
 
 class LogContext:
     """日志上下文管理器"""
 
     def __init__(
-        self, request_id: str = None, user_id: str = None, task_id: str = None
-    ):
+        self,
+        request_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+    ) -> None:
         self.request_id = request_id
         self.user_id = user_id
         self.task_id = task_id
-        self.tokens = []
+        self.tokens: list[Any] = []
 
-    def __enter__(self):
+    def __enter__(self) -> "LogContext":
         if self.request_id:
             self.tokens.append(request_id_var.set(self.request_id))
         if self.user_id:
@@ -353,7 +364,7 @@ class LogContext:
             self.tokens.append(task_id_var.set(self.task_id))
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         for token in reversed(self.tokens):
             token.var.reset(token)
 
@@ -366,13 +377,17 @@ audit_logger = AuditLogger()
 performance_logger = PerformanceLogger()
 
 
-def get_logger(name: str = None):
+def get_logger(name: Optional[str] = None) -> Any:
     """获取日志记录器"""
     if name:
         return logger.bind(logger_name=name)
     return logger
 
 
-def set_log_context(request_id: str = None, user_id: str = None, task_id: str = None):
+def set_log_context(
+    request_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+) -> LogContext:
     """设置日志上下文"""
     return LogContext(request_id=request_id, user_id=user_id, task_id=task_id)

@@ -1,44 +1,54 @@
 """
-Qlib集成服务模块
+Qlib集成服务模块（轻量懒加载入口）。
 
-提供Qlib框架的集成功能，包括：
-- 增强的数据提供器（EnhancedQlibDataProvider）
-- Alpha158因子计算器（Alpha158Calculator）
-- 因子缓存管理（FactorCache）
-- 统一训练引擎（UnifiedQlibTrainingEngine）
-- 模型配置管理器（QlibModelManager）
-- 自定义模型实现（CustomModels）
+该模块避免在包导入时 eager import 重依赖子模块，
+从而减少 qlib/psutil 等可选依赖缺失带来的导入失败。
 """
 
-from .enhanced_qlib_provider import (
-    Alpha158Calculator,
-    EnhancedQlibDataProvider,
-    FactorCache,
-)
-from .qlib_data_adapter import QlibDataAdapter
-from .qlib_model_manager import (
-    HyperparameterSpec,
-    ModelCategory,
-    ModelComplexity,
-    ModelMetadata,
-    QlibModelManager,
-)
-from .unified_qlib_training_engine import (
-    QlibModelType,
-    QlibTrainingConfig,
-    QlibTrainingResult,
-    UnifiedQlibTrainingEngine,
-)
+from importlib import import_module
+from typing import Any, Dict, List, Tuple
 
-# 尝试导入自定义模型（可能因为依赖问题失败）
+# 名称 -> (子模块, 属性名)
+_LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
+    # 数据提供器
+    "EnhancedQlibDataProvider": ("enhanced_qlib_provider", "EnhancedQlibDataProvider"),
+    "Alpha158Calculator": ("enhanced_qlib_provider", "Alpha158Calculator"),
+    "FactorCache": ("enhanced_qlib_provider", "FactorCache"),
+    "QlibDataAdapter": ("qlib_data_adapter", "QlibDataAdapter"),
+    # 训练引擎
+    "UnifiedQlibTrainingEngine": (
+        "unified_qlib_training_engine",
+        "UnifiedQlibTrainingEngine",
+    ),
+    "QlibTrainingConfig": ("unified_qlib_training_engine", "QlibTrainingConfig"),
+    "QlibTrainingResult": ("unified_qlib_training_engine", "QlibTrainingResult"),
+    "QlibModelType": ("unified_qlib_training_engine", "QlibModelType"),
+    # 模型管理器
+    "QlibModelManager": ("qlib_model_manager", "QlibModelManager"),
+    "ModelMetadata": ("qlib_model_manager", "ModelMetadata"),
+    "HyperparameterSpec": ("qlib_model_manager", "HyperparameterSpec"),
+    "ModelCategory": ("qlib_model_manager", "ModelCategory"),
+    "ModelComplexity": ("qlib_model_manager", "ModelComplexity"),
+    # 自定义模型
+    "CustomTransformerModel": ("custom_models", "CustomTransformerModel"),
+    "CustomInformerModel": ("custom_models", "CustomInformerModel"),
+    "CustomTimesNetModel": ("custom_models", "CustomTimesNetModel"),
+    "CustomPatchTSTModel": ("custom_models", "CustomPatchTSTModel"),
+}
+
+# 支持 `from app.services.qlib import official_workflow` 这类子模块导入
+_LAZY_SUBMODULES = {
+    "official_workflow",
+    "enhanced_qlib_provider",
+    "qlib_data_adapter",
+    "qlib_model_manager",
+    "unified_qlib_training_engine",
+    "custom_models",
+}
+
+# 仅检查 custom_models 是否可导入，不触发 provider/training engine 导入
 try:
-    from .custom_models import (
-        CustomInformerModel,
-        CustomPatchTSTModel,
-        CustomTimesNetModel,
-        CustomTransformerModel,
-    )
-
+    import_module(f"{__name__}.custom_models")
     CUSTOM_MODELS_AVAILABLE = True
 except ImportError:
     CUSTOM_MODELS_AVAILABLE = False
@@ -74,3 +84,26 @@ if CUSTOM_MODELS_AVAILABLE:
             "CustomPatchTSTModel",
         ]
     )
+
+
+def __getattr__(name: str) -> Any:
+    if name == "CUSTOM_MODELS_AVAILABLE":
+        return CUSTOM_MODELS_AVAILABLE
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        module = import_module(f"{__name__}.{module_name}")
+        value = getattr(module, attr_name)
+        globals()[name] = value
+        return value
+
+    if name in _LAZY_SUBMODULES:
+        module = import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
+def __dir__() -> List[str]:
+    return sorted(set(globals()) | set(__all__) | _LAZY_SUBMODULES)

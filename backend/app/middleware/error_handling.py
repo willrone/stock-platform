@@ -6,9 +6,9 @@
 
 import traceback
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -20,11 +20,11 @@ from app.api.v1.schemas import StandardResponse
 class ErrorHandlingMiddleware(BaseHTTPMiddleware):
     """错误处理中间件"""
 
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         super().__init__(app)
-        self.error_counts = {}  # 错误统计
+        self.error_counts: dict[str, Any] = {}  # 错误统计
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         """处理请求"""
         try:
             response = await call_next(request)
@@ -34,7 +34,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
             return await self._handle_http_exception(request, exc)
 
         except StarletteHTTPException as exc:
-            return await self._handle_http_exception(request, exc)
+            return await self._handle_http_exception(request, cast(HTTPException, exc))
 
         except ValueError as exc:
             return await self._handle_validation_error(request, exc)
@@ -62,14 +62,13 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
         logger.warning(f"HTTP异常: {error_info}")
 
         # 记录错误统计
-        self._record_error(exc.status_code)
+        self._record_error(str(exc.status_code))
 
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=StandardResponse(
-                success=False, message=str(exc.detail), data=None
-            ).model_dump(mode="json"),
-        )
+        content = StandardResponse(
+            success=False, message=str(exc.detail), data=None
+        ).model_dump(mode="json")
+        content["detail"] = exc.detail
+        return JSONResponse(status_code=exc.status_code, content=content)
 
     async def _handle_validation_error(
         self, request: Request, exc: ValueError
@@ -153,7 +152,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
         response = StandardResponse(success=False, message="服务器内部错误", data=None)
         return JSONResponse(status_code=500, content=response.model_dump(mode="json"))
 
-    def _record_error(self, error_type: str):
+    def _record_error(self, error_type: str) -> None:
         """记录错误统计"""
         if error_type not in self.error_counts:
             self.error_counts[error_type] = 0
@@ -171,10 +170,10 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """请求日志中间件"""
 
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         """处理请求"""
         start_time = datetime.now()
 

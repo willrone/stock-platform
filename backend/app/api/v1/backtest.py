@@ -2,9 +2,10 @@
 回测服务路由
 """
 
+# mypy: disable-error-code="untyped-decorator"
+
 import os
-from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List, cast
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -18,18 +19,23 @@ from app.core.error_handler import (
     log_structured_exception,
 )
 from app.services.backtest import BacktestConfig, BacktestExecutor
+from app.services.backtest.utils.official_style_params import (
+    apply_official_style_topk_dropout_params,
+)
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
 
 
-def _normalize_backtest_strategy_request(request: BacktestRequest) -> tuple[str, Dict[str, object]]:
+def _normalize_backtest_strategy_request(
+    request: BacktestRequest,
+) -> tuple[str, Dict[str, object]]:
     """规范化回测策略请求，补齐模型驱动回测配置。"""
     strategy_name = request.strategy_name
     strategy_config = dict(request.strategy_config or {})
 
+    normalized_name = strategy_name.lower()
     if request.model_id:
         strategy_config.setdefault("model_id", request.model_id)
-        normalized_name = strategy_name.lower()
         if normalized_name in {"model", "signal", "model_signal"}:
             strategy_name = "model_signal"
         elif normalized_name in {
@@ -40,6 +46,12 @@ def _normalize_backtest_strategy_request(request: BacktestRequest) -> tuple[str,
             "ranking",
         }:
             strategy_name = "model_topk_dropout"
+
+    strategy_config = apply_official_style_topk_dropout_params(
+        strategy_name=strategy_name,
+        stock_codes=request.stock_codes,
+        strategy_config=strategy_config,
+    )
 
     return strategy_name, strategy_config
 
@@ -67,14 +79,16 @@ def _coerce_numeric_value(
     value: object,
     *,
     field_name: str,
-    default: float,
+    default: float | int | str,
     context: ErrorContext,
 ) -> float:
     """将回测结果中的数值安全转换为 float，并记录降级日志。"""
     try:
         if value is None:
-            return float(default)
-        return float(value)
+            value = default
+        if isinstance(value, (int, float)):
+            return float(value)
+        return float(str(value))
     except (TypeError, ValueError) as conversion_error:
         log_structured_exception(
             f"回测结果字段 {field_name} 不是可序列化数值，已回退默认值",
@@ -90,11 +104,13 @@ def _coerce_numeric_value(
                 }
             ),
         )
-        return float(default)
+        return (
+            float(default) if isinstance(default, (int, float)) else float(str(default))
+        )
 
 
 @router.get("/strategies", response_model=StandardResponse)
-async def get_available_strategies():
+async def get_available_strategies() -> Any:
     """获取可用策略列表"""
     try:
         from app.services.backtest import AdvancedStrategyFactory, StrategyFactory
@@ -589,7 +605,7 @@ async def get_available_strategies():
             },
         }
 
-        result = []
+        result: List[Dict[str, Any]] = []
         for strategy_key in all_strategies:
             if strategy_key in strategy_descriptions:
                 result.append(
@@ -613,7 +629,12 @@ async def get_available_strategies():
             "factor_investment": 2,
             "other": 3,
         }
-        result.sort(key=lambda x: (category_order.get(x.get("category"), 3), x["key"]))
+        result.sort(
+            key=lambda x: (
+                category_order.get(cast(str, x.get("category", "other"))),
+                cast(str, x["key"]),
+            )
+        )
 
         return StandardResponse(success=True, message="获取策略列表成功", data=result)
     except Exception as e:
@@ -622,7 +643,7 @@ async def get_available_strategies():
 
 
 @router.post("", response_model=StandardResponse)
-async def run_backtest(request: BacktestRequest):
+async def run_backtest(request: BacktestRequest) -> Any:
     """
     运行回测（支持单策略和组合策略）
 
@@ -647,7 +668,9 @@ async def run_backtest(request: BacktestRequest):
     }
     """
     try:
-        normalized_strategy_name, strategy_config = _normalize_backtest_strategy_request(request)
+        normalized_strategy_name, strategy_config = (
+            _normalize_backtest_strategy_request(request)
+        )
 
         # 检测是否为组合策略
         is_portfolio = normalized_strategy_name.lower() == "portfolio" or (
@@ -688,9 +711,7 @@ async def run_backtest(request: BacktestRequest):
                 )
             ),
             slippage_rate=float(
-                _resolve_backtest_config_value(
-                    strategy_config, "slippage_rate", 0.0001
-                )
+                _resolve_backtest_config_value(strategy_config, "slippage_rate", 0.0001)
             ),
             max_position_size=float(
                 _resolve_backtest_config_value(
@@ -703,24 +724,27 @@ async def run_backtest(request: BacktestRequest):
                 )
             ),
             board_lot_size=int(
-                _resolve_backtest_config_value(
-                    strategy_config, "board_lot_size", 100
-                )
+                _resolve_backtest_config_value(strategy_config, "board_lot_size", 100)
             ),
             stop_loss_pct=float(
-                _resolve_backtest_config_value(
-                    strategy_config, "stop_loss_pct", 0.05
-                )
+                _resolve_backtest_config_value(strategy_config, "stop_loss_pct", 0.05)
             ),
             take_profit_pct=float(
-                _resolve_backtest_config_value(
-                    strategy_config, "take_profit_pct", 0.15
-                )
+                _resolve_backtest_config_value(strategy_config, "take_profit_pct", 0.15)
             ),
             rebalance_frequency=str(
                 _resolve_backtest_config_value(
                     strategy_config, "rebalance_frequency", "daily"
                 )
+            ),
+            open_cost=float(
+                _resolve_backtest_config_value(strategy_config, "open_cost", 0.0)
+            ),
+            close_cost=float(
+                _resolve_backtest_config_value(strategy_config, "close_cost", 0.0)
+            ),
+            min_cost=float(
+                _resolve_backtest_config_value(strategy_config, "min_cost", 0.0)
             ),
         )
 
@@ -730,7 +754,7 @@ async def run_backtest(request: BacktestRequest):
         # 所以在线程中创建新的事件循环来运行
         import asyncio
 
-        def _run_backtest_in_thread():
+        def _run_backtest_in_thread() -> Any:
             """在独立线程中运行回测，避免阻塞FastAPI事件循环。"""
             return asyncio.run(
                 executor.run_backtest(
@@ -806,9 +830,9 @@ async def run_backtest(request: BacktestRequest):
             # 尝试从回测报告中提取组合信息
             portfolio_info = {
                 "is_portfolio": True,
-                "strategies": strategy_config.get("strategies", [])
-                if strategy_config
-                else [],
+                "strategies": (
+                    strategy_config.get("strategies", []) if strategy_config else []
+                ),
             }
 
         result = {
@@ -908,7 +932,7 @@ async def run_backtest(request: BacktestRequest):
 
 
 @router.get("/portfolio-templates", response_model=StandardResponse)
-async def get_portfolio_templates():
+async def get_portfolio_templates() -> Any:
     """获取预设的策略组合模板"""
     try:
         templates = [
@@ -991,7 +1015,9 @@ async def get_portfolio_templates():
             },
         ]
 
-        return StandardResponse(success=True, message="获取策略组合模板成功", data=templates)
+        return StandardResponse(
+            success=True, message="获取策略组合模板成功", data=templates
+        )
     except Exception as e:
         logger.error(f"获取策略组合模板失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取策略组合模板失败: {str(e)}")

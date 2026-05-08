@@ -11,12 +11,44 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
 // 标准响应格式
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T;
   timestamp: string;
 }
+
+type RequestParams = Record<string, unknown>;
+type ErrorResponseData = { message?: string; [key: string]: unknown };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LooseApiPayload = any;
+type EnhancedError = Error & {
+  status?: number;
+  response?: AxiosError['response'];
+};
+
+const apiLogger = {
+  debug: (...args: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      globalThis.console.log(...args);
+    }
+  },
+  warn: (...args: unknown[]) => {
+    globalThis.console.warn(...args);
+  },
+  error: (...args: unknown[]) => {
+    globalThis.console.error(...args);
+  },
+};
+
+const extractErrorMessage = (data: unknown): string | undefined => {
+  if (!data || typeof data !== 'object') {
+    return undefined;
+  }
+
+  const candidate = data as ErrorResponseData;
+  return typeof candidate.message === 'string' ? candidate.message : undefined;
+};
 
 // 创建axios实例
 // 使用相对路径，通过Next.js代理转发到后端
@@ -28,7 +60,7 @@ const createApiInstance = (): AxiosInstance => {
       'Content-Type': 'application/json',
     },
     // 配置参数序列化：FastAPI期望数组参数格式为 ?key=a&key=b，而不是 ?key[]=a&key[]=b
-    paramsSerializer: params => {
+    paramsSerializer: (params: RequestParams) => {
       const searchParams = new URLSearchParams();
       for (const [key, value] of Object.entries(params)) {
         if (value === null || value === undefined) {
@@ -56,13 +88,15 @@ const createApiInstance = (): AxiosInstance => {
         config.headers.Authorization = `Bearer ${token}`;
       }
 
-      console.log(`[API] 发起请求: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-      console.log('[API] 请求参数:', config.params);
-      console.log('[API] 请求头:', config.headers);
+      apiLogger.debug(
+        `[API] 发起请求: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`
+      );
+      apiLogger.debug('[API] 请求参数:', config.params);
+      apiLogger.debug('[API] 请求头:', config.headers);
       return config;
     },
     error => {
-      console.error('[API] 请求拦截器错误:', error);
+      apiLogger.error('[API] 请求拦截器错误:', error);
       return Promise.reject(error);
     }
   );
@@ -72,23 +106,23 @@ const createApiInstance = (): AxiosInstance => {
     (response: AxiosResponse<ApiResponse>) => {
       const { data } = response;
 
-      console.log(
+      apiLogger.debug(
         `[API] 响应成功: ${response.config.method?.toUpperCase()} ${response.config.url}`
       );
-      console.log(`[API] 响应状态: ${response.status}`);
-      console.log('[API] 响应数据:', data);
+      apiLogger.debug(`[API] 响应状态: ${response.status}`);
+      apiLogger.debug('[API] 响应数据:', data);
 
       // 检查业务逻辑错误
       if (!data.success) {
-        console.error('[API] 业务错误:', data.message);
-        console.error(data.message || '请求失败');
+        apiLogger.error('[API] 业务错误:', data.message);
+        apiLogger.error(data.message || '请求失败');
         return Promise.reject(new Error(data.message || '请求失败'));
       }
 
       return response;
     },
     (error: AxiosError) => {
-      console.error('[API] 响应错误详情:', {
+      apiLogger.error('[API] 响应错误详情:', {
         message: error.message,
         code: error.code,
         config: {
@@ -107,37 +141,38 @@ const createApiInstance = (): AxiosInstance => {
       // 处理不同类型的错误
       if (error.response) {
         const status = error.response.status;
-        const data = error.response.data as any;
+        const data = error.response.data;
+        const errorMessage = extractErrorMessage(data);
 
         switch (status) {
           case 400:
-            console.error('请求参数错误:', data?.message || '请求参数错误');
+            apiLogger.error('请求参数错误:', errorMessage || '请求参数错误');
             break;
           case 401:
-            console.error('未授权访问，请重新登录');
+            apiLogger.error('未授权访问，请重新登录');
             // 清除token并跳转到登录页
             localStorage.removeItem('auth_token');
             window.location.href = '/login';
             break;
           case 403:
-            console.error('权限不足');
+            apiLogger.error('权限不足');
             break;
           case 404:
-            console.error('请求的资源不存在:', `${error.config?.baseURL}${error.config?.url}`);
+            apiLogger.error('请求的资源不存在:', `${error.config?.baseURL}${error.config?.url}`);
             break;
           case 429:
-            console.error('请求过于频繁，请稍后再试');
+            apiLogger.error('请求过于频繁，请稍后再试');
             break;
           case 500:
-            console.error('服务器内部错误:', data?.message || '服务器内部错误');
+            apiLogger.error('服务器内部错误:', errorMessage || '服务器内部错误');
             break;
           default:
-            console.error(`请求失败 (${status}):`, data?.message || '未知错误');
+            apiLogger.error(`请求失败 (${status}):`, errorMessage || '未知错误');
         }
       } else if (error.request) {
-        console.error('网络连接失败，请检查网络设置');
+        apiLogger.error('网络连接失败，请检查网络设置');
       } else {
-        console.error('请求配置错误:', error.message);
+        apiLogger.error('请求配置错误:', error.message);
       }
 
       return Promise.reject(error);
@@ -152,34 +187,36 @@ export const api = createApiInstance();
 
 // 通用请求方法
 export const apiRequest = {
-  get: <T = any>(url: string, params?: any): Promise<T> => {
+  get: <T = LooseApiPayload>(url: string, params?: RequestParams): Promise<T> => {
     return api
       .get<ApiResponse<T>>(url, { params })
       .then(res => {
-        console.log(`[API] GET ${url} 响应:`, res.data);
+        apiLogger.debug(`[API] GET ${url} 响应:`, res.data);
         if (!res.data || !res.data.success) {
-          console.error(`[API] GET ${url} 失败:`, res.data?.message || '未知错误');
+          apiLogger.error(`[API] GET ${url} 失败:`, res.data?.message || '未知错误');
           throw new Error(res.data?.message || '请求失败');
         }
         if (res.data.data === undefined || res.data.data === null) {
-          console.warn(`[API] GET ${url} 返回的data字段为空`);
+          apiLogger.warn(`[API] GET ${url} 返回的data字段为空`);
           return null as T;
         }
         return res.data.data;
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         // 确保错误对象包含状态码信息
-        if (error.response) {
-          const enhancedError = new Error(error.response.data?.message || error.message);
-          (enhancedError as any).status = error.response.status;
-          (enhancedError as any).response = error.response;
+        if (axios.isAxiosError(error) && error.response) {
+          const enhancedError = new Error(
+            extractErrorMessage(error.response.data) || error.message
+          ) as EnhancedError;
+          enhancedError.status = error.response.status;
+          enhancedError.response = error.response;
           throw enhancedError;
         }
         throw error;
       });
   },
 
-  post: <T = any>(url: string, data?: any): Promise<T> => {
+  post: <T = LooseApiPayload>(url: string, data?: unknown): Promise<T> => {
     return api.post<ApiResponse<T>>(url, data).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -188,7 +225,7 @@ export const apiRequest = {
     });
   },
 
-  put: <T = any>(url: string, data?: any): Promise<T> => {
+  put: <T = LooseApiPayload>(url: string, data?: unknown): Promise<T> => {
     return api.put<ApiResponse<T>>(url, data).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -197,7 +234,7 @@ export const apiRequest = {
     });
   },
 
-  delete: <T = any>(url: string): Promise<T> => {
+  delete: <T = LooseApiPayload>(url: string): Promise<T> => {
     return api.delete<ApiResponse<T>>(url).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -206,7 +243,7 @@ export const apiRequest = {
     });
   },
 
-  patch: <T = any>(url: string, data?: any): Promise<T> => {
+  patch: <T = LooseApiPayload>(url: string, data?: unknown): Promise<T> => {
     return api.patch<ApiResponse<T>>(url, data).then(res => {
       if (!res.data || !res.data.success) {
         throw new Error(res.data?.message || '请求失败');
@@ -221,7 +258,7 @@ export const uploadFile = async (
   url: string,
   file: File,
   onProgress?: (progress: number) => void
-): Promise<any> => {
+): Promise<unknown> => {
   const formData = new FormData();
   formData.append('file', file);
 

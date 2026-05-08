@@ -21,7 +21,7 @@ from app.core.error_handler import (
     PredictionError,
     RecoveryAction,
 )
-from app.models.task_models import PredictionResult, RiskMetrics
+from app.models.task_models import RiskMetrics
 from app.repositories.task_repository import ModelInfoRepository
 
 from .feature_extractor import FeatureConfig, FeatureExtractor
@@ -95,7 +95,7 @@ class ModelLoader:
         try:
             model_path = self.model_dir / f"{model_id}.joblib"
 
-            metadata = {}
+            metadata: Any = {}
             if model_path.exists():
                 model, metadata = self._load_model_file(model_path)
             else:
@@ -174,7 +174,7 @@ class ModelLoader:
         logger.info(f"创建备用模型: {model_id}")
         return model, metadata
 
-    def save_model(self, model_id: str, model: Any, metadata: Dict[str, Any]):
+    def save_model(self, model_id: str, model: Any, metadata: Dict[str, Any]) -> Any:
         """保存模型"""
         try:
             model_path = self.model_dir / f"{model_id}.joblib"
@@ -202,7 +202,9 @@ class RiskAssessment:
     """风险评估器"""
 
     @staticmethod
-    def calculate_var(returns: Union[pd.Series, np.ndarray], confidence_level: float = 0.95) -> float:
+    def calculate_var(
+        returns: Union[pd.Series, np.ndarray], confidence_level: float = 0.95
+    ) -> float:
         """计算风险价值(VaR)"""
         if len(returns) == 0:
             return 0.0
@@ -212,11 +214,11 @@ class RiskAssessment:
             returns_clean = returns.dropna().values
         else:
             returns_clean = returns[~np.isnan(returns)]
-        
+
         if len(returns_clean) == 0:
             return 0.0
 
-        return np.percentile(returns_clean, (1 - confidence_level) * 100)
+        return float(np.percentile(returns_clean, (1 - confidence_level) * 100))
 
     @staticmethod
     def calculate_expected_shortfall(
@@ -227,25 +229,27 @@ class RiskAssessment:
             return 0.0
 
         var = RiskAssessment.calculate_var(returns, confidence_level)
-        
+
         # 处理 NaN 值
         if isinstance(returns, pd.Series):
             returns_clean = returns.dropna().values
         else:
             returns_clean = returns[~np.isnan(returns)]
-            
+
         if len(returns_clean) == 0:
             return 0.0
-            
+
         # 计算低于 VaR 的平均值
         below_var = returns_clean[returns_clean <= var]
         if len(below_var) == 0:
             return float(np.mean(returns_clean))  # 如果没有低于 VaR 的值，则返回平均值
-        
+
         return float(np.mean(below_var))
 
     @staticmethod
-    def calculate_volatility(returns: Union[pd.Series, np.ndarray], annualize: bool = True) -> float:
+    def calculate_volatility(
+        returns: Union[pd.Series, np.ndarray], annualize: bool = True
+    ) -> float:
         """计算波动率"""
         if len(returns) == 0:
             return 0.0
@@ -255,14 +259,14 @@ class RiskAssessment:
             returns_clean = returns.dropna().values
         else:
             returns_clean = returns[~np.isnan(returns)]
-            
+
         if len(returns_clean) == 0:
             return 0.0
 
         vol = np.std(returns_clean)
         if annualize:
             vol *= np.sqrt(252)  # 年化
-        return vol
+        return float(vol)
 
     @staticmethod
     def calculate_max_drawdown(prices: Union[pd.Series, np.ndarray]) -> float:
@@ -275,7 +279,7 @@ class RiskAssessment:
             prices_clean = prices.dropna().values
         else:
             prices_clean = prices[~np.isnan(prices)]
-            
+
         if len(prices_clean) == 0:
             return 0.0
 
@@ -284,13 +288,13 @@ class RiskAssessment:
             returns = prices.pct_change().dropna().values
         else:
             returns = np.diff(prices_clean) / prices_clean[:-1]
-        
+
         if len(returns) == 0:
             return 0.0
 
         # 计算累积收益
         cumulative = np.concatenate([[1.0], (1 + returns).cumprod()])
-        
+
         # 计算最大回撤
         running_max = np.maximum.accumulate(cumulative)
         drawdown = (cumulative - running_max) / running_max
@@ -306,7 +310,7 @@ class RiskAssessment:
             returns_clean = returns.dropna().values
         else:
             returns_clean = returns[~np.isnan(returns)]
-            
+
         if len(returns_clean) == 0 or np.std(returns_clean) == 0:
             return 0.0
 
@@ -419,8 +423,17 @@ class PredictionEngine:
                 end_date = datetime.now()
 
             # 检查缓存 - 使用更精确的缓存键（包含配置哈希）
-            config_hash = hash((config.horizon, config.confidence_level, config.prediction_days, config.use_ensemble))
-            cache_key = f"{stock_code}_{config.model_id}_{end_date.date()}_{config_hash}"
+            config_hash = hash(
+                (
+                    config.horizon,
+                    config.confidence_level,
+                    config.prediction_days,
+                    config.use_ensemble,
+                )
+            )
+            cache_key = (
+                f"{stock_code}_{config.model_id}_{end_date.date()}_{config_hash}"
+            )
             if cache_key in self.prediction_cache:
                 cached_prediction = self.prediction_cache[cache_key]
                 if datetime.now() - cached_prediction.prediction_date < self.cache_ttl:
@@ -443,11 +456,11 @@ class PredictionEngine:
                 predicted_price = current_price * (1 + predicted_return)
                 prediction_result = {
                     "predicted_price": predicted_price,
-                    "predicted_direction": 1
-                    if predicted_return > 0.01
-                    else -1
-                    if predicted_return < -0.01
-                    else 0,
+                    "predicted_direction": (
+                        1
+                        if predicted_return > 0.01
+                        else -1 if predicted_return < -0.01 else 0
+                    ),
                     "confidence_score": model_metadata.get(
                         "performance_metrics", {}
                     ).get("accuracy", 0.5),
@@ -680,7 +693,9 @@ class PredictionEngine:
                     for feat in missing_features:
                         latest_features[feat] = 0.0
                 # 按训练时的顺序排列特征
-                available_features = [f for f in expected_features if f in latest_features.columns]
+                available_features = [
+                    f for f in expected_features if f in latest_features.columns
+                ]
                 latest_features = latest_features[available_features]
 
             # 执行预测
@@ -773,7 +788,7 @@ class PredictionEngine:
             engine = UnifiedQlibTrainingEngine()
             start_date = end_date - timedelta(days=365)
 
-            async def run_predict():
+            async def run_predict() -> Any:
                 return await engine.predict_with_qlib_model(
                     model_path=model_path,
                     stock_codes=[stock_code],
@@ -897,12 +912,15 @@ class PredictionEngine:
             # 验证股票代码
             if not stock_code or len(stock_code) < 6:
                 raise PredictionError(
-                    message=f"无效的股票代码: {stock_code}", severity=ErrorSeverity.MEDIUM
+                    message=f"无效的股票代码: {stock_code}",
+                    severity=ErrorSeverity.MEDIUM,
                 )
 
             # 验证模型ID
             if not config.model_id:
-                raise PredictionError(message="模型ID不能为空", severity=ErrorSeverity.MEDIUM)
+                raise PredictionError(
+                    message="模型ID不能为空", severity=ErrorSeverity.MEDIUM
+                )
 
             # 验证置信水平
             if not 0.5 <= config.confidence_level <= 0.99:
@@ -952,7 +970,11 @@ class PredictionEngine:
         # 默认情况下，尝试从模型ID中推断
         if "xgb" in model_id.lower() or "xgboost" in model_id.lower():
             return "xgboost"
-        elif "torch" in model_id.lower() or "pytorch" in model_id.lower() or "pth" in model_id.lower():
+        elif (
+            "torch" in model_id.lower()
+            or "pytorch" in model_id.lower()
+            or "pth" in model_id.lower()
+        ):
             return "pytorch"
         elif "lstm" in model_id.lower() or "gru" in model_id.lower():
             return "pytorch"
@@ -961,30 +983,32 @@ class PredictionEngine:
         else:
             return "unknown"
 
-    def _calculate_predicted_return(self, direction: int, confidence: float, horizon) -> float:
+    def _calculate_predicted_return(
+        self, direction: int, confidence: float, horizon: Any
+    ) -> float:
         """根据方向、置信度和时间范围计算预测收益率"""
         # 根据预测方向和置信度计算预期收益率
         base_return = 0.01  # 基础收益率
-        
+
         # 处理 horizon 参数（可能是枚举或字符串）
-        if hasattr(horizon, 'value'):  # 如果是枚举
+        if hasattr(horizon, "value"):  # 如果是枚举
             horizon_str = horizon.value
         else:
             horizon_str = str(horizon)
-        
+
         # 根据时间范围调整收益率
         horizon_multiplier = {
             "intraday": 0.1,
             "short_term": 1.0,
             "medium_term": 2.0,
-            "long_term": 3.0
+            "long_term": 3.0,
         }
-        
+
         multiplier = horizon_multiplier.get(horizon_str, 1.0)
-        
+
         # 确保不同时间范围产生不同的值，即使是小数点差异
         adjusted_multiplier = multiplier * (1.0 + hash(horizon_str) % 1000 / 1000000)
-        
+
         # 根据方向和置信度计算最终收益率
         # 根据测试期望，direction=0表示下跌（负值），direction=1表示上涨（正值）
         if direction == 0:  # 下跌
@@ -994,34 +1018,46 @@ class PredictionEngine:
         else:  # 持平
             return 0.0
 
-    async def _make_prediction(self, model: Any, X: np.ndarray, model_type: str) -> tuple:
+    async def _make_prediction(
+        self, model: Any, X: np.ndarray, model_type: str
+    ) -> tuple:
         """使用指定模型进行预测"""
         if model_type == "xgboost":
             # 优先尝试使用predict方法（测试中mock的是predict方法）
-            if hasattr(model, 'predict'):
+            if hasattr(model, "predict"):
                 try:
                     pred_result = model.predict(X.reshape(1, -1))
-                    if hasattr(pred_result, '__getitem__') and len(pred_result) > 0:
+                    if hasattr(pred_result, "__getitem__") and len(pred_result) > 0:
                         pred = float(pred_result[0])
                     else:
                         pred = 0.75  # 默认值
-                except:
+                except Exception:
                     pred = 0.75  # 默认值
                 proba = pred
                 direction = 1 if proba > 0.5 else 0
-            elif hasattr(model, 'predict_proba'):
+            elif hasattr(model, "predict_proba"):
                 # 如果没有predict方法，则尝试predict_proba
                 try:
                     pred_proba_result = model.predict_proba(X.reshape(1, -1))
-                    if hasattr(pred_proba_result, '__getitem__') and len(pred_proba_result) > 0:
-                        if hasattr(pred_proba_result[0], '__getitem__') and len(pred_proba_result[0]) > 1:
+                    if (
+                        hasattr(pred_proba_result, "__getitem__")
+                        and len(pred_proba_result) > 0
+                    ):
+                        if (
+                            hasattr(pred_proba_result[0], "__getitem__")
+                            and len(pred_proba_result[0]) > 1
+                        ):
                             # 二分类情况，取正类概率
                             proba = float(pred_proba_result[0][1])
                         else:
-                            proba = float(pred_proba_result[0][0]) if len(pred_proba_result[0]) > 0 else 0.5
+                            proba = (
+                                float(pred_proba_result[0][0])
+                                if len(pred_proba_result[0]) > 0
+                                else 0.5
+                            )
                     else:
                         proba = 0.5  # 默认概率
-                except:
+                except Exception:
                     proba = 0.75  # 默认值
                 direction = 1 if proba > 0.5 else 0
             else:
@@ -1030,43 +1066,49 @@ class PredictionEngine:
         elif model_type in ["pytorch", "sklearn"]:
             try:
                 pred_result = model.predict(X.reshape(1, -1))
-                if hasattr(pred_result, '__getitem__') and len(pred_result) > 0:
+                if hasattr(pred_result, "__getitem__") and len(pred_result) > 0:
                     pred = float(pred_result[0])
                 else:
                     pred = 0.75
-            except:
+            except Exception:
                 pred = 0.75
             proba = abs(pred)
             direction = 1 if pred > 0 else (-1 if pred < 0 else 1)
         else:
             try:
-                pred_result = model.predict(X.reshape(1, -1)) if hasattr(model, 'predict') else [0.75]
-                if hasattr(pred_result, '__getitem__') and len(pred_result) > 0:
+                pred_result = (
+                    model.predict(X.reshape(1, -1))
+                    if hasattr(model, "predict")
+                    else [0.75]
+                )
+                if hasattr(pred_result, "__getitem__") and len(pred_result) > 0:
                     pred = float(pred_result[0])
                 else:
                     pred = 0.75
-            except:
+            except Exception:
                 pred = 0.75
             proba = abs(pred)
             direction = 1 if pred > 0 else (-1 if pred < 0 else 1)
-            
+
         return proba, direction
 
-    def _calculate_prediction_confidence_interval(self, predicted_return: float, volatility: float, confidence_level: float) -> tuple:
+    def _calculate_prediction_confidence_interval(
+        self, predicted_return: float, volatility: float, confidence_level: float
+    ) -> tuple:
         """计算预测置信区间"""
         from scipy import stats
-        
+
         # 计算Z分数
         z_score = stats.norm.ppf((1 + confidence_level) / 2)
-        
+
         # 计算置信区间
         margin = volatility * z_score
         lower_bound = predicted_return - margin
         upper_bound = predicted_return + margin
-        
+
         return lower_bound, upper_bound
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """清空预测缓存"""
         self.prediction_cache.clear()
         if self.feature_extractor.cache:

@@ -10,7 +10,9 @@ from app.services.backtest.strategies.strategy_factory import StrategyFactory
 
 
 @pytest.mark.asyncio
-async def test_model_prediction_strategy_flattens_multiindex_prediction_series_for_single_stock() -> None:
+async def test_model_prediction_strategy_flattens_multiindex_prediction_series_for_single_stock() -> (
+    None
+):
     strategy = StrategyFactory.create_strategy(
         "model_signal",
         {

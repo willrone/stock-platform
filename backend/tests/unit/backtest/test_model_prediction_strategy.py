@@ -11,7 +11,9 @@ from app.services.backtest.strategies.strategy_factory import StrategyFactory
 
 
 @pytest.mark.asyncio
-async def test_model_prediction_strategy_prepares_predictions_and_emits_threshold_signals() -> None:
+async def test_model_prediction_strategy_prepares_predictions_and_emits_threshold_signals() -> (
+    None
+):
     strategy = StrategyFactory.create_strategy(
         "model_signal",
         {
@@ -22,11 +24,13 @@ async def test_model_prediction_strategy_prepares_predictions_and_emits_threshol
         },
     )
 
-    trading_dates = pd.to_datetime([
-        "2024-01-02",
-        "2024-01-03",
-        "2024-01-04",
-    ])
+    trading_dates = pd.to_datetime(
+        [
+            "2024-01-02",
+            "2024-01-03",
+            "2024-01-04",
+        ]
+    )
     stock_data = {
         "000001.SZ": pd.DataFrame(
             {

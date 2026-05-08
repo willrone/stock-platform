@@ -2,11 +2,10 @@
 统一错误处理框架
 """
 
-import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
@@ -68,7 +67,14 @@ class BaseError(Exception):
         original_exception: Optional[Exception] = None,
         recovery_actions: Optional[List[RecoveryAction]] = None,
     ):
-        super().__init__(message)
+        super().__init__(
+            message,
+            error_type,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
         self.message = message
         self.error_type = error_type
         self.severity = severity
@@ -77,6 +83,9 @@ class BaseError(Exception):
         self.recovery_actions = recovery_actions or []
         self.timestamp = datetime.utcnow()
         self.error_id = f"{error_type.value}_{int(self.timestamp.timestamp())}"
+
+    def __str__(self) -> str:
+        return self.message
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -93,9 +102,9 @@ class BaseError(Exception):
                 "request_id": self.context.request_id,
                 "additional_data": self.context.additional_data,
             },
-            "original_exception": str(self.original_exception)
-            if self.original_exception
-            else None,
+            "original_exception": (
+                str(self.original_exception) if self.original_exception else None
+            ),
             "recovery_actions": [
                 {
                     "action_type": action.action_type,
@@ -110,43 +119,127 @@ class BaseError(Exception):
 class PredictionError(BaseError):
     """预测相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.PREDICTION_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.PREDICTION_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class TaskError(BaseError):
     """任务相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.TASK_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.TASK_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class ModelError(BaseError):
     """模型相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.MODEL_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.MODEL_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class DataError(BaseError):
     """数据相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.DATA_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.DATA_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class SystemError(BaseError):
     """系统相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.SYSTEM_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.SYSTEM_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 class ValidationError(BaseError):
     """验证相关错误"""
 
-    def __init__(self, message: str, **kwargs):
-        super().__init__(message, ErrorType.VALIDATION_ERROR, **kwargs)
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        context: Optional[ErrorContext] = None,
+        original_exception: Optional[Exception] = None,
+        recovery_actions: Optional[List[RecoveryAction]] = None,
+    ):
+        super().__init__(
+            message,
+            ErrorType.VALIDATION_ERROR,
+            severity,
+            context,
+            original_exception,
+            recovery_actions,
+        )
 
 
 ERROR_CLASS_BY_TYPE = {
@@ -191,7 +284,6 @@ def log_structured_exception(
     return normalized_error
 
 
-
 def log_best_effort_failure(
     message: str,
     *,
@@ -207,9 +299,11 @@ def log_best_effort_failure(
 class ErrorRecoveryManager:
     """错误恢复管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.error_history: List[BaseError] = []
-        self.recovery_strategies = {
+        self.recovery_strategies: Dict[
+            ErrorType, Callable[[Any], List[RecoveryAction]]
+        ] = {
             ErrorType.PREDICTION_ERROR: self._handle_prediction_error,
             ErrorType.TASK_ERROR: self._handle_task_error,
             ErrorType.MODEL_ERROR: self._handle_model_error,
@@ -233,7 +327,9 @@ class ErrorRecoveryManager:
         # 默认恢复动作
         return [
             RecoveryAction(
-                action_type="log_and_continue", parameters={}, description="记录错误并继续执行"
+                action_type="log_and_continue",
+                parameters={},
+                description="记录错误并继续执行",
             )
         ]
 
@@ -404,8 +500,8 @@ class ErrorRecoveryManager:
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
         recent_errors = [e for e in self.error_history if e.timestamp > cutoff_time]
 
-        error_counts = {}
-        severity_counts = {}
+        error_counts: Any = {}
+        severity_counts: Any = {}
 
         for error in recent_errors:
             error_type = error.error_type.value
@@ -419,9 +515,9 @@ class ErrorRecoveryManager:
             "total_errors": len(recent_errors),
             "error_counts_by_type": error_counts,
             "error_counts_by_severity": severity_counts,
-            "most_common_error": max(error_counts.items(), key=lambda x: x[1])
-            if error_counts
-            else None,
+            "most_common_error": (
+                max(error_counts.items(), key=lambda x: x[1]) if error_counts else None
+            ),
             "critical_errors": len(
                 [e for e in recent_errors if e.severity == ErrorSeverity.CRITICAL]
             ),
@@ -432,10 +528,10 @@ class ErrorRecoveryManager:
 error_recovery_manager = ErrorRecoveryManager()
 
 
-def handle_exception(func):
+def handle_exception(func: Any) -> Any:
     """装饰器：统一异常处理"""
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except BaseError as e:
@@ -455,10 +551,10 @@ def handle_exception(func):
     return wrapper
 
 
-def handle_async_exception(func):
+def handle_async_exception(func: Any) -> Any:
     """装饰器：异步函数统一异常处理"""
 
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return await func(*args, **kwargs)
         except BaseError as e:

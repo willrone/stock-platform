@@ -4,15 +4,13 @@
 提供详细的回测进度跟踪和WebSocket实时推送功能
 """
 
-import asyncio
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
 from app.services.infrastructure.websocket_manager import (
-    WebSocketMessage,
     websocket_manager,
 )
 
@@ -27,11 +25,7 @@ class BacktestProgressStage:
     end_time: Optional[datetime] = None
     progress: float = 0.0
     status: str = "pending"  # pending, running, completed, failed
-    details: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.details is None:
-            self.details = {}
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -42,7 +36,7 @@ class BacktestProgressData:
     backtest_id: str
     overall_progress: float = 0.0
     current_stage: str = "initializing"
-    stages: List[BacktestProgressStage] = None
+    stages: List[BacktestProgressStage] = field(default_factory=list)
 
     # 时间信息
     start_time: Optional[datetime] = None
@@ -62,19 +56,13 @@ class BacktestProgressData:
 
     # 错误信息
     error_message: Optional[str] = None
-    warnings: List[str] = None
-
-    def __post_init__(self):
-        if self.stages is None:
-            self.stages = []
-        if self.warnings is None:
-            self.warnings = []
+    warnings: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class BacktestProgressMonitor:
     """回测进度监控器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_backtests: Dict[str, BacktestProgressData] = {}
         self.stage_definitions = self._define_stages()
 
@@ -128,10 +116,10 @@ class BacktestProgressMonitor:
         self,
         task_id: str,
         stage_name: str,
-        progress: float = None,
-        status: str = None,
-        details: Dict[str, Any] = None,
-    ):
+        progress: Optional[float] = None,
+        status: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """更新阶段进度"""
         if task_id not in self.active_backtests:
             logger.warning(f"尝试更新不存在的回测进度: {task_id}")
@@ -167,11 +155,11 @@ class BacktestProgressMonitor:
         self,
         task_id: str,
         processed_days: int,
-        current_date: str = None,
+        current_date: Optional[str] = None,
         signals_generated: int = 0,
         trades_executed: int = 0,
         portfolio_value: float = 0.0,
-    ):
+    ) -> None:
         """更新执行进度"""
         if task_id not in self.active_backtests:
             return
@@ -229,7 +217,7 @@ class BacktestProgressMonitor:
         ):
             await self._notify_progress_update(task_id, "execution_progress")
 
-    async def add_warning(self, task_id: str, warning_message: str):
+    async def add_warning(self, task_id: str, warning_message: str) -> None:
         """添加警告信息"""
         if task_id not in self.active_backtests:
             return
@@ -246,7 +234,7 @@ class BacktestProgressMonitor:
 
         logger.warning(f"回测警告 {task_id}: {warning_message}")
 
-    async def set_error(self, task_id: str, error_message: str):
+    async def set_error(self, task_id: str, error_message: str) -> None:
         """设置错误信息"""
         if task_id not in self.active_backtests:
             return
@@ -270,8 +258,8 @@ class BacktestProgressMonitor:
         logger.error(f"回测错误 {task_id}: {error_message}")
 
     async def complete_backtest(
-        self, task_id: str, final_results: Dict[str, Any] = None
-    ):
+        self, task_id: str, final_results: Optional[Dict[str, Any]] = None
+    ) -> None:
         """完成回测监控"""
         if task_id not in self.active_backtests:
             return
@@ -293,7 +281,7 @@ class BacktestProgressMonitor:
 
         logger.info(f"回测监控完成: {task_id}")
 
-    async def cancel_backtest(self, task_id: str, reason: str = "用户取消"):
+    async def cancel_backtest(self, task_id: str, reason: str = "用户取消") -> None:
         """取消回测"""
         if task_id not in self.active_backtests:
             return
@@ -325,7 +313,7 @@ class BacktestProgressMonitor:
         """获取所有活跃的回测"""
         return self.active_backtests.copy()
 
-    async def cleanup_completed_backtests(self, max_age_hours: int = 24):
+    async def cleanup_completed_backtests(self, max_age_hours: int = 24) -> None:
         """清理已完成的回测监控数据"""
         cutoff_time = datetime.utcnow() - timedelta(hours=max_age_hours)
 
@@ -344,7 +332,7 @@ class BacktestProgressMonitor:
             del self.active_backtests[task_id]
             logger.info(f"清理已完成的回测监控数据: {task_id}")
 
-    async def _calculate_overall_progress(self, task_id: str):
+    async def _calculate_overall_progress(self, task_id: str) -> None:
         """计算总体进度"""
         progress_data = self.active_backtests[task_id]
 
@@ -374,8 +362,8 @@ class BacktestProgressMonitor:
         )
 
     async def _notify_progress_update(
-        self, task_id: str, update_type: str, extra_data: Dict[str, Any] = None
-    ):
+        self, task_id: str, update_type: str, extra_data: Optional[Dict[str, Any]] = None
+    ) -> None:
         """发送进度更新通知"""
         if task_id not in self.active_backtests:
             return
@@ -393,12 +381,14 @@ class BacktestProgressMonitor:
             "total_days": progress_data.total_trading_days,
             "current_date": progress_data.current_date,
             "processing_speed": progress_data.processing_speed,
-            "estimated_completion": progress_data.estimated_completion.isoformat()
-            if progress_data.estimated_completion
-            else None,
-            "elapsed_time": str(progress_data.elapsed_time)
-            if progress_data.elapsed_time
-            else None,
+            "estimated_completion": (
+                progress_data.estimated_completion.isoformat()
+                if progress_data.estimated_completion
+                else None
+            ),
+            "elapsed_time": (
+                str(progress_data.elapsed_time) if progress_data.elapsed_time else None
+            ),
             "portfolio_value": progress_data.current_portfolio_value,
             "signals_generated": progress_data.total_signals_generated,
             "trades_executed": progress_data.total_trades_executed,
@@ -414,9 +404,9 @@ class BacktestProgressMonitor:
                 "description": stage.stage_description,
                 "progress": stage.progress,
                 "status": stage.status,
-                "start_time": stage.start_time.isoformat()
-                if stage.start_time
-                else None,
+                "start_time": (
+                    stage.start_time.isoformat() if stage.start_time else None
+                ),
                 "end_time": stage.end_time.isoformat() if stage.end_time else None,
                 "details": stage.details,
             }

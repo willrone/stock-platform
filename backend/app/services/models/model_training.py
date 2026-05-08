@@ -6,13 +6,12 @@
 以及LSTM、XGBoost等基线模型。
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, TypeAlias, cast
 
 import numpy as np
 import pandas as pd
@@ -21,11 +20,10 @@ import torch.nn as nn
 import xgboost as xgb
 from loguru import logger
 from sklearn.metrics import accuracy_score, precision_score, recall_score
-from sklearn.model_selection import TimeSeriesSplit
 
 
 # 检测可用的计算设备
-def get_device():
+def get_device() -> torch.device:
     """
     检测并返回最佳可用设备
     优先级：ROCm > CUDA > CPU
@@ -46,11 +44,7 @@ def get_device():
 
 try:
     import qlib
-    from qlib.config import REG_CN, C
-    from qlib.data import D
-    from qlib.data.dataset import DatasetH
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
+    from qlib.config import REG_CN
 
     QLIB_AVAILABLE = True
 except ImportError as e:
@@ -79,60 +73,76 @@ except ImportError as e:
 try:
     from app.core.error_handler import (
         DataError,
-        ErrorContext,
         ErrorSeverity,
-        ModelError,
-        TaskError,
         handle_async_exception,
     )
 except ImportError:
     logger.warning("错误处理模块未找到，使用默认错误处理")
-    ModelError = Exception
-    DataError = Exception
-    TaskError = Exception
-    ErrorSeverity = None
-    ErrorContext = None
-    handle_async_exception = lambda func: func
+
+    class DataError(ValueError):  # type: ignore[no-redef]
+        pass
+
+    class ErrorSeverity:  # type: ignore[no-redef]
+        HIGH = "high"
+
+    def handle_async_exception(func: Any) -> Any:
+        return func
+
 
 # 导入其他依赖
 from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 
+TimesNet: Any = None
+PatchTST: Any = None
+Informer: Any = None
 try:
-    from .modern_models import Informer, PatchTST, TimesNet
+    from .modern_models import Informer as ImportedInformer
+    from .modern_models import PatchTST as ImportedPatchTST
+    from .modern_models import TimesNet as ImportedTimesNet
 
+    TimesNet = ImportedTimesNet
+    PatchTST = ImportedPatchTST
+    Informer = ImportedInformer
     MODERN_MODELS_AVAILABLE = True
 except ImportError:
     MODERN_MODELS_AVAILABLE = False
-    TimesNet = None
-    PatchTST = None
-    Informer = None
 
+DataPreprocessor: Any = None
+ModelEvaluator: Any = None
+ModelVersionManager: Any = None
+BacktestMetrics: TypeAlias = Any
 try:
-    from .model_evaluation import BacktestMetrics, ModelEvaluator, ModelVersionManager
+    from .feature_engineering import DataPreprocessor as ImportedDataPreprocessor
+    from .model_evaluation import ModelEvaluator as ImportedModelEvaluator
+    from .model_evaluation import ModelVersionManager as ImportedModelVersionManager
 
+    DataPreprocessor = ImportedDataPreprocessor
+    ModelEvaluator = ImportedModelEvaluator
+    ModelVersionManager = ImportedModelVersionManager
     MODEL_EVALUATION_AVAILABLE = True
 except ImportError:
     MODEL_EVALUATION_AVAILABLE = False
-    ModelEvaluator = None
-    ModelVersionManager = None
-    BacktestMetrics = None
 
+AdvancedTrainingService: Any = None
+EnsembleConfig: Any = None
+EnsembleMethod: Any = None
+OnlineLearningConfig: Any = None
 try:
     from .advanced_training import (
-        AdvancedTrainingService,
-        EnsembleConfig,
-        EnsembleMethod,
-        OnlineLearningConfig,
+        AdvancedTrainingService as ImportedAdvancedTrainingService,
     )
+    from .advanced_training import EnsembleConfig as ImportedEnsembleConfig
+    from .advanced_training import EnsembleMethod as ImportedEnsembleMethod
+    from .advanced_training import OnlineLearningConfig as ImportedOnlineLearningConfig
 
+    AdvancedTrainingService = ImportedAdvancedTrainingService
+    EnsembleConfig = ImportedEnsembleConfig
+    EnsembleMethod = ImportedEnsembleMethod
+    OnlineLearningConfig = ImportedOnlineLearningConfig
     ADVANCED_TRAINING_AVAILABLE = True
 except ImportError:
     ADVANCED_TRAINING_AVAILABLE = False
-    AdvancedTrainingService = None
-    EnsembleConfig = None
-    OnlineLearningConfig = None
-    EnsembleMethod = None
 
 # 使用 loguru 日志记录器（已在文件顶部导入）
 
@@ -160,10 +170,10 @@ class TrainingConfig:
     learning_rate: float = 0.001
     validation_split: float = 0.2
     early_stopping_patience: int = 10
-    feature_columns: List[str] = None
+    feature_columns: Optional[List[str]] = None
     target_column: str = "close"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.feature_columns is None:
             self.feature_columns = [
                 "open",
@@ -213,8 +223,21 @@ class QlibDataProvider:
     def __init__(self, data_service: SimpleDataService):
         self.data_service = data_service
         self.indicator_calculator = TechnicalIndicatorCalculator()
+        from app.core.config import settings
 
-    async def initialize_qlib(self):
+        self.data_root = settings.DATA_ROOT_PATH
+        self.feature_engineer: Any = None
+        if DataPreprocessor is not None:
+            try:
+                from .feature_engineering import FeatureEngineer
+
+                self.feature_engineer = FeatureEngineer(
+                    data_service, str(self.data_root)
+                )
+            except Exception as e:
+                logger.warning(f"特征工程模块初始化失败，使用降级实现: {e}")
+
+    async def initialize_qlib(self) -> None:
         """初始化Qlib环境"""
         try:
             # 使用本地路径作为 provider_uri，避免 Qlib 将 ":" 拼进 data_path 导致日历路径出错
@@ -273,7 +296,7 @@ class QlibDataProvider:
             )
 
             # 清理数据
-            if DataPreprocessor:
+            if DataPreprocessor is not None:
                 features = DataPreprocessor.clean_data(features)
 
             return features
@@ -377,7 +400,9 @@ class QlibDataProvider:
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
+        logger.info(
+            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
+        )
         return combined_features
 
     def _add_fundamental_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -406,8 +431,8 @@ class QlibDataProvider:
 class ModelTrainingService:
     """模型训练服务主类"""
 
-    def __init__(self):
-        self.data_provider = None
+    def __init__(self) -> None:
+        self.data_provider: Optional[QlibDataProvider] = None
         # 修复路径问题：使用配置中的路径
         from app.core.config import settings
 
@@ -430,16 +455,15 @@ class ModelTrainingService:
         self.version_manager = (
             ModelVersionManager() if ModelVersionManager is not None else None
         )
-        self.advanced_training = None  # 高级训练服务
+        self.advanced_training: Any = None  # 高级训练服务
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """初始化服务"""
         from ..data.simple_data_service import SimpleDataService
 
         data_service = SimpleDataService()
 
         # 使用QlibDataProvider作为数据提供器
-        from app.core.config import settings
 
         self.data_provider = QlibDataProvider(data_service)
         await self.data_provider.initialize_qlib()
@@ -447,8 +471,9 @@ class ModelTrainingService:
         # 初始化高级训练服务（传入self避免循环依赖）
         if ADVANCED_TRAINING_AVAILABLE and AdvancedTrainingService is not None:
             self.advanced_training = AdvancedTrainingService(self)
-            if hasattr(self.advanced_training, "initialize"):
-                await self.advanced_training.initialize()
+            advanced_training = self.advanced_training
+            if hasattr(advanced_training, "initialize"):
+                await advanced_training.initialize()
 
         logger.info("模型训练服务初始化完成")
 
@@ -488,6 +513,8 @@ class ModelTrainingService:
             logger.info(
                 f"准备训练数据，股票数量: {len(stock_codes)}, 时间范围: {start_date} 到 {end_date}"
             )
+            if self.data_provider is None:
+                raise RuntimeError("模型训练服务尚未初始化")
             features_df = await self.data_provider.prepare_features(
                 stock_codes, start_date, end_date
             )
@@ -569,7 +596,7 @@ class ModelTrainingService:
 
                 # 创建一个简单的模型版本对象
                 class SimpleModelVersion:
-                    def __init__(self, file_path):
+                    def __init__(self, file_path: str) -> None:
                         self.file_path = file_path
 
                 model_version = SimpleModelVersion(model_path)
@@ -598,20 +625,25 @@ class ModelTrainingService:
         # 提取收盘价
         prices = features_df[config.target_column].values
 
-        return prices
+        return cast(np.ndarray, prices)
 
     def _prepare_training_data(
         self, features_df: pd.DataFrame, config: TrainingConfig
     ) -> Tuple[np.ndarray, np.ndarray]:
         """准备训练数据"""
         # 选择特征列
+        configured_feature_columns = config.feature_columns or []
         feature_cols = [
-            col for col in config.feature_columns if col in features_df.columns
+            col for col in configured_feature_columns if col in features_df.columns
         ]
 
         # 填充缺失值（使用更合理的策略）
         # 对于价格类特征使用前向填充，对于其他特征使用中位数填充
-        price_cols = [col for col in feature_cols if col in ['open', 'high', 'low', 'close', 'volume']]
+        price_cols = [
+            col
+            for col in feature_cols
+            if col in ["open", "high", "low", "close", "volume"]
+        ]
         other_cols = [col for col in feature_cols if col not in price_cols]
 
         if price_cols:
@@ -619,7 +651,11 @@ class ModelTrainingService:
         if other_cols:
             for col in other_cols:
                 median_val = features_df[col].median()
-                features_df[col] = features_df[col].ffill().fillna(median_val if pd.notna(median_val) else 0)
+                features_df[col] = (
+                    features_df[col]
+                    .ffill()
+                    .fillna(median_val if pd.notna(median_val) else 0)
+                )
 
         # 为每只股票创建序列数据
         X_list, y_list = [], []
@@ -742,6 +778,7 @@ class ModelTrainingService:
         input_dim = train_X.shape[-1]  # 特征维度
         seq_len = train_X.shape[1]  # 序列长度
 
+        model: nn.Module
         if config.model_type == ModelType.LSTM:
             model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=2)
         elif config.model_type == ModelType.TRANSFORMER:
@@ -836,12 +873,12 @@ class ModelTrainingService:
                         patience_counter += 1
 
                     if patience_counter >= config.early_stopping_patience:
-                        logger.info(f"早停触发，在第 {epoch+1} 轮停止训练")
+                        logger.info(f"早停触发，在第 {epoch + 1} 轮停止训练")
                         break
 
                 if (epoch + 1) % 10 == 0:
                     logger.info(
-                        f"Epoch {epoch+1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
+                        "Epoch {epoch + 1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
                     )
                     if device.type == "cuda":
                         logger.info(
@@ -869,14 +906,14 @@ class ModelTrainingService:
 
         # 计算金融指标（简化版本）
         # 假设预测正确时获得正收益，错误时获得负收益
-        returns = []
+        returns_list: List[float] = []
         for i in range(len(y_true)):
             if y_pred[i] == y_true[i]:
-                returns.append(0.01)  # 1%收益
+                returns_list.append(0.01)  # 1%收益
             else:
-                returns.append(-0.01)  # -1%损失
+                returns_list.append(-0.01)  # -1%损失
 
-        returns = np.array(returns)
+        returns = np.array(returns_list)
 
         # 夏普比率
         sharpe_ratio = np.mean(returns) / (np.std(returns) + 1e-8) * np.sqrt(252)
@@ -885,19 +922,19 @@ class ModelTrainingService:
         cumulative_returns = np.cumprod(1 + returns)
         running_max = np.maximum.accumulate(cumulative_returns)
         drawdown = (cumulative_returns - running_max) / running_max
-        max_drawdown = np.min(drawdown)
+        max_drawdown: float = float(np.min(drawdown))
 
         # 总收益
-        total_return = cumulative_returns[-1] - 1
+        total_return = float(cumulative_returns[-1] - 1)
 
         # 胜率
-        win_rate = np.sum(returns > 0) / len(returns)
+        win_rate = float(np.sum(returns > 0) / len(returns))
 
         return ModelMetrics(
-            accuracy=accuracy,
-            precision=precision,
-            recall=recall,
-            sharpe_ratio=sharpe_ratio,
+            accuracy=float(accuracy),
+            precision=float(precision),
+            recall=float(recall),
+            sharpe_ratio=float(sharpe_ratio),
             max_drawdown=max_drawdown,
             total_return=total_return,
             win_rate=win_rate,
@@ -925,14 +962,21 @@ class ModelTrainingService:
             "name": model_filename,
             "type": config.model_type.value,
             "version": "1.0",
-            "parameters": {k: str(v) if isinstance(v, ModelType) else v for k, v in config.__dict__.items()},
-            "performance_metrics": metrics.to_dict() if hasattr(metrics, 'to_dict') else {},
+            "parameters": {
+                k: str(v) if isinstance(v, ModelType) else v
+                for k, v in config.__dict__.items()
+            },
+            "performance_metrics": (
+                metrics.to_dict() if hasattr(metrics, "to_dict") else {}
+            ),
             "file_path": str(model_path),
             "created_at": datetime.now().isoformat(),
             "is_active": True,
         }
 
-        logger.info(f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}")
+        logger.info(
+            f"模型元数据: {json.dumps(metadata, indent=2, ensure_ascii=False, default=str)}"
+        )
 
         return str(model_path)
 
@@ -978,6 +1022,8 @@ class ModelTrainingService:
 
         # 获取一些股票数据作为验证集
         stock_codes = ["000001.SZ", "000002.SZ", "600000.SH"]
+        if self.data_provider is None:
+            raise RuntimeError("模型训练服务尚未初始化")
         features_df = await self.data_provider.prepare_features(
             stock_codes, start_date, end_date
         )
@@ -990,13 +1036,14 @@ class ModelTrainingService:
         split_idx = int(len(X) * 0.8)
         validation_data = (X[split_idx:], y[split_idx:])
 
-        # 创建集成模型
+        if self.advanced_training is None:
+            raise RuntimeError("高级训练服务不可用")
         ensemble_info = await self.advanced_training.create_ensemble_model(
             ensemble_id, config, validation_data
         )
 
         logger.info(f"集成模型 {ensemble_id} 创建完成")
-        return ensemble_info
+        return cast(Dict[str, Any], ensemble_info)
 
     @handle_async_exception
     async def setup_online_learning(
@@ -1026,12 +1073,14 @@ class ModelTrainingService:
             adaptation_threshold=adaptation_threshold,
         )
 
+        if self.advanced_training is None:
+            raise RuntimeError("高级训练服务不可用")
         setup_info = await self.advanced_training.setup_online_learning(
             model_id, config
         )
 
         logger.info(f"模型 {model_id} 在线学习设置完成")
-        return setup_info
+        return cast(Dict[str, Any], setup_info)
 
     @handle_async_exception
     async def update_model_with_new_data(
@@ -1058,6 +1107,8 @@ class ModelTrainingService:
         logger.info(f"使用新数据更新模型 {model_id}")
 
         # 准备新的训练数据
+        if self.data_provider is None:
+            raise RuntimeError("模型训练服务尚未初始化")
         features_df = await self.data_provider.prepare_features(
             new_stock_codes, start_date, end_date
         )
@@ -1066,11 +1117,15 @@ class ModelTrainingService:
         new_X, new_y = self._prepare_training_data(features_df, training_config)
 
         # 在线更新模型
+        if self.advanced_training is None:
+            raise RuntimeError("高级训练服务不可用")
         updated_model, metrics = await self.advanced_training.update_model_online(
             model_id, new_X, new_y, current_model
         )
 
-        logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}")
+        logger.info(
+            f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}"
+        )
         return updated_model, metrics
 
     @handle_async_exception
@@ -1080,7 +1135,7 @@ class ModelTrainingService:
         stock_codes: List[str],
         start_date: datetime,
         end_date: datetime,
-        model_types: List[str] = None,
+        model_types: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         训练多个基础模型并创建集成模型
@@ -1124,9 +1179,11 @@ class ModelTrainingService:
                         "model_id": model_id,
                         "model_type": model_type,
                         "model_path": model_path,
-                        "metrics": metrics.__dict__
-                        if hasattr(metrics, "__dict__")
-                        else metrics,
+                        "metrics": (
+                            metrics.__dict__
+                            if hasattr(metrics, "__dict__")
+                            else metrics
+                        ),
                     }
                 )
 
@@ -1150,7 +1207,9 @@ class ModelTrainingService:
             "total_base_models": len(base_model_ids),
         }
 
-        logger.info(f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型")
+        logger.info(
+            f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型"
+        )
         return result
 
 
@@ -1162,7 +1221,7 @@ class LSTMModel(nn.Module):
 
     def __init__(
         self, input_dim: int, hidden_dim: int, num_layers: int, num_classes: int
-    ):
+    ) -> None:
         super(LSTMModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -1173,7 +1232,7 @@ class LSTMModel(nn.Module):
         self.dropout = nn.Dropout(0.3)
         self.fc = nn.Linear(hidden_dim, num_classes)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # LSTM前向传播
         lstm_out, _ = self.lstm(x)
 
@@ -1184,7 +1243,7 @@ class LSTMModel(nn.Module):
         output = self.dropout(last_output)
         output = self.fc(output)
 
-        return output
+        return cast(torch.Tensor, output)
 
 
 class TransformerModel(nn.Module):
@@ -1197,7 +1256,7 @@ class TransformerModel(nn.Module):
         nhead: int,
         num_layers: int,
         num_classes: int,
-    ):
+    ) -> None:
         super(TransformerModel, self).__init__()
         self.d_model = d_model
         self.input_projection = nn.Linear(input_dim, d_model)
@@ -1223,7 +1282,7 @@ class TransformerModel(nn.Module):
             nn.Linear(d_model // 2, num_classes),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # 输入投影
         x = self.input_projection(x)
 
@@ -1239,13 +1298,13 @@ class TransformerModel(nn.Module):
         # 分类
         output = self.classifier(pooled)
 
-        return output
+        return cast(torch.Tensor, output)
 
 
 class PositionalEncoding(nn.Module):
     """位置编码"""
 
-    def __init__(self, d_model: int, max_len: int = 5000):
+    def __init__(self, d_model: int, max_len: int = 5000) -> None:
         super(PositionalEncoding, self).__init__()
 
         pe = torch.zeros(max_len, d_model)
@@ -1259,9 +1318,10 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
 
+        self.pe: torch.Tensor
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.pe[: x.size(1), :].transpose(0, 1)
 
 

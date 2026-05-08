@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -21,10 +21,7 @@ try:
     # 导入Qlib内置的Alpha158
     from qlib.contrib.data.loader import Alpha158DL
     from qlib.data import D
-    from qlib.data.dataset import DatasetH
     from qlib.data.dataset.loader import QlibDataLoader
-    from qlib.data.filter import ExpressionDFilter, NameDFilter
-    from qlib.utils import init_instance_by_config
 
     QLIB_AVAILABLE = True
     ALPHA158_AVAILABLE = True
@@ -38,12 +35,14 @@ try:
         if hasattr(qlib, "_mount_nfs_uri"):
             _original_mount_nfs_uri = qlib._mount_nfs_uri
 
-            def _patched_mount_nfs_uri(provider_uri, mount_path, auto_mount):
+            def _patched_mount_nfs_uri(
+                provider_uri: Any, mount_path: Any, auto_mount: Any
+            ) -> Any:
                 """修复后的 _mount_nfs_uri，处理 Path 对象和路径格式问题"""
 
                 # 清理路径的函数
-                def clean_path(path_val):
-                    """清理路径，移除末尾的 :\ 等异常字符"""
+                def clean_path(path_val: Any) -> Any:
+                    """清理路径，移除末尾的多余冒号和反斜杠等异常字符"""
                     if isinstance(path_val, Path):
                         path_str = path_val.resolve().as_posix()
                     elif isinstance(path_val, str):
@@ -116,12 +115,14 @@ try:
                                     try:
                                         # 尝试通过 __dict__ 设置
                                         if hasattr(C.dpm, "__dict__"):
-                                            C.dpm.__dict__[
-                                                "data_path"
-                                            ] = fixed_data_path
-                                            logger.info(f"通过 __dict__ 修复 data_path")
+                                            C.dpm.__dict__["data_path"] = (
+                                                fixed_data_path
+                                            )
+                                            logger.info("通过 __dict__ 修复 data_path")
                                     except Exception:
-                                        logger.warning(f"无法修复 data_path: {set_error}")
+                                        logger.warning(
+                                            f"无法修复 data_path: {set_error}"
+                                        )
                 except Exception as fix_error:
                     logger.debug(f"修复 data_path 时出错: {fix_error}")
 
@@ -136,7 +137,9 @@ try:
             if hasattr(CalendarProvider, "load_calendar"):
                 _original_load_calendar = CalendarProvider.load_calendar
 
-                def _patched_load_calendar(self, freq, future=False):
+                def _patched_load_calendar(
+                    self: Any, freq: Any, future: Any = False
+                ) -> Any:
                     r"""修复后的 load_calendar，修复路径拼接问题（:/ 字符）"""
                     try:
                         # 调用原始方法
@@ -189,10 +192,14 @@ try:
                                         )
                                         return calendar_dates
                                     except Exception as read_error:
-                                        logger.warning(f"读取日历文件失败: {read_error}")
+                                        logger.warning(
+                                            f"读取日历文件失败: {read_error}"
+                                        )
                                         raise
                                 else:
-                                    logger.warning(f"修复后的路径也不存在: {fixed_path}")
+                                    logger.warning(
+                                        f"修复后的路径也不存在: {fixed_path}"
+                                    )
                                     # 尝试使用配置中的路径
                                     try:
                                         from app.core.config import settings
@@ -203,7 +210,9 @@ try:
                                             / "day.txt"
                                         )
                                         if config_path.exists():
-                                            logger.info(f"使用配置路径读取日历: {config_path}")
+                                            logger.info(
+                                                f"使用配置路径读取日历: {config_path}"
+                                            )
                                             with open(config_path, "r") as f:
                                                 dates = [
                                                     line.strip()
@@ -220,12 +229,16 @@ try:
                                             )
                                             return calendar_dates
                                     except Exception as config_error:
-                                        logger.warning(f"使用配置路径也失败: {config_error}")
+                                        logger.warning(
+                                            f"使用配置路径也失败: {config_error}"
+                                        )
                         # 如果无法修复，抛出原始错误
                         raise
 
                 CalendarProvider.load_calendar = _patched_load_calendar
-                logger.debug("已 patch CalendarProvider.load_calendar 方法以修复路径问题")
+                logger.debug(
+                    "已 patch CalendarProvider.load_calendar 方法以修复路径问题"
+                )
         except Exception as cal_patch_error:
             logger.debug(f"无法 patch CalendarProvider: {cal_patch_error}")
     except Exception:
@@ -274,7 +287,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 class Alpha158Calculator:
     """Alpha158因子计算器 - 使用Qlib内置的Alpha158实现"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.factor_cache = FactorCache()
         self.max_workers = min(mp.cpu_count(), 8)  # 最多使用8个进程
 
@@ -318,7 +331,7 @@ class Alpha158Calculator:
             self.alpha_fields = []
             self.alpha_names = []
             logger.warning("Qlib内置Alpha158不可用，将使用简化版本")
-            logger.info(f"Alpha158计算器初始化，支持 0 个因子（需要Qlib支持）")
+            logger.info("Alpha158计算器初始化，支持 0 个因子（需要Qlib支持）")
 
     def _calculate_factors_for_stock(
         self, stock_data: pd.DataFrame, stock_code: str
@@ -331,7 +344,9 @@ class Alpha158Calculator:
                 col for col in required_cols if col not in stock_data.columns
             ]
             if missing_cols:
-                logger.warning(f"股票 {stock_code} 缺少必要列: {missing_cols}，无法计算Alpha158因子")
+                logger.warning(
+                    f"股票 {stock_code} 缺少必要列: {missing_cols}，无法计算Alpha158因子"
+                )
                 return pd.DataFrame(index=stock_data.index)
 
             factors = pd.DataFrame(index=stock_data.index)
@@ -422,7 +437,9 @@ class Alpha158Calculator:
             cache_key = self.factor_cache.get_cache_key(stock_codes, date_range)
             cached_factors = self.factor_cache.get_cached_factors(cache_key)
             if cached_factors is not None:
-                logger.info(f"从缓存加载Alpha158因子: {len(cached_factors.columns)} 个因子")
+                logger.info(
+                    f"从缓存加载Alpha158因子: {len(cached_factors.columns)} 个因子"
+                )
                 return cached_factors
 
         try:
@@ -537,7 +554,9 @@ class Alpha158Calculator:
                             if calendar_file.exists():
                                 # 如果文件存在但 Qlib 找不到，可能是路径格式问题
                                 # 尝试通过符号链接或其他方式修复
-                                logger.debug(f"日历文件存在但 Qlib 找不到，路径: {calendar_file}")
+                                logger.debug(
+                                    f"日历文件存在但 Qlib 找不到，路径: {calendar_file}"
+                                )
             except Exception as cal_check_error:
                 logger.debug(f"检查日历文件路径时出错: {cal_check_error}")
 
@@ -578,7 +597,7 @@ class Alpha158Calculator:
                 logger.debug(f"[Alpha158] 绝对路径: {qlib_features_dir_abs}")
 
                 # 使用 glob 获取文件列表
-                logger.debug(f"[Alpha158] 开始使用glob查找*.parquet文件...")
+                logger.debug("[Alpha158] 开始使用glob查找*.parquet文件...")
                 glob_pattern = qlib_features_dir_abs / "*.parquet"
                 logger.debug(f"[Alpha158] glob模式: {glob_pattern}")
 
@@ -605,10 +624,9 @@ class Alpha158Calculator:
                             logger.debug(
                                 f"[Alpha158] 跳过无效文件: {f.name} (exists={exists}, size={size})"
                             )
-                    except (OSError, FileNotFoundError) as e:
+                    except OSError as e:
                         logger.debug(f"[Alpha158] 无法访问文件 {f.name}: {e}")
                         # 忽略无法访问的文件
-                        pass
 
                 available_files = {f.stem for f in parquet_files}
 
@@ -676,10 +694,6 @@ class Alpha158Calculator:
                     logger.debug(
                         f"测试代码 {test_code}: 候选={test_candidates}, 在集合中={found_in_set}, 集合示例={list(available_files)[:5]}"
                     )
-            except Exception as e:
-                logger.warning(f"无法读取Qlib数据目录: {e}, 路径: {qlib_features_dir}")
-                available_files = set()
-
             qlib_bin_dir_abs = qlib_bin_dir.resolve()
 
             available_map = {c.lower(): c for c in available_files}
@@ -701,8 +715,9 @@ class Alpha158Calculator:
                         candidates.append(f"{exch}{sym}")  # 000001.SZ -> SZ000001
                         candidates.append(f"{sym}_{exch}")  # 000001.SZ -> 000001_SZ
                     except ValueError as e:
-                        logger.debug(f"[Alpha158] 分割股票代码失败: {norm_code}, 错误: {e}")
-                        pass
+                        logger.debug(
+                            f"[Alpha158] 分割股票代码失败: {norm_code}, 错误: {e}"
+                        )
 
                 if len(norm_code) >= 8 and norm_code[:2] in ("SZ", "SH"):
                     sym = norm_code[2:]
@@ -723,7 +738,9 @@ class Alpha158Calculator:
 
                 # 去重候选列表
                 candidates = list(dict.fromkeys(candidates))  # 保持顺序的去重
-                logger.info(f"[Alpha158] 股票代码 {raw_code} 的候选文件名: {candidates}")
+                logger.info(
+                    f"[Alpha158] 股票代码 {raw_code} 的候选文件名: {candidates}"
+                )
 
                 # 选择第一个存在的数据文件
                 # 首先从预先获取的文件列表中查找
@@ -739,14 +756,18 @@ class Alpha158Calculator:
                         matching_candidates.append(cand)
                         if selected is None:
                             selected = available_map.get(cand.lower(), cand)
-                            logger.info(f"[Alpha158] 在集合中找到: {raw_code} -> {selected}")
+                            logger.info(
+                                f"[Alpha158] 在集合中找到: {raw_code} -> {selected}"
+                            )
 
                 # 如果预先获取的列表中没有找到，直接检查文件系统（处理时序问题）
                 if selected is None:
-                    logger.warning(f"[Alpha158] 在集合中未找到，开始直接文件系统检查...")
+                    logger.warning("[Alpha158] 在集合中未找到，开始直接文件系统检查...")
                     # 确保使用绝对路径
                     qlib_features_dir_abs = qlib_features_dir.resolve()
-                    logger.debug(f"[Alpha158] 使用绝对路径进行文件检查: {qlib_features_dir_abs}")
+                    logger.debug(
+                        f"[Alpha158] 使用绝对路径进行文件检查: {qlib_features_dir_abs}"
+                    )
 
                     # 尝试多次检查（处理文件系统缓存和写入延迟）
                     import os
@@ -756,7 +777,9 @@ class Alpha158Calculator:
                     retry_delay = 0.2  # 200ms
 
                     for attempt in range(max_retries):
-                        logger.debug(f"[Alpha158] 文件系统检查尝试 {attempt + 1}/{max_retries}")
+                        logger.debug(
+                            f"[Alpha158] 文件系统检查尝试 {attempt + 1}/{max_retries}"
+                        )
                         for cand in candidates:
                             file_path = qlib_features_dir_abs / f"{cand}.parquet"
                             os_path = str(file_path)
@@ -789,7 +812,9 @@ class Alpha158Calculator:
                                     else:
                                         size = os.path.getsize(os_path)
 
-                                    logger.debug(f"[Alpha158]     文件大小: {size} 字节")
+                                    logger.debug(
+                                        f"[Alpha158]     文件大小: {size} 字节"
+                                    )
 
                                     if size > 0:
                                         selected = cand
@@ -800,9 +825,13 @@ class Alpha158Calculator:
                                         )
                                         break
                                     else:
-                                        logger.warning(f"[Alpha158]     文件大小为0，等待重试...")
-                                except (OSError, FileNotFoundError) as e:
-                                    logger.debug(f"[Alpha158]     无法获取文件状态: {e}")
+                                        logger.warning(
+                                            "[Alpha158]     文件大小为0，等待重试..."
+                                        )
+                                except OSError as e:
+                                    logger.debug(
+                                        f"[Alpha158]     无法获取文件状态: {e}"
+                                    )
                                     # 即使获取状态失败，如果文件存在，也尝试使用
                                     if os_isfile:
                                         logger.warning(
@@ -852,12 +881,14 @@ class Alpha158Calculator:
                     qlib_features_dir_abs = qlib_features_dir.resolve()
                     direct_check_results = {}
 
-                    logger.error(f"[Alpha158] 详细诊断信息:")
+                    logger.error("[Alpha158] 详细诊断信息:")
                     logger.error(f"[Alpha158]   候选文件名: {candidates}")
                     logger.error(f"[Alpha158]   可用文件数: {len(available_files)}")
                     logger.error(f"[Alpha158]   匹配的候选: {matching_candidates}")
                     logger.error(f"[Alpha158]   目录路径: {qlib_features_dir_abs}")
-                    logger.error(f"[Alpha158]   目录存在: {qlib_features_dir_abs.exists()}")
+                    logger.error(
+                        f"[Alpha158]   目录存在: {qlib_features_dir_abs.exists()}"
+                    )
                     logger.error(
                         f"[Alpha158]   目录是目录: {qlib_features_dir_abs.is_dir()}"
                     )
@@ -881,10 +912,10 @@ class Alpha158Calculator:
                         # 方法4: 尝试打开文件
                         can_open = False
                         try:
-                            with open(os_path, "rb") as f:
+                            with open(os_path, "rb"):
                                 can_open = True
                                 file_size = os.path.getsize(os_path)
-                        except (OSError, FileNotFoundError) as e:
+                        except OSError as e:
                             file_size = -1
                             open_error = str(e)
 
@@ -920,7 +951,9 @@ class Alpha158Calculator:
 
                     if selected is None:
                         logger.error(f"[Alpha158]   相关文件示例: {sample_matching}")
-                        logger.error(f"[Alpha158]   直接文件检查结果: {direct_check_results}")
+                        logger.error(
+                            f"[Alpha158]   直接文件检查结果: {direct_check_results}"
+                        )
 
             if not resolved_instruments:
                 # 提供更详细的错误信息
@@ -954,12 +987,16 @@ class Alpha158Calculator:
                     )
                     if test_data.empty:
                         logger.warning(
-                            f"[Alpha158] D.features()返回空数据，可能的原因：数据格式不对或Qlib无法识别文件"
+                            "[Alpha158] D.features()返回空数据，可能的原因：数据格式不对或Qlib无法识别文件"
                         )
                     else:
-                        logger.info(f"[Alpha158] D.features()成功加载数据: {test_data.shape}")
+                        logger.info(
+                            f"[Alpha158] D.features()成功加载数据: {test_data.shape}"
+                        )
             except Exception as d_api_error:
-                logger.warning(f"[Alpha158] D API验证失败: {d_api_error}，但这不影响handler尝试")
+                logger.warning(
+                    f"[Alpha158] D API验证失败: {d_api_error}，但这不影响handler尝试"
+                )
 
             # 确保qlib已初始化（handler需要）
             try:
@@ -980,7 +1017,9 @@ class Alpha158Calculator:
                     )
                     logger.debug("[Alpha158] qlib初始化完成")
             except Exception as init_error:
-                logger.warning(f"[Alpha158] qlib初始化失败: {init_error}，尝试继续使用handler")
+                logger.warning(
+                    f"[Alpha158] qlib初始化失败: {init_error}，尝试继续使用handler"
+                )
 
             # 创建Alpha158 handler
             handler = Alpha158Handler(
@@ -1176,7 +1215,9 @@ class Alpha158Calculator:
                 col for col in required_cols if col not in stock_data.columns
             ]
             if missing_cols:
-                logger.warning(f"股票 {stock_code} 缺少必要列: {missing_cols}，无法计算Alpha158因子")
+                logger.warning(
+                    f"股票 {stock_code} 缺少必要列: {missing_cols}，无法计算Alpha158因子"
+                )
                 return pd.DataFrame(index=stock_data.index)
 
             factors = pd.DataFrame(index=stock_data.index)
@@ -1203,7 +1244,7 @@ class Alpha158Calculator:
                     # 每10个因子输出一次进度
                     if idx % 10 == 0:
                         logger.info(
-                            f"股票 {stock_code} 计算进度: {idx+1}/{total_factors} ({((idx+1)/total_factors*100):.1f}%)"
+                            f"股票 {stock_code} 计算进度: {idx + 1}/{total_factors} ({((idx + 1) / total_factors * 100):.1f}%)"
                         )
                     try:
                         # 使用表达式评估器计算因子
@@ -1220,7 +1261,7 @@ class Alpha158Calculator:
                             else:
                                 # 全部是NaN，可能是数据不足或计算错误
                                 logger.debug(
-                                    f"因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 全部为NaN: {field_expr}"
+                                    f"因子 {factor_name} ({idx + 1}/{len(self.alpha_fields)}) 全部为NaN: {field_expr}"
                                 )
                                 factors[factor_name] = 0
                                 fail_count += 1
@@ -1230,14 +1271,16 @@ class Alpha158Calculator:
                         else:
                             # 如果表达式解析失败，填充0
                             logger.debug(
-                                f"因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 表达式解析返回空: {field_expr}"
+                                f"因子 {factor_name} ({idx + 1}/{len(self.alpha_fields)}) 表达式解析返回空: {field_expr}"
                             )
                             factors[factor_name] = 0
                             fail_count += 1
-                            failed_expressions.append((factor_name, field_expr, "返回空"))
+                            failed_expressions.append(
+                                (factor_name, field_expr, "返回空")
+                            )
                     except Exception as e:
                         logger.debug(
-                            f"计算因子 {factor_name} ({idx+1}/{len(self.alpha_fields)}) 失败: {e}, 表达式: {field_expr}"
+                            f"计算因子 {factor_name} ({idx + 1}/{len(self.alpha_fields)}) 失败: {e}, 表达式: {field_expr}"
                         )
                         # 失败时填充0
                         factors[factor_name] = 0
@@ -1255,7 +1298,7 @@ class Alpha158Calculator:
                 )
             else:
                 # 回退到简化版本（47个核心因子）
-                logger.warning(f"Alpha158配置不可用，使用简化版本（47个核心因子）")
+                logger.warning("Alpha158配置不可用，使用简化版本（47个核心因子）")
                 close = stock_data["$close"]
                 high = stock_data["$high"]
                 low = stock_data["$low"]
@@ -1339,18 +1382,20 @@ class Alpha158Calculator:
             # 但Qlib的表达式引擎需要数据在Qlib系统中
             # 所以我们使用pandas实现表达式计算（基于Qlib的表达式定义）
 
-            factors = pd.DataFrame(index=data.index)
+            _ = pd.DataFrame(index=data.index)
 
             # 为了兼容性，我们使用pandas实现表达式计算
             # 这是一个折中方案：使用Qlib的因子定义，但用pandas计算
-            logger.info(f"使用Qlib Alpha158因子定义计算 {len(self.alpha_fields)} 个因子")
+            logger.info(
+                f"使用Qlib Alpha158因子定义计算 {len(self.alpha_fields)} 个因子"
+            )
 
             # 由于Qlib表达式引擎需要数据在Qlib系统中，我们使用表达式解析和pandas计算
             # 这里先实现一个简化版本，直接使用QlibDataLoader（如果可能）
 
             # 尝试使用QlibDataLoader
             try:
-                loader = QlibDataLoader(config=loader_config["config"])
+                _ = QlibDataLoader(config=loader_config["config"])
 
                 # 准备数据：需要将DataFrame转换为Qlib可以使用的格式
                 # 由于QlibDataLoader需要从Qlib数据系统加载，我们需要另一种方法
@@ -1457,7 +1502,7 @@ class Alpha158Calculator:
             # 步骤1: 处理Ref函数（最基础，可能被其他函数使用）
             # 注意：这里直接替换变量，因为Ref函数需要立即使用变量
             # 但需要确保变量名已经标准化（有$前缀）
-            def replace_ref(match):
+            def replace_ref(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 确保变量名有$前缀（calc_data中的列名应该有$前缀）
@@ -1498,7 +1543,7 @@ class Alpha158Calculator:
                         expr = expr.replace(nested_pattern, f"calc_data['${var_name}']")
 
             # 步骤2: 处理Log函数（可能在Corr等函数内部）
-            def replace_log(match):
+            def replace_log(match: Any) -> Any:
                 inner = match.group(1)
                 # 处理 Log($var+1) 或 Log($var-1) 等形式
                 if "+" in inner or "-" in inner:
@@ -1531,7 +1576,7 @@ class Alpha158Calculator:
                 log_iteration += 1
 
             # 步骤3: 处理Abs函数
-            def replace_abs(match):
+            def replace_abs(match: Any) -> Any:
                 inner = match.group(1)
                 return f"np.abs({inner})"
 
@@ -1546,7 +1591,7 @@ class Alpha158Calculator:
                 abs_iteration += 1
 
             # 步骤4: 保留Greater/Less，交由运行时函数处理，返回Series以支持rolling
-            def _as_series(x, ref):
+            def _as_series(x: Any, ref: Any) -> Any:
                 if isinstance(x, pd.Series):
                     return x
                 if np.isscalar(x):
@@ -1555,7 +1600,7 @@ class Alpha158Calculator:
                     return pd.Series(x, index=ref.index)
                 return pd.Series(x, index=ref.index)
 
-            def Greater(a, b=0):
+            def Greater(a: Any, b: Any = 0) -> Any:
                 """Greater函数：返回布尔Series，表示a > b"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1564,12 +1609,12 @@ class Alpha158Calculator:
                     # 返回布尔Series，True表示a > b，False表示a <= b
                     return (a_s > b_s).astype(float)
                 return (
-                    float(a > b)
-                    if np.isscalar(a) and np.isscalar(b)
-                    else np.maximum(a, b)
+                    1.0
+                    if float(a) > float(b)
+                    else 0.0 if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
                 )
 
-            def Less(a, b=0):
+            def Less(a: Any, b: Any = 0) -> Any:
                 """Less函数：返回布尔Series，表示a < b"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1578,12 +1623,12 @@ class Alpha158Calculator:
                     # 返回布尔Series，True表示a < b，False表示a >= b
                     return (a_s < b_s).astype(float)
                 return (
-                    float(a < b)
-                    if np.isscalar(a) and np.isscalar(b)
-                    else np.minimum(a, b)
+                    1.0
+                    if float(a) < float(b)
+                    else 0.0 if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
                 )
 
-            def Sum(x, n):
+            def Sum(x: Any, n: Any) -> Any:
                 """Sum函数：对Series进行滚动求和"""
                 # 确保x是Series
                 if not isinstance(x, pd.Series):
@@ -1598,7 +1643,7 @@ class Alpha158Calculator:
                     x_s = x_s.astype(float)
                 return x_s.rolling(int(n)).sum()
 
-            def Mean(x, n):
+            def Mean(x: Any, n: Any) -> Any:
                 """Mean函数：对Series进行滚动均值"""
                 if not isinstance(x, pd.Series):
                     x_s = _as_series(x, calc_data)
@@ -1610,7 +1655,7 @@ class Alpha158Calculator:
                     x_s = x_s.astype(float)
                 return x_s.rolling(int(n)).mean()
 
-            def Std(x, n):
+            def Std(x: Any, n: Any) -> Any:
                 """Std函数：对Series进行滚动标准差"""
                 if not isinstance(x, pd.Series):
                     x_s = _as_series(x, calc_data)
@@ -1626,7 +1671,7 @@ class Alpha158Calculator:
             # 注意：这些函数已经在返回值中包含了calc_data['$var']，所以不需要在步骤14再次替换
             # IdxMax返回最大值在窗口中的位置（从右往左，0到n-1），然后除以n归一化
             # IdxMin返回最小值在窗口中的位置（从右往左，0到n-1），然后除以n归一化
-            def replace_idxmax(match):
+            def replace_idxmax(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 计算最大值在窗口中的位置（从右往左，0到n-1），然后除以n
@@ -1634,7 +1679,7 @@ class Alpha158Calculator:
                 # 注意：raw=True时x是numpy数组，需要使用pd.isna()或np.isnan()
                 return f"(calc_data['${var}'].rolling({n}).apply(lambda x: (len(x) - 1 - x.argmax()) / {n} if len(x) == {n} and not np.isnan(x).all() else np.nan, raw=True))"
 
-            def replace_idxmin(match):
+            def replace_idxmin(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 计算最小值在窗口中的位置（从右往左，0到n-1），然后除以n
@@ -1666,7 +1711,7 @@ class Alpha158Calculator:
             # 这里先处理滚动窗口的情况，标量情况由运行时函数处理
 
             # 运行时Max/Min函数（处理Series和标量的情况）
-            def Max(a, b):
+            def Max(a: Any, b: Any) -> Any:
                 """Max函数：如果两个参数都是Series或一个是Series一个是标量，返回逐元素最大值"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1674,10 +1719,12 @@ class Alpha158Calculator:
                     b_s = _as_series(b, ref)
                     return pd.concat([a_s, b_s], axis=1).max(axis=1)
                 return (
-                    max(a, b) if np.isscalar(a) and np.isscalar(b) else np.maximum(a, b)
+                    max(float(cast(Any, a)), float(cast(Any, b)))
+                    if np.isscalar(a) and np.isscalar(b)
+                    else np.maximum(a, b)
                 )
 
-            def Min(a, b):
+            def Min(a: Any, b: Any) -> Any:
                 """Min函数：如果两个参数都是Series或一个是Series一个是标量，返回逐元素最小值"""
                 if isinstance(a, pd.Series) or isinstance(b, pd.Series):
                     ref = a if isinstance(a, pd.Series) else b
@@ -1685,25 +1732,27 @@ class Alpha158Calculator:
                     b_s = _as_series(b, ref)
                     return pd.concat([a_s, b_s], axis=1).min(axis=1)
                 return (
-                    min(a, b) if np.isscalar(a) and np.isscalar(b) else np.minimum(a, b)
+                    min(float(cast(Any, a)), float(cast(Any, b)))
+                    if np.isscalar(a) and np.isscalar(b)
+                    else np.minimum(a, b)
                 )
 
-            def replace_max(match):
+            def replace_max(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).max()"
 
-            def replace_min(match):
+            def replace_min(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).min()"
 
-            def replace_mean_var(match):
+            def replace_mean_var(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).mean()"
 
-            def replace_std(match):
+            def replace_std(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).std()"
@@ -1743,7 +1792,7 @@ class Alpha158Calculator:
                 std_var_iteration += 1
 
             # 步骤7: 处理Corr函数（两个变量）
-            def replace_corr(match):
+            def replace_corr(match: Any) -> Any:
                 var1_expr = match.group(1)
                 var2_expr = match.group(2)
                 n = int(match.group(3))
@@ -1779,10 +1828,10 @@ class Alpha158Calculator:
 
             # 步骤9: 处理Mean函数（用于嵌套表达式，如Mean(Abs(...), n)）
             # 使用类似Sum函数的括号匹配方法处理嵌套Mean函数
-            def find_mean_and_replace(expr_str):
+            def find_mean_and_replace(expr_str: Any) -> Any:
                 """找到Mean函数并替换，处理嵌套括号"""
 
-                def find_matching_paren(s, start_pos):
+                def find_matching_paren(s: Any, start_pos: Any) -> Any:
                     count = 0
                     i = start_pos
                     while i < len(s):
@@ -1832,10 +1881,10 @@ class Alpha158Calculator:
 
             # 步骤10: 处理Std函数（用于嵌套表达式，如Std(Abs(...), n)）
             # 使用类似Sum函数的括号匹配方法处理嵌套Std函数
-            def find_std_and_replace(expr_str):
+            def find_std_and_replace(expr_str: Any) -> Any:
                 """找到Std函数并替换，处理嵌套括号"""
 
-                def find_matching_paren(s, start_pos):
+                def find_matching_paren(s: Any, start_pos: Any) -> Any:
                     """找到匹配的右括号位置"""
                     count = 0
                     i = start_pos
@@ -1900,7 +1949,7 @@ class Alpha158Calculator:
                 iteration += 1
 
             # 步骤11: 处理Quantile函数
-            def replace_quantile(match):
+            def replace_quantile(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 q = float(match.group(3))
@@ -1919,7 +1968,7 @@ class Alpha158Calculator:
                 quantile_iteration += 1
 
             # 步骤12: 处理Rank函数
-            def replace_rank(match):
+            def replace_rank(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 使用raw=False，x是Series，可以使用iloc
@@ -1935,18 +1984,18 @@ class Alpha158Calculator:
                 rank_iteration += 1
 
             # 步骤13: 处理Slope, Rsquare, Resi函数（如果需要）
-            def replace_slope(match):
+            def replace_slope(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 return f"calc_data['${var}'].rolling({n}).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0] if len(x) == {n} else np.nan, raw=True)"
 
-            def replace_rsquare(match):
+            def replace_rsquare(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 使用raw=False，x是Series，可以使用iloc
                 return f"calc_data['${var}'].rolling({n}).apply(lambda x: 1 - np.var(x.values - np.linspace(x.iloc[0] if len(x) > 0 else 0, x.iloc[-1] if len(x) > 0 else 0, len(x))) / (np.var(x.values) + 1e-8) if len(x) == {n} and np.var(x.values) > 0 else 0, raw=False)"
 
-            def replace_resi(match):
+            def replace_resi(match: Any) -> Any:
                 var = match.group(1)
                 n = int(match.group(2))
                 # 使用raw=False，x是Series，可以使用iloc
@@ -2026,7 +2075,7 @@ class Alpha158Calculator:
                     pattern = rf"(?<!calc_data\[\')\${var_name}(?!\'\])"
                     # 多次替换直到没有变化（处理嵌套情况）
                     max_replace_iterations = 10
-                    for iteration in range(max_replace_iterations):
+                    for _iteration in range(max_replace_iterations):
                         new_expr = re.sub(pattern, replacement, expr)
                         # 每次替换后，立即修复可能产生的嵌套（在继续之前）
                         # 修复 calc_data['calc_data['$var']'] 格式
@@ -2080,7 +2129,7 @@ class Alpha158Calculator:
             # 处理包含比较操作符或复杂表达式的Mean/Std函数
             # Mean函数 - 处理包含比较操作符的表达式，如 Mean($close>Ref($close, 1), 5)
             # 使用直接的字符串替换方法，确保所有Mean函数都被替换
-            def find_matching_paren_simple(s, start_pos):
+            def find_matching_paren_simple(s: Any, start_pos: Any) -> Any:
                 count = 0
                 i = start_pos
                 while i < len(s):
@@ -2145,7 +2194,7 @@ class Alpha158Calculator:
                                     )
                                     replaced_any = True
                                     break
-                            except (ValueError, Exception) as e:
+                            except Exception:
                                 # 如果解析失败，尝试强制替换
                                 try:
                                     n = int(n_str)
@@ -2155,7 +2204,7 @@ class Alpha158Calculator:
                                     )
                                     replaced_any = True
                                     break
-                                except:
+                                except Exception:
                                     pass
 
                 if not replaced_any and mean_positions:
@@ -2222,7 +2271,7 @@ class Alpha158Calculator:
                                     )
                                     replaced_any = True
                                     break
-                            except (ValueError, Exception) as e:
+                            except Exception:
                                 # 如果解析失败，尝试强制替换
                                 try:
                                     n = int(n_str)
@@ -2232,7 +2281,7 @@ class Alpha158Calculator:
                                     )
                                     replaced_any = True
                                     break
-                                except:
+                                except Exception:
                                     pass
 
                 if not replaced_any and std_positions:
@@ -2261,7 +2310,9 @@ class Alpha158Calculator:
             # 在评估前，最后检查并修复Mean/Std函数（确保所有都被替换）
             # 如果还有Mean/Std函数，强制替换
             if "Mean(" in expr or "Std(" in expr:
-                logger.debug(f"表达式评估前仍有未替换的Mean/Std函数，交由运行时函数处理: {expr[:200]}...")
+                logger.debug(
+                    f"表达式评估前仍有未替换的Mean/Std函数，交由运行时函数处理: {expr[:200]}..."
+                )
 
             # 评估表达式
             result = eval(
@@ -2299,7 +2350,9 @@ class Alpha158Calculator:
             if not hasattr(self, "_detailed_error_count"):
                 self._detailed_error_count = 0
             if self._detailed_error_count < 5:
-                logger.warning(f"表达式评估失败: {expression[:100]}... 错误: {error_msg}")
+                logger.warning(
+                    f"表达式评估失败: {expression[:100]}... 错误: {error_msg}"
+                )
                 logger.debug(f"失败表达式(转换后): {expr[:200]}...")
                 logger.debug(
                     f"可用列: {list(calc_data.columns)[:20]}{'...' if len(calc_data.columns) > 20 else ''}"
@@ -2389,7 +2442,7 @@ class EnhancedQlibDataProvider:
 
         logger.info("增强版Qlib数据提供器初始化完成")
 
-    async def initialize_qlib(self):
+    async def initialize_qlib(self) -> Any:
         """初始化Qlib环境"""
         global _QLIB_GLOBAL_INITIALIZED
 
@@ -2413,7 +2466,9 @@ class EnhancedQlibDataProvider:
                 calendar_generator = QlibCalendarGenerator()
                 calendar_generator.ensure_calendar_exists()
             except Exception as cal_error:
-                logger.warning(f"生成交易日历文件失败: {cal_error}，Alpha158 handler可能无法使用")
+                logger.warning(
+                    f"生成交易日历文件失败: {cal_error}，Alpha158 handler可能无法使用"
+                )
 
             # 准备mount_path和provider_uri配置
             # qlib.init()内部会调用C.set()重置配置，所以需要通过参数传递
@@ -2481,7 +2536,7 @@ class EnhancedQlibDataProvider:
                     data_path = C.dpm.data_path
                     if isinstance(data_path, dict):
                         # 清理路径的函数
-                        def clean_path_value(path_val):
+                        def clean_path_value(path_val: Any) -> Any:
                             """清理路径值"""
                             if isinstance(path_val, Path):
                                 path_str = str(path_val)
@@ -2524,17 +2579,19 @@ class EnhancedQlibDataProvider:
                             # 方法1: 直接设置
                             try:
                                 C.dpm.data_path = fixed_data_path
-                                logger.info(f"✓ 已修复 C.dpm.data_path: {fixed_data_path}")
+                                logger.info(
+                                    f"✓ 已修复 C.dpm.data_path: {fixed_data_path}"
+                                )
                             except Exception as set_error:
                                 # 方法2: 通过 __dict__ 设置
                                 try:
                                     if hasattr(C.dpm, "__dict__"):
                                         C.dpm.__dict__["data_path"] = fixed_data_path
-                                        logger.info(f"✓ 通过 __dict__ 修复 data_path")
+                                        logger.info("✓ 通过 __dict__ 修复 data_path")
                                     else:
-                                        # 方法3: 通过 setattr
-                                        setattr(C.dpm, "data_path", fixed_data_path)
-                                        logger.info(f"✓ 通过 setattr 修复 data_path")
+                                        # 方法3: 直接赋值属性
+                                        C.dpm.data_path = fixed_data_path
+                                        logger.info("✓ 通过属性赋值修复 data_path")
                                 except Exception as set_error2:
                                     logger.warning(
                                         f"✗ 无法修复 data_path: {set_error}, {set_error2}"
@@ -2548,7 +2605,9 @@ class EnhancedQlibDataProvider:
                         else:
                             logger.debug("data_path 路径格式正确，无需修复")
             except Exception as cal_setup_error:
-                logger.warning(f"修复 data_path 时出错: {cal_setup_error}，但不影响主要功能")
+                logger.warning(
+                    f"修复 data_path 时出错: {cal_setup_error}，但不影响主要功能"
+                )
             _QLIB_GLOBAL_INITIALIZED = True
             self._qlib_initialized = True
             logger.info("Qlib环境初始化成功")
@@ -2626,7 +2685,7 @@ class EnhancedQlibDataProvider:
             except Exception as e:
                 logger.error(f"Alpha因子计算失败: {e}")
 
-        logger.info(f"========== Qlib数据集准备完成 ==========")
+        logger.info("========== Qlib数据集准备完成 ==========")
         logger.info(f"记录数: {len(qlib_data)}")
         logger.info(f"特征数: {len(qlib_data.columns)}")
         logger.info(f"数据集形状: {qlib_data.shape}")
@@ -2640,7 +2699,7 @@ class EnhancedQlibDataProvider:
         )
         logger.info(f"缺失值总数: {qlib_data.isnull().sum().sum()}")
         logger.info(f"数据类型统计: {qlib_data.dtypes.value_counts().to_dict()}")
-        logger.info(f"==========================================")
+        logger.info("==========================================")
         if not qlib_data.empty:
             logger.info(
                 f"数据统计: 缺失值={qlib_data.isnull().sum().sum()}, 数据类型={qlib_data.dtypes.value_counts().to_dict()}"
@@ -2739,7 +2798,9 @@ class EnhancedQlibDataProvider:
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"基础特征准备完成: {len(stock_codes)} 只股票, {len(combined_features)} 条记录")
+        logger.info(
+            f"基础特征准备完成: {len(stock_codes)} 只股票, {len(combined_features)} 条记录"
+        )
         return combined_features
 
     def _convert_to_qlib_format(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -2774,51 +2835,10 @@ class EnhancedQlibDataProvider:
         self, model_type: str, hyperparameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """创建 Qlib 模型配置。"""
-        return await self.data_adapter.create_qlib_model_config(
+        config: Dict[str, Any] = await self.data_adapter.create_qlib_model_config(
             model_type, hyperparameters
         )
-
-    async def validate_and_fix_qlib_format(
-        self, data: pd.DataFrame
-    ) -> Tuple[bool, pd.DataFrame]:
-        """验证并修复 Qlib 数据格式。"""
-        return await self.data_adapter.validate_and_fix_qlib_format(data)
-
-    def _fix_missing_columns(
-        self, data: pd.DataFrame, missing_cols: List[str]
-    ) -> pd.DataFrame:
-        """修复缺失列。"""
-        return self.data_adapter._fix_missing_columns(data, missing_cols)
-
-    def _fix_data_types(self, data: pd.DataFrame) -> pd.DataFrame:
-        """修复数据类型。"""
-        return self.data_adapter._fix_data_types(data)
-
-    def _check_data_quality(self, data: pd.DataFrame) -> List[str]:
-        """检查数据质量问题。"""
-        return self.data_adapter._check_data_quality(data)
-
-    def _fix_data_quality_issues(
-        self, data: pd.DataFrame, issues: List[str]
-    ) -> pd.DataFrame:
-        """修复数据质量问题。"""
-        return self.data_adapter._fix_data_quality_issues(data, issues)
-
-    async def validate_qlib_data_format(self, data: pd.DataFrame) -> bool:
-        """验证 Qlib 数据格式。"""
-        return await self.data_adapter.validate_qlib_data_format(data)
-
-    async def convert_dataframe_to_qlib(
-        self, df: pd.DataFrame, validate: bool = True, fix_issues: bool = True
-    ) -> Tuple[bool, pd.DataFrame, Dict[str, Any]]:
-        """将 DataFrame 转换为 Qlib 格式。"""
-        return await self.data_adapter.convert_dataframe_to_qlib(
-            df, validate=validate, fix_issues=fix_issues
-        )
-
-    async def get_qlib_format_example(self) -> Dict[str, Any]:
-        """获取 Qlib 格式说明示例。"""
-        return await self.data_adapter.get_qlib_format_example()
+        return config
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计信息"""
@@ -2845,7 +2865,7 @@ class EnhancedQlibDataProvider:
                 "qlib_initialized": self._qlib_initialized,
             }
 
-    async def clear_cache(self):
+    async def clear_cache(self) -> None:
         """清空缓存"""
         try:
             cache_dir = self.alpha_calculator.factor_cache.cache_dir
@@ -2950,7 +2970,9 @@ class EnhancedQlibDataProvider:
             # 7. 最终验证
             is_valid = await self.validate_qlib_data_format(data)
 
-            logger.info(f"Qlib格式验证和修复完成: 有效={is_valid}, 数据形状={data.shape}")
+            logger.info(
+                f"Qlib格式验证和修复完成: 有效={is_valid}, 数据形状={data.shape}"
+            )
             return is_valid, data
 
         except Exception as e:
@@ -3045,7 +3067,9 @@ class EnhancedQlibDataProvider:
 
         # 检查缺失值
         missing_counts = data.isnull().sum()
-        critical_missing = missing_counts[missing_counts > len(data) * 0.1]  # 超过10%缺失
+        critical_missing = missing_counts[
+            missing_counts > len(data) * 0.1
+        ]  # 超过10%缺失
         if not critical_missing.empty:
             issues.append(f"高缺失率列: {critical_missing.to_dict()}")
 
@@ -3196,7 +3220,9 @@ class EnhancedQlibDataProvider:
                 converted_df.memory_usage(deep=True).sum() / 1024 / 1024
             )
 
-            logger.info(f"Qlib格式转换完成: {conversion_info['final_shape']}, 有效={is_valid}")
+            logger.info(
+                f"Qlib格式转换完成: {conversion_info['final_shape']}, 有效={is_valid}"
+            )
             return is_valid, converted_df, conversion_info
 
         except Exception as e:

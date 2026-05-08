@@ -8,12 +8,10 @@ from __future__ import annotations  # 延迟评估类型注解，避免在独立
 
 import asyncio
 import os
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -40,9 +38,9 @@ class OfflineFactorPrecomputeService:
     def __init__(
         self,
         batch_size: int = 50,
-        max_workers: int = None,
+        max_workers: Optional[int] = None,
         progress_callback: Optional[Callable[[float, str], None]] = None,
-    ):
+    ) -> None:
         """
         初始化预计算服务
 
@@ -82,9 +80,11 @@ class OfflineFactorPrecomputeService:
         except Exception as cal_error:
             logger.warning(f"生成交易日历文件失败: {cal_error}")
 
-        logger.info(f"离线因子预计算服务初始化完成，批次大小: {batch_size}, 最大并发数: {self.max_workers}")
+        logger.info(
+            f"离线因子预计算服务初始化完成，批次大小: {batch_size}, 最大并发数: {self.max_workers}"
+        )
 
-    async def initialize_qlib(self):
+    async def initialize_qlib(self) -> None:
         """初始化Qlib环境（延迟初始化）"""
         if self.qlib_provider is None:
             self.qlib_provider = EnhancedQlibDataProvider()
@@ -228,7 +228,9 @@ class OfflineFactorPrecomputeService:
                     qlib_base, fundamental_features, stock_code
                 )
 
-            logger.info(f"股票 {stock_code} 预计算完成，指标数: {len(qlib_base.columns)}")
+            logger.info(
+                f"股票 {stock_code} 预计算完成，指标数: {len(qlib_base.columns)}"
+            )
 
             return qlib_base
 
@@ -261,7 +263,7 @@ class OfflineFactorPrecomputeService:
             # 使用pandas计算基础统计指标（Qlib表达式引擎需要完整的数据集，这里先用pandas实现）
             # 注意：避免与后续技术指标计算重复，这里只计算基础统计指标，不计算MA、STD等（这些会在技术指标中计算）
             close = stock_data["$close"]
-            volume = stock_data["$volume"]
+            stock_data["$volume"]
 
             # 价格变化率（这些是基础指标，不会与技术指标重复）
             indicators["RET1"] = close.pct_change(1)
@@ -409,9 +411,11 @@ class OfflineFactorPrecomputeService:
                 stock_data_list.append(
                     StockData(
                         stock_code=stock_code,
-                        date=date.to_pydatetime()
-                        if isinstance(date, pd.Timestamp)
-                        else date,
+                        date=(
+                            date.to_pydatetime()
+                            if isinstance(date, pd.Timestamp)
+                            else date
+                        ),
                         open=row["open"],
                         high=row["high"],
                         low=row["low"],
@@ -497,7 +501,9 @@ class OfflineFactorPrecomputeService:
             # 填充缺失值
             indicators = indicators.bfill().fillna(0)
 
-            logger.debug(f"股票 {stock_code} 技术指标计算完成，指标数: {len(indicators.columns)}")
+            logger.debug(
+                f"股票 {stock_code} 技术指标计算完成，指标数: {len(indicators.columns)}"
+            )
 
             return indicators
 
@@ -531,7 +537,9 @@ class OfflineFactorPrecomputeService:
             ]
             feature_df = features[feature_cols].copy()
 
-            logger.debug(f"股票 {stock_code} 基本面特征计算完成，特征数: {len(feature_df.columns)}")
+            logger.debug(
+                f"股票 {stock_code} 基本面特征计算完成，特征数: {len(feature_df.columns)}"
+            )
 
             return feature_df
 
@@ -582,7 +590,9 @@ class OfflineFactorPrecomputeService:
                     stock_codes, force_update=False
                 )
                 if stocks_to_update:
-                    logger.info(f"增量更新模式: 检测到 {len(stocks_to_update)} 只股票需要更新")
+                    logger.info(
+                        f"增量更新模式: 检测到 {len(stocks_to_update)} 只股票需要更新"
+                    )
                     stock_codes = stocks_to_update
                 else:
                     logger.info("增量更新模式: 没有股票需要更新")
@@ -626,10 +636,10 @@ class OfflineFactorPrecomputeService:
 
                 for stock_code, result in zip(batch_codes, results):
                     try:
-                        if isinstance(result, Exception):
+                        if isinstance(result, BaseException):
                             failed_stocks.append(stock_code)
                             logger.error(f"✗ 股票 {stock_code} 预计算失败: {result}")
-                        elif result is not None and not result.empty:
+                        elif result is not None and not cast(Any, result).empty:
                             # 增量更新：如果文件已存在，合并数据
                             output_file = (
                                 output_dir / f"{stock_code.replace('.', '_')}.parquet"
@@ -680,7 +690,9 @@ class OfflineFactorPrecomputeService:
                 # 保存合并后的数据
                 combined_file = output_dir / "all_stocks.parquet"
                 self.format_converter.save_qlib_data(combined_data, combined_file)
-                logger.info(f"合并数据已保存: {combined_file}, 形状: {combined_data.shape}")
+                logger.info(
+                    f"合并数据已保存: {combined_file}, 形状: {combined_data.shape}"
+                )
 
             # 更新版本信息
             try:

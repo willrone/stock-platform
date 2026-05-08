@@ -14,20 +14,29 @@ Notes:
 
 from __future__ import annotations
 
+from typing import Any, Callable, TypeVar, cast
+
 import numpy as np
 
+F = TypeVar("F", bound=Callable[..., Any])
+
 try:
-    from numba import njit
+    from numba import njit as _numba_njit
 
     NUMBA_AVAILABLE = True
 except Exception:  # pragma: no cover
     NUMBA_AVAILABLE = False
 
-    def njit(*args, **kwargs):  # type: ignore
-        def _wrap(fn):
+    def njit(*args: Any, **kwargs: Any) -> Callable[[F], F]:
+        def _wrap(fn: F) -> F:
             return fn
 
         return _wrap
+
+else:
+
+    def njit(*args: Any, **kwargs: Any) -> Callable[[F], F]:
+        return cast(Callable[[F], F], _numba_njit(*args, **kwargs))
 
 
 @njit(cache=True)
@@ -44,17 +53,19 @@ def ema(values: np.ndarray, span: int) -> np.ndarray:
     n = values.shape[0]
     out = np.empty(n, dtype=np.float64)
     if n == 0:
-        return out
+        return cast(np.ndarray, out)
 
     alpha = 2.0 / (span + 1.0)
     out[0] = values[0]
     for i in range(1, n):
         out[i] = alpha * values[i] + (1.0 - alpha) * out[i - 1]
-    return out
+    return cast(np.ndarray, out)
 
 
 @njit(cache=True)
-def macd(values: np.ndarray, fast: int, slow: int, signal: int):
+def macd(
+    values: np.ndarray, fast: int, slow: int, signal: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """MACD (DIF/DEA/HIST) using EMA.
 
     Returns:
@@ -77,7 +88,7 @@ def rsi_wilder(values: np.ndarray, period: int) -> np.ndarray:
     n = values.shape[0]
     out = np.empty(n, dtype=np.float64)
     if n == 0:
-        return out
+        return cast(np.ndarray, out)
 
     out[:] = np.nan
 
@@ -94,7 +105,7 @@ def rsi_wilder(values: np.ndarray, period: int) -> np.ndarray:
             loss -= diff
 
     if n <= period:
-        return out
+        return cast(np.ndarray, out)
 
     avg_gain = gain / period
     avg_loss = loss / period
@@ -108,13 +119,13 @@ def rsi_wilder(values: np.ndarray, period: int) -> np.ndarray:
     for i in range(period + 1, n):
         diff = values[i] - values[i - 1]
         g = diff if diff > 0 else 0.0
-        l = -diff if diff < 0 else 0.0
+        loss_value = -diff if diff < 0 else 0.0
         avg_gain = (avg_gain * (period - 1) + g) / period
-        avg_loss = (avg_loss * (period - 1) + l) / period
+        avg_loss = (avg_loss * (period - 1) + loss_value) / period
         if avg_loss == 0.0:
             out[i] = 100.0
         else:
             rs = avg_gain / avg_loss
             out[i] = 100.0 - (100.0 / (1.0 + rs))
 
-    return out
+    return cast(np.ndarray, out)

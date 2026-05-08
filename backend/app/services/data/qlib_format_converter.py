@@ -5,13 +5,11 @@ Qlib数据格式转换工具
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
 from loguru import logger
-
-from app.core.config import settings
 
 
 class QlibFormatConverter:
@@ -26,9 +24,8 @@ class QlibFormatConverter:
         "volume": "$volume",
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化转换器"""
-        pass
 
     def convert_parquet_to_qlib(
         self, stock_data: pd.DataFrame, stock_code: str
@@ -124,7 +121,9 @@ class QlibFormatConverter:
             combined_df = pd.concat(qlib_dataframes, axis=0)
             combined_df = combined_df.sort_index()
 
-            logger.info(f"合并完成: {len(qlib_dataframes)} 只股票, 总记录数: {len(combined_df)}")
+            logger.info(
+                f"合并完成: {len(qlib_dataframes)} 只股票, 总记录数: {len(combined_df)}"
+            )
 
             return combined_df
 
@@ -192,13 +191,15 @@ class QlibFormatConverter:
             # 检查列名冲突
             overlapping_cols = qlib_base.columns.intersection(indicators.columns)
             if len(overlapping_cols) > 0:
-                logger.warning(f"检测到列名冲突: {list(overlapping_cols)}，将只添加不存在的列")
+                logger.warning(
+                    f"检测到列名冲突: {list(overlapping_cols)}，将只添加不存在的列"
+                )
                 # 只添加不存在的列
                 new_cols = indicators.columns.difference(qlib_base.columns)
                 if len(new_cols) > 0:
                     indicators = indicators[new_cols]
                 else:
-                    logger.warning(f"所有指标列都已存在，跳过添加")
+                    logger.warning("所有指标列都已存在，跳过添加")
                     return qlib_base
 
             # 合并指标到基础数据
@@ -340,76 +341,91 @@ class QlibFormatConverter:
                 logger.warning(f"文件不存在: {file_path}")
                 return pd.DataFrame()
 
-            # 根据文件扩展名选择读取方式
-            if file_path.suffix == ".parquet":
-                # 尝试使用不同的引擎读取，处理MultiIndex兼容性问题
-                try:
-                    df = pd.read_parquet(file_path, engine="pyarrow")
-                except Exception as e:
-                    logger.debug(f"使用pyarrow读取失败: {e}，尝试fastparquet")
-                    try:
-                        df = pd.read_parquet(file_path, engine="fastparquet")
-                    except Exception as e2:
-                        logger.warning(f"使用fastparquet也失败: {e2}，尝试默认引擎")
-                        df = pd.read_parquet(file_path)
-            elif file_path.suffix == ".csv":
-                df = pd.read_csv(file_path, index_col=[0, 1], parse_dates=True)
-            else:
-                raise ValueError(f"不支持的文件格式: {file_path.suffix}")
+            df = self._load_raw_qlib_data(file_path)
+            df = self._ensure_multiindex(df, file_path, stock_code)
+            df = self._filter_by_stock_code(df, stock_code)
+            if df.empty:
+                return df
 
-            # 确保是MultiIndex
-            if not isinstance(df.index, pd.MultiIndex):
-                # 如果读取后不是MultiIndex，尝试重建
-                if df.index.nlevels == 1 and len(df.columns) > 0:
-                    # 可能是索引被展平了，尝试从列中恢复
-                    logger.warning(f"数据索引不是MultiIndex，尝试重建: {file_path}")
-                    # 如果文件是单股票文件，可能索引只有日期
-                    # 这种情况下，我们需要根据stock_code参数重建MultiIndex
-                    if stock_code is not None:
-                        df.index = pd.MultiIndex.from_tuples(
-                            [(stock_code, idx) for idx in df.index],
-                            names=["stock_code", "date"],
-                        )
-                    else:
-                        raise ValueError(f"数据格式错误，无法重建MultiIndex: {file_path}")
-                else:
-                    raise ValueError(f"数据格式错误，期望MultiIndex: {file_path}")
-
-            # 过滤股票代码
-            if stock_code is not None:
-                try:
-                    # 使用xs提取，但保留层级结构
-                    df = df.xs(stock_code, level=0, drop_level=False)
-                except KeyError:
-                    logger.warning(f"股票 {stock_code} 不在数据中")
-                    return pd.DataFrame()
-
-            # 过滤日期范围（使用更安全的方式）
-            if start_date is not None or end_date is not None:
-                try:
-                    # 获取日期层级（使用numpy数组避免索引长度问题）
-                    date_level = df.index.get_level_values(1).to_numpy()
-
-                    # 构建布尔掩码（使用numpy数组）
-                    mask = np.ones(len(df), dtype=bool)
-
-                    if start_date is not None:
-                        start_ts = pd.Timestamp(start_date)
-                        mask = mask & (date_level >= start_ts)
-                    if end_date is not None:
-                        end_ts = pd.Timestamp(end_date)
-                        mask = mask & (date_level <= end_ts)
-
-                    # 使用numpy布尔数组进行过滤
-                    df = df.iloc[mask]
-                except Exception as e:
-                    logger.warning(f"日期过滤失败: {e}，返回全部数据")
-                    # 如果过滤失败，返回全部数据而不是空DataFrame
+            df = self._filter_by_date_range(df, start_date, end_date)
 
             logger.debug(f"加载Qlib数据: {file_path}, 形状: {df.shape}")
-
             return df
 
         except Exception as e:
             logger.error(f"加载Qlib数据失败: {e}")
             return pd.DataFrame()
+
+    def _load_raw_qlib_data(self, file_path: Path) -> pd.DataFrame:
+        if file_path.suffix == ".parquet":
+            return self._read_parquet_with_fallback(file_path)
+        if file_path.suffix == ".csv":
+            return pd.read_csv(file_path, index_col=[0, 1], parse_dates=True)
+        raise ValueError(f"不支持的文件格式: {file_path.suffix}")
+
+    def _read_parquet_with_fallback(self, file_path: Path) -> pd.DataFrame:
+        try:
+            return pd.read_parquet(file_path, engine="pyarrow")
+        except Exception as e:
+            logger.debug(f"使用pyarrow读取失败: {e}，尝试fastparquet")
+            try:
+                return pd.read_parquet(file_path, engine="fastparquet")
+            except Exception as e2:
+                logger.warning(f"使用fastparquet也失败: {e2}，尝试默认引擎")
+                return pd.read_parquet(file_path)
+
+    def _ensure_multiindex(
+        self, df: pd.DataFrame, file_path: Path, stock_code: Optional[str]
+    ) -> pd.DataFrame:
+        if isinstance(df.index, pd.MultiIndex):
+            return df
+
+        if df.index.nlevels == 1 and len(df.columns) > 0:
+            logger.warning(f"数据索引不是MultiIndex，尝试重建: {file_path}")
+            if stock_code is None:
+                raise ValueError(f"数据格式错误，无法重建MultiIndex: {file_path}")
+
+            df.index = pd.MultiIndex.from_tuples(
+                [(stock_code, idx) for idx in df.index],
+                names=["stock_code", "date"],
+            )
+            return df
+
+        raise ValueError(f"数据格式错误，期望MultiIndex: {file_path}")
+
+    def _filter_by_stock_code(
+        self, df: pd.DataFrame, stock_code: Optional[str]
+    ) -> pd.DataFrame:
+        if stock_code is None:
+            return df
+
+        try:
+            return df.xs(stock_code, level=0, drop_level=False)
+        except KeyError:
+            logger.warning(f"股票 {stock_code} 不在数据中")
+            return pd.DataFrame()
+
+    def _filter_by_date_range(
+        self,
+        df: pd.DataFrame,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime],
+    ) -> pd.DataFrame:
+        if start_date is None and end_date is None:
+            return df
+
+        try:
+            date_level = df.index.get_level_values(1).to_numpy()
+            mask: np.ndarray[Any, np.dtype[np.bool_]] = np.ones(len(df), dtype=bool)
+
+            if start_date is not None:
+                start_ts = pd.Timestamp(start_date)
+                mask = mask & (date_level >= start_ts)
+            if end_date is not None:
+                end_ts = pd.Timestamp(end_date)
+                mask = mask & (date_level <= end_ts)
+
+            return df.iloc[mask]
+        except Exception as e:
+            logger.warning(f"日期过滤失败: {e}，返回全部数据")
+            return df

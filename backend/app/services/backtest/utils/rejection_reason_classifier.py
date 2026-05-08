@@ -76,14 +76,16 @@ def get_category_label(category_key: str) -> str:
 
 
 # 不计入 actionable 的拒绝类别（P0 语义：这些是前置条件不满足，非“真正可执行”）
-_NON_ACTIONABLE_CATEGORIES = frozenset({
-    "no_position",
-    "insufficient_buy_quantity",
-    "insufficient_funds",
-    "position_limit",
-    "strength_too_low",
-    "other",
-})
+_NON_ACTIONABLE_CATEGORIES = frozenset(
+    {
+        "no_position",
+        "insufficient_buy_quantity",
+        "insufficient_funds",
+        "position_limit",
+        "strength_too_low",
+        "other",
+    }
+)
 
 
 def is_actionable_rejection(raw_reason: Optional[str]) -> bool:

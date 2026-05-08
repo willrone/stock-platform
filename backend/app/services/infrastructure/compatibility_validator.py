@@ -2,19 +2,17 @@
 模型兼容性验证器
 检查模型依赖、环境兼容性和接口一致性
 """
+
 import hashlib
 import importlib
-import json
+import importlib.metadata
 import pickle
 import platform
-import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-import importlib.metadata
 from loguru import logger
 from packaging import version
 
@@ -97,7 +95,7 @@ class ModelMetadata:
 class DependencyValidator:
     """依赖验证器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.installed_packages = self._get_installed_packages()
 
     def _get_installed_packages(self) -> Dict[str, str]:
@@ -239,13 +237,17 @@ class DependencyValidator:
 
         except Exception as e:
             logger.error(f"版本比较失败: {e}")
-            return {"compatible": False, "warning": False, "reason": f"版本格式错误: {e}"}
+            return {
+                "compatible": False,
+                "warning": False,
+                "reason": f"版本格式错误: {e}",
+            }
 
 
 class SystemValidator:
     """系统环境验证器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.system_info = self._get_system_info()
 
     def _get_system_info(self) -> Dict[str, Any]:
@@ -397,7 +399,7 @@ class SystemValidator:
 class ModelFormatValidator:
     """模型格式验证器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.supported_formats = {
             "pickle": self._validate_pickle,
             "joblib": self._validate_joblib,
@@ -411,14 +413,14 @@ class ModelFormatValidator:
         self, model_path: str, expected_format: str
     ) -> ValidationResult:
         """验证模型格式"""
-        model_path = Path(model_path)
+        path = Path(model_path)
 
-        if not model_path.exists():
+        if not path.exists():
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,
                 level=CompatibilityLevel.INCOMPATIBLE,
-                message=f"模型文件不存在: {model_path}",
-                details={"model_path": str(model_path)},
+                message=f"模型文件不存在: {path}",
+                details={"model_path": str(path)},
                 suggestions=["检查模型文件路径是否正确"],
             )
 
@@ -433,14 +435,14 @@ class ModelFormatValidator:
 
         try:
             validator_func = self.supported_formats[expected_format]
-            return validator_func(model_path)
+            return validator_func(path)
         except Exception as e:
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,
                 level=CompatibilityLevel.INCOMPATIBLE,
                 message=f"模型格式验证失败: {e}",
                 details={
-                    "model_path": str(model_path),
+                    "model_path": str(path),
                     "expected_format": expected_format,
                     "error": str(e),
                 },
@@ -536,10 +538,10 @@ class ModelFormatValidator:
 
             if model_path.is_dir():
                 # SavedModel格式
-                model = tf.saved_model.load(str(model_path))
+                tf.saved_model.load(str(model_path))
             else:
                 # H5格式
-                model = tf.keras.models.load_model(str(model_path))
+                tf.keras.models.load_model(str(model_path))
 
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,
@@ -569,7 +571,7 @@ class ModelFormatValidator:
         try:
             import torch
 
-            model = torch.load(model_path, map_location="cpu")
+            _ = torch.load(model_path, map_location="cpu")
 
             return ValidationResult(
                 category=ValidationCategory.MODEL_FORMAT,
@@ -719,7 +721,7 @@ class APIInterfaceValidator:
 class CompatibilityValidator:
     """模型兼容性验证器主类"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.dependency_validator = DependencyValidator()
         self.system_validator = SystemValidator()
         self.format_validator = ModelFormatValidator()
@@ -729,20 +731,20 @@ class CompatibilityValidator:
 
     def extract_model_metadata(self, model_path: str) -> ModelMetadata:
         """提取模型元数据"""
-        model_path = Path(model_path)
+        path = Path(model_path)
 
-        if not model_path.exists():
-            raise FileNotFoundError(f"模型文件不存在: {model_path}")
+        if not path.exists():
+            raise FileNotFoundError(f"模型文件不存在: {path}")
 
         # 计算文件哈希
-        file_hash = self._calculate_file_hash(model_path)
+        file_hash = self._calculate_file_hash(path)
 
         # 尝试从模型文件中提取元数据
-        metadata = self._extract_metadata_from_model(model_path)
+        metadata = self._extract_metadata_from_model(path)
 
         # 如果无法从模型中提取，使用默认值
         if not metadata:
-            metadata = self._create_default_metadata(model_path, file_hash)
+            metadata = self._create_default_metadata(path, file_hash)
 
         return metadata
 

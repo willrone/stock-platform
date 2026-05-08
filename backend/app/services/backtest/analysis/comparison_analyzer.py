@@ -2,7 +2,6 @@
 回测对比分析器 - 用于对比多个回测结果
 """
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -109,10 +108,10 @@ class BacktestComparisonAnalyzer:
                     "volatility",
                     "max_drawdown",
                 ]:
-                    row[metric] = f"{float(value) * 100:.2f}%"
+                    row[metric] = "{float(value) * 100:.2f}%"
                     row[f"{metric}_raw"] = float(value)
                 elif metric in ["sharpe_ratio", "win_rate", "profit_factor"]:
-                    row[metric] = f"{float(value):.3f}"
+                    row[metric] = "{float(value):.3f}"
                     row[f"{metric}_raw"] = float(value)
                 else:
                     row[metric] = value
@@ -197,10 +196,12 @@ class BacktestComparisonAnalyzer:
                 "task_id": result["task_id"],
                 "task_name": result["task_name"],
                 "strategy_name": task_data.get("strategy_name", ""),
-                "return": float(task_data.get("annualized_return", 0)) * 100,  # 转换为百分比
+                "return": float(task_data.get("annualized_return", 0))
+                * 100,  # 转换为百分比
                 "risk": float(task_data.get("volatility", 0)) * 100,  # 转换为百分比
                 "sharpe_ratio": float(task_data.get("sharpe_ratio", 0)),
-                "max_drawdown": float(task_data.get("max_drawdown", 0)) * 100,  # 转换为百分比
+                "max_drawdown": float(task_data.get("max_drawdown", 0))
+                * 100,  # 转换为百分比
             }
 
             scatter_data.append(scatter_point)
@@ -276,7 +277,10 @@ class BacktestComparisonAnalyzer:
                 )
 
             # 根据指标类型决定排序方向
-            reverse_sort = metric not in ["volatility", "max_drawdown"]  # 波动率和最大回撤越小越好
+            reverse_sort = metric not in [
+                "volatility",
+                "max_drawdown",
+            ]  # 波动率和最大回撤越小越好
             metric_values.sort(key=lambda x: x["value"], reverse=reverse_sort)
 
             # 添加排名

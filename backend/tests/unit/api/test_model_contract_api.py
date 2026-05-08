@@ -1,10 +1,10 @@
 """模型/训练接口 contract tests。"""
 
 import sys
+from concurrent.futures import Future
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from concurrent.futures import Future
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -191,7 +191,9 @@ class TestModelAndTrainingContractAPI:
             },
         }
 
-        mock_session.query.return_value.filter.return_value.first.return_value = legacy_model
+        mock_session.query.return_value.filter.return_value.first.return_value = (
+            legacy_model
+        )
 
         response = client.get("/models/model-1/evaluation-report")
 

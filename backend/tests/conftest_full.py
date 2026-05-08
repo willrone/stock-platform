@@ -55,12 +55,12 @@ async def test_db_engine(test_settings: Settings):
         echo=False,
         future=True,
     )
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     await engine.dispose()
 
 
@@ -72,7 +72,7 @@ async def test_db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    
+
     async with async_session() as session:
         yield session
 
@@ -81,11 +81,11 @@ async def test_db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
 def test_client(test_settings: Settings, test_db_session: AsyncSession) -> TestClient:
     """测试客户端"""
     app = create_application()
-    
+
     # 覆盖依赖
     async def override_get_db():
         yield test_db_session
-    
+
     app.dependency_overrides[get_async_session] = override_get_db
-    
+
     return TestClient(app)

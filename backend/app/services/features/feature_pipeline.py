@@ -4,10 +4,8 @@
 协调特征计算、存储和管理
 """
 
-import asyncio
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 from loguru import logger
@@ -16,24 +14,26 @@ from ..data.simple_data_service import SimpleDataService
 from ..prediction.technical_indicators import TechnicalIndicatorCalculator
 from .feature_store import FeatureMetadata, FeatureStore, FeatureType
 
+FeatureCalculator = Callable[[pd.DataFrame], Awaitable[pd.Series]]
+
 
 class FeaturePipeline:
     """特征工程管道"""
 
-    def __init__(self, feature_store: Optional[FeatureStore] = None):
+    def __init__(self, feature_store: Optional[FeatureStore] = None) -> None:
         self.feature_store = feature_store or FeatureStore()
         self.indicator_calculator = TechnicalIndicatorCalculator()
         self.data_service = SimpleDataService()
 
         # 注册的特征计算器
-        self._feature_calculators: Dict[str, callable] = {}
+        self._feature_calculators: Dict[str, FeatureCalculator] = {}
 
         # 初始化标志
         self._initialized = False
 
         logger.info("特征工程管道初始化")
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """初始化特征管道"""
         if self._initialized:
             return
@@ -57,9 +57,11 @@ class FeaturePipeline:
         stock_code: str,
         date_range: Tuple[datetime, datetime],
         sync_type: str = "incremental",
-    ):
+    ) -> None:
         """数据同步完成回调"""
-        logger.info(f"收到数据同步完成通知: {stock_code}, 日期范围: {date_range}, 类型: {sync_type}")
+        logger.info(
+            f"收到数据同步完成通知: {stock_code}, 日期范围: {date_range}, 类型: {sync_type}"
+        )
 
         try:
             # 使相关缓存失效
@@ -100,7 +102,9 @@ class FeaturePipeline:
                 return cached_data
 
         # 计算特征
-        logger.info(f"开始计算特征: {len(stock_codes)} 只股票, {len(feature_names)} 个特征")
+        logger.info(
+            f"开始计算特征: {len(stock_codes)} 只股票, {len(feature_names)} 个特征"
+        )
 
         all_features = []
 
@@ -146,13 +150,13 @@ class FeaturePipeline:
     async def register_feature_calculator(
         self,
         feature_name: str,
-        calculator: callable,
+        calculator: FeatureCalculator,
         feature_type: FeatureType = FeatureType.CUSTOM,
         dependencies: Optional[List[str]] = None,
         update_frequency: str = "daily",
         description: Optional[str] = None,
         parameters: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> None:
         """注册特征计算器"""
         # 注册计算器
         self._feature_calculators[feature_name] = calculator
@@ -161,9 +165,11 @@ class FeaturePipeline:
         await self.feature_store.register_feature(
             feature_name=feature_name,
             feature_type=feature_type,
-            calculation_method=calculator.__name__
-            if hasattr(calculator, "__name__")
-            else str(calculator),
+            calculation_method=(
+                calculator.__name__
+                if hasattr(calculator, "__name__")
+                else str(calculator)
+            ),
             dependencies=dependencies or [],
             update_frequency=update_frequency,
             description=description,
@@ -186,7 +192,7 @@ class FeaturePipeline:
         self,
         stock_codes: Optional[List[str]] = None,
         feature_names: Optional[List[str]] = None,
-    ):
+    ) -> None:
         """使特征缓存失效"""
         await self.feature_store.invalidate_cache(stock_codes, feature_names)
 
@@ -200,7 +206,7 @@ class FeaturePipeline:
             "initialized": self._initialized,
         }
 
-    async def _register_builtin_features(self):
+    async def _register_builtin_features(self) -> None:
         """注册内置特征计算器"""
         # 技术指标特征 - 扩展支持更多指标
         technical_indicators = [
@@ -371,7 +377,7 @@ class FeaturePipeline:
 
     async def _calculate_incremental_features(
         self, stock_code: str, date_range: Tuple[datetime, datetime]
-    ):
+    ) -> None:
         """计算增量特征"""
         try:
             # 获取需要更新的特征
@@ -394,7 +400,9 @@ class FeaturePipeline:
             )
 
             if not features_df.empty:
-                logger.info(f"增量特征计算完成: {stock_code}, {len(features_df)} 条记录")
+                logger.info(
+                    f"增量特征计算完成: {stock_code}, {len(features_df)} 条记录"
+                )
 
         except Exception as e:
             logger.error(f"增量特征计算失败 {stock_code}: {e}")
@@ -424,9 +432,9 @@ class FeaturePipeline:
         """计算加权移动平均线"""
 
         # 简化实现，使用pandas的rolling和apply
-        def wma_func(x):
+        def wma_func(x: Any) -> float:
             weights = range(1, len(x) + 1)
-            return sum(x * weights) / sum(weights)
+            return float(sum(x * weights) / sum(weights))
 
         return data["close"].rolling(20).apply(wma_func, raw=True)
 

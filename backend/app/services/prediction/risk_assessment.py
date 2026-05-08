@@ -3,8 +3,8 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -12,19 +12,18 @@ from loguru import logger
 from scipy import stats
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, PredictionError
-from app.models.task_models import RiskMetrics
 
 
 @dataclass
 class RiskAssessmentConfig:
     """风险评估配置"""
 
-    confidence_levels: List[float] = None
-    time_horizons: List[int] = None  # 天数
-    risk_metrics: List[str] = None
+    confidence_levels: Optional[List[float]] = None
+    time_horizons: Optional[List[int]] = None  # 天数
+    risk_metrics: Optional[List[str]] = None
     monte_carlo_simulations: int = 10000
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.confidence_levels is None:
             self.confidence_levels = [0.90, 0.95, 0.99]
         if self.time_horizons is None:
@@ -60,7 +59,7 @@ class RiskAssessmentResult:
     confidence_intervals: Dict[float, ConfidenceInterval]
     risk_metrics: Dict[str, float]
     scenario_analysis: Dict[str, float]
-    stress_test_results: Dict[str, float]
+    stress_test_results: Dict[str, Dict[str, float]]
     risk_rating: str  # low, medium, high, extreme
 
 
@@ -109,14 +108,14 @@ class ConfidenceIntervalCalculator:
             )
 
         # 自助抽样
-        bootstrap_returns = []
+        bootstrap_returns_list: List[float] = []
         for _ in range(n_bootstrap):
             sample_returns = np.random.choice(
                 historical_returns.dropna(), size=len(historical_returns), replace=True
             )
-            bootstrap_returns.append(np.mean(sample_returns))
+            bootstrap_returns_list.append(float(np.mean(sample_returns)))
 
-        bootstrap_returns = np.array(bootstrap_returns)
+        bootstrap_returns = np.array(bootstrap_returns_list)
 
         # 计算置信区间
         alpha = 1 - confidence_level
@@ -247,7 +246,7 @@ class RiskMetricsCalculator:
             lambda_param = 0.94
             ewma_var = clean_returns.ewm(alpha=1 - lambda_param).var().iloc[-1]
             metrics["garch_volatility"] = np.sqrt(ewma_var * 252)
-        except:
+        except Exception:
             metrics["garch_volatility"] = metrics["annualized_volatility"]
 
         return metrics
@@ -269,12 +268,12 @@ class RiskMetricsCalculator:
         metrics = {
             "max_drawdown": drawdown.min(),
             "current_drawdown": drawdown.iloc[-1],
-            "avg_drawdown": drawdown[drawdown < 0].mean()
-            if (drawdown < 0).any()
-            else 0,
-            "drawdown_duration": len(drawdown[drawdown < 0])
-            if (drawdown < 0).any()
-            else 0,
+            "avg_drawdown": (
+                drawdown[drawdown < 0].mean() if (drawdown < 0).any() else 0
+            ),
+            "drawdown_duration": (
+                len(drawdown[drawdown < 0]) if (drawdown < 0).any() else 0
+            ),
         }
 
         return metrics
@@ -323,7 +322,9 @@ class ScenarioAnalysis:
 
     @staticmethod
     def stress_test(
-        current_price: float, volatility: float, scenarios: Dict[str, float]
+        current_price: float,
+        volatility: float,
+        scenarios: Optional[Dict[str, float]] = None,
     ) -> Dict[str, float]:
         """压力测试"""
         results = {}
@@ -349,13 +350,13 @@ class ScenarioAnalysis:
     def sensitivity_analysis(
         current_price: float,
         base_volatility: float,
-        volatility_shocks: List[float] = None,
+        volatility_shocks: Optional[List[float]] = None,
     ) -> Dict[str, Dict[str, float]]:
         """敏感性分析"""
         if volatility_shocks is None:
             volatility_shocks = [-0.5, -0.25, 0, 0.25, 0.5, 1.0]
 
-        results = {}
+        results: Dict[str, Dict[str, float]] = {}
 
         for shock in volatility_shocks:
             shocked_vol = base_volatility * (1 + shock)
@@ -369,7 +370,7 @@ class ScenarioAnalysis:
                 var = current_price * shocked_vol * z_score
                 var_results[f"var_{level}"] = var
 
-            results[f"vol_shock_{shock:+.0%}"] = var_results
+            results["vol_shock_{shock:+.0%}"] = var_results
 
         return results
 
@@ -377,7 +378,7 @@ class ScenarioAnalysis:
 class RiskAssessmentService:
     """风险评估服务主类"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.confidence_calculator = ConfidenceIntervalCalculator()
         self.risk_calculator = RiskMetricsCalculator()
         self.scenario_analysis = ScenarioAnalysis()
@@ -410,7 +411,7 @@ class RiskAssessmentService:
 
             # 情景分析
             scenario_results = self.scenario_analysis.stress_test(
-                predicted_price, returns.std()
+                predicted_price, returns.std(), None
             )
 
             # 敏感性分析
@@ -452,11 +453,12 @@ class RiskAssessmentService:
         config: RiskAssessmentConfig,
     ) -> Dict[float, ConfidenceInterval]:
         """计算置信区间"""
-        intervals = {}
+        intervals: Dict[float, ConfidenceInterval] = {}
         volatility = returns.std()
         expected_return = returns.mean()
+        confidence_levels = config.confidence_levels or []
 
-        for confidence_level in config.confidence_levels:
+        for confidence_level in confidence_levels:
             # 使用多种方法计算置信区间
             if len(returns) >= 100:
                 # 数据充足时使用蒙特卡洛方法
@@ -486,35 +488,36 @@ class RiskAssessmentService:
         self, returns: pd.Series, prices: pd.Series, config: RiskAssessmentConfig
     ) -> Dict[str, float]:
         """计算风险指标"""
-        all_metrics = {}
+        all_metrics: Dict[str, float] = {}
+        risk_metrics = config.risk_metrics or []
+        confidence_levels = config.confidence_levels or []
+        time_horizons = config.time_horizons or []
 
-        if "var" in config.risk_metrics:
-            var_metrics = self.risk_calculator.calculate_var(
-                returns, config.confidence_levels
-            )
+        if "var" in risk_metrics:
+            var_metrics = self.risk_calculator.calculate_var(returns, confidence_levels)
             all_metrics.update(
                 {f"var_{level}": value for level, value in var_metrics.items()}
             )
 
-        if "es" in config.risk_metrics:
+        if "es" in risk_metrics:
             es_metrics = self.risk_calculator.calculate_expected_shortfall(
-                returns, config.confidence_levels
+                returns, confidence_levels
             )
             all_metrics.update(
                 {f"es_{level}": value for level, value in es_metrics.items()}
             )
 
-        if "volatility" in config.risk_metrics:
+        if "volatility" in risk_metrics:
             vol_metrics = self.risk_calculator.calculate_volatility_metrics(
-                returns, config.time_horizons
+                returns, time_horizons
             )
             all_metrics.update(vol_metrics)
 
-        if "max_drawdown" in config.risk_metrics:
+        if "max_drawdown" in risk_metrics:
             dd_metrics = self.risk_calculator.calculate_drawdown_metrics(prices)
             all_metrics.update(dd_metrics)
 
-        if "sharpe_ratio" in config.risk_metrics:
+        if "sharpe_ratio" in risk_metrics:
             perf_metrics = self.risk_calculator.calculate_performance_metrics(returns)
             all_metrics.update(perf_metrics)
 
@@ -609,37 +612,39 @@ class RiskAssessmentService:
             weights = {stock: value / total_value for stock, value in positions.items()}
 
             # 计算组合VaR (简化版，假设独立)
-            portfolio_var_95 = 0
+            portfolio_var_95 = 0.0
             for stock, weight in weights.items():
                 if stock in individual_risks:
                     stock_var = individual_risks[stock].risk_metrics.get("var_0.95", 0)
-                    portfolio_var_95 += (weight * stock_var) ** 2
+                    portfolio_var_95 += float((weight * stock_var) ** 2)
 
             portfolio_var_95 = np.sqrt(portfolio_var_95)
 
             # 计算组合波动率
-            portfolio_vol = 0
+            portfolio_vol = 0.0
             for stock, weight in weights.items():
                 if stock in individual_risks:
                     stock_vol = individual_risks[stock].risk_metrics.get(
                         "annualized_volatility", 0
                     )
-                    portfolio_vol += (weight * stock_vol) ** 2
+                    portfolio_vol += float((weight * stock_vol) ** 2)
 
             portfolio_vol = np.sqrt(portfolio_vol)
 
             return {
                 "portfolio_var_95": portfolio_var_95,
                 "portfolio_volatility": portfolio_vol,
-                "diversification_ratio": portfolio_vol
-                / np.mean(
-                    [
-                        individual_risks[stock].risk_metrics.get(
-                            "annualized_volatility", 0
-                        )
-                        for stock in weights.keys()
-                        if stock in individual_risks
-                    ]
+                "diversification_ratio": float(portfolio_vol)
+                / float(
+                    np.mean(
+                        [
+                            individual_risks[stock].risk_metrics.get(
+                                "annualized_volatility", 0
+                            )
+                            for stock in weights.keys()
+                            if stock in individual_risks
+                        ]
+                    )
                 ),
             }
 

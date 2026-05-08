@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
@@ -55,11 +55,11 @@ class IndicatorRegistry:
         category: IndicatorCategory,
         calculator_class: str,
         calculator_method: str,
-        params: Dict[str, Any] = None,
+        params: Optional[Dict[str, Any]] = None,
         description: Optional[str] = None,
         version: str = "1.0.0",
         enabled: bool = True,
-    ):
+    ) -> None:
         """
         注册新指标
 
@@ -112,16 +112,13 @@ class IndicatorRegistry:
         cls, category: IndicatorCategory
     ) -> Dict[str, IndicatorConfig]:
         """按类别获取指标"""
-        if category == IndicatorCategory.TECHNICAL:
-            return cls.TECHNICAL_INDICATORS
-        elif category == IndicatorCategory.ALPHA:
-            return cls.ALPHA_FACTORS
-        elif category == IndicatorCategory.FUNDAMENTAL:
-            return cls.FUNDAMENTAL_FEATURES
-        elif category == IndicatorCategory.BASE:
-            return cls.BASE_INDICATORS
-        else:
-            return {}
+        category_map: Dict[IndicatorCategory, Dict[str, IndicatorConfig]] = {
+            IndicatorCategory.TECHNICAL: cls.TECHNICAL_INDICATORS,
+            IndicatorCategory.ALPHA: cls.ALPHA_FACTORS,
+            IndicatorCategory.FUNDAMENTAL: cls.FUNDAMENTAL_FEATURES,
+            IndicatorCategory.BASE: cls.BASE_INDICATORS,
+        }
+        return category_map.get(category, {})
 
     @classmethod
     def get_indicator_config(cls, name: str) -> Optional[IndicatorConfig]:
@@ -135,7 +132,7 @@ class IndicatorRegistry:
         return name in cls.get_all_indicators()
 
     @classmethod
-    def unregister_indicator(cls, name: str):
+    def unregister_indicator(cls, name: str) -> None:
         """取消注册指标"""
         if name in cls.TECHNICAL_INDICATORS:
             del cls.TECHNICAL_INDICATORS[name]
@@ -149,7 +146,7 @@ class IndicatorRegistry:
             logger.warning(f"指标 {name} 未注册，无法取消注册")
 
     @classmethod
-    def enable_indicator(cls, name: str):
+    def enable_indicator(cls, name: str) -> None:
         """启用指标"""
         config = cls.get_indicator_config(name)
         if config:
@@ -159,7 +156,7 @@ class IndicatorRegistry:
             logger.warning(f"指标 {name} 未注册，无法启用")
 
     @classmethod
-    def disable_indicator(cls, name: str):
+    def disable_indicator(cls, name: str) -> None:
         """禁用指标"""
         config = cls.get_indicator_config(name)
         if config:
@@ -178,12 +175,8 @@ class IndicatorRegistry:
 
 
 # 初始化默认指标注册
-def _initialize_default_indicators():
+def _initialize_default_indicators() -> None:
     """初始化默认指标注册"""
-    from app.services.models.feature_engineering import FeatureCalculator
-    from app.services.prediction.technical_indicators import (
-        TechnicalIndicatorCalculator,
-    )
 
     # 注册技术指标
     IndicatorRegistry.register_indicator(
@@ -271,7 +264,7 @@ def _initialize_default_indicators():
     # 注册Alpha158因子（批量注册）
     for i in range(1, 159):
         IndicatorRegistry.register_indicator(
-            name=f"alpha_{i:03d}",
+            name="alpha_{i:03d}",
             category=IndicatorCategory.ALPHA,
             calculator_class="Alpha158Calculator",
             calculator_method="calculate_alpha_factors",

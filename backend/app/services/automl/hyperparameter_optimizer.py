@@ -9,18 +9,14 @@
 - 早停策略
 """
 
-import asyncio
-import json
-import math
 import random
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import optuna
 from loguru import logger
-from scipy.stats import randint, uniform
 from sklearn.model_selection import ParameterGrid
 
 
@@ -37,9 +33,9 @@ class OptimizationMethod(Enum):
 class HyperparameterOptimizer:
     """超参数优化器"""
 
-    def __init__(self):
-        self.optimization_history = {}
-        self.best_params_cache = {}
+    def __init__(self) -> None:
+        self.optimization_history: Dict[str, Any] = {}
+        self.best_params_cache: Dict[str, Any] = {}
 
     async def optimize_hyperparameters(
         self,
@@ -51,7 +47,7 @@ class HyperparameterOptimizer:
         timeout: Optional[int] = None,
         early_stopping_rounds: Optional[int] = 10,
         direction: str = "maximize",
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         优化超参数
@@ -141,7 +137,9 @@ class HyperparameterOptimizer:
             # 缓存最佳参数
             self.best_params_cache[model_type] = result["best_params"]
 
-            logger.info(f"超参数优化完成: {model_type}, 最佳得分: {result['best_score']}")
+            logger.info(
+                f"超参数优化完成: {model_type}, 最佳得分: {result['best_score']}"
+            )
             return result
 
         except Exception as e:
@@ -162,7 +160,7 @@ class HyperparameterOptimizer:
         timeout: Optional[int],
         early_stopping_rounds: Optional[int],
         direction: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """贝叶斯优化实现"""
 
@@ -172,7 +170,7 @@ class HyperparameterOptimizer:
         )
 
         # 定义目标函数包装器
-        def optuna_objective(trial):
+        def optuna_objective(trial: Any) -> Any:
             # 从参数空间采样参数
             params = {}
             for param_name, param_config in param_space.items():
@@ -209,9 +207,11 @@ class HyperparameterOptimizer:
                 optuna_objective,
                 n_trials=n_trials,
                 timeout=timeout,
-                callbacks=[self._create_early_stopping_callback(early_stopping_rounds)]
-                if early_stopping_rounds
-                else None,
+                callbacks=(
+                    [self._create_early_stopping_callback(early_stopping_rounds)]
+                    if early_stopping_rounds
+                    else None
+                ),
             )
 
             return {
@@ -243,7 +243,7 @@ class HyperparameterOptimizer:
         timeout: Optional[int],
         early_stopping_rounds: Optional[int],
         direction: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """TPE优化实现"""
         # TPE优化与贝叶斯优化类似，使用不同的采样器
@@ -254,7 +254,7 @@ class HyperparameterOptimizer:
             ),
         )
 
-        def optuna_objective(trial):
+        def optuna_objective(trial: Any) -> Any:
             params = {}
             for param_name, param_config in param_space.items():
                 if param_config["type"] == "float":
@@ -306,7 +306,7 @@ class HyperparameterOptimizer:
         n_trials: int,
         early_stopping_rounds: Optional[int],
         direction: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """遗传算法优化实现"""
 
@@ -423,7 +423,7 @@ class HyperparameterOptimizer:
         model_type: str,
         param_space: Dict[str, Any],
         objective_function: Callable,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """网格搜索优化实现"""
 
@@ -492,7 +492,7 @@ class HyperparameterOptimizer:
         n_trials: int,
         early_stopping_rounds: Optional[int],
         direction: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """随机搜索优化实现"""
 
@@ -541,9 +541,9 @@ class HyperparameterOptimizer:
                     {
                         "trial": trial,
                         "params": params,
-                        "score": float("-inf")
-                        if direction == "maximize"
-                        else float("inf"),
+                        "score": (
+                            float("-inf") if direction == "maximize" else float("inf")
+                        ),
                         "error": str(e),
                     }
                 )
@@ -595,7 +595,7 @@ class HyperparameterOptimizer:
         else:
             winner_idx = tournament_indices[np.argmin(tournament_scores)]
 
-        return population[winner_idx].copy()
+        return cast(Dict[str, Any], population[winner_idx].copy())
 
     def _crossover(
         self,
@@ -647,7 +647,7 @@ class HyperparameterOptimizer:
         diversities = []
 
         # 获取所有参数名
-        param_names = set()
+        param_names: Any = set()
         for individual in population:
             param_names.update(individual.keys())
 
@@ -662,12 +662,12 @@ class HyperparameterOptimizer:
             if len(values) > 1:
                 diversities.append(np.std(values))
 
-        return np.mean(diversities) if diversities else 0.0
+        return float(np.mean(diversities)) if diversities else 0.0
 
-    def _create_early_stopping_callback(self, patience: int):
+    def _create_early_stopping_callback(self, patience: int) -> Any:
         """创建早停回调"""
 
-        def callback(study, trial):
+        def callback(study: Any, trial: Any) -> Any:
             if len(study.trials) < patience:
                 return
 
@@ -741,7 +741,7 @@ class HyperparameterOptimizer:
             },
         }
 
-        return param_spaces.get(model_type, {})
+        return cast(Dict[str, Any], param_spaces.get(model_type, {}))
 
 
 # 全局实例

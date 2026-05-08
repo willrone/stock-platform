@@ -4,12 +4,15 @@
 负责创建和管理所有策略实例，整合基础策略和高级策略
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
 from ..core.strategy_portfolio import StrategyPortfolio
+from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
+from .model_prediction_strategy import ModelPredictionStrategy
+from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
 from .strategies import (  # 技术分析策略; 统计套利策略; 因子投资策略
     BollingerBandStrategy,
     CCIStrategy,
@@ -26,15 +29,14 @@ from .strategies import (  # 技术分析策略; 统计套利策略; 因子投�
 )
 from .technical.basic_strategies import MACDStrategy, MovingAverageStrategy
 from .technical.rsi_optimized import RSIOptimizedStrategy
-from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
-from .model_prediction_strategy import ModelPredictionStrategy
-from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
+
+StrategyBuilder = Callable[[Dict[str, Any]], BaseStrategy]
 
 
 class StrategyFactory:
     """统一的策略工厂，整合所有策略"""
 
-    _strategies = {
+    _strategies: Dict[str, StrategyBuilder] = {
         # 基础技术分析策略
         "moving_average": MovingAverageStrategy,
         "rsi": RSIOptimizedStrategy,
@@ -70,7 +72,7 @@ class StrategyFactory:
     @classmethod
     def create_strategy(
         cls, strategy_name: str, config: Dict[str, Any]
-    ) -> BaseStrategy:
+    ) -> BaseStrategy | StrategyPortfolio:
         """
         创建策略实例（支持单策略和组合策略）
 
@@ -132,9 +134,25 @@ class StrategyFactory:
         if "strategies" not in config or not config["strategies"]:
             config = dict(config)
             config["strategies"] = [
-                {"name": "bollinger", "weight": 1.0, "config": {"period": 20, "std_dev": 2, "entry_threshold": 0.02}},
-                {"name": "cci", "weight": 1.0, "config": {"period": 20, "oversold": -100, "overbought": 100}},
-                {"name": "macd", "weight": 1.0, "config": {"fast_period": 12, "slow_period": 26, "signal_period": 9}},
+                {
+                    "name": "bollinger",
+                    "weight": 1.0,
+                    "config": {"period": 20, "std_dev": 2, "entry_threshold": 0.02},
+                },
+                {
+                    "name": "cci",
+                    "weight": 1.0,
+                    "config": {"period": 20, "oversold": -100, "overbought": 100},
+                },
+                {
+                    "name": "macd",
+                    "weight": 1.0,
+                    "config": {
+                        "fast_period": 12,
+                        "slow_period": 26,
+                        "signal_period": 9,
+                    },
+                },
             ]
 
         strategy_configs = config["strategies"]
@@ -155,7 +173,8 @@ class StrategyFactory:
 
             if "name" not in strat_config:
                 raise TaskError(
-                    message="策略配置中必须包含'name'字段", severity=ErrorSeverity.MEDIUM
+                    message="策略配置中必须包含'name'字段",
+                    severity=ErrorSeverity.MEDIUM,
                 )
 
             name = strat_config["name"]
@@ -169,7 +188,8 @@ class StrategyFactory:
                 weights[strategy.name] = weight
             except Exception as e:
                 raise TaskError(
-                    message=f"创建策略 {name} 失败: {str(e)}", severity=ErrorSeverity.MEDIUM
+                    message=f"创建策略 {name} 失败: {str(e)}",
+                    severity=ErrorSeverity.MEDIUM,
                 )
 
         # 获取整合方法
@@ -214,7 +234,7 @@ class StrategyFactory:
         return categories
 
     @classmethod
-    def register_strategy(cls, name: str, strategy_class: type):
+    def register_strategy(cls, name: str, strategy_class: StrategyBuilder) -> None:
         """注册新策略"""
         cls._strategies[name.lower()] = strategy_class
 

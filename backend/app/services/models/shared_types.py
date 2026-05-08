@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class ModelType(Enum):
@@ -61,10 +61,10 @@ class TrainingConfig:
     learning_rate: float = 0.001
     validation_split: float = 0.2
     early_stopping_patience: int = 10
-    feature_columns: List[str] = None
+    feature_columns: Optional[List[str]] = None
     target_column: str = "close"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.feature_columns is None:
             self.feature_columns = [
                 "open",

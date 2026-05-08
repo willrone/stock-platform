@@ -40,7 +40,7 @@ class ModelTopkDropoutStrategy(BaseModelPredictionStrategy):
             "deal_price": self.deal_price,
         }
 
-    def precompute_all_signals(self, data: pd.DataFrame):
+    def precompute_all_signals(self, data: pd.DataFrame) -> None:
         """Ranking strategies need raw daily scores, not discrete threshold states."""
         return None
 

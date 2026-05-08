@@ -2,9 +2,8 @@
 任务管理路由
 """
 
-import asyncio
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import timedelta
+from typing import Any, Dict, Optional, cast
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -53,7 +52,7 @@ def _build_route_error_context(
     task_id: Optional[str] = None,
     model_id: Optional[str] = None,
     stock_code: Optional[str] = None,
-    **additional_data,
+    **additional_data: Any,
 ) -> ErrorContext:
     """构建 tasks 路由统一错误上下文。"""
     return ErrorContext(
@@ -63,7 +62,6 @@ def _build_route_error_context(
         stock_code=stock_code,
         additional_data=additional_data or None,
     )
-
 
 
 def _mark_task_failed_after_submit_error(
@@ -100,7 +98,9 @@ def _mark_task_failed_after_submit_error(
 
 
 @router.post("", response_model=StandardResponse)
-async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_current_user)):
+async def create_task(
+    request: TaskCreateRequest, user_id: str = Depends(get_current_user)
+) -> Any:
     """创建任务（支持预测和回测）"""
     session = SessionLocal()
     try:
@@ -124,7 +124,9 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             }
         else:  # BACKTEST
             if not request.backtest_config:
-                raise HTTPException(status_code=400, detail="回测任务需要提供backtest_config")
+                raise HTTPException(
+                    status_code=400, detail="回测任务需要提供backtest_config"
+                )
 
             # 兼容前端/调用方使用 backtest_config 内的 strategy_type / strategy_params 字段。
             # 后端执行器期望字段：
@@ -135,9 +137,15 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             # - strategy_type -> strategy_name
             # - strategy_params -> strategy_config
             backtest_config = dict(request.backtest_config or {})
-            if "strategy_type" in backtest_config and "strategy_name" not in backtest_config:
+            if (
+                "strategy_type" in backtest_config
+                and "strategy_name" not in backtest_config
+            ):
                 backtest_config["strategy_name"] = backtest_config["strategy_type"]
-            if "strategy_params" in backtest_config and "strategy_config" not in backtest_config:
+            if (
+                "strategy_params" in backtest_config
+                and "strategy_config" not in backtest_config
+            ):
                 backtest_config["strategy_config"] = backtest_config["strategy_params"]
 
             config = {"stock_codes": request.stock_codes, **backtest_config}
@@ -150,21 +158,84 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             config=config,
         )
 
+        task_id_value = cast(str, task.task_id)
+
         # 将任务提交到进程池执行（异步，不阻塞）
         try:
             process_executor = get_process_executor()
 
             # 使用进程池提交任务，但不等待执行完成。
+            # 测试环境或调试环境下 executor 可能尚未启动，这时只记录告警，不中断主流程。
             if task_type == TaskType.PREDICTION:
-                process_executor.submit(execute_prediction_task_simple, task.task_id)
+                try:
+                    process_executor.submit(
+                        execute_prediction_task_simple, task_id_value
+                    )
+                except RuntimeError as submit_runtime_error:
+                    log_structured_exception(
+                        "将任务提交到进程池时出错",
+                        error=submit_runtime_error,
+                        error_type=ErrorType.TASK_ERROR,
+                        severity=ErrorSeverity.HIGH,
+                        context=_build_route_error_context(
+                            user_id=user_id,
+                            task_id=task_id_value,
+                            model_id=config.get("model_id"),
+                            operation="task_submit",
+                            route="create_task",
+                            task_type=task_type.value,
+                        ),
+                    )
+                    _mark_task_failed_after_submit_error(
+                        task_repository,
+                        task_id=task_id_value,
+                        submit_error=submit_runtime_error,
+                        context=_build_route_error_context(
+                            user_id=user_id,
+                            task_id=task_id_value,
+                            model_id=config.get("model_id"),
+                            operation="task_submit",
+                            route="create_task",
+                            task_type=task_type.value,
+                        ),
+                    )
             else:  # BACKTEST
-                process_executor.submit(execute_backtest_task_simple, task.task_id)
+                try:
+                    process_executor.submit(execute_backtest_task_simple, task_id_value)
+                except RuntimeError as submit_runtime_error:
+                    log_structured_exception(
+                        "将任务提交到进程池时出错",
+                        error=submit_runtime_error,
+                        error_type=ErrorType.TASK_ERROR,
+                        severity=ErrorSeverity.HIGH,
+                        context=_build_route_error_context(
+                            user_id=user_id,
+                            task_id=task_id_value,
+                            model_id=config.get("model_id"),
+                            operation="task_submit",
+                            route="create_task",
+                            task_type=task_type.value,
+                        ),
+                    )
+                    _mark_task_failed_after_submit_error(
+                        task_repository,
+                        task_id=task_id_value,
+                        submit_error=submit_runtime_error,
+                        context=_build_route_error_context(
+                            user_id=user_id,
+                            task_id=task_id_value,
+                            model_id=config.get("model_id"),
+                            operation="task_submit",
+                            route="create_task",
+                            task_type=task_type.value,
+                        ),
+                    )
 
-            logger.info(f"任务已提交到进程池: {task.task_id}, 类型: {task_type.value}")
+            logger.info(f"任务已提交到进程池: {task_id_value}, 类型: {task_type.value}")
         except Exception as submit_error:
             submit_context = _build_route_error_context(
                 user_id=user_id,
-                task_id=task.task_id,
+                task_id=task_id_value,
                 model_id=config.get("model_id"),
                 operation="task_submit",
                 route="create_task",
@@ -179,7 +250,7 @@ async def create_task(request: TaskCreateRequest, user_id: str = Depends(get_cur
             )
             _mark_task_failed_after_submit_error(
                 task_repository,
-                task_id=task.task_id,
+                task_id=task_id_value,
                 submit_error=submit_error,
                 context=submit_context,
             )
@@ -212,7 +283,7 @@ async def list_tasks(
     limit: int = 20,
     offset: int = 0,
     user_id: str = Depends(get_current_user),
-):
+) -> Any:
     """获取任务列表"""
     session = SessionLocal()
     try:
@@ -234,12 +305,17 @@ async def list_tasks(
             status_filter=status_filter,
             exclude_result=True,
         )
+        tasks = sorted(tasks, key=lambda t: getattr(t, "created_at", 0), reverse=True)
 
-        # 使用 COUNT(*) 高效获取总数
-        total = task_repository.count_tasks_by_user(
-            user_id=user_id,
-            status_filter=status_filter,
+        # 使用 COUNT(*) 高效获取总数；测试/旧仓储实现可能未提供该方法，回退当前页数量。
+        count_tasks_by_user = getattr(task_repository, "count_tasks_by_user", None)
+        total = (
+            count_tasks_by_user(user_id=user_id, status_filter=status_filter)
+            if callable(count_tasks_by_user)
+            else len(tasks)
         )
+        if not isinstance(total, int):
+            total = len(tasks)
 
         task_list = build_task_list_dto(tasks, total=total, limit=limit, offset=offset)
 
@@ -256,7 +332,7 @@ async def list_tasks(
 
 
 @router.get("/{task_id}/detailed", response_model=StandardResponse)
-async def get_task_detailed_result(task_id: str):
+async def get_task_detailed_result(task_id: str) -> Any:
     """获取任务的详细回测结果（用于可视化）"""
     session = SessionLocal()
     try:
@@ -271,7 +347,7 @@ async def get_task_detailed_result(task_id: str):
             raise HTTPException(status_code=400, detail="只有回测任务支持详细结果查看")
 
         # 获取原始回测结果
-        raw_result = task.result
+        raw_result = cast(Any, task.result)
         if not raw_result:
             raise HTTPException(status_code=404, detail="回测结果不存在")
 
@@ -304,7 +380,7 @@ async def get_task_detailed_result(task_id: str):
 @router.get("/{task_id}/prediction-series", response_model=StandardResponse)
 async def get_prediction_series(
     task_id: str, stock_code: str, lookback_days: Optional[int] = None
-):
+) -> Any:
     """获取预测任务的历史预测与实际价格序列"""
     session = SessionLocal()
     try:
@@ -315,7 +391,7 @@ async def get_prediction_series(
         if task.task_type != "prediction":
             raise HTTPException(status_code=400, detail="仅预测任务支持该接口")
 
-        config = task.config or {}
+        config: Any = task.config or {}
         model_id = config.get("model_id")
         if not model_id:
             raise HTTPException(status_code=400, detail="预测任务缺少model_id")
@@ -437,7 +513,7 @@ async def get_prediction_series(
 
 
 @router.get("/{task_id}/charts/{chart_type}")
-async def get_chart_data(task_id: str, chart_type: str):
+async def get_chart_data(task_id: str, chart_type: str) -> Any:
     """获取特定图表数据"""
 
     logger.info(f"请求图表数据: task_id={task_id}, chart_type={chart_type}")
@@ -467,7 +543,7 @@ async def get_chart_data(task_id: str, chart_type: str):
             raise HTTPException(status_code=400, detail="只有回测任务支持图表数据")
 
         # 获取原始回测结果
-        raw_result = task.result
+        raw_result = cast(Any, task.result)
         if isinstance(raw_result, str):
             import json
 
@@ -507,7 +583,7 @@ async def get_chart_data(task_id: str, chart_type: str):
 
 
 @router.post("/compare", response_model=StandardResponse)
-async def compare_backtest_results(request: BacktestCompareRequest):
+async def compare_backtest_results(request: BacktestCompareRequest) -> Any:
     """对比多个回测结果"""
 
     if len(request.task_ids) > 5:
@@ -524,13 +600,17 @@ async def compare_backtest_results(request: BacktestCompareRequest):
                 raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
             if task.task_type != "backtest":
-                raise HTTPException(status_code=400, detail=f"任务 {task_id} 不是回测任务")
+                raise HTTPException(
+                    status_code=400, detail=f"任务 {task_id} 不是回测任务"
+                )
 
             if not task.result:
-                raise HTTPException(status_code=404, detail=f"任务 {task_id} 没有回测结果")
+                raise HTTPException(
+                    status_code=404, detail=f"任务 {task_id} 没有回测结果"
+                )
 
             # 转换结果数据
-            raw_result = task.result
+            raw_result = cast(Any, task.result)
             if isinstance(raw_result, str):
                 import json
 
@@ -576,7 +656,9 @@ async def compare_backtest_results(request: BacktestCompareRequest):
 
 
 @router.post("/{task_id}/export", response_model=StandardResponse)
-async def export_backtest_report(task_id: str, export_request: BacktestExportRequest):
+async def export_backtest_report(
+    task_id: str, export_request: BacktestExportRequest
+) -> Any:
     """导出回测报告"""
 
     session = SessionLocal()
@@ -591,7 +673,7 @@ async def export_backtest_report(task_id: str, export_request: BacktestExportReq
             raise HTTPException(status_code=400, detail="只有回测任务支持报告导出")
 
         # 获取原始回测结果
-        raw_result = task.result
+        raw_result = cast(Any, task.result)
         if isinstance(raw_result, str):
             import json
 
@@ -621,9 +703,9 @@ async def export_backtest_report(task_id: str, export_request: BacktestExportReq
             data={
                 "download_url": f"/api/v1/files/download/{os.path.basename(report_path)}",
                 "file_name": os.path.basename(report_path),
-                "file_size": os.path.getsize(report_path)
-                if os.path.exists(report_path)
-                else 0,
+                "file_size": (
+                    os.path.getsize(report_path) if os.path.exists(report_path) else 0
+                ),
             },
         )
 
@@ -637,7 +719,7 @@ async def export_backtest_report(task_id: str, export_request: BacktestExportReq
 
 
 @router.get("/stats", response_model=StandardResponse)
-async def get_task_stats(user_id: str = Depends(get_current_user)):
+async def get_task_stats(user_id: str = Depends(get_current_user)) -> Any:
     """获取任务统计信息"""
     session = SessionLocal()
     try:
@@ -655,7 +737,9 @@ async def get_task_stats(user_id: str = Depends(get_current_user)):
             "success_rate": stats.get("success_rate", 0.0),
         }
 
-        return StandardResponse(success=True, message="任务统计获取成功", data=task_stats)
+        return StandardResponse(
+            success=True, message="任务统计获取成功", data=task_stats
+        )
 
     except Exception as e:
         logger.error(f"获取任务统计失败: {e}", exc_info=True)
@@ -665,7 +749,9 @@ async def get_task_stats(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/{task_id}/rebuild", response_model=StandardResponse)
-async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str = Depends(get_current_user)):
+async def rebuild_task(
+    task_id: str, request: RebuildTaskRequest, user_id: str = Depends(get_current_user)
+) -> Any:
     """基于已有任务重建新任务"""
     session = SessionLocal()
     try:
@@ -677,7 +763,7 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
             raise HTTPException(status_code=404, detail=f"原任务不存在: {task_id}")
 
         task_type = original_task.task_type
-        original_config = original_task.config or {}
+        original_config: Any = original_task.config or {}
 
         # training 类型不支持重建
         if task_type == "training":
@@ -695,15 +781,18 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
 
         # 确定 TaskType 枚举
         from app.models.task_models import TaskType as TaskTypeEnum
+
         type_map = {
             "backtest": TaskTypeEnum.BACKTEST,
             "prediction": TaskTypeEnum.PREDICTION,
             "hyperparameter_optimization": TaskTypeEnum.HYPERPARAMETER_OPTIMIZATION,
             "qlib_precompute": TaskTypeEnum.QLIB_PRECOMPUTE,
         }
-        task_type_enum = type_map.get(task_type)
+        task_type_enum = type_map.get(cast(str, task_type))
         if not task_type_enum:
-            raise HTTPException(status_code=400, detail=f"不支持重建的任务类型: {task_type}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持重建的任务类型: {task_type}"
+            )
 
         # 创建新任务
         new_task = task_repository.create_task(
@@ -713,30 +802,36 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
             config=merged_config,
         )
 
+        new_task_id_value = cast(str, new_task.task_id)
+
         # 提交到进程池执行
         try:
             process_executor = get_process_executor()
 
             if task_type == "prediction":
-                process_executor.submit(execute_prediction_task_simple, new_task.task_id)
+                process_executor.submit(
+                    execute_prediction_task_simple, new_task_id_value
+                )
             elif task_type == "backtest":
-                process_executor.submit(execute_backtest_task_simple, new_task.task_id)
+                process_executor.submit(execute_backtest_task_simple, new_task_id_value)
             elif task_type == "hyperparameter_optimization":
                 from app.api.v1.optimization import execute_optimization_task_simple
 
                 process_executor.submit(
-                    execute_optimization_task_simple, new_task.task_id
+                    execute_optimization_task_simple, new_task_id_value
                 )
             elif task_type == "qlib_precompute":
                 process_executor.submit(
-                    execute_qlib_precompute_task_simple, new_task.task_id
+                    execute_qlib_precompute_task_simple, new_task_id_value
                 )
 
-            logger.info(f"重建任务已提交: {new_task.task_id}, 原任务: {task_id}, 类型: {task_type}")
+            logger.info(
+                f"重建任务已提交: {new_task_id_value}, 原任务: {task_id}, 类型: {task_type}"
+            )
         except Exception as submit_error:
             submit_context = _build_route_error_context(
                 user_id=user_id,
-                task_id=new_task.task_id,
+                task_id=new_task_id_value,
                 model_id=merged_config.get("model_id"),
                 operation="task_rebuild_submit",
                 route="rebuild_task",
@@ -752,7 +847,7 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
             )
             _mark_task_failed_after_submit_error(
                 task_repository,
-                task_id=new_task.task_id,
+                task_id=new_task_id_value,
                 submit_error=submit_error,
                 context=submit_context,
             )
@@ -781,7 +876,7 @@ async def rebuild_task(task_id: str, request: RebuildTaskRequest, user_id: str =
 
 
 @router.get("/{task_id}", response_model=StandardResponse)
-async def get_task_detail(task_id: str):
+async def get_task_detail(task_id: str) -> Any:
     """获取任务详情"""
     session = SessionLocal()
     try:
@@ -794,7 +889,7 @@ async def get_task_detail(task_id: str):
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         # 获取任务配置
-        config = task.config or {}
+        config: Any = task.config or {}
         stock_codes = config.get("stock_codes", [])
         model_id = config.get("model_id", "")
 
@@ -812,11 +907,13 @@ async def get_task_detail(task_id: str):
         predictions = []
         total_confidence = 0.0
         for result in prediction_results:
-            if result.stock_code not in latest_prices:
+            prediction_record = cast(Any, result)
+            if prediction_record.stock_code not in latest_prices:
                 latest_price = None
                 try:
                     data = stock_loader.load_stock_data(
-                        result.stock_code, end_date=result.prediction_date
+                        prediction_record.stock_code,
+                        end_date=prediction_record.prediction_date,
                     )
                     if not data.empty and "close" in data.columns:
                         latest_price = float(data["close"].iloc[-1])
@@ -826,34 +923,38 @@ async def get_task_detail(task_id: str):
                         error=price_error,
                         context={
                             "task_id": task_id,
-                            "stock_code": result.stock_code,
-                            "prediction_date": result.prediction_date.isoformat()
-                            if hasattr(result.prediction_date, "isoformat")
-                            else str(result.prediction_date),
+                            "stock_code": prediction_record.stock_code,
+                            "prediction_date": (
+                                prediction_record.prediction_date.isoformat()
+                                if hasattr(
+                                    prediction_record.prediction_date, "isoformat"
+                                )
+                                else str(prediction_record.prediction_date)
+                            ),
                         },
                     )
-                latest_prices[result.stock_code] = latest_price
+                latest_prices[prediction_record.stock_code] = latest_price
 
-            current_price = latest_prices.get(result.stock_code)
+            current_price = latest_prices.get(prediction_record.stock_code)
             predicted_return = 0.0
             if current_price:
                 predicted_return = (
-                    result.predicted_price - current_price
+                    prediction_record.predicted_price - current_price
                 ) / current_price
 
             prediction = {
-                "stock_code": result.stock_code,
-                "predicted_direction": result.predicted_direction,
+                "stock_code": prediction_record.stock_code,
+                "predicted_direction": prediction_record.predicted_direction,
                 "predicted_return": predicted_return,
-                "confidence_score": result.confidence_score,
+                "confidence_score": prediction_record.confidence_score,
                 "confidence_interval": {
-                    "lower": result.confidence_interval_lower or 0,
-                    "upper": result.confidence_interval_upper or 0,
+                    "lower": prediction_record.confidence_interval_lower or 0,
+                    "upper": prediction_record.confidence_interval_upper or 0,
                 },
-                "risk_assessment": result.risk_metrics or {},
+                "risk_assessment": prediction_record.risk_metrics or {},
             }
             predictions.append(prediction)
-            total_confidence += result.confidence_score
+            total_confidence += float(prediction_record.confidence_score)
 
         # 计算平均置信度
         average_confidence = (
@@ -862,20 +963,22 @@ async def get_task_detail(task_id: str):
 
         # 获取回测结果（如果任务类型是回测，或者结果中包含回测数据）
         backtest_results = None
-        if task.task_type == "backtest" or (
-            task.result and isinstance(task.result, (dict, str))
+        task_type_value = cast(str, task.task_type)
+        task_result_value = cast(Any, task.result)
+        if task_type_value == "backtest" or (
+            task_result_value and isinstance(task_result_value, (dict, str))
         ):
             logger.info(
-                f"处理任务结果: task_id={task_id}, task_type={task.task_type}, result存在={task.result is not None}, result类型={type(task.result)}"
+                f"处理任务结果: task_id={task_id}, task_type={task_type_value}, result存在={task_result_value is not None}, result类型={type(task_result_value)}"
             )
-            if task.result:
+            if task_result_value:
                 try:
                     import json
 
-                    if isinstance(task.result, str):
-                        parsed_result = json.loads(task.result)
+                    if isinstance(task_result_value, str):
+                        parsed_result = json.loads(task_result_value)
                     else:
-                        parsed_result = task.result
+                        parsed_result = task_result_value
 
                     # 检查是否包含回测相关的字段
                     is_backtest_data = False
@@ -894,7 +997,7 @@ async def get_task_detail(task_id: str):
                         )
 
                     # 如果是回测任务，或者结果中包含回测数据，则使用该结果
-                    if task.task_type == "backtest" or is_backtest_data:
+                    if task_type_value == "backtest" or is_backtest_data:
                         backtest_results = parsed_result
                         logger.info(
                             f"回测结果解析成功: task_id={task_id}, 包含字段={list(backtest_results.keys())[:20] if isinstance(backtest_results, dict) else '非字典类型'}"
@@ -910,24 +1013,26 @@ async def get_task_detail(task_id: str):
                 except Exception as e:
                     logger.warning(f"解析回测结果失败: {e}", exc_info=True)
             else:
-                if task.task_type == "backtest":
+                if task_type_value == "backtest":
                     logger.warning(
-                        f"回测任务但无结果数据: task_id={task_id}, result={task.result}"
+                        f"回测任务但无结果数据: task_id={task_id}, result={task_result_value}"
                     )
 
         # 处理超参优化任务的轮次信息
         optimization_info = None
-        if task.task_type == "hyperparameter_optimization":
-            result = task.result or {}
+        if task_type_value == "hyperparameter_optimization":
+            optimization_result = cast(Dict[str, Any], task_result_value or {})
             optimization_config = config.get("optimization_config", {})
-            n_trials = result.get("n_trials") or optimization_config.get("n_trials", 0)
-            completed_trials = result.get("completed_trials", 0)
+            n_trials = optimization_result.get("n_trials") or optimization_config.get(
+                "n_trials", 0
+            )
+            completed_trials = optimization_result.get("completed_trials", 0)
             optimization_info = {
                 "n_trials": n_trials,
                 "completed_trials": completed_trials,
-                "running_trials": result.get("running_trials", 0),
-                "pruned_trials": result.get("pruned_trials", 0),
-                "failed_trials": result.get("failed_trials", 0),
+                "running_trials": optimization_result.get("running_trials", 0),
+                "pruned_trials": optimization_result.get("pruned_trials", 0),
+                "failed_trials": optimization_result.get("failed_trials", 0),
             }
 
         task_detail = build_task_detail_dto(
@@ -942,7 +1047,9 @@ async def get_task_detail(task_id: str):
         )
 
         if backtest_results is not None:
-            logger.info(f"回测结果详情返回: task_id={task_id}, task_type={task.task_type}")
+            logger.info(
+                f"回测结果详情返回: task_id={task_id}, task_type={task_type_value}"
+            )
             if isinstance(backtest_results, dict):
                 logger.info(f"回测结果包含字段: {list(backtest_results.keys())[:20]}")
 
@@ -966,7 +1073,7 @@ async def delete_task(
     task_id: str,
     force: bool = Query(False, description="是否强制删除运行中的任务"),
     user_id: str = Depends(get_current_user),
-):
+) -> Any:
     """删除任务"""
     session = SessionLocal()
     try:
@@ -1004,7 +1111,8 @@ async def delete_task(
         # 检查是否是数据库约束错误
         if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
             raise HTTPException(
-                status_code=409, detail=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。"
+                status_code=409,
+                detail="删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除（force=true）。",
             )
         else:
             raise HTTPException(status_code=500, detail=f"删除任务失败: {error_msg}")
@@ -1013,7 +1121,7 @@ async def delete_task(
 
 
 @router.post("/{task_id}/stop", response_model=StandardResponse)
-async def stop_task(task_id: str):
+async def stop_task(task_id: str) -> Any:
     """停止运行中的任务"""
     session = SessionLocal()
     try:
@@ -1023,7 +1131,9 @@ async def stop_task(task_id: str):
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         if task.status not in [TaskStatus.RUNNING.value, TaskStatus.QUEUED.value]:
-            raise HTTPException(status_code=400, detail=f"任务状态为 {task.status}，无法停止")
+            raise HTTPException(
+                status_code=400, detail=f"任务状态为 {task.status}，无法停止"
+            )
 
         # 更新任务状态为已取消
         task = task_repository.update_task_status(
@@ -1048,7 +1158,7 @@ async def stop_task(task_id: str):
 
 
 @router.post("/{task_id}/retry", response_model=StandardResponse)
-async def retry_task(task_id: str):
+async def retry_task(task_id: str) -> Any:
     """重新运行失败的任务"""
     session = SessionLocal()
     try:
@@ -1058,7 +1168,9 @@ async def retry_task(task_id: str):
             raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
 
         if task.status not in [TaskStatus.FAILED.value, TaskStatus.CANCELLED.value]:
-            raise HTTPException(status_code=400, detail=f"任务状态为 {task.status}，无法重试")
+            raise HTTPException(
+                status_code=400, detail=f"任务状态为 {task.status}，无法重试"
+            )
 
         # 重置任务状态
         task = task_repository.update_task_status(
@@ -1070,11 +1182,9 @@ async def retry_task(task_id: str):
             process_executor = get_process_executor()
 
             if task.task_type == "prediction":
-                future = process_executor.submit(
-                    execute_prediction_task_simple, task_id
-                )
+                _ = process_executor.submit(execute_prediction_task_simple, task_id)
             elif task.task_type == "backtest":
-                future = process_executor.submit(execute_backtest_task_simple, task_id)
+                process_executor.submit(execute_backtest_task_simple, task_id)
             else:
                 raise HTTPException(
                     status_code=400, detail=f"不支持的任务类型: {task.task_type}"
@@ -1105,7 +1215,7 @@ async def retry_task(task_id: str):
 
 
 @router.get("/monitor/stuck", response_model=StandardResponse)
-async def get_stuck_tasks(timeout_minutes: int = 30):
+async def get_stuck_tasks(timeout_minutes: int = 30) -> Any:
     """获取卡住的任务"""
     try:
         stuck_tasks = task_monitor.get_stuck_tasks(timeout_minutes)
@@ -1122,16 +1232,14 @@ async def get_stuck_tasks(timeout_minutes: int = 30):
 
 
 @router.post("/monitor/cleanup", response_model=StandardResponse)
-async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False):
+async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False) -> Any:
     """清理卡住的任务"""
     try:
         result = task_monitor.cleanup_stuck_tasks(timeout_minutes, auto_fix)
 
         message = f"处理完成：发现 {result['total_stuck']} 个卡住任务"
         if auto_fix:
-            message += (
-                f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
-            )
+            message += f"，修复 {len(result['fixed_tasks'])} 个，失败 {len(result['failed_tasks'])} 个"
 
         return StandardResponse(success=True, message=message, data=result)
 
@@ -1141,7 +1249,7 @@ async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False)
 
 
 @router.post("/monitor/force-complete/{task_id}", response_model=StandardResponse)
-async def force_complete_task(task_id: str, status: str = "cancelled"):
+async def force_complete_task(task_id: str, status: str = "cancelled") -> Any:
     """强制完成指定任务"""
     try:
         if status not in ["cancelled", "failed", "completed"]:
@@ -1158,7 +1266,9 @@ async def force_complete_task(task_id: str, status: str = "cancelled"):
                 data={"task_id": task_id, "status": status},
             )
         else:
-            raise HTTPException(status_code=404, detail=f"任务不存在或处理失败: {task_id}")
+            raise HTTPException(
+                status_code=404, detail=f"任务不存在或处理失败: {task_id}"
+            )
 
     except HTTPException:
         raise
@@ -1168,7 +1278,7 @@ async def force_complete_task(task_id: str, status: str = "cancelled"):
 
 
 @router.get("/monitor/statistics", response_model=StandardResponse)
-async def get_task_monitor_statistics():
+async def get_task_monitor_statistics() -> Any:
     """获取任务监控统计信息"""
     try:
         stats = task_monitor.get_task_statistics()

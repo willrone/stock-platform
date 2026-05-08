@@ -3,9 +3,9 @@
 测试Qlib内置Alpha158功能是否可用
 """
 
+import sys
+
 import pytest
-import pandas as pd
-from datetime import datetime
 
 # 检查Qlib是否安装，如果未安装则跳过所有测试
 qlib = pytest.importorskip("qlib")
@@ -16,6 +16,7 @@ print("\n2. 检查Alpha158导入...")
 try:
     from qlib.contrib.data.handler import Alpha158
     from qlib.contrib.data.loader import Alpha158DL
+
     print("   ✓ Alpha158可以导入")
     print(f"   ✓ Alpha158类: {Alpha158}")
     print(f"   ✓ Alpha158DL类: {Alpha158DL}")
@@ -34,21 +35,22 @@ try:
         },
         "rolling": {},
     }
-    
+
     fields, names = Alpha158DL.get_feature_config(default_config)
-    print(f"   ✓ get_feature_config()成功")
+    print("   ✓ get_feature_config()成功")
     print(f"   ✓ 生成的因子数量: {len(fields)}")
     print(f"   ✓ 因子名称示例: {names[:10]}")
     print(f"   ✓ 因子表达式示例: {fields[:3]}")
-    
+
     if len(fields) == 158:
         print("   ✓ 因子数量正确：158个（标准Alpha158）")
     else:
         print(f"   ⚠ 因子数量: {len(fields)}（预期158个）")
-        
+
 except Exception as e:
     print(f"   ✗ get_feature_config()失败: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -56,24 +58,22 @@ except Exception as e:
 print("\n4. 测试Alpha158 handler创建...")
 try:
     # 初始化Qlib（使用memory模式）
-    import qlib
-    from qlib.config import REG_CN
     from pathlib import Path
-    
+
     # 创建临时数据目录
     temp_data_path = Path("./data/qlib_temp")
     temp_data_path.mkdir(parents=True, exist_ok=True)
-    
+
     qlib.init(
         region=REG_CN,
         provider_uri="memory://",
         mount_path={
             "day": str(temp_data_path),
             "1min": str(temp_data_path),
-        }
+        },
     )
     print("   ✓ Qlib初始化成功")
-    
+
     # 尝试创建Alpha158 handler（不实际加载数据）
     try:
         # 注意：这里可能会失败，因为需要实际的数据
@@ -87,14 +87,14 @@ try:
         )
         print("   ✓ Alpha158 handler创建成功")
         print(f"   ✓ Handler类型: {type(handler)}")
-        
+
         # 检查handler的方法
-        if hasattr(handler, 'fetch'):
+        if hasattr(handler, "fetch"):
             print("   ✓ Handler有fetch()方法")
-        if hasattr(handler, 'get_feature_config'):
+        if hasattr(handler, "get_feature_config"):
             config = handler.get_feature_config()
             print(f"   ✓ Handler有get_feature_config()方法，返回: {type(config)}")
-            
+
     except Exception as e:
         error_msg = str(e)
         if "Please run qlib.init()" in error_msg:
@@ -105,11 +105,13 @@ try:
         else:
             print(f"   ✗ Handler创建失败: {e}")
             import traceback
+
             traceback.print_exc()
-            
+
 except Exception as e:
     print(f"   ✗ 测试失败: {e}")
     import traceback
+
     traceback.print_exc()
 
 # 5. 总结
@@ -125,4 +127,3 @@ print("  1. 修改enhanced_qlib_provider.py，使用Qlib内置的Alpha158")
 print("  2. 这样可以获得完整的158个标准Alpha158因子")
 print("  3. 而不是当前简化的32个因子")
 print("=" * 60)
-

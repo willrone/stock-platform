@@ -63,7 +63,9 @@ def mock_repository(mock_detailed_result):
     repo.get_portfolio_snapshots = AsyncMock(return_value=[])
     repo.get_trade_records = AsyncMock(return_value=[])
     repo.get_trade_records_count = AsyncMock(return_value=0)
-    repo.get_trade_statistics = AsyncMock(return_value={"total_trades": 0, "win_rate": 0.0})
+    repo.get_trade_statistics = AsyncMock(
+        return_value={"total_trades": 0, "win_rate": 0.0}
+    )
     repo.get_signal_records = AsyncMock(return_value=[])
     repo.get_signal_records_count = AsyncMock(return_value=0)
     repo.get_signal_statistics = AsyncMock(

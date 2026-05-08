@@ -19,6 +19,8 @@
 - 现代模型: TimesNet, PatchTST, Informer等深度学习模型
 """
 
+from typing import Any
+
 # 模型训练服务
 from .model_training_service import (
     LinearRegressionTrainer,
@@ -39,16 +41,16 @@ try:
     from .model_training import TransformerModel
 
     DEEP_LEARNING_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     DEEP_LEARNING_AVAILABLE = False
-    DeepModelTrainingService = None
-    QlibDataProvider = None
-    LSTMModel = None
-    TransformerModel = None
-    PositionalEncoding = None
-    ModelType = None
-    DeepTrainingConfig = None
-    ModelMetrics = None
+    DeepModelTrainingService: Any = None  # type: ignore[no-redef]
+    QlibDataProvider: Any = None  # type: ignore[no-redef]
+    LSTMModel: Any = None  # type: ignore[no-redef]
+    TransformerModel: Any = None  # type: ignore[no-redef]
+    PositionalEncoding: Any = None  # type: ignore[no-redef]
+    ModelType: Any = None  # type: ignore[no-redef]
+    DeepTrainingConfig: Any = None  # type: ignore[no-redef]
+    ModelMetrics: Any = None  # type: ignore[no-redef]
 
 # 模型部署服务
 from .model_deployment_service import (
@@ -60,7 +62,9 @@ from .model_deployment_service import (
     ModelEvaluation,
 )
 from .model_deployment_service import ModelEvaluator as DeploymentEvaluator
-from .model_deployment_service import ModelPerformanceMonitor
+from .model_deployment_service import (
+    ModelPerformanceMonitor,
+)
 
 # 模型评估和版本管理
 from .model_evaluation import ModelStatus, ModelVersionManager
@@ -80,20 +84,24 @@ try:
         ModelEvaluator,
     )
     from .model_evaluation import ModelStatus as EvaluationModelStatus
-    from .model_evaluation import ModelVersion
+    from .model_evaluation import (
+        ModelVersion,
+    )
     from .model_evaluation import ModelVersionManager as EvaluationVersionManager
-    from .model_evaluation import TimeSeriesValidator
+    from .model_evaluation import (
+        TimeSeriesValidator,
+    )
 
     MODEL_EVALUATION_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     MODEL_EVALUATION_AVAILABLE = False
-    ModelEvaluator = None
-    EvaluationVersionManager = None
-    TimeSeriesValidator = None
-    FinancialMetricsCalculator = None
-    BacktestMetrics = None
-    ModelVersion = None
-    EvaluationModelStatus = None
+    ModelEvaluator: Any = None  # type: ignore[no-redef]
+    EvaluationVersionManager: Any = None  # type: ignore[no-redef]
+    TimeSeriesValidator: Any = None  # type: ignore[no-redef]
+    FinancialMetricsCalculator: Any = None  # type: ignore[no-redef]
+    BacktestMetrics: Any = None  # type: ignore[no-redef]
+    ModelVersion: Any = None  # type: ignore[no-redef]
+    EvaluationModelStatus: Any = None  # type: ignore[no-redef]
 
 # 高级训练 - 可选导入
 try:
@@ -104,18 +112,21 @@ try:
         EnsembleModelManager,
     )
     from .advanced_training import ModelType as AdvancedModelType
-    from .advanced_training import OnlineLearningConfig, OnlineLearningManager
+    from .advanced_training import (
+        OnlineLearningConfig,
+        OnlineLearningManager,
+    )
 
     ADVANCED_TRAINING_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     ADVANCED_TRAINING_AVAILABLE = False
-    AdvancedTrainingService = None
-    EnsembleModelManager = None
-    OnlineLearningManager = None
-    EnsembleMethod = None
-    EnsembleConfig = None
-    OnlineLearningConfig = None
-    AdvancedModelType = None
+    AdvancedTrainingService: Any = None  # type: ignore[no-redef]
+    EnsembleModelManager: Any = None  # type: ignore[no-redef]
+    OnlineLearningManager: Any = None  # type: ignore[no-redef]
+    EnsembleMethod: Any = None  # type: ignore[no-redef]
+    EnsembleConfig: Any = None  # type: ignore[no-redef]
+    OnlineLearningConfig: Any = None  # type: ignore[no-redef]
+    AdvancedModelType: Any = None  # type: ignore[no-redef]  # type: ignore[no-redef]
 
 # 现代模型 - 可选导入
 try:
@@ -126,19 +137,23 @@ try:
         PatchTST,
     )
     from .modern_models import PositionalEncoding as ModernPositionalEncoding
-    from .modern_models import ProbAttention, TimesBlock, TimesNet
+    from .modern_models import (
+        ProbAttention,
+        TimesBlock,
+        TimesNet,
+    )
 
     MODERN_MODELS_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     MODERN_MODELS_AVAILABLE = False
-    TimesNet = None
-    TimesBlock = None
-    Inception_Block_V1 = None
-    PatchTST = None
-    Informer = None
-    InformerEncoderLayer = None
-    ProbAttention = None
-    ModernPositionalEncoding = None
+    TimesNet: Any = None  # type: ignore[no-redef]
+    TimesBlock: Any = None  # type: ignore[no-redef]
+    Inception_Block_V1: Any = None  # type: ignore[no-redef]
+    PatchTST: Any = None  # type: ignore[no-redef]
+    Informer: Any = None  # type: ignore[no-redef]
+    InformerEncoderLayer: Any = None  # type: ignore[no-redef]
+    ProbAttention: Any = None  # type: ignore[no-redef]
+    ModernPositionalEncoding: Any = None  # type: ignore[no-redef]  # type: ignore[no-redef]
 
 __all__ = [
     # 模型训练服务

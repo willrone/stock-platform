@@ -7,23 +7,18 @@
 3. 因子投资策略：价值因子策略、动量因子策略、低波动因子策略、多因子组合策略
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd  # type: ignore[import-untyped,unused-ignore]
 import talib
-import pandas as pd
 from loguru import logger
-from scipy import stats
-from scipy.optimize import minimize
 
 from app.core.error_handler import ErrorSeverity, TaskError
 
 from ..core.base_strategy import BaseStrategy
-from ..models import BacktestConfig, Position, SignalType, TradingSignal
+from ..models import SignalType, TradingSignal
 
 
 class BollingerBandStrategy(BaseStrategy):
@@ -82,7 +77,9 @@ class BollingerBandStrategy(BaseStrategy):
             sell_mask = (prev_pb >= 1) & (pb < 1)
 
             # 用 None 初始化，避免未赋值位置默认为 NaN(float)，导致下游误判为 truthy
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -103,30 +100,40 @@ class BollingerBandStrategy(BaseStrategy):
                     indicators = self.get_cached_indicators(data)
                     current_idx = self._get_current_idx(data, current_date)
                     current_price = indicators["price"].iloc[current_idx]
-                    _pb = indicators['percent_b'].iloc[current_idx]
+                    _pb = indicators["percent_b"].iloc[current_idx]
                     # 动态 strength：基于 %B 偏离程度
                     if sig_type == SignalType.BUY:
-                        _strength = min(1.0, max(0.1, abs(_pb)))  # %B 越负（越低于下轨），信号越强
+                        _strength = min(
+                            1.0, max(0.1, abs(_pb))
+                        )  # %B 越负（越低于下轨），信号越强
                     else:
-                        _strength = min(1.0, max(0.1, abs(1 - _pb)))  # %B 越超过1（越高于上轨），信号越强
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=data.attrs.get("stock_code", "UNKNOWN"),
-                        signal_type=sig_type,
-                        strength=_strength,
-                        price=current_price,
-                        reason=f"[向量化] 价格突破轨道, %B: {_pb:.3f}",
-                        metadata={
-                            "upper_band": indicators["upper_band"].iloc[current_idx],
-                            "lower_band": indicators["lower_band"].iloc[current_idx],
-                            "percent_b": _pb,
-                        },
-                    )]
+                        _strength = min(
+                            1.0, max(0.1, abs(1 - _pb))
+                        )  # %B 越超过1（越高于上轨），信号越强
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=data.attrs.get("stock_code", "UNKNOWN"),
+                            signal_type=sig_type,
+                            strength=_strength,
+                            price=current_price,
+                            reason=f"[向量化] 价格突破轨道, %B: {_pb:.3f}",
+                            metadata={
+                                "upper_band": indicators["upper_band"].iloc[
+                                    current_idx
+                                ],
+                                "lower_band": indicators["lower_band"].iloc[
+                                    current_idx
+                                ],
+                                "percent_b": _pb,
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -216,21 +223,23 @@ class StochasticStrategy(BaseStrategy):
             # 向量化逻辑判断
             # 买入：超卖区金叉 (K < oversold 且 K 上穿 D)
             buy_mask = (
-                (k < self.oversold) &
-                (prev_k < self.oversold) &
-                (k > d) &
-                (prev_k <= prev_d)
+                (k < self.oversold)
+                & (prev_k < self.oversold)
+                & (k > d)
+                & (prev_k <= prev_d)
             )
             # 卖出：超买区死叉 (K > overbought 且 K 下穿 D)
             sell_mask = (
-                (k > self.overbought) &
-                (prev_k > self.overbought) &
-                (k < d) &
-                (prev_k >= prev_d)
+                (k > self.overbought)
+                & (prev_k > self.overbought)
+                & (k < d)
+                & (prev_k >= prev_d)
             )
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -257,23 +266,33 @@ class StochasticStrategy(BaseStrategy):
                     current_d = indicators["d_percent"].iloc[current_idx]
                     # 动态 strength：K 值越极端，信号越强
                     if sig_type == SignalType.BUY:
-                        _strength = min(1.0, max(0.1, (self.oversold - current_k) / self.oversold))
+                        _strength = min(
+                            1.0, max(0.1, (self.oversold - current_k) / self.oversold)
+                        )
                     else:
-                        _strength = min(1.0, max(0.1, (current_k - self.overbought) / (100 - self.overbought)))
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=_strength,
-                        price=current_price,
-                        reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
-                        metadata={"k_percent": current_k, "d_percent": current_d},
-                    )]
+                        _strength = min(
+                            1.0,
+                            max(
+                                0.1,
+                                (current_k - self.overbought) / (100 - self.overbought),
+                            ),
+                        )
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=_strength,
+                            price=current_price,
+                            reason=f"[向量化] 随机指标{'超卖金叉' if sig_type == SignalType.BUY else '超买死叉'}，K: {current_k:.2f}, D: {current_d:.2f}",
+                            metadata={"k_percent": current_k, "d_percent": current_d},
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -343,7 +362,12 @@ class CCIStrategy(BaseStrategy):
         typical_price = (high + low + close) / 3
 
         # 使用 talib.CCI 替换手动 rolling.apply 计算（性能优化）
-        cci_values = talib.CCI(high.values.astype(np.float64), low.values.astype(np.float64), close.values.astype(np.float64), timeperiod=self.period)
+        cci_values = talib.CCI(
+            high.values.astype(np.float64),
+            low.values.astype(np.float64),
+            close.values.astype(np.float64),
+            timeperiod=self.period,
+        )
         cci = pd.Series(cci_values, index=data.index)
 
         return {"cci": cci, "typical_price": typical_price, "price": close}
@@ -362,7 +386,9 @@ class CCIStrategy(BaseStrategy):
             sell_mask = (cci > self.overbought) & (prev_cci <= self.overbought)
 
             # 构造全量信号 Series
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
 
@@ -388,23 +414,29 @@ class CCIStrategy(BaseStrategy):
                     current_cci = indicators["cci"].iloc[current_idx]
                     # 动态 strength：CCI 越极端，信号越强
                     if sig_type == SignalType.BUY:
-                        _strength = min(1.0, max(0.1, abs(current_cci) / abs(self.oversold)))
+                        _strength = min(
+                            1.0, max(0.1, abs(current_cci) / abs(self.oversold))
+                        )
                     else:
-                        _strength = min(1.0, max(0.1, abs(current_cci) / abs(self.overbought)))
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=_strength,
-                        price=current_price,
-                        reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
-                        metadata={"cci": current_cci},
-                    )]
+                        _strength = min(
+                            1.0, max(0.1, abs(current_cci) / abs(self.overbought))
+                        )
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=_strength,
+                            price=current_price,
+                            reason=f"[向量化] CCI{'超卖' if sig_type == SignalType.BUY else '超买'}: {current_cci:.2f}",
+                            metadata={"cci": current_cci},
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -489,19 +521,13 @@ class KDJStrategy(BaseStrategy):
             prev_d = d.shift(1)
 
             # 买入：J < oversold 且 K上穿D（金叉）
-            buy_mask = (
-                (j < self.oversold) &
-                (k > d) &
-                (prev_k <= prev_d)
-            )
+            buy_mask = (j < self.oversold) & (k > d) & (prev_k <= prev_d)
             # 卖出：J > overbought 且 K下穿D（死叉）
-            sell_mask = (
-                (j > self.overbought) &
-                (k < d) &
-                (prev_k >= prev_d)
-            )
+            sell_mask = (j > self.overbought) & (k < d) & (prev_k >= prev_d)
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -527,23 +553,37 @@ class KDJStrategy(BaseStrategy):
                     current_j = indicators["j_line"].iloc[current_idx]
                     # 动态 strength：J 值越极端，信号越强
                     if sig_type == SignalType.BUY:
-                        _strength = min(1.0, max(0.1, (self.oversold - current_j) / self.oversold))
+                        _strength = min(
+                            1.0, max(0.1, (self.oversold - current_j) / self.oversold)
+                        )
                     else:
-                        _strength = min(1.0, max(0.1, (current_j - self.overbought) / (100 - self.overbought)))
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=_strength,
-                        price=current_price,
-                        reason=f"[向量化] KDJ{'低位金叉' if sig_type == SignalType.BUY else '高位死叉'}，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
-                        metadata={"k_line": current_k, "d_line": current_d, "j_line": current_j},
-                    )]
+                        _strength = min(
+                            1.0,
+                            max(
+                                0.1,
+                                (current_j - self.overbought) / (100 - self.overbought),
+                            ),
+                        )
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=_strength,
+                            price=current_price,
+                            reason=f"[向量化] KDJ{'低位金叉' if sig_type == SignalType.BUY else '高位死叉'}，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
+                            metadata={
+                                "k_line": current_k,
+                                "d_line": current_d,
+                                "j_line": current_j,
+                            },
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
         try:
             indicators = self.get_cached_indicators(data)
             current_idx = self._get_current_idx(data, current_date)
@@ -568,10 +608,18 @@ class KDJStrategy(BaseStrategy):
                     strength=min(1.0, strength),
                     price=current_price,
                     reason=f"KDJ低位金叉，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
-                    metadata={"k_line": current_k, "d_line": current_d, "j_line": current_j},
+                    metadata={
+                        "k_line": current_k,
+                        "d_line": current_d,
+                        "j_line": current_j,
+                    },
                 )
                 signals.append(signal)
-            elif current_j > self.overbought and current_k < current_d and prev_k >= prev_d:
+            elif (
+                current_j > self.overbought
+                and current_k < current_d
+                and prev_k >= prev_d
+            ):
                 strength = (current_j - self.overbought) / (100 - self.overbought)
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -580,7 +628,11 @@ class KDJStrategy(BaseStrategy):
                     strength=min(1.0, strength),
                     price=current_price,
                     reason=f"KDJ高位死叉，K: {current_k:.2f}, D: {current_d:.2f}, J: {current_j:.2f}",
-                    metadata={"k_line": current_k, "d_line": current_d, "j_line": current_j},
+                    metadata={
+                        "k_line": current_k,
+                        "d_line": current_d,
+                        "j_line": current_j,
+                    },
                 )
                 signals.append(signal)
 
@@ -601,10 +653,16 @@ class OBVStrategy(BaseStrategy):
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算OBV及OBV均线（价涨加量，价跌减量）"""
         close = data["close"]
-        volume = data["volume"] if "volume" in data.columns else pd.Series(0, index=data.index)
+        volume = (
+            data["volume"]
+            if "volume" in data.columns
+            else pd.Series(0, index=data.index)
+        )
 
         price_change = close.diff()
-        obv_direction = np.where(price_change > 0, volume, np.where(price_change < 0, -volume, 0))
+        obv_direction = np.where(
+            price_change > 0, volume, np.where(price_change < 0, -volume, 0)
+        )
         obv = pd.Series(obv_direction, index=data.index).cumsum()
         obv_ma = obv.rolling(window=self.obv_ma_period).mean()
 
@@ -624,7 +682,9 @@ class OBVStrategy(BaseStrategy):
             # 卖出：OBV下穿OBV_MA
             sell_mask = (prev_obv >= prev_obv_ma) & (obv < obv_ma)
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -648,22 +708,26 @@ class OBVStrategy(BaseStrategy):
                     current_obv = indicators["obv"].iloc[current_idx]
                     current_obv_ma = indicators["obv_ma"].iloc[current_idx]
                     # 动态 strength：基于 OBV 偏离均线的程度
-                    _obv_dev = abs(current_obv - current_obv_ma) / (abs(current_obv_ma) + 1e-10)
+                    _obv_dev = abs(current_obv - current_obv_ma) / (
+                        abs(current_obv_ma) + 1e-10
+                    )
                     _strength = min(1.0, max(0.1, _obv_dev * 5))  # 偏离 20% 即满强度
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=_strength,
-                        price=current_price,
-                        reason=f"[向量化] OBV{'上穿均线' if sig_type == SignalType.BUY else '下穿均线'}，OBV: {current_obv:.0f}, MA: {current_obv_ma:.0f}",
-                        metadata={"obv": current_obv, "obv_ma": current_obv_ma},
-                    )]
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=_strength,
+                            price=current_price,
+                            reason=f"[向量化] OBV{'上穿均线' if sig_type == SignalType.BUY else '下穿均线'}，OBV: {current_obv:.0f}, MA: {current_obv_ma:.0f}",
+                            metadata={"obv": current_obv, "obv_ma": current_obv_ma},
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
         try:
             indicators = self.get_cached_indicators(data)
             current_idx = self._get_current_idx(data, current_date)
@@ -680,7 +744,9 @@ class OBVStrategy(BaseStrategy):
 
             if prev_obv <= prev_obv_ma and current_obv > current_obv_ma:
                 # 动态 strength：基于 OBV 偏离均线的程度
-                _obv_dev = abs(current_obv - current_obv_ma) / (abs(current_obv_ma) + 1e-10)
+                _obv_dev = abs(current_obv - current_obv_ma) / (
+                    abs(current_obv_ma) + 1e-10
+                )
                 strength = min(1.0, max(0.1, _obv_dev * 5))
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -694,7 +760,9 @@ class OBVStrategy(BaseStrategy):
                 signals.append(signal)
             elif prev_obv >= prev_obv_ma and current_obv < current_obv_ma:
                 # 动态 strength：基于 OBV 偏离均线的程度
-                _obv_dev = abs(current_obv - current_obv_ma) / (abs(current_obv_ma) + 1e-10)
+                _obv_dev = abs(current_obv - current_obv_ma) / (
+                    abs(current_obv_ma) + 1e-10
+                )
                 strength = min(1.0, max(0.1, _obv_dev * 5))
                 signal = TradingSignal(
                     timestamp=current_date,
@@ -741,7 +809,7 @@ class StatisticalArbitrageStrategy(BaseStrategy):
         min_len = min(len(returns1), len(returns2))
         correlation = returns1.iloc[-min_len:].corr(returns2.iloc[-min_len:])
 
-        return correlation
+        return float(correlation)
 
 
 class PairsTradingStrategy(StatisticalArbitrageStrategy):
@@ -776,9 +844,11 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
             "momentum_20d": momentum_20d,
         }
 
-    def find_pairs(self, stock_data: Dict[str, pd.DataFrame]) -> List[Tuple[str, str]]:
+    def find_pairs(
+        self, stock_data: Dict[str, pd.DataFrame]
+    ) -> List[Tuple[str, str, float]]:
         """寻找符合条件的配对"""
-        valid_pairs = []
+        valid_pairs: List[Tuple[str, str, float]] = []
         stock_codes = list(stock_data.keys())
 
         for i in range(len(stock_codes)):
@@ -801,7 +871,7 @@ class PairsTradingStrategy(StatisticalArbitrageStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成配对交易信号（单股票模式下使用相对强度）"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -895,7 +965,7 @@ class MeanReversionStrategy(StatisticalArbitrageStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """生成均值回归交易信号"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -983,12 +1053,16 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             # 与日线版本保持一致：
             # prev_z <= -entry 且 z > -entry -> BUY
             # prev_z >=  entry 且 z <  entry -> SELL
-            buy_mask = (prev_z <= -self.entry_threshold) & (zscore > -self.entry_threshold)
-            sell_mask = (prev_z >= self.entry_threshold) & (zscore < self.entry_threshold)
+            buy_mask = (prev_z <= -self.entry_threshold) & (
+                zscore > -self.entry_threshold
+            )
+            sell_mask = (prev_z >= self.entry_threshold) & (
+                zscore < self.entry_threshold
+            )
 
             # 只有在均值回归为负（beta[1]<0）时启用（当前 mean_rev 为负常数/0）
-            buy_mask &= (mean_rev < 0)
-            sell_mask &= (mean_rev < 0)
+            buy_mask &= mean_rev < 0
+            sell_mask &= mean_rev < 0
 
             # 数据不足：前 lookback_period 天不产生信号
             if len(data.index) > 0:
@@ -999,7 +1073,9 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                 buy_mask &= enough_data
                 sell_mask &= enough_data
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -1049,7 +1125,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             "mean_reversion_strength": mean_reversion_strength,
         }
 
-    def _estimate_half_life(self, returns) -> float:
+    def _estimate_half_life(self, returns: Any) -> float:
         """估计半衰期。纯 numpy 实现，避免 pandas shift/iloc/isna 开销。
 
         Args:
@@ -1057,37 +1133,43 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         """
         try:
             # 统一转为 numpy array
-            arr = returns.values if isinstance(returns, pd.Series) else np.asarray(returns, dtype=float)
+            arr = (
+                returns.values
+                if isinstance(returns, pd.Series)
+                else np.asarray(returns, dtype=float)
+            )
 
             # 取最近 252 个有效值
             window = min(len(arr) - 1, 252)
             if window < 10:
-                return self.half_life
+                return float(self.half_life)
 
-            y = arr[-window:]       # t 期收益
-            x = arr[-window - 1:-1] # t-1 期收益（lag）
+            y = arr[-window:]  # t 期收益
+            x = arr[-window - 1 : -1]  # t-1 期收益（lag）
 
             # 过滤 NaN/Inf
             valid = np.isfinite(x) & np.isfinite(y)
             if valid.sum() < 10:
-                return self.half_life
+                return float(self.half_life)
 
             y = y[valid]
             x = x[valid]
 
             # 解析解 OLS: beta = cov(x,y)/var(x)
             x_centered = x - np.mean(x)
-            beta = np.dot(x_centered, y - np.mean(y)) / (np.dot(x_centered, x_centered) + 1e-10)
+            beta = np.dot(x_centered, y - np.mean(y)) / (
+                np.dot(x_centered, x_centered) + 1e-10
+            )
 
             if beta >= 0:
-                return self.half_life
+                return float(self.half_life)
 
             half_life = -np.log(2) / beta
-            return max(1, min(half_life, 252))
+            return float(max(1, min(half_life, 252)))
 
         except Exception as e:
             logger.warning(f"半衰期估计失败: {e}")
-            return self.half_life
+            return float(self.half_life)
 
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
@@ -1105,19 +1187,30 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
                     current_price = indicators["price"].iloc[current_idx]
                     current_zscore = indicators["zscore"].iloc[current_idx]
                     half_life = indicators.get("half_life")
-                    mean_reversion = indicators["mean_reversion_strength"].iloc[current_idx]
+                    mean_reversion = indicators["mean_reversion_strength"].iloc[
+                        current_idx
+                    ]
 
                     return [
                         TradingSignal(
                             timestamp=current_date,
                             stock_code=stock_code,
                             signal_type=sig_type,
-                            strength=min(1.0, abs(current_zscore) / self.entry_threshold) if self.entry_threshold else 0.8,
+                            strength=(
+                                min(1.0, abs(current_zscore) / self.entry_threshold)
+                                if self.entry_threshold
+                                else 0.8
+                            ),
                             price=current_price,
-                            reason=f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, 半衰期: {float(half_life):.1f}",
+                            reason=(
+                                f"[向量化] 协整信号, Z-score: {current_zscore:.2f}, "
+                                f"半衰期: {float(half_life or 0.0):.1f}"
+                            ),
                             metadata={
                                 "zscore": float(current_zscore),
-                                "half_life": float(half_life) if half_life is not None else None,
+                                "half_life": (
+                                    float(half_life) if half_life is not None else None
+                                ),
                                 "mean_reversion_strength": float(mean_reversion),
                             },
                         )
@@ -1126,7 +1219,7 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1241,7 +1334,7 @@ class FactorStrategy(BaseStrategy):
                 try:
                     beta = np.linalg.lstsq(X, y, rcond=None)[0]
                     neutralized.loc[valid_idx] = y - X @ beta
-                except:
+                except Exception:
                     pass
 
         if industries is not None and self.industry_neutral:
@@ -1342,7 +1435,7 @@ class ValueFactorStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """价值因子信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1441,7 +1534,7 @@ class MomentumFactorStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """动量因子信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1520,7 +1613,7 @@ class LowVolatilityStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """低波动因子信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1653,7 +1746,7 @@ class MultiFactorStrategy(FactorStrategy):
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
         """多因子策略信号生成"""
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
@@ -1682,16 +1775,18 @@ class MultiFactorStrategy(FactorStrategy):
                     reason=f"多因子综合评分转正: {current_score:.3f}",
                     metadata={
                         "combined_score": current_score,
-                        "value_score": float(
-                            indicators["value_score"].iloc[current_idx]
-                        )
-                        if not pd.isna(indicators["value_score"].iloc[current_idx])
-                        else 0,
-                        "momentum_score": float(
-                            indicators["momentum_score"].iloc[current_idx]
-                        )
-                        if not pd.isna(indicators["momentum_score"].iloc[current_idx])
-                        else 0,
+                        "value_score": (
+                            float(indicators["value_score"].iloc[current_idx])
+                            if not pd.isna(indicators["value_score"].iloc[current_idx])
+                            else 0
+                        ),
+                        "momentum_score": (
+                            float(indicators["momentum_score"].iloc[current_idx])
+                            if not pd.isna(
+                                indicators["momentum_score"].iloc[current_idx]
+                            )
+                            else 0
+                        ),
                     },
                 )
                 signals.append(signal)
@@ -1707,16 +1802,18 @@ class MultiFactorStrategy(FactorStrategy):
                     reason=f"多因子综合评分转负: {current_score:.3f}",
                     metadata={
                         "combined_score": current_score,
-                        "value_score": float(
-                            indicators["value_score"].iloc[current_idx]
-                        )
-                        if not pd.isna(indicators["value_score"].iloc[current_idx])
-                        else 0,
-                        "momentum_score": float(
-                            indicators["momentum_score"].iloc[current_idx]
-                        )
-                        if not pd.isna(indicators["momentum_score"].iloc[current_idx])
-                        else 0,
+                        "value_score": (
+                            float(indicators["value_score"].iloc[current_idx])
+                            if not pd.isna(indicators["value_score"].iloc[current_idx])
+                            else 0
+                        ),
+                        "momentum_score": (
+                            float(indicators["momentum_score"].iloc[current_idx])
+                            if not pd.isna(
+                                indicators["momentum_score"].iloc[current_idx]
+                            )
+                            else 0
+                        ),
                     },
                 )
                 signals.append(signal)
@@ -1731,7 +1828,7 @@ class MultiFactorStrategy(FactorStrategy):
 class AdvancedStrategyFactory:
     """高级策略工厂"""
 
-    _strategies = {
+    _strategies: Dict[str, Callable[[Dict[str, Any]], BaseStrategy]] = {
         # 技术分析策略
         "bollinger": BollingerBandStrategy,
         "stochastic": StochasticStrategy,
@@ -1768,7 +1865,7 @@ class AdvancedStrategyFactory:
     @classmethod
     def get_available_strategies(cls) -> Dict[str, List[str]]:
         """获取可用策略分类列表"""
-        categories = {
+        categories: Dict[str, List[str]] = {
             "technical": [],
             "statistical_arbitrage": [],
             "factor_investment": [],
@@ -1790,6 +1887,11 @@ class AdvancedStrategyFactory:
         return categories
 
     @classmethod
-    def register_strategy(cls, name: str, strategy_class: type, category: str):
+    def register_strategy(
+        cls,
+        name: str,
+        strategy_class: Callable[[Dict[str, Any]], BaseStrategy],
+        category: str,
+    ) -> None:
         """注册新策略"""
         cls._strategies[name.lower()] = strategy_class

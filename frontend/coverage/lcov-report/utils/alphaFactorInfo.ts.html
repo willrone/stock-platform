@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/36</span>
+                <span class='fraction'>0/44</span>
             </div>
         
             
@@ -1209,7 +1209,7 @@ function <span class="fstat-no" title="function not covered" >getAlpha158Categor
 <span class="cstat-no" title="statement not covered" >    return 'MEAN_REVERSION';</span>
   } else <span class="cstat-no" title="statement not covered" >if (alphaNumber &gt;= 101 &amp;&amp; alphaNumber &lt;= 140) {</span>
 <span class="cstat-no" title="statement not covered" >    return 'VOLATILITY';</span>
-  } else <span class="cstat-no" title="statement not covered" ><span class="missing-if-branch" title="if path not taken" >I</span>if (alphaNumber &gt;= 141 &amp;&amp; alphaNumber &lt;= 158) {</span>
+  } else <span class="cstat-no" title="statement not covered" >if (alphaNumber &gt;= 141 &amp;&amp; alphaNumber &lt;= 158) {</span>
 <span class="cstat-no" title="statement not covered" >    return 'VOLUME';</span>
   }
 <span class="cstat-no" title="statement not covered" >  return 'OTHER';</span>
@@ -1228,7 +1228,7 @@ function <span class="fstat-no" title="function not covered" >getAlpha158FactorN
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >parseAlphaFactor(</span></span>factorName: string): AlphaFactorInfo {
   // 首先尝试匹配 alpha_XXX 格式（标准Alpha158因子）
   const alpha158Match = <span class="cstat-no" title="statement not covered" >factorName.match(/^alpha_(\d+)$/i);</span>
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (alpha158Match) {</span>
+<span class="cstat-no" title="statement not covered" >  if (alpha158Match) {</span>
     const alphaNumber = <span class="cstat-no" title="statement not covered" >parseInt(alpha158Match[1], 10);</span>
     const category = <span class="cstat-no" title="statement not covered" >getAlpha158CategoryByNumber(alphaNumber);</span>
     const categoryInfo =
@@ -1298,7 +1298,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  for (const { pattern, category, description, formula } of patterns) {</span>
     const match = <span class="cstat-no" title="statement not covered" >factorName.match(pattern);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (match) {</span>
+<span class="cstat-no" title="statement not covered" >    if (match) {</span>
       const period = <span class="cstat-no" title="statement not covered" >match[2] ? parseInt(match[2], 10) : undefined;</span>
 <span class="cstat-no" title="statement not covered" >      return {</span>
         name: factorName,
@@ -1326,7 +1326,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  factors.forEach(<span class="fstat-no" title="function not covered" >factor =&gt; {</span></span>
     const info = <span class="cstat-no" title="statement not covered" >parseAlphaFactor(factor);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!grouped[info.category]) {</span>
+<span class="cstat-no" title="statement not covered" >    if (!grouped[info.category]) {</span>
 <span class="cstat-no" title="statement not covered" >      grouped[info.category] = [];</span>
     }
 <span class="cstat-no" title="statement not covered" >    grouped[info.category].push(factor);</span>
@@ -1338,14 +1338,14 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
       // 如果是alpha_XXX格式，按编号排序
       const alphaMatchA = <span class="cstat-no" title="statement not covered" >a.match(/^alpha_(\d+)$/i);</span>
       const alphaMatchB = <span class="cstat-no" title="statement not covered" >b.match(/^alpha_(\d+)$/i);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (alphaMatchA &amp;&amp; alphaMatchB) {</span>
+<span class="cstat-no" title="statement not covered" >      if (alphaMatchA &amp;&amp; alphaMatchB) {</span>
 <span class="cstat-no" title="statement not covered" >        return parseInt(alphaMatchA[1], 10) - parseInt(alphaMatchB[1], 10);</span>
       }
 &nbsp;
       // 如果有周期，按周期排序
       const infoA = <span class="cstat-no" title="statement not covered" >parseAlphaFactor(a);</span>
       const infoB = <span class="cstat-no" title="statement not covered" >parseAlphaFactor(b);</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (infoA.period &amp;&amp; infoB.period) {</span>
+<span class="cstat-no" title="statement not covered" >      if (infoA.period &amp;&amp; infoB.period) {</span>
 <span class="cstat-no" title="statement not covered" >        return infoA.period - infoB.period;</span>
       }
 &nbsp;
@@ -1363,13 +1363,13 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >getAlphaFactorDisplayName(</span></span>factorName: string): string {
   // 如果是alpha_XXX格式，显示实际名称
   const alpha158Match = <span class="cstat-no" title="statement not covered" >factorName.match(/^alpha_(\d+)$/i);</span>
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (alpha158Match) {</span>
+<span class="cstat-no" title="statement not covered" >  if (alpha158Match) {</span>
     const alphaNumber = <span class="cstat-no" title="statement not covered" >parseInt(alpha158Match[1], 10);</span>
 <span class="cstat-no" title="statement not covered" >    return getAlpha158FactorName(alphaNumber);</span>
   }
 &nbsp;
   const info = <span class="cstat-no" title="statement not covered" >parseAlphaFactor(factorName);</span>
-<span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (info.period) {</span>
+<span class="cstat-no" title="statement not covered" >  if (info.period) {</span>
 <span class="cstat-no" title="statement not covered" >    return `${info.description} (${info.period}天)`;</span>
   }
 <span class="cstat-no" title="statement not covered" >  return info.description || factorName;</span>
@@ -1381,7 +1381,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-26T11:02:31.449Z
+                at 2026-04-22T13:59:52.722Z
             </div>
         <script src="../prettify.js"></script>
         <script>

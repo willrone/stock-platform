@@ -11,7 +11,6 @@ RSI策略 - 性能优化版本
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -21,6 +20,7 @@ from ...models import SignalType, TradingSignal
 # 尝试导入talib
 try:
     import talib
+
     TALIB_AVAILABLE = True
 except ImportError:
     TALIB_AVAILABLE = False
@@ -29,17 +29,19 @@ except ImportError:
 class RSIOptimizedStrategy(BaseStrategy):
     """
     RSI策略 - 性能优化版本
-    
+
     核心逻辑：
     - RSI从超卖区回升: 买入信号
     - RSI从超买区回调: 卖出信号
-    
+
     计算路径优先级：预计算列 > Numba > TA-Lib > pandas rolling
     """
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("RSI", config)
-        logger.info(f"\U0001f4cc RSI策略实例化: class={self.__class__.__name__}, module={self.__class__.__module__}, rsi_period={config.get('rsi_period', 14)}")
+        logger.info(
+            f"\U0001f4cc RSI策略实例化: class={self.__class__.__name__}, module={self.__class__.__module__}, rsi_period={config.get('rsi_period', 14)}"
+        )
         self.rsi_period = config.get("rsi_period", 14)
         self.oversold_threshold = config.get("oversold_threshold", 30)
         self.overbought_threshold = config.get("overbought_threshold", 70)
@@ -50,6 +52,7 @@ class RSIOptimizedStrategy(BaseStrategy):
         优先级：预计算列 > Numba > TA-Lib > pandas rolling
         """
         import time as _time
+
         _t0 = _time.perf_counter()
         close_prices = data["close"]
         calc_path = "unknown"
@@ -76,11 +79,19 @@ class RSIOptimizedStrategy(BaseStrategy):
                     calc_path = "talib"
                 else:
                     delta = close_prices.diff()
-                    gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-                    loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+                    gain = (
+                        (delta.where(delta > 0, 0))
+                        .rolling(window=self.rsi_period)
+                        .mean()
+                    )
+                    loss = (
+                        (-delta.where(delta < 0, 0))
+                        .rolling(window=self.rsi_period)
+                        .mean()
+                    )
                     rs = gain / loss
                     rsi = 100 - (100 / (1 + rs))
-                    calc_path = "pandas_rolling"
+                    calc_path = "pandas"
             except Exception as e:
                 logger.warning(f"Numba RSI 计算失败，回退到 pandas: {e}")
                 if TALIB_AVAILABLE:
@@ -91,8 +102,16 @@ class RSIOptimizedStrategy(BaseStrategy):
                     calc_path = "talib_fallback"
                 else:
                     delta = close_prices.diff()
-                    gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-                    loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
+                    gain = (
+                        (delta.where(delta > 0, 0))
+                        .rolling(window=self.rsi_period)
+                        .mean()
+                    )
+                    loss = (
+                        (-delta.where(delta < 0, 0))
+                        .rolling(window=self.rsi_period)
+                        .mean()
+                    )
                     rs = gain / loss
                     rsi = 100 - (100 / (1 + rs))
                     calc_path = "pandas_fallback"
@@ -100,7 +119,10 @@ class RSIOptimizedStrategy(BaseStrategy):
         _elapsed_ms = (_time.perf_counter() - _t0) * 1000
         stock_code = data.attrs.get("stock_code", "?")
         if _elapsed_ms > 5:  # 只记录耗时 >5ms 的
-            logger.debug(f"\U0001f4ca RSI.calculate_indicators [{stock_code}]: path={calc_path}, {_elapsed_ms:.1f}ms")
+            logger.debug(
+                f"\U0001f4ca RSI.calculate_indicators [{stock_code}]: "
+                f"path={calc_path}, {_elapsed_ms:.1f}ms"
+            )
 
         return {
             "rsi": rsi,
@@ -115,10 +137,16 @@ class RSIOptimizedStrategy(BaseStrategy):
             prev_rsi = rsi.shift(1)
 
             # 简化逻辑：从超卖区回升 -> 买入；从超买区回调 -> 卖出
-            buy_mask = (prev_rsi <= self.oversold_threshold) & (rsi > self.oversold_threshold)
-            sell_mask = (prev_rsi >= self.overbought_threshold) & (rsi < self.overbought_threshold)
+            buy_mask = (prev_rsi <= self.oversold_threshold) & (
+                rsi > self.oversold_threshold
+            )
+            sell_mask = (prev_rsi >= self.overbought_threshold) & (
+                rsi < self.overbought_threshold
+            )
 
-            signals = pd.Series([None] * len(data.index), index=data.index, dtype=object)
+            signals = pd.Series(
+                [None] * len(data.index), index=data.index, dtype=object
+            )
             signals[buy_mask.fillna(False)] = SignalType.BUY
             signals[sell_mask.fillna(False)] = SignalType.SELL
             return signals
@@ -143,28 +171,52 @@ class RSIOptimizedStrategy(BaseStrategy):
                     current_rsi = indicators["rsi"].iloc[current_idx]
                     # 动态计算 strength：RSI 越极端，strength 越高
                     if sig_type == SignalType.BUY:
-                        _strength = min(1.0, max(0.1, (self.oversold_threshold - current_rsi) / self.oversold_threshold)) if current_rsi < self.oversold_threshold else 0.3
+                        _strength = (
+                            min(
+                                1.0,
+                                max(
+                                    0.1,
+                                    (self.oversold_threshold - current_rsi)
+                                    / self.oversold_threshold,
+                                ),
+                            )
+                            if current_rsi < self.oversold_threshold
+                            else 0.3
+                        )
                     else:
-                        _strength = min(1.0, max(0.1, (current_rsi - self.overbought_threshold) / (100 - self.overbought_threshold))) if current_rsi > self.overbought_threshold else 0.3
-                    return [TradingSignal(
-                        timestamp=current_date,
-                        stock_code=stock_code,
-                        signal_type=sig_type,
-                        strength=_strength,
-                        price=current_price,
-                        reason=f"RSI信号, RSI: {current_rsi:.2f}",
-                        metadata={"rsi": current_rsi},
-                    )]
+                        _strength = (
+                            min(
+                                1.0,
+                                max(
+                                    0.1,
+                                    (current_rsi - self.overbought_threshold)
+                                    / (100 - self.overbought_threshold),
+                                ),
+                            )
+                            if current_rsi > self.overbought_threshold
+                            else 0.3
+                        )
+                    return [
+                        TradingSignal(
+                            timestamp=current_date,
+                            stock_code=stock_code,
+                            signal_type=sig_type,
+                            strength=_strength,
+                            price=current_price,
+                            reason=f"RSI信号, RSI: {current_rsi:.2f}",
+                            metadata={"rsi": current_rsi},
+                        )
+                    ]
                 return []
         except Exception:
             pass
 
-        signals = []
+        signals: List[TradingSignal] = []
 
         try:
             indicators = self.get_cached_indicators(data)
             current_idx = self._get_current_idx(data, current_date)
-            
+
             if current_idx < self.rsi_period:
                 return signals
 
@@ -177,9 +229,18 @@ class RSIOptimizedStrategy(BaseStrategy):
             stock_code = data.attrs.get("stock_code", "UNKNOWN")
 
             # 买入信号：RSI从超卖区域向上穿越
-            if prev_rsi <= self.oversold_threshold and current_rsi > self.oversold_threshold:
+            if (
+                prev_rsi <= self.oversold_threshold
+                and current_rsi > self.oversold_threshold
+            ):
                 # 动态 strength：prev_rsi 越低（越超卖），信号越强
-                _buy_strength = min(1.0, max(0.1, (self.oversold_threshold - prev_rsi) / self.oversold_threshold))
+                _buy_strength = min(
+                    1.0,
+                    max(
+                        0.1,
+                        (self.oversold_threshold - prev_rsi) / self.oversold_threshold,
+                    ),
+                )
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,
@@ -192,9 +253,19 @@ class RSIOptimizedStrategy(BaseStrategy):
                 signals.append(signal)
 
             # 卖出信号：RSI从超买区域向下穿越
-            elif prev_rsi >= self.overbought_threshold and current_rsi <= self.overbought_threshold:
+            elif (
+                prev_rsi >= self.overbought_threshold
+                and current_rsi <= self.overbought_threshold
+            ):
                 # 动态 strength：prev_rsi 越高（越超买），信号越强
-                _sell_strength = min(1.0, max(0.1, (prev_rsi - self.overbought_threshold) / (100 - self.overbought_threshold)))
+                _sell_strength = min(
+                    1.0,
+                    max(
+                        0.1,
+                        (prev_rsi - self.overbought_threshold)
+                        / (100 - self.overbought_threshold),
+                    ),
+                )
                 signal = TradingSignal(
                     timestamp=current_date,
                     stock_code=stock_code,

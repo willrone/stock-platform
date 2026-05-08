@@ -40,7 +40,18 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
-import { Plus, RefreshCw, Search, Eye, Play, Pause, Trash2, Filter, BarChart3, Copy } from 'lucide-react';
+import {
+  Plus,
+  RefreshCw,
+  Search,
+  Eye,
+  Play,
+  Pause,
+  Trash2,
+  Filter,
+  BarChart3,
+  Copy,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTaskStore, Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
@@ -434,11 +445,11 @@ export default function TasksPage() {
                 <MobileTaskCard
                   key={task.task_id}
                   task={task}
-                  onDelete={(id) => {
+                  onDelete={id => {
                     setTaskToDelete(id);
                     setIsDeleteOpen(true);
                   }}
-                  onToggle={(id) => {
+                  onToggle={id => {
                     console.log('暂停功能开发中', id);
                   }}
                 />
@@ -492,8 +503,11 @@ export default function TasksPage() {
                         <Chip label={task.model_id} size="small" />
                       ) : (
                         <Typography variant="body2" color="text.secondary">
-                          {task.task_type === 'backtest' ? '回测任务' : 
-                           task.task_type === 'hyperparameter_optimization' ? '超参优化' : '-'}
+                          {task.task_type === 'backtest'
+                            ? '回测任务'
+                            : task.task_type === 'hyperparameter_optimization'
+                              ? '超参优化'
+                              : '-'}
                         </Typography>
                       )}
                     </TableCell>
@@ -535,7 +549,7 @@ export default function TasksPage() {
                           <IconButton
                             size="small"
                             onClick={() => {
-                              router.push("/tasks/create?rebuild=" + task.task_id);
+                              router.push('/tasks/create?rebuild=' + task.task_id);
                             }}
                           >
                             <Copy size={16} />

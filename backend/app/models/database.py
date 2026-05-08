@@ -9,7 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 
 class TaskStatus(Enum):
@@ -54,9 +54,9 @@ class Task:
             "progress": self.progress,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "error_message": self.error_message,
         }
 
@@ -82,18 +82,18 @@ class TaskResult:
             "id": self.id,
             "task_id": self.task_id,
             "stock_code": self.stock_code,
-            "prediction_date": self.prediction_date.isoformat()
-            if self.prediction_date
-            else None,
+            "prediction_date": (
+                self.prediction_date.isoformat() if self.prediction_date else None
+            ),
             "prediction_value": self.prediction_value,
             "confidence": self.confidence,
             "model_name": self.model_name,
-            "indicators_used": json.loads(self.indicators_used)
-            if self.indicators_used
-            else [],
-            "backtest_metrics": json.loads(self.backtest_metrics)
-            if self.backtest_metrics
-            else {},
+            "indicators_used": (
+                json.loads(self.indicators_used) if self.indicators_used else []
+            ),
+            "backtest_metrics": (
+                json.loads(self.backtest_metrics) if self.backtest_metrics else {}
+            ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -122,12 +122,12 @@ class ModelMetadata:
             "model_type": self.model_type,
             "version": self.version,
             "parameters": json.loads(self.parameters) if self.parameters else {},
-            "training_data_info": json.loads(self.training_data_info)
-            if self.training_data_info
-            else {},
-            "performance_metrics": json.loads(self.performance_metrics)
-            if self.performance_metrics
-            else {},
+            "training_data_info": (
+                json.loads(self.training_data_info) if self.training_data_info else {}
+            ),
+            "performance_metrics": (
+                json.loads(self.performance_metrics) if self.performance_metrics else {}
+            ),
             "file_path": self.file_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -164,7 +164,7 @@ class DatabaseManager:
         self.ensure_db_directory()
         self.init_database()
 
-    def ensure_db_directory(self):
+    def ensure_db_directory(self) -> None:
         """确保数据库目录存在"""
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
@@ -176,7 +176,7 @@ class DatabaseManager:
         conn.row_factory = sqlite3.Row  # 使结果可以按列名访问
         return conn
 
-    def init_database(self):
+    def init_database(self) -> None:
         """初始化数据库表结构"""
         with self.get_connection() as conn:
             # 创建任务表
@@ -290,7 +290,7 @@ class DatabaseManager:
         """获取单条记录"""
         with self.get_connection() as conn:
             cursor = conn.execute(query, params)
-            return cursor.fetchone()
+            return cast(Optional[sqlite3.Row], cursor.fetchone())
 
     def fetch_all(self, query: str, params: tuple = ()) -> list:
         """获取多条记录"""
