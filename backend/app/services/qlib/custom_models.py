@@ -7,7 +7,7 @@
 
 import math
 from abc import abstractmethod
-from typing import Tuple
+from typing import Any, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -26,14 +26,20 @@ except ImportError:
     # 为了类型注解，创建一个占位符
     nn = None
     torch = None
-    F = None
+    F = None  # type: ignore[assignment]
     DataLoader = None
     TensorDataset = None
     logger.warning("PyTorch不可用，深度学习模型将不可用")
 
+torch_api: Any = torch
+nn_api: Any = nn
+functional_api: Any = F
+data_loader_cls: Any = DataLoader
+tensor_dataset_cls: Any = TensorDataset
+
 # 检测Qlib可用性
 try:
-    from qlib.model.base import Model
+    from qlib.model.base import Model as QlibModel
 
     QLIB_AVAILABLE = True
 except ImportError:
@@ -41,22 +47,24 @@ except ImportError:
     logger.warning("Qlib不可用，使用基础模型接口")
 
     # 定义基础模型接口
-    class Model:
-        def fit(self, dataset):
+    class QlibModel:  # type: ignore[no-redef]
+        def fit(self, dataset: Any) -> None:
             pass
 
-        def predict(self, dataset):
+        def predict(self, dataset: Any) -> Any:
             pass
 
 
-class BaseCustomModel(Model):
+class BaseCustomModel(QlibModel):
     """自定义模型基类"""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__()
         if not PYTORCH_AVAILABLE:
             raise RuntimeError("PyTorch不可用，无法初始化深度学习模型")
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch_api.device(
+            "cuda" if torch_api.cuda.is_available() else "cpu"
+        )
         self.model = None
         self.fitted = False
         self.config = kwargs
@@ -64,7 +72,7 @@ class BaseCustomModel(Model):
         logger.info(f"使用设备: {self.device}")
 
     @abstractmethod
-    def _build_model(self, input_dim: int, seq_len: int) -> "nn.Module":
+    def _build_model(self, input_dim: int, seq_len: int) -> "nn_api.Module":
         """构建模型"""
 
     def _prepare_data(
@@ -88,12 +96,12 @@ class BaseCustomModel(Model):
             X.append(features[i : i + seq_len])
             y.append(features[i + seq_len, 0])  # 假设第一列是目标变量
 
-        X = torch.FloatTensor(np.array(X))
-        y = torch.FloatTensor(np.array(y))
+        X = torch_api.FloatTensor(np.array(X))
+        y = torch_api.FloatTensor(np.array(y))
 
         return X, y
 
-    def fit(self, dataset: pd.DataFrame):
+    def fit(self, dataset: pd.DataFrame) -> None:
         """训练模型"""
         if not PYTORCH_AVAILABLE:
             raise RuntimeError("PyTorch不可用，无法训练深度学习模型")
@@ -106,7 +114,8 @@ class BaseCustomModel(Model):
             input_dim = X.shape[-1]
             seq_len = X.shape[1]
             self.model = self._build_model(input_dim, seq_len)
-            self.model.to(self.device)
+            model = cast(Any, self.model)
+            model.to(self.device)
 
             # 训练参数
             learning_rate = self.config.get("learning_rate", 0.001)
@@ -114,15 +123,17 @@ class BaseCustomModel(Model):
             batch_size = self.config.get("batch_size", 32)
 
             # 创建数据加载器
-            dataset_torch = TensorDataset(X, y)
-            dataloader = DataLoader(dataset_torch, batch_size=batch_size, shuffle=True)
+            dataset_torch = tensor_dataset_cls(X, y)
+            dataloader = data_loader_cls(
+                dataset_torch, batch_size=batch_size, shuffle=True
+            )
 
             # 优化器和损失函数
-            optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-            criterion = nn.MSELoss()
+            optimizer = torch_api.optim.Adam(model.parameters(), lr=learning_rate)
+            criterion = nn_api.MSELoss()
 
             # 训练循环
-            self.model.train()
+            model.train()
             for epoch in range(epochs):
                 total_loss = 0
                 for batch_X, batch_y in dataloader:
@@ -130,7 +141,7 @@ class BaseCustomModel(Model):
                     batch_y = batch_y.to(self.device)
 
                     optimizer.zero_grad()
-                    outputs = self.model(batch_X)
+                    outputs = model(batch_X)
                     loss = criterion(outputs.squeeze(), batch_y)
                     loss.backward()
                     optimizer.step()
@@ -150,16 +161,17 @@ class BaseCustomModel(Model):
 
     def predict(self, dataset: pd.DataFrame) -> pd.Series:
         """预测"""
-        if not self.fitted or self.model is None:
+        model = cast(Any, self.model)
+        if not self.fitted or model is None:
             raise RuntimeError("模型尚未训练")
 
         try:
             X, _ = self._prepare_data(dataset)
             X = X.to(self.device)
 
-            self.model.eval()
-            with torch.no_grad():
-                predictions = self.model(X)
+            model.eval()
+            with torch_api.no_grad():
+                predictions = model(X)
                 predictions = predictions.cpu().numpy().flatten()
 
             # 返回pandas Series
@@ -173,32 +185,32 @@ class BaseCustomModel(Model):
 # 只有在 PyTorch 可用时才定义这些类
 if PYTORCH_AVAILABLE:
 
-    class PositionalEncoding(nn.Module):
+    class PositionalEncoding(nn_api.Module):
         """位置编码"""
 
-        def __init__(self, d_model: int, max_len: int = 5000):
+        def __init__(self, d_model: int, max_len: int = 5000) -> None:
             super().__init__()
 
-            pe = torch.zeros(max_len, d_model)
-            position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+            pe = torch_api.zeros(max_len, d_model)
+            position = torch_api.arange(0, max_len, dtype=torch.float).unsqueeze(1)
 
-            div_term = torch.exp(
-                torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+            div_term = torch_api.exp(
+                torch_api.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
             )
 
-            pe[:, 0::2] = torch.sin(position * div_term)
-            pe[:, 1::2] = torch.cos(position * div_term)
+            pe[:, 0::2] = torch_api.sin(position * div_term)
+            pe[:, 1::2] = torch_api.cos(position * div_term)
             pe = pe.unsqueeze(0).transpose(0, 1)
 
             self.register_buffer("pe", pe)
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Any:
             return x + self.pe[: x.size(0), :]
 
     class CustomTransformerModel(BaseCustomModel):
         """自定义Transformer模型"""
 
-        def _build_model(self, input_dim: int, seq_len: int) -> "nn.Module":
+        def _build_model(self, input_dim: int, seq_len: int) -> "nn_api.Module":
             """构建Transformer模型"""
             d_model = self.config.get("d_model", 128)
             nhead = self.config.get("nhead", 8)
@@ -213,7 +225,7 @@ if PYTORCH_AVAILABLE:
                 dropout=dropout,
             )
 
-    class TransformerNet(nn.Module):
+    class TransformerNet(nn_api.Module):
         """Transformer网络实现"""
 
         def __init__(
@@ -223,31 +235,31 @@ if PYTORCH_AVAILABLE:
             nhead: int,
             num_layers: int,
             dropout: float,
-        ):
+        ) -> None:
             super().__init__()
 
-            self.input_projection = nn.Linear(input_dim, d_model)
+            self.input_projection = nn_api.Linear(input_dim, d_model)
             self.pos_encoding = PositionalEncoding(d_model)
 
-            encoder_layer = nn.TransformerEncoderLayer(
+            encoder_layer = nn_api.TransformerEncoderLayer(
                 d_model=d_model,
                 nhead=nhead,
                 dim_feedforward=d_model * 4,
                 dropout=dropout,
                 batch_first=True,
             )
-            self.transformer = nn.TransformerEncoder(
+            self.transformer = nn_api.TransformerEncoder(
                 encoder_layer, num_layers=num_layers
             )
 
-            self.output_projection = nn.Sequential(
-                nn.Linear(d_model, d_model // 2),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(d_model // 2, 1),
+            self.output_projection = nn_api.Sequential(
+                nn_api.Linear(d_model, d_model // 2),
+                nn_api.ReLU(),
+                nn_api.Dropout(dropout),
+                nn_api.Linear(d_model // 2, 1),
             )
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Any:
             # x shape: (batch_size, seq_len, input_dim)
             x = self.input_projection(x)  # (batch_size, seq_len, d_model)
             x = x.transpose(0, 1)  # (seq_len, batch_size, d_model)
@@ -257,7 +269,7 @@ if PYTORCH_AVAILABLE:
             x = self.transformer(x)  # (batch_size, seq_len, d_model)
 
             # 全局平均池化
-            x = torch.mean(x, dim=1)  # (batch_size, d_model)
+            x = torch_api.mean(x, dim=1)  # (batch_size, d_model)
 
             output = self.output_projection(x)  # (batch_size, 1)
             return output
@@ -265,7 +277,7 @@ if PYTORCH_AVAILABLE:
     class CustomInformerModel(BaseCustomModel):
         """自定义Informer模型"""
 
-        def _build_model(self, input_dim: int, seq_len: int) -> "nn.Module":
+        def _build_model(self, input_dim: int, seq_len: int) -> "nn_api.Module":
             """构建Informer模型"""
             d_model = self.config.get("d_model", 512)
             n_heads = self.config.get("n_heads", 8)
@@ -282,7 +294,7 @@ if PYTORCH_AVAILABLE:
                 factor=factor,
             )
 
-    class InformerNet(nn.Module):
+    class InformerNet(nn_api.Module):
         """Informer网络实现（简化版）"""
 
         def __init__(
@@ -293,34 +305,34 @@ if PYTORCH_AVAILABLE:
             e_layers: int,
             d_layers: int,
             factor: int,
-        ):
+        ) -> None:
             super().__init__()
 
-            self.input_projection = nn.Linear(input_dim, d_model)
+            self.input_projection = nn_api.Linear(input_dim, d_model)
             self.pos_encoding = PositionalEncoding(d_model)
 
             # 简化的Informer实现，使用标准Transformer
-            encoder_layer = nn.TransformerEncoderLayer(
+            encoder_layer = nn_api.TransformerEncoderLayer(
                 d_model=d_model,
                 nhead=n_heads,
                 dim_feedforward=d_model * 4,
                 dropout=0.1,
                 batch_first=True,
             )
-            self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=e_layers)
+            self.encoder = nn_api.TransformerEncoder(encoder_layer, num_layers=e_layers)
 
-            decoder_layer = nn.TransformerDecoderLayer(
+            decoder_layer = nn_api.TransformerDecoderLayer(
                 d_model=d_model,
                 nhead=n_heads,
                 dim_feedforward=d_model * 4,
                 dropout=0.1,
                 batch_first=True,
             )
-            self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=d_layers)
+            self.decoder = nn_api.TransformerDecoder(decoder_layer, num_layers=d_layers)
 
-            self.output_projection = nn.Linear(d_model, 1)
+            self.output_projection = nn_api.Linear(d_model, 1)
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Any:
             # 简化的前向传播
             batch_size, seq_len, _ = x.shape
 
@@ -342,7 +354,7 @@ if PYTORCH_AVAILABLE:
     class CustomTimesNetModel(BaseCustomModel):
         """自定义TimesNet模型"""
 
-        def _build_model(self, input_dim: int, seq_len: int) -> "nn.Module":
+        def _build_model(self, input_dim: int, seq_len: int) -> "nn_api.Module":
             """构建TimesNet模型"""
             d_model = self.config.get("d_model", 64)
             d_ff = self.config.get("d_ff", 256)
@@ -358,7 +370,7 @@ if PYTORCH_AVAILABLE:
                 top_k=top_k,
             )
 
-    class TimesNetModel(nn.Module):
+    class TimesNetModel(nn_api.Module):
         """TimesNet网络实现（简化版）"""
 
         def __init__(
@@ -369,27 +381,30 @@ if PYTORCH_AVAILABLE:
             d_ff: int,
             num_kernels: int,
             top_k: int,
-        ):
+        ) -> None:
             super().__init__()
 
-            self.input_projection = nn.Linear(input_dim, d_model)
+            self.input_projection = nn_api.Linear(input_dim, d_model)
 
             # 简化的2D卷积层
-            self.conv_layers = nn.ModuleList(
+            self.conv_layers = nn_api.ModuleList(
                 [
-                    nn.Conv2d(1, d_model, kernel_size=(3, 3), padding=1)
+                    nn_api.Conv2d(1, d_model, kernel_size=(3, 3), padding=1)
                     for _ in range(num_kernels)
                 ]
             )
 
-            self.norm = nn.LayerNorm(d_model)
-            self.dropout = nn.Dropout(0.1)
+            self.norm = nn_api.LayerNorm(d_model)
+            self.dropout = nn_api.Dropout(0.1)
 
-            self.output_projection = nn.Sequential(
-                nn.Linear(d_model, d_ff), nn.ReLU(), nn.Dropout(0.1), nn.Linear(d_ff, 1)
+            self.output_projection = nn_api.Sequential(
+                nn_api.Linear(d_model, d_ff),
+                nn_api.ReLU(),
+                nn_api.Dropout(0.1),
+                nn_api.Linear(d_ff, 1),
             )
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Any:
             # 简化的前向传播
             batch_size, seq_len, input_dim = x.shape
 
@@ -402,11 +417,11 @@ if PYTORCH_AVAILABLE:
             # 应用卷积
             conv_outputs = []
             for conv in self.conv_layers:
-                conv_out = F.relu(conv(x))
+                conv_out = functional_api.relu(conv(x))
                 conv_outputs.append(conv_out)
 
             # 合并卷积输出
-            x = torch.stack(conv_outputs, dim=1).mean(
+            x = torch_api.stack(conv_outputs, dim=1).mean(
                 dim=1
             )  # (batch_size, d_model, seq_len, d_model)
             x = x.mean(dim=(2, 3))  # (batch_size, d_model)
@@ -420,7 +435,7 @@ if PYTORCH_AVAILABLE:
     class CustomPatchTSTModel(BaseCustomModel):
         """自定义PatchTST模型"""
 
-        def _build_model(self, input_dim: int, seq_len: int) -> "nn.Module":
+        def _build_model(self, input_dim: int, seq_len: int) -> "nn_api.Module":
             """构建PatchTST模型"""
             patch_len = self.config.get("patch_len", 16)
             stride = self.config.get("stride", 8)
@@ -438,7 +453,7 @@ if PYTORCH_AVAILABLE:
                 num_layers=num_layers,
             )
 
-    class PatchTSTNet(nn.Module):
+    class PatchTSTNet(nn_api.Module):
         """PatchTST网络实现（简化版）"""
 
         def __init__(
@@ -450,7 +465,7 @@ if PYTORCH_AVAILABLE:
             d_model: int,
             n_heads: int,
             num_layers: int,
-        ):
+        ) -> None:
             super().__init__()
 
             self.patch_len = patch_len
@@ -460,29 +475,29 @@ if PYTORCH_AVAILABLE:
             self.num_patches = (seq_len - patch_len) // stride + 1
 
             # 补丁嵌入
-            self.patch_embedding = nn.Linear(patch_len * input_dim, d_model)
+            self.patch_embedding = nn_api.Linear(patch_len * input_dim, d_model)
             self.pos_encoding = PositionalEncoding(d_model, max_len=self.num_patches)
 
             # Transformer编码器
-            encoder_layer = nn.TransformerEncoderLayer(
+            encoder_layer = nn_api.TransformerEncoderLayer(
                 d_model=d_model,
                 nhead=n_heads,
                 dim_feedforward=d_model * 4,
                 dropout=0.1,
                 batch_first=True,
             )
-            self.transformer = nn.TransformerEncoder(
+            self.transformer = nn_api.TransformerEncoder(
                 encoder_layer, num_layers=num_layers
             )
 
-            self.output_projection = nn.Sequential(
-                nn.Linear(d_model, d_model // 2),
-                nn.ReLU(),
-                nn.Dropout(0.1),
-                nn.Linear(d_model // 2, 1),
+            self.output_projection = nn_api.Sequential(
+                nn_api.Linear(d_model, d_model // 2),
+                nn_api.ReLU(),
+                nn_api.Dropout(0.1),
+                nn_api.Linear(d_model // 2, 1),
             )
 
-        def forward(self, x):
+        def forward(self, x: Any) -> Any:
             batch_size, seq_len, input_dim = x.shape
 
             # 创建补丁
@@ -495,7 +510,7 @@ if PYTORCH_AVAILABLE:
                 # 如果无法创建补丁，使用整个序列
                 patches = [x.reshape(batch_size, -1)]
 
-            patches = torch.stack(
+            patches = torch_api.stack(
                 patches, dim=1
             )  # (batch_size, num_patches, patch_len * input_dim)
 
@@ -511,23 +526,23 @@ if PYTORCH_AVAILABLE:
             x = self.transformer(x)
 
             # 全局平均池化
-            x = torch.mean(x, dim=1)  # (batch_size, d_model)
+            x = torch_api.mean(x, dim=1)  # (batch_size, d_model)
 
             output = self.output_projection(x)
             return output
 
 else:
     # PyTorch 不可用时，创建占位符类
-    class CustomTransformerModel(BaseCustomModel):
+    class CustomTransformerModel(BaseCustomModel):  # type: ignore[no-redef]
         pass
 
-    class CustomInformerModel(BaseCustomModel):
+    class CustomInformerModel(BaseCustomModel):  # type: ignore[no-redef]
         pass
 
-    class CustomTimesNetModel(BaseCustomModel):
+    class CustomTimesNetModel(BaseCustomModel):  # type: ignore[no-redef]
         pass
 
-    class CustomPatchTSTModel(BaseCustomModel):
+    class CustomPatchTSTModel(BaseCustomModel):  # type: ignore[no-redef]
         pass
 
 

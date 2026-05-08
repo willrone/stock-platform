@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, cast
 
 import pandas as pd
 from loguru import logger
@@ -89,20 +89,23 @@ class QlibTrainingPipeline:
 
     async def create_model_config(self, config: Any) -> Dict[str, Any]:
         """构建模型配置。"""
-        return await self.engine._create_qlib_model_config(config)
+        return cast(Dict[str, Any], await self.engine._create_qlib_model_config(config))
 
     def analyze_feature_correlations(self, dataset: pd.DataFrame) -> Dict[str, Any]:
         """分析特征相关性。"""
-        return self.engine._analyze_feature_correlations(dataset)
+        return cast(Dict[str, Any], self.engine._analyze_feature_correlations(dataset))
 
     async def prepare_training_datasets(
         self, dataset: pd.DataFrame, validation_split: float, config: Any
     ) -> Tuple[Any, Any]:
         """准备训练/验证数据集。"""
-        return await self.engine._prepare_training_datasets(
-            dataset,
-            validation_split,
-            config,
+        return cast(
+            Tuple[Any, Any],
+            await self.engine._prepare_training_datasets(
+                dataset,
+                validation_split,
+                config,
+            ),
         )
 
     async def train(
@@ -130,21 +133,24 @@ class QlibTrainingPipeline:
         model_id: str,
     ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
         """评估训练后模型。"""
-        return await self.engine._evaluate_model(
-            model,
-            train_dataset,
-            val_dataset,
-            model_id,
+        return cast(
+            Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]],
+            await self.engine._evaluate_model(
+                model,
+                train_dataset,
+                val_dataset,
+                model_id,
+            ),
         )
 
     async def extract_feature_importance(
         self, model: Any, model_type: Any
     ) -> Dict[str, float]:
         """提取特征重要性。"""
-        return await self.engine._extract_feature_importance(model, model_type)
+        return cast(Dict[str, float], await self.engine._extract_feature_importance(model, model_type))
 
     async def save_model(
         self, model: Any, model_id: str, model_config: Dict[str, Any]
     ) -> str:
         """落盘模型产物。"""
-        return await self.engine._save_qlib_model(model, model_id, model_config)
+        return str(await self.engine._save_qlib_model(model, model_id, model_config))

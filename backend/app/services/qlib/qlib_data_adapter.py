@@ -295,21 +295,23 @@ class QlibDataAdapter:
         self, model_type: str, hyperparameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """创建Qlib模型配置。"""
-        base_config = {
+        kwargs: Dict[str, Any] = {
+            # 使用 Huber 损失提高对异常标签的鲁棒性。
+            "loss": "huber",
+            "huber_delta": 0.1,
+            "colsample_bytree": 0.8879,
+            "learning_rate": 0.0421,
+            "subsample": 0.8789,
+            "lambda_l1": 205.6999,
+            "lambda_l2": 580.9768,
+            "max_depth": 8,
+            "num_leaves": 210,
+            "num_threads": 20,
+        }
+        base_config: Dict[str, Any] = {
             "class": "LGBModel",
             "module_path": "qlib.contrib.model.gbdt",
-            "kwargs": {
-                # qlib 默认 LGBModel 不支持 huber，仅支持 mse/binary
-                "loss": "mse",
-                "colsample_bytree": 0.8879,
-                "learning_rate": 0.0421,
-                "subsample": 0.8789,
-                "lambda_l1": 205.6999,
-                "lambda_l2": 580.9768,
-                "max_depth": 8,
-                "num_leaves": 210,
-                "num_threads": 20,
-            },
+            "kwargs": kwargs,
         }
 
         if model_type.lower() == "lightgbm":
@@ -323,7 +325,7 @@ class QlibDataAdapter:
             base_config["module_path"] = "qlib.contrib.model.pytorch_nn"
 
         if hyperparameters:
-            base_config["kwargs"].update(hyperparameters)
+            kwargs.update(hyperparameters)
 
         return base_config
 

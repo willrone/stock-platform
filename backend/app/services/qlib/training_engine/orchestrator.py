@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 from loguru import logger
 
@@ -20,7 +20,7 @@ class QlibTrainingOrchestrator:
         pipeline: Any,
         result_assembler: Any,
         qlib_available_getter: Callable[[], bool],
-    ):
+    ) -> None:
         self.engine = engine
         self.pipeline = pipeline
         self.result_assembler = result_assembler
@@ -201,7 +201,10 @@ class QlibTrainingOrchestrator:
             request,
         )
         self.engine.performance_monitor.end_stage("train_model")
-        return self.result_assembler.normalize_training_output(training_output)
+        return cast(
+            Tuple[Any, Any, Dict[str, Any]],
+            self.result_assembler.normalize_training_output(training_output),
+        )
 
     async def _run_evaluation_stage(
         self,
@@ -263,7 +266,7 @@ class QlibTrainingOrchestrator:
             model, request.model_id, model_config
         )
         self.engine.performance_monitor.end_stage("save_model")
-        return model_path
+        return str(model_path)
 
     async def _run_completion_stage(
         self,
@@ -295,10 +298,6 @@ class QlibTrainingOrchestrator:
         if request.progress_callback is None:
             return
 
-        if details is None:
-            await request.progress_callback(request.model_id, progress, status, message)
-            return
-
         await request.progress_callback(
             request.model_id,
             progress,
@@ -313,7 +312,7 @@ class QlibTrainingOrchestrator:
         )
         if request.progress_callback is not None:
             await request.progress_callback(
-                request.model_id, 0.0, "failed", f"训练失败: {str(exc)}"
+                request.model_id, 0.0, "failed", f"训练失败: {str(exc)}", None
             )
         self.engine.performance_monitor.end_stage("total_training")
         self.engine.performance_monitor.print_summary()

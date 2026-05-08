@@ -286,15 +286,16 @@ class ParallelHyperparameterSearch:
             params = {}
             for param_name, space in param_space.items():
                 if space.param_type == "float":
-                    params[param_name] = round(
-                        random.uniform(space.min_value, space.max_value), 4
-                    )
+                    min_value = float(space.min_value or 0.0)
+                    max_value = float(space.max_value or min_value)
+                    params[param_name] = round(random.uniform(min_value, max_value), 4)
                 elif space.param_type == "int":
-                    params[param_name] = random.randint(
-                        space.min_value, space.max_value
-                    )
+                    min_value = int(space.min_value or 0)
+                    max_value = int(space.max_value or min_value)
+                    params[param_name] = random.randint(min_value, max_value)
                 elif space.param_type == "categorical":
-                    params[param_name] = random.choice(space.choices)
+                    choices = space.choices or []
+                    params[param_name] = random.choice(choices)
             trials.append(params)
 
         return trials
@@ -312,19 +313,23 @@ class ParallelHyperparameterSearch:
             space = param_space[param_name]
             if space.param_type == "float":
                 # 生成浮点数范围
-                step = (space.max_value - space.min_value) / (space.step or 10)
+                min_value = float(space.min_value or 0.0)
+                max_value = float(space.max_value or min_value)
+                step = (max_value - min_value) / float(space.step or 10)
                 values = [
-                    round(space.min_value + i * step, 4)
-                    for i in range(int((space.max_value - space.min_value) / step) + 1)
+                    round(min_value + i * step, 4)
+                    for i in range(int((max_value - min_value) / step) + 1)
                 ]
             elif space.param_type == "int":
                 # 生成整数范围
-                step = space.step or 1
-                values = list(range(space.min_value, space.max_value + 1, step))
+                min_value = int(space.min_value or 0)
+                max_value = int(space.max_value or min_value)
+                step = int(space.step or 1)
+                values = list(range(min_value, max_value + 1, step))
             elif space.param_type == "categorical":
-                values = space.choices
+                values = space.choices or []
             else:
-                values = [space.min_value]  # 默认值
+                values = [float(space.min_value or 0.0)]  # 默认值
 
             param_values_list.append(values)
 
