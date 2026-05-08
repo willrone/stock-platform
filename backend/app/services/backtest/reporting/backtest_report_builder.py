@@ -129,13 +129,13 @@ class BacktestReportBuilder:
             "strategy_name": payload.strategy_name,
             "start_date": payload.start_date.isoformat(),
             "end_date": payload.end_date.isoformat(),
-            "initial_cash": payload.config.initial_cash,
-            "commission_rate": payload.config.commission_rate,
-            "slippage_rate": payload.config.slippage_rate,
-            "open_cost": payload.config.open_cost,
-            "close_cost": payload.config.close_cost,
-            "min_cost": payload.config.min_cost,
-            "max_position_size": payload.config.max_position_size,
+            "initial_cash": getattr(payload.config, "initial_cash", 0.0),
+            "commission_rate": getattr(payload.config, "commission_rate", 0.0),
+            "slippage_rate": getattr(payload.config, "slippage_rate", 0.0),
+            "open_cost": getattr(payload.config, "open_cost", 0.0),
+            "close_cost": getattr(payload.config, "close_cost", 0.0),
+            "min_cost": getattr(payload.config, "min_cost", 0.0),
+            "max_position_size": getattr(payload.config, "max_position_size", 0.0),
         }
         if payload.strategy_config:
             config_dict["strategy_config"] = payload.strategy_config
