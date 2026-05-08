@@ -628,7 +628,9 @@ class PositionAnalyzer:
         """分析持仓期"""
 
         # 按股票分组计算持仓期
-        stock_holdings: defaultdict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: {"buys": [], "sells": []})
+        stock_holdings: defaultdict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
+            lambda: {"buys": [], "sells": []}
+        )
 
         for trade in trade_history:
             stock_code = trade.get("stock_code", "")

@@ -147,7 +147,10 @@ class QlibTrainingPipeline:
         self, model: Any, model_type: Any
     ) -> Dict[str, float]:
         """提取特征重要性。"""
-        return cast(Dict[str, float], await self.engine._extract_feature_importance(model, model_type))
+        return cast(
+            Dict[str, float],
+            await self.engine._extract_feature_importance(model, model_type),
+        )
 
     async def save_model(
         self, model: Any, model_id: str, model_config: Dict[str, Any]

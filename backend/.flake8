@@ -28,7 +28,9 @@ ignore =
     # W503: 行断点前二元运算符（与black冲突）
     W503,
     # E501: 行太长（由max-line-length控制）
-    E501
+    E501,
+    # E704: black keeps Protocol stub ellipsis on one line
+    E704
 
 # 选择的错误和警告
 select =
@@ -61,6 +63,7 @@ per-file-ignores =
     app/services/prediction/risk_assessment.py:C901
     app/services/prediction/technical_indicators.py:C901
     app/services/models/model_training.py:E402
+    app/services/data/sftp_sync_service.py:E402
     app/services/qlib/enhanced_qlib_provider.py:E402,C901
     app/services/qlib/unified_qlib_training_engine.py:C901
     app/services/qlib/test_alpha158_expression_engine.py:E402

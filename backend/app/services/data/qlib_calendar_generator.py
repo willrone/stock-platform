@@ -21,9 +21,7 @@ class QlibCalendarGenerator:
         self.calendar_dir = self.qlib_data_path / "calendars"
         self.calendar_file = self.calendar_dir / "day.txt"
 
-    def _extract_dates_from_precomputed_file(
-        self, parquet_file: Path
-    ) -> Set[datetime]:
+    def _extract_dates_from_precomputed_file(self, parquet_file: Path) -> Set[datetime]:
         try:
             df = pd.read_parquet(parquet_file)
             if isinstance(df.index, pd.MultiIndex):
@@ -68,7 +66,9 @@ class QlibCalendarGenerator:
 
         if stock_data_path.is_dir():
             for parquet_file in stock_data_path.glob("*.parquet"):
-                trading_dates.update(self._extract_dates_from_parquet_file(parquet_file))
+                trading_dates.update(
+                    self._extract_dates_from_parquet_file(parquet_file)
+                )
             return trading_dates
 
         if stock_data_path.is_file():
@@ -76,9 +76,7 @@ class QlibCalendarGenerator:
 
         return trading_dates
 
-    def _collect_trading_dates(
-        self, stock_data_path: Optional[Path]
-    ) -> Set[datetime]:
+    def _collect_trading_dates(self, stock_data_path: Optional[Path]) -> Set[datetime]:
         if stock_data_path is None:
             return self._collect_precomputed_trading_dates()
         return self._collect_parquet_trading_dates(stock_data_path)

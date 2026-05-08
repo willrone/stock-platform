@@ -159,9 +159,7 @@ class TechnicalIndicatorCalculator:
                 # EMA = (当前价格 * 乘数) + (前一日EMA * (1 - 乘数))
                 previous_ema = ema_values[i - 1]
                 assert previous_ema is not None
-                ema = (data[i].close * multiplier) + (
-                    previous_ema * (1 - multiplier)
-                )
+                ema = (data[i].close * multiplier) + (previous_ema * (1 - multiplier))
                 ema_values.append(round(ema, 4))
 
         return ema_values
@@ -232,9 +230,7 @@ class TechnicalIndicatorCalculator:
                 # 计算过去d_period天%K的平均值
                 k_values = [
                     value
-                    for value in (
-                        stoch_k[j] for j in range(i - d_period + 1, i + 1)
-                    )
+                    for value in (stoch_k[j] for j in range(i - d_period + 1, i + 1))
                     if value is not None
                 ]
                 if k_values:
@@ -592,9 +588,7 @@ class TechnicalIndicatorCalculator:
                     # EMA = (当前价格 * 乘数) + (前一日EMA * (1 - 乘数))
                     previous_ema = ema_values[i - 1]
                     assert previous_ema is not None
-                    ema = (prices[i] * multiplier) + (
-                        previous_ema * (1 - multiplier)
-                    )
+                    ema = (prices[i] * multiplier) + (previous_ema * (1 - multiplier))
                     ema_values.append(ema)
 
             return ema_values

@@ -749,7 +749,9 @@ class DataLineageTracker:
             "total_edges": len(self.all_edges),
         }
 
-    def export_lineage_graph(self, graph_id: Optional[str] = None, format: str = "json") -> str:
+    def export_lineage_graph(
+        self, graph_id: Optional[str] = None, format: str = "json"
+    ) -> str:
         """导出血缘图"""
         if graph_id is None:
             graph_id = self.default_graph_id

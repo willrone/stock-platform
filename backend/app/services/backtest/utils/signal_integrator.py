@@ -362,7 +362,9 @@ class SignalIntegrator:
             ]
             scored.sort(reverse=True)
         else:  # consensus_topk
-            scored = [(vote_count[c], strength_sum[c], vote_count[c], c) for c in candidates]
+            scored = [
+                (vote_count[c], strength_sum[c], vote_count[c], c) for c in candidates
+            ]
             scored.sort(reverse=True)
 
         top = scored[: int(topk)]

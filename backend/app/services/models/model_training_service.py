@@ -220,7 +220,9 @@ class TrainerFactory:
 class ModelTrainingService:
     """模型训练服务"""
 
-    def __init__(self, model_storage: ModelStorage, data_dir: str = "backend/data") -> None:
+    def __init__(
+        self, model_storage: ModelStorage, data_dir: str = "backend/data"
+    ) -> None:
         self.model_storage = model_storage
         self.data_dir = Path(data_dir)
 

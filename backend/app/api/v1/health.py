@@ -1,6 +1,7 @@
 """
 健康检查路由
 """
+
 from typing import Any
 
 from fastapi import APIRouter

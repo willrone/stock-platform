@@ -1,6 +1,7 @@
 """
 系统状态路由
 """
+
 from datetime import datetime
 from typing import Any
 

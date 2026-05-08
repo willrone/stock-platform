@@ -121,7 +121,9 @@ class BacktestPerformanceProfiler:
 
         logger.info("回测性能分析完成")
 
-    def start_stage(self, stage_name: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def start_stage(
+        self, stage_name: str, details: Optional[Dict[str, Any]] = None
+    ) -> None:
         """
         开始监控一个阶段
 
@@ -285,7 +287,9 @@ class BacktestPerformanceProfiler:
             }
         )
 
-    def update_backtest_stats(self, signals: int = 0, trades: int = 0, days: int = 0) -> None:
+    def update_backtest_stats(
+        self, signals: int = 0, trades: int = 0, days: int = 0
+    ) -> None:
         """
         更新回测统计信息
 

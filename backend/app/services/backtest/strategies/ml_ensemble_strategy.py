@@ -418,11 +418,17 @@ class MLEnsembleLgbXgbRiskCtlStrategy(BaseStrategy):
                     import xgboost as xgb  # type: ignore[import-not-found,unused-ignore]
 
                     features_array = np.asarray(features, dtype=float)
-                    lgb_prob = float(self.lgb_model.predict(features_array.reshape(1, -1))[0])
-                    xgb_prob = float(
-                        self.xgb_model.predict(xgb.DMatrix(features_array.reshape(1, -1)))[0]
+                    lgb_prob = float(
+                        self.lgb_model.predict(features_array.reshape(1, -1))[0]
                     )
-                    return float(self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob)
+                    xgb_prob = float(
+                        self.xgb_model.predict(
+                            xgb.DMatrix(features_array.reshape(1, -1))
+                        )[0]
+                    )
+                    return float(
+                        self.lgb_weight * lgb_prob + self.xgb_weight * xgb_prob
+                    )
                 except Exception:
                     pass
 

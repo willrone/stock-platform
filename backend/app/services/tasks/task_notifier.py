@@ -169,9 +169,7 @@ class TaskNotifier:
 
             if progress_data:
                 # 如果有进度监控数据，使用回测WebSocket管理器发送详细进度
-                await backtest_ws_manager.send_progress_update(
-                    task_id, progress_data
-                )
+                await backtest_ws_manager.send_progress_update(task_id, progress_data)
             else:
                 # 如果仍然没有，发送基本进度消息
                 message = {
@@ -389,9 +387,7 @@ class TaskNotifier:
                     "timestamp": utcnow().isoformat(),
                 }
                 await manager.send_to_task_subscribers(task_id, message)
-                logger.debug(
-                    f"已发送任务进度更新: {task_id}, 进度: {task_progress}%"
-                )
+                logger.debug(f"已发送任务进度更新: {task_id}, 进度: {task_progress}%")
 
             elif task.status == TaskStatus.COMPLETED.value:
                 # 已完成：发送完成消息

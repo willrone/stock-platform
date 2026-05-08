@@ -325,7 +325,9 @@ class StrategyPortfolio(BaseStrategy):
 
         return all_indicators
 
-    def add_strategy(self, strategy: BaseStrategy, weight: Optional[float] = None) -> None:
+    def add_strategy(
+        self, strategy: BaseStrategy, weight: Optional[float] = None
+    ) -> None:
         """
         动态添加策略
 

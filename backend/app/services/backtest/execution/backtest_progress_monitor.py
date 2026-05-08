@@ -362,7 +362,10 @@ class BacktestProgressMonitor:
         )
 
     async def _notify_progress_update(
-        self, task_id: str, update_type: str, extra_data: Optional[Dict[str, Any]] = None
+        self,
+        task_id: str,
+        update_type: str,
+        extra_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         """发送进度更新通知"""
         if task_id not in self.active_backtests:

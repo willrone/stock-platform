@@ -331,9 +331,7 @@ class DataVersionManager:
 
             # 确定存储路径
             if copy_file:
-                version_file_path = (
-                    self.storage_path / f"{version_id}{path.suffix}"
-                )
+                version_file_path = self.storage_path / f"{version_id}{path.suffix}"
                 shutil.copy2(path, version_file_path)
                 stored_path = str(version_file_path)
             else:

@@ -184,7 +184,9 @@ class WebSocketManager:
                 f"任务状态通知已发送: {task_id}, 状态: {status}, 订阅者: {len(subscribers)}"
             )
 
-    async def notify_user(self, user_id: str, message_type: str, data: Dict[str, Any]) -> None:
+    async def notify_user(
+        self, user_id: str, message_type: str, data: Dict[str, Any]
+    ) -> None:
         """向特定用户发送通知"""
         message = WebSocketMessage(type=message_type, data=data)
 
@@ -220,7 +222,9 @@ class WebSocketManager:
             f"系统告警已广播: {alert_type}, 严重程度: {severity}, 接收者: {len(connections)}"
         )
 
-    async def _send_to_connection(self, connection_id: str, message: WebSocketMessage) -> None:
+    async def _send_to_connection(
+        self, connection_id: str, message: WebSocketMessage
+    ) -> None:
         """向单个连接发送消息"""
         if connection_id not in self.active_connections:
             return

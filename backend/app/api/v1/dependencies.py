@@ -18,10 +18,10 @@ from app.repositories.task_repository import (
     PredictionResultRepository,
     TaskRepository,
 )
-from app.services.tasks import TaskQueueManager
 from app.services.backtest.utils.official_style_params import (
     apply_official_style_topk_dropout_params,
 )
+from app.services.tasks import TaskQueueManager
 
 
 # 用户认证依赖

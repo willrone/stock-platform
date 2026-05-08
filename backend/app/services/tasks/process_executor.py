@@ -167,7 +167,9 @@ def start_process_executor() -> None:
     executor.start()
 
 
-def shutdown_process_executor(wait: bool = True, timeout: Optional[float] = None) -> Any:
+def shutdown_process_executor(
+    wait: bool = True, timeout: Optional[float] = None
+) -> Any:
     """关闭全局进程池执行器"""
     global _process_executor
     if _process_executor:

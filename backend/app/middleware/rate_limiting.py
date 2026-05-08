@@ -9,9 +9,9 @@ from collections import defaultdict, deque
 from typing import Any, Dict, Optional
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi.responses import JSONResponse
 
 from app.api.v1.schemas import StandardResponse
 

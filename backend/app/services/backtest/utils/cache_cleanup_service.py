@@ -112,7 +112,9 @@ class CacheCleanupService:
 
             async with get_async_session_context() as session:
                 repository = BacktestDetailedRepository(session)
-                cleanup_results: Dict[str, int] = await repository.cleanup_old_data(self.data_retention_days)
+                cleanup_results: Dict[str, int] = await repository.cleanup_old_data(
+                    self.data_retention_days
+                )
                 await session.commit()
 
                 total_cleaned = sum(cleanup_results.values())

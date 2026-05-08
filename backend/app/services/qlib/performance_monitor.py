@@ -137,7 +137,11 @@ class BenchmarkRunner:
         logger.info("基准测试运行器初始化完成")
 
     async def run_benchmark(
-        self, test_name: str, func: Callable[..., Union[Any, Awaitable[Any]]], *args: Any, **kwargs: Any
+        self,
+        test_name: str,
+        func: Callable[..., Union[Any, Awaitable[Any]]],
+        *args: Any,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """运行基准测试"""
         monitor = PerformanceMonitor()

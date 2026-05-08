@@ -137,9 +137,7 @@ class QlibBinConverter:
                 if inst_file.exists():
                     lines = [
                         line
-                        for line in inst_file.read_text(
-                            encoding="utf-8"
-                        ).splitlines()
+                        for line in inst_file.read_text(encoding="utf-8").splitlines()
                         if line.strip()
                     ]
                     updated = False

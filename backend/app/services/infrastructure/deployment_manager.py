@@ -198,7 +198,9 @@ class MetricsCollector:
     def __init__(self) -> None:
         self.collectors: Dict[str, MetricsCollectorFunc] = {}
 
-    def register_collector(self, name: str, collector_func: MetricsCollectorFunc) -> None:
+    def register_collector(
+        self, name: str, collector_func: MetricsCollectorFunc
+    ) -> None:
         """注册指标收集函数"""
         self.collectors[name] = collector_func
         logger.info(f"注册指标收集器: {name}")
@@ -315,9 +317,7 @@ class DeploymentManager:
         if event in self.callbacks:
             self.callbacks[event].append(callback)
 
-    async def _notify_callbacks(
-        self, event: str, *args: Any, **kwargs: Any
-    ) -> None:
+    async def _notify_callbacks(self, event: str, *args: Any, **kwargs: Any) -> None:
         """通知回调函数"""
         for callback in self.callbacks.get(event, []):
             try:

@@ -31,12 +31,16 @@ except ImportError:
 
     def prange(*args: int) -> range:
         return range(*args)
+
 else:
+
     def njit(*args: Any, **kwargs: Any) -> Callable[[F], F]:
         return cast(Callable[[F], F], _numba_njit(*args, **kwargs))
 
     def prange(*args: int) -> range:
         return cast(range, _numba_prange(*args))
+
+
 # isort: on
 
 

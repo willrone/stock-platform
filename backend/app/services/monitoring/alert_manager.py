@@ -374,7 +374,9 @@ class AlertNotificationManager:
         )
         self.notification_configs[NotificationChannel.WEBHOOK] = webhook_config
 
-    def update_config(self, channel: NotificationChannel, config: NotificationConfig) -> Any:
+    def update_config(
+        self, channel: NotificationChannel, config: NotificationConfig
+    ) -> Any:
         """更新通知配置"""
         self.notification_configs[channel] = config
 

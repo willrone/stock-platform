@@ -147,7 +147,9 @@ class DeploymentRecord:
 class ModelEvaluator:
     """模型评估器"""
 
-    def __init__(self, model_storage: ModelStorage, data_dir: str = "backend/data") -> None:
+    def __init__(
+        self, model_storage: ModelStorage, data_dir: str = "backend/data"
+    ) -> None:
         self.model_storage = model_storage
         self.data_dir = Path(data_dir)
 

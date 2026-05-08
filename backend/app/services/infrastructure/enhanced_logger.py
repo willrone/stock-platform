@@ -444,7 +444,9 @@ class EnhancedLogger:
         return {
             "total_logs": self.stats["total_logs"],
             "logs_by_level": cast(Dict[str, int], self.stats["logs_by_level"]).copy(),
-            "logs_by_category": cast(Dict[str, int], self.stats["logs_by_category"]).copy(),
+            "logs_by_category": cast(
+                Dict[str, int], self.stats["logs_by_category"]
+            ).copy(),
             "uptime_seconds": uptime.total_seconds(),
             "logs_per_minute": self.stats["total_logs"]
             / max(uptime.total_seconds() / 60, 1),

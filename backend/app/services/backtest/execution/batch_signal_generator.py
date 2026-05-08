@@ -27,15 +27,12 @@ PackedSignals = Tuple[np.ndarray[Any, Any], np.ndarray[Any, Any], np.ndarray[Any
 class BatchPrecomputeStrategy(Protocol):
     def precompute_all_signals_batch(
         self, data: pd.DataFrame
-    ) -> Optional[pd.DataFrame]:
-        ...
+    ) -> Optional[pd.DataFrame]: ...
 
 
 def _multiprocess_precompute_stock_signals(
     task: Tuple[str, Dict[str, Any], Dict[str, Any]],
-) -> Tuple[
-    bool, str, Optional[PackedSignals], Optional[str]
-]:
+) -> Tuple[bool, str, Optional[PackedSignals], Optional[str]]:
     """模块级 worker：为单只股票预计算信号（用于 ProcessPoolExecutor）。
 
     Returns:
@@ -575,12 +572,8 @@ class BatchSignalGenerator:
         stats: Dict[str, Any] = {
             "total_signals": len(signal_cache),
             "buy_signals": int((signal_cache["signal_type"] == SignalType.BUY).sum()),
-            "sell_signals": int(
-                (signal_cache["signal_type"] == SignalType.SELL).sum()
-            ),
-            "stocks_count": signal_cache.index.get_level_values(
-                "stock_code"
-            ).nunique(),
+            "sell_signals": int((signal_cache["signal_type"] == SignalType.SELL).sum()),
+            "stocks_count": signal_cache.index.get_level_values("stock_code").nunique(),
         }
 
         return stats

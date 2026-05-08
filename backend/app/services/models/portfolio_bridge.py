@@ -83,13 +83,11 @@ def _infer_window_label(task_name: str, backtest_result: Dict[str, Any]) -> str:
 
 def _query_signal_summary(session: Any, task_id: str) -> Dict[str, Any]:
     rows = session.execute(
-        text(
-            """
+        text("""
             SELECT stock_code, signal_type, executed, execution_reason
             FROM signal_records
             WHERE task_id = :task_id
-            """
-        ),
+            """),
         {"task_id": task_id},
     ).fetchall()
 
@@ -206,9 +204,7 @@ def _extract_stock_contribution_summary(task_result: Dict[str, Any]) -> Dict[str
                 "avg_pnl_per_trade": _safe_number(item.get("avg_pnl_per_trade")),
             }
         )
-    normalized_details.sort(
-        key=lambda item: float(item["total_pnl"]), reverse=True
-    )
+    normalized_details.sort(key=lambda item: float(item["total_pnl"]), reverse=True)
     best_stock = task_result.get("best_performing_stock")
     best_stock = (
         best_stock
@@ -262,16 +258,12 @@ def build_portfolio_bridge_summary(
         return _default_bridge_summary(model_id)
 
     try:
-        task_rows = session.execute(
-            text(
-                """
+        task_rows = session.execute(text("""
                 SELECT task_id, task_name, status, created_at, config, result
                 FROM tasks
                 WHERE task_type = 'backtest' AND status = 'completed'
                 ORDER BY created_at DESC
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
     except Exception as exc:
         logger.warning(f"查询模型 {model_id} 的 bridge tasks 失败: {exc}")
         return _default_bridge_summary(model_id)
@@ -428,8 +420,7 @@ def build_portfolio_bridge_summary(
         largest_cost_gap = max(
             valid_cost_tasks,
             key=lambda task: float(
-                task["cost_metrics"].get("gross_minus_net_value_gap")
-                or float("-inf")
+                task["cost_metrics"].get("gross_minus_net_value_gap") or float("-inf")
             ),
         )
         summary["cost_vs_gross_gap_rollup"]["largest_cost_gap"] = {
@@ -443,8 +434,7 @@ def build_portfolio_bridge_summary(
         best_gross = max(
             valid_cost_tasks,
             key=lambda task: float(
-                task["cost_metrics"].get("total_return_without_cost")
-                or float("-inf")
+                task["cost_metrics"].get("total_return_without_cost") or float("-inf")
             ),
         )
         summary["cost_vs_gross_gap_rollup"]["best_gross_return"] = {

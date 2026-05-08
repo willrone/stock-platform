@@ -339,9 +339,7 @@ class Informer(nn.Module):
 class InformerEncoderLayer(nn.Module):
     """Informer编码器层"""
 
-    def __init__(
-        self, d_model: int, nhead: int, dropout: float, factor: int
-    ) -> None:
+    def __init__(self, d_model: int, nhead: int, dropout: float, factor: int) -> None:
         super(InformerEncoderLayer, self).__init__()
         self.self_attention = ProbAttention(d_model, nhead, dropout, factor)
         self.feed_forward = nn.Sequential(
@@ -369,9 +367,7 @@ class InformerEncoderLayer(nn.Module):
 class ProbAttention(nn.Module):
     """ProbSparse自注意力机制"""
 
-    def __init__(
-        self, d_model: int, nhead: int, dropout: float, factor: int
-    ) -> None:
+    def __init__(self, d_model: int, nhead: int, dropout: float, factor: int) -> None:
         super(ProbAttention, self).__init__()
         self.d_model = d_model
         self.nhead = nhead

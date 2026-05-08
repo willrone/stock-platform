@@ -790,7 +790,11 @@ class PerformanceMonitor:
         active_alerts = self.get_active_alerts()
         alert_counts = {
             "critical": len(
-                [a for a in active_alerts if a.get("level") == AlertLevel.CRITICAL.value]
+                [
+                    a
+                    for a in active_alerts
+                    if a.get("level") == AlertLevel.CRITICAL.value
+                ]
             ),
             "warning": len(
                 [a for a in active_alerts if a.get("level") == AlertLevel.WARNING.value]

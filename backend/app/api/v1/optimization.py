@@ -73,9 +73,7 @@ async def create_optimization_task(
             process_executor = get_process_executor()
 
             # 使用进程池提交任务
-            _ = process_executor.submit(
-                execute_optimization_task_simple, task.task_id
-            )
+            _ = process_executor.submit(execute_optimization_task_simple, task.task_id)
 
             logger.info(f"超参优化任务已提交到进程池: {task.task_id}")
         except Exception as submit_error:
@@ -308,7 +306,9 @@ async def get_param_importance(
 
 
 @router.get("/tasks/{task_id}/pareto-front", response_model=StandardResponse)
-async def get_pareto_front(task_id: str, db: AsyncSession = Depends(get_async_session)) -> Any:
+async def get_pareto_front(
+    task_id: str, db: AsyncSession = Depends(get_async_session)
+) -> Any:
     """获取帕累托前沿（多目标优化时）"""
     try:
         task_repository = AsyncTaskRepository(db)

@@ -157,12 +157,14 @@ class ChartCacheService:
                     await session.commit()
                     return True
 
-                return bool(await retry_db_operation(
-                    _cache_data,
-                    max_retries=3,
-                    retry_delay=0.1,
-                    operation_name=f"缓存图表数据 (task_id={task_id}, chart_type={chart_type})",
-                ))
+                return bool(
+                    await retry_db_operation(
+                        _cache_data,
+                        max_retries=3,
+                        retry_delay=0.1,
+                        operation_name=f"缓存图表数据 (task_id={task_id}, chart_type={chart_type})",
+                    )
+                )
 
             except Exception as e:
                 self.logger.error(f"缓存图表数据失败: {e}", exc_info=True)
@@ -203,12 +205,14 @@ class ChartCacheService:
                     self.logger.info(f"删除了 {deleted_count} 条缓存记录")
                     return True
 
-                return bool(await retry_db_operation(
-                    _invalidate,
-                    max_retries=3,
-                    retry_delay=0.1,
-                    operation_name=f"删除缓存 (task_id={task_id}, chart_type={chart_type})",
-                ))
+                return bool(
+                    await retry_db_operation(
+                        _invalidate,
+                        max_retries=3,
+                        retry_delay=0.1,
+                        operation_name=f"删除缓存 (task_id={task_id}, chart_type={chart_type})",
+                    )
+                )
 
             except Exception as e:
                 self.logger.error(f"删除缓存失败: {e}", exc_info=True)
@@ -239,12 +243,15 @@ class ChartCacheService:
 
                     return deleted_count
 
-                return int(await retry_db_operation(
-                    _cleanup,
-                    max_retries=3,
-                    retry_delay=0.1,
-                    operation_name="清理过期缓存",
-                ) or 0)
+                return int(
+                    await retry_db_operation(
+                        _cleanup,
+                        max_retries=3,
+                        retry_delay=0.1,
+                        operation_name="清理过期缓存",
+                    )
+                    or 0
+                )
 
             except Exception as e:
                 self.logger.error(f"清理过期缓存失败: {e}", exc_info=True)

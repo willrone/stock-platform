@@ -721,9 +721,7 @@ class HealthMonitor:
         result = await self.performance_tester.run_load_test(test_name, **kwargs)
         return result.to_dict()
 
-    def set_performance_baseline(
-        self, test_name: str, metrics: Dict[str, Any]
-    ) -> None:
+    def set_performance_baseline(self, test_name: str, metrics: Dict[str, Any]) -> None:
         """设置性能基准"""
         baseline_metrics = PerformanceMetrics(**metrics)
         self.performance_tester.set_baseline(test_name, baseline_metrics)

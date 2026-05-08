@@ -219,7 +219,7 @@ class BacktestExecutor:
                 backtest_config = BacktestConfig()
 
             # 开始进度监控
-            if (task_id or ""):
+            if task_id or "":
                 await backtest_progress_monitor.start_backtest_monitoring(
                     task_id=(task_id or ""), backtest_id=backtest_id
                 )
@@ -235,7 +235,7 @@ class BacktestExecutor:
                     {"strategy_name": strategy_name, "stock_count": len(stock_codes)},
                 )
 
-            if (task_id or ""):
+            if task_id or "":
                 await backtest_progress_monitor.update_stage(
                     task_id or "", "strategy_setup", status="running"
                 )
@@ -394,7 +394,9 @@ class BacktestExecutor:
                         task_repo = TaskRepository(session)
                         existing_task = task_repo.get_task_by_id((task_id or ""))
                         if existing_task:
-                            result_data: Dict[str, Any] = cast(Any, existing_task.result) or {}
+                            result_data: Dict[str, Any] = (
+                                cast(Any, existing_task.result) or {}
+                            )
                             progress_data_db = result_data.get("progress_data", {})
                             progress_data_db["total_days"] = len(trading_dates)
                             result_data["progress_data"] = progress_data_db
@@ -460,9 +462,7 @@ class BacktestExecutor:
                     trades=backtest_results.get("executed_trades", 0),
                     days=backtest_results.get("trading_days", 0),
                 )
-                self._profiler().take_memory_snapshot(
-                    "after_backtest_execution"
-                )
+                self._profiler().take_memory_snapshot("after_backtest_execution")
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
@@ -558,7 +558,10 @@ class BacktestExecutor:
 
             if task_id:
                 await backtest_progress_monitor.update_stage(
-                    (task_id or ""), "report_generation", progress=100, status="completed"
+                    (task_id or ""),
+                    "report_generation",
+                    progress=100,
+                    status="completed",
                 )
                 await backtest_progress_monitor.update_stage(
                     task_id, "data_storage", progress=100, status="completed"
@@ -743,7 +746,7 @@ class BacktestExecutor:
         _stock_times: List[Tuple[str, float, int]] = []  # 收集每只股票的预计算耗时
 
         def _work_one(
-            item: Tuple[str, pd.DataFrame]
+            item: Tuple[str, pd.DataFrame],
         ) -> Tuple[bool, str, Optional[str]]:
             stock_code, data = item
             try:
@@ -950,8 +953,12 @@ class BacktestExecutor:
         dates64 = np.array(trading_dates, dtype="datetime64[ns]")
 
         # 预分配数组（Phase 3 优化：使用连续内存）
-        close: np.ndarray[Any, Any] = np.full((N, T), np.nan, dtype=np.float64, order="C")
-        open_: np.ndarray[Any, Any] = np.full((N, T), np.nan, dtype=np.float64, order="C")
+        close: np.ndarray[Any, Any] = np.full(
+            (N, T), np.nan, dtype=np.float64, order="C"
+        )
+        open_: np.ndarray[Any, Any] = np.full(
+            (N, T), np.nan, dtype=np.float64, order="C"
+        )
         valid: np.ndarray[Any, Any] = np.zeros((N, T), dtype=bool, order="C")
         signal: np.ndarray[Any, Any] = np.zeros((N, T), dtype=np.int8, order="C")
         _align_alloc_s = time.perf_counter() - _t_align_alloc
@@ -1393,7 +1400,11 @@ class BacktestExecutor:
 
                     if need_codes:
                         # 批量查找价格（向量化）
-                        assert code_to_i is not None and valid_mat is not None and close_mat is not None
+                        assert (
+                            code_to_i is not None
+                            and valid_mat is not None
+                            and close_mat is not None
+                        )
                         for c in need_codes:
                             j = code_to_i.get(c)
                             if j is not None and bool(valid_mat[j, i]):
@@ -1429,10 +1440,16 @@ class BacktestExecutor:
                 all_signals: List[TradingSignal] = []
 
                 if aligned_arrays is not None:
-                    sig_mat = cast(Optional[np.ndarray[Any, Any]], aligned_arrays.get("signal"))
+                    sig_mat = cast(
+                        Optional[np.ndarray[Any, Any]], aligned_arrays.get("signal")
+                    )
                     codes = cast(Optional[List[str]], aligned_arrays.get("stock_codes"))
-                    close_mat = cast(Optional[np.ndarray[Any, Any]], aligned_arrays.get("close"))
-                    valid_mat = cast(Optional[np.ndarray[Any, Any]], aligned_arrays.get("valid"))
+                    close_mat = cast(
+                        Optional[np.ndarray[Any, Any]], aligned_arrays.get("close")
+                    )
+                    valid_mat = cast(
+                        Optional[np.ndarray[Any, Any]], aligned_arrays.get("valid")
+                    )
                     if (
                         isinstance(sig_mat, np.ndarray)
                         and isinstance(close_mat, np.ndarray)
@@ -2024,7 +2041,9 @@ class BacktestExecutor:
                                     severity=ErrorSeverity.LOW,
                                 )
 
-                            result_data: Dict[str, Any] = cast(Any, existing_task.result) or {}
+                            result_data: Dict[str, Any] = (
+                                cast(Any, existing_task.result) or {}
+                            )
                             progress_data = result_data.get("progress_data", {})
                             if not isinstance(progress_data, dict):
                                 progress_data = {}
