@@ -9,6 +9,14 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, cast
 import pandas as pd
 from loguru import logger
 
+from app.services.data.official_qlib_data_builder import OfficialQlibDataBuilder
+from app.services.qlib.official_workflow import (
+    OfficialDataset,
+    OfficialMarket,
+    build_official_lightgbm_workflow_config,
+    create_official_dataset_adapter,
+)
+
 ProgressCallback = Callable[
     [str, float, str, str, Optional[Dict[str, Any]]], Awaitable[None]
 ]
@@ -56,8 +64,38 @@ class QlibTrainingPipeline:
         """初始化训练引擎。"""
         await self.engine.initialize()
 
-    async def prepare_dataset(self, request: TrainingRequest) -> pd.DataFrame:
+    @staticmethod
+    def _is_official_replication(config: Any) -> bool:
+        return getattr(config, "workflow_mode", None) == "official_replication"
+
+    @staticmethod
+    def _build_official_workflow(config: Any) -> Any:
+        dataset = OfficialDataset(
+            getattr(config, "official_dataset", OfficialDataset.ALPHA158.value)
+        )
+        market = OfficialMarket(
+            getattr(config, "official_market", OfficialMarket.CSI300.value)
+        )
+        return build_official_lightgbm_workflow_config(
+            dataset=dataset,
+            market=market,
+        )
+
+    async def prepare_dataset(self, request: TrainingRequest) -> Any:
         """准备 Qlib 数据集。"""
+        if self._is_official_replication(request.config):
+            builder = OfficialQlibDataBuilder()
+            build_result = builder.prepare_stocks(request.stock_codes)
+            if not build_result.get("success"):
+                raise ValueError("官方Qlib复刻数据构建失败，未生成任何可用股票数据")
+
+            workflow = self._build_official_workflow(request.config)
+            return create_official_dataset_adapter(
+                workflow,
+                stock_codes=request.stock_codes,
+                provider_uri=builder.official_qlib_data_path,
+            )
+
         return await self.engine.data_provider.prepare_qlib_dataset(
             stock_codes=request.stock_codes,
             start_date=request.start_date,
@@ -96,9 +134,12 @@ class QlibTrainingPipeline:
         return cast(Dict[str, Any], self.engine._analyze_feature_correlations(dataset))
 
     async def prepare_training_datasets(
-        self, dataset: pd.DataFrame, validation_split: float, config: Any
+        self, dataset: Any, validation_split: float, config: Any
     ) -> Tuple[Any, Any]:
         """准备训练/验证数据集。"""
+        if self._is_official_replication(config) and hasattr(dataset, "for_segment"):
+            return dataset.for_segment("train"), dataset.for_segment("valid")
+
         return cast(
             Tuple[Any, Any],
             await self.engine._prepare_training_datasets(
@@ -107,6 +148,12 @@ class QlibTrainingPipeline:
                 config,
             ),
         )
+
+    def prepare_test_dataset(self, dataset: Any) -> Any:
+        """准备测试数据集。"""
+        if hasattr(dataset, "for_segment"):
+            return dataset.for_segment("test")
+        return dataset
 
     async def train(
         self,
