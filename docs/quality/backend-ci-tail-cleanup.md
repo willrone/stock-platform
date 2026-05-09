@@ -14,8 +14,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `integration/test_integration.py` | integration/live-app-legacy | Full app integration suite mixes old expectations, external state, and broad endpoint coverage; previous CI showed multiple failures. | Split into smoke tests vs live integration; keep smoke deterministic under TestClient. |
 | `integration/test_integration_simple.py` | integration/live-app-legacy | Simple integration suite still assumes legacy endpoint behavior and local services/data. | Convert service-dependent cases to marked integration job or update endpoint contracts. |
 | `integration/test_simple_integration.py` | integration/live-app-legacy | Legacy simple integration has failing live app assumptions. | Keep out of unit gate; restore under integration marker with explicit fixtures. |
-| `unit/backtest/test_backtest_engine.py` | legacy-backtest-api | Old dataclass/engine API characterization conflicts with current async executor/backtest model. | Decide delete vs port to current BacktestExecutor contract. |
-| `unit/backtest/test_backtest_engine_properties.py` | legacy-backtest-api/property | Property tests still target older engine semantics; latest CI had deterministic failures. | Port generated cases to current engine or mark as legacy until old engine removed. |
 | `unit/infrastructure/test_container_properties.py` | legacy-infrastructure | Container/service lifecycle property tests fail under CI environment assumptions. | Rebuild around current DI/container API with temp config. |
 | `unit/infrastructure/test_error_handling_properties.py` | optional-dependency/env | CircuitBreaker resolves to None in CI path; tests assume callable implementation. | Fix optional import fallback or skip only missing optional component cases. |
 | `unit/infrastructure/test_infrastructure.py` | legacy-infrastructure | Project structure/app/environment checks encode old filesystem/env assumptions. | Update path assumptions to repo root/backend layout and current app factory. |
@@ -38,8 +36,7 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 ## Recommended restore order
 1. Websocket/live-service tests: add proper fixtures or move to integration job.
 2. Repository/task state isolation: reset global DB/task managers between property examples.
-3. Backtest legacy engine tests: decide deletion vs port to current executor.
-4. Model/infrastructure property suites: larger contract drift; restore by module with dedicated fixtures.
+3. Model/infrastructure property suites: larger contract drift; restore by module with dedicated fixtures.
 
 ## Exit criteria
 - Remove each path from `collect_ignore` only in the same PR/commit that makes it pass under `GITHUB_ACTIONS=true pytest tests`.
