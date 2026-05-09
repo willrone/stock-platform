@@ -18,7 +18,6 @@ if os.getenv("GITHUB_ACTIONS") == "true":
         "unit/models/test_model_training.py",
         "unit/models/test_model_training_properties.py",
         "unit/models/test_official_workflow_pipeline.py",
-        "unit/models/test_training_report_contracts.py",
     ]
 
 

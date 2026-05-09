@@ -265,8 +265,8 @@ class TrainingHistory:
     """训练历史"""
 
     epoch: int
-    train_loss: float
-    val_loss: float
+    train_loss: Optional[float]
+    val_loss: Optional[float]
     train_accuracy: float
     val_accuracy: float
     timestamp: str
@@ -417,13 +417,16 @@ class EvaluationReportGenerator:
                     )
 
         # 构建训练历史
+        def _optional_float(value: Any) -> Optional[float]:
+            return None if value is None else float(value)
+
         history: List[TrainingHistory] = []
         for hist in training_history:
             history.append(
                 TrainingHistory(
                     epoch=int(hist.get("epoch", 0) or 0),
-                    train_loss=float(hist.get("train_loss") or 0.0),
-                    val_loss=float(hist.get("val_loss") or 0.0),
+                    train_loss=_optional_float(hist.get("train_loss")),
+                    val_loss=_optional_float(hist.get("val_loss")),
                     train_accuracy=float(hist.get("train_accuracy", 0.0) or 0.0),
                     val_accuracy=float(hist.get("val_accuracy", 0.0) or 0.0),
                     timestamp=str(hist.get("timestamp", datetime.now().isoformat())),
@@ -467,13 +470,19 @@ class EvaluationReportGenerator:
 
         # 基于准确率的建议
         if metrics.accuracy < 0.6:
-            recommendations.append("模型准确率较低，建议：增加训练数据、调整模型架构或进行特征工程")
+            recommendations.append(
+                "模型准确率较低，建议：增加训练数据、调整模型架构或进行特征工程"
+            )
         elif metrics.accuracy < 0.75:
-            recommendations.append("模型准确率中等，可以通过超参数调优或集成学习提升性能")
+            recommendations.append(
+                "模型准确率中等，可以通过超参数调优或集成学习提升性能"
+            )
 
         # 基于过拟合的建议
         if metrics.precision > 0.9 and metrics.recall < 0.5:
-            recommendations.append("模型可能存在过拟合，建议增加正则化或使用更多训练数据")
+            recommendations.append(
+                "模型可能存在过拟合，建议增加正则化或使用更多训练数据"
+            )
 
         # 基于特征重要性的建议
         if features:
@@ -486,7 +495,9 @@ class EvaluationReportGenerator:
             recommendations.append("夏普比率较低，建议优化风险控制策略或调整预测阈值")
 
         if not recommendations:
-            recommendations.append("模型性能良好，可以尝试进一步优化超参数或使用集成方法")
+            recommendations.append(
+                "模型性能良好，可以尝试进一步优化超参数或使用集成方法"
+            )
 
         return recommendations
 

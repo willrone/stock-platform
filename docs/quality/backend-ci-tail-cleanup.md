@@ -19,7 +19,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `unit/models/test_model_training.py` | model-contract-drift | Training service tests include multiple failures and skips around current service behavior. | Reconcile model version naming, persistence paths, and optional ML dependencies. |
 | `unit/models/test_model_training_properties.py` | model-contract-drift/property | Property tests expose repeated model version string and data consistency failures. | Fix version interpolation bug and deterministic training result fixtures. |
 | `unit/models/test_official_workflow_pipeline.py` | qlib-workflow-drift | Tests expect pipeline symbols/methods not present in current split training engine. | Restore compatibility exports or update tests to new engine split. |
-| `unit/models/test_training_report_contracts.py` | model-report-contract | Report contract expected None but implementation returns 0.0 for early stopping/sample field. | Decide API schema semantics; adjust report builder or tests. |
 
 ## Recommended restore order
 1. Repository/task state isolation: reset global DB/task managers between property examples.
