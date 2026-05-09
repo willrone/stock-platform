@@ -59,6 +59,7 @@ class Task(Base):
     result = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     estimated_duration = Column(Integer, nullable=True)  # 预估时长（秒）
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Any:
         return {
@@ -77,6 +78,7 @@ class Task(Base):
             "result": self.result,
             "error_message": self.error_message,
             "estimated_duration": self.estimated_duration,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 

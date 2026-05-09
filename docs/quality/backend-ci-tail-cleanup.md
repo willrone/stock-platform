@@ -28,7 +28,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `unit/models/test_training_report_contracts.py` | model-report-contract | Report contract expected None but implementation returns 0.0 for early stopping/sample field. | Decide API schema semantics; adjust report builder or tests. |
 | `unit/prediction/test_prediction_engine_properties.py` | flaky-property/prediction | Hypothesis health/filtering and confidence interval lower bound failures. | Relax strategy filtering and fix interval lower-bound semantics. |
 | `unit/prediction/test_technical_indicators_properties.py` | prediction-contract-drift/property | Batch processing property calls SimpleDataService.save_to_local with unsupported argument. | Align SimpleDataService API or update property test helper. |
-| `unit/repositories/test_task_repository_updated_at.py` | repository-schema-drift | Task object lacks expected updated_at field in current ORM/model path. | Add updated_at compatibility or update repository contract. |
 | `unit/tasks/test_task_management_properties.py` | state-leak/property | Task management properties see accumulated global tasks/statistics in CI. | Add repository/task manager isolation fixtures and reset global state. |
 
 ## Recommended restore order

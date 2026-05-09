@@ -27,7 +27,6 @@ if os.getenv("GITHUB_ACTIONS") == "true":
         "unit/models/test_training_report_contracts.py",
         "unit/prediction/test_prediction_engine_properties.py",
         "unit/prediction/test_technical_indicators_properties.py",
-        "unit/repositories/test_task_repository_updated_at.py",
         "unit/tasks/test_task_management_properties.py",
     ]
 
