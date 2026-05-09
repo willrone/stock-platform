@@ -11,8 +11,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 ## CI-isolated suites
 | Path | Category | Observed issue / reason | Restore path |
 | --- | --- | --- | --- |
-| `integration/test_integration.py` | integration/live-app-legacy | Full app integration suite mixes old expectations, external state, and broad endpoint coverage; previous CI showed multiple failures. | Split into smoke tests vs live integration; keep smoke deterministic under TestClient. |
-| `integration/test_integration_simple.py` | integration/live-app-legacy | Simple integration suite still assumes legacy endpoint behavior and local services/data. | Convert service-dependent cases to marked integration job or update endpoint contracts. |
 
 ## Recommended restore order
 1. Repository/task state isolation: reset global DB/task managers between property examples.

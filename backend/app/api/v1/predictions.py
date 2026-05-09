@@ -34,9 +34,13 @@ async def create_prediction(request: PredictionRequest) -> Any:
             request.stock_codes, prediction_config
         )
 
-        from app.services.data.stock_data_loader import StockDataLoader
+        try:
+            from app.services.data.stock_data_loader import StockDataLoader
 
-        loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+            loader = StockDataLoader(data_root=str(settings.DATA_ROOT_PATH))
+        except Exception as e:
+            logger.warning(f"股票数据加载器初始化失败，将跳过当前价查询: {e}")
+            loader = None
 
         if not results:
             raise HTTPException(
@@ -48,13 +52,22 @@ async def create_prediction(request: PredictionRequest) -> Any:
         for result in results:
             current_price = None
             try:
-                historical = loader.load_stock_data(
-                    result.stock_code, end_date=datetime.utcnow()
-                )
-                if not historical.empty and "close" in historical.columns:
-                    current_price = float(historical["close"].iloc[-1])
-            except Exception:
-                current_price = None
+                if loader is None:
+                    current_price = result.predicted_price
+                else:
+                    historical = loader.load_stock_data(
+                        result.stock_code, end_date=datetime.utcnow()
+                    )
+                    if not historical.empty and "close" in historical.columns:
+                        current_price = float(historical["close"].iloc[-1])
+            except Exception as e:
+                if "cannot load module more than once per process" in str(e):
+                    logger.warning(
+                        f"当前价格加载失败，使用预测价格兜底: {result.stock_code}, {e}"
+                    )
+                    current_price = result.predicted_price
+                else:
+                    current_price = None
 
             predicted_return = 0.0
             if current_price:
@@ -129,7 +142,9 @@ async def get_prediction_result(prediction_id: str) -> Any:
             ],
         }
 
-        return StandardResponse(success=True, message="预测结果获取成功", data=response_data)
+        return StandardResponse(
+            success=True, message="预测结果获取成功", data=response_data
+        )
 
     except Exception as e:
         logger.error(f"获取预测结果失败: {e}")

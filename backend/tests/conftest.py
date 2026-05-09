@@ -4,15 +4,11 @@
 
 import os
 
-# CI currently runs the full historical `tests/` tree. Several legacy suites target
-# retired APIs, repository-root relative paths, external services, or property tests
-# without async Hypothesis executors. Keep the GitHub gate focused on the maintained
-# regression suite while those legacy contracts are paid down separately.
+# CI runs the full historical `tests/` tree. Keep this hook explicit so
+# `scripts/check_ci_tail_cleanup_sync.py` can detect any future temporary
+# isolations and require matching ledger entries.
 if os.getenv("GITHUB_ACTIONS") == "true":
-    collect_ignore = [
-        "integration/test_integration.py",
-        "integration/test_integration_simple.py",
-    ]
+    collect_ignore = []
 
 
 import tempfile

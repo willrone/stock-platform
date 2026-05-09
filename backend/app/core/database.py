@@ -118,15 +118,11 @@ def ensure_sqlite_task_updated_at_column_sync(connection: Connection) -> None:
     if "updated_at" not in columns:
         connection.exec_driver_sql("ALTER TABLE tasks ADD COLUMN updated_at DATETIME")
 
-    connection.execute(
-        text(
-            """
+    connection.execute(text("""
             UPDATE tasks
             SET updated_at = COALESCE(updated_at, completed_at, started_at, created_at)
             WHERE updated_at IS NULL
-            """
-        )
-    )
+            """))
 
 
 # 会话工厂
@@ -211,7 +207,9 @@ async def retry_db_operation(
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
+                    logger.error(
+                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
+                    )
             else:
                 # 非锁定错误，直接抛出
                 raise
@@ -269,7 +267,9 @@ def retry_db_operation_sync(
                     time.sleep(current_delay)
                     current_delay *= backoff_factor
                 else:
-                    logger.error(f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}")
+                    logger.error(
+                        f"{operation_name} 重试 {max_retries} 次后仍然失败: {e}"
+                    )
             else:
                 # 非锁定错误，直接抛出
                 raise
@@ -300,12 +300,10 @@ async def init_db() -> None:
     # 创建所有表
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(ensure_sqlite_task_updated_at_column_sync)
 
-        # 如果是 SQLite，启用 WAL 模式
-        # 注意：WAL 模式已经在连接时通过事件监听器配置，这里只是确保设置正确
-        if "sqlite" in settings.DATABASE_URL.lower():
-            # 使用 text() 包装 SQL 语句以便在异步引擎中执行
-            await conn.execute(text("PRAGMA journal_mode=WAL"))
-            await conn.execute(text("PRAGMA busy_timeout=5000"))
-            await conn.execute(text("PRAGMA foreign_keys=ON"))
-            await conn.execute(text("PRAGMA synchronous=NORMAL"))
+        # SQLite PRAGMA settings are applied by connection event hooks.
+        # Re-applying journal/synchronous pragmas inside this transactional
+        # ``begin`` block can fail on aiosqlite ("Safety level may not be changed
+        # inside a transaction"), especially when TestClient repeatedly starts
+        # lifespan contexts in the same process.
