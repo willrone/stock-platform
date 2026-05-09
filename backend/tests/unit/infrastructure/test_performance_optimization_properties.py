@@ -15,7 +15,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis.strategies import composite
 
-from app.services.data.stream_processor import StreamProcessor
+from app.services.data.stream_processor import MemoryMonitor, StreamProcessor
 from app.services.infrastructure.cache_service import (
     CacheManager,
     LRUCache,
@@ -25,10 +25,6 @@ from app.services.infrastructure.connection_pool import (
     PoolConfig,
     connection_pool_manager,
 )
-
-# ChunkedDataReader, MemoryMonitor 可能已移除
-ChunkedDataReader = None
-MemoryMonitor = None
 
 
 @composite
@@ -42,7 +38,7 @@ def cache_configs(draw):
 
 
 @composite
-def test_data_frames(draw):
+def data_frames(draw):
     """生成测试数据DataFrame"""
     size = draw(st.integers(min_value=100, max_value=1000))
 
@@ -121,7 +117,7 @@ class TestPerformanceOptimizationProperties:
         assert stats.size <= cache_config["max_size"]
 
     @pytest.mark.asyncio
-    @given(test_data_frames())
+    @given(data_frames())
     @settings(max_examples=3, deadline=15000)
     async def test_stream_processing_memory_efficiency(self, test_df):
         """
@@ -271,11 +267,13 @@ class TestPerformanceOptimizationProperties:
         **验证: 需求 7.2, 7.5**
         """
         # 创建大量测试数据
+        row_count = 10000
+        categories = ["A", "B", "C"]
         large_df = pd.DataFrame(
             {
-                "id": range(10000),
-                "value": [i * 0.1 for i in range(10000)],
-                "category": ["A", "B", "C"] * 3334,
+                "id": range(row_count),
+                "value": [i * 0.1 for i in range(row_count)],
+                "category": [categories[i % len(categories)] for i in range(row_count)],
             }
         )
 
