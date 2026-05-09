@@ -199,7 +199,7 @@ class AuditLogger:
             "request_id": request_id_var.get(),
         }
 
-        logger.info(f"用户操作: {action}", **audit_data)
+        logger.info("用户操作: {}", action, **audit_data)
 
     @staticmethod
     def log_data_change(
@@ -224,7 +224,7 @@ class AuditLogger:
             "request_id": request_id_var.get(),
         }
 
-        logger.info(f"数据变更: {table}.{operation}", **audit_data)
+        logger.info("数据变更: {}.{}", table, operation, **audit_data)
 
     @staticmethod
     def log_system_event(
@@ -244,7 +244,7 @@ class AuditLogger:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        logger.info(f"系统事件: {event_type}", **audit_data)
+        logger.info("系统事件: {}", event_type, **audit_data)
 
     @staticmethod
     def log_security_event(
@@ -265,7 +265,7 @@ class AuditLogger:
             "request_id": request_id_var.get(),
         }
 
-        logger.warning(f"安全事件: {event_type}", **audit_data)
+        logger.warning("安全事件: {}", event_type, **audit_data)
 
 
 class PerformanceLogger:
@@ -292,7 +292,9 @@ class PerformanceLogger:
             "request_id": request_id_var.get(),
         }
 
-        logger.info(f"API性能: {method} {endpoint} - {duration_ms:.2f}ms", **perf_data)
+        logger.info(
+            "API性能: {} {} - {:.2f}ms", method, endpoint, duration_ms, **perf_data
+        )
 
     @staticmethod
     def log_task_performance(
@@ -314,7 +316,7 @@ class PerformanceLogger:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        logger.info(f"任务性能: {task_type} - {duration_seconds:.2f}s", **perf_data)
+        logger.info("任务性能: {} - {:.2f}s", task_type, duration_seconds, **perf_data)
 
     @staticmethod
     def log_model_performance(
@@ -336,7 +338,9 @@ class PerformanceLogger:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        logger.info(f"模型性能: {model_id}.{operation} - {duration_ms:.2f}ms", **perf_data)
+        logger.info(
+            "模型性能: {}.{} - {:.2f}ms", model_id, operation, duration_ms, **perf_data
+        )
 
 
 class LogContext:

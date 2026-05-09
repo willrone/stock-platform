@@ -315,7 +315,7 @@ class ErrorRecoveryManager:
         """处理错误并返回恢复动作"""
         # 记录错误
         self.error_history.append(error)
-        logger.error(f"错误处理: {error.error_id} - {error.message}")
+        logger.error("错误处理: {} - {}", error.error_id, error.message)
 
         # 获取恢复策略
         handler = self.recovery_strategies.get(error.error_type)
@@ -389,6 +389,15 @@ class ErrorRecoveryManager:
                     action_type="increase_timeout",
                     parameters={"timeout_multiplier": 2},
                     description="增加任务超时时间",
+                )
+            )
+
+        if not actions:
+            actions.append(
+                RecoveryAction(
+                    action_type="log_task_error",
+                    parameters={"severity": error.severity.value},
+                    description="记录任务错误并交由任务状态管理器处理",
                 )
             )
 
