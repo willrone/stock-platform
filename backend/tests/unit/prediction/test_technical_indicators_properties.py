@@ -22,9 +22,9 @@ from app.services.prediction.technical_indicators import (
 @composite
 def stock_code_strategy(draw):
     """生成有效的股票代码"""
-    _ = draw(st.integers(min_value=1, max_value=999999))
-    _ = draw(st.sampled_from(["SH", "SZ"]))
-    return "{number:06d}.{market}"
+    number = draw(st.integers(min_value=1, max_value=999999))
+    market = draw(st.sampled_from(["SH", "SZ"]))
+    return f"{number:06d}.{market}"
 
 
 @composite
@@ -191,9 +191,7 @@ class TestTechnicalIndicatorProperties:
                         test_data = data_service.generate_mock_data(
                             stock_code, start_date, end_date
                         )
-                        data_service.save_to_local(
-                            test_data, stock_code, merge_with_existing=False
-                        )
+                        assert data_service.save_to_local(test_data, stock_code)
 
                     # 创建批量请求
                     request = BatchIndicatorRequest(
