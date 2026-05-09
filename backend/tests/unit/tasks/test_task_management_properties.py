@@ -4,6 +4,7 @@
 """
 
 from datetime import datetime
+from uuid import uuid4
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -232,7 +233,9 @@ class TestTaskManagementIntegrity:
         功能: production-ready-implementation, 属性 2: 任务管理完整性
         验证任务统计的完整性 - 统计信息应该准确反映任务状态
         """
-        user_id = "stats_test_user"
+        # Hypothesis runs many examples against the same setup_method fixture instance;
+        # keep each generated example isolated from prior task rows.
+        user_id = f"stats_test_user_{uuid4()}"
 
         # 创建不同状态的任务
         statuses = [
