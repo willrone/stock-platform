@@ -14,7 +14,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `integration/test_integration.py` | integration/live-app-legacy | Full app integration suite mixes old expectations, external state, and broad endpoint coverage; previous CI showed multiple failures. | Split into smoke tests vs live integration; keep smoke deterministic under TestClient. |
 | `integration/test_integration_simple.py` | integration/live-app-legacy | Simple integration suite still assumes legacy endpoint behavior and local services/data. | Convert service-dependent cases to marked integration job or update endpoint contracts. |
 | `integration/test_simple_integration.py` | integration/live-app-legacy | Legacy simple integration has failing live app assumptions. | Keep out of unit gate; restore under integration marker with explicit fixtures. |
-| `unit/models/test_model_management_properties.py` | model-contract-drift/property | Model management properties fail/error under current storage/service state. | Add temp storage isolation and update API expectations. |
 
 ## Recommended restore order
 1. Repository/task state isolation: reset global DB/task managers between property examples.

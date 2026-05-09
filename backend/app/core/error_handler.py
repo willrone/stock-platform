@@ -2,6 +2,7 @@
 统一错误处理框架
 """
 
+import inspect
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
@@ -561,7 +562,10 @@ def handle_exception(func: Any) -> Any:
 
 
 def handle_async_exception(func: Any) -> Any:
-    """装饰器：异步函数统一异常处理"""
+    """装饰器：统一异常处理，兼容同步和异步函数。"""
+
+    if not inspect.iscoroutinefunction(func):
+        return handle_exception(func)
 
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:

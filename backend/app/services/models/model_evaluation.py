@@ -23,6 +23,17 @@ from app.core.logging import logger as app_logger
 
 logger = app_logger
 
+
+class VersionInfo(dict):
+    """模型版本信息，兼容 dict 和属性访问。"""
+
+    def __getattr__(self, item: str) -> Any:
+        try:
+            return self[item]
+        except KeyError as exc:
+            raise AttributeError(item) from exc
+
+
 if TYPE_CHECKING:
     from .model_storage import ModelStorage
 
@@ -402,7 +413,9 @@ class ModelEvaluator:
             max_consecutive_losses=max_consecutive_losses,
         )
 
-        logger.info(f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}")
+        logger.info(
+            f"模型评估完成，准确率: {accuracy:.4f}, 夏普比率: {sharpe_ratio:.4f}"
+        )
         return metrics
 
 
@@ -411,16 +424,21 @@ class ModelVersionManager:
 
     def __init__(
         self,
-        models_dir: Optional[str] = None,
+        models_dir: Optional[Any] = None,
         storage: Optional["ModelStorage"] = None,
     ) -> None:
-        # 使用配置中的路径，如果没有提供则使用默认配置
+        # 使用配置中的路径，如果没有提供则使用默认配置。
+        # 兼容旧调用：ModelVersionManager(model_storage)。
         from app.core.config import settings
+
+        if storage is None and hasattr(models_dir, "storage_root"):
+            storage = cast("ModelStorage", models_dir)
+            models_dir = str(storage.versions_dir)
 
         if models_dir is None:
             models_dir = settings.MODEL_STORAGE_PATH
 
-        self.models_dir = Path(models_dir)
+        self.models_dir = Path(cast(str, models_dir))
         # 解析相对路径为绝对路径
         if not self.models_dir.is_absolute():
             backend_dir = Path(__file__).parent.parent.parent
@@ -676,8 +694,8 @@ class ModelVersionManager:
             logger.error(f"创建模型版本失败: {str(e)}")
             return False
 
-    def list_versions(self, model_id: str) -> List[Dict[str, Any]]:
-        """列出模型的所有版本"""
+    def list_versions(self, model_id: str) -> List[Any]:
+        """列出模型的所有版本。"""
         try:
             version_dir = self.versions_dir / model_id
             if not version_dir.exists():
@@ -690,13 +708,13 @@ class ModelVersionManager:
                         import json
 
                         version_dict = json.load(f)
-                    versions.append(version_dict)
+                    versions.append(VersionInfo(version_dict))
                 except Exception as e:
                     logger.warning(f"读取版本信息失败: {version_file}, 错误: {e}")
                     continue
 
             # 按创建时间排序
-            versions.sort(key=lambda x: x["created_at"], reverse=True)
+            versions.sort(key=lambda x: x.created_at, reverse=True)
             return versions
         except Exception as e:
             logger.error(f"列出模型版本失败: {model_id}, 错误: {e}")
@@ -712,4 +730,5 @@ __all__ = [
     "BacktestMetrics",
     "ModelVersion",
     "ModelStatus",
+    "VersionInfo",
 ]

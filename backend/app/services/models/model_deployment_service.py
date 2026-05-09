@@ -285,7 +285,9 @@ class ModelEvaluator:
                     all_data.append(stock_data)
 
             if not all_data:
-                raise ModelError(message="无法加载测试数据", severity=ErrorSeverity.HIGH)
+                raise ModelError(
+                    message="无法加载测试数据", severity=ErrorSeverity.HIGH
+                )
 
             # 合并数据
             test_data = pd.concat(all_data, axis=0)
@@ -591,7 +593,7 @@ class ModelEvaluator:
     def _save_evaluation(self, evaluation: ModelEvaluation) -> None:
         """保存评估结果"""
         try:
-            evaluation_dir = Path("backend/models/evaluations")
+            evaluation_dir = self.data_dir / "models" / "evaluations"
             evaluation_dir.mkdir(parents=True, exist_ok=True)
 
             evaluation_file = evaluation_dir / f"{evaluation.evaluation_id}.json"
