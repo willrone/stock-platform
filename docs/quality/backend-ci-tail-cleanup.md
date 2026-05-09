@@ -16,7 +16,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `integration/test_simple_integration.py` | integration/live-app-legacy | Legacy simple integration has failing live app assumptions. | Keep out of unit gate; restore under integration marker with explicit fixtures. |
 | `unit/models/test_model_management_properties.py` | model-contract-drift/property | Model management properties fail/error under current storage/service state. | Add temp storage isolation and update API expectations. |
 | `unit/models/test_model_training.py` | model-contract-drift | Training service tests include multiple failures and skips around current service behavior. | Reconcile model version naming, persistence paths, and optional ML dependencies. |
-| `unit/models/test_model_training_properties.py` | model-contract-drift/property | Property tests expose repeated model version string and data consistency failures. | Fix version interpolation bug and deterministic training result fixtures. |
 | `unit/models/test_official_workflow_pipeline.py` | qlib-workflow-drift | Tests expect pipeline symbols/methods not present in current split training engine. | Restore compatibility exports or update tests to new engine split. |
 
 ## Recommended restore order

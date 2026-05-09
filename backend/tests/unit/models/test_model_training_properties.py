@@ -131,7 +131,7 @@ class MockModelVersionManager:
         """保存模型版本"""
         # 生成版本信息
         versions = self.saved_versions.get(model_id, [])
-        version = "v{len(versions) + 1:03d}"
+        version = f"v{len(versions) + 1:03d}"
 
         # 模拟保存模型文件
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -413,7 +413,10 @@ class TestModelTrainingResultsSaving:
     @settings(
         max_examples=10,
         deadline=None,
-        suppress_health_check=[HealthCheck.filter_too_much],
+        suppress_health_check=[
+            HealthCheck.filter_too_much,
+            HealthCheck.data_too_large,
+        ],
     )
     def test_training_data_consistency_property(self, training_data):
         """
