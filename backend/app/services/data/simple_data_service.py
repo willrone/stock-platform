@@ -320,7 +320,9 @@ class SimpleDataService:
                     df_filtered = df[mask].copy()
 
                     if df_filtered.empty:
-                        logger.debug(f"Parquet文件在指定日期范围内无数据: {parquet_path}")
+                        logger.debug(
+                            f"Parquet文件在指定日期范围内无数据: {parquet_path}"
+                        )
                         continue
 
                     # Convert to list of dicts
@@ -340,7 +342,9 @@ class SimpleDataService:
                         }
                         out.append(item)
 
-                    logger.info(f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录")
+                    logger.info(
+                        f"从Parquet加载数据成功: {stock_code}, {len(out)}条记录"
+                    )
                     return out
                 except Exception as e:
                     logger.error(f"加载Parquet数据失败: {parquet_path}, {e}")
@@ -411,9 +415,16 @@ class SimpleDataService:
         and store files under `<data_path>/parquet/<stock_code>.parquet`.
         """
         try:
-            parquet_dir = self.data_path / "parquet"
+            if self.data_path.name == "stocks":
+                parquet_dir = self.data_path / "daily" / stock_code
+                file_path = (
+                    parquet_dir
+                    / f"{pd.to_datetime(df['date']).dt.year.iloc[0]}.parquet"
+                )
+            else:
+                parquet_dir = self.data_path / "parquet"
+                file_path = parquet_dir / f"{stock_code}.parquet"
             parquet_dir.mkdir(parents=True, exist_ok=True)
-            file_path = parquet_dir / f"{stock_code}.parquet"
             df.to_parquet(file_path, index=False, engine="pyarrow")
             return True
         except Exception as e:

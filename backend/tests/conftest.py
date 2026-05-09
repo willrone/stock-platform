@@ -12,7 +12,6 @@ if os.getenv("GITHUB_ACTIONS") == "true":
     collect_ignore = [
         "integration/test_integration.py",
         "integration/test_integration_simple.py",
-        "integration/test_simple_integration.py",
     ]
 
 
