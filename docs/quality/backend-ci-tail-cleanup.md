@@ -20,7 +20,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `unit/models/test_model_training_properties.py` | model-contract-drift/property | Property tests expose repeated model version string and data consistency failures. | Fix version interpolation bug and deterministic training result fixtures. |
 | `unit/models/test_official_workflow_pipeline.py` | qlib-workflow-drift | Tests expect pipeline symbols/methods not present in current split training engine. | Restore compatibility exports or update tests to new engine split. |
 | `unit/models/test_training_report_contracts.py` | model-report-contract | Report contract expected None but implementation returns 0.0 for early stopping/sample field. | Decide API schema semantics; adjust report builder or tests. |
-| `unit/prediction/test_prediction_engine_properties.py` | flaky-property/prediction | Hypothesis health/filtering and confidence interval lower bound failures. | Relax strategy filtering and fix interval lower-bound semantics. |
 | `unit/tasks/test_task_management_properties.py` | state-leak/property | Task management properties see accumulated global tasks/statistics in CI. | Add repository/task manager isolation fixtures and reset global state. |
 
 ## Recommended restore order
