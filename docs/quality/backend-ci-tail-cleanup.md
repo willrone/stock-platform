@@ -29,7 +29,6 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `unit/prediction/test_prediction_engine_properties.py` | flaky-property/prediction | Hypothesis health/filtering and confidence interval lower bound failures. | Relax strategy filtering and fix interval lower-bound semantics. |
 | `unit/prediction/test_technical_indicators_properties.py` | prediction-contract-drift/property | Batch processing property calls SimpleDataService.save_to_local with unsupported argument. | Align SimpleDataService API or update property test helper. |
 | `unit/repositories/test_task_repository_updated_at.py` | repository-schema-drift | Task object lacks expected updated_at field in current ORM/model path. | Add updated_at compatibility or update repository contract. |
-| `unit/services/test_strategy_factory_portfolio.py` | strategy-factory-contract | Portfolio strategy factory returns names/cases and errors differently from tests. | Decide canonical strategy names and error behavior. |
 | `unit/services/test_websocket_endpoint.py` | live-service/async | Async live websocket/http tests require running server and pytest async handling. | Move to integration job with started app, or rewrite via TestClient/websocket test client. |
 | `unit/tasks/test_task_management_properties.py` | state-leak/property | Task management properties see accumulated global tasks/statistics in CI. | Add repository/task manager isolation fixtures and reset global state. |
 

@@ -9,6 +9,11 @@ from app.services.backtest.core.strategy_portfolio import StrategyPortfolio
 from app.services.backtest.strategies.strategy_factory import StrategyFactory
 
 
+def _weights_by_strategy_name(strategy: StrategyPortfolio) -> dict[str, float]:
+    """Return normalized weights keyed by the concrete strategy names."""
+    return dict(strategy.weights)
+
+
 class TestStrategyFactoryPortfolio:
     """策略工厂组合策略测试类"""
 
@@ -84,9 +89,10 @@ class TestStrategyFactoryPortfolio:
         strategy = StrategyFactory.create_strategy("portfolio", config)
 
         # 权重应该自动归一化
-        assert abs(sum(strategy.weights.values()) - 1.0) < 0.001
-        assert abs(strategy.weights["rsi"] - 0.5) < 0.001
-        assert abs(strategy.weights["macd"] - 0.5) < 0.001
+        weights = _weights_by_strategy_name(strategy)
+        assert abs(sum(weights.values()) - 1.0) < 0.001
+        assert abs(weights["RSI"] - 0.5) < 0.001
+        assert abs(weights["MACD"] - 0.5) < 0.001
 
     def test_portfolio_default_weight(self):
         """测试组合策略默认权重"""
@@ -104,19 +110,29 @@ class TestStrategyFactoryPortfolio:
         for weight in strategy.weights.values():
             assert abs(weight - 0.5) < 0.001
 
-    def test_portfolio_missing_strategies_error(self):
-        """测试缺少strategies字段的错误"""
-        config = {}
+    def test_portfolio_missing_strategies_uses_default_portfolio(self):
+        """测试缺少strategies字段时使用默认组合策略"""
+        strategy = StrategyFactory.create_strategy("portfolio", {})
 
-        with pytest.raises(TaskError, match="必须包含'strategies'字段"):
-            StrategyFactory.create_strategy("portfolio", config)
+        assert isinstance(strategy, StrategyPortfolio)
+        assert [child.name for child in strategy.strategies] == [
+            "BollingerBands",
+            "CCI",
+            "MACD",
+        ]
+        assert abs(sum(strategy.weights.values()) - 1.0) < 0.001
 
-    def test_portfolio_empty_strategies_error(self):
-        """测试空strategies列表的错误"""
-        config = {"strategies": []}
+    def test_portfolio_empty_strategies_uses_default_portfolio(self):
+        """测试空strategies列表时使用默认组合策略"""
+        strategy = StrategyFactory.create_strategy("portfolio", {"strategies": []})
 
-        with pytest.raises(TaskError, match="必须是非空列表"):
-            StrategyFactory.create_strategy("portfolio", config)
+        assert isinstance(strategy, StrategyPortfolio)
+        assert [child.name for child in strategy.strategies] == [
+            "BollingerBands",
+            "CCI",
+            "MACD",
+        ]
+        assert abs(sum(strategy.weights.values()) - 1.0) < 0.001
 
     def test_portfolio_invalid_strategy_config(self):
         """测试无效策略配置"""
@@ -150,4 +166,4 @@ class TestStrategyFactoryPortfolio:
 
         # 应该创建单策略，不是组合策略
         assert not isinstance(strategy, StrategyPortfolio)
-        assert strategy.name == "rsi"
+        assert strategy.name == "RSI"
