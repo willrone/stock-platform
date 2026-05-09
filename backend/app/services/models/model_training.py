@@ -24,7 +24,7 @@ try:
 
     XGBOOST_AVAILABLE = True
 except ImportError:
-    xgb = None  # type: ignore[assignment]
+    xgb = None
     XGBOOST_AVAILABLE = False
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
