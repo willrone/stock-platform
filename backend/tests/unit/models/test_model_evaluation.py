@@ -251,18 +251,18 @@ class TestModelVersioning:
         existing_versions = []
 
         # 第一个版本
-        version1 = "v{len(existing_versions) + 1:03d}"
+        version1 = f"v{len(existing_versions) + 1:03d}"
         assert version1 == "v001"
         existing_versions.append(version1)
 
         # 第二个版本
-        version2 = "v{len(existing_versions) + 1:03d}"
+        version2 = f"v{len(existing_versions) + 1:03d}"
         assert version2 == "v002"
         existing_versions.append(version2)
 
         # 第十个版本
         for _i in range(8):
-            existing_versions.append("v{len(existing_versions) + 1:03d}")
+            existing_versions.append(f"v{len(existing_versions) + 1:03d}")
 
         # 现在应该有10个版本了
         assert len(existing_versions) == 10
@@ -337,7 +337,9 @@ class TestFinancialMetricsCalculator:
         predictions = np.array([1, 0, 1, 1, 0])
         actual_prices = np.array([100, 105, 102, 108, 106, 110])
 
-        returns = self.calculate_returns(predictions, actual_prices)
+        returns = FinancialMetricsCalculator.calculate_returns(
+            predictions, actual_prices
+        )
 
         # 检查返回数组长度
         assert len(returns) == len(predictions)
