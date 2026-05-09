@@ -17,8 +17,15 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-import xgboost as xgb
 from loguru import logger
+
+try:
+    import xgboost as xgb
+
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    xgb = None  # type: ignore[assignment]
+    XGBOOST_AVAILABLE = False
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 
@@ -396,7 +403,9 @@ class QlibDataProvider:
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
+        logger.info(
+            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
+        )
         return combined_features
 
     def _add_fundamental_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -714,6 +723,9 @@ class ModelTrainingService:
     ) -> Any:
         """训练XGBoost模型"""
         logger.info("开始训练XGBoost模型")
+
+        if xgb is None:
+            raise ImportError("xgboost is required to train XGBoost models")
 
         # 将3D数据展平为2D（XGBoost不支持3D输入）
         train_X_flat = train_X.reshape(train_X.shape[0], -1)
@@ -1117,7 +1129,9 @@ class ModelTrainingService:
             model_id, new_X, new_y, current_model
         )
 
-        logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}")
+        logger.info(
+            f"模型 {model_id} 在线更新完成，准确率: {metrics.get('accuracy', 0):.4f}"
+        )
         return updated_model, metrics
 
     @handle_async_exception
@@ -1199,7 +1213,9 @@ class ModelTrainingService:
             "total_base_models": len(base_model_ids),
         }
 
-        logger.info(f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型")
+        logger.info(
+            f"集成模型 {ensemble_id} 训练完成，包含 {len(base_model_ids)} 个基础模型"
+        )
         return result
 
 
@@ -1322,4 +1338,7 @@ __all__ = [
     "ModelType",
     "ModelMetrics",
     "QlibDataProvider",
+    "get_device",
+    "xgb",
+    "XGBOOST_AVAILABLE",
 ]

@@ -34,7 +34,7 @@ from .model_training_service import (
 
 # 模型训练（深度学习）- 可选导入
 try:
-    from .model_training import LSTMModel, ModelMetrics
+    from .model_training import LSTMModel, ModelMetrics, get_device
     from .model_training import ModelTrainingService as DeepModelTrainingService
     from .model_training import ModelType, PositionalEncoding, QlibDataProvider
     from .model_training import TrainingConfig as DeepTrainingConfig
@@ -51,6 +51,7 @@ except ImportError:
     ModelType: Any = None  # type: ignore[no-redef]
     DeepTrainingConfig: Any = None  # type: ignore[no-redef]
     ModelMetrics: Any = None  # type: ignore[no-redef]
+    get_device: Any = None  # type: ignore[no-redef]
 
 # 模型部署服务
 from .model_deployment_service import (
@@ -160,6 +161,7 @@ __all__ = [
     "ModelType",
     "DeepTrainingConfig",
     "ModelMetrics",
+    "get_device",
     # 模型存储
     "ModelStorage",
     "ModelVersionManager",

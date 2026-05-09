@@ -146,7 +146,7 @@ class TestModelTrainingService:
         assert metrics.max_drawdown <= 0
         assert 0 <= metrics.win_rate <= 1
 
-    @patch("app.services.model_training.xgb")
+    @patch("app.services.models.model_training.xgb")
     async def test_train_xgboost_model(self, mock_xgb, service, training_config):
         """测试XGBoost模型训练"""
         # 模拟XGBoost
@@ -163,14 +163,14 @@ class TestModelTrainingService:
 
         training_config.model_type = ModelType.XGBOOST
 
-        model, metrics = await service._train_xgboost(
+        model = await service._train_xgboost(
             train_X, train_y, val_X, val_y, training_config
         )
 
         # 验证XGBoost被调用
+        assert model is mock_model
         assert mock_xgb.train.called
         assert mock_xgb.DMatrix.called
-        assert isinstance(metrics, ModelMetrics)
 
     @patch("torch.cuda.is_available")
     @patch("torch.cuda.get_device_name")
@@ -200,7 +200,7 @@ class TestModelTrainingService:
         assert device.type == "cuda"
         mock_get_device_name.assert_called_once_with(0)
 
-    @patch("app.services.model_training.get_device")
+    @patch("app.services.models.model_training.get_device")
     async def test_train_deep_learning_model(
         self, mock_get_device, service, training_config
     ):
@@ -216,14 +216,12 @@ class TestModelTrainingService:
         training_config.epochs = 2  # 减少训练轮数
         training_config.batch_size = 5
 
-        model, metrics = await service._train_deep_learning_model(
+        model = await service._train_deep_learning_model(
             train_X, train_y, val_X, val_y, training_config
         )
 
         # 验证返回结果
         assert model is not None
-        assert isinstance(metrics, ModelMetrics)
-        assert 0 <= metrics.accuracy <= 1
 
 
 class TestQlibDataProvider:
@@ -300,6 +298,7 @@ async def test_model_training_integration():
 
     mock_data_provider.prepare_features = AsyncMock(return_value=mock_features_df)
     service.data_provider = mock_data_provider
+    service.version_manager = None
 
     # 创建训练配置
     config = TrainingConfig(model_type=ModelType.XGBOOST, sequence_length=20, epochs=5)
@@ -308,9 +307,9 @@ async def test_model_training_integration():
     service._save_model = AsyncMock(return_value="/path/to/model.json")
 
     # 执行训练（这里会调用实际的XGBoost训练）
-    with patch("app.services.model_training.xgb") as mock_xgb:
+    with patch("app.services.models.model_training.xgb") as mock_xgb:
         mock_model = Mock()
-        mock_model.predict.return_value = np.array([0.6, 0.4, 0.8])
+        mock_model.predict.side_effect = lambda x: (np.arange(len(x)) % 2).astype(int)
         mock_xgb.train.return_value = mock_model
         mock_xgb.DMatrix = Mock()
 
@@ -324,5 +323,5 @@ async def test_model_training_integration():
 
         # 验证结果
         assert model_path == "/path/to/model.json"
-        assert isinstance(metrics, ModelMetrics)
         assert 0 <= metrics.accuracy <= 1
+        assert metrics.max_drawdown <= 0
