@@ -29,13 +29,11 @@ The GitHub backend test workflow currently runs the whole historical `backend/te
 | `unit/prediction/test_prediction_engine_properties.py` | flaky-property/prediction | Hypothesis health/filtering and confidence interval lower bound failures. | Relax strategy filtering and fix interval lower-bound semantics. |
 | `unit/prediction/test_technical_indicators_properties.py` | prediction-contract-drift/property | Batch processing property calls SimpleDataService.save_to_local with unsupported argument. | Align SimpleDataService API or update property test helper. |
 | `unit/repositories/test_task_repository_updated_at.py` | repository-schema-drift | Task object lacks expected updated_at field in current ORM/model path. | Add updated_at compatibility or update repository contract. |
-| `unit/services/test_websocket_endpoint.py` | live-service/async | Async live websocket/http tests require running server and pytest async handling. | Move to integration job with started app, or rewrite via TestClient/websocket test client. |
 | `unit/tasks/test_task_management_properties.py` | state-leak/property | Task management properties see accumulated global tasks/statistics in CI. | Add repository/task manager isolation fixtures and reset global state. |
 
 ## Recommended restore order
-1. Websocket/live-service tests: add proper fixtures or move to integration job.
-2. Repository/task state isolation: reset global DB/task managers between property examples.
-3. Model/infrastructure property suites: larger contract drift; restore by module with dedicated fixtures.
+1. Repository/task state isolation: reset global DB/task managers between property examples.
+2. Model/infrastructure property suites: larger contract drift; restore by module with dedicated fixtures.
 
 ## Exit criteria
 - Remove each path from `collect_ignore` only in the same PR/commit that makes it pass under `GITHUB_ACTIONS=true pytest tests`.

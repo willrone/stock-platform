@@ -1,131 +1,126 @@
-#!/usr/bin/env python3
+"""Backtest WebSocket endpoint tests.
+
+These tests run against an in-process FastAPI app instead of requiring a live
+server on localhost:8000.  They verify the maintained HTTP/WebSocket contracts
+for the backtest progress router.
 """
-测试回测WebSocket端点
 
-验证WebSocket端点是否正常工作
-"""
+from __future__ import annotations
 
-import asyncio
-import json
-import sys
-from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
-# 添加backend目录到Python路径
-sys.path.insert(0, str(Path(__file__).parent))
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
-import websockets
-from loguru import logger
+from app.api.v1 import backtest_websocket
 
 
-async def test_websocket_connection():
-    """测试WebSocket连接"""
+@pytest.fixture
+def client() -> TestClient:
+    """Create an isolated ASGI test client for the backtest WebSocket router."""
+    app = FastAPI()
+    app.include_router(backtest_websocket.router, prefix="/api/v1")
 
-    # 测试任务ID（使用一个已存在的回测任务）
-    task_id = "test_task_001"
+    def override_db():
+        yield object()
 
-    # WebSocket URL
-    ws_url = f"ws://localhost:8000/api/v1/backtest/ws/{task_id}"
+    app.dependency_overrides[backtest_websocket.get_db] = override_db
+    backtest_websocket.backtest_ws_manager.active_connections.clear()
+    backtest_websocket.backtest_ws_manager.task_subscriptions.clear()
+    backtest_websocket.backtest_ws_manager.connection_tasks.clear()
 
-    logger.info(f"连接到WebSocket: {ws_url}")
+    with TestClient(app) as test_client:
+        yield test_client
 
-    try:
-        async with websockets.connect(ws_url) as websocket:
-            logger.info("WebSocket连接成功")
-
-            # 接收连接确认消息
-            message = await websocket.recv()
-            data = json.loads(message)
-            logger.info(f"收到消息: {data}")
-
-            # 发送ping消息
-            logger.info("发送ping消息")
-            await websocket.send(json.dumps({"type": "ping"}))
-
-            # 接收pong响应
-            message = await websocket.recv()
-            data = json.loads(message)
-            logger.info(f"收到pong响应: {data}")
-
-            # 请求当前进度
-            logger.info("请求当前进度")
-            await websocket.send(json.dumps({"type": "get_current_progress"}))
-
-            # 接收进度数据
-            message = await websocket.recv()
-            data = json.loads(message)
-            logger.info(f"收到进度数据: {data.get('type')}")
-
-            logger.success("WebSocket测试成功！")
-            return True
-
-    except websockets.exceptions.InvalidStatusCode as e:
-        logger.error(f"WebSocket连接失败，状态码: {e.status_code}")
-        if e.status_code == 4004:
-            logger.warning("任务不存在，这是预期的（测试任务ID不存在）")
-            return True  # 这实际上是成功的，因为端点正常工作
-        return False
-    except Exception as e:
-        logger.error(f"WebSocket测试失败: {e}")
-        return False
+    backtest_websocket.backtest_ws_manager.active_connections.clear()
+    backtest_websocket.backtest_ws_manager.task_subscriptions.clear()
+    backtest_websocket.backtest_ws_manager.connection_tasks.clear()
 
 
-async def test_http_endpoints():
-    """测试HTTP端点"""
-    import aiohttp
-
-    base_url = "http://localhost:8000/api/v1/backtest"
-
-    async with aiohttp.ClientSession() as session:
-        # 测试统计端点
-        logger.info("测试WebSocket统计端点")
-        async with session.get(f"{base_url}/ws/stats") as response:
-            if response.status == 200:
-                data = await response.json()
-                logger.info(f"统计数据: {data}")
-                logger.success("统计端点测试成功")
-            else:
-                logger.error(f"统计端点测试失败: {response.status}")
-                return False
-
-        # 测试进度端点（使用不存在的任务）
-        logger.info("测试进度HTTP端点")
-        task_id = "test_task_001"
-        async with session.get(f"{base_url}/progress/{task_id}") as response:
-            if response.status in [200, 404]:
-                logger.info(f"进度端点响应: {response.status}")
-                logger.success("进度端点测试成功")
-            else:
-                logger.error(f"进度端点测试失败: {response.status}")
-                return False
-
-    return True
+def _task(task_type: str = "backtest") -> SimpleNamespace:
+    return SimpleNamespace(task_id="test_task_001", task_type=task_type)
 
 
-async def main():
-    """主函数"""
-    logger.info("开始测试回测WebSocket端点")
+def test_http_endpoints(client: TestClient) -> None:
+    """HTTP stats and progress endpoints should work without a live server."""
+    stats_response = client.get("/api/v1/backtest/ws/stats")
+    assert stats_response.status_code == 200
+    stats_payload = stats_response.json()
+    assert stats_payload["success"] is True
+    assert set(stats_payload["data"]).issuperset(
+        {"total_connections", "task_subscriptions", "active_backtests", "timestamp"}
+    )
 
-    # 测试HTTP端点
-    logger.info("\n=== 测试HTTP端点 ===")
-    http_success = await test_http_endpoints()
+    repo = Mock()
+    repo.get_task_by_id.return_value = None
+    with patch.object(backtest_websocket, "TaskRepository", return_value=repo):
+        missing_response = client.get("/api/v1/backtest/progress/test_task_001")
 
-    # 测试WebSocket连接
-    logger.info("\n=== 测试WebSocket连接 ===")
-    ws_success = await test_websocket_connection()
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "任务不存在"
 
-    # 总结
-    logger.info("\n=== 测试总结 ===")
-    logger.info(f"HTTP端点测试: {'✓ 通过' if http_success else '✗ 失败'}")
-    logger.info(f"WebSocket连接测试: {'✓ 通过' if ws_success else '✗ 失败'}")
+    repo.get_task_by_id.return_value = _task()
+    with patch.object(backtest_websocket, "TaskRepository", return_value=repo):
+        no_progress_response = client.get("/api/v1/backtest/progress/test_task_001")
 
-    if http_success and ws_success:
-        logger.success("\n所有测试通过！WebSocket端点工作正常。")
-        return 0
-    else:
-        logger.error("\n部分测试失败，请检查日志。")
-        return 1
+    assert no_progress_response.status_code == 200
+    assert no_progress_response.json() == {
+        "success": True,
+        "message": "当前没有进度数据",
+        "data": None,
+    }
 
 
-if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)
+def test_websocket_connection(client: TestClient) -> None:
+    """WebSocket should accept a valid backtest task and answer control messages."""
+    repo = Mock()
+    repo.get_task_by_id.return_value = _task()
+
+    with patch.object(backtest_websocket, "TaskRepository", return_value=repo):
+        with client.websocket_connect("/api/v1/backtest/ws/test_task_001") as websocket:
+            connected = websocket.receive_json()
+            assert connected["type"] == "connection_established"
+            assert connected["task_id"] == "test_task_001"
+            assert connected["message"] == "回测进度WebSocket连接建立成功"
+
+            websocket.send_json({"type": "ping"})
+            assert websocket.receive_json()["type"] == "pong"
+
+            websocket.send_json({"type": "get_current_progress"})
+            no_progress = websocket.receive_json()
+            assert no_progress["type"] == "no_progress_data"
+            assert no_progress["message"] == "当前没有进度数据"
+
+            websocket.send_json({"type": "unknown"})
+            error = websocket.receive_json()
+            assert error["type"] == "error"
+            assert "未知的消息类型" in error["message"]
+
+
+def test_websocket_rejects_missing_task(client: TestClient) -> None:
+    """Missing tasks should close the WebSocket with the endpoint contract code."""
+    repo = Mock()
+    repo.get_task_by_id.return_value = None
+
+    with patch.object(backtest_websocket, "TaskRepository", return_value=repo):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/api/v1/backtest/ws/missing-task"):
+                pass
+
+    assert exc_info.value.code == 4004
+
+
+def test_websocket_rejects_non_backtest_task(client: TestClient) -> None:
+    """Non-backtest tasks should be rejected before connection registration."""
+    repo = Mock()
+    repo.get_task_by_id.return_value = _task(task_type="prediction")
+
+    with patch.object(backtest_websocket, "TaskRepository", return_value=repo):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/api/v1/backtest/ws/prediction-task"):
+                pass
+
+    assert exc_info.value.code == 4005
