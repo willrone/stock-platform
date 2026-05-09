@@ -21,22 +21,12 @@ from app.services.infrastructure.monitoring_service import (
 )
 from app.services.prediction import TechnicalIndicatorCalculator
 
-# DataSyncEngine 已移除，使用占位符
-try:
-    from app.services.data.incremental_updater import (
-        IncrementalUpdater as DataSyncEngine,
-    )
-except ImportError:
-    DataSyncEngine = None
-
 
 @composite
 def service_names(draw):
     """生成服务名称"""
     return draw(
-        st.sampled_from(
-            ["data_service", "indicators_service", "parquet_manager", "sync_engine"]
-        )
+        st.sampled_from(["data_service", "indicators_service", "parquet_manager"])
     )
 
 
@@ -74,14 +64,12 @@ class TestMonitoringServiceProperties:
         self.mock_data_service = AsyncMock(spec=StockDataService)
         self.mock_indicators_service = MagicMock(spec=TechnicalIndicatorCalculator)
         self.mock_parquet_manager = MagicMock(spec=ParquetManager)
-        self.mock_sync_engine = AsyncMock(spec=DataSyncEngine)
 
         # 创建监控服务
         self.monitoring_service = DataMonitoringService(
             data_service=self.mock_data_service,
             indicators_service=self.mock_indicators_service,
             parquet_manager=self.mock_parquet_manager,
-            sync_engine=self.mock_sync_engine,
         )
 
         # 清理监控服务状态
@@ -128,9 +116,6 @@ class TestMonitoringServiceProperties:
             self.mock_parquet_manager.get_storage_stats.return_value = {
                 "total_files": 10
             }
-        elif service_name == "sync_engine":
-            self.mock_sync_engine.get_sync_history.return_value = []
-
         # 执行健康检查
         health_status = await self.monitoring_service.check_service_health(service_name)
 
@@ -149,8 +134,6 @@ class TestMonitoringServiceProperties:
             self.mock_indicators_service.calculate_moving_average.assert_called_once()
         elif service_name == "parquet_manager":
             self.mock_parquet_manager.get_storage_stats.assert_called_once()
-        elif service_name == "sync_engine":
-            self.mock_sync_engine.get_sync_history.assert_called_once()
 
     @pytest.mark.asyncio
     @given(service_names())
@@ -182,11 +165,6 @@ class TestMonitoringServiceProperties:
             self.mock_parquet_manager.get_storage_stats.side_effect = Exception(
                 "存储访问失败"
             )
-        elif service_name == "sync_engine":
-            self.mock_sync_engine.get_sync_history.side_effect = Exception(
-                "同步引擎故障"
-            )
-
         # 执行健康检查
         health_status = await self.monitoring_service.check_service_health(service_name)
 
@@ -211,7 +189,6 @@ class TestMonitoringServiceProperties:
             data_service=self.mock_data_service,
             indicators_service=self.mock_indicators_service,
             parquet_manager=self.mock_parquet_manager,
-            sync_engine=self.mock_sync_engine,
         )
 
         service_name = "test_service"
@@ -263,7 +240,6 @@ class TestMonitoringServiceProperties:
             data_service=self.mock_data_service,
             indicators_service=self.mock_indicators_service,
             parquet_manager=self.mock_parquet_manager,
-            sync_engine=self.mock_sync_engine,
         )
 
         # 记录错误数据
