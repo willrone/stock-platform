@@ -1,6 +1,6 @@
 """
 服务容器属性测试
-验证服务容器的正确性属性
+验证当前 ServiceContainer 管理的基础服务生命周期与 singleton 语义
 """
 
 import asyncio
@@ -12,7 +12,7 @@ from hypothesis.strategies import composite
 
 from app.core.container import ServiceContainer, cleanup_container, get_container
 from app.services.data import SimpleDataService as StockDataService
-from app.services.data.parquet_manager import ParquetManager
+from app.services.data.sftp_sync_service import SFTPSyncService
 from app.services.prediction import TechnicalIndicatorCalculator
 
 
@@ -48,7 +48,7 @@ class TestServiceContainerProperties:
         # 验证服务可用
         assert container.data_service is not None
         assert container.indicators_service is not None
-        assert container.parquet_manager is not None
+        assert container.sftp_sync_service is not None
 
         await container.cleanup()
 
@@ -76,7 +76,7 @@ class TestServiceContainerProperties:
                     assert isinstance(
                         container.indicators_service, TechnicalIndicatorCalculator
                     )
-                    assert isinstance(container.parquet_manager, ParquetManager)
+                    assert isinstance(container.sftp_sync_service, SFTPSyncService)
 
                 elif operation == "get_service" and initialized:
                     # 验证服务获取的一致性
@@ -129,21 +129,15 @@ class TestServiceContainerProperties:
         container = ServiceContainer()
         await container.initialize()
 
-        # 验证基础服务存在
+        # 验证当前容器管理的基础服务存在
         assert container.data_service is not None
-        assert container.parquet_manager is not None
+        assert container.indicators_service is not None
+        assert container.sftp_sync_service is not None
 
-        # 验证复合服务正确依赖基础服务
-        sync_engine = container.data_sync_engine
-        monitoring_service = container.monitoring_service
-
-        assert sync_engine is not None
-        assert monitoring_service is not None
-
-        # 验证依赖关系（通过检查内部属性）
-        assert hasattr(sync_engine, "data_service")
-        assert hasattr(sync_engine, "parquet_manager")
-        assert hasattr(monitoring_service, "data_service")
+        # 验证访问器返回稳定实例，而不是每次重新创建
+        assert container.data_service is container.data_service
+        assert container.indicators_service is container.indicators_service
+        assert container.sftp_sync_service is container.sftp_sync_service
 
         await container.cleanup()
 
@@ -163,7 +157,7 @@ class TestServiceContainerProperties:
             _ = container.indicators_service
 
         with pytest.raises(RuntimeError, match="服务容器未初始化"):
-            _ = container.parquet_manager
+            _ = container.sftp_sync_service
 
         # 初始化后应该正常工作
         await container.initialize()
@@ -171,7 +165,7 @@ class TestServiceContainerProperties:
         # 现在应该可以正常访问
         assert container.data_service is not None
         assert container.indicators_service is not None
-        assert container.parquet_manager is not None
+        assert container.sftp_sync_service is not None
 
         await container.cleanup()
 
@@ -227,8 +221,8 @@ class TestServiceContainerProperties:
 
 
 @pytest.fixture(autouse=True)
-def cleanup_after_test():
-    """测试后自动清理"""
+async def cleanup_after_test():
+    """测试后自动清理全局容器，避免 singleton 状态跨用例泄漏。"""
+    await cleanup_container()
     yield
-    # 清理代码可以在这里添加
-    # 注意：这里不能使用await，因为这是同步fixture
+    await cleanup_container()
