@@ -191,7 +191,7 @@ export function StrategyConfigForm({
 
     switch (param.type) {
       case 'int':
-      case 'float':
+      case 'float': {
         const numValue =
           typeof value === 'number'
             ? value
@@ -266,6 +266,7 @@ export function StrategyConfigForm({
             )}
           </Box>
         );
+      }
 
       case 'boolean':
         return <Switch checked={value} onChange={e => handleValueChange(key, e.target.checked)} />;

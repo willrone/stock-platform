@@ -434,7 +434,7 @@ export default function BacktestPage() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            确定要删除回测任务 "{selectedTask?.task_name}" 吗？此操作不可撤销。
+            确定要删除回测任务 “{selectedTask?.task_name}” 吗？此操作不可撤销。
           </Typography>
         </DialogContent>
         <DialogActions>

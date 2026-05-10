@@ -437,7 +437,7 @@ export default function PredictionsPage() {
                 暂无预测结果
               </Typography>
               <Typography variant="body2">
-                选择模型和股票代码，点击"开始预测"按钮进行预测分析
+                选择模型和股票代码，点击“开始预测”按钮进行预测分析
               </Typography>
             </Box>
           </CardContent>

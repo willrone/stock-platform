@@ -514,7 +514,7 @@ export function FeatureSelector({
                   color="text.secondary"
                   sx={{ mt: 1, display: 'block' }}
                 >
-                  请先选择股票和日期范围，或点击"刷新特征列表"按钮
+                  请先选择股票和日期范围，或点击“刷新特征列表”按钮
                 </Typography>
               </Box>
             ) : (

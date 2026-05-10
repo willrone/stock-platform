@@ -412,7 +412,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
               </Typography>
               {searchValue ? (
                 <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
-                  (搜索: "{searchValue}", 找到 {filteredStocks.length} 只，共 {allStocks.length} 只)
+                  (搜索: “{searchValue}”, 找到 {filteredStocks.length} 只，共 {allStocks.length} 只)
                 </Typography>
               ) : (
                 <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
