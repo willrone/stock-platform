@@ -1,9 +1,9 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 创建超参优化任务表单
  */
-
-('use client');
 
 import React, { useState, useEffect } from 'react';
 import {

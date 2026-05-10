@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 错误边界组件
  *
@@ -7,8 +9,6 @@
  * - 错误信息展示
  * - 错误恢复机制
  */
-
-'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, Button, Box, Typography, Alert } from '@mui/material';

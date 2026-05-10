@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 预测分析页面
  *
@@ -6,8 +8,6 @@
  * - 查看预测结果和置信度
  * - 风险评估展示
  */
-
-'use client';
 
 import React, { useState, useEffect } from 'react';
 import {

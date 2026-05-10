@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 回撤曲线图表组件
  * 显示回撤曲线并标注最大回撤期间
  */
-
-'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';

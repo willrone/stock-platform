@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 系统监控页面
  *
@@ -8,8 +10,6 @@
  * - 数据质量检查
  * - 异常检测
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

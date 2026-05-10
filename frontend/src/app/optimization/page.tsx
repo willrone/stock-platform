@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 超参优化页面
  *
@@ -7,8 +9,6 @@
  * - 监控优化状态
  * - 查看优化结果和可视化
  */
-
-'use client';
 
 import dynamic from 'next/dynamic';
 import React, { useState, useEffect } from 'react';

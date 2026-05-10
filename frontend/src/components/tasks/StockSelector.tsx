@@ -1,3 +1,5 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 股票选择器组件
@@ -8,8 +10,6 @@ import { logger } from '@/utils/logger';
  * - 分页浏览
  * - 已选股票管理
  */
-
-('use client');
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {

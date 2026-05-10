@@ -1,8 +1,8 @@
+'use client';
+
 /**
  * 实时训练监控弹窗组件
  */
-
-'use client';
 
 import React from 'react';
 import {

@@ -1,3 +1,5 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 任务管理页面
@@ -8,8 +10,6 @@ import { logger } from '@/utils/logger';
  * - 任务进度监控
  * - 实时状态更新
  */
-
-('use client');
 
 import React, { useEffect, useState } from 'react';
 import {

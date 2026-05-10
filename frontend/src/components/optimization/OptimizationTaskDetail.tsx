@@ -1,10 +1,10 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 优化任务详情组件
  * 包含状态监控和结果可视化
  */
-
-('use client');
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent, Button, Tabs, Tab, Box, Typography } from '@mui/material';

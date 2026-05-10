@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 应用主布局组件
  *
@@ -7,8 +9,6 @@
  * - 主内容区域
  * - 底部信息栏
  */
-
-'use client';
 
 import React, { useState, useEffect } from 'react';
 import {

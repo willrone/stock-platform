@@ -1,10 +1,10 @@
+'use client';
+
 /**
  * 训练报告详情弹窗组件
  *
  * 显示模型训练完成后的详细报告，包括训练概览、曲线图、特征重要性等
  */
-
-'use client';
 
 import React, { useState, useEffect } from 'react';
 import {

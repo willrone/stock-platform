@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 用户工作流程测试组件
  *
@@ -7,8 +9,6 @@
  * - 测试结果展示
  * - 错误诊断和修复建议
  */
-
-'use client';
 
 import React, { useState, useCallback } from 'react';
 import {

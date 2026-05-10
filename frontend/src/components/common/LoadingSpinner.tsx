@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 加载动画组件
  *
@@ -7,8 +9,6 @@
  * - 不同尺寸
  * - 居中布局
  */
-
-'use client';
 
 import React from 'react';
 import { CircularProgress, Box, Typography, SxProps, Theme } from '@mui/material';

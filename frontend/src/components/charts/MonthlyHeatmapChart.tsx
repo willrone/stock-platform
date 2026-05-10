@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 月度收益热力图组件
  * 显示每月收益率的热力图，便于识别季节性模式
  */
-
-'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';

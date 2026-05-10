@@ -1,10 +1,10 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 优化结果可视化组件
  * 包含参数重要性、优化历史曲线、Pareto front等
  */
-
-('use client');
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';

@@ -1,8 +1,8 @@
+'use client';
+
 /**
  * MUI 主题配置
  */
-
-'use client';
 
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';

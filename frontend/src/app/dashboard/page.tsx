@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 仪表板页面
  *
@@ -7,8 +9,6 @@
  * - 最近活动
  * - 快速操作
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

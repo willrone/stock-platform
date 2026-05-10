@@ -1,8 +1,8 @@
+'use client';
+
 /**
  * 保存策略配置对话框组件
  */
-
-'use client';
 
 import React, { useState, useEffect } from 'react';
 import {

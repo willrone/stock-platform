@@ -1,8 +1,8 @@
+'use client';
+
 /**
  * 优化任务状态监控组件
  */
-
-'use client';
 
 import React from 'react';
 import {

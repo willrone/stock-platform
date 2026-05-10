@@ -1,10 +1,10 @@
+'use client';
+
 /**
  * 策略回测页面
  *
  * 显示回测任务列表和管理界面
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

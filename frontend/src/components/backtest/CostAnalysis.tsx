@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 成本分析组件
  * 展示有成本/无成本收益对比和交易成本明细
  */
-
-'use client';
 
 import React, { useMemo } from 'react';
 import {

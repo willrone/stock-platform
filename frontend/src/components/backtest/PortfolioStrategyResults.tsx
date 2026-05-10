@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 组合策略结果展示组件
  *
@@ -6,8 +8,6 @@
  * - 策略权重分布图表
  * - 信号来源标识
  */
-
-'use client';
 
 import React from 'react';
 import { Card, CardContent, CardHeader, Box, Typography, Paper } from '@mui/material';

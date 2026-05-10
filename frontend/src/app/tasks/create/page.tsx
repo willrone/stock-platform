@@ -1,3 +1,5 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 任务创建页面
@@ -8,8 +10,6 @@ import { logger } from '@/utils/logger';
  * - 参数配置
  * - 预测设置
  */
-
-('use client');
 
 import React, { useEffect, useState } from 'react';
 import {

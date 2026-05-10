@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 回测概览组件
  * 展示回测任务的关键指标和概览信息
  */
-
-'use client';
 
 import React from 'react';
 import {

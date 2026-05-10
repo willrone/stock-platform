@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 预测分析图表组件
  * 使用ECharts显示预测结果、置信区间和技术指标
  */
-
-'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';

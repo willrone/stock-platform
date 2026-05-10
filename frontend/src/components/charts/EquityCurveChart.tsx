@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 收益曲线图表组件
  * 支持缩放、时间范围选择和基准对比
  */
-
-'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';

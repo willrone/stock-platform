@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 增强的数据文件表格组件
  *
@@ -8,8 +10,6 @@
  * - 批量操作
  * - 文件预览
  */
-
-'use client';
 
 import React, { useState, useMemo } from 'react';
 import {

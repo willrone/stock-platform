@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 系统健康状态卡片组件
  *
@@ -7,8 +9,6 @@
  * - 响应时间监控
  * - 错误信息展示
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

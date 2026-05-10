@@ -1,8 +1,8 @@
+'use client';
+
 /**
  * 创建模型表单组件
  */
-
-'use client';
 
 import React from 'react';
 import {

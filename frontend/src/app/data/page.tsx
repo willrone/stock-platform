@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 数据管理页面 - 数据概览
  *
@@ -5,8 +7,6 @@
  * - 远端数据服务状态
  * - 远端股票列表
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

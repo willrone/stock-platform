@@ -1,10 +1,10 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 交互式图表容器组件
  * 整合收益曲线、回撤曲线和月度热力图
  */
-
-('use client');
 
 import React, { useState, useEffect } from 'react';
 import {

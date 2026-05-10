@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 组合策略配置组件
  *
@@ -8,8 +10,6 @@
  * - 权重归一化显示
  * - 权重约束验证
  */
-
-'use client';
 
 import React, { useState, useEffect } from 'react';
 import {

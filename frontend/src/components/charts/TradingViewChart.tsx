@@ -1,10 +1,10 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * TradingView图表组件
  * 使用lightweight-charts库显示股票价格走势
  */
-
-('use client');
 
 import React, { useEffect, useRef, useState } from 'react';
 import {

@@ -1,8 +1,8 @@
+'use client';
+
 /**
  * 模型列表表格组件
  */
-
-'use client';
 
 import React from 'react';
 import {

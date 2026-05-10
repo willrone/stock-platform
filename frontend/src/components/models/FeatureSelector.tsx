@@ -1,11 +1,11 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 特征选择组件
  *
  * 用于模型创建时的特征选择功能
  */
-
-('use client');
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {

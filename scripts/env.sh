@@ -74,13 +74,30 @@ tmux_session_exists() {
 }
 
 backend_python_bin() {
-  if [[ -x "$PROJECT_ROOT/backend/.venv/bin/python" ]]; then
-    echo "$PROJECT_ROOT/backend/.venv/bin/python"
-  elif [[ -x "$PROJECT_ROOT/backend/venv/bin/python" ]]; then
-    echo "$PROJECT_ROOT/backend/venv/bin/python"
-  else
-    echo "$PROJECT_ROOT/backend/.venv/bin/python"
-  fi
+  local candidates=(
+    "$PROJECT_ROOT/backend/.venv/bin/python"
+    "$PROJECT_ROOT/backend/.venv-py313/bin/python"
+    "$PROJECT_ROOT/backend/venv/bin/python"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]] && "$candidate" - <<'PY' >/dev/null 2>&1
+import uvicorn
+PY
+    then
+      echo "$candidate"
+      return
+    fi
+  done
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return
+    fi
+  done
+
+  echo "$PROJECT_ROOT/backend/.venv/bin/python"
 }
 
 ensure_backend_env() {

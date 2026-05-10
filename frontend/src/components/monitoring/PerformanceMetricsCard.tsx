@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 性能指标卡片组件
  *
@@ -7,8 +9,6 @@
  * - 错误统计
  * - 服务负载情况
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

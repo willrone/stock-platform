@@ -1,10 +1,10 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 回测结果图表组件
  * 显示策略回测的收益曲线、交易记录和性能指标
  */
-
-('use client');
 
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';

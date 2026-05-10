@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 同步进度模态框组件
  *
@@ -8,8 +10,6 @@
  * - 预估剩余时间
  * - 实时状态更新
  */
-
-'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {

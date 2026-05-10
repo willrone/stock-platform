@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * 同步历史模态框组件
  *
@@ -7,8 +9,6 @@
  * - 详细的成功/失败信息
  * - 重试功能
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

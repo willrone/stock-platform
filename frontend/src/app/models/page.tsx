@@ -1,11 +1,11 @@
+'use client';
+
 import { logger } from '@/utils/logger';
 /**
  * 模型管理页面
  *
  * 提供模型创建、查看和管理功能
  */
-
-('use client');
 
 import dynamic from 'next/dynamic';
 import React, { useState, useEffect } from 'react';

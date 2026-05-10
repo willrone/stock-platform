@@ -1,10 +1,10 @@
+'use client';
+
 /**
  * 策略配置表单组件
  *
  * 根据策略的参数定义动态渲染表单字段
  */
-
-'use client';
 
 import React, { useEffect, useState } from 'react';
 import {

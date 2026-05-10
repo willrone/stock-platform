@@ -1,9 +1,9 @@
+'use client';
+
 /**
  * 回测任务状态组件
  * 显示回测任务的状态、进度和基础信息
  */
-
-'use client';
 
 import React, { useState } from 'react';
 import {
