@@ -7,7 +7,8 @@ import asyncio
 import inspect
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Any, Dict, Optional, cast
+from pathlib import Path
+from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -35,6 +36,95 @@ from app.services.events.data_sync_events import (
 )
 
 router = APIRouter(prefix="/data", tags=["数据管理"])
+
+
+def _resolve_data_root() -> Path:
+    """解析 DATA_ROOT_PATH，兼容相对 backend 目录和绝对路径。"""
+    data_root = Path(settings.DATA_ROOT_PATH)
+    if data_root.is_absolute():
+        return data_root
+    backend_dir = Path(__file__).parent.parent.parent.parent
+    return (backend_dir / data_root).resolve()
+
+
+def _candidate_parquet_roots() -> List[Path]:
+    """返回本地 parquet 数据可能存在的目录。"""
+    data_root = _resolve_data_root()
+    backend_dir = Path(__file__).parent.parent.parent.parent
+    return [
+        data_root / "parquet" / "stock_data",
+        data_root / "parquet" / "daily",
+        data_root / "parquet",
+        data_root / "stocks" / "daily",
+        backend_dir / "data" / "parquet" / "stock_data",
+        backend_dir / "data" / "parquet",
+        Path("data") / "parquet" / "stock_data",
+        Path("data") / "parquet",
+    ]
+
+
+def _find_existing_parquet_roots() -> List[Path]:
+    """去重并返回存在的 parquet 根目录。"""
+    roots: List[Path] = []
+    seen: set[str] = set()
+    for candidate in _candidate_parquet_roots():
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        key = str(resolved)
+        if key in seen or not resolved.exists() or not resolved.is_dir():
+            continue
+        seen.add(key)
+        roots.append(resolved)
+    return roots
+
+
+def _stock_code_from_file(file_path: Path) -> str:
+    """从 parquet 路径推断股票代码。"""
+    stem = file_path.stem
+    if "_" in stem:
+        parts = stem.split("_")
+        if len(parts) >= 2 and parts[0].isdigit():
+            market = parts[1].upper()
+            if market in {"SZ", "SH", "BJ"}:
+                return f"{parts[0]}.{market}"
+    if "." in stem:
+        return stem
+
+    # 兼容 data/parquet/<stock_code>/<year>/<month> 布局。
+    for parent in file_path.parents:
+        name = parent.name
+        if "." in name or ("_" in name and name.split("_")[0].isdigit()):
+            return name.replace("_", ".")
+    return stem
+
+
+def _safe_read_parquet_metadata(file_path: Path) -> Dict[str, Any]:
+    """尽力读取 parquet 的行数和日期范围，失败时返回基础信息。"""
+    metadata: Dict[str, Any] = {
+        "record_count": 0,
+        "date_range": {"start": None, "end": None},
+        "readable": False,
+    }
+    try:
+        import pandas as pd
+
+        df = pd.read_parquet(file_path)
+        metadata["record_count"] = len(df)
+        metadata["readable"] = True
+        for date_col in ("date", "trade_date", "datetime", "time"):
+            if date_col in df.columns and not df.empty:
+                dates = pd.to_datetime(df[date_col], errors="coerce").dropna()
+                if not dates.empty:
+                    metadata["date_range"] = {
+                        "start": dates.min().strftime("%Y-%m-%d"),
+                        "end": dates.max().strftime("%Y-%m-%d"),
+                    }
+                break
+    except Exception as e:
+        logger.debug(f"读取 parquet 元数据失败 {file_path}: {e}")
+    return metadata
 
 
 async def _resolve_service(service: Any) -> Any:
@@ -282,6 +372,122 @@ async def get_data_service_status(
                 "error_message": str(e),
             },
         )
+
+
+@router.get(
+    "/files",
+    response_model=StandardResponse,
+    summary="获取本地数据文件列表",
+    description="列出本地 parquet 数据文件，支持分页和股票代码过滤",
+)
+async def list_local_data_files(
+    stock_code: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> Any:
+    """获取本地数据文件列表。"""
+    try:
+        limit = max(0, min(limit, 500))
+        offset = max(0, offset)
+        roots = _find_existing_parquet_roots()
+        all_files: List[Path] = []
+        for root in roots:
+            all_files.extend(root.rglob("*.parquet"))
+
+        rows: List[Dict[str, Any]] = []
+        for file_path in sorted(set(all_files)):
+            inferred_stock_code = _stock_code_from_file(file_path)
+            if stock_code and inferred_stock_code != stock_code:
+                continue
+
+            stat = file_path.stat()
+            metadata = _safe_read_parquet_metadata(file_path)
+            rows.append(
+                {
+                    "stock_code": inferred_stock_code,
+                    "file_path": str(file_path),
+                    "file_size": stat.st_size,
+                    "last_updated": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "record_count": metadata["record_count"],
+                    "date_range": metadata["date_range"],
+                    "readable": metadata["readable"],
+                }
+            )
+
+        total = len(rows)
+        paged_files = rows[offset : offset + limit] if limit else []
+        return StandardResponse(
+            success=True,
+            message=f"成功获取本地数据文件列表: {total} 个文件",
+            data={
+                "files": paged_files,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+    except Exception as e:
+        logger.error(f"获取本地数据文件列表失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"获取本地数据文件列表失败: {str(e)}"
+        )
+
+
+@router.get(
+    "/stats",
+    response_model=StandardResponse,
+    summary="获取本地数据统计信息",
+    description="统计本地 parquet 数据文件数量、大小、记录数和日期范围",
+)
+async def get_local_data_statistics() -> Any:
+    """获取本地数据统计信息。"""
+    try:
+        roots = _find_existing_parquet_roots()
+        all_files: List[Path] = []
+        for root in roots:
+            all_files.extend(root.rglob("*.parquet"))
+
+        total_size = 0
+        total_records = 0
+        stock_codes: set[str] = set()
+        start_dates: List[str] = []
+        end_dates: List[str] = []
+        last_sync: Optional[datetime] = None
+
+        for file_path in sorted(set(all_files)):
+            stat = file_path.stat()
+            total_size += stat.st_size
+            modified = datetime.fromtimestamp(stat.st_mtime)
+            if last_sync is None or modified > last_sync:
+                last_sync = modified
+            stock_codes.add(_stock_code_from_file(file_path))
+            metadata = _safe_read_parquet_metadata(file_path)
+            total_records += int(metadata["record_count"] or 0)
+            date_range = metadata["date_range"]
+            if date_range.get("start"):
+                start_dates.append(date_range["start"])
+            if date_range.get("end"):
+                end_dates.append(date_range["end"])
+
+        return StandardResponse(
+            success=True,
+            message="成功获取本地数据统计信息",
+            data={
+                "total_files": len(set(all_files)),
+                "total_size": total_size,
+                "total_size_bytes": total_size,
+                "total_records": total_records,
+                "stock_count": len(stock_codes),
+                "last_sync": last_sync.isoformat() if last_sync else None,
+                "date_range": {
+                    "start": min(start_dates) if start_dates else None,
+                    "end": max(end_dates) if end_dates else None,
+                },
+            },
+        )
+    except Exception as e:
+        logger.error(f"获取本地数据统计失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取本地数据统计失败: {str(e)}")
 
 
 @router.get(
