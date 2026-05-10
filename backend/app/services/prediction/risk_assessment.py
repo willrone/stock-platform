@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -12,6 +12,15 @@ from loguru import logger
 from scipy import stats
 
 from app.core.error_handler import ErrorContext, ErrorSeverity, PredictionError
+
+
+def _finite_float(value: Any, default: float = 0.0) -> float:
+    """Return a finite float, replacing NaN/inf from statistical edge cases."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if np.isfinite(number) else default
 
 
 @dataclass
@@ -196,7 +205,9 @@ class RiskMetricsCalculator:
             return {level: 0.0 for level in confidence_levels}
 
         for level in confidence_levels:
-            var_results[level] = np.percentile(clean_returns, (1 - level) * 100)
+            var_results[level] = _finite_float(
+                np.percentile(clean_returns, (1 - level) * 100)
+            )
 
         return var_results
 
@@ -214,7 +225,9 @@ class RiskMetricsCalculator:
         for level in confidence_levels:
             var = np.percentile(clean_returns, (1 - level) * 100)
             tail_returns = clean_returns[clean_returns <= var]
-            es_results[level] = tail_returns.mean() if len(tail_returns) > 0 else var
+            es_results[level] = _finite_float(
+                tail_returns.mean() if len(tail_returns) > 0 else var
+            )
 
         return es_results
 
@@ -230,22 +243,26 @@ class RiskMetricsCalculator:
         metrics = {}
 
         # 历史波动率
-        daily_vol = clean_returns.std()
+        daily_vol = _finite_float(clean_returns.std())
         metrics["daily_volatility"] = daily_vol
-        metrics["annualized_volatility"] = daily_vol * np.sqrt(252)
+        metrics["annualized_volatility"] = _finite_float(daily_vol * np.sqrt(252))
 
         # 不同时间期限的波动率
         for horizon in time_horizons:
             if len(clean_returns) >= horizon:
-                rolling_vol = clean_returns.rolling(window=horizon).std().iloc[-1]
-                metrics[f"volatility_{horizon}d"] = rolling_vol * np.sqrt(252)
+                rolling_vol = _finite_float(
+                    clean_returns.rolling(window=horizon).std().iloc[-1]
+                )
+                metrics[f"volatility_{horizon}d"] = _finite_float(
+                    rolling_vol * np.sqrt(252)
+                )
 
         # GARCH波动率（简化版）
         try:
             # 简单的EWMA波动率
             lambda_param = 0.94
             ewma_var = clean_returns.ewm(alpha=1 - lambda_param).var().iloc[-1]
-            metrics["garch_volatility"] = np.sqrt(ewma_var * 252)
+            metrics["garch_volatility"] = _finite_float(np.sqrt(ewma_var * 252))
         except Exception:
             metrics["garch_volatility"] = metrics["annualized_volatility"]
 
@@ -290,13 +307,13 @@ class RiskMetricsCalculator:
         metrics = {}
 
         # 基础统计
-        metrics["mean_return"] = clean_returns.mean() * 252
-        metrics["std_return"] = clean_returns.std() * np.sqrt(252)
+        metrics["mean_return"] = _finite_float(clean_returns.mean() * 252)
+        metrics["std_return"] = _finite_float(clean_returns.std() * np.sqrt(252))
 
         # 夏普比率
         excess_returns = clean_returns.mean() - risk_free_rate / 252
         if clean_returns.std() > 0:
-            metrics["sharpe_ratio"] = (
+            metrics["sharpe_ratio"] = _finite_float(
                 excess_returns / clean_returns.std() * np.sqrt(252)
             )
         else:
@@ -306,13 +323,15 @@ class RiskMetricsCalculator:
         downside_returns = clean_returns[clean_returns < 0]
         if len(downside_returns) > 0:
             downside_deviation = downside_returns.std() * np.sqrt(252)
-            metrics["sortino_ratio"] = metrics["mean_return"] / downside_deviation
+            metrics["sortino_ratio"] = _finite_float(
+                metrics["mean_return"] / downside_deviation
+            )
         else:
-            metrics["sortino_ratio"] = float("inf") if metrics["mean_return"] > 0 else 0
+            metrics["sortino_ratio"] = 0.0
 
         # 偏度和峰度
-        metrics["skewness"] = clean_returns.skew()
-        metrics["kurtosis"] = clean_returns.kurtosis()
+        metrics["skewness"] = _finite_float(clean_returns.skew())
+        metrics["kurtosis"] = _finite_float(clean_returns.kurtosis())
 
         return metrics
 
