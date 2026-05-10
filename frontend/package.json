@@ -17,7 +17,10 @@
     "test:ci": "jest --ci --coverage --maxWorkers=2",
     "quality:check": "npm run lint && npm run type-check && npm run format:check",
     "quality:fix": "npm run lint:fix && npm run format",
-    "pre-commit": "npm run quality:check && npm run test:ci"
+    "pre-commit": "npm run quality:check && npm run test:ci",
+    "build:check": "NEXT_DIST_DIR=.next-build-check next build",
+    "smoke:pages": "node scripts/smoke-pages.js",
+    "smoke:browser": "node scripts/smoke-browser.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
