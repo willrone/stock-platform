@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, CardHeader, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
+import { Card, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
 import { OptimizationResult } from '../../services/optimizationService';
 import * as echarts from 'echarts';
 
@@ -20,7 +20,6 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
   const paretoChartRef = useRef<HTMLDivElement>(null);
   const historyChartInstance = useRef<echarts.ECharts | null>(null);
   const importanceChartInstance = useRef<echarts.ECharts | null>(null);
-  const paretoChartInstance = useRef<echarts.ECharts | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>('history');
 
   useEffect(() => {

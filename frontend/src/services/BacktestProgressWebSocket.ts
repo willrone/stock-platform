@@ -398,7 +398,7 @@ export class BacktestProgressWebSocketManager {
    * 断开所有WebSocket连接
    */
   disconnectAll(): void {
-    this.connections.forEach((connection, taskId) => {
+    this.connections.forEach(connection => {
       connection.disconnect();
     });
     this.connections.clear();

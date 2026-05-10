@@ -23,7 +23,7 @@ import {
   Typography,
 } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
-import { Brain, TrendingUp, BarChart3, Download, Clock, Target, Zap, Activity } from 'lucide-react';
+import { Brain, Download, Clock, Target, Zap, Activity } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { DataService } from '../../services/dataService';

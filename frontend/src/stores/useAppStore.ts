@@ -48,7 +48,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   devtools(
-    (set, get) => ({
+    set => ({
       // 初始状态
       user: null,
       isAuthenticated: false,
@@ -77,7 +77,7 @@ export const useAppStore = create<AppState>()(
       // Actions
       setUser: user =>
         set(
-          state => ({
+          () => ({
             user,
             isAuthenticated: !!user,
           }),

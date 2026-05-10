@@ -32,7 +32,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Task } from '../../stores/useTaskStore';
-import { LoadingSpinner } from '../common/LoadingSpinner';
 
 interface BacktestTaskStatusProps {
   task: Task;
@@ -398,7 +397,6 @@ export default function BacktestTaskStatus({
                   >
                     {(() => {
                       const STOCKS_PER_PAGE = 12;
-                      const totalPages = Math.ceil(task.stock_codes.length / STOCKS_PER_PAGE);
                       const startIndex = (selectedStocksPage - 1) * STOCKS_PER_PAGE;
                       const endIndex = startIndex + STOCKS_PER_PAGE;
                       const currentStocks = task.stock_codes.slice(startIndex, endIndex);

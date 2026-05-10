@@ -48,7 +48,7 @@ const SELECTED_STOCKS_CARD_HEIGHT = 200; // 已选股票卡片固定高度
 export const StockSelector: React.FC<StockSelectorProps> = ({
   value = [],
   onChange,
-  maxCount = 50,
+  maxCount: _maxCount = 50,
   placeholder = '搜索股票代码或名称',
 }) => {
   const [searchValue, setSearchValue] = useState('');
@@ -315,9 +315,6 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
                   }}
                 >
                   {(() => {
-                    const selectedStocksTotalPages = Math.ceil(
-                      value.length / SELECTED_STOCKS_PER_PAGE
-                    );
                     const selectedStartIndex = (selectedStocksPage - 1) * SELECTED_STOCKS_PER_PAGE;
                     const selectedEndIndex = selectedStartIndex + SELECTED_STOCKS_PER_PAGE;
                     const currentSelectedStocks = value.slice(selectedStartIndex, selectedEndIndex);

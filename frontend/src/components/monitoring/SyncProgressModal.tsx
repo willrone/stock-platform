@@ -25,7 +25,7 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { Clock, CheckCircle, XCircle, Activity, Pause, Play, RotateCcw } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Activity, Pause, RotateCcw } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 
 interface SyncProgressData {

@@ -32,11 +32,9 @@ import {
 import {
   Plus,
   RefreshCw,
-  Play,
   Trash2,
   Eye,
   Activity,
-  TrendingUp,
   AlertTriangle,
   CheckCircle,
   XCircle,

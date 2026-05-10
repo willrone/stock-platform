@@ -14,7 +14,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Divider,
   Chip,
   Box,
   Typography,
@@ -22,7 +21,7 @@ import {
   InputLabel,
   FormHelperText,
 } from '@mui/material';
-import { Save, Loader2 } from 'lucide-react';
+import { Save } from 'lucide-react';
 import {
   OptimizationService,
   CreateOptimizationTaskRequest,

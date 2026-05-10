@@ -106,7 +106,6 @@ export default function BacktestProgressMonitor({
   const [progressData, setProgressData] = useState<BacktestProgressData | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [, setWarnings] = useState<string[]>([]);
   const [connection, setConnection] = useState<BacktestProgressWebSocket | null>(null);
 
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);

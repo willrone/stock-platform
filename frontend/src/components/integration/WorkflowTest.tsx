@@ -27,21 +27,11 @@ import {
   LinearProgress,
 } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
-import {
-  Play,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Download,
-  RefreshCw,
-  AlertTriangle,
-  Info,
-} from 'lucide-react';
+import { Play, CheckCircle, XCircle, Clock, Download, AlertTriangle, Info } from 'lucide-react';
 
 import {
   integrationTestManager,
   TestSuiteResult,
-  TestResult,
   generateTestReport,
 } from '../../utils/integrationTest';
 
@@ -63,18 +53,6 @@ export const WorkflowTest: React.FC<WorkflowTestProps> = ({ onTestComplete }) =>
     setResult(null);
 
     try {
-      // 模拟测试进度更新
-      const testNames = [
-        'API连接测试',
-        'API基础功能测试',
-        'WebSocket连接测试',
-        'WebSocket消息传输测试',
-        '任务创建流程测试',
-        '数据获取流程测试',
-        '错误处理机制测试',
-        '完整用户工作流程测试',
-      ];
-
       // 运行测试并更新进度
       const testResult = await integrationTestManager.runAllTests();
 

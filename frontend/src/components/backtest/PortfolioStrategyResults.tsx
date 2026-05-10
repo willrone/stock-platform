@@ -10,16 +10,7 @@
 'use client';
 
 import React from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  Box,
-  Typography,
-  Chip,
-  Paper,
-  Divider,
-} from '@mui/material';
+import { Card, CardContent, CardHeader, Box, Typography, Paper } from '@mui/material';
 import {
   PieChart,
   Pie,

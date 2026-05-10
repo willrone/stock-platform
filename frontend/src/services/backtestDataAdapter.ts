@@ -751,7 +751,7 @@ export class BacktestDataAdapter {
     };
   }
 
-  private static generateRollingData(dates: string[], windowSize: number) {
+  private static generateRollingData(dates: string[], _windowSize: number) {
     const length = dates.length;
 
     return {

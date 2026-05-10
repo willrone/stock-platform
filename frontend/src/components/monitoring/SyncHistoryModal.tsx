@@ -30,7 +30,7 @@ import {
   IconButton,
   CircularProgress,
 } from '@mui/material';
-import { History, CheckCircle, XCircle, Clock, RotateCcw, Eye, RefreshCw } from 'lucide-react';
+import { History, CheckCircle, XCircle, RotateCcw, Eye, RefreshCw } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 
 interface SyncHistoryEntry {
@@ -97,20 +97,6 @@ export function SyncHistoryModal({ isOpen, onClose }: SyncHistoryModalProps) {
       await loadHistory();
     } catch (error) {
       console.error('重试同步失败:', error);
-    }
-  };
-
-  const formatDuration = (startTime: string, endTime?: string) => {
-    const start = new Date(startTime);
-    const end = endTime ? new Date(endTime) : new Date();
-    const duration = Math.floor((end.getTime() - start.getTime()) / 1000);
-
-    if (duration < 60) {
-      return `${duration}秒`;
-    } else if (duration < 3600) {
-      return `${Math.floor(duration / 60)}分钟`;
-    } else {
-      return `${Math.floor(duration / 3600)}小时`;
     }
   };
 

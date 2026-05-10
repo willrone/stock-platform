@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent, Box, Typography, Chip } from '@mui/material';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 interface ErrorStat {
   error_type: string;

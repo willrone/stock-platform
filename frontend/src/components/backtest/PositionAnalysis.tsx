@@ -91,7 +91,7 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-export function PositionAnalysis({ positionAnalysis, stockCodes, taskId }: PositionAnalysisProps) {
+export function PositionAnalysis({ positionAnalysis, taskId }: PositionAnalysisProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'total_return',
     direction: 'desc',

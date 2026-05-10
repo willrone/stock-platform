@@ -26,21 +26,12 @@ import {
   CircularProgress,
   Box,
   Typography,
-  IconButton,
   InputAdornment,
   FormControl,
   InputLabel,
   TableSortLabel,
 } from '@mui/material';
-import {
-  Search,
-  Filter,
-  Download,
-  TrendingUp,
-  TrendingDown,
-  Calendar,
-  DollarSign,
-} from 'lucide-react';
+import { Search, Filter, Download, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { BacktestService, TradeRecord, TradeStatistics } from '../../services/backtestService';
 
 interface TradeHistoryTableProps {

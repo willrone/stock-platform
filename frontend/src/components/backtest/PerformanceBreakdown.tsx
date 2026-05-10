@@ -15,11 +15,8 @@ import {
   TableBody,
   TableRow,
   TableCell,
-  Chip,
   Select,
   MenuItem,
-  Button,
-  Tooltip,
   Box,
   Typography,
   FormControl,
@@ -102,7 +99,6 @@ interface PerformanceBreakdownProps {
 }
 
 export function PerformanceBreakdown({
-  taskId,
   monthlyPerformance,
   yearlyPerformance,
   seasonalAnalysis,

@@ -26,22 +26,12 @@ import {
   CircularProgress,
   Box,
   Typography,
-  IconButton,
   InputAdornment,
   FormControl,
   InputLabel,
   TableSortLabel,
 } from '@mui/material';
-import {
-  Search,
-  Filter,
-  Download,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Calendar,
-  Zap,
-} from 'lucide-react';
+import { Search, Filter, Download, AlertCircle, CheckCircle, XCircle, Zap } from 'lucide-react';
 import { BacktestService, SignalRecord, SignalStatistics } from '../../services/backtestService';
 
 interface SignalHistoryTableProps {
@@ -73,7 +63,6 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 50;
 
   // 排序状态
@@ -130,7 +119,6 @@ export function SignalHistoryTable({ taskId, onSignalClick }: SignalHistoryTable
       ]);
 
       setSignals(signalsResponse.signals);
-      setTotalCount(signalsResponse.pagination.count);
       setTotalPages(Math.ceil(signalsResponse.pagination.count / itemsPerPage));
       setStatistics(statsResponse);
     } catch (err: any) {

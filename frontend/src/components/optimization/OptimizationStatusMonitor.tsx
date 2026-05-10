@@ -23,7 +23,7 @@ interface OptimizationStatusMonitorProps {
 
 export default function OptimizationStatusMonitor({
   status,
-  task,
+  task: _task,
 }: OptimizationStatusMonitorProps) {
   const getStatusColor = (status: string) => {
     switch (status) {

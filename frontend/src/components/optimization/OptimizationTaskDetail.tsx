@@ -6,25 +6,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  Button,
-  Chip,
-  LinearProgress,
-  Tabs,
-  Tab,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  Box,
-  Typography,
-  TableContainer,
-  Paper,
-} from '@mui/material';
+import { Card, CardHeader, CardContent, Button, Tabs, Tab, Box, Typography } from '@mui/material';
 import { ArrowLeft, RefreshCw, Save } from 'lucide-react';
 import {
   OptimizationService,

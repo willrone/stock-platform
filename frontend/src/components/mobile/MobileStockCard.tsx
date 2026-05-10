@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent, Box, Typography, Chip } from '@mui/material';
-import { TrendingUp, Calendar, Database } from 'lucide-react';
+import { Calendar, Database } from 'lucide-react';
 
 interface RemoteStock {
   ts_code: string;

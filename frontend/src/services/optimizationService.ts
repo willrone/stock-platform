@@ -111,8 +111,6 @@ export interface OptimizationResult {
 
 // API 基础 URL - 使用相对路径，通过Next.js代理转发
 // 不再需要绝对URL，直接使用相对路径即可
-const API_BASE_URL = '';
-
 export class OptimizationService {
   /**
    * 创建超参优化任务

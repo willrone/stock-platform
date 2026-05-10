@@ -88,7 +88,6 @@ export default function InteractiveChartsContainer({
   const [tradeRecords, setTradeRecords] = useState<TradeRecord[]>([]);
   const [signalRecords, setSignalRecords] = useState<SignalRecord[]>([]);
   const [tradeLoading, setTradeLoading] = useState(false);
-  const [signalLoading, setSignalLoading] = useState(false);
   const [selectedStock, setSelectedStock] = useState<string>('');
 
   // 加载图表数据
@@ -320,7 +319,6 @@ export default function InteractiveChartsContainer({
 
     const fetchSignals = async () => {
       try {
-        setSignalLoading(true);
         const signalsResponse = await BacktestService.getSignalRecords(taskId, {
           stockCode: selectedStock,
           limit: 1000,
@@ -331,8 +329,6 @@ export default function InteractiveChartsContainer({
       } catch (signalError) {
         console.warn('[InteractiveChartsContainer] 无法加载信号记录:', signalError);
         setSignalRecords([]);
-      } finally {
-        setSignalLoading(false);
       }
     };
 

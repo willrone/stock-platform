@@ -41,11 +41,10 @@ import {
   TrendingDown,
   Brain,
   RefreshCw,
-  Info,
   AlertTriangle,
   CheckCircle,
 } from 'lucide-react';
-import { DataService, PredictionRequest, PredictionResponse } from '../../services/dataService';
+import { DataService, PredictionRequest } from '../../services/dataService';
 import { useDataStore } from '../../stores/useDataStore';
 import type { Model } from '../../types/model';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';

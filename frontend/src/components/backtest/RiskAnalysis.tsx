@@ -8,9 +8,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Tabs,
-  Tab,
-  LinearProgress,
   Chip,
   Tooltip,
   Select,
@@ -28,9 +25,7 @@ import {
 import * as echarts from 'echarts';
 import {
   TrendingUp,
-  TrendingDown,
   BarChart3,
-  PieChart as PieChartIcon,
   AlertTriangle,
   Target,
   Calculator,
@@ -98,14 +93,12 @@ interface RiskAnalysisProps {
 }
 
 export function RiskAnalysis({
-  taskId,
   riskMetrics,
   returnDistribution,
   rollingMetrics,
 }: RiskAnalysisProps) {
   const [selectedMetric, setSelectedMetric] = useState<keyof RollingMetrics>('rolling_sharpe');
   const [selectedDistribution, setSelectedDistribution] = useState<'daily' | 'monthly'>('daily');
-  const [, setSelectedRiskLevel] = useState<'95' | '99'>('95');
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const onDetailOpen = () => setIsDetailOpen(true);

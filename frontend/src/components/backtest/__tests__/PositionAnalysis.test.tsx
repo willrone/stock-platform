@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { PositionAnalysis } from '../PositionAnalysis';
 import { BacktestService } from '@/services/backtestService';
@@ -15,15 +15,6 @@ jest.mock('@/services/backtestService', () => ({
     getPortfolioSnapshots: jest.fn(),
   },
 }));
-
-// Mock ECharts (已在 jest.setup.js 中全局 mock，这里确保可用)
-const mockEChartsInstance = {
-  setOption: jest.fn(),
-  dispose: jest.fn(),
-  resize: jest.fn(),
-  on: jest.fn(),
-  off: jest.fn(),
-};
 
 // 基础测试数据
 const mockPositionData = [

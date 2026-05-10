@@ -11,7 +11,7 @@ import {
   IconButton,
   Button,
 } from '@mui/material';
-import { Eye, Trash2, Play, Pause, ChevronRight } from 'lucide-react';
+import { Eye, Trash2, Pause } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import type { Task } from '../../types/task';

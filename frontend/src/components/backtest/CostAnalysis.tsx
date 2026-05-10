@@ -12,13 +12,11 @@ import {
   CardHeader,
   Tabs,
   Tab,
-  Chip,
   Tooltip,
   Box,
   Typography,
   LinearProgress,
   Skeleton,
-  IconButton,
 } from '@mui/material';
 import { DollarSign, TrendingUp, TrendingDown, Info, PieChart } from 'lucide-react';
 

@@ -26,7 +26,6 @@ import {
   IconButton,
   FormControl,
   InputLabel,
-  FormHelperText,
   InputAdornment,
   CircularProgress,
 } from '@mui/material';

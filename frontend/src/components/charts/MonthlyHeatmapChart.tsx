@@ -174,7 +174,7 @@ export default function MonthlyHeatmapChart({
       tooltip: {
         position: 'top',
         formatter: function (params: any) {
-          const [monthIndex, yearIndex, returnValue, date] = params.data;
+          const [monthIndex, yearIndex, returnValue] = params.data;
           const month = MONTH_NAMES[monthIndex];
           const year = years[yearIndex];
 
