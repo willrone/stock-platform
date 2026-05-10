@@ -125,11 +125,17 @@ class SimpleDataService:
             self._cached_working_url = None
 
         port = self._extract_port_from_url(self.remote_url)
-        urls_to_try = [f"http://localhost:{port}", f"http://127.0.0.1:{port}"]
-
         parsed_remote = urlparse(self.remote_url)
-        if parsed_remote.hostname not in ["localhost", "127.0.0.1"]:
-            urls_to_try.append(self.remote_url)
+
+        urls_to_try = [self.remote_url]
+        if parsed_remote.hostname in ["localhost", "127.0.0.1"]:
+            urls_to_try.extend([f"http://localhost:{port}", f"http://127.0.0.1:{port}"])
+        elif self.remote_url == settings.REMOTE_DATA_SERVICE_URL:
+            # Runtime convenience: if the configured default remote is offline,
+            # try a colocated back_test_data_service on the same port. Explicitly
+            # injected remote_url values (common in tests) should not silently
+            # report localhost as the service URL.
+            urls_to_try.extend([f"http://localhost:{port}", f"http://127.0.0.1:{port}"])
 
         for url in urls_to_try:
             success, _, _ = await self._try_connect(url, path)
@@ -611,6 +617,67 @@ class SimpleDataService:
         except Exception as e:
             logger.error(f"获取股票列表异常: {e}")
             return None
+
+    async def get_remote_data_summary(self) -> Optional[Dict[str, Any]]:
+        """Fetch summary statistics from the configured data service."""
+        try:
+            working_url = await self._get_working_url("api/data/health")
+            if working_url is None:
+                return None
+
+            full_url = f"{working_url.rstrip('/')}/api/data/data_summary"
+            client = await self._get_client()
+            response = await client.get(full_url)
+
+            if response.status_code != 200:
+                logger.warning(
+                    f"获取数据服务汇总失败: HTTP {response.status_code}, {response.text[:200]}"
+                )
+                return None
+
+            data = response.json()
+            return cast(Dict[str, Any], data) if isinstance(data, dict) else None
+        except Exception as e:
+            logger.error(f"获取数据服务汇总异常: {e}")
+            return None
+
+    async def get_remote_stock_daily_data(
+        self, stock_code: str, start_date: str, end_date: str
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch daily OHLCV rows from the configured data service."""
+        try:
+            working_url = await self._get_working_url("api/data/health")
+            if working_url is None:
+                return None
+
+            full_url = f"{working_url.rstrip('/')}/api/data/stock/{stock_code}/daily"
+            client = await self._get_client()
+            response = await client.get(
+                full_url,
+                params={"start_date": start_date, "end_date": end_date},
+            )
+
+            payload: Dict[str, Any]
+            try:
+                payload = cast(Dict[str, Any], response.json())
+            except Exception:
+                payload = {
+                    "success": False,
+                    "error": response.text[:500] or f"HTTP {response.status_code}",
+                }
+
+            if response.status_code == 404:
+                return payload
+            if response.status_code != 200:
+                logger.warning(
+                    f"获取远端日线数据失败: HTTP {response.status_code}, {str(payload)[:200]}"
+                )
+                return payload
+
+            return payload
+        except Exception as e:
+            logger.error(f"获取远端日线数据异常: {e}")
+            return {"success": False, "error": str(e)}
 
     async def __aenter__(self) -> Any:
         return self

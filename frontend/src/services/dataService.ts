@@ -90,6 +90,35 @@ type QlibPrecomputeTaskResponse = {
   error_message?: string;
 };
 
+export type DataServiceSummary = {
+  total_stocks: number;
+  total_records: number;
+  complete_stocks: number;
+  incomplete_stocks: number;
+  missing_stocks: number;
+  last_update?: string | null;
+  note?: string;
+};
+
+export type RemoteDailyRow = {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+export type RemoteDailyDataResponse = {
+  success: boolean;
+  data?: RemoteDailyRow[];
+  total_records?: number;
+  stock_code?: string;
+  start_date?: string;
+  end_date?: string;
+  error?: string;
+};
+
 const dataLogger = {
   debug: (...args: unknown[]) => {
     if (process.env.NODE_ENV !== 'production') {
@@ -520,6 +549,27 @@ export class DataService {
     error_message?: string;
   }> {
     return apiRequest.get('/data/status');
+  }
+
+  /**
+   * 获取 back_test_data_service 数据汇总
+   */
+  static async getRemoteDataSummary(): Promise<DataServiceSummary> {
+    return apiRequest.get('/data/remote/summary');
+  }
+
+  /**
+   * 通过 back_test_data_service 查询股票日线数据
+   */
+  static async getRemoteStockDailyData(params: {
+    stockCode: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<RemoteDailyDataResponse> {
+    return apiRequest.get(`/data/remote/stock/${encodeURIComponent(params.stockCode)}/daily`, {
+      start_date: params.startDate,
+      end_date: params.endDate,
+    });
   }
 
   /**

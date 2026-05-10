@@ -552,6 +552,81 @@ async def get_remote_stock_list(
 
 
 @router.get(
+    "/remote/summary",
+    response_model=StandardResponse,
+    summary="获取数据服务汇总",
+    description="从 back_test_data_service 获取数据汇总统计",
+)
+async def get_remote_data_summary(
+    data_service: SimpleDataService = Depends(get_data_service),
+) -> Any:
+    """获取 back_test_data_service 的数据汇总统计。"""
+    try:
+        summary = await data_service.get_remote_data_summary()
+        if summary is None:
+            return StandardResponse(
+                success=False,
+                message="数据服务未连接，无法获取汇总统计",
+                data=None,
+            )
+
+        return StandardResponse(
+            success=True,
+            message="成功获取数据服务汇总统计",
+            data=summary,
+        )
+    except Exception as e:
+        logger.error(f"获取数据服务汇总失败: {e}", exc_info=True)
+        return StandardResponse(
+            success=False,
+            message=f"获取数据服务汇总失败: {str(e)}",
+            data=None,
+        )
+
+
+@router.get(
+    "/remote/stock/{stock_code}/daily",
+    response_model=StandardResponse,
+    summary="获取数据服务股票日线数据",
+    description="通过 back_test_data_service 查询指定股票的日线数据",
+)
+async def get_remote_stock_daily_data(
+    stock_code: str,
+    start_date: str,
+    end_date: str,
+    data_service: SimpleDataService = Depends(get_data_service),
+) -> Any:
+    """通过 back_test_data_service 查询股票日线数据。"""
+    try:
+        payload = await data_service.get_remote_stock_daily_data(
+            stock_code=stock_code,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if payload is None:
+            return StandardResponse(
+                success=False,
+                message="数据服务未连接，无法获取日线数据",
+                data=None,
+            )
+
+        success = bool(payload.get("success", False))
+        message = (
+            f"成功获取 {stock_code} 日线数据"
+            if success
+            else str(payload.get("error") or f"未获取到 {stock_code} 日线数据")
+        )
+        return StandardResponse(success=success, message=message, data=payload)
+    except Exception as e:
+        logger.error(f"获取远端股票日线数据失败: {stock_code}, {e}", exc_info=True)
+        return StandardResponse(
+            success=False,
+            message=f"获取远端股票日线数据失败: {str(e)}",
+            data=None,
+        )
+
+
+@router.get(
     "/local/stocks",
     response_model=StandardResponse,
     summary="获取本地股票列表",

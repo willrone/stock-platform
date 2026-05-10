@@ -10,24 +10,31 @@
 
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  Box,
+  Button,
   Card,
   CardContent,
   CardHeader,
-  Button,
   Chip,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  Tabs,
+  Divider,
+  Stack,
   Tab,
-  Box,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Tabs,
+  TextField,
   Typography,
-  Alert,
 } from '@mui/material';
 import { Server, RefreshCw, Wifi, WifiOff, XCircle, Zap, Database, Download } from 'lucide-react';
-import { DataService } from '../../services/dataService';
+import {
+  DataService,
+  type DataServiceSummary,
+  type RemoteDailyDataResponse,
+} from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { wsService } from '../../services/websocket';
 import { MobileStockCard } from '../../components/mobile/MobileStockCard';
@@ -65,11 +72,27 @@ interface LocalStock {
   record_count?: number;
 }
 
+interface DailyQueryForm {
+  stockCode: string;
+  startDate: string;
+  endDate: string;
+}
+
 export default function DataManagementPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [precomputing, setPrecomputing] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
+  const [dataSummary, setDataSummary] = useState<DataServiceSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [dailyQuery, setDailyQuery] = useState<DailyQueryForm>({
+    stockCode: '000001',
+    startDate: '2023-06-01',
+    endDate: '2023-06-30',
+  });
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyResult, setDailyResult] = useState<RemoteDailyDataResponse | null>(null);
+  const [dailyError, setDailyError] = useState<string | null>(null);
   const [remoteStocks, setRemoteStocks] = useState<RemoteStock[]>([]);
   const [localStocks, setLocalStocks] = useState<LocalStock[]>([]);
   const [activeTab, setActiveTab] = useState<string>('remote');
@@ -94,6 +117,49 @@ export default function DataManagementPage() {
       setServiceStatus(status);
     } catch (error) {
       console.error('检查服务状态失败:', error);
+    }
+  };
+
+  // 加载数据服务汇总
+  const loadDataServiceSummary = async () => {
+    if (!serviceStatus?.is_connected) {
+      setDataSummary(null);
+      return;
+    }
+
+    try {
+      setSummaryLoading(true);
+      const summary = await DataService.getRemoteDataSummary();
+      setDataSummary(summary);
+    } catch (error) {
+      console.error('加载数据服务汇总失败:', error);
+      setDataSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  // 查询数据服务日线数据
+  const handleQueryDailyData = async () => {
+    if (!serviceStatus?.is_connected || dailyLoading) {
+      return;
+    }
+
+    setDailyLoading(true);
+    setDailyError(null);
+    setDailyResult(null);
+
+    try {
+      const result = await DataService.getRemoteStockDailyData(dailyQuery);
+      setDailyResult(result);
+      if (!result.success) {
+        setDailyError(result.error || '数据服务未返回可用数据');
+      }
+    } catch (error) {
+      console.error('查询数据服务日线失败:', error);
+      setDailyError(error instanceof Error ? error.message : '查询失败');
+    } finally {
+      setDailyLoading(false);
     }
   };
 
@@ -129,6 +195,10 @@ export default function DataManagementPage() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    loadDataServiceSummary();
+  }, [serviceStatus?.is_connected]);
 
   // 刷新数据
   const handleRefresh = async () => {
@@ -483,6 +553,178 @@ export default function DataManagementPage() {
               </Typography>
               <Typography variant="caption">{serviceStatus.error_message}</Typography>
             </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* back_test_data_service API 面板 */}
+      <Card
+        sx={{
+          border: serviceStatus?.is_connected ? '1px solid rgba(46, 125, 50, 0.25)' : undefined,
+          background: serviceStatus?.is_connected
+            ? 'linear-gradient(135deg, rgba(46,125,50,0.06), rgba(25,118,210,0.04))'
+            : undefined,
+        }}
+      >
+        <CardHeader
+          avatar={<Database size={24} />}
+          title="数据服务 API"
+          subheader="连接成功后可直接通过股票平台代理请求 back_test_data_service"
+          action={
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<RefreshCw size={16} />}
+              onClick={loadDataServiceSummary}
+              disabled={!serviceStatus?.is_connected || summaryLoading}
+            >
+              {summaryLoading ? '刷新中...' : '刷新汇总'}
+            </Button>
+          }
+        />
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {!serviceStatus?.is_connected ? (
+            <Alert severity="warning" icon={<WifiOff size={20} />}>
+              数据服务未连接。请先启动 back_test_data_service，再刷新状态。
+            </Alert>
+          ) : (
+            <>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                {[
+                  { label: '股票数', value: dataSummary?.total_stocks ?? '--' },
+                  {
+                    label: '总记录数',
+                    value: dataSummary?.total_records?.toLocaleString() ?? '--',
+                  },
+                  { label: '完整', value: dataSummary?.complete_stocks ?? '--' },
+                  { label: '不完整', value: dataSummary?.incomplete_stocks ?? '--' },
+                  { label: '缺失', value: dataSummary?.missing_stocks ?? '--' },
+                ].map(item => (
+                  <Box
+                    key={item.label}
+                    sx={{
+                      flex: 1,
+                      minWidth: 120,
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {item.label}
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {item.value}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  日线数据查询
+                </Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
+                  <TextField
+                    label="股票代码"
+                    size="small"
+                    value={dailyQuery.stockCode}
+                    onChange={event =>
+                      setDailyQuery(prev => ({ ...prev, stockCode: event.target.value.trim() }))
+                    }
+                    placeholder="例如 000001"
+                    sx={{ minWidth: 160 }}
+                  />
+                  <TextField
+                    label="开始日期"
+                    type="date"
+                    size="small"
+                    value={dailyQuery.startDate}
+                    onChange={event =>
+                      setDailyQuery(prev => ({ ...prev, startDate: event.target.value }))
+                    }
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <TextField
+                    label="结束日期"
+                    type="date"
+                    size="small"
+                    value={dailyQuery.endDate}
+                    onChange={event =>
+                      setDailyQuery(prev => ({ ...prev, endDate: event.target.value }))
+                    }
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <Button
+                    variant="contained"
+                    startIcon={<Zap size={16} />}
+                    onClick={handleQueryDailyData}
+                    disabled={!dailyQuery.stockCode || dailyLoading}
+                  >
+                    {dailyLoading ? '查询中...' : '请求数据服务'}
+                  </Button>
+                </Stack>
+              </Box>
+
+              {dailyError && (
+                <Alert severity="warning" icon={<XCircle size={20} />}>
+                  {dailyError}
+                </Alert>
+              )}
+
+              {dailyResult?.success && (
+                <Box>
+                  <Divider sx={{ mb: 2 }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      查询结果：{dailyResult.stock_code || dailyQuery.stockCode}
+                    </Typography>
+                    <Chip
+                      label={`${dailyResult.total_records || 0} 条`}
+                      color="success"
+                      size="small"
+                    />
+                  </Box>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>日期</TableCell>
+                          <TableCell align="right">开盘</TableCell>
+                          <TableCell align="right">最高</TableCell>
+                          <TableCell align="right">最低</TableCell>
+                          <TableCell align="right">收盘</TableCell>
+                          <TableCell align="right">成交量</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(dailyResult.data || []).slice(0, 12).map(row => (
+                          <TableRow key={row.date}>
+                            <TableCell>{row.date}</TableCell>
+                            <TableCell align="right">{row.open.toFixed(2)}</TableCell>
+                            <TableCell align="right">{row.high.toFixed(2)}</TableCell>
+                            <TableCell align="right">{row.low.toFixed(2)}</TableCell>
+                            <TableCell align="right">{row.close.toFixed(2)}</TableCell>
+                            <TableCell align="right">{row.volume.toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                  {(dailyResult.data?.length || 0) > 12 && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 1, display: 'block' }}
+                    >
+                      仅预览前 12 条记录。
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
