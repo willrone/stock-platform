@@ -33,8 +33,9 @@ class TradeModeExecutionResult:
 class TradeModeExecutor(Protocol):
     mode_name: str
 
-    def execute(self, context: TradeModeExecutionContext) -> TradeModeExecutionResult:
-        ...
+    def execute(
+        self, context: TradeModeExecutionContext
+    ) -> TradeModeExecutionResult: ...
 
 
 def _build_execution_result(

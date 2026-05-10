@@ -44,7 +44,9 @@ class ParallelHyperparameterSearch:
         if self.config.max_workers is None:
             self.config.max_workers = mp.cpu_count()
 
-        logger.info(f"并行超参数搜索器初始化完成，最大工作进程数: {self.config.max_workers}")
+        logger.info(
+            f"并行超参数搜索器初始化完成，最大工作进程数: {self.config.max_workers}"
+        )
 
     def parallel_random_search(
         self,
@@ -65,7 +67,9 @@ class ParallelHyperparameterSearch:
         Returns:
             最优超参数试验结果
         """
-        logger.info(f"开始并行随机搜索，试验次数: {n_trials}, 工作进程数: {self.config.max_workers}")
+        logger.info(
+            f"开始并行随机搜索，试验次数: {n_trials}, 工作进程数: {self.config.max_workers}"
+        )
 
         # 生成超参数组合
         trials_params = self._generate_random_trials(param_space, n_trials)

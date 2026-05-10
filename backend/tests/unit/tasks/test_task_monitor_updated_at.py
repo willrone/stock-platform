@@ -17,8 +17,7 @@ def _db_timestamp(value: datetime) -> str:
 
 def _create_tasks_table(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE tasks (
             task_id TEXT PRIMARY KEY,
             task_name TEXT NOT NULL,
@@ -35,8 +34,7 @@ def _create_tasks_table(db_path: Path) -> None:
             estimated_duration INTEGER,
             updated_at DATETIME
         )
-        """
-    )
+        """)
     conn.commit()
     conn.close()
 

@@ -4,12 +4,11 @@
 """
 
 from datetime import datetime
-from uuid import uuid4
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

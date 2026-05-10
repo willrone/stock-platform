@@ -140,7 +140,9 @@ class TaskNotificationService:
             if new_status in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value]:
                 await self._send_task_completion_notification(notification)
 
-            logger.info(f"任务状态变化通知已发送: {task_id}, {old_status} -> {new_status}")
+            logger.info(
+                f"任务状态变化通知已发送: {task_id}, {old_status} -> {new_status}"
+            )
 
         except Exception as e:
             logger.error(f"发送任务状态变化通知失败: {task_id}, 错误: {e}")
@@ -338,7 +340,9 @@ class TaskNotificationService:
                 notification.user_id, completion_type, completion_message
             )
 
-            logger.info(f"任务完成通知已发送: {notification.task_id}, 状态: {notification.status}")
+            logger.info(
+                f"任务完成通知已发送: {notification.task_id}, 状态: {notification.status}"
+            )
 
         except Exception as e:
             logger.error(f"发送任务完成通知失败: {notification.task_id}, 错误: {e}")

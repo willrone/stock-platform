@@ -279,7 +279,9 @@ class AsyncTaskRepository:
             await self.db.commit()
             await self.db.refresh(task)
 
-            logger.debug(f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%")
+            logger.debug(
+                f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%"
+            )
             return task
 
         except TaskError:
@@ -380,7 +382,9 @@ class AsyncTaskRepository:
                         logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
 
                 if total_deleted > 0:
-                    logger.info(f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录")
+                    logger.info(
+                        f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录"
+                    )
                     await self.db.flush()
             except Exception as e:
                 logger.warning(f"删除任务详细数据时出错（继续删除主任务）: {e}")
@@ -410,7 +414,9 @@ class AsyncTaskRepository:
             await self.db.rollback()
             error_msg = str(e)
             if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
-                logger.error(f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}")
+                logger.error(
+                    f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}"
+                )
                 raise TaskError(
                     message=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除。错误详情: {error_msg}",
                     severity=ErrorSeverity.HIGH,

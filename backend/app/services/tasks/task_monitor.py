@@ -197,13 +197,11 @@ class TaskMonitor:
             cursor = conn.cursor()
 
             # 统计各状态任务数量
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT status, COUNT(*) as count
                 FROM tasks
                 GROUP BY status
-                """
-            )
+                """)
 
             status_counts = {}
             for status, count in cursor.fetchall():

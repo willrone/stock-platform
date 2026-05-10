@@ -137,7 +137,9 @@ class HyperparameterOptimizer:
             # 缓存最佳参数
             self.best_params_cache[model_type] = result["best_params"]
 
-            logger.info(f"超参数优化完成: {model_type}, 最佳得分: {result['best_score']}")
+            logger.info(
+                f"超参数优化完成: {model_type}, 最佳得分: {result['best_score']}"
+            )
             return result
 
         except Exception as e:

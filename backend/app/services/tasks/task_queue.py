@@ -357,7 +357,9 @@ class TaskScheduler:
 
         def progress_callback(progress: float, message: str = "") -> None:
             # 这里可以通过WebSocket发送进度更新
-            logger.debug(f"任务进度更新: {task_id}, 进度: {progress:.2f}, 消息: {message}")
+            logger.debug(
+                f"任务进度更新: {task_id}, 进度: {progress:.2f}, 消息: {message}"
+            )
 
         return progress_callback
 
@@ -392,7 +394,9 @@ class TaskScheduler:
         # 检查是否需要重试
         if queued_task.retry_count < queued_task.max_retries:
             queued_task.retry_count += 1
-            logger.info(f"任务重试: {queued_task.task_id}, 重试次数: {queued_task.retry_count}")
+            logger.info(
+                f"任务重试: {queued_task.task_id}, 重试次数: {queued_task.retry_count}"
+            )
 
             # 延迟重新入队
             def retry_task() -> None:
@@ -460,7 +464,9 @@ class TaskQueueManager:
     def create_scheduler(self, name: str, max_executors: int = 3) -> TaskScheduler:
         """创建新的调度器"""
         if name in self.schedulers:
-            raise TaskError(message=f"调度器已存在: {name}", severity=ErrorSeverity.MEDIUM)
+            raise TaskError(
+                message=f"调度器已存在: {name}", severity=ErrorSeverity.MEDIUM
+            )
 
         scheduler = TaskScheduler(max_executors=max_executors)
         self.schedulers[name] = scheduler

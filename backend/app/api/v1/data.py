@@ -221,7 +221,9 @@ async def trigger_qlib_precompute(
             "error_message": task.error_message,
         }
 
-        return StandardResponse(success=True, message="Qlib预计算任务创建成功", data=task_data)
+        return StandardResponse(
+            success=True, message="Qlib预计算任务创建成功", data=task_data
+        )
 
     except Exception as e:
         session.rollback()
@@ -324,7 +326,9 @@ async def get_remote_stock_list(
         )
 
         if estimated_size > 5 * 1024 * 1024:  # 5MB
-            logger.warning(f"响应数据较大 ({estimated_size / 1024 / 1024:.2f} MB)，可能导致前端处理失败")
+            logger.warning(
+                f"响应数据较大 ({estimated_size / 1024 / 1024:.2f} MB)，可能导致前端处理失败"
+            )
 
         return StandardResponse(
             success=True,
@@ -414,7 +418,9 @@ async def get_local_stock_list() -> Any:
                 try:
                     df = pd.read_parquet(file_path, engine="pyarrow")
                 except Exception as e:
-                    logger.debug(f"使用 pyarrow 引擎读取失败: {e}，尝试使用 fastparquet")
+                    logger.debug(
+                        f"使用 pyarrow 引擎读取失败: {e}，尝试使用 fastparquet"
+                    )
                     try:
                         df = pd.read_parquet(file_path, engine="fastparquet")
                     except Exception as e2:
@@ -431,7 +437,9 @@ async def get_local_stock_list() -> Any:
                 elif "stock_code" in df.columns:
                     stock_code_col = "stock_code"
                 else:
-                    logger.warning(f"文件缺少股票代码列: {file_path}, 列名: {df.columns.tolist()}")
+                    logger.warning(
+                        f"文件缺少股票代码列: {file_path}, 列名: {df.columns.tolist()}"
+                    )
                     continue
 
                 # 按股票代码分组统计
@@ -486,7 +494,9 @@ async def get_local_stock_list() -> Any:
                             dates = pd.to_datetime(stock_df[date_col]).tolist()
                             stock_data_map[stock_code]["dates"].extend(dates)
                         except Exception as e:
-                            logger.debug(f"解析日期列 {date_col} 失败 {stock_code}: {e}")
+                            logger.debug(
+                                f"解析日期列 {date_col} 失败 {stock_code}: {e}"
+                            )
 
             except Exception as e:
                 error_count += 1
@@ -661,7 +671,9 @@ async def get_local_stock_list_simple() -> Any:
                         stock_code = f"{code}.{market}"
                         stock_codes_set.add(stock_code)
                     else:
-                        logger.debug(f"跳过未知的市场代码: {file_name} (市场: {market})")
+                        logger.debug(
+                            f"跳过未知的市场代码: {file_name} (市场: {market})"
+                        )
                 else:
                     logger.debug(f"文件名格式不正确: {file_name}")
             else:
@@ -744,7 +756,9 @@ async def sync_remote_data(
     # 立即记录结构化日志，避免使用 print。
     logger.info("=" * 60)
     logger.info("收到同步远端数据请求 - API端点被调用")
-    logger.info(f"请求参数: stock_codes={'已提供' if request.stock_codes else '未提供（将同步所有股票）'}")
+    logger.info(
+        f"请求参数: stock_codes={'已提供' if request.stock_codes else '未提供（将同步所有股票）'}"
+    )
     if request.stock_codes:
         logger.info(f"要同步的股票数量: {len(request.stock_codes)}")
     logger.info("=" * 60)
@@ -876,7 +890,9 @@ async def get_sync_event_stats() -> Any:
         event_manager = get_data_sync_event_manager()
         stats = event_manager.get_stats()
 
-        return StandardResponse(success=True, message="成功获取事件统计信息", data=stats)
+        return StandardResponse(
+            success=True, message="成功获取事件统计信息", data=stats
+        )
 
     except Exception as e:
         logger.error(f"获取事件统计失败: {e}")

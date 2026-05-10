@@ -196,7 +196,9 @@ async def get_cache_stats() -> Any:
         provider = get_qlib_provider()
         stats = await provider.get_cache_stats()
 
-        return StandardResponse(success=True, message="缓存统计信息获取成功", data=stats)
+        return StandardResponse(
+            success=True, message="缓存统计信息获取成功", data=stats
+        )
 
     except Exception as e:
         logger.error(f"获取缓存统计失败: {e}", exc_info=True)
@@ -373,9 +375,13 @@ async def get_model_config_template(model_name: str) -> Any:
 
         template = engine.get_model_config_template(model_name)
         if not template:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
-        return StandardResponse(success=True, message="模型配置模板获取成功", data=template)
+        return StandardResponse(
+            success=True, message="模型配置模板获取成功", data=template
+        )
 
     except HTTPException:
         raise
@@ -392,7 +398,9 @@ async def get_model_hyperparameters(model_name: str) -> Any:
 
         hyperparameter_specs = engine.model_manager.get_hyperparameter_specs(model_name)
         if not hyperparameter_specs:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
         specs_data = []
         for spec in hyperparameter_specs:
@@ -480,7 +488,9 @@ async def get_training_tips(model_name: str) -> Any:
 
         recommendations = engine.get_training_recommendations(model_name)
         if not recommendations:
-            raise HTTPException(status_code=404, detail=f"不支持的模型类型: {model_name}")
+            raise HTTPException(
+                status_code=404, detail=f"不支持的模型类型: {model_name}"
+            )
 
         return StandardResponse(
             success=True,

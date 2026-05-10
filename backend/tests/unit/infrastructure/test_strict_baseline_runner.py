@@ -31,8 +31,7 @@ STRICT_COMMON = load_module(COMMON_PATH, "strict_baseline_common_test")
 def create_tasks_table(db_path: Path) -> None:
     """Create the minimal tasks table used by strict-baseline scripts."""
     connection = sqlite3.connect(db_path)
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TABLE tasks (
             task_id TEXT PRIMARY KEY,
             task_name TEXT,
@@ -41,8 +40,7 @@ def create_tasks_table(db_path: Path) -> None:
             config TEXT,
             result TEXT
         )
-        """
-    )
+        """)
     connection.commit()
     connection.close()
 

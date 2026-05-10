@@ -550,7 +550,9 @@ class HealthMonitor:
                 },
             }
 
-        self.health_checker.register_check("model_file", model_file_check, "检查模型文件是否存在")
+        self.health_checker.register_check(
+            "model_file", model_file_check, "检查模型文件是否存在"
+        )
 
         # 模型加载检查
         async def model_load_check(

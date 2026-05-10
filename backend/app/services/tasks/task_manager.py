@@ -530,11 +530,9 @@ class TaskManager:
             }
 
             # 任务状态统计
-            status_rows = self.db_manager.fetch_all(
-                """
+            status_rows = self.db_manager.fetch_all("""
                 SELECT status, COUNT(*) as count FROM tasks GROUP BY status
-            """
-            )
+            """)
 
             for row in status_rows:
                 status = row["status"]

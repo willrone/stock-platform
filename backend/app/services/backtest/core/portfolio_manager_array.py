@@ -34,8 +34,12 @@ class PortfolioManagerArray:
         self.n_stocks = len(stock_codes)
 
         # 持仓数组化 (shape: [n_stocks])
-        self.quantities: np.ndarray = np.zeros(self.n_stocks, dtype=np.int32)  # 持仓数量
-        self.avg_costs: np.ndarray = np.zeros(self.n_stocks, dtype=np.float64)  # 平均成本
+        self.quantities: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.int32
+        )  # 持仓数量
+        self.avg_costs: np.ndarray = np.zeros(
+            self.n_stocks, dtype=np.float64
+        )  # 平均成本
         self.realized_pnl: np.ndarray = np.zeros(
             self.n_stocks, dtype=np.float64
         )  # 已实现盈亏

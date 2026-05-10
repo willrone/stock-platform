@@ -101,7 +101,9 @@ class QlibTrainingConfig:
     use_alpha_factors: bool = True
     cache_features: bool = True
     # 特征选择配置
-    selected_features: Optional[List[str]] = None  # 用户选择的特征列表，None表示使用所有特征
+    selected_features: Optional[List[str]] = (
+        None  # 用户选择的特征列表，None表示使用所有特征
+    )
     # 早停策略配置
     enable_early_stopping: bool = True
     early_stopping_monitor: str = "val_loss"
@@ -260,7 +262,9 @@ class OutlierHandler:
                 outliers = z_scores > threshold
 
                 if outliers.sum() > 0:
-                    logger.info(f"标签异常值处理: 使用Z-score方法，检测到 {outliers.sum()} 个异常值")
+                    logger.info(
+                        f"标签异常值处理: 使用Z-score方法，检测到 {outliers.sum()} 个异常值"
+                    )
                     # 将异常值截断到阈值
                     data_processed.loc[outliers, label_col] = (
                         np.sign(label_values[outliers] - mean) * threshold * std + mean
@@ -270,7 +274,9 @@ class OutlierHandler:
         # 如果收益率超过50%，标记为可疑
         extreme_mask = np.abs(data_processed[label_col]) > 0.5
         if extreme_mask.sum() > 0:
-            logger.warning(f"检测到 {extreme_mask.sum()} 个极端收益率（>50%），可能是除权除息，已处理")
+            logger.warning(
+                f"检测到 {extreme_mask.sum()} 个极端收益率（>50%），可能是除权除息，已处理"
+            )
 
         return data_processed
 
@@ -1001,7 +1007,9 @@ class UnifiedQlibTrainingEngine:
                                 ]
                             ]
                             if missing_features:
-                                logger.warning(f"以下特征不存在，将被忽略: {missing_features[:10]}")
+                                logger.warning(
+                                    f"以下特征不存在，将被忽略: {missing_features[:10]}"
+                                )
                             logger.info(
                                 f"使用用户选择的 {len(feature_cols)} 个特征进行训练: {feature_cols[:10]}"
                             )
@@ -1364,7 +1372,9 @@ class UnifiedQlibTrainingEngine:
                     elif hasattr(model, "model") and hasattr(
                         model.model, "best_iteration"
                     ):
-                        logger.debug("模型未直接暴露 evals_result，回退到 best_iteration 信息")
+                        logger.debug(
+                            "模型未直接暴露 evals_result，回退到 best_iteration 信息"
+                        )
 
                 if evals_result:
                     train_metrics = evals_result.get("train", {})
@@ -1421,7 +1431,9 @@ class UnifiedQlibTrainingEngine:
                             f"从官方 evals_result 获取训练历史: {len(training_history)} 轮, metric={preferred_metric}"
                         )
             except Exception as e:
-                logger.debug(f"无法从官方 evals_result 获取训练历史: {e}", exc_info=True)
+                logger.debug(
+                    f"无法从官方 evals_result 获取训练历史: {e}", exc_info=True
+                )
 
             # 读取官方模型的真实 best_iteration / early stopping 结果
             actual_best_iteration = None
@@ -1725,7 +1737,9 @@ class UnifiedQlibTrainingEngine:
                     prepared = dataset.dataset.prepare(segment, col_set="label")
                     y_true, y_index = _extract_label_from_prepared(prepared)
                 except Exception as e:
-                    logger.debug(f"通过official adapter dataset.prepare获取标签失败: {e}")
+                    logger.debug(
+                        f"通过official adapter dataset.prepare获取标签失败: {e}"
+                    )
 
             if y_true is None and hasattr(dataset, "prepare"):
                 try:
@@ -1935,7 +1949,9 @@ class UnifiedQlibTrainingEngine:
                 dataset, predictions, dataset_name
             )
             if evaluation_inputs is None:
-                logger.warning(f"数据集 {dataset_name} 中没有有效评估输入，使用默认指标")
+                logger.warning(
+                    f"数据集 {dataset_name} 中没有有效评估输入，使用默认指标"
+                )
                 return self._get_default_metrics()
 
             y_true = evaluation_inputs["y_true"]
@@ -2500,7 +2516,9 @@ class UnifiedQlibTrainingEngine:
 
             aligned = aligned[normalized_feature_names]
             if missing:
-                logger.info("预测特征缺失补齐: count={}, sample={}", len(missing), missing[:5])
+                logger.info(
+                    "预测特征缺失补齐: count={}, sample={}", len(missing), missing[:5]
+                )
             return aligned
 
         except Exception as e:
@@ -2543,7 +2561,7 @@ class UnifiedQlibTrainingEngine:
 
     def get_training_recommendations(self, model_type: str) -> Dict[str, Any]:
         """获取训练建议"""
-        recommendations: Dict[
-            str, Any
-        ] = self.model_manager.get_training_recommendations(model_type)
+        recommendations: Dict[str, Any] = (
+            self.model_manager.get_training_recommendations(model_type)
+        )
         return recommendations

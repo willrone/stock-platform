@@ -101,7 +101,9 @@ class BacktestChartCache(Base):
         comment="图表类型：equity_curve, drawdown_curve, monthly_heatmap等",
     )
     chart_data = Column(JSON, nullable=False, comment="图表数据JSON")
-    data_hash = Column(String(64), nullable=True, comment="数据哈希值，用于检测数据变化")
+    data_hash = Column(
+        String(64), nullable=True, comment="数据哈希值，用于检测数据变化"
+    )
     created_at = Column(DateTime, nullable=False, default=utcnow)
     expires_at = Column(DateTime, nullable=True, comment="缓存过期时间")
 
@@ -242,7 +244,9 @@ class SignalRecord(Base):
     reason = Column(Text, nullable=True, comment="信号原因")
     signal_metadata = Column(JSON, nullable=True, comment="元数据（JSON格式）")
     executed = Column(Boolean, nullable=False, default=False, comment="是否被执行")
-    execution_reason = Column(Text, nullable=True, comment="执行原因：已执行时为空，未执行时记录未执行原因")
+    execution_reason = Column(
+        Text, nullable=True, comment="执行原因：已执行时为空，未执行时记录未执行原因"
+    )
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     # 创建索引
@@ -294,7 +298,9 @@ class BacktestBenchmark(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     task_id = Column(String(50), nullable=False, index=True)
     backtest_id = Column(String(50), nullable=False, index=True)
-    benchmark_symbol = Column(String(20), nullable=False, comment="基准代码，如000300.SH")
+    benchmark_symbol = Column(
+        String(20), nullable=False, comment="基准代码，如000300.SH"
+    )
     benchmark_name = Column(String(100), nullable=False, comment="基准名称，如沪深300")
     benchmark_data = Column(JSON, nullable=False, comment="基准历史数据")
 
@@ -387,7 +393,9 @@ class BacktestStatistics(Base):
     # ========== 股票分布统计 ==========
     unique_stocks_signaled = Column(Integer, default=0, comment="产生信号的股票数")
     unique_stocks_traded = Column(Integer, default=0, comment="实际交易的股票数")
-    most_signaled_stock = Column(String(20), nullable=True, comment="信号最多的股票代码")
+    most_signaled_stock = Column(
+        String(20), nullable=True, comment="信号最多的股票代码"
+    )
     most_traded_stock = Column(String(20), nullable=True, comment="交易最多的股票代码")
 
     # ========== 性能指标统计 ==========

@@ -30,7 +30,9 @@ class CacheCleanupService:
             return
 
         self.is_running = True
-        self.logger.info(f"启动缓存清理调度器，清理间隔: {self.cleanup_interval_hours}小时")
+        self.logger.info(
+            f"启动缓存清理调度器，清理间隔: {self.cleanup_interval_hours}小时"
+        )
 
         try:
             while self.is_running:

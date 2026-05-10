@@ -333,7 +333,9 @@ class AdaptiveEarlyStopping:
 
         # 检查是否应该停止
         if self.wait >= self.current_patience:
-            logger.info(f"自适应早停触发: 等待 {self.wait} 轮，容忍轮数 {self.current_patience}")
+            logger.info(
+                f"自适应早停触发: 等待 {self.wait} 轮，容忍轮数 {self.current_patience}"
+            )
             return True
 
         return False

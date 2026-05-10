@@ -107,9 +107,13 @@ def _patch_executor_run(
         )
     )
     stack.enter_context(
-        patch.object(executor.data_loader, "load_multiple_stocks", return_value=stock_data)
+        patch.object(
+            executor.data_loader, "load_multiple_stocks", return_value=stock_data
+        )
     )
-    stack.enter_context(patch.object(executor, "_get_trading_calendar", return_value=trading_dates))
+    stack.enter_context(
+        patch.object(executor, "_get_trading_calendar", return_value=trading_dates)
+    )
     stack.enter_context(patch.object(executor, "_build_date_index"))
     stack.enter_context(patch.object(executor, "_precompute_strategy_signals"))
     stack.enter_context(
@@ -127,20 +131,32 @@ def _patch_executor_run(
         )
     )
     stack.enter_context(
-        patch.object(executor, "_prepare_strategy_backtest_data", AsyncMock(return_value=None))
+        patch.object(
+            executor, "_prepare_strategy_backtest_data", AsyncMock(return_value=None)
+        )
     )
     stack.enter_context(
-        patch.object(executor_module, "PortfolioManagerArray", return_value=portfolio_manager)
+        patch.object(
+            executor_module, "PortfolioManagerArray", return_value=portfolio_manager
+        )
     )
     stack.enter_context(
         patch.object(
             executor,
             "_execute_backtest_loop",
-            AsyncMock(return_value=loop_result
-            or {"total_signals": 3, "trading_days": len(trading_dates), "executed_trades": 1}),
+            AsyncMock(
+                return_value=loop_result
+                or {
+                    "total_signals": 3,
+                    "trading_days": len(trading_dates),
+                    "executed_trades": 1,
+                }
+            ),
         )
     )
-    stack.enter_context(patch.object(executor, "_calculate_additional_metrics", return_value={}))
+    stack.enter_context(
+        patch.object(executor, "_calculate_additional_metrics", return_value={})
+    )
     stack.enter_context(
         patch(
             "app.core.database.get_async_session_context",
@@ -310,13 +326,16 @@ class TestBacktestExecutor:
     def test_validate_backtest_parameters(self) -> None:
         executor = BacktestExecutor(data_dir="/tmp", enable_parallel=False)
 
-        assert executor.validate_backtest_parameters(
-            strategy_name="rsi",
-            stock_codes=["000001.SZ"],
-            start_date=datetime(2024, 1, 1),
-            end_date=datetime(2024, 3, 1),
-            strategy_config={"rsi_period": 14},
-        ) is True
+        assert (
+            executor.validate_backtest_parameters(
+                strategy_name="rsi",
+                stock_codes=["000001.SZ"],
+                start_date=datetime(2024, 1, 1),
+                end_date=datetime(2024, 3, 1),
+                strategy_config={"rsi_period": 14},
+            )
+            is True
+        )
 
     @pytest.mark.asyncio
     async def test_run_backtest_returns_current_report_contract(self) -> None:

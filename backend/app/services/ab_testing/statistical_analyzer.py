@@ -694,7 +694,9 @@ class ExperimentAnalyzer:
         ci_upper = mean_diff + t_critical * pooled_se
 
         is_significant = p_value < 0.05
-        interpretation = f"{'显著' if is_significant else '不显著'}差异 (p = {p_value:.3f})"
+        interpretation = (
+            f"{'显著' if is_significant else '不显著'}差异 (p = {p_value:.3f})"
+        )
 
         return StatisticalTestResult(
             test_type=TestType.T_TEST,
@@ -759,9 +761,7 @@ class ExperimentAnalyzer:
             return "实验结果无显著差异，建议继续收集数据或重新设计实验"
 
         if overall_confidence < 0.8:
-            return (
-                f"实验组 {overall_winner} 表现较好，但置信度较低（{overall_confidence:.2f}），建议延长实验时间"
-            )
+            return f"实验组 {overall_winner} 表现较好，但置信度较低（{overall_confidence:.2f}），建议延长实验时间"
 
         elif overall_confidence < 0.95:
             return f"实验组 {overall_winner} 表现显著优于对照组，建议谨慎推广"
@@ -787,7 +787,9 @@ class ExperimentAnalyzer:
             "minimum_detectable_effect": 0.05,  # 5%的最小可检测效应
             "statistical_power": 0.8,  # 期望的统计功效
             "significance_level": 0.05,  # 显著性水平
-            "recommendation": ("样本量充足" if total_sample_size > 1000 else "建议增加样本量"),
+            "recommendation": (
+                "样本量充足" if total_sample_size > 1000 else "建议增加样本量"
+            ),
         }
 
     def _get_total_users(self, experiment: ABExperiment) -> int:

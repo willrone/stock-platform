@@ -249,7 +249,9 @@ class TestBacktestDataAdapterProperties:
         if enhanced_result.drawdown_analysis:
             assert isinstance(enhanced_result.drawdown_analysis, DrawdownAnalysis)
             assert not np.isnan(enhanced_result.drawdown_analysis.max_drawdown)
-            assert enhanced_result.drawdown_analysis.max_drawdown <= 0, "最大回撤应该是负数或零"
+            assert (
+                enhanced_result.drawdown_analysis.max_drawdown <= 0
+            ), "最大回撤应该是负数或零"
 
     @given(
         portfolio_length=st.integers(min_value=30, max_value=252),
@@ -309,7 +311,9 @@ class TestBacktestDataAdapterProperties:
 
         # 验证波动率计算的合理性
         calculated_volatility = risk_metrics.volatility
-        assert 0 < calculated_volatility < 2.0, f"波动率 {calculated_volatility} 应该在合理范围内"
+        assert (
+            0 < calculated_volatility < 2.0
+        ), f"波动率 {calculated_volatility} 应该在合理范围内"
 
         # 验证波动率与输入参数的一致性（允许一定误差）
         expected_volatility = volatility_level
@@ -332,16 +336,22 @@ class TestBacktestDataAdapterProperties:
 
         # 验证最大回撤
         max_drawdown = risk_metrics.max_drawdown
-        assert -1.0 < max_drawdown <= 0, f"最大回撤 {max_drawdown} 应该是负数且大于-100%"
+        assert (
+            -1.0 < max_drawdown <= 0
+        ), f"最大回撤 {max_drawdown} 应该是负数且大于-100%"
 
         # 验证Calmar比率（如果有回撤）
         if max_drawdown < 0:
             calmar_ratio = risk_metrics.calmar_ratio
-            assert -10 < calmar_ratio < 10, f"Calmar比率 {calmar_ratio} 应该在合理范围内"
+            assert (
+                -10 < calmar_ratio < 10
+            ), f"Calmar比率 {calmar_ratio} 应该在合理范围内"
 
         # 验证下行偏差
         downside_deviation = risk_metrics.downside_deviation
-        assert 0 <= downside_deviation < 2.0, f"下行偏差 {downside_deviation} 应该非负且在合理范围内"
+        assert (
+            0 <= downside_deviation < 2.0
+        ), f"下行偏差 {downside_deviation} 应该非负且在合理范围内"
 
     @given(
         num_months=st.integers(min_value=6, max_value=24),

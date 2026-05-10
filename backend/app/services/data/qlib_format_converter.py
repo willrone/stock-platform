@@ -121,7 +121,9 @@ class QlibFormatConverter:
             combined_df = pd.concat(qlib_dataframes, axis=0)
             combined_df = combined_df.sort_index()
 
-            logger.info(f"合并完成: {len(qlib_dataframes)} 只股票, 总记录数: {len(combined_df)}")
+            logger.info(
+                f"合并完成: {len(qlib_dataframes)} 只股票, 总记录数: {len(combined_df)}"
+            )
 
             return combined_df
 
@@ -189,7 +191,9 @@ class QlibFormatConverter:
             # 检查列名冲突
             overlapping_cols = qlib_base.columns.intersection(indicators.columns)
             if len(overlapping_cols) > 0:
-                logger.warning(f"检测到列名冲突: {list(overlapping_cols)}，将只添加不存在的列")
+                logger.warning(
+                    f"检测到列名冲突: {list(overlapping_cols)}，将只添加不存在的列"
+                )
                 # 只添加不存在的列
                 new_cols = indicators.columns.difference(qlib_base.columns)
                 if len(new_cols) > 0:

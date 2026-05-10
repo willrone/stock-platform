@@ -115,9 +115,13 @@ def _patch_executor_run(
         )
     )
     stack.enter_context(
-        patch.object(executor.data_loader, "load_multiple_stocks", return_value=stock_data)
+        patch.object(
+            executor.data_loader, "load_multiple_stocks", return_value=stock_data
+        )
     )
-    stack.enter_context(patch.object(executor, "_get_trading_calendar", return_value=trading_dates))
+    stack.enter_context(
+        patch.object(executor, "_get_trading_calendar", return_value=trading_dates)
+    )
     stack.enter_context(patch.object(executor, "_build_date_index"))
     stack.enter_context(patch.object(executor, "_precompute_strategy_signals"))
     stack.enter_context(
@@ -135,10 +139,14 @@ def _patch_executor_run(
         )
     )
     stack.enter_context(
-        patch.object(executor, "_prepare_strategy_backtest_data", AsyncMock(return_value=None))
+        patch.object(
+            executor, "_prepare_strategy_backtest_data", AsyncMock(return_value=None)
+        )
     )
     stack.enter_context(
-        patch.object(executor_module, "PortfolioManagerArray", return_value=portfolio_manager)
+        patch.object(
+            executor_module, "PortfolioManagerArray", return_value=portfolio_manager
+        )
     )
     stack.enter_context(
         patch.object(
@@ -153,7 +161,9 @@ def _patch_executor_run(
             ),
         )
     )
-    stack.enter_context(patch.object(executor, "_calculate_additional_metrics", return_value={}))
+    stack.enter_context(
+        patch.object(executor, "_calculate_additional_metrics", return_value={})
+    )
     stack.enter_context(
         patch(
             "app.core.database.get_async_session_context",
@@ -205,7 +215,11 @@ class TestBacktestEngineAccuracy:
         for signal in signals:
             assert isinstance(signal, TradingSignal)
             assert signal.stock_code == "000001.SZ"
-            assert signal.signal_type in {SignalType.BUY, SignalType.SELL, SignalType.HOLD}
+            assert signal.signal_type in {
+                SignalType.BUY,
+                SignalType.SELL,
+                SignalType.HOLD,
+            }
             assert 0 <= signal.strength <= 1
             assert signal.price > 0
             assert signal.timestamp == current_date
@@ -258,7 +272,9 @@ class TestBacktestEngineAccuracy:
         position = portfolio_manager.positions["000001.SZ"]
         assert position.quantity == buy_trade.quantity
 
-        expected_cash = initial_cash - (buy_trade.quantity * buy_trade.price + buy_trade.commission)
+        expected_cash = initial_cash - (
+            buy_trade.quantity * buy_trade.price + buy_trade.commission
+        )
         assert abs(portfolio_manager.cash - expected_cash) < 0.01
 
         sell_signal = TradingSignal(
@@ -291,11 +307,15 @@ class TestBacktestEngineAccuracy:
         portfolio_manager = PortfolioManager(config)
         portfolio_values = [config.initial_cash]
         for daily_return in returns_data:
-            portfolio_values.append(max(portfolio_values[-1] * (1 + daily_return), 1_000))
+            portfolio_values.append(
+                max(portfolio_values[-1] * (1 + daily_return), 1_000)
+            )
 
         base_date = datetime(2024, 1, 1)
         for i, value in enumerate(portfolio_values):
-            portfolio_manager.equity_curve.append((base_date + timedelta(days=i), value))
+            portfolio_manager.equity_curve.append(
+                (base_date + timedelta(days=i), value)
+            )
             portfolio_manager.portfolio_history.append(
                 {
                     "date": base_date + timedelta(days=i),
@@ -323,7 +343,9 @@ class TestBacktestEngineAccuracy:
         assert -1 <= metrics["max_drawdown"] <= 0
         assert 0 <= metrics["win_rate"] <= 1
         assert metrics["total_trades"] >= 0
-        expected_total_return = (portfolio_values[-1] - config.initial_cash) / config.initial_cash
+        expected_total_return = (
+            portfolio_values[-1] - config.initial_cash
+        ) / config.initial_cash
         assert abs(metrics["total_return"] - expected_total_return) < 0.01
 
     @given(
@@ -338,13 +360,16 @@ class TestBacktestEngineAccuracy:
         executor = BacktestExecutor(data_dir="/tmp", enable_parallel=False)
         stock_codes = [f"00000{i}.SZ" for i in range(1, stock_count + 1)]
 
-        assert executor.validate_backtest_parameters(
-            strategy_name=strategy_name,
-            stock_codes=stock_codes,
-            start_date=datetime(2024, 1, 1),
-            end_date=datetime(2024, 3, 1),
-            strategy_config={},
-        ) is True
+        assert (
+            executor.validate_backtest_parameters(
+                strategy_name=strategy_name,
+                stock_codes=stock_codes,
+                start_date=datetime(2024, 1, 1),
+                end_date=datetime(2024, 3, 1),
+                strategy_config={},
+            )
+            is True
+        )
 
     @pytest.mark.asyncio
     @given(stock_count=st.integers(min_value=1, max_value=3))

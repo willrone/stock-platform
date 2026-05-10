@@ -675,7 +675,9 @@ async def train_model_task(
                     hyperparameters.copy() if hyperparameters else {}
                 )
 
-            logger.info(f"生成评估报告 - 模型 {model_id}, 超参数: {final_hyperparameters}")
+            logger.info(
+                f"生成评估报告 - 模型 {model_id}, 超参数: {final_hyperparameters}"
+            )
 
             report = report_generator.generate_report(
                 model_id=model_id,
@@ -872,17 +874,23 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
         report_payload = model.evaluation_report
         if report_payload is None:
             logger.warning(f"模型 {model_id} 的评估报告为 None，状态: {model.status}")
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+            raise HTTPException(
+                status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
+            )
 
         # 检查评估报告是否为空字典
         if isinstance(report_payload, dict) and len(report_payload) == 0:
             logger.warning(f"模型 {model_id} 的评估报告为空字典")
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+            raise HTTPException(
+                status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
+            )
 
         # 检查评估报告是否为空字符串
         if isinstance(report_payload, str) and len(report_payload.strip()) == 0:
             logger.warning(f"模型 {model_id} 的评估报告为空字符串")
-            raise HTTPException(status_code=404, detail="该模型尚未生成评估报告，请等待训练完成")
+            raise HTTPException(
+                status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
+            )
 
         # 如果评估报告是字符串，尝试解析为JSON
         if isinstance(report_payload, str):
@@ -950,7 +958,9 @@ async def list_models() -> StandardResponse:
         session.close()
 
 
-@router.get("/available-features", response_model=StandardResponse, summary="获取可用特征列表")
+@router.get(
+    "/available-features", response_model=StandardResponse, summary="获取可用特征列表"
+)
 async def get_available_features(
     stock_code: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -1320,7 +1330,9 @@ async def cancel_model_training(model_id: str) -> StandardResponse:
 async def create_training_task(request: ModelTrainingRequest) -> StandardResponse:
     """创建模型训练任务"""
     if not TRAINING_AVAILABLE:
-        raise HTTPException(status_code=503, detail="模型训练服务不可用，请检查依赖安装")
+        raise HTTPException(
+            status_code=503, detail="模型训练服务不可用，请检查依赖安装"
+        )
 
     session = SessionLocal()
     try:
@@ -1358,7 +1370,9 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
             start_date = datetime.fromisoformat(request.start_date)
             end_date = datetime.fromisoformat(request.end_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式")
+            raise HTTPException(
+                status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
 
         hyperparameters = dict(request.hyperparameters or {})
         if request.workflow_mode:
@@ -1479,7 +1493,9 @@ async def get_model_lifecycle(model_id: str) -> StandardResponse:
         lifecycle_info = await model_lifecycle_manager.get_lifecycle_history(model_id)
 
         if not lifecycle_info:
-            raise HTTPException(status_code=404, detail=f"模型生命周期信息不存在: {model_id}")
+            raise HTTPException(
+                status_code=404, detail=f"模型生命周期信息不存在: {model_id}"
+            )
 
         return StandardResponse(
             success=True,
@@ -1491,7 +1507,9 @@ async def get_model_lifecycle(model_id: str) -> StandardResponse:
         raise
     except Exception as e:
         logger.error(f"获取模型生命周期信息失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}"
+        )
 
 
 @router.get("/{model_id}/lineage", response_model=StandardResponse)
@@ -1501,9 +1519,13 @@ async def get_model_lineage(model_id: str) -> StandardResponse:
         lineage_info = await lineage_tracker.get_model_lineage(model_id)
 
         if not lineage_info:
-            raise HTTPException(status_code=404, detail=f"模型血缘信息不存在: {model_id}")
+            raise HTTPException(
+                status_code=404, detail=f"模型血缘信息不存在: {model_id}"
+            )
 
-        return StandardResponse(success=True, message="模型血缘信息获取成功", data=lineage_info)
+        return StandardResponse(
+            success=True, message="模型血缘信息获取成功", data=lineage_info
+        )
 
     except HTTPException:
         raise
@@ -1520,7 +1542,9 @@ async def get_model_dependencies(model_id: str) -> StandardResponse:
         lineage_info = await lineage_tracker.get_model_lineage(model_id)
 
         if not lineage_info:
-            raise HTTPException(status_code=404, detail=f"模型依赖信息不存在: {model_id}")
+            raise HTTPException(
+                status_code=404, detail=f"模型依赖信息不存在: {model_id}"
+            )
 
         dependencies = {
             "data_dependencies": lineage_info.get("data_dependencies", []),
@@ -1529,7 +1553,9 @@ async def get_model_dependencies(model_id: str) -> StandardResponse:
             "config_dependencies": lineage_info.get("config_dependencies", []),
         }
 
-        return StandardResponse(success=True, message="模型依赖关系获取成功", data=dependencies)
+        return StandardResponse(
+            success=True, message="模型依赖关系获取成功", data=dependencies
+        )
 
     except HTTPException:
         raise
@@ -1604,7 +1630,9 @@ async def get_model_performance_history(
         }
 
         if time_range not in time_ranges:
-            raise HTTPException(status_code=400, detail=f"不支持的时间范围: {time_range}")
+            raise HTTPException(
+                status_code=400, detail=f"不支持的时间范围: {time_range}"
+            )
 
         end_time = datetime.now()
         start_time = end_time - time_ranges[time_range]

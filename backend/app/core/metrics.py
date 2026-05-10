@@ -183,7 +183,9 @@ class MetricsCollector:
         # 匹配UUID、数字ID等
         endpoint = re.sub(r"/[0-9a-f-]{36}", "/{id}", endpoint)  # UUID
         endpoint = re.sub(r"/\d+", "/{id}", endpoint)  # 数字ID
-        endpoint = re.sub(r"/[A-Z0-9]{6,}\.SZ|SH", "/{stock_code}", endpoint)  # 股票代码
+        endpoint = re.sub(
+            r"/[A-Z0-9]{6,}\.SZ|SH", "/{stock_code}", endpoint
+        )  # 股票代码
 
         return endpoint
 

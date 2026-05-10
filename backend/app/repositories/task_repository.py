@@ -349,7 +349,9 @@ class TaskRepository:
             self.db.commit()
             self.db.refresh(task)
 
-            logger.debug(f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%")
+            logger.debug(
+                f"任务进度更新: {task_id}, {old_progress:.1f}% -> {progress:.1f}%"
+            )
             return task
 
         except TaskError:
@@ -458,7 +460,9 @@ class TaskRepository:
                         logger.debug(f"删除{table_name}时出错（可能表不存在）: {e}")
 
                 if total_deleted > 0:
-                    logger.info(f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录")
+                    logger.info(
+                        f"已删除任务 {task_id} 的详细数据，共 {total_deleted} 条记录"
+                    )
                     self.db.flush()  # 刷新但先不提交，等主任务删除一起提交
             except Exception as e:
                 # 删除详细数据失败不影响主任务删除
@@ -490,7 +494,9 @@ class TaskRepository:
             error_msg = str(e)
             # 检查是否是数据库约束错误
             if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
-                logger.error(f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}")
+                logger.error(
+                    f"删除任务失败（数据库约束）: {task_id}, 错误: {error_msg}"
+                )
                 raise TaskError(
                     message=f"删除任务失败：存在关联数据。请先删除相关数据，或使用强制删除。错误详情: {error_msg}",
                     severity=ErrorSeverity.HIGH,

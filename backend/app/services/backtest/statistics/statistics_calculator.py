@@ -96,7 +96,9 @@ class StatisticsCalculator:
                 return new_stats
 
         except Exception as e:
-            self.logger.error(f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True)
+            self.logger.error(
+                f"计算统计信息失败: task_id={task_id}, error={e}", exc_info=True
+            )
             raise
 
     def _update_statistics_object(

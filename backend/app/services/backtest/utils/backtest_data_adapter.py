@@ -209,9 +209,9 @@ class BacktestDataAdapter:
             extended_metrics["var_95"] = var_95
 
             # 最大回撤持续时间
-            extended_metrics[
-                "max_drawdown_duration"
-            ] = self._calculate_max_drawdown_duration(df["portfolio_value"])
+            extended_metrics["max_drawdown_duration"] = (
+                self._calculate_max_drawdown_duration(df["portfolio_value"])
+            )
 
             # 夏普比率（重新计算，使用无风险利率）
             sharpe_ratio = (

@@ -172,7 +172,9 @@ class ModelStorage:
             # 清理model_id，移除不允许的文件名字符
             import re
 
-            safe_model_id = re.sub(r'[<>:"/\\|?*]', "_", model_id)  # 替换不允许的字符为下划线
+            safe_model_id = re.sub(
+                r'[<>:"/\\|?*]', "_", model_id
+            )  # 替换不允许的字符为下划线
             safe_model_id = re.sub(r"\s+", "_", safe_model_id)  # 替换空格为下划线
 
             # 生成文件路径

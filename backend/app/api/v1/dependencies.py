@@ -803,7 +803,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                             f"组合快照数据为空: task_id={task_id}"
                                         )
                                 else:
-                                    task_logger.warning(f"没有组合历史数据: task_id={task_id}")
+                                    task_logger.warning(
+                                        f"没有组合历史数据: task_id={task_id}"
+                                    )
 
                                 # 批量创建交易记录
                                 trade_history = enhanced_result.trade_history or []
@@ -884,7 +886,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                             f"交易记录数据为空: task_id={task_id}"
                                         )
                                 else:
-                                    task_logger.warning(f"没有交易历史数据: task_id={task_id}")
+                                    task_logger.warning(
+                                        f"没有交易历史数据: task_id={task_id}"
+                                    )
 
                                 # 先提交主数据，确保立即可查询
                                 await session.commit()
@@ -892,7 +896,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
 
                                 # 计算并保存统计信息（在单独的事务中，不阻塞主数据查询）
                                 try:
-                                    task_logger.info(f"开始计算统计信息: task_id={task_id}")
+                                    task_logger.info(
+                                        f"开始计算统计信息: task_id={task_id}"
+                                    )
                                     calculator = StatisticsCalculator(session)
                                     backtest_id = f"bt_{task_id[:8]}"
                                     stats = await calculator.calculate_all_statistics(
@@ -943,7 +949,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
             # 处理任务错误（如任务被删除）
             if task_error.severity == ErrorSeverity.LOW:
                 # 低严重程度错误（如任务被删除），直接退出，不更新任务状态
-                task_logger.info("任务被取消或删除: {}, 原因: {}", task_id, task_error.message)
+                task_logger.info(
+                    "任务被取消或删除: {}, 原因: {}", task_id, task_error.message
+                )
                 return
             else:
                 # 其他任务错误，标记为失败
@@ -964,7 +972,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     pass
                 raise task_error
         except Exception as backtest_error:
-            task_logger.error(f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True)
+            task_logger.error(
+                f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True
+            )
             # 如果回测执行失败，尝试标记任务为失败
             try:
                 # 先检查任务是否还存在
@@ -1122,7 +1132,9 @@ def execute_qlib_precompute_task_simple(task_id: str) -> Any:
         )
 
     except Exception as e:
-        task_logger.error(f"Qlib预计算任务执行失败: {task_id}, 错误: {e}", exc_info=True)
+        task_logger.error(
+            f"Qlib预计算任务执行失败: {task_id}, 错误: {e}", exc_info=True
+        )
         try:
             if "task_repository" in locals():
                 task_repository.update_task_status(

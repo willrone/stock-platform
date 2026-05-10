@@ -11,8 +11,7 @@ from app.core.database import ensure_sqlite_task_updated_at_column_sync
 def test_task_updated_at_column_migration_adds_and_backfills(tmp_path: Path) -> None:
     db_path = tmp_path / "migration.db"
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE tasks (
             task_id TEXT PRIMARY KEY,
             task_name TEXT NOT NULL,
@@ -28,8 +27,7 @@ def test_task_updated_at_column_migration_adds_and_backfills(tmp_path: Path) -> 
             error_message TEXT,
             estimated_duration INTEGER
         )
-        """
-    )
+        """)
     conn.execute(
         """
         INSERT INTO tasks (

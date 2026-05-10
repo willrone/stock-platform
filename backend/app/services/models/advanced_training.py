@@ -145,7 +145,9 @@ class EnsembleModelManager:
         with open(ensemble_path, "wb") as f:
             pickle.dump({"model": ensemble_model, "info": ensemble_info}, f)
 
-        logger.info(f"集成模型 {ensemble_id} 创建完成，准确率: {metrics['accuracy']:.4f}")
+        logger.info(
+            f"集成模型 {ensemble_id} 创建完成，准确率: {metrics['accuracy']:.4f}"
+        )
         return ensemble_info
 
     @handle_async_exception
@@ -566,7 +568,9 @@ class OnlineLearningManager:
                 logger.info(f"模型 {model_id} 性能下降，建议重新训练")
                 metrics["retrain_recommended"] = True
 
-            logger.info(f"模型 {model_id} 在线更新完成，准确率: {metrics['accuracy']:.4f}")
+            logger.info(
+                f"模型 {model_id} 在线更新完成，准确率: {metrics['accuracy']:.4f}"
+            )
             return updated_model, metrics
 
         else:

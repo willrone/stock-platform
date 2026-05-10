@@ -59,7 +59,9 @@ class FeaturePipeline:
         sync_type: str = "incremental",
     ) -> None:
         """数据同步完成回调"""
-        logger.info(f"收到数据同步完成通知: {stock_code}, 日期范围: {date_range}, 类型: {sync_type}")
+        logger.info(
+            f"收到数据同步完成通知: {stock_code}, 日期范围: {date_range}, 类型: {sync_type}"
+        )
 
         try:
             # 使相关缓存失效
@@ -100,7 +102,9 @@ class FeaturePipeline:
                 return cached_data
 
         # 计算特征
-        logger.info(f"开始计算特征: {len(stock_codes)} 只股票, {len(feature_names)} 个特征")
+        logger.info(
+            f"开始计算特征: {len(stock_codes)} 只股票, {len(feature_names)} 个特征"
+        )
 
         all_features = []
 
@@ -396,7 +400,9 @@ class FeaturePipeline:
             )
 
             if not features_df.empty:
-                logger.info(f"增量特征计算完成: {stock_code}, {len(features_df)} 条记录")
+                logger.info(
+                    f"增量特征计算完成: {stock_code}, {len(features_df)} 条记录"
+                )
 
         except Exception as e:
             logger.error(f"增量特征计算失败 {stock_code}: {e}")

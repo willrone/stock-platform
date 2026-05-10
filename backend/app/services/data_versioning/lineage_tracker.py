@@ -810,7 +810,9 @@ class DataLineageTracker:
                 default_graph.nodes = self.all_nodes.copy()
                 default_graph.edges = self.all_edges.copy()
 
-                logger.info(f"加载了 {len(self.all_nodes)} 个节点，{len(self.all_edges)} 条边")
+                logger.info(
+                    f"加载了 {len(self.all_nodes)} 个节点，{len(self.all_edges)} 条边"
+                )
 
         except Exception as e:
             logger.error(f"加载血缘数据失败: {e}")

@@ -319,7 +319,9 @@ class TaskScheduler:
             else:
                 task.status = TaskStatus.FAILED
                 task.completed_at = datetime.now()
-                logger.error(f"任务重试次数已用完，标记为失败: {task.name} (ID: {task.task_id})")
+                logger.error(
+                    f"任务重试次数已用完，标记为失败: {task.name} (ID: {task.task_id})"
+                )
                 await self._notify_callbacks("task_failed", task)
 
         finally:

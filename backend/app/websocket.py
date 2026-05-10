@@ -452,7 +452,9 @@ async def notify_model_training_failed(model_id: str, error: str) -> Any:
     )
 
 
-async def notify_model_training_cancelled(model_id: str, message: str = "训练已取消") -> Any:
+async def notify_model_training_cancelled(
+    model_id: str, message: str = "训练已取消"
+) -> Any:
     """通知模型训练取消"""
     await manager.send_to_task_subscribers(
         model_id,

@@ -90,9 +90,9 @@ class FeatureCalculator:
     """特征计算器"""
 
     def __init__(self) -> None:
-        self.indicator_calculator: Optional[
-            TechnicalIndicatorCalculator
-        ] = TechnicalIndicatorCalculator()
+        self.indicator_calculator: Optional[TechnicalIndicatorCalculator] = (
+            TechnicalIndicatorCalculator()
+        )
 
     @handle_async_exception
     async def calculate_technical_indicators(
@@ -247,13 +247,17 @@ class FeatureEngineer:
                 continue
 
         if not all_features:
-            raise DataError(message="没有成功处理任何股票数据", severity=ErrorSeverity.HIGH)
+            raise DataError(
+                message="没有成功处理任何股票数据", severity=ErrorSeverity.HIGH
+            )
 
         # 合并所有股票的特征
         combined_features = pd.concat(all_features, ignore_index=True)
         combined_features = combined_features.sort_values(["stock_code", "date"])
 
-        logger.info(f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录")
+        logger.info(
+            f"成功准备了 {len(stock_codes)} 只股票的特征数据，共 {len(combined_features)} 条记录"
+        )
         return combined_features
 
 

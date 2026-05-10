@@ -90,7 +90,10 @@ class CircuitBreaker:
         if self.state != "open":
             return True
         assert self.last_failure_time is not None
-        if asyncio.get_running_loop().time() - self.last_failure_time >= self.recovery_timeout:
+        if (
+            asyncio.get_running_loop().time() - self.last_failure_time
+            >= self.recovery_timeout
+        ):
             self.state = "half_open"
             return True
         return False
@@ -172,29 +175,49 @@ def corrupted_data_frames(draw):
     for error_type in error_types:
         if error_type == "negative_prices":
             indices = draw(
-                st.lists(st.integers(min_value=0, max_value=len(df) - 1), min_size=1, max_size=3)
+                st.lists(
+                    st.integers(min_value=0, max_value=len(df) - 1),
+                    min_size=1,
+                    max_size=3,
+                )
             )
             for idx in indices:
                 df.loc[idx, "close"] = -abs(df.loc[idx, "close"])
         elif error_type == "invalid_relationships":
             indices = draw(
-                st.lists(st.integers(min_value=0, max_value=len(df) - 1), min_size=1, max_size=3)
+                st.lists(
+                    st.integers(min_value=0, max_value=len(df) - 1),
+                    min_size=1,
+                    max_size=3,
+                )
             )
             for idx in indices:
                 df.loc[idx, "high"] = df.loc[idx, "low"] * 0.9
         elif error_type == "missing_values":
             indices = draw(
-                st.lists(st.integers(min_value=0, max_value=len(df) - 1), min_size=1, max_size=3)
+                st.lists(
+                    st.integers(min_value=0, max_value=len(df) - 1),
+                    min_size=1,
+                    max_size=3,
+                )
             )
             columns = draw(
-                st.lists(st.sampled_from(["open", "high", "low", "close"]), min_size=1, max_size=2)
+                st.lists(
+                    st.sampled_from(["open", "high", "low", "close"]),
+                    min_size=1,
+                    max_size=2,
+                )
             )
             for idx in indices:
                 for col in columns:
                     df.loc[idx, col] = None
         elif error_type == "extreme_volatility":
             indices = draw(
-                st.lists(st.integers(min_value=1, max_value=len(df) - 1), min_size=1, max_size=2)
+                st.lists(
+                    st.integers(min_value=1, max_value=len(df) - 1),
+                    min_size=1,
+                    max_size=2,
+                )
             )
             for idx in indices:
                 df.loc[idx, "close"] = df.loc[idx - 1, "close"] * 2.0
@@ -231,7 +254,9 @@ def _install_error_handling_contract(service: StockDataService) -> None:
         raise last_error  # type: ignore[misc]
 
     def _cache_data(stock_code, start_date, end_date, data):
-        service._compat_cache[(stock_code, pd.Timestamp(start_date), pd.Timestamp(end_date))] = data.copy()
+        service._compat_cache[
+            (stock_code, pd.Timestamp(start_date), pd.Timestamp(end_date))
+        ] = data.copy()
 
     async def _try_fallback_strategies(stock_code, start_date, end_date):
         local_rows = service.load_from_local(stock_code, start_date, end_date)
@@ -304,7 +329,10 @@ class TestErrorHandlingProperties:
         for attempt in range(retry_config.max_retries):
             delay = retry_config.get_delay(attempt)
             assert 0 <= delay <= retry_config.max_delay
-            if retry_config.strategy == RetryStrategy.EXPONENTIAL_BACKOFF and not retry_config.jitter:
+            if (
+                retry_config.strategy == RetryStrategy.EXPONENTIAL_BACKOFF
+                and not retry_config.jitter
+            ):
                 expected_base = retry_config.base_delay * (2**attempt)
                 assert delay == min(expected_base, retry_config.max_delay)
 
@@ -335,7 +363,9 @@ class TestErrorHandlingProperties:
     @pytest.mark.asyncio
     @given(stock_data_frames())
     @settings(max_examples=3, deadline=10000)
-    async def test_fallback_strategy_effectiveness(self, stock_df: pd.DataFrame) -> None:
+    async def test_fallback_strategy_effectiveness(
+        self, stock_df: pd.DataFrame
+    ) -> None:
         stock_code = "TEST001"
         start_date = stock_df["date"].min()
         end_date = stock_df["date"].max()
@@ -365,7 +395,9 @@ class TestErrorHandlingProperties:
         for failure_count, expected_level in failure_scenarios:
             self.data_service.consecutive_failures = 0
             self.data_service.health_level = ServiceHealthLevel.HEALTHY
-            self.data_service.circuit_breaker = CircuitBreaker(failure_threshold=10, recovery_timeout=1.0)
+            self.data_service.circuit_breaker = CircuitBreaker(
+                failure_threshold=10, recovery_timeout=1.0
+            )
             for _ in range(failure_count):
                 self.data_service._update_health_level(False)
             assert self.data_service.health_level == expected_level
@@ -403,9 +435,24 @@ class TestErrorHandlingProperties:
     async def test_error_logging_completeness(self) -> None:
         test_scenarios = [
             (LogLevel.ERROR, LogCategory.API, "API请求失败", {"status_code": 500}),
-            (LogLevel.WARNING, LogCategory.DATA, "数据质量问题", {"stock_code": "TEST001"}),
-            (LogLevel.CRITICAL, LogCategory.SYSTEM, "系统严重错误", {"error_code": "SYS001"}),
-            (LogLevel.INFO, LogCategory.PERFORMANCE, "性能指标", {"duration_ms": 150.5}),
+            (
+                LogLevel.WARNING,
+                LogCategory.DATA,
+                "数据质量问题",
+                {"stock_code": "TEST001"},
+            ),
+            (
+                LogLevel.CRITICAL,
+                LogCategory.SYSTEM,
+                "系统严重错误",
+                {"error_code": "SYS001"},
+            ),
+            (
+                LogLevel.INFO,
+                LogCategory.PERFORMANCE,
+                "性能指标",
+                {"duration_ms": 150.5},
+            ),
         ]
         for level, category, message, metadata in test_scenarios:
             if level == LogLevel.ERROR:

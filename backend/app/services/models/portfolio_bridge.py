@@ -83,13 +83,11 @@ def _infer_window_label(task_name: str, backtest_result: Dict[str, Any]) -> str:
 
 def _query_signal_summary(session: Any, task_id: str) -> Dict[str, Any]:
     rows = session.execute(
-        text(
-            """
+        text("""
             SELECT stock_code, signal_type, executed, execution_reason
             FROM signal_records
             WHERE task_id = :task_id
-            """
-        ),
+            """),
         {"task_id": task_id},
     ).fetchall()
 
@@ -260,16 +258,12 @@ def build_portfolio_bridge_summary(
         return _default_bridge_summary(model_id)
 
     try:
-        task_rows = session.execute(
-            text(
-                """
+        task_rows = session.execute(text("""
                 SELECT task_id, task_name, status, created_at, config, result
                 FROM tasks
                 WHERE task_type = 'backtest' AND status = 'completed'
                 ORDER BY created_at DESC
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
     except Exception as exc:
         logger.warning(f"查询模型 {model_id} 的 bridge tasks 失败: {exc}")
         return _default_bridge_summary(model_id)

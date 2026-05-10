@@ -129,7 +129,9 @@ class ParquetManager:
                 # 保存到Parquet文件
                 df_to_save.to_parquet(file_path, index=False, engine="pyarrow")
 
-                self.logger.info(f"保存股票数据到 {file_path}: {len(df_to_save)} 条记录")
+                self.logger.info(
+                    f"保存股票数据到 {file_path}: {len(df_to_save)} 条记录"
+                )
 
             return True
 
@@ -859,9 +861,7 @@ class ParquetManager:
             total_deleted = len(deleted_files)
 
             if success:
-                message = (
-                    f"成功删除 {total_deleted} 个文件，释放空间 {freed_space / 1024 / 1024:.2f} MB"
-                )
+                message = f"成功删除 {total_deleted} 个文件，释放空间 {freed_space / 1024 / 1024:.2f} MB"
             else:
                 message = f"删除完成: 成功 {total_deleted}, 失败 {len(failed_files)}"
 

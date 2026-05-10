@@ -105,7 +105,9 @@ async def get_stock_data(
             "data": data_points,
         }
 
-        return StandardResponse(success=True, message="股票数据获取成功", data=response_data)
+        return StandardResponse(
+            success=True, message="股票数据获取成功", data=response_data
+        )
 
     except Exception as e:
         logger.error(f"获取股票数据失败: {e}")
@@ -173,7 +175,9 @@ async def get_technical_indicators(
             "detailed_results": formatted_results,
         }
 
-        return StandardResponse(success=True, message="技术指标计算成功", data=response_data)
+        return StandardResponse(
+            success=True, message="技术指标计算成功", data=response_data
+        )
 
     except ValueError as e:
         logger.error(f"技术指标计算参数错误: {e}")
@@ -202,7 +206,9 @@ async def get_popular_stocks(
             stock_code = stock.get("ts_code", "")
             stock_name = stock.get("name", "")
             market = (
-                "深圳" if ".SZ" in stock_code else "上海" if ".SH" in stock_code else "未知"
+                "深圳"
+                if ".SZ" in stock_code
+                else "上海" if ".SH" in stock_code else "未知"
             )
 
             popular_stocks.append(
@@ -267,9 +273,7 @@ async def search_stocks(
                 market = (
                     "深圳"
                     if ".sz" in stock_code
-                    else "上海"
-                    if ".sh" in stock_code
-                    else "未知"
+                    else "上海" if ".sh" in stock_code else "未知"
                 )
 
                 matched_stocks.append(

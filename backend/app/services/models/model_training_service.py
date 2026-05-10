@@ -254,7 +254,9 @@ class ModelTrainingService:
             # 清理模型名称，移除不允许的文件名字符
             import re
 
-            safe_model_name = re.sub(r'[<>:"/\\|?*]', "_", model_name)  # 替换不允许的字符为下划线
+            safe_model_name = re.sub(
+                r'[<>:"/\\|?*]', "_", model_name
+            )  # 替换不允许的字符为下划线
             safe_model_name = re.sub(r"\s+", "_", safe_model_name)  # 替换空格为下划线
 
             # 生成模型ID
@@ -586,7 +588,9 @@ class ModelTrainingService:
                 "mae": float(mae),
                 "r2": float(r2),
                 "rmse": rmse,
-                "accuracy": float(accuracy_metric),  # 使用方向准确率或R²（取较大值，且R²负值设为0）
+                "accuracy": float(
+                    accuracy_metric
+                ),  # 使用方向准确率或R²（取较大值，且R²负值设为0）
                 "direction_accuracy": float(direction_accuracy),  # 方向准确率
             }
 

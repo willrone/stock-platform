@@ -2,7 +2,6 @@
 拒绝原因分类器单元测试（工单#24）
 """
 
-
 from app.services.backtest.utils.rejection_reason_classifier import (
     REJECTION_CATEGORIES,
     aggregate_rejection_reasons,

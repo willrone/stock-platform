@@ -34,7 +34,8 @@ except ImportError as e:  # noqa: I005
     logger.error(f"无法导入 optuna 模块: {e}")
     logger.error("请运行: pip install optuna>=3.4.0")
     raise ImportError(
-        "optuna 模块未安装。超参优化功能需要 optuna 库。" "请运行: pip install optuna>=3.4.0"
+        "optuna 模块未安装。超参优化功能需要 optuna 库。"
+        "请运行: pip install optuna>=3.4.0"
     ) from e
 
 from app.core.config import settings
@@ -222,7 +223,9 @@ class StrategyHyperparameterOptimizer:
         if default_params and not is_multi_objective:
             try:
                 study.enqueue_trial(default_params)
-                logger.info(f"注入默认参数作为初始 trial: {list(default_params.keys())}")
+                logger.info(
+                    f"注入默认参数作为初始 trial: {list(default_params.keys())}"
+                )
             except Exception as e:
                 logger.warning(f"注入默认参数失败: {e}")
 
@@ -466,7 +469,9 @@ class StrategyHyperparameterOptimizer:
                                 if t.state == optuna.trial.TrialState.FAIL
                             ]
                         )
-                        trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
+                        trial_num = (
+                            trial.number + 1
+                        )  # trial.number 从 0 开始，所以 +1 得到当前编号
                         progress_callback(
                             trial_num,
                             n_trials,
@@ -689,7 +694,9 @@ class StrategyHyperparameterOptimizer:
                                 if t.state == optuna.trial.TrialState.FAIL
                             ]
                         )
-                        trial_num = trial.number + 1  # trial.number 从 0 开始，所以 +1 得到当前编号
+                        trial_num = (
+                            trial.number + 1
+                        )  # trial.number 从 0 开始，所以 +1 得到当前编号
                         # 注意：在 objective 回调里，当前 trial 还未被 Optuna 标记为 COMPLETE，
                         # 直接访问 study.best_trial 可能抛出 "No trials are completed yet"。
                         best_score = None

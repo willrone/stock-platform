@@ -76,7 +76,9 @@ class BacktestDetailedRepository:
             self.session.add(detailed_result)
             await self.session.flush()
 
-            self.logger.info(f"创建回测详细结果: task_id={task_id}, backtest_id={backtest_id}")
+            self.logger.info(
+                f"创建回测详细结果: task_id={task_id}, backtest_id={backtest_id}"
+            )
             return detailed_result
 
         except Exception as e:
@@ -204,7 +206,9 @@ class BacktestDetailedRepository:
             self.session.add_all(snapshots)
             await self.session.flush()
 
-            self.logger.info(f"批量创建组合快照: task_id={task_id}, count={len(snapshots)}")
+            self.logger.info(
+                f"批量创建组合快照: task_id={task_id}, count={len(snapshots)}"
+            )
             return True
 
         except Exception as e:
@@ -268,7 +272,9 @@ class BacktestDetailedRepository:
             self.session.add_all(trades)
             await self.session.flush()
 
-            self.logger.info(f"批量创建交易记录: task_id={task_id}, count={len(trades)}")
+            self.logger.info(
+                f"批量创建交易记录: task_id={task_id}, count={len(trades)}"
+            )
             return True
 
         except Exception as e:
@@ -388,7 +394,9 @@ class BacktestDetailedRepository:
                 if "no such table" in error_str or (
                     "table" in error_str and "does not exist" in error_str
                 ):
-                    self.logger.debug(f"统计表不存在，回退到实时计算: task_id={task_id}")
+                    self.logger.debug(
+                        f"统计表不存在，回退到实时计算: task_id={task_id}"
+                    )
                 else:
                     self.logger.warning(
                         f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}"
@@ -510,7 +518,9 @@ class BacktestDetailedRepository:
             import traceback
 
             error_detail = traceback.format_exc()
-            self.logger.error("获取交易统计失败: {}\n{}", e, error_detail, exc_info=True)
+            self.logger.error(
+                "获取交易统计失败: {}\n{}", e, error_detail, exc_info=True
+            )
             # 返回空统计而不是抛出异常，避免前端报错
             return {
                 "total_trades": 0,
@@ -604,7 +614,9 @@ class BacktestDetailedRepository:
             self.session.add_all(signals)
             await self.session.flush()
 
-            self.logger.info(f"批量保存信号记录: task_id={task_id}, count={len(signals)}")
+            self.logger.info(
+                f"批量保存信号记录: task_id={task_id}, count={len(signals)}"
+            )
             return True
 
         except Exception as e:
@@ -805,7 +817,9 @@ class BacktestDetailedRepository:
                 if "no such table" in error_str or (
                     "table" in error_str and "does not exist" in error_str
                 ):
-                    self.logger.debug(f"统计表不存在，回退到实时计算: task_id={task_id}")
+                    self.logger.debug(
+                        f"统计表不存在，回退到实时计算: task_id={task_id}"
+                    )
                 else:
                     self.logger.warning(
                         f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}"
@@ -897,7 +911,9 @@ class BacktestDetailedRepository:
             import traceback
 
             error_detail = traceback.format_exc()
-            self.logger.error("获取信号统计失败: {}\n{}", e, error_detail, exc_info=True)
+            self.logger.error(
+                "获取信号统计失败: {}\n{}", e, error_detail, exc_info=True
+            )
             return base_fail.copy()
 
     async def mark_signal_as_executed(
@@ -1037,15 +1053,13 @@ class BacktestDetailedRepository:
 
             # 构建完整的 UPDATE 语句
             where_clause = " OR ".join(case_conditions)
-            sql = text(
-                f"""
+            sql = text(f"""
                 UPDATE signal_records
                 SET executed = 1, execution_reason = NULL
                 WHERE task_id = :task_id
                 AND executed = 0
                 AND ({where_clause})
-            """
-            )
+            """)
 
             result = await self.session.execute(sql, params)
             updated_count = int(getattr(result, "rowcount", 0) or 0)
@@ -1109,15 +1123,13 @@ class BacktestDetailedRepository:
             # 构建完整的 UPDATE 语句
             case_when_clause = " ".join(case_when_parts)
             where_clause = " OR ".join(where_conditions)
-            sql = text(
-                f"""
+            sql = text(f"""
                 UPDATE signal_records
                 SET execution_reason = CASE {case_when_clause} END
                 WHERE task_id = :task_id
                 AND executed = 0
                 AND ({where_clause})
-            """
-            )
+            """)
 
             result = await self.session.execute(sql, params)
             updated_count = int(getattr(result, "rowcount", 0) or 0)
@@ -1163,7 +1175,9 @@ class BacktestDetailedRepository:
             self.session.add(benchmark)
             await self.session.flush()
 
-            self.logger.info(f"创建基准数据: task_id={task_id}, benchmark={benchmark_symbol}")
+            self.logger.info(
+                f"创建基准数据: task_id={task_id}, benchmark={benchmark_symbol}"
+            )
             return benchmark
 
         except Exception as e:
@@ -1226,7 +1240,9 @@ class BacktestDetailedRepository:
             await self.session.flush()
 
             total_deleted = sum(deleted_counts.values())
-            self.logger.info(f"删除任务数据完成: task_id={task_id}, 总计删除{total_deleted}条记录")
+            self.logger.info(
+                f"删除任务数据完成: task_id={task_id}, 总计删除{total_deleted}条记录"
+            )
 
             return True
 

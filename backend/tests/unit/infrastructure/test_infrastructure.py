@@ -16,9 +16,11 @@ from sqlalchemy import create_engine, text
 
 from app.core.config import Settings, settings
 from app.main import create_application
-from app.middleware.error_handling import ErrorHandlingMiddleware, RequestLoggingMiddleware
+from app.middleware.error_handling import (
+    ErrorHandlingMiddleware,
+    RequestLoggingMiddleware,
+)
 from app.middleware.rate_limiting import RateLimitMiddleware
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_ROOT = BACKEND_ROOT.parent

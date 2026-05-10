@@ -8,9 +8,7 @@ from app.services.models.portfolio_bridge import build_portfolio_bridge_summary
 
 
 def _seed_schema(session: Session) -> None:
-    session.execute(
-        text(
-            """
+    session.execute(text("""
             CREATE TABLE tasks (
                 task_id TEXT PRIMARY KEY,
                 task_name TEXT NOT NULL,
@@ -20,12 +18,8 @@ def _seed_schema(session: Session) -> None:
                 created_at TEXT,
                 result TEXT
             )
-            """
-        )
-    )
-    session.execute(
-        text(
-            """
+            """))
+    session.execute(text("""
             CREATE TABLE signal_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id TEXT NOT NULL,
@@ -34,9 +28,7 @@ def _seed_schema(session: Session) -> None:
                 executed BOOLEAN NOT NULL,
                 execution_reason TEXT
             )
-            """
-        )
-    )
+            """))
     session.commit()
 
 
@@ -45,14 +37,12 @@ def test_build_portfolio_bridge_summary_collects_task_and_signal_rollups() -> No
     with Session(engine) as session:
         _seed_schema(session)
         session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO tasks (task_id, task_name, task_type, status, config, created_at, result)
                 VALUES
                 (:task_id, :task_name, 'backtest', 'completed', :config, '2026-04-14T12:00:00', :result),
                 (:other_task_id, :other_task_name, 'backtest', 'completed', :other_config, '2026-04-13T12:00:00', :other_result)
-                """
-            ),
+                """),
             {
                 "task_id": "task-official-2024",
                 "task_name": "hermes-qlib-costmodel-official-2024-full",
@@ -64,18 +54,14 @@ def test_build_portfolio_bridge_summary_collects_task_and_signal_rollups() -> No
                 "other_result": '{"strategy_name": "model_topk_dropout", "start_date": "2024-01-01T00:00:00", "end_date": "2024-12-31T00:00:00", "total_return": 0.999, "sharpe_ratio": 9.9, "max_drawdown": -0.01, "total_trades": 1}',
             },
         )
-        session.execute(
-            text(
-                """
+        session.execute(text("""
                 INSERT INTO signal_records (task_id, stock_code, signal_type, executed, execution_reason)
                 VALUES
                 ('task-official-2024', '600036.SH', 'BUY', 1, NULL),
                 ('task-official-2024', '600036.SH', 'SELL', 1, NULL),
                 ('task-official-2024', '601288.SH', 'BUY', 0, '可买数量不足: 无法买入200股'),
                 ('task-other-model', '000001.SZ', 'BUY', 1, NULL)
-                """
-            )
-        )
+                """))
         session.commit()
 
         summary = build_portfolio_bridge_summary(session, "model-official")

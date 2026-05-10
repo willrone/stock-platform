@@ -196,10 +196,12 @@ class BacktestComparisonAnalyzer:
                 "task_id": result["task_id"],
                 "task_name": result["task_name"],
                 "strategy_name": task_data.get("strategy_name", ""),
-                "return": float(task_data.get("annualized_return", 0)) * 100,  # 转换为百分比
+                "return": float(task_data.get("annualized_return", 0))
+                * 100,  # 转换为百分比
                 "risk": float(task_data.get("volatility", 0)) * 100,  # 转换为百分比
                 "sharpe_ratio": float(task_data.get("sharpe_ratio", 0)),
-                "max_drawdown": float(task_data.get("max_drawdown", 0)) * 100,  # 转换为百分比
+                "max_drawdown": float(task_data.get("max_drawdown", 0))
+                * 100,  # 转换为百分比
             }
 
             scatter_data.append(scatter_point)

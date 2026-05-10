@@ -366,7 +366,9 @@ class FeatureExtractor:
             if self.cache and config.cache_enabled:
                 self.cache.set(cache_key, features)
 
-            logger.info(f"特征提取完成: {stock_code}, 特征数量: {len(features.columns)}")
+            logger.info(
+                f"特征提取完成: {stock_code}, 特征数量: {len(features.columns)}"
+            )
             return features
 
         except Exception as e:
@@ -472,10 +474,10 @@ class FeatureExtractor:
 
                 elif indicator.startswith("willr_"):
                     window = int(indicator.split("_")[1])
-                    features[
-                        indicator
-                    ] = self.technical_indicators.calculate_williams_r(
-                        high, low, close, window
+                    features[indicator] = (
+                        self.technical_indicators.calculate_williams_r(
+                            high, low, close, window
+                        )
                     )
 
             except Exception as e:

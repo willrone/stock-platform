@@ -35,11 +35,9 @@ class TestDatabaseManager:
         assert Path(self.db_manager.db_path).exists()
 
         # 验证表结构
-        tables = self.db_manager.fetch_all(
-            """
+        tables = self.db_manager.fetch_all("""
             SELECT name FROM sqlite_master WHERE type='table'
-        """
-        )
+        """)
 
         table_names = {row["name"] for row in tables}
         expected_tables = {"tasks", "task_results", "model_metadata", "system_config"}
@@ -415,11 +413,9 @@ class TestDataLifecycleManager:
         assert success, "调度配置应该成功"
 
         # 验证配置保存到数据库
-        config_row = self.db_manager.fetch_one(
-            """
+        config_row = self.db_manager.fetch_one("""
             SELECT * FROM system_config WHERE key = 'cleanup_schedule'
-        """
-        )
+        """)
 
         assert config_row is not None, "应该保存调度配置"
         assert "interval_hours" in config_row["value"], "配置应该包含间隔时间"

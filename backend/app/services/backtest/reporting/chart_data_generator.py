@@ -247,9 +247,7 @@ class ChartDataGenerator:
             "profit_factor": (
                 total_profit / total_loss
                 if total_loss > 0
-                else float("inf")
-                if total_profit > 0
-                else 0
+                else float("inf") if total_profit > 0 else 0
             ),
         }
 
@@ -341,7 +339,9 @@ class ChartDataGenerator:
 
         # 基础风险指标
         risk_metrics = {
-            "volatility": float(returns.std() * np.sqrt(252) * 100),  # 年化波动率（百分比）
+            "volatility": float(
+                returns.std() * np.sqrt(252) * 100
+            ),  # 年化波动率（百分比）
             "sharpe_ratio": float(backtest_result.get("sharpe_ratio", 0)),
             "max_drawdown": float(
                 backtest_result.get("max_drawdown", 0) * 100

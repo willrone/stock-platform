@@ -478,7 +478,9 @@ class BusinessMetricsCollector:
                 metric_definition
             )
 
-        logger.info(f"注册业务指标: {metric_definition.name} ({metric_definition.metric_id})")
+        logger.info(
+            f"注册业务指标: {metric_definition.name} ({metric_definition.metric_id})"
+        )
 
     def unregister_metric(self, metric_id: str) -> Any:
         """注销指标定义"""

@@ -339,7 +339,9 @@ class BacktestReportGenerator:
 
                         if config_items:
                             config_df = pd.DataFrame(config_items)
-                            config_df.to_excel(writer, sheet_name="配置信息", index=False)
+                            config_df.to_excel(
+                                writer, sheet_name="配置信息", index=False
+                            )
 
             logger.info(f"Excel报告生成成功: {filepath}")
             return filepath
