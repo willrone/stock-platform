@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 任务创建页面
  *
@@ -8,7 +9,7 @@
  * - 预测设置
  */
 
-'use client';
+('use client');
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -106,7 +107,7 @@ export default function CreateTaskPage() {
           setFormData(prev => ({ ...prev, model_id: result.models[0].model_id }));
         }
       } catch (error) {
-        console.error('加载模型列表失败');
+        logger.error('加载模型列表失败');
       }
     };
 
@@ -131,7 +132,7 @@ export default function CreateTaskPage() {
             }
           }
         } catch (error) {
-          console.error('加载策略列表失败:', error);
+          logger.error('加载策略列表失败:', error);
         }
       }
     };
@@ -239,7 +240,7 @@ export default function CreateTaskPage() {
           }));
         }
       } catch (error) {
-        console.error('加载重建任务失败:', error);
+        logger.error('加载重建任务失败:', error);
       }
     };
 
@@ -268,7 +269,7 @@ export default function CreateTaskPage() {
           const response = await StrategyConfigService.getConfigs(targetStrategyName);
           setSavedConfigs(response.configs);
         } catch (error) {
-          console.error('加载已保存配置失败:', error);
+          logger.error('加载已保存配置失败:', error);
         } finally {
           setLoadingConfigs(false);
         }
@@ -292,7 +293,7 @@ export default function CreateTaskPage() {
       // 通过更新key强制重新渲染组件，传入新的values
       setConfigFormKey(prev => prev + 1);
     } catch (error) {
-      console.error('加载配置失败:', error);
+      logger.error('加载配置失败:', error);
     }
   };
 
@@ -309,7 +310,7 @@ export default function CreateTaskPage() {
       });
       setPortfolioConfigKey(prev => prev + 1);
     } catch (error) {
-      console.error('加载组合策略配置失败:', error);
+      logger.error('加载组合策略配置失败:', error);
     }
   };
 
@@ -406,10 +407,10 @@ export default function CreateTaskPage() {
       };
 
       const task = await TaskService.createTask(request);
-      console.log('任务创建成功');
+      logger.debug('任务创建成功');
       router.push(`/tasks/${task.task_id}`);
     } catch (error) {
-      console.error('创建任务失败:', error);
+      logger.error('创建任务失败:', error);
     } finally {
       setLoading(false);
       setCreating(false);

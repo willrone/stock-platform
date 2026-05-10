@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 回测进度WebSocket客户端
  *
@@ -150,7 +151,7 @@ export class BacktestProgressWebSocket {
         this.ws = new WebSocket(wsEndpoint);
 
         this.ws.onopen = () => {
-          console.log(`回测进度WebSocket连接已建立: ${this.taskId}`);
+          logger.debug(`回测进度WebSocket连接已建立: ${this.taskId}`);
           this.isConnecting = false;
           this.reconnectAttempts = 0;
 
@@ -171,12 +172,12 @@ export class BacktestProgressWebSocket {
             const data: BacktestWebSocketMessage = JSON.parse(event.data);
             this.handleMessage(data);
           } catch (error) {
-            console.error('解析回测WebSocket消息失败:', error);
+            logger.error('解析回测WebSocket消息失败:', error);
           }
         };
 
         this.ws.onclose = event => {
-          console.log(`回测进度WebSocket连接已关闭: ${this.taskId}`, event.code, event.reason);
+          logger.debug(`回测进度WebSocket连接已关闭: ${this.taskId}`, event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
 
@@ -193,7 +194,7 @@ export class BacktestProgressWebSocket {
         };
 
         this.ws.onerror = error => {
-          console.error(`回测进度WebSocket连接错误: ${this.taskId}`, error);
+          logger.error(`回测进度WebSocket连接错误: ${this.taskId}`, error);
           this.isConnecting = false;
           this.callbacks.onConnection?.(false);
           reject(error);
@@ -260,7 +261,7 @@ export class BacktestProgressWebSocket {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
-      console.warn('WebSocket未连接，无法发送消息:', message);
+      logger.warn('WebSocket未连接，无法发送消息:', message);
     }
   }
 
@@ -270,7 +271,7 @@ export class BacktestProgressWebSocket {
   private handleMessage(data: BacktestWebSocketMessage): void {
     switch (data.type) {
       case 'connection_established':
-        console.log('回测WebSocket连接建立确认:', data);
+        logger.debug('回测WebSocket连接建立确认:', data);
         break;
 
       case 'progress_update':
@@ -294,15 +295,15 @@ export class BacktestProgressWebSocket {
         break;
 
       case 'no_progress_data':
-        console.log('当前没有进度数据');
+        logger.debug('当前没有进度数据');
         break;
 
       case 'error':
-        console.error('WebSocket错误消息:', data);
+        logger.error('WebSocket错误消息:', data);
         break;
 
       default:
-        console.log('未知的WebSocket消息类型:', data);
+        logger.debug('未知的WebSocket消息类型:', data);
     }
   }
 
@@ -336,12 +337,12 @@ export class BacktestProgressWebSocket {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // 指数退避
 
-    console.log(`${delay}ms后尝试重连回测WebSocket (第${this.reconnectAttempts}次)`);
+    logger.debug(`${delay}ms后尝试重连回测WebSocket (第${this.reconnectAttempts}次)`);
 
     setTimeout(() => {
       if (!this.isManuallyDisconnected) {
         this.connect().catch(error => {
-          console.error('回测WebSocket重连失败:', error);
+          logger.error('回测WebSocket重连失败:', error);
         });
       }
     }, delay);

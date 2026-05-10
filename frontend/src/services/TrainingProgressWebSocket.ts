@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 训练进度WebSocket客户端
  *
@@ -62,7 +63,7 @@ export class TrainingProgressWebSocket {
         this.ws = new WebSocket(this.wsUrl!);
 
         this.ws.onopen = () => {
-          console.log('训练进度WebSocket连接已建立');
+          logger.debug('训练进度WebSocket连接已建立');
           this.isConnecting = false;
           this.reconnectAttempts = 0;
           resolve();
@@ -73,12 +74,12 @@ export class TrainingProgressWebSocket {
             const data: TrainingProgressData = JSON.parse(event.data);
             this.handleMessage(data);
           } catch (error) {
-            console.error('解析WebSocket消息失败:', error);
+            logger.error('解析WebSocket消息失败:', error);
           }
         };
 
         this.ws.onclose = event => {
-          console.log('训练进度WebSocket连接已关闭', event.code, event.reason);
+          logger.debug('训练进度WebSocket连接已关闭', event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
 
@@ -89,7 +90,7 @@ export class TrainingProgressWebSocket {
         };
 
         this.ws.onerror = error => {
-          console.error('训练进度WebSocket连接错误:', error);
+          logger.error('训练进度WebSocket连接错误:', error);
           this.isConnecting = false;
           reject(error);
         };
@@ -170,7 +171,7 @@ export class TrainingProgressWebSocket {
         try {
           callback(data);
         } catch (error) {
-          console.error('执行训练进度回调失败:', error);
+          logger.error('执行训练进度回调失败:', error);
         }
       });
     }
@@ -182,7 +183,7 @@ export class TrainingProgressWebSocket {
         try {
           callback(data);
         } catch (error) {
-          console.error('执行全局训练进度回调失败:', error);
+          logger.error('执行全局训练进度回调失败:', error);
         }
       });
     }
@@ -195,11 +196,11 @@ export class TrainingProgressWebSocket {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // 指数退避
 
-    console.log(`${delay}ms后尝试重连 (第${this.reconnectAttempts}次)`);
+    logger.debug(`${delay}ms后尝试重连 (第${this.reconnectAttempts}次)`);
 
     setTimeout(() => {
       this.connect().catch(error => {
-        console.error('重连失败:', error);
+        logger.error('重连失败:', error);
       });
     }, delay);
   }

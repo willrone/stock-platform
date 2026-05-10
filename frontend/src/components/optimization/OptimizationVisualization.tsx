@@ -1,9 +1,10 @@
+import { logger } from '@/utils/logger';
 /**
  * 优化结果可视化组件
  * 包含参数重要性、优化历史曲线、Pareto front等
  */
 
-'use client';
+('use client');
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, Tabs, Tab, Box, Typography } from '@mui/material';
@@ -23,12 +24,12 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
   const [selectedTab, setSelectedTab] = useState<string>('history');
 
   useEffect(() => {
-    console.log('[OptimizationVisualization] optimization_history:', result.optimization_history);
-    console.log(
+    logger.debug('[OptimizationVisualization] optimization_history:', result.optimization_history);
+    logger.debug(
       '[OptimizationVisualization] optimization_history length:',
       result.optimization_history?.length
     );
-    console.log('[OptimizationVisualization] selectedTab:', selectedTab);
+    logger.debug('[OptimizationVisualization] selectedTab:', selectedTab);
 
     // 如果不在历史Tab，不初始化
     if (selectedTab !== 'history') {
@@ -40,23 +41,23 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
       !result.optimization_history ||
       result.optimization_history.length === 0
     ) {
-      console.log('[OptimizationVisualization] 跳过初始化：容器或数据不存在');
+      logger.debug('[OptimizationVisualization] 跳过初始化：容器或数据不存在');
       return;
     }
 
     const initChart = () => {
       if (!historyChartRef.current) {
-        console.log('[OptimizationVisualization] historyChartRef.current 为空');
+        logger.debug('[OptimizationVisualization] historyChartRef.current 为空');
         return;
       }
 
       // 检查容器是否有尺寸
       const rect = historyChartRef.current.getBoundingClientRect();
-      console.log('[OptimizationVisualization] 容器尺寸:', rect.width, rect.height);
+      logger.debug('[OptimizationVisualization] 容器尺寸:', rect.width, rect.height);
 
       if (rect.width === 0 || rect.height === 0) {
         // 如果容器还没有尺寸，延迟重试
-        console.log('[OptimizationVisualization] 容器尺寸为0，延迟重试');
+        logger.debug('[OptimizationVisualization] 容器尺寸为0，延迟重试');
         setTimeout(initChart, 100);
         return;
       }
@@ -67,7 +68,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         historyChartInstance.current = null;
       }
 
-      console.log('[OptimizationVisualization] 开始初始化历史图表');
+      logger.debug('[OptimizationVisualization] 开始初始化历史图表');
       const chart = echarts.init(historyChartRef.current);
       historyChartInstance.current = chart;
 
@@ -75,10 +76,10 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         t => (t.state === 'complete' || t.state === 'finished') && t.score !== undefined
       );
 
-      console.log('[OptimizationVisualization] completedTrials:', completedTrials.length);
+      logger.debug('[OptimizationVisualization] completedTrials:', completedTrials.length);
 
       if (completedTrials.length === 0) {
-        console.warn('[OptimizationVisualization] 没有完成的试验数据');
+        logger.warn('[OptimizationVisualization] 没有完成的试验数据');
         return;
       }
 
@@ -96,7 +97,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         return [t.trial_number, bestScore];
       });
 
-      console.log(
+      logger.debug(
         '[OptimizationVisualization] 数据点数量:',
         data.length,
         '最佳得分曲线点数:',
@@ -146,7 +147,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
       };
 
       chart.setOption(option);
-      console.log('[OptimizationVisualization] 历史图表设置完成');
+      logger.debug('[OptimizationVisualization] 历史图表设置完成');
 
       // 响应式调整
       const handleResize = () => {
@@ -175,12 +176,12 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
   }, [result.optimization_history, selectedTab]);
 
   useEffect(() => {
-    console.log('[OptimizationVisualization] param_importance:', result.param_importance);
-    console.log(
+    logger.debug('[OptimizationVisualization] param_importance:', result.param_importance);
+    logger.debug(
       '[OptimizationVisualization] param_importance keys:',
       result.param_importance ? Object.keys(result.param_importance) : []
     );
-    console.log('[OptimizationVisualization] selectedTab:', selectedTab);
+    logger.debug('[OptimizationVisualization] selectedTab:', selectedTab);
 
     // 如果不在重要性Tab，不初始化
     if (selectedTab !== 'importance') {
@@ -192,23 +193,23 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
       !result.param_importance ||
       Object.keys(result.param_importance).length === 0
     ) {
-      console.log('[OptimizationVisualization] 跳过初始化：容器或数据不存在');
+      logger.debug('[OptimizationVisualization] 跳过初始化：容器或数据不存在');
       return;
     }
 
     const initChart = () => {
       if (!importanceChartRef.current) {
-        console.log('[OptimizationVisualization] importanceChartRef.current 为空');
+        logger.debug('[OptimizationVisualization] importanceChartRef.current 为空');
         return;
       }
 
       // 检查容器是否有尺寸
       const rect = importanceChartRef.current.getBoundingClientRect();
-      console.log('[OptimizationVisualization] 重要性容器尺寸:', rect.width, rect.height);
+      logger.debug('[OptimizationVisualization] 重要性容器尺寸:', rect.width, rect.height);
 
       if (rect.width === 0 || rect.height === 0) {
         // 如果容器还没有尺寸，延迟重试
-        console.log('[OptimizationVisualization] 重要性容器尺寸为0，延迟重试');
+        logger.debug('[OptimizationVisualization] 重要性容器尺寸为0，延迟重试');
         setTimeout(initChart, 100);
         return;
       }
@@ -219,13 +220,13 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         importanceChartInstance.current = null;
       }
 
-      console.log('[OptimizationVisualization] 开始初始化参数重要性图表');
+      logger.debug('[OptimizationVisualization] 开始初始化参数重要性图表');
       const chart = echarts.init(importanceChartRef.current);
       importanceChartInstance.current = chart;
 
       const entries = Object.entries(result.param_importance || {}).sort((a, b) => b[1] - a[1]);
 
-      console.log('[OptimizationVisualization] param_importance entries:', entries.length);
+      logger.debug('[OptimizationVisualization] param_importance entries:', entries.length);
 
       const option = {
         title: {
@@ -267,7 +268,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
       };
 
       chart.setOption(option);
-      console.log('[OptimizationVisualization] 参数重要性图表设置完成');
+      logger.debug('[OptimizationVisualization] 参数重要性图表设置完成');
 
       // 响应式调整
       const handleResize = () => {
@@ -363,7 +364,7 @@ export default function OptimizationVisualization({ result }: OptimizationVisual
         value={selectedTab}
         onChange={(e, newValue) => {
           setSelectedTab(newValue);
-          console.log('[OptimizationVisualization] Tab切换:', newValue);
+          logger.debug('[OptimizationVisualization] Tab切换:', newValue);
         }}
         aria-label="可视化标签页"
       >

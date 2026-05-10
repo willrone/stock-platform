@@ -1,10 +1,11 @@
+import { logger } from '@/utils/logger';
 /**
  * 特征选择组件
  *
  * 用于模型创建时的特征选择功能
  */
 
-'use client';
+('use client');
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -97,7 +98,7 @@ export function FeatureSelector({
           start_date: startDate,
           end_date: endDate,
         });
-        console.log('获取到的特征数据（实际）:', result);
+        logger.debug('获取到的特征数据（实际）:', result);
 
         const features = result.features || [];
         const categories = result.feature_categories || {
@@ -112,7 +113,7 @@ export function FeatureSelector({
       } else {
         // 否则获取理论特征列表
         const result = await DataService.getAvailableFeatures();
-        console.log('获取到的特征数据（理论）:', result);
+        logger.debug('获取到的特征数据（理论）:', result);
 
         const features = result.features || [];
         const categories = result.feature_categories || {
@@ -169,7 +170,7 @@ export function FeatureSelector({
         setAvailableFeatures(features);
       }
     } catch (error) {
-      console.error('加载可用特征列表失败:', error);
+      logger.error('加载可用特征列表失败:', error);
       // 如果加载失败，使用默认特征列表
       const defaultFeatures = [
         'open',

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 任务管理页面
  *
@@ -8,7 +9,7 @@
  * - 实时状态更新
  */
 
-'use client';
+('use client');
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -97,7 +98,7 @@ export default function TasksPage() {
       const result = await TaskService.getTasks(status || undefined, size, offset);
       setTasks(result.tasks, result.total);
     } catch (error) {
-      console.error('加载任务失败:', error);
+      logger.error('加载任务失败:', error);
     } finally {
       setLoading(false);
     }
@@ -114,7 +115,7 @@ export default function TasksPage() {
         failed: statsData.failed,
       });
     } catch (error) {
-      console.error('加载任务统计失败:', error);
+      logger.error('加载任务统计失败:', error);
       // 如果API失败，使用本地计算作为后备
       setStats({
         total: tasks.length,
@@ -159,7 +160,7 @@ export default function TasksPage() {
         results: data.results,
         completed_at: new Date().toISOString(),
       });
-      console.log(`任务 ${data.task_id} 已完成`);
+      logger.debug(`任务 ${data.task_id} 已完成`);
     };
 
     const handleTaskFailed = (data: { task_id: string; error: string }) => {
@@ -167,7 +168,7 @@ export default function TasksPage() {
         status: 'failed',
         error_message: data.error,
       });
-      console.error(`任务 ${data.task_id} 执行失败`);
+      logger.error(`任务 ${data.task_id} 执行失败`);
     };
 
     wsService.on('task:progress', handleTaskProgress);
@@ -234,13 +235,13 @@ export default function TasksPage() {
     setDeleteError(null);
     try {
       await TaskService.deleteTask(taskToDelete, deleteForce);
-      console.log('任务删除成功');
+      logger.debug('任务删除成功');
       loadTasks();
       setTaskToDelete(null);
       setIsDeleteOpen(false);
       setDeleteForce(false);
     } catch (error: any) {
-      console.error('删除任务失败:', error);
+      logger.error('删除任务失败:', error);
       const errorMessage = error?.response?.data?.detail || error?.message || '删除任务失败';
       setDeleteError(errorMessage);
 
@@ -260,11 +261,11 @@ export default function TasksPage() {
 
     try {
       await TaskService.batchDeleteTasks(taskIds);
-      console.log(`成功删除 ${taskIds.length} 个任务`);
+      logger.debug(`成功删除 ${taskIds.length} 个任务`);
       setSelectedKeys(new Set());
       loadTasks();
     } catch (error) {
-      console.error('批量删除失败');
+      logger.error('批量删除失败');
     } finally {
       setIsBatchDeleteOpen(false);
     }
@@ -274,10 +275,10 @@ export default function TasksPage() {
   const handleRetryTask = async (taskId: string) => {
     try {
       await TaskService.retryTask(taskId);
-      console.log('任务已重新启动');
+      logger.debug('任务已重新启动');
       loadTasks();
     } catch (error) {
-      console.error('重新运行失败');
+      logger.error('重新运行失败');
     }
   };
 
@@ -450,7 +451,7 @@ export default function TasksPage() {
                     setIsDeleteOpen(true);
                   }}
                   onToggle={id => {
-                    console.log('暂停功能开发中', id);
+                    logger.debug('暂停功能开发中', id);
                   }}
                 />
               ))
@@ -529,7 +530,7 @@ export default function TasksPage() {
                             <IconButton
                               size="small"
                               onClick={() => {
-                                console.log('暂停功能开发中');
+                                logger.debug('暂停功能开发中');
                               }}
                             >
                               <Pause size={16} />

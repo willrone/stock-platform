@@ -1,9 +1,10 @@
+import { logger } from '@/utils/logger';
 /**
  * 回测结果图表组件
  * 显示策略回测的收益曲线、交易记录和性能指标
  */
 
-'use client';
+('use client');
 
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
@@ -55,7 +56,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
   // 处理回测数据（优先使用真实数据，否则生成模拟数据）
   const processBacktestData = () => {
     // 调试日志
-    console.log('BacktestChart - backtestData:', backtestData);
+    logger.debug('BacktestChart - backtestData:', backtestData);
 
     // 如果提供了真实回测数据，使用真实数据
     // 检查多种可能的数据格式
@@ -67,7 +68,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
         backtestData.sharpe_ratio !== undefined);
 
     if (hasRealData) {
-      console.log('BacktestChart - 使用真实回测数据');
+      logger.debug('BacktestChart - 使用真实回测数据');
       // 兼容多种数据格式
       const portfolio = backtestData.portfolio || {
         initial_cash: backtestData.initial_cash || 100000,
@@ -130,7 +131,7 @@ export default function BacktestChart({ stockCode, backtestData }: BacktestChart
     }
 
     // 否则生成模拟回测数据
-    console.log('BacktestChart - 未找到真实数据，生成模拟数据');
+    logger.debug('BacktestChart - 未找到真实数据，生成模拟数据');
     return generateMockBacktestData();
   };
 

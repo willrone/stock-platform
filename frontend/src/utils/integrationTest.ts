@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 集成测试工具
  *
@@ -321,7 +322,7 @@ export class IntegrationTestManager {
     const startTime = Date.now();
     const results: TestResult[] = [];
 
-    console.log('开始运行集成测试...');
+    logger.debug('开始运行集成测试...');
 
     // 运行所有测试
     const tests = [
@@ -339,7 +340,7 @@ export class IntegrationTestManager {
       const result = await test();
       results.push(result);
 
-      console.log(
+      logger.debug(
         `${result.success ? '✅' : '❌'} ${result.name}: ${result.message} (${result.duration}ms)`
       );
     }
@@ -358,12 +359,12 @@ export class IntegrationTestManager {
       results,
     };
 
-    console.log('\n集成测试完成:');
-    console.log(`总测试数: ${suiteResult.totalTests}`);
-    console.log(`通过: ${suiteResult.passedTests}`);
-    console.log(`失败: ${suiteResult.failedTests}`);
-    console.log(`总耗时: ${suiteResult.duration}ms`);
-    console.log(`结果: ${suiteResult.success ? '✅ 通过' : '❌ 失败'}`);
+    logger.debug('\n集成测试完成:');
+    logger.debug(`总测试数: ${suiteResult.totalTests}`);
+    logger.debug(`通过: ${suiteResult.passedTests}`);
+    logger.debug(`失败: ${suiteResult.failedTests}`);
+    logger.debug(`总耗时: ${suiteResult.duration}ms`);
+    logger.debug(`结果: ${suiteResult.success ? '✅ 通过' : '❌ 失败'}`);
 
     return suiteResult;
   }

@@ -1,9 +1,10 @@
+import { logger } from '@/utils/logger';
 /**
  * 优化任务详情组件
  * 包含状态监控和结果可视化
  */
 
-'use client';
+('use client');
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent, Button, Tabs, Tab, Box, Typography } from '@mui/material';
@@ -40,18 +41,21 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
       const taskData = await OptimizationService.getTask(taskId);
       setTask(taskData);
       if (taskData.result) {
-        console.log('[OptimizationTaskDetail] task result:', taskData.result);
-        console.log(
+        logger.debug('[OptimizationTaskDetail] task result:', taskData.result);
+        logger.debug(
           '[OptimizationTaskDetail] optimization_history:',
           taskData.result.optimization_history
         );
-        console.log('[OptimizationTaskDetail] param_importance:', taskData.result.param_importance);
+        logger.debug(
+          '[OptimizationTaskDetail] param_importance:',
+          taskData.result.param_importance
+        );
         setResult(taskData.result);
       } else {
-        console.warn('[OptimizationTaskDetail] task result is empty:', taskData);
+        logger.warn('[OptimizationTaskDetail] task result is empty:', taskData);
       }
     } catch (error) {
-      console.error('加载任务详情失败:', error);
+      logger.error('加载任务详情失败:', error);
     }
   };
 
@@ -60,7 +64,7 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
       const statusData = await OptimizationService.getStatus(taskId);
       setStatus(statusData);
     } catch (error) {
-      console.error('加载任务状态失败:', error);
+      logger.error('加载任务状态失败:', error);
     }
   };
 
@@ -97,9 +101,9 @@ export default function OptimizationTaskDetail({ taskId, onBack }: OptimizationT
         parameters: result.best_params,
         description: description || `来自超参优化任务: ${task.task_name}`,
       });
-      console.log('策略配置保存成功');
+      logger.debug('策略配置保存成功');
     } catch (error: any) {
-      console.error('保存策略配置失败:', error);
+      logger.error('保存策略配置失败:', error);
       throw error;
     } finally {
       setSavingConfig(false);

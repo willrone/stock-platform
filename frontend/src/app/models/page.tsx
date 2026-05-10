@@ -1,10 +1,11 @@
+import { logger } from '@/utils/logger';
 /**
  * 模型管理页面
  *
  * 提供模型创建、查看和管理功能
  */
 
-'use client';
+('use client');
 
 import dynamic from 'next/dynamic';
 import React, { useState, useEffect } from 'react';
@@ -88,7 +89,7 @@ function ModelsPage() {
       const data = await DataService.getModels();
       setModels(data.models || data);
     } catch (error) {
-      console.error('加载模型列表失败:', error);
+      logger.error('加载模型列表失败:', error);
     } finally {
       setLoading(false);
     }
@@ -113,7 +114,7 @@ function ModelsPage() {
         (window as any).unsubscribeTrainingProgress = unsubscribe;
       }
     } catch (error) {
-      console.error('设置WebSocket连接失败:', error);
+      logger.error('设置WebSocket连接失败:', error);
       setWsConnected(false);
     }
   };
@@ -275,7 +276,7 @@ function ModelsPage() {
       });
       alert('停止训练请求已发送');
     } catch (error: any) {
-      console.error('停止训练失败:', error);
+      logger.error('停止训练失败:', error);
       alert(error?.message || '停止训练失败，请稍后重试');
     } finally {
       setStoppingTrainingModelId(current => (current === modelId ? null : current));
@@ -302,7 +303,7 @@ function ModelsPage() {
       setDeletingModelId(null);
       alert('模型删除成功');
     } catch (error: any) {
-      console.error('删除模型失败:', error);
+      logger.error('删除模型失败:', error);
       alert(error?.message || '删除模型失败，请稍后重试');
     } finally {
       setDeleting(false);
@@ -360,7 +361,7 @@ function ModelsPage() {
             : undefined,
       };
       const result = await DataService.createModel(submitData);
-      console.log('模型创建成功:', result);
+      logger.debug('模型创建成功:', result);
 
       // 重置表单
       setFormData({
@@ -384,7 +385,7 @@ function ModelsPage() {
 
       alert('模型创建成功！训练任务已开始，您可以在模型列表中查看进度。');
     } catch (error: any) {
-      console.error('创建模型失败:', error);
+      logger.error('创建模型失败:', error);
       alert(error?.message || '创建模型失败，请稍后重试');
     } finally {
       setCreating(false);

@@ -1,9 +1,10 @@
+import { logger } from '@/utils/logger';
 /**
  * TradingView图表组件
  * 使用lightweight-charts库显示股票价格走势
  */
 
-'use client';
+('use client');
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -90,7 +91,7 @@ export default function TradingViewChart({
   // 获取股票数据
   const fetchStockData = async () => {
     if (!stockCode) {
-      console.warn('[TradingViewChart] 股票代码为空，无法加载数据');
+      logger.warn('[TradingViewChart] 股票代码为空，无法加载数据');
       setPriceData([]);
       setLoading(false);
       return;
@@ -109,7 +110,7 @@ export default function TradingViewChart({
       if (startDate) {
         resolvedStart = new Date(startDate);
         if (isNaN(resolvedStart.getTime())) {
-          console.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
+          logger.warn(`[TradingViewChart] 无效的startDate格式: ${startDate}，使用默认值`);
           resolvedStart = fallbackStart;
         }
       } else {
@@ -120,14 +121,14 @@ export default function TradingViewChart({
       if (endDate) {
         resolvedEnd = new Date(endDate);
         if (isNaN(resolvedEnd.getTime())) {
-          console.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
+          logger.warn(`[TradingViewChart] 无效的endDate格式: ${endDate}，使用默认值`);
           resolvedEnd = fallbackEnd;
         }
       } else {
         resolvedEnd = fallbackEnd;
       }
 
-      console.log(
+      logger.debug(
         `[TradingViewChart] 开始获取股票数据: ${stockCode}, 时间范围: ${
           resolvedStart.toISOString().split('T')[0]
         } 至 ${resolvedEnd.toISOString().split('T')[0]}`
@@ -140,14 +141,14 @@ export default function TradingViewChart({
         resolvedEnd.toISOString().split('T')[0]
       );
 
-      console.log('[TradingViewChart] API响应:', response);
+      logger.debug('[TradingViewChart] API响应:', response);
 
       // 转换数据格式
       // DataService.getStockData 返回格式: { stock_code, data: [...], last_updated }
       // 其中 data 字段已经是后端返回的数据数组
       const dataArray: any[] = Array.isArray(response?.data) ? response.data : [];
 
-      console.log(`[TradingViewChart] 解析后的数据数组长度: ${dataArray.length}`, {
+      logger.debug(`[TradingViewChart] 解析后的数据数组长度: ${dataArray.length}`, {
         responseType: typeof response,
         responseKeys: response ? Object.keys(response) : [],
         hasDataArray: Array.isArray(dataArray),
@@ -224,7 +225,7 @@ export default function TradingViewChart({
         // 按时间排序（确保数据按时间顺序）
         formattedData.sort((a, b) => a.time.localeCompare(b.time));
 
-        console.log(
+        logger.debug(
           `[TradingViewChart] 成功加载 ${formattedData.length} 条${
             timeframe === '1D' ? '日' : timeframe === '1W' ? '周' : '月'
           }线数据，时间范围: ${formattedData[0]?.time} 至 ${formattedData[formattedData.length - 1]
@@ -232,7 +233,7 @@ export default function TradingViewChart({
         );
         setPriceData(formattedData);
       } else {
-        console.warn('[TradingViewChart] 未获取到股票数据，返回空数据。', {
+        logger.warn('[TradingViewChart] 未获取到股票数据，返回空数据。', {
           stockCode,
           startDate: resolvedStart.toISOString().split('T')[0],
           endDate: resolvedEnd.toISOString().split('T')[0],
@@ -242,8 +243,8 @@ export default function TradingViewChart({
         setPriceData([]);
       }
     } catch (error: any) {
-      console.error('[TradingViewChart] 获取股票数据失败:', error);
-      console.error('[TradingViewChart] 错误详情:', {
+      logger.error('[TradingViewChart] 获取股票数据失败:', error);
+      logger.error('[TradingViewChart] 错误详情:', {
         message: error?.message,
         stack: error?.stack,
         response: error?.response,

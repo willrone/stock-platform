@@ -1,8 +1,9 @@
+import { logger } from '@/utils/logger';
 /**
  * 创建超参优化任务表单
  */
 
-'use client';
+('use client');
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -81,15 +82,15 @@ export default function CreateOptimizationTaskForm({
     const loadStrategies = async () => {
       try {
         const strategiesList = await apiRequest.get<Strategy[]>('/backtest/strategies');
-        console.log('加载到策略数量:', strategiesList?.length || 0);
+        logger.debug('加载到策略数量:', strategiesList?.length || 0);
         if (strategiesList && Array.isArray(strategiesList)) {
           setStrategies(strategiesList);
         } else {
-          console.warn('策略列表数据格式不正确:', strategiesList);
+          logger.warn('策略列表数据格式不正确:', strategiesList);
           setStrategies([]);
         }
       } catch (error) {
-        console.error('加载策略列表失败:', error);
+        logger.error('加载策略列表失败:', error);
         setStrategies([]);
       }
     };
@@ -270,7 +271,7 @@ export default function CreateOptimizationTaskForm({
         backtest_config: formData.optimization_mode === 'portfolio' ? fixedTradeConfig : undefined,
       };
 
-      console.log('创建优化任务请求:', request);
+      logger.debug('创建优化任务请求:', request);
 
       await OptimizationService.createTask(request);
       onTaskCreated();
@@ -292,7 +293,7 @@ export default function CreateOptimizationTaskForm({
       setSelectedStocks([]);
       setParamSpace({});
     } catch (error) {
-      console.error('创建优化任务失败:', error);
+      logger.error('创建优化任务失败:', error);
       alert('创建优化任务失败: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);

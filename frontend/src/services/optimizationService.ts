@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 超参优化服务
  */
@@ -119,8 +120,8 @@ export class OptimizationService {
     try {
       // 构建完整的 API URL（使用相对路径，通过Next.js代理转发）
       const url = '/api/v1/optimization/tasks';
-      console.log('[OptimizationService] 创建任务请求 URL:', url);
-      console.log('[OptimizationService] 请求数据:', JSON.stringify(request, null, 2));
+      logger.debug('[OptimizationService] 创建任务请求 URL:', url);
+      logger.debug('[OptimizationService] 请求数据:', JSON.stringify(request, null, 2));
 
       const response = await fetch(url, {
         method: 'POST',
@@ -130,24 +131,24 @@ export class OptimizationService {
         body: JSON.stringify(request),
       });
 
-      console.log('[OptimizationService] 响应状态:', response.status, response.statusText);
-      console.log('[OptimizationService] 响应 URL:', response.url);
-      console.log('[OptimizationService] 响应头:', Object.fromEntries(response.headers.entries()));
+      logger.debug('[OptimizationService] 响应状态:', response.status, response.statusText);
+      logger.debug('[OptimizationService] 响应 URL:', response.url);
+      logger.debug('[OptimizationService] 响应头:', Object.fromEntries(response.headers.entries()));
 
       // 如果是 404，检查 URL 是否正确
       if (response.status === 404) {
-        console.error('[OptimizationService] 404 错误 - 请求的 URL 不存在');
-        console.error('[OptimizationService] 实际请求 URL:', url);
-        console.error('[OptimizationService] 请求失败，URL:', url);
-        console.error('[OptimizationService] 响应 URL:', response.url);
-        console.error('[OptimizationService] 响应状态:', response.status, response.statusText);
+        logger.error('[OptimizationService] 404 错误 - 请求的 URL 不存在');
+        logger.error('[OptimizationService] 实际请求 URL:', url);
+        logger.error('[OptimizationService] 请求失败，URL:', url);
+        logger.error('[OptimizationService] 响应 URL:', response.url);
+        logger.error('[OptimizationService] 响应状态:', response.status, response.statusText);
 
         // 尝试获取错误详情
         try {
           const errorText = await response.text();
-          console.error('[OptimizationService] 错误响应内容:', errorText);
+          logger.error('[OptimizationService] 错误响应内容:', errorText);
         } catch (e) {
-          console.error('[OptimizationService] 无法读取错误响应:', e);
+          logger.error('[OptimizationService] 无法读取错误响应:', e);
         }
 
         throw new Error(
@@ -163,7 +164,7 @@ export class OptimizationService {
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
             errorData = await response.json();
-            console.error('[OptimizationService] 错误响应数据:', errorData);
+            logger.error('[OptimizationService] 错误响应数据:', errorData);
 
             if (errorData.detail) {
               // 处理 Pydantic 验证错误
@@ -186,11 +187,11 @@ export class OptimizationService {
             }
           } else {
             const text = await response.text();
-            console.error('[OptimizationService] 错误响应文本:', text);
+            logger.error('[OptimizationService] 错误响应文本:', text);
             errorMessage = text || `HTTP ${response.status}: ${response.statusText}`;
           }
         } catch (e) {
-          console.error('[OptimizationService] 解析错误响应失败:', e);
+          logger.error('[OptimizationService] 解析错误响应失败:', e);
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
 
@@ -198,7 +199,7 @@ export class OptimizationService {
       }
 
       const result: StandardResponse<OptimizationTask> = await response.json();
-      console.log('[OptimizationService] 成功响应:', result);
+      logger.debug('[OptimizationService] 成功响应:', result);
 
       if (!result.success) {
         throw new Error(result.message || '创建优化任务失败');
@@ -210,7 +211,7 @@ export class OptimizationService {
 
       return result.data;
     } catch (error) {
-      console.error('[OptimizationService] 创建优化任务错误:', error);
+      logger.error('[OptimizationService] 创建优化任务错误:', error);
       if (error instanceof Error) {
         throw error;
       }

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 持仓分析组件
  * 展示各股票表现排行、持仓权重饼图和柱状图
@@ -126,18 +127,18 @@ export function PositionAnalysis({ positionAnalysis, taskId }: PositionAnalysisP
 
   // 数据格式转换：兼容新旧两种格式
   const normalizedData = useMemo(() => {
-    console.log('[PositionAnalysis] 接收到的 positionAnalysis:', positionAnalysis);
-    console.log('[PositionAnalysis] positionAnalysis 类型:', typeof positionAnalysis);
-    console.log('[PositionAnalysis] 是否为数组:', Array.isArray(positionAnalysis));
+    logger.debug('[PositionAnalysis] 接收到的 positionAnalysis:', positionAnalysis);
+    logger.debug('[PositionAnalysis] positionAnalysis 类型:', typeof positionAnalysis);
+    logger.debug('[PositionAnalysis] 是否为数组:', Array.isArray(positionAnalysis));
 
     if (!positionAnalysis) {
-      console.log('[PositionAnalysis] positionAnalysis 为空');
+      logger.debug('[PositionAnalysis] positionAnalysis 为空');
       return null;
     }
 
     // 如果是数组格式（旧格式），直接使用
     if (Array.isArray(positionAnalysis)) {
-      console.log('[PositionAnalysis] 使用数组格式，长度:', positionAnalysis.length);
+      logger.debug('[PositionAnalysis] 使用数组格式，长度:', positionAnalysis.length);
       return {
         stock_performance: positionAnalysis,
         position_weights: undefined,
@@ -149,14 +150,14 @@ export function PositionAnalysis({ positionAnalysis, taskId }: PositionAnalysisP
 
     // 如果是对象格式（新格式），检查是否有 stock_performance
     if (typeof positionAnalysis === 'object' && positionAnalysis !== null) {
-      console.log('[PositionAnalysis] 使用对象格式');
-      console.log('[PositionAnalysis] 对象键:', Object.keys(positionAnalysis));
-      console.log('[PositionAnalysis] stock_performance:', positionAnalysis.stock_performance);
-      console.log(
+      logger.debug('[PositionAnalysis] 使用对象格式');
+      logger.debug('[PositionAnalysis] 对象键:', Object.keys(positionAnalysis));
+      logger.debug('[PositionAnalysis] stock_performance:', positionAnalysis.stock_performance);
+      logger.debug(
         '[PositionAnalysis] stock_performance 类型:',
         typeof positionAnalysis.stock_performance
       );
-      console.log(
+      logger.debug(
         '[PositionAnalysis] stock_performance 长度:',
         Array.isArray(positionAnalysis.stock_performance)
           ? positionAnalysis.stock_performance.length
@@ -167,12 +168,12 @@ export function PositionAnalysis({ positionAnalysis, taskId }: PositionAnalysisP
       if (positionAnalysis.stock_performance && Array.isArray(positionAnalysis.stock_performance)) {
         return positionAnalysis as EnhancedPositionAnalysis;
       } else {
-        console.warn('[PositionAnalysis] stock_performance 不存在或不是数组');
+        logger.warn('[PositionAnalysis] stock_performance 不存在或不是数组');
         return null;
       }
     }
 
-    console.warn('[PositionAnalysis] 未知的数据格式');
+    logger.warn('[PositionAnalysis] 未知的数据格式');
     return null;
   }, [positionAnalysis]);
 
@@ -944,7 +945,7 @@ export function PositionAnalysis({ positionAnalysis, taskId }: PositionAnalysisP
           setPortfolioSnapshots(sorted);
         }
       } catch (error) {
-        console.error('获取组合快照数据失败:', error);
+        logger.error('获取组合快照数据失败:', error);
       } finally {
         setLoadingSnapshots(false);
       }

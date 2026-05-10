@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * 股票选择器组件
  *
@@ -8,7 +9,7 @@
  * - 已选股票管理
  */
 
-'use client';
+('use client');
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -63,12 +64,12 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     const loadAllStocks = async () => {
       setLoadingAllStocks(true);
       try {
-        console.log('[StockSelector] 开始加载本地股票列表...');
+        logger.debug('[StockSelector] 开始加载本地股票列表...');
         const result = await DataService.getLocalStockList();
-        console.log(`[StockSelector] 获取到 ${result.total_stocks} 只本地股票`);
+        logger.debug(`[StockSelector] 获取到 ${result.total_stocks} 只本地股票`);
 
         if (!result.stocks || result.stocks.length === 0) {
-          console.warn('[StockSelector] 本地股票列表为空');
+          logger.warn('[StockSelector] 本地股票列表为空');
           setAllStocks([]);
           return;
         }
@@ -90,10 +91,10 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
           };
         });
 
-        console.log(`[StockSelector] 格式化后 ${formattedStocks.length} 只股票`);
+        logger.debug(`[StockSelector] 格式化后 ${formattedStocks.length} 只股票`);
         setAllStocks(formattedStocks);
       } catch (error) {
-        console.error('[StockSelector] 加载本地股票列表失败:', error);
+        logger.error('[StockSelector] 加载本地股票列表失败:', error);
         setAllStocks([]);
       } finally {
         setLoadingAllStocks(false);
@@ -126,7 +127,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   // 添加股票
   const handleAddStock = (stockCode: string) => {
     if (value.includes(stockCode)) {
-      console.log('股票已存在');
+      logger.debug('股票已存在');
       return;
     }
 
@@ -139,7 +140,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     const count = parseInt(randomCount, 10);
 
     if (isNaN(count) || count <= 0) {
-      console.warn('请输入有效的数量');
+      logger.warn('请输入有效的数量');
       return;
     }
 
@@ -147,7 +148,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     const availableStocks = filteredStocks.filter(stock => !value.includes(stock.code));
 
     if (availableStocks.length === 0) {
-      console.warn('没有可选的股票');
+      logger.warn('没有可选的股票');
       return;
     }
 
@@ -162,7 +163,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
     const newValue = [...value, ...selectedStocks];
     onChange?.(newValue);
 
-    console.log(`随机选择了 ${selectedStocks.length} 只股票`);
+    logger.debug(`随机选择了 ${selectedStocks.length} 只股票`);
   };
 
   // 移除股票
@@ -181,7 +182,7 @@ export const StockSelector: React.FC<StockSelectorProps> = ({
   const handleClearAll = () => {
     onChange?.([]);
     setSelectedStocksPage(1); // 重置分页
-    console.log('已清空所有股票');
+    logger.debug('已清空所有股票');
   };
 
   // 获取股票显示名称

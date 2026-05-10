@@ -1,9 +1,10 @@
+import { logger } from '@/utils/logger';
 /**
  * 交互式图表容器组件
  * 整合收益曲线、回撤曲线和月度热力图
  */
 
-'use client';
+('use client');
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -92,7 +93,7 @@ export default function InteractiveChartsContainer({
 
   // 加载图表数据
   const loadChartData = async (forceRefresh = false) => {
-    console.log(
+    logger.debug(
       `[InteractiveChartsContainer] 开始加载图表数据: taskId=${taskId}, forceRefresh=${forceRefresh}`
     );
 
@@ -100,7 +101,7 @@ export default function InteractiveChartsContainer({
       setLoading(true);
       setError(null);
 
-      console.log('[InteractiveChartsContainer] 并行加载三种图表数据...');
+      logger.debug('[InteractiveChartsContainer] 并行加载三种图表数据...');
 
       // 并行加载所有图表数据，允许部分失败
       const [equityResult, drawdownResult, heatmapResult] = await Promise.allSettled([
@@ -115,23 +116,23 @@ export default function InteractiveChartsContainer({
       const heatmapData = heatmapResult.status === 'fulfilled' ? heatmapResult.value : null;
 
       if (equityResult.status === 'rejected') {
-        console.warn('[InteractiveChartsContainer] 权益曲线数据加载失败:', equityResult.reason);
+        logger.warn('[InteractiveChartsContainer] 权益曲线数据加载失败:', equityResult.reason);
       }
       if (drawdownResult.status === 'rejected') {
-        console.warn('[InteractiveChartsContainer] 回撤曲线数据加载失败:', drawdownResult.reason);
+        logger.warn('[InteractiveChartsContainer] 回撤曲线数据加载失败:', drawdownResult.reason);
       }
       if (heatmapResult.status === 'rejected') {
-        console.warn('[InteractiveChartsContainer] 月度热力图数据加载失败:', heatmapResult.reason);
+        logger.warn('[InteractiveChartsContainer] 月度热力图数据加载失败:', heatmapResult.reason);
       }
 
       // 如果所有数据都加载失败，尝试从现有回测数据生成
       if (!equityData && !drawdownData && !heatmapData) {
-        console.log('[InteractiveChartsContainer] 所有API数据加载失败，尝试从现有回测数据生成...');
+        logger.debug('[InteractiveChartsContainer] 所有API数据加载失败，尝试从现有回测数据生成...');
         generateChartDataFromBacktest();
         return;
       }
 
-      console.log('[InteractiveChartsContainer] 基础图表数据加载结果:', {
+      logger.debug('[InteractiveChartsContainer] 基础图表数据加载结果:', {
         equityData: !!equityData,
         drawdownData: !!drawdownData,
         heatmapData: !!heatmapData,
@@ -140,7 +141,7 @@ export default function InteractiveChartsContainer({
       // 尝试加载基准数据（可选）
       let benchmarkData;
       try {
-        console.log('[InteractiveChartsContainer] 尝试加载基准数据...');
+        logger.debug('[InteractiveChartsContainer] 尝试加载基准数据...');
         const benchmark = await BacktestService.getBenchmarkData(taskId);
         if (benchmark && benchmark.benchmark_returns) {
           benchmarkData = {
@@ -148,12 +149,12 @@ export default function InteractiveChartsContainer({
             values: benchmark.benchmark_returns.map((r: any) => r.cumulative_return * 100000), // 假设初始值
             returns: benchmark.benchmark_returns.map((r: any) => r.return),
           };
-          console.log('[InteractiveChartsContainer] 基准数据加载成功');
+          logger.debug('[InteractiveChartsContainer] 基准数据加载成功');
         } else {
-          console.log('[InteractiveChartsContainer] 基准数据为空');
+          logger.debug('[InteractiveChartsContainer] 基准数据为空');
         }
       } catch (benchmarkError) {
-        console.warn('[InteractiveChartsContainer] 无法加载基准数据:', benchmarkError);
+        logger.warn('[InteractiveChartsContainer] 无法加载基准数据:', benchmarkError);
       }
 
       const finalChartData = {
@@ -163,12 +164,12 @@ export default function InteractiveChartsContainer({
         benchmarkData,
       };
 
-      console.log('[InteractiveChartsContainer] 所有图表数据设置完成:', finalChartData);
+      logger.debug('[InteractiveChartsContainer] 所有图表数据设置完成:', finalChartData);
       setChartData(finalChartData);
     } catch (err: any) {
-      console.error('[InteractiveChartsContainer] 加载图表数据失败:', err);
+      logger.error('[InteractiveChartsContainer] 加载图表数据失败:', err);
       // 如果API加载失败，尝试从现有回测数据生成
-      console.log('[InteractiveChartsContainer] 尝试从现有回测数据生成图表...');
+      logger.debug('[InteractiveChartsContainer] 尝试从现有回测数据生成图表...');
       generateChartDataFromBacktest();
       if (!chartData || Object.keys(chartData).length === 0) {
         setError(err.message || '加载图表数据失败');
@@ -202,7 +203,7 @@ export default function InteractiveChartsContainer({
           dailyReturns: sortedHistory.map((h: any) => h.daily_return || 0),
         };
 
-        console.log(
+        logger.debug(
           `[InteractiveChartsContainer] 从回测数据生成权益曲线: 数据量=${
             sortedHistory.length
           }, 日期范围=${equityCurveData.dates[0]} 至 ${
@@ -252,7 +253,7 @@ export default function InteractiveChartsContainer({
         });
       }
     } catch (err) {
-      console.error('从回测数据生成图表数据失败:', err);
+      logger.error('从回测数据生成图表数据失败:', err);
     }
   };
 
@@ -268,18 +269,18 @@ export default function InteractiveChartsContainer({
   }, [taskId]);
 
   useEffect(() => {
-    console.log('[InteractiveChartsContainer] 更新selectedStock:', {
+    logger.debug('[InteractiveChartsContainer] 更新selectedStock:', {
       stockCode,
       stockCodes,
       currentSelected: selectedStock,
     });
 
     if (stockCode) {
-      console.log(`[InteractiveChartsContainer] 使用stockCode: ${stockCode}`);
+      logger.debug(`[InteractiveChartsContainer] 使用stockCode: ${stockCode}`);
       setSelectedStock(stockCode);
     } else if (stockCodes && stockCodes.length > 0) {
       const defaultStock = stockCodes[0];
-      console.log(`[InteractiveChartsContainer] 使用stockCodes[0]: ${defaultStock}`);
+      logger.debug(`[InteractiveChartsContainer] 使用stockCodes[0]: ${defaultStock}`);
       setSelectedStock(prev => {
         // 如果已经有选中的股票且该股票仍在列表中，保持选中
         if (prev && stockCodes.includes(prev)) {
@@ -288,7 +289,7 @@ export default function InteractiveChartsContainer({
         return defaultStock;
       });
     } else {
-      console.warn('[InteractiveChartsContainer] 没有可用的股票代码');
+      logger.warn('[InteractiveChartsContainer] 没有可用的股票代码');
     }
   }, [stockCode, stockCodes]);
 
@@ -310,7 +311,7 @@ export default function InteractiveChartsContainer({
         });
         setTradeRecords(tradesResponse.trades);
       } catch (tradeError) {
-        console.warn('[InteractiveChartsContainer] 无法加载交易记录:', tradeError);
+        logger.warn('[InteractiveChartsContainer] 无法加载交易记录:', tradeError);
         setTradeRecords([]);
       } finally {
         setTradeLoading(false);
@@ -327,7 +328,7 @@ export default function InteractiveChartsContainer({
         });
         setSignalRecords(signalsResponse.signals);
       } catch (signalError) {
-        console.warn('[InteractiveChartsContainer] 无法加载信号记录:', signalError);
+        logger.warn('[InteractiveChartsContainer] 无法加载信号记录:', signalError);
         setSignalRecords([]);
       }
     };
@@ -493,7 +494,7 @@ export default function InteractiveChartsContainer({
                         backtestData?.start_date ||
                         backtestData?.period?.start_date ||
                         backtestData?.backtest_config?.start_date;
-                      console.log(
+                      logger.debug(
                         '[InteractiveChartsContainer] TradingViewChart startDate:',
                         startDate,
                         'from backtestData:',
@@ -506,7 +507,7 @@ export default function InteractiveChartsContainer({
                         backtestData?.end_date ||
                         backtestData?.period?.end_date ||
                         backtestData?.backtest_config?.end_date;
-                      console.log(
+                      logger.debug(
                         '[InteractiveChartsContainer] TradingViewChart endDate:',
                         endDate,
                         'from backtestData:',
