@@ -626,6 +626,80 @@ async def get_remote_stock_daily_data(
         )
 
 
+@router.post(
+    "/remote/manual-fetch",
+    response_model=StandardResponse,
+    summary="触发数据服务手动获取",
+    description="通过 back_test_data_service 触发手动获取并缓存股票数据",
+)
+async def trigger_remote_manual_fetch(
+    data_service: SimpleDataService = Depends(get_data_service),
+) -> Any:
+    """触发 back_test_data_service 的 manual_fetch。"""
+    try:
+        payload = await data_service.trigger_remote_manual_fetch()
+        if payload is None:
+            return StandardResponse(
+                success=False,
+                message="数据服务未连接，无法触发手动获取",
+                data=None,
+            )
+
+        success = "error" not in payload
+        message = str(
+            payload.get("message")
+            or payload.get("error")
+            or ("已触发数据服务手动获取" if success else "触发数据服务手动获取失败")
+        )
+        return StandardResponse(success=success, message=message, data=payload)
+    except Exception as e:
+        logger.error(f"触发数据服务手动获取失败: {e}", exc_info=True)
+        return StandardResponse(
+            success=False,
+            message=f"触发数据服务手动获取失败: {str(e)}",
+            data=None,
+        )
+
+
+@router.get(
+    "/remote/logs/{log_type}",
+    response_model=StandardResponse,
+    summary="获取数据服务日志",
+    description="获取 back_test_data_service 的 api/service/error 日志",
+)
+async def get_remote_service_logs(
+    log_type: str,
+    data_service: SimpleDataService = Depends(get_data_service),
+) -> Any:
+    """获取 back_test_data_service 日志。"""
+    try:
+        payload = await data_service.get_remote_service_logs(log_type)
+        if payload is None:
+            return StandardResponse(
+                success=False,
+                message="数据服务未连接，无法获取日志",
+                data=None,
+            )
+
+        success = "error" not in payload
+        return StandardResponse(
+            success=success,
+            message=(
+                "成功获取数据服务日志"
+                if success
+                else str(payload.get("error", "获取日志失败"))
+            ),
+            data=payload,
+        )
+    except Exception as e:
+        logger.error(f"获取数据服务日志失败: {e}", exc_info=True)
+        return StandardResponse(
+            success=False,
+            message=f"获取数据服务日志失败: {str(e)}",
+            data=None,
+        )
+
+
 @router.get(
     "/local/stocks",
     response_model=StandardResponse,

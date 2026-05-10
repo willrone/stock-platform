@@ -34,6 +34,7 @@ import {
   DataService,
   type DataServiceSummary,
   type RemoteDailyDataResponse,
+  type RemoteServiceLogResponse,
 } from '../../services/dataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { wsService } from '../../services/websocket';
@@ -93,6 +94,14 @@ export default function DataManagementPage() {
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyResult, setDailyResult] = useState<RemoteDailyDataResponse | null>(null);
   const [dailyError, setDailyError] = useState<string | null>(null);
+  const [manualFetchLoading, setManualFetchLoading] = useState(false);
+  const [manualFetchMessage, setManualFetchMessage] = useState<{
+    severity: 'success' | 'info' | 'warning' | 'error';
+    text: string;
+  } | null>(null);
+  const [logType, setLogType] = useState<'api' | 'service' | 'error'>('api');
+  const [logLoading, setLogLoading] = useState(false);
+  const [serviceLog, setServiceLog] = useState<RemoteServiceLogResponse | null>(null);
   const [remoteStocks, setRemoteStocks] = useState<RemoteStock[]>([]);
   const [localStocks, setLocalStocks] = useState<LocalStock[]>([]);
   const [activeTab, setActiveTab] = useState<string>('remote');
@@ -163,6 +172,56 @@ export default function DataManagementPage() {
     }
   };
 
+  // 触发数据服务手动获取
+  const handleManualFetch = async () => {
+    if (!serviceStatus?.is_connected || manualFetchLoading) {
+      return;
+    }
+
+    setManualFetchLoading(true);
+    setManualFetchMessage(null);
+
+    try {
+      const result = await DataService.triggerRemoteManualFetch();
+      setManualFetchMessage({
+        severity: result.error ? 'error' : 'info',
+        text: result.error || result.message || '已触发数据服务手动获取，请通过日志观察进度',
+      });
+      await loadRemoteServiceLogs('api');
+    } catch (error) {
+      console.error('触发数据服务手动获取失败:', error);
+      setManualFetchMessage({
+        severity: 'error',
+        text: error instanceof Error ? error.message : '触发失败',
+      });
+    } finally {
+      setManualFetchLoading(false);
+    }
+  };
+
+  // 加载数据服务日志
+  const loadRemoteServiceLogs = async (nextLogType = logType) => {
+    if (!serviceStatus?.is_connected) {
+      setServiceLog(null);
+      return;
+    }
+
+    setLogLoading(true);
+    try {
+      const logs = await DataService.getRemoteServiceLogs(nextLogType);
+      setServiceLog(logs);
+    } catch (error) {
+      console.error('获取数据服务日志失败:', error);
+      setServiceLog({
+        content: error instanceof Error ? error.message : '获取日志失败',
+        lines: 0,
+        error: error instanceof Error ? error.message : '获取日志失败',
+      });
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
   // 加载远端股票列表
   const loadRemoteStocks = async () => {
     try {
@@ -198,6 +257,9 @@ export default function DataManagementPage() {
 
   useEffect(() => {
     loadDataServiceSummary();
+    if (serviceStatus?.is_connected) {
+      loadRemoteServiceLogs(logType);
+    }
   }, [serviceStatus?.is_connected]);
 
   // 刷新数据
@@ -621,6 +683,95 @@ export default function DataManagementPage() {
                   </Box>
                 ))}
               </Stack>
+
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  数据获取与缓存
+                </Typography>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  手动获取会调用 back_test_data_service 的 <code>/api/data/manual_fetch</code>
+                  ，后台更新股票列表并批量抓取股票日线缓存。任务在数据服务内异步执行，可通过下方日志观察进度。
+                </Alert>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<Download size={16} />}
+                    onClick={handleManualFetch}
+                    disabled={manualFetchLoading}
+                  >
+                    {manualFetchLoading ? '触发中...' : '手动获取并缓存所有股票数据'}
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">
+                    数据量较大，触发后请不要重复点击；进度以 API 日志为准。
+                  </Typography>
+                </Stack>
+                {manualFetchMessage && (
+                  <Alert severity={manualFetchMessage.severity} sx={{ mt: 2 }}>
+                    {manualFetchMessage.text}
+                  </Alert>
+                )}
+              </Box>
+
+              <Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    mb: 1,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    数据服务日志
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Tabs
+                      value={logType}
+                      onChange={(_event, value) => {
+                        setLogType(value);
+                        loadRemoteServiceLogs(value);
+                      }}
+                      aria-label="数据服务日志类型"
+                    >
+                      <Tab value="service" label="Service" />
+                      <Tab value="api" label="API" />
+                      <Tab value="error" label="Error" />
+                    </Tabs>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<RefreshCw size={14} />}
+                      onClick={() => loadRemoteServiceLogs(logType)}
+                      disabled={logLoading}
+                    >
+                      {logLoading ? '刷新中...' : '刷新日志'}
+                    </Button>
+                  </Stack>
+                </Box>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    p: 2,
+                    maxHeight: 280,
+                    overflow: 'auto',
+                    borderRadius: 2,
+                    bgcolor: '#0b1020',
+                    color: '#d7e1ff',
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  {serviceLog?.content
+                    ? serviceLog.content.split('\n').slice(-80).join('\n')
+                    : '暂无日志，点击刷新日志。'}
+                </Box>
+              </Box>
 
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>

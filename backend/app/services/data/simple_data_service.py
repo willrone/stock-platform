@@ -265,33 +265,34 @@ class SimpleDataService:
         self, stock_code: str, start_date: datetime, end_date: datetime
     ) -> Optional[List[Dict[str, Any]]]:
         """Load raw dict rows from local Parquet file filtered by date range."""
-        # Try multiple parquet paths - include project root data folder
-        project_root = Path(
-            __file__
-        ).parent.parent.parent.parent.parent  # backend/../ = willrone/
+        # Prefer the service's configured data_path. Only the default application
+        # data path may fall back to the project-root shared dataset; explicit
+        # temp data_path values in tests should stay isolated.
+        project_root = Path(__file__).parent.parent.parent.parent.parent
         logger.info(
             f"load_from_parquet called: {stock_code}, project_root={project_root}"
         )
+
+        safe_code = stock_code.replace(".", "_")
         parquet_paths = [
-            # Project root data folder (where real stock data lives)
-            project_root
-            / "data"
-            / "parquet"
-            / "stock_data"
-            / f"{stock_code.replace('.', '_')}.parquet",
-            project_root
-            / "data"
-            / "parquet"
-            / f"{stock_code.replace('.', '_')}.parquet",
-            # Backend data folder
-            self.data_path
-            / "parquet"
-            / "stock_data"
-            / f"{stock_code.replace('.', '_')}.parquet",
-            self.data_path / "parquet" / f"{stock_code.replace('.', '_')}.parquet",
+            self.data_path / "parquet" / "stock_data" / f"{safe_code}.parquet",
+            self.data_path / "parquet" / f"{safe_code}.parquet",
             self.data_path / "parquet" / "stock_data" / f"{stock_code}.parquet",
             self.data_path / "parquet" / f"{stock_code}.parquet",
         ]
+
+        default_data_root = Path(getattr(settings, "DATA_ROOT_PATH", "data"))
+        if self.data_path == default_data_root:
+            parquet_paths.extend(
+                [
+                    project_root
+                    / "data"
+                    / "parquet"
+                    / "stock_data"
+                    / f"{safe_code}.parquet",
+                    project_root / "data" / "parquet" / f"{safe_code}.parquet",
+                ]
+            )
 
         for parquet_path in parquet_paths:
             logger.debug(
@@ -677,6 +678,61 @@ class SimpleDataService:
             return payload
         except Exception as e:
             logger.error(f"获取远端日线数据异常: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def trigger_remote_manual_fetch(self) -> Optional[Dict[str, Any]]:
+        """Trigger back_test_data_service manual fetch/cache task."""
+        try:
+            working_url = await self._get_working_url("api/data/health")
+            if working_url is None:
+                return None
+
+            full_url = f"{working_url.rstrip('/')}/api/data/manual_fetch"
+            client = await self._get_client()
+            response = await client.post(full_url)
+            try:
+                payload = cast(Dict[str, Any], response.json())
+            except Exception:
+                payload = {
+                    "success": False,
+                    "error": response.text[:500] or f"HTTP {response.status_code}",
+                }
+
+            if response.status_code >= 400:
+                payload.setdefault("success", False)
+                payload.setdefault("error", f"HTTP {response.status_code}")
+            return payload
+        except Exception as e:
+            logger.error(f"触发数据服务手动获取异常: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_remote_service_logs(self, log_type: str) -> Optional[Dict[str, Any]]:
+        """Fetch logs from back_test_data_service."""
+        if log_type not in {"api", "service", "error"}:
+            return {"success": False, "error": "无效的日志类型"}
+
+        try:
+            working_url = await self._get_working_url("api/data/health")
+            if working_url is None:
+                return None
+
+            full_url = f"{working_url.rstrip('/')}/api/data/logs/{log_type}"
+            client = await self._get_client()
+            response = await client.get(full_url)
+            try:
+                payload = cast(Dict[str, Any], response.json())
+            except Exception:
+                payload = {
+                    "success": False,
+                    "error": response.text[:500] or f"HTTP {response.status_code}",
+                }
+
+            if response.status_code >= 400:
+                payload.setdefault("success", False)
+                payload.setdefault("error", f"HTTP {response.status_code}")
+            return payload
+        except Exception as e:
+            logger.error(f"获取数据服务日志异常: {e}")
             return {"success": False, "error": str(e)}
 
     async def __aenter__(self) -> Any:

@@ -119,6 +119,19 @@ export type RemoteDailyDataResponse = {
   error?: string;
 };
 
+export type RemoteManualFetchResponse = {
+  message?: string;
+  status?: string;
+  error?: string;
+};
+
+export type RemoteServiceLogResponse = {
+  content: string;
+  lines: number;
+  file?: string;
+  error?: string;
+};
+
 const dataLogger = {
   debug: (...args: unknown[]) => {
     if (process.env.NODE_ENV !== 'production') {
@@ -570,6 +583,22 @@ export class DataService {
       start_date: params.startDate,
       end_date: params.endDate,
     });
+  }
+
+  /**
+   * 触发 back_test_data_service 手动获取并缓存股票数据
+   */
+  static async triggerRemoteManualFetch(): Promise<RemoteManualFetchResponse> {
+    return apiRequest.post('/data/remote/manual-fetch');
+  }
+
+  /**
+   * 获取 back_test_data_service 日志
+   */
+  static async getRemoteServiceLogs(
+    logType: 'api' | 'service' | 'error'
+  ): Promise<RemoteServiceLogResponse> {
+    return apiRequest.get(`/data/remote/logs/${logType}`);
   }
 
   /**
