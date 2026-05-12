@@ -300,6 +300,7 @@ class TaskSummaryDTO(BaseModel):
     stock_codes: List[str] = Field(default_factory=list)
     model_id: str = ""
     created_at: str
+    started_at: Optional[str] = None
     completed_at: Optional[str] = None
     error_message: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
@@ -368,6 +369,7 @@ def build_task_summary_dto(
         model_id=model_id,
         created_at=to_iso_datetime(getattr(task, "created_at", None))
         or datetime.now().isoformat(),
+        started_at=to_iso_datetime(getattr(task, "started_at", None)),
         completed_at=to_iso_datetime(getattr(task, "completed_at", None)),
         error_message=getattr(task, "error_message", None),
         config=task_config,

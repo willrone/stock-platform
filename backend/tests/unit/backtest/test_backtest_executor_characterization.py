@@ -108,9 +108,18 @@ def _run_backtest_patch_stack(
             return_value=object(),
         )
     )
+
+    def fake_load_multiple_stocks(*args, **kwargs):
+        progress_callback = kwargs.get("progress_callback")
+        if progress_callback:
+            progress_callback(1, 1, "加载股票数据 000001.SZ (1/1)")
+        return stock_data
+
     stack.enter_context(
         patch.object(
-            executor.data_loader, "load_multiple_stocks", return_value=stock_data
+            executor.data_loader,
+            "load_multiple_stocks",
+            side_effect=fake_load_multiple_stocks,
         )
     )
     stack.enter_context(
@@ -276,6 +285,34 @@ async def test_run_backtest_with_task_id_falls_back_to_empty_signal_summary() ->
     assert result["total_signals"] == 9
     assert result["trading_days"] == 20
     assert result["signal_execution_summary"] == {}
+
+
+@pytest.mark.asyncio
+async def test_run_backtest_reports_data_loading_progress_callback() -> None:
+    """任务进度回调应覆盖数据加载阶段，避免长时间停在 30%。"""
+    progress_callback = MagicMock()
+    executor = BacktestExecutor(
+        data_dir="/tmp", enable_parallel=False, progress_callback=progress_callback
+    )
+    progress_monitor = _build_progress_monitor()
+    loop_result = {"total_signals": 11, "trading_days": 20, "executed_trades": 7}
+
+    with _run_backtest_patch_stack(
+        executor,
+        loop_result=loop_result,
+        report_template=_build_report_template(),
+        progress_monitor=progress_monitor,
+    ):
+        await executor.run_backtest(
+            strategy_name="macd",
+            stock_codes=["000001.SZ"],
+            start_date=datetime(2024, 1, 1),
+            end_date=datetime(2024, 1, 31),
+            strategy_config={"fast_period": 12, "slow_period": 26},
+            task_id="task-progress",
+        )
+
+    progress_callback.assert_any_call(30.0, "加载股票数据 000001.SZ (1/1)")
 
 
 def test_topk_dropout_price_lookup_includes_non_held_candidates_without_precomputed_signal_matrix() -> (

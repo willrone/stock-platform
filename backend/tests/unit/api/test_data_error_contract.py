@@ -65,7 +65,11 @@ def test_mark_task_failed_after_submit_error_logs_compensation_failure():
         additional_data={"route": "trigger_qlib_precompute"},
     )
 
-    with patch("app.api.v1.data.log_best_effort_failure") as mock_log_best_effort:
+    mock_log_best_effort = MagicMock()
+    with patch.dict(
+        _mark_task_failed_after_submit_error.__globals__,
+        {"log_best_effort_failure": mock_log_best_effort},
+    ):
         _mark_task_failed_after_submit_error(
             repository,
             task_id="qlib-task-1",

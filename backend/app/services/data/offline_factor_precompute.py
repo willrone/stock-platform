@@ -547,13 +547,14 @@ class OfflineFactorPrecomputeService:
             logger.error(f"计算基本面特征失败 {stock_code}: {e}")
             return pd.DataFrame()
 
-    async def precompute_all_stocks(
+    async def precompute_all_stocks(  # noqa: C901
         self,
         stock_codes: Optional[List[str]] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         incremental: bool = True,
         force_update: bool = False,
+        merge_all_stocks: bool = False,
     ) -> "Dict[str, Any]":
         """
         预计算所有股票的所有指标
@@ -562,6 +563,8 @@ class OfflineFactorPrecomputeService:
             stock_codes: 股票代码列表（None则自动获取所有股票）
             start_date: 开始日期（可选）
             end_date: 结束日期（可选）
+            merge_all_stocks: 是否额外合并生成 all_stocks.parquet；默认 False，
+                避免全市场规模下将数 GB 单股特征一次性 concat 造成内存峰值。
 
         Returns:
             包含统计信息的字典
@@ -573,6 +576,9 @@ class OfflineFactorPrecomputeService:
             # 获取股票列表
             if stock_codes is None:
                 stock_codes = self.get_all_stock_codes()
+
+            effective_start_date = start_date or datetime.now()
+            effective_end_date = end_date or datetime.now()
 
             if not stock_codes:
                 logger.error("没有可用的股票代码")
@@ -595,14 +601,19 @@ class OfflineFactorPrecomputeService:
                     )
                     stock_codes = stocks_to_update
                 else:
+                    all_stock_count = len(self.get_all_stock_codes())
                     logger.info("增量更新模式: 没有股票需要更新")
+                    if self.progress_callback:
+                        self.progress_callback(100.0, "所有股票数据已是最新，无需更新")
                     return {
                         "success": True,
                         "message": "所有股票数据已是最新，无需更新",
-                        "total_stocks": len(self.get_all_stock_codes()),
-                        "success_stocks": len(self.get_all_stock_codes()),
+                        "total_stocks": all_stock_count,
+                        "success_stocks": all_stock_count,
                         "failed_stocks": [],
                         "incremental": True,
+                        "merge_all_stocks": merge_all_stocks,
+                        "combined_file": None,
                     }
 
             total_stocks = len(stock_codes)
@@ -611,7 +622,11 @@ class OfflineFactorPrecomputeService:
             # 分批处理
             success_stocks = []
             failed_stocks = []
-            all_precomputed_data = []
+            all_precomputed_data: Optional[List[pd.DataFrame]] = (
+                [] if merge_all_stocks else None
+            )
+            date_min: Optional[datetime] = None
+            date_max: Optional[datetime] = None
 
             # 创建输出目录
             output_dir = self.qlib_data_path / "features" / "day"
@@ -664,7 +679,39 @@ class OfflineFactorPrecomputeService:
                             )
 
                             success_stocks.append(stock_code)
-                            all_precomputed_data.append(result)
+                            try:
+                                result_index = result.index
+                                result_dates = (
+                                    result_index.get_level_values(1)
+                                    if isinstance(result_index, pd.MultiIndex)
+                                    else result_index
+                                )
+                                current_min = cast(Any, result_dates).min()
+                                current_max = cast(Any, result_dates).max()
+                                if pd.notna(current_min):
+                                    current_min_dt = pd.to_datetime(
+                                        current_min
+                                    ).to_pydatetime()
+                                    date_min = (
+                                        current_min_dt
+                                        if date_min is None
+                                        else min(date_min, current_min_dt)
+                                    )
+                                if pd.notna(current_max):
+                                    current_max_dt = pd.to_datetime(
+                                        current_max
+                                    ).to_pydatetime()
+                                    date_max = (
+                                        current_max_dt
+                                        if date_max is None
+                                        else max(date_max, current_max_dt)
+                                    )
+                            except Exception as date_error:
+                                logger.debug(
+                                    f"统计股票 {stock_code} 日期范围失败: {date_error}"
+                                )
+                            if all_precomputed_data is not None:
+                                all_precomputed_data.append(result)
 
                             logger.info(f"✓ 股票 {stock_code} 预计算完成")
                         else:
@@ -681,7 +728,9 @@ class OfflineFactorPrecomputeService:
                         progress, f"已处理 {batch_end}/{total_stocks} 只股票"
                     )
 
-            # 合并所有数据（可选，用于创建统一的数据文件）
+            # 合并所有数据（可选，用于创建统一的数据文件）。默认跳过，
+            # 全市场 5 年特征数据会达到数 GB，一次性 concat 容易导致 worker OOM。
+            combined_file: Optional[Path] = None
             if all_precomputed_data:
                 logger.info("合并所有预计算数据...")
                 combined_data = pd.concat(all_precomputed_data, axis=0)
@@ -693,24 +742,25 @@ class OfflineFactorPrecomputeService:
                 logger.info(
                     f"合并数据已保存: {combined_file}, 形状: {combined_data.shape}"
                 )
+            else:
+                logger.info("已跳过 all_stocks.parquet 合并，仅保留单股特征文件")
 
             # 更新版本信息
             try:
                 # 获取所有股票和日期范围
                 all_stocks = self.get_all_stock_codes()
-                if all_precomputed_data:
-                    # 从合并数据获取日期范围
-                    dates = (
-                        combined_data.index.get_level_values(1)
-                        if isinstance(combined_data.index, pd.MultiIndex)
-                        else combined_data.index
-                    )
-                    date_range = {
-                        "start": dates.min().strftime("%Y-%m-%d"),
-                        "end": dates.max().strftime("%Y-%m-%d"),
-                    }
-                else:
-                    date_range = {"start": None, "end": None}
+                date_range = {
+                    "start": (
+                        date_min.strftime("%Y-%m-%d")
+                        if date_min
+                        else effective_start_date.strftime("%Y-%m-%d")
+                    ),
+                    "end": (
+                        date_max.strftime("%Y-%m-%d")
+                        if date_max
+                        else effective_end_date.strftime("%Y-%m-%d")
+                    ),
+                }
 
                 # 获取指标列表
                 from app.services.data.indicator_registry import IndicatorCategory
@@ -755,6 +805,8 @@ class OfflineFactorPrecomputeService:
                 "failed_stocks": failed_stocks,
                 "output_dir": str(output_dir),
                 "incremental": incremental,
+                "merge_all_stocks": merge_all_stocks,
+                "combined_file": str(combined_file) if combined_file else None,
             }
 
             logger.info(f"预计算完成: 成功 {len(success_stocks)}/{total_stocks} 只股票")

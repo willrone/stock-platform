@@ -5,7 +5,7 @@ Qlib数据格式转换工具
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -321,6 +321,7 @@ class QlibFormatConverter:
         stock_code: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        columns: Optional[Sequence[str]] = None,
     ) -> pd.DataFrame:
         """
         从文件加载Qlib格式数据
@@ -330,6 +331,7 @@ class QlibFormatConverter:
             stock_code: 股票代码（可选，用于过滤）
             start_date: 开始日期（可选）
             end_date: 结束日期（可选）
+            columns: 仅读取/返回指定列（可选，Parquet 下推，减少宽表 I/O）
 
         Returns:
             Qlib格式DataFrame
@@ -341,7 +343,7 @@ class QlibFormatConverter:
                 logger.warning(f"文件不存在: {file_path}")
                 return pd.DataFrame()
 
-            df = self._load_raw_qlib_data(file_path)
+            df = self._load_raw_qlib_data(file_path, columns=columns)
             df = self._ensure_multiindex(df, file_path, stock_code)
             df = self._filter_by_stock_code(df, stock_code)
             if df.empty:
@@ -356,23 +358,27 @@ class QlibFormatConverter:
             logger.error(f"加载Qlib数据失败: {e}")
             return pd.DataFrame()
 
-    def _load_raw_qlib_data(self, file_path: Path) -> pd.DataFrame:
+    def _load_raw_qlib_data(
+        self, file_path: Path, columns: Optional[Sequence[str]] = None
+    ) -> pd.DataFrame:
         if file_path.suffix == ".parquet":
-            return self._read_parquet_with_fallback(file_path)
+            return self._read_parquet_with_fallback(file_path, columns=columns)
         if file_path.suffix == ".csv":
             return pd.read_csv(file_path, index_col=[0, 1], parse_dates=True)
         raise ValueError(f"不支持的文件格式: {file_path.suffix}")
 
-    def _read_parquet_with_fallback(self, file_path: Path) -> pd.DataFrame:
+    def _read_parquet_with_fallback(
+        self, file_path: Path, columns: Optional[Sequence[str]] = None
+    ) -> pd.DataFrame:
         try:
-            return pd.read_parquet(file_path, engine="pyarrow")
+            return pd.read_parquet(file_path, engine="pyarrow", columns=columns)
         except Exception as e:
             logger.debug(f"使用pyarrow读取失败: {e}，尝试fastparquet")
             try:
-                return pd.read_parquet(file_path, engine="fastparquet")
+                return pd.read_parquet(file_path, engine="fastparquet", columns=columns)
             except Exception as e2:
                 logger.warning(f"使用fastparquet也失败: {e2}，尝试默认引擎")
-                return pd.read_parquet(file_path)
+                return pd.read_parquet(file_path, columns=columns)
 
     def _ensure_multiindex(
         self, df: pd.DataFrame, file_path: Path, stock_code: Optional[str]

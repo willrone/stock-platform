@@ -8,7 +8,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 from loguru import logger
@@ -74,7 +74,11 @@ class DataLoader:
         self.qlib_data_path = Path(settings.QLIB_DATA_PATH) / "features" / "day"
 
     def load_stock_data(
-        self, stock_code: str, start_date: datetime, end_date: datetime
+        self,
+        stock_code: str,
+        start_date: datetime,
+        end_date: datetime,
+        required_columns: Optional[Sequence[str]] = None,
     ) -> pd.DataFrame:
         """
         加载股票历史数据，优先从预计算结果读取
@@ -90,7 +94,7 @@ class DataLoader:
         try:
             # 1. 优先尝试从Qlib预计算目录加载
             precomputed_data = self._load_from_precomputed(
-                stock_code, start_date, end_date
+                stock_code, start_date, end_date, required_columns=required_columns
             )
             if precomputed_data is not None and not precomputed_data.empty:
                 logger.info(
@@ -113,6 +117,26 @@ class DataLoader:
                 context=ErrorContext(stock_code=stock_code),
                 original_exception=e,
             )
+
+    def _to_qlib_columns(
+        self, required_columns: Optional[Sequence[str]]
+    ) -> Optional[List[str]]:
+        """Map backtest column names to qlib parquet column names."""
+        if not required_columns:
+            return None
+        mapping = {
+            "open": "$open",
+            "high": "$high",
+            "low": "$low",
+            "close": "$close",
+            "volume": "$volume",
+        }
+        columns = []
+        for column in required_columns:
+            mapped = mapping.get(column, column)
+            if mapped not in columns:
+                columns.append(mapped)
+        return columns
 
     def _create_ci_fallback_stock_data(
         self, stock_code: str, start_date: datetime, end_date: datetime
@@ -154,7 +178,11 @@ class DataLoader:
         return data
 
     def _load_from_precomputed(
-        self, stock_code: str, start_date: datetime, end_date: datetime
+        self,
+        stock_code: str,
+        start_date: datetime,
+        end_date: datetime,
+        required_columns: Optional[Sequence[str]] = None,
     ) -> Optional[pd.DataFrame]:
         """
         从Qlib预计算目录加载数据
@@ -172,17 +200,19 @@ class DataLoader:
 
             converter = QlibFormatConverter()
             safe_code = stock_code.replace(".", "_")
+            qlib_columns = self._to_qlib_columns(required_columns)
 
             # 尝试从单股票文件加载
             stock_file = self.qlib_data_path / f"{safe_code}.parquet"
             if stock_file.exists():
-                # Qlib 文件通常以下划线命名（000001_SZ），内部 index level 0 也可能是该格式。
-                # 为避免 KeyError + 大量 warning，统一用 safe_code 去读取/过滤。
+                # 文件名使用下划线（000001_SZ），但文件内部 stock_code level
+                # 保留点号格式（000001.SZ）。按真实股票代码过滤，避免误 miss。
                 qlib_data = converter.load_qlib_data(
                     stock_file,
-                    stock_code=safe_code,
+                    stock_code=stock_code,
                     start_date=start_date,
                     end_date=end_date,
+                    columns=qlib_columns,
                 )
 
                 if not qlib_data.empty:
@@ -191,7 +221,7 @@ class DataLoader:
                     if isinstance(qlib_data.index, pd.MultiIndex):
                         try:
                             stock_data = qlib_data.xs(
-                                safe_code, level=0, drop_level=False
+                                stock_code, level=0, drop_level=False
                             )
                             # 将日期索引提取出来
                             stock_data.index = stock_data.index.get_level_values(1)
@@ -236,6 +266,7 @@ class DataLoader:
                     stock_code=safe_code,
                     start_date=start_date,
                     end_date=end_date,
+                    columns=qlib_columns,
                 )
 
                 if not qlib_data.empty:
@@ -374,12 +405,14 @@ class DataLoader:
         )
         return data
 
-    def load_multiple_stocks(
+    def load_multiple_stocks(  # noqa: C901
         self,
         stock_codes: List[str],
         start_date: datetime,
         end_date: datetime,
         parallel: bool = True,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        required_columns: Optional[Sequence[str]] = None,
     ) -> Dict[str, pd.DataFrame]:
         """
         加载多只股票数据，优先从预计算结果读取
@@ -389,8 +422,30 @@ class DataLoader:
             start_date: 开始日期
             end_date: 结束日期
             parallel: 是否并行加载（默认True）
+            progress_callback: 可选进度回调 callback(current, total, message)
+            required_columns: 预计算 parquet 仅读取的列（可选）
         """
         stock_data = {}
+        total_stocks = len(stock_codes)
+        completed_stocks = 0
+
+        def report_progress(stock_code: str) -> None:
+            nonlocal completed_stocks
+            completed_stocks += 1
+            if not progress_callback or total_stocks <= 0:
+                return
+            should_report = (
+                completed_stocks == 1
+                or completed_stocks == total_stocks
+                or completed_stocks % max(1, total_stocks // 20) == 0
+            )
+            if should_report:
+                progress_callback(
+                    completed_stocks,
+                    total_stocks,
+                    f"加载股票数据 {stock_code} ({completed_stocks}/{total_stocks})",
+                )
+
         failed_stocks = []
         precomputed_count = 0
 
@@ -406,7 +461,12 @@ class DataLoader:
             ) -> Tuple[str, Optional[pd.DataFrame], Optional[str], bool]:
                 """加载单只股票数据，返回 (stock_code, data, error, from_precomputed)"""
                 try:
-                    data = self.load_stock_data(stock_code, start_date, end_date)
+                    data = self.load_stock_data(
+                        stock_code,
+                        start_date,
+                        end_date,
+                        required_columns=required_columns,
+                    )
                     from_precomputed = data.attrs.get("from_precomputed", False)
                     return (stock_code, data, None, from_precomputed)
                 except Exception as e:
@@ -430,6 +490,7 @@ class DataLoader:
 
                 for future in as_completed(futures):
                     stock_code, data, error, from_precomputed = future.result()
+                    report_progress(stock_code)
                     if data is not None:
                         # data validity filter: avoid missing/too-short coverage polluting universe sampling
                         if self._is_data_valid(data, start_date, end_date):
@@ -444,13 +505,19 @@ class DataLoader:
             # 顺序加载（兼容旧逻辑）
             for stock_code in stock_codes:
                 try:
-                    data = self.load_stock_data(stock_code, start_date, end_date)
+                    data = self.load_stock_data(
+                        stock_code,
+                        start_date,
+                        end_date,
+                        required_columns=required_columns,
+                    )
                     if self._is_data_valid(data, start_date, end_date):
                         stock_data[stock_code] = data
                         if data.attrs.get("from_precomputed", False):
                             precomputed_count += 1
                     else:
                         failed_stocks.append(stock_code)
+                    report_progress(stock_code)
                 except Exception as e:
                     fallback = self._create_ci_fallback_stock_data(
                         stock_code, start_date, end_date
@@ -458,9 +525,11 @@ class DataLoader:
                     if fallback is not None:
                         logger.warning(f"使用CI兜底回测数据: {stock_code}, 原错误: {e}")
                         stock_data[stock_code] = fallback
+                        report_progress(stock_code)
                         continue
                     logger.error(f"加载股票数据失败: {stock_code}, 错误: {e}")
                     failed_stocks.append(stock_code)
+                    report_progress(stock_code)
                     continue
 
         if precomputed_count > 0:
@@ -469,7 +538,15 @@ class DataLoader:
             )
 
         if failed_stocks:
-            logger.warning(f"部分股票数据加载失败: {failed_stocks}")
+            sample_failed = failed_stocks[:20]
+            suffix = (
+                ""
+                if len(failed_stocks) <= 20
+                else f" ... (+{len(failed_stocks) - 20} more)"
+            )
+            logger.warning(
+                f"部分股票数据加载失败: count={len(failed_stocks)}, sample={sample_failed}{suffix}"
+            )
 
         if not stock_data:
             raise TaskError(message="所有股票数据加载失败", severity=ErrorSeverity.HIGH)

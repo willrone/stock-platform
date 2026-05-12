@@ -7,6 +7,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -35,12 +36,22 @@ class MovingAverageStrategy(BaseStrategy):
         self.signal_threshold = config.get("signal_threshold", 0.005)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算移动平均指标"""
+        """计算移动平均指标，优先复用预计算 MA 列。"""
         close_prices = data["close"]
+        short_col = f"MA{self.short_window}"
+        long_col = f"MA{self.long_window}"
 
         indicators = {
-            "sma_short": close_prices.rolling(window=self.short_window).mean(),
-            "sma_long": close_prices.rolling(window=self.long_window).mean(),
+            "sma_short": (
+                data[short_col]
+                if short_col in data.columns
+                else close_prices.rolling(window=self.short_window).mean()
+            ),
+            "sma_long": (
+                data[long_col]
+                if long_col in data.columns
+                else close_prices.rolling(window=self.long_window).mean()
+            ),
             "price": close_prices,
         }
 
@@ -52,32 +63,62 @@ class MovingAverageStrategy(BaseStrategy):
         return indicators
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """[性能优化] 向量化计算全量均线交叉信号"""
-        try:
-            indicators = self.get_cached_indicators(data)
-            ma_diff = indicators["ma_diff"]
-            prev_ma_diff = ma_diff.shift(1)
+        """[性能优化] 用 NumPy 计算全量均线交叉信号。
 
-            # 向量化逻辑判断
+        避免 pandas Series 布尔运算按 Timestamp index 对齐/哈希，在全市场
+        数千只股票场景下会把 CPU 时间放大到分钟级。
+        """
+        try:
+            close_prices = data["close"]
+            short_col = f"MA{self.short_window}"
+            long_col = f"MA{self.long_window}"
+
+            short_series = (
+                data[short_col]
+                if short_col in data.columns
+                else close_prices.rolling(window=self.short_window).mean()
+            )
+            long_series = (
+                data[long_col]
+                if long_col in data.columns
+                else close_prices.rolling(window=self.long_window).mean()
+            )
+
+            short_values = short_series.to_numpy(dtype="float64", copy=False)
+            long_values = long_series.to_numpy(dtype="float64", copy=False)
+            ma_diff = np.full(len(data.index), np.nan, dtype="float64")
+            np.divide(
+                short_values - long_values,
+                long_values,
+                out=ma_diff,
+                where=(long_values != 0) & np.isfinite(long_values),
+            )
+
+            prev_ma_diff = np.empty_like(ma_diff)
+            prev_ma_diff[0] = np.nan
+            prev_ma_diff[1:] = ma_diff[:-1]
+
+            valid = np.isfinite(ma_diff) & np.isfinite(prev_ma_diff)
+            abs_diff = np.abs(ma_diff)
             buy_mask = (
-                (prev_ma_diff <= 0)
+                valid
+                & (prev_ma_diff <= 0)
                 & (ma_diff > 0)
-                & (abs(ma_diff) > self.signal_threshold)
+                & (abs_diff > self.signal_threshold)
             )
             sell_mask = (
-                (prev_ma_diff >= 0)
+                valid
+                & (prev_ma_diff >= 0)
                 & (ma_diff < 0)
-                & (abs(ma_diff) > self.signal_threshold)
+                & (abs_diff > self.signal_threshold)
             )
 
-            # 构造全量信号 Series
-            signals = pd.Series(
-                [None] * len(data.index), index=data.index, dtype=object
-            )
-            signals[buy_mask.fillna(False)] = SignalType.BUY
-            signals[sell_mask.fillna(False)] = SignalType.SELL
+            signal_values = np.empty(len(data.index), dtype=object)
+            signal_values[:] = None
+            signal_values[buy_mask] = SignalType.BUY
+            signal_values[sell_mask] = SignalType.SELL
 
-            return signals
+            return pd.Series(signal_values, index=data.index, dtype=object)
         except Exception as e:
             logger.error(f"MA策略向量化计算失败: {e}")
             return None

@@ -5,6 +5,7 @@
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -140,6 +141,47 @@ class TestSimpleStockDataService:
 
         if not status.is_available:
             assert status.error_message is not None
+
+    @pytest.mark.asyncio
+    async def test_remote_data_summary_uses_configured_timeout(self, temp_data_path):
+        """慢汇总接口应使用配置超时，不受健康检查快速失败超时影响。"""
+
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {"total_stocks": 5513, "total_records": 16539903}
+
+        class FakeClient:
+            def __init__(self):
+                self.calls = []
+
+            async def get(self, url, timeout=None):
+                self.calls.append({"url": url, "timeout": timeout})
+                return FakeResponse()
+
+        service = SimpleStockDataService(
+            data_path=temp_data_path,
+            remote_url="http://127.0.0.1:5002",
+            timeout=30,
+            offline_fallback=True,
+        )
+        fake_client = FakeClient()
+        service._get_working_url = AsyncMock(return_value="http://127.0.0.1:5002")
+        service._get_client = AsyncMock(return_value=fake_client)
+
+        summary = await service.get_remote_data_summary()
+
+        assert summary == {"total_stocks": 5513, "total_records": 16539903}
+        assert service.timeout == 1.0
+        assert service.remote_timeout == 30
+        assert fake_client.calls == [
+            {
+                "url": "http://127.0.0.1:5002/api/data/data_summary",
+                "timeout": 30,
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_fetch_remote_data(self, data_service):

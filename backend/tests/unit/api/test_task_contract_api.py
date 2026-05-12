@@ -85,6 +85,7 @@ def prediction_task():
         status="created",
         progress=0.0,
         created_at=FIXED_NOW,
+        started_at=None,
         completed_at=None,
         error_message=None,
         config={"stock_codes": ["000001.SZ"], "model_id": "model-v1"},
@@ -103,6 +104,7 @@ def backtest_task():
         status="completed",
         progress=100.0,
         created_at=FIXED_NOW,
+        started_at=FIXED_NOW,
         completed_at=FIXED_NOW,
         error_message=None,
         config={
@@ -256,6 +258,7 @@ class TestTaskContractAPI:
         assert payload["tasks"][0]["task_type"] == "prediction"
         assert payload["tasks"][1]["task_type"] == "backtest"
         assert payload["tasks"][1]["config"]["strategy_name"] == "multi_factor"
+        assert payload["tasks"][1]["started_at"] == FIXED_NOW.isoformat()
 
     @patch("app.api.v1.tasks.PredictionResultRepository")
     @patch("app.api.v1.tasks.TaskRepository")
@@ -305,6 +308,7 @@ class TestTaskContractAPI:
         assert payload["task_id"] == "task-bt-1"
         assert payload["task_type"] == "backtest"
         assert payload["config"]["strategy_name"] == "multi_factor"
+        assert payload["started_at"] == FIXED_NOW.isoformat()
         assert payload["results"]["total_stocks"] == 2
         assert payload["results"]["successful_predictions"] == 1
         assert payload["results"]["predictions"][0]["stock_code"] == "000001.SZ"

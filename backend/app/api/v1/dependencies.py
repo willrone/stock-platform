@@ -457,11 +457,24 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
             )
         )
 
+        def backtest_progress_callback(progress: float, message: str = "") -> None:
+            try:
+                task_repository.update_task_status(
+                    task_id=task_id,
+                    status=TaskStatus.RUNNING,
+                    progress=max(10.0, min(progress, 89.0)),
+                )
+                if message:
+                    task_logger.info(f"回测进度: {progress:.1f}% - {message}")
+            except Exception as progress_error:
+                task_logger.warning(f"更新回测进度失败: {progress_error}")
+
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
             enable_parallel=enable_parallel,
             max_workers=max_workers,
             enable_performance_profiling=enable_performance_profiling,
+            progress_callback=backtest_progress_callback,
         )
 
         # 创建回测配置
@@ -1110,7 +1123,7 @@ def execute_qlib_precompute_task_simple(task_id: str) -> Any:
         cancel_event = threading.Event()
 
         def progress_callback(progress: float, message: str = "") -> None:
-            task_repository.update_task_progress(task_id, progress)
+            task_repository.update_task_progress(task_id, min(progress, 99.0))
 
         context = TaskExecutionContext(
             task_id=task_id,

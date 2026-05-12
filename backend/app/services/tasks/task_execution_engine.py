@@ -1002,6 +1002,9 @@ class QlibPrecomputeTaskExecutor:
                         stock_codes=stock_codes,
                         start_date=start_date,
                         end_date=end_date,
+                        merge_all_stocks=bool(
+                            config_dict.get("merge_all_stocks", False)
+                        ),
                     )
                 )
 

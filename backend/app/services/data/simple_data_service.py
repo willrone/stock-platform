@@ -57,6 +57,10 @@ class SimpleDataService:
         configured_timeout = float(
             timeout if timeout is not None else settings.REMOTE_DATA_SERVICE_TIMEOUT
         )
+        # Keep a short probe timeout for offline fallback health checks, but retain
+        # the configured timeout for known slow data-service endpoints such as
+        # /api/data/data_summary.
+        self.remote_timeout = configured_timeout
         self.timeout = (
             min(configured_timeout, 1.0) if offline_fallback else configured_timeout
         )
@@ -628,7 +632,7 @@ class SimpleDataService:
 
             full_url = f"{working_url.rstrip('/')}/api/data/data_summary"
             client = await self._get_client()
-            response = await client.get(full_url)
+            response = await client.get(full_url, timeout=self.remote_timeout)
 
             if response.status_code != 200:
                 logger.warning(

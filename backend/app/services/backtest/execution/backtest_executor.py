@@ -6,7 +6,7 @@ import time
 from concurrent.futures import as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped,unused-ignore]
@@ -130,6 +130,7 @@ class BacktestExecutor:
         max_workers: Optional[int] = None,
         enable_performance_profiling: bool = False,
         use_multiprocessing: bool = False,
+        progress_callback: Optional[Callable[[float, str], None]] = None,
     ) -> None:
         """
         初始化回测执行器
@@ -142,6 +143,7 @@ class BacktestExecutor:
             use_multiprocessing: 是否使用多进程（突破GIL限制，默认False）
                 - True: 使用 ProcessPoolExecutor，适合 CPU 密集型策略
                 - False: 使用 ThreadPoolExecutor，序列化开销小
+            progress_callback: 可选的任务进度回调，参数为 (progress, message)
         """
         import os
 
@@ -154,6 +156,7 @@ class BacktestExecutor:
         self.max_workers = max_workers
         self.use_multiprocessing = use_multiprocessing
         self.use_array_portfolio = True  # Phase 1: 启用数组化持仓管理
+        self.progress_callback = progress_callback
         self.data_loader = DataLoader(
             data_dir, max_workers=max_workers if enable_parallel else None
         )
@@ -184,6 +187,25 @@ class BacktestExecutor:
         if self.performance_profiler is None:
             raise RuntimeError("性能分析器尚未初始化")
         return self.performance_profiler
+
+    def _get_required_data_columns(
+        self, strategy_name: str, strategy_config: Dict[str, Any]
+    ) -> Optional[List[str]]:
+        """Return minimal data columns needed for common strategies."""
+        normalized = strategy_name.lower()
+        if normalized == "moving_average":
+            short_window = int(strategy_config.get("short_window", 5))
+            long_window = int(strategy_config.get("long_window", 20))
+            return [
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                f"MA{short_window}",
+                f"MA{long_window}",
+            ]
+        return None
 
     async def run_backtest(
         self,
@@ -284,8 +306,31 @@ class BacktestExecutor:
             logger.info(
                 f"开始回测: {strategy_name}, 股票: {stock_codes}, 期间: {start_date} - {end_date}"
             )
+
+            def _data_loading_progress(
+                current: int, total: int, message: str = ""
+            ) -> None:
+                if not self.progress_callback or total <= 0:
+                    return
+                # Overall task progress: 10% after setup, 30% after data loading.
+                data_stage_progress = min(max(current / total, 0.0), 1.0)
+                overall_progress = 10.0 + data_stage_progress * 20.0
+                self.progress_callback(overall_progress, message)
+
+            required_data_columns = self._get_required_data_columns(
+                strategy_name, strategy_config
+            )
+            if required_data_columns:
+                logger.info(
+                    f"策略 {strategy_name} 使用列裁剪加载数据: {required_data_columns}"
+                )
+
             stock_data = self.data_loader.load_multiple_stocks(
-                stock_codes, start_date, end_date
+                stock_codes,
+                start_date,
+                end_date,
+                progress_callback=_data_loading_progress if task_id else None,
+                required_columns=required_data_columns,
             )
 
             if self.enable_performance_profiling:
@@ -594,9 +639,9 @@ class BacktestExecutor:
                 # 保存性能报告到文件（如果提供了task_id）
                 if task_id:
                     try:
-                        pass
-
-                        performance_dir = Path("backend/data/performance_reports")
+                        performance_dir = (
+                            Path(self.data_loader.data_dir) / "performance_reports"
+                        )
                         performance_dir.mkdir(parents=True, exist_ok=True)
                         performance_file = (
                             performance_dir / f"backtest_{task_id}_performance.json"
