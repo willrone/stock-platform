@@ -36,22 +36,17 @@ class MovingAverageStrategy(BaseStrategy):
         self.signal_threshold = config.get("signal_threshold", 0.005)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算移动平均指标，优先复用预计算 MA 列。"""
+        """计算移动平均指标。
+
+        Qlib 预计算特征中的 MA5/MA20 等列不是普通价格均线，不能直接作为
+        moving_average 策略的短/长均线复用；这里始终基于 close 重新计算，
+        确保策略语义一致。
+        """
         close_prices = data["close"]
-        short_col = f"MA{self.short_window}"
-        long_col = f"MA{self.long_window}"
 
         indicators = {
-            "sma_short": (
-                data[short_col]
-                if short_col in data.columns
-                else close_prices.rolling(window=self.short_window).mean()
-            ),
-            "sma_long": (
-                data[long_col]
-                if long_col in data.columns
-                else close_prices.rolling(window=self.long_window).mean()
-            ),
+            "sma_short": close_prices.rolling(window=self.short_window).mean(),
+            "sma_long": close_prices.rolling(window=self.long_window).mean(),
             "price": close_prices,
         }
 
@@ -70,19 +65,9 @@ class MovingAverageStrategy(BaseStrategy):
         """
         try:
             close_prices = data["close"]
-            short_col = f"MA{self.short_window}"
-            long_col = f"MA{self.long_window}"
 
-            short_series = (
-                data[short_col]
-                if short_col in data.columns
-                else close_prices.rolling(window=self.short_window).mean()
-            )
-            long_series = (
-                data[long_col]
-                if long_col in data.columns
-                else close_prices.rolling(window=self.long_window).mean()
-            )
+            short_series = close_prices.rolling(window=self.short_window).mean()
+            long_series = close_prices.rolling(window=self.long_window).mean()
 
             short_values = short_series.to_numpy(dtype="float64", copy=False)
             long_values = long_series.to_numpy(dtype="float64", copy=False)

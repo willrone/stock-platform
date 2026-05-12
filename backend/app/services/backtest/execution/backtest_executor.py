@@ -194,17 +194,9 @@ class BacktestExecutor:
         """Return minimal data columns needed for common strategies."""
         normalized = strategy_name.lower()
         if normalized == "moving_average":
-            short_window = int(strategy_config.get("short_window", 5))
-            long_window = int(strategy_config.get("long_window", 20))
-            return [
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                f"MA{short_window}",
-                f"MA{long_window}",
-            ]
+            # Keep moving_average semantics based on raw close rolling means.
+            # Qlib MA* feature columns are factor-style features, not plain price MAs.
+            return ["open", "high", "low", "close", "volume"]
         return None
 
     async def run_backtest(
