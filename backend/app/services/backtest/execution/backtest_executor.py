@@ -1097,7 +1097,7 @@ class BacktestExecutor:
             perf_breakdown["align_sub_signal_reindex_s"] = _align_signal_s
             logger.info(
                 f"📊 align_arrays 细粒度: alloc={_align_alloc_s:.2f}s, "
-                "price_reindex={_align_price_s:.2f}s, signal_reindex={_align_signal_s:.2f}s"
+                f"price_reindex={_align_price_s:.2f}s, signal_reindex={_align_signal_s:.2f}s"
             )
 
         return {
@@ -2180,10 +2180,10 @@ class BacktestExecutor:
             perf_breakdown["mainloop_sub_accounted_s"] = _ml_total
             logger.info(
                 f"📊 main_loop 细粒度: price={_ml_price_lookup:.1f}s, "
-                "signal={_ml_signal_extract:.1f}s, trade={_ml_trade_exec:.1f}s, "
-                "snap={_ml_portfolio_snap:.1f}s, batch_collect={_ml_batch_collect:.1f}s, "
-                "flush={_ml_batch_flush:.1f}s, progress={_ml_progress_update:.1f}s, "
-                "accounted={_ml_total:.1f}s"
+                f"signal={_ml_signal_extract:.1f}s, trade={_ml_trade_exec:.1f}s, "
+                f"snap={_ml_portfolio_snap:.1f}s, batch_collect={_ml_batch_collect:.1f}s, "
+                f"flush={_ml_batch_flush:.1f}s, progress={_ml_progress_update:.1f}s, "
+                f"accounted={_ml_total:.1f}s"
             )
 
         # ========== PERF优化：循环结束后写入剩余数据 ==========

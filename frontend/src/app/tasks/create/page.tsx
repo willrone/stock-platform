@@ -11,7 +11,7 @@ import { logger } from '@/utils/logger';
  * - 预测设置
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -48,7 +48,7 @@ import {
 } from '../../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
 
-export default function CreateTaskPage() {
+function CreateTaskPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { models, selectedModel, setModels, setSelectedModel } = useDataStore();
@@ -1007,5 +1007,13 @@ export default function CreateTaskPage() {
         </Box>
       </Box>
     </Box>
+  );
+}
+
+export default function CreateTaskPage() {
+  return (
+    <Suspense fallback={<Box sx={{ p: 3 }}>加载任务创建页面...</Box>}>
+      <CreateTaskPageContent />
+    </Suspense>
   );
 }
