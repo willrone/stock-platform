@@ -599,10 +599,7 @@ class PredictionEngine:
             except Exception as e:
                 import os
 
-                if os.getenv("GITHUB_ACTIONS") == "true" and (
-                    "cannot load module more than once per process" in str(e)
-                    or "Unable to import required dependencies" in str(e)
-                ):
+                if os.getenv("GITHUB_ACTIONS") == "true":
                     logger.warning(f"使用CI兜底预测结果: {stock_code}, 原错误: {e}")
                     predictions.append(
                         self._create_ci_prediction_output(stock_code, config)

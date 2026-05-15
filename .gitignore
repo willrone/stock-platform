@@ -290,8 +290,15 @@ frontend/logs/
 
 # 数据文件
 /data/
-backend/data/
+backend/data/*
 !backend/data/.gitkeep
+!backend/data/stocks/
+!backend/data/stocks/.gitkeep
+!backend/data/models/
+!backend/data/models/.gitkeep
+!backend/data/logs/
+backend/data/logs/*
+!backend/data/logs/.gitkeep
 !/data/.gitkeep
 backend/backend/data/performance_reports/
 

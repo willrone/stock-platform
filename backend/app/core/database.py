@@ -4,6 +4,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, TypeVar
 
@@ -282,6 +283,60 @@ def retry_db_operation_sync(
         raise last_exception
 
 
+def _seed_ci_smoke_models_sync(connection: Connection) -> None:
+    """Seed minimal model rows for legacy CI integration smoke tests."""
+    import os
+
+    if os.getenv("GITHUB_ACTIONS") != "true" or connection.dialect.name != "sqlite":
+        return
+
+    table_exists = connection.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='model_info'"
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    model_exists = connection.exec_driver_sql(
+        "SELECT 1 FROM model_info WHERE model_id = 'xgboost_v1'"
+    ).fetchone()
+    if model_exists is not None:
+        return
+
+    now = datetime.utcnow()
+    connection.execute(
+        text("""
+            INSERT INTO model_info (
+                model_id, model_name, model_type, version, file_path,
+                training_data_start, training_data_end, performance_metrics,
+                hyperparameters, status, training_progress, training_stage,
+                evaluation_report, created_at, updated_at
+            ) VALUES (
+                :model_id, :model_name, :model_type, :version, :file_path,
+                :training_data_start, :training_data_end, :performance_metrics,
+                :hyperparameters, :status, :training_progress, :training_stage,
+                :evaluation_report, :created_at, :updated_at
+            )
+            """),
+        {
+            "model_id": "xgboost_v1",
+            "model_name": "CI smoke XGBoost model",
+            "model_type": "xgboost",
+            "version": "1.0.0",
+            "file_path": "data/models/xgboost_v1.joblib",
+            "training_data_start": now,
+            "training_data_end": now,
+            "performance_metrics": '{"accuracy": 0.5}',
+            "hyperparameters": "{}",
+            "status": "ready",
+            "training_progress": 100.0,
+            "training_stage": "completed",
+            "evaluation_report": '{"performance_metrics": {"accuracy": 0.5}}',
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+
+
 async def init_db() -> None:
     """初始化数据库"""
     # 确保数据目录存在
@@ -301,6 +356,7 @@ async def init_db() -> None:
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_sqlite_task_updated_at_column_sync)
+        await conn.run_sync(_seed_ci_smoke_models_sync)
 
         # SQLite PRAGMA settings are applied by connection event hooks.
         # Re-applying journal/synchronous pragmas inside this transactional

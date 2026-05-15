@@ -1107,7 +1107,16 @@ class BacktestExecutor:
         """Return holding codes without forcing full Position object materialization."""
         getter = getattr(portfolio_manager, "get_position_codes", None)
         if callable(getter):
-            return list(getter())
+            try:
+                codes = getter()
+                if isinstance(codes, (str, bytes)):
+                    return [str(codes)]
+                return list(codes)
+            except TypeError:
+                # Unit-test mocks may expose get_position_codes as a callable Mock
+                # that returns another non-iterable Mock. Fall through to the
+                # underlying positions mapping in that case.
+                pass
         positions = getattr(portfolio_manager, "positions", {})
         try:
             return list(positions.keys())

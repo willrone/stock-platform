@@ -271,7 +271,7 @@ async def create_task(
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"创建任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error("创建任务失败: {}", e)
         raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
     finally:
         session.close()

@@ -405,11 +405,20 @@ class QlibFormatConverter:
         if stock_code is None:
             return df
 
-        try:
-            return df.xs(stock_code, level=0, drop_level=False)
-        except KeyError:
-            logger.warning(f"股票 {stock_code} 不在数据中")
-            return pd.DataFrame()
+        candidate_codes = [stock_code]
+        if "." in stock_code:
+            candidate_codes.append(stock_code.replace(".", "_"))
+        elif "_" in stock_code:
+            candidate_codes.append(stock_code.replace("_", "."))
+
+        for candidate in dict.fromkeys(candidate_codes):
+            try:
+                return df.xs(candidate, level=0, drop_level=False)
+            except KeyError:
+                continue
+
+        logger.warning(f"股票 {stock_code} 不在数据中")
+        return pd.DataFrame()
 
     def _filter_by_date_range(
         self,
