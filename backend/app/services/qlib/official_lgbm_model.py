@@ -114,9 +114,9 @@ class StockPlatformLGBModel(ModelFT, LightGBMFInt):
         self.model = lgb.train(
             self.params,
             ds[0],
-            num_boost_round=self.num_boost_round
-            if num_boost_round is None
-            else num_boost_round,
+            num_boost_round=(
+                self.num_boost_round if num_boost_round is None else num_boost_round
+            ),
             valid_sets=ds,
             valid_names=names,
             callbacks=callbacks,

@@ -683,7 +683,9 @@ async def train_model_task(
             config.official_market = official_market or final_hyperparameters.get(
                 "official_market"
             )
-            config.official_max_stocks = final_hyperparameters.get("official_max_stocks")
+            config.official_max_stocks = final_hyperparameters.get(
+                "official_max_stocks"
+            )
 
             # 使用统一Qlib训练引擎训练模型
             result = await training_engine.train_model(
@@ -1497,7 +1499,9 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
             hyperparameters.setdefault("close_cost", official_config.close_cost)
             hyperparameters.setdefault("min_cost", official_config.min_cost)
             if not request.stock_codes and not request.official_max_stocks:
-                hyperparameters.setdefault("official_stock_pool", official_config.market)
+                hyperparameters.setdefault(
+                    "official_stock_pool", official_config.market
+                )
 
         # 创建模型记录
         model_info = ModelInfo(

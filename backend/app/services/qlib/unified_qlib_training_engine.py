@@ -1383,7 +1383,9 @@ class UnifiedQlibTrainingEngine:
 
                         R.log_metrics = original_log_metrics  # type: ignore[method-assign]
                     except Exception:
-                        logger.debug("恢复 Qlib workflow metric logging 失败", exc_info=True)
+                        logger.debug(
+                            "恢复 Qlib workflow metric logging 失败", exc_info=True
+                        )
 
             # 优先使用官方 evals_result 重建训练历史
             try:
@@ -1645,11 +1647,11 @@ class UnifiedQlibTrainingEngine:
                     test_shape = (
                         test_pred.shape
                         if hasattr(test_pred, "shape")
-                        else len(test_pred)
-                        if hasattr(test_pred, "__len__")
-                        else "N/A"
+                        else len(test_pred) if hasattr(test_pred, "__len__") else "N/A"
                     )
-                    logger.info(f"测试集预测结果: 类型={type(test_pred)}, 形状={test_shape}")
+                    logger.info(
+                        f"测试集预测结果: 类型={type(test_pred)}, 形状={test_shape}"
+                    )
                     test_metrics = self._calculate_metrics(
                         test_dataset, test_pred, "测试集", model_id
                     )
@@ -1661,8 +1663,12 @@ class UnifiedQlibTrainingEngine:
                         f"测试集评估失败，保留默认测试指标: {e}", exc_info=True
                     )
 
-            train_samples = len(train_dataset) if hasattr(train_dataset, "__len__") else 0
-            validation_samples = len(val_dataset) if hasattr(val_dataset, "__len__") else 0
+            train_samples = (
+                len(train_dataset) if hasattr(train_dataset, "__len__") else 0
+            )
+            validation_samples = (
+                len(val_dataset) if hasattr(val_dataset, "__len__") else 0
+            )
             test_samples = (
                 len(test_dataset)
                 if test_dataset is not None and hasattr(test_dataset, "__len__")
@@ -1672,7 +1678,9 @@ class UnifiedQlibTrainingEngine:
             segment_evaluation = {
                 "train": {
                     "dataset_samples": train_samples,
-                    "evaluated_samples": int(training_metrics.get("sample_count", 0) or 0),
+                    "evaluated_samples": int(
+                        training_metrics.get("sample_count", 0) or 0
+                    ),
                     "performance_metrics": training_metrics,
                     "signal_quality": self._calculate_signal_quality(
                         train_dataset, train_pred, "训练集"
@@ -1680,7 +1688,9 @@ class UnifiedQlibTrainingEngine:
                 },
                 "validation": {
                     "dataset_samples": validation_samples,
-                    "evaluated_samples": int(validation_metrics.get("sample_count", 0) or 0),
+                    "evaluated_samples": int(
+                        validation_metrics.get("sample_count", 0) or 0
+                    ),
                     "performance_metrics": validation_metrics,
                     "signal_quality": validation_signal_quality,
                 },
@@ -1730,7 +1740,10 @@ class UnifiedQlibTrainingEngine:
                         "dataset_samples": 0,
                         "evaluated_samples": 0,
                         "performance_metrics": default_metrics,
-                        "signal_quality": {**default_signal_quality, "analysis_scope": "train"},
+                        "signal_quality": {
+                            **default_signal_quality,
+                            "analysis_scope": "train",
+                        },
                     },
                     "validation": {
                         "dataset_samples": 0,
@@ -1742,7 +1755,10 @@ class UnifiedQlibTrainingEngine:
                         "dataset_samples": 0,
                         "evaluated_samples": 0,
                         "performance_metrics": default_metrics,
-                        "signal_quality": {**default_signal_quality, "analysis_scope": "test"},
+                        "signal_quality": {
+                            **default_signal_quality,
+                            "analysis_scope": "test",
+                        },
                     },
                 },
             )

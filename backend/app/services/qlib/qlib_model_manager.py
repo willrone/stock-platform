@@ -201,7 +201,9 @@ class LightGBMAdapter(BaseModelAdapter):
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
         requested_loss = str(hyperparameters.get("loss", "mse")).lower()
-        qlib_supported_loss = requested_loss if requested_loss in {"mse", "binary"} else "mse"
+        qlib_supported_loss = (
+            requested_loss if requested_loss in {"mse", "binary"} else "mse"
+        )
         kwargs: Dict[str, Any] = {
             "loss": qlib_supported_loss,
             "learning_rate": hyperparameters.get("learning_rate", 0.1),

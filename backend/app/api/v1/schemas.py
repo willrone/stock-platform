@@ -131,7 +131,8 @@ class ModelTrainingRequest(BaseModel):
         None, description="官方复现市场，如 csi300/csi500"
     )
     official_max_stocks: Optional[int] = Field(
-        None, description="官方复现自动发现股票池时的最大股票数量；为空则使用全部本地可用股票"
+        None,
+        description="官方复现自动发现股票池时的最大股票数量；为空则使用全部本地可用股票",
     )
 
 
