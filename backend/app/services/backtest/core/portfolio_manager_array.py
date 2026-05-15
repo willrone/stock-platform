@@ -99,56 +99,82 @@ class PortfolioManagerArray:
 
         return float(total_value)
 
-    def get_position(self, stock_code: str) -> Optional[Position]:
+    def get_position(
+        self, stock_code: str, current_price: Optional[float] = None
+    ) -> Optional[Position]:
         """获取持仓信息（兼容接口）"""
         idx = self.code_to_idx.get(stock_code)
         if idx is None or self.quantities[idx] <= 0:
             return None
 
+        price = float(current_price or 0.0)
+        quantity = int(self.quantities[idx])
+        avg_cost = float(self.avg_costs[idx])
+        market_value = float(quantity * price) if price > 0 else 0.0
+        unrealized_pnl = market_value - float(quantity * avg_cost) if price > 0 else 0.0
         return Position(
             stock_code=stock_code,
-            quantity=int(self.quantities[idx]),
-            avg_cost=float(self.avg_costs[idx]),
-            current_price=0.0,  # 需要外部提供
-            market_value=0.0,
-            unrealized_pnl=0.0,
+            quantity=quantity,
+            avg_cost=avg_cost,
+            current_price=price,
+            market_value=market_value,
+            unrealized_pnl=unrealized_pnl,
             realized_pnl=float(self.realized_pnl[idx]),
         )
+
+    def has_position(self, stock_code: str) -> bool:
+        """Return whether a stock currently has positive quantity."""
+        idx = self.code_to_idx.get(stock_code)
+        return bool(idx is not None and self.quantities[idx] > 0)
+
+    def get_position_count(self) -> int:
+        """Return current holding count without materializing Position objects."""
+        return int(np.count_nonzero(self.quantities > 0))
+
+    def get_position_codes(self) -> List[str]:
+        """Return current holding codes without building a full positions dict."""
+        indices = np.nonzero(self.quantities > 0)[0]
+        return [self.stock_codes[int(i)] for i in indices]
+
+    @property
+    def positions_array(self) -> np.ndarray:
+        """Compatibility alias used by vectorized helpers."""
+        return self.quantities
 
     @property
     def positions(self) -> Dict[str, Position]:
         """返回持仓字典（兼容接口）"""
         result = {}
-        for i in range(self.n_stocks):
-            if self.quantities[i] > 0:
-                code = self.stock_codes[i]
-                result[code] = Position(
-                    stock_code=code,
-                    quantity=int(self.quantities[i]),
-                    avg_cost=float(self.avg_costs[i]),
-                    current_price=0.0,
-                    market_value=0.0,
-                    unrealized_pnl=0.0,
-                    realized_pnl=float(self.realized_pnl[i]),
-                )
+        for i in np.nonzero(self.quantities > 0)[0]:
+            idx = int(i)
+            code = self.stock_codes[idx]
+            result[code] = Position(
+                stock_code=code,
+                quantity=int(self.quantities[idx]),
+                avg_cost=float(self.avg_costs[idx]),
+                current_price=0.0,
+                market_value=0.0,
+                unrealized_pnl=0.0,
+                realized_pnl=float(self.realized_pnl[idx]),
+            )
         return result
 
     @property
     def positions_without_cost(self) -> Dict[str, Position]:
         """返回无成本持仓字典（兼容接口）"""
         result = {}
-        for i in range(self.n_stocks):
-            if self.quantities_without_cost[i] > 0:
-                code = self.stock_codes[i]
-                result[code] = Position(
-                    stock_code=code,
-                    quantity=int(self.quantities_without_cost[i]),
-                    avg_cost=float(self.avg_costs_without_cost[i]),
-                    current_price=0.0,
-                    market_value=0.0,
-                    unrealized_pnl=0.0,
-                    realized_pnl=float(self.realized_pnl_without_cost[i]),
-                )
+        for i in np.nonzero(self.quantities_without_cost > 0)[0]:
+            idx = int(i)
+            code = self.stock_codes[idx]
+            result[code] = Position(
+                stock_code=code,
+                quantity=int(self.quantities_without_cost[idx]),
+                avg_cost=float(self.avg_costs_without_cost[idx]),
+                current_price=0.0,
+                market_value=0.0,
+                unrealized_pnl=0.0,
+                realized_pnl=float(self.realized_pnl_without_cost[idx]),
+            )
         return result
 
     def execute_signal(

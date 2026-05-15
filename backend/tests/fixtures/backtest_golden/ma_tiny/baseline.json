@@ -1,0 +1,1547 @@
+{
+  "annualized_return": 0.20040505327720148,
+  "backtest_config": {
+    "close_cost": 0.0,
+    "commission_rate": 0.001,
+    "end_date": "2024-06-30T00:00:00",
+    "initial_cash": 100000.0,
+    "max_position_size": 0.2,
+    "min_cost": 0.0,
+    "open_cost": 0.0,
+    "slippage_rate": 0.001,
+    "start_date": "2024-01-01T00:00:00",
+    "strategy_config": {
+      "long_window": 10,
+      "short_window": 3
+    },
+    "strategy_name": "moving_average"
+  },
+  "best_month": 0.09140398664602856,
+  "best_performing_stock": {
+    "avg_pnl_per_trade": 1863.98431385394,
+    "stock_code": "000002.SZ",
+    "total_pnl": 3727.96862770788,
+    "trade_count": 2
+  },
+  "cost_statistics": {
+    "cost_ratio": 0.002211220938354864,
+    "total_commission": 110.55625072487979,
+    "total_cost": 221.1220938354864,
+    "total_slippage": 110.56584311060662
+  },
+  "end_date": "2024-06-30T00:00:00",
+  "excess_return_with_cost": {
+    "annualized_return": 0.20040505327720148,
+    "information_ratio": null,
+    "max_drawdown": -0.09200010912232849,
+    "mean": null,
+    "std": null
+  },
+  "excess_return_without_cost": {
+    "annualized_return": 0.0,
+    "information_ratio": 0.0,
+    "max_drawdown": 0.0,
+    "mean": 0.0,
+    "std": 0.0
+  },
+  "final_value": 109371.26363299736,
+  "golden_case": {
+    "backtest_config": {
+      "board_lot_size": 100,
+      "cash_reserve_ratio": 0.05,
+      "close_cost": 0.0,
+      "commission_rate": 0.001,
+      "initial_cash": 100000.0,
+      "max_position_size": 0.2,
+      "min_cost": 0.0,
+      "open_cost": 0.0,
+      "portfolio_history_stride": 1,
+      "record_portfolio_history": true,
+      "record_positions_in_history": true,
+      "slippage_rate": 0.001
+    },
+    "data_source": "synthetic",
+    "description": "Tiny moving-average semantics guard: quick local diff with trades and equity curve.",
+    "end": "2024-06-30",
+    "name": "ma_tiny",
+    "prediction_source": null,
+    "start": "2024-01-01",
+    "stock_codes": [
+      "000001.SZ",
+      "000002.SZ",
+      "600000.SH"
+    ],
+    "strategy_config": {
+      "long_window": 10,
+      "short_window": 3
+    },
+    "strategy_name": "moving_average"
+  },
+  "initial_cash": 100000.0,
+  "losing_trades": 0,
+  "max_drawdown": -0.09200010912232849,
+  "metrics": {
+    "annualized_return": 0.20040505327720148,
+    "max_drawdown": -0.09200010912232849,
+    "profit_factor": Infinity,
+    "sharpe_ratio": 2.987179020168566,
+    "total_return": 0.0937126363299736,
+    "total_trades": 6,
+    "volatility": 0.06708839742249283,
+    "win_rate": 1.0
+  },
+  "monthly_return_mean": 0.02021879640779365,
+  "monthly_return_std": 0.07294285541713771,
+  "monthly_returns_detail": [
+    {
+      "month": "2024-02",
+      "return": 0.07805750701778424
+    },
+    {
+      "month": "2024-03",
+      "return": -0.08871392074113726
+    },
+    {
+      "month": "2024-04",
+      "return": 0.09140398664602856
+    },
+    {
+      "month": "2024-05",
+      "return": -0.00984963458461141
+    },
+    {
+      "month": "2024-06",
+      "return": 0.03019604370090412
+    }
+  ],
+  "negative_months": 2,
+  "official_portfolio_analysis": {
+    "benchmark": null,
+    "excess_return_with_cost": {
+      "annualized_return": 0.20040505327720148,
+      "information_ratio": null,
+      "max_drawdown": -0.09200010912232849,
+      "mean": null,
+      "std": null
+    },
+    "excess_return_without_cost": {
+      "annualized_return": 0.0,
+      "information_ratio": 0.0,
+      "max_drawdown": 0.0,
+      "mean": 0.0,
+      "std": 0.0
+    }
+  },
+  "portfolio_history": [
+    {
+      "cash": 100000.0,
+      "date": "2024-01-01T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-02T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-03T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-04T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-05T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-08T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-09T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-10T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-11T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-12T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-15T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-16T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-17T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-18T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-19T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-22T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-23T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-24T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-25T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-26T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-29T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-30T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-31T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-01T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-02T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-05T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-06T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-07T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-08T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-09T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 80570.2975644925,
+      "date": "2024-02-12T00:00:00",
+      "portfolio_value": 99961.19880661453,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.0003880119338547229,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 80570.2975644925,
+      "date": "2024-02-13T00:00:00",
+      "portfolio_value": 100296.74519749625,
+      "portfolio_value_without_cost": 100335.54639088172,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0029674519749624596,
+      "total_return_without_cost": 0.0033554639088171825
+    },
+    {
+      "cash": 80570.2975644925,
+      "date": "2024-02-14T00:00:00",
+      "portfolio_value": 100674.51461308042,
+      "portfolio_value_without_cost": 100713.3158064659,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.006745146130804206,
+      "total_return_without_cost": 0.007133158064658928
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-15T00:00:00",
+      "portfolio_value": 101052.20040959785,
+      "portfolio_value_without_cost": 101122.8389201238,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.010522004095978482,
+      "total_return_without_cost": 0.011228389201238025
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-16T00:00:00",
+      "portfolio_value": 101775.74888860092,
+      "portfolio_value_without_cost": 101846.38739912688,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.017757488886009233,
+      "total_return_without_cost": 0.018463873991268774
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-19T00:00:00",
+      "portfolio_value": 102546.2443246603,
+      "portfolio_value_without_cost": 102616.88283518626,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.02546244324660307,
+      "total_return_without_cost": 0.026168828351862614
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-20T00:00:00",
+      "portfolio_value": 103342.00100165495,
+      "portfolio_value_without_cost": 103412.6395121809,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0334200100165495,
+      "total_return_without_cost": 0.03412639512180904
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-21T00:00:00",
+      "portfolio_value": 104140.63312513159,
+      "portfolio_value_without_cost": 104211.27163565754,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.04140633125131586,
+      "total_return_without_cost": 0.0421127163565754
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-22T00:00:00",
+      "portfolio_value": 104919.6752118449,
+      "portfolio_value_without_cost": 104990.31372237085,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.04919675211844893,
+      "total_return_without_cost": 0.049903137223708476
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-23T00:00:00",
+      "portfolio_value": 105657.20468775573,
+      "portfolio_value_without_cost": 105727.84319828168,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0565720468775573,
+      "total_return_without_cost": 0.05727843198281684
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-26T00:00:00",
+      "portfolio_value": 106332.4494400952,
+      "portfolio_value_without_cost": 106403.08795062115,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06332449440095195,
+      "total_return_without_cost": 0.06403087950621149
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-27T00:00:00",
+      "portfolio_value": 106926.36348607775,
+      "portfolio_value_without_cost": 106997.0019966037,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06926363486077752,
+      "total_return_without_cost": 0.06997001996603706
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-28T00:00:00",
+      "portfolio_value": 107422.1548044475,
+      "portfolio_value_without_cost": 107492.79331497346,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07422154804447506,
+      "total_return_without_cost": 0.0749279331497346
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-02-29T00:00:00",
+      "portfolio_value": 107805.75070177842,
+      "portfolio_value_without_cost": 107876.38921230438,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07805750701778423,
+      "total_return_without_cost": 0.07876389212304377
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-01T00:00:00",
+      "portfolio_value": 108066.18781658258,
+      "portfolio_value_without_cost": 108136.82632710853,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08066187816582576,
+      "total_return_without_cost": 0.0813682632710853
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-04T00:00:00",
+      "portfolio_value": 108195.91595283296,
+      "portfolio_value_without_cost": 108266.55446335892,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08195915952832962,
+      "total_return_without_cost": 0.08266554463358916
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-05T00:00:00",
+      "portfolio_value": 108191.00732259947,
+      "portfolio_value_without_cost": 108261.64583312543,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08191007322599471,
+      "total_return_without_cost": 0.08261645833125425
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-06T00:00:00",
+      "portfolio_value": 108051.26539894463,
+      "portfolio_value_without_cost": 108121.90390947058,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08051265398944626,
+      "total_return_without_cost": 0.0812190390947058
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-07T00:00:00",
+      "portfolio_value": 107780.23036237998,
+      "portfolio_value_without_cost": 107850.86887290594,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07780230362379982,
+      "total_return_without_cost": 0.07850868872905936
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-08T00:00:00",
+      "portfolio_value": 107385.08098994308,
+      "portfolio_value_without_cost": 107455.71950046903,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07385080989943076,
+      "total_return_without_cost": 0.0745571950046903
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-11T00:00:00",
+      "portfolio_value": 106876.43570589527,
+      "portfolio_value_without_cost": 106947.07421642123,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06876435705895274,
+      "total_return_without_cost": 0.06947074216421228
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-12T00:00:00",
+      "portfolio_value": 106268.05830762937,
+      "portfolio_value_without_cost": 106338.69681815532,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06268058307629369,
+      "total_return_without_cost": 0.06338696818155323
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-13T00:00:00",
+      "portfolio_value": 105576.47652216312,
+      "portfolio_value_without_cost": 105647.11503268908,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.05576476522163124,
+      "total_return_without_cost": 0.05647115032689078
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-14T00:00:00",
+      "portfolio_value": 104820.52396436708,
+      "portfolio_value_without_cost": 104891.16247489303,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.048205239643670794,
+      "total_return_without_cost": 0.048911624748930335
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-15T00:00:00",
+      "portfolio_value": 104020.81819088431,
+      "portfolio_value_without_cost": 104091.45670141026,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.04020818190884311,
+      "total_return_without_cost": 0.04091456701410265
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-18T00:00:00",
+      "portfolio_value": 103199.18931471423,
+      "portfolio_value_without_cost": 103269.82782524018,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.03199189314714226,
+      "total_return_without_cost": 0.0326982782524018
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-19T00:00:00",
+      "portfolio_value": 102378.07501557092,
+      "portfolio_value_without_cost": 102448.71352609688,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.023780750155709247,
+      "total_return_without_cost": 0.02448713526096879
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-20T00:00:00",
+      "portfolio_value": 101579.89871241913,
+      "portfolio_value_without_cost": 101650.53722294509,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.015798987124191335,
+      "total_return_without_cost": 0.016505372229450876
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-21T00:00:00",
+      "portfolio_value": 100826.44813122583,
+      "portfolio_value_without_cost": 100897.08664175178,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.008264481312258286,
+      "total_return_without_cost": 0.008970866417517827
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-22T00:00:00",
+      "portfolio_value": 100138.27149001326,
+      "portfolio_value_without_cost": 100208.91000053921,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0013827149001325598,
+      "total_return_without_cost": 0.0020891000053921017
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-25T00:00:00",
+      "portfolio_value": 99534.10803506113,
+      "portfolio_value_without_cost": 99604.74654558708,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.004658919649388699,
+      "total_return_without_cost": -0.003952534544129157
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-26T00:00:00",
+      "portfolio_value": 99030.36871011376,
+      "portfolio_value_without_cost": 99101.00722063972,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.009696312898862379,
+      "total_return_without_cost": -0.008989927793602838
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-27T00:00:00",
+      "portfolio_value": 98640.68135108556,
+      "portfolio_value_without_cost": 98711.31986161151,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.013593186489144428,
+      "total_return_without_cost": -0.012886801383884885
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-28T00:00:00",
+      "portfolio_value": 98375.51301052785,
+      "portfolio_value_without_cost": 98446.1515210538,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.016244869894721486,
+      "total_return_without_cost": -0.015538484789461945
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-03-29T00:00:00",
+      "portfolio_value": 98241.87987858205,
+      "portfolio_value_without_cost": 98312.51838910801,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.017581201214179453,
+      "total_return_without_cost": -0.016874816108919912
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-01T00:00:00",
+      "portfolio_value": 98243.15283953547,
+      "portfolio_value_without_cost": 98313.79135006142,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.01756847160464531,
+      "total_return_without_cost": -0.016862086499385767
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-02T00:00:00",
+      "portfolio_value": 98378.96405269526,
+      "portfolio_value_without_cost": 98449.60256322121,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.016210359473047428,
+      "total_return_without_cost": -0.015503974367787887
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-03T00:00:00",
+      "portfolio_value": 98645.21714655515,
+      "portfolio_value_without_cost": 98715.8556570811,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.01354782853444849,
+      "total_return_without_cost": -0.012841443429188948
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-04T00:00:00",
+      "portfolio_value": 99034.20074373808,
+      "portfolio_value_without_cost": 99104.83925426404,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.009657992562619183,
+      "total_return_without_cost": -0.008951607457359642
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-05T00:00:00",
+      "portfolio_value": 99534.80217053759,
+      "portfolio_value_without_cost": 99605.44068106354,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": -0.004651978294624132,
+      "total_return_without_cost": -0.00394559318936459
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-08T00:00:00",
+      "portfolio_value": 100132.81542841035,
+      "portfolio_value_without_cost": 100203.4539389363,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0013281542841035116,
+      "total_return_without_cost": 0.0020345393893630537
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-09T00:00:00",
+      "portfolio_value": 100811.33489244056,
+      "portfolio_value_without_cost": 100881.97340296651,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.008113348924405581,
+      "total_return_without_cost": 0.008819734029665124
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-10T00:00:00",
+      "portfolio_value": 101551.2238259995,
+      "portfolio_value_without_cost": 101621.86233652546,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.015512238259995065,
+      "total_return_without_cost": 0.016218623365254606
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-11T00:00:00",
+      "portfolio_value": 102331.64472740174,
+      "portfolio_value_without_cost": 102402.2832379277,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.02331644727401741,
+      "total_return_without_cost": 0.02402283237927695
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-12T00:00:00",
+      "portfolio_value": 103130.63681077643,
+      "portfolio_value_without_cost": 103201.27532130238,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.031306368107764285,
+      "total_return_without_cost": 0.032012753213023826
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-15T00:00:00",
+      "portfolio_value": 103925.72461711628,
+      "portfolio_value_without_cost": 103996.36312764224,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.03925724617116284,
+      "total_return_without_cost": 0.039963631276422384
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-16T00:00:00",
+      "portfolio_value": 104694.54088873965,
+      "portfolio_value_without_cost": 104765.1793992656,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.04694540888739648,
+      "total_return_without_cost": 0.04765179399265602
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-17T00:00:00",
+      "portfolio_value": 105415.44644511097,
+      "portfolio_value_without_cost": 105486.08495563692,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.05415446445110967,
+      "total_return_without_cost": 0.05486084955636921
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-18T00:00:00",
+      "portfolio_value": 106068.12988106842,
+      "portfolio_value_without_cost": 106138.76839159438,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06068129881068424,
+      "total_return_without_cost": 0.06138768391594378
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-19T00:00:00",
+      "portfolio_value": 106634.17046770002,
+      "portfolio_value_without_cost": 106704.80897822598,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06634170467700023,
+      "total_return_without_cost": 0.06704808978225978
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-22T00:00:00",
+      "portfolio_value": 107097.54865589339,
+      "portfolio_value_without_cost": 107168.18716641935,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07097548655893392,
+      "total_return_without_cost": 0.07168187166419346
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-23T00:00:00",
+      "portfolio_value": 107445.09003470084,
+      "portfolio_value_without_cost": 107515.7285452268,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07445090034700842,
+      "total_return_without_cost": 0.07515728545226796
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-24T00:00:00",
+      "portfolio_value": 107666.83044086302,
+      "portfolio_value_without_cost": 107737.46895138898,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0766683044086302,
+      "total_return_without_cost": 0.07737468951388975
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-25T00:00:00",
+      "portfolio_value": 107756.2921010148,
+      "portfolio_value_without_cost": 107826.93061154075,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07756292101014799,
+      "total_return_without_cost": 0.07826930611540753
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-26T00:00:00",
+      "portfolio_value": 107710.6631536962,
+      "portfolio_value_without_cost": 107781.30166422215,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07710663153696194,
+      "total_return_without_cost": 0.07781301664222148
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-29T00:00:00",
+      "portfolio_value": 107530.8755759788,
+      "portfolio_value_without_cost": 107601.51408650476,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07530875575978804,
+      "total_return_without_cost": 0.07601514086504758
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-04-30T00:00:00",
+      "portfolio_value": 107221.57935508472,
+      "portfolio_value_without_cost": 107292.21786561067,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07221579355084716,
+      "total_return_without_cost": 0.0729221786561067
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-05-01T00:00:00",
+      "portfolio_value": 106791.01362079421,
+      "portfolio_value_without_cost": 106861.65213132017,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06791013620794212,
+      "total_return_without_cost": 0.06861652131320166
+    },
+    {
+      "cash": 64627.75702872097,
+      "date": "2024-05-02T00:00:00",
+      "portfolio_value": 106250.77831001881,
+      "portfolio_value_without_cost": 106321.41682054476,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0625077831001881,
+      "total_return_without_cost": 0.06321416820544765
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-03T00:00:00",
+      "portfolio_value": 105577.98439511,
+      "portfolio_value_without_cost": 105686.15120204787,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.05577984395110005,
+      "total_return_without_cost": 0.05686151202047869
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-06T00:00:00",
+      "portfolio_value": 105157.80552066112,
+      "portfolio_value_without_cost": 105265.97232759898,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.05157805520661117,
+      "total_return_without_cost": 0.05265972327598982
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-07T00:00:00",
+      "portfolio_value": 104722.54932331377,
+      "portfolio_value_without_cost": 104830.71613025163,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.047225493233137676,
+      "total_return_without_cost": 0.048307161302516326
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-08T00:00:00",
+      "portfolio_value": 104284.27829174281,
+      "portfolio_value_without_cost": 104392.44509868068,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.04284278291742812,
+      "total_return_without_cost": 0.04392445098680677
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-09T00:00:00",
+      "portfolio_value": 103855.13846634259,
+      "portfolio_value_without_cost": 103963.30527328045,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.03855138466342585,
+      "total_return_without_cost": 0.0396330527328045
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-10T00:00:00",
+      "portfolio_value": 103447.02282948847,
+      "portfolio_value_without_cost": 103555.18963642634,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.034470228294884726,
+      "total_return_without_cost": 0.035551896364263376
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-13T00:00:00",
+      "portfolio_value": 103071.24170893135,
+      "portfolio_value_without_cost": 103179.40851586922,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.03071241708931353,
+      "total_return_without_cost": 0.03179408515869218
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-14T00:00:00",
+      "portfolio_value": 102738.2093286124,
+      "portfolio_value_without_cost": 102846.37613555026,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.027382093286124,
+      "total_return_without_cost": 0.02846376135550265
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-15T00:00:00",
+      "portfolio_value": 102457.15519368385,
+      "portfolio_value_without_cost": 102565.32200062172,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.024571551936838514,
+      "total_return_without_cost": 0.025653220006217163
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-16T00:00:00",
+      "portfolio_value": 102235.8683082777,
+      "portfolio_value_without_cost": 102344.03511521556,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.022358683082776987,
+      "total_return_without_cost": 0.023440351152155637
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-17T00:00:00",
+      "portfolio_value": 102080.4813146524,
+      "portfolio_value_without_cost": 102188.64812159026,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.020804813146523958,
+      "total_return_without_cost": 0.021886481215902604
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-20T00:00:00",
+      "portfolio_value": 101995.30053598556,
+      "portfolio_value_without_cost": 102103.46734292342,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.019953005359855596,
+      "total_return_without_cost": 0.021034673429234246
+    },
+    {
+      "cash": 83363.76370575503,
+      "date": "2024-05-21T00:00:00",
+      "portfolio_value": 101982.68663292774,
+      "portfolio_value_without_cost": 102090.8534398656,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0198268663292774,
+      "total_return_without_cost": 0.02090853439865605
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-22T00:00:00",
+      "portfolio_value": 102012.60374775993,
+      "portfolio_value_without_cost": 102151.1559882843,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.02012603747759931,
+      "total_return_without_cost": 0.021511559882842993
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-23T00:00:00",
+      "portfolio_value": 102378.05701554962,
+      "portfolio_value_without_cost": 102516.609256074,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.023780570155496242,
+      "total_return_without_cost": 0.02516609256074007
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-24T00:00:00",
+      "portfolio_value": 102844.33759076054,
+      "portfolio_value_without_cost": 102982.8898312849,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.02844337590760537,
+      "total_return_without_cost": 0.029828898312849052
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-27T00:00:00",
+      "portfolio_value": 103398.68947069909,
+      "portfolio_value_without_cost": 103537.24171122344,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.03398689470699086,
+      "total_return_without_cost": 0.0353724171122344
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-28T00:00:00",
+      "portfolio_value": 104025.91588532059,
+      "portfolio_value_without_cost": 104164.46812584496,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.040259158853205884,
+      "total_return_without_cost": 0.04164468125844956
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-29T00:00:00",
+      "portfolio_value": 104708.80045347623,
+      "portfolio_value_without_cost": 104847.35269400058,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.04708800453476229,
+      "total_return_without_cost": 0.04847352694000583
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-30T00:00:00",
+      "portfolio_value": 105428.5843097269,
+      "portfolio_value_without_cost": 105567.13655025125,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.05428584309726895,
+      "total_return_without_cost": 0.05567136550251249
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-05-31T00:00:00",
+      "portfolio_value": 106165.48597885222,
+      "portfolio_value_without_cost": 106304.03821937658,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06165485978852216,
+      "total_return_without_cost": 0.06304038219376584
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-03T00:00:00",
+      "portfolio_value": 106899.24959049348,
+      "portfolio_value_without_cost": 107037.80183101784,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.06899249590493477,
+      "total_return_without_cost": 0.07037801831017845
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-04T00:00:00",
+      "portfolio_value": 107609.70624096383,
+      "portfolio_value_without_cost": 107748.25848148821,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.07609706240963832,
+      "total_return_without_cost": 0.07748258481488214
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-05T00:00:00",
+      "portfolio_value": 108277.33294490422,
+      "portfolio_value_without_cost": 108415.8851854286,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08277332944904221,
+      "total_return_without_cost": 0.08415885185428604
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-06T00:00:00",
+      "portfolio_value": 108883.79368625805,
+      "portfolio_value_without_cost": 109022.34592678242,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08883793686258054,
+      "total_return_without_cost": 0.09022345926782421
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-07T00:00:00",
+      "portfolio_value": 109412.44757412835,
+      "portfolio_value_without_cost": 109550.99981465272,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.09412447574128353,
+      "total_return_without_cost": 0.09550999814652722
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-10T00:00:00",
+      "portfolio_value": 109848.81002072121,
+      "portfolio_value_without_cost": 109987.36226124558,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.09848810020721212,
+      "total_return_without_cost": 0.0998736226124558
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-11T00:00:00",
+      "portfolio_value": 110180.95416050372,
+      "portfolio_value_without_cost": 110319.50640102808,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.10180954160503723,
+      "total_return_without_cost": 0.10319506401028077
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-12T00:00:00",
+      "portfolio_value": 110399.84138583174,
+      "portfolio_value_without_cost": 110538.3936263561,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.10399841385831736,
+      "total_return_without_cost": 0.10538393626356105
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-13T00:00:00",
+      "portfolio_value": 110499.57183873608,
+      "portfolio_value_without_cost": 110638.12407926045,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.10499571838736083,
+      "total_return_without_cost": 0.10638124079260451
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-14T00:00:00",
+      "portfolio_value": 110477.54791685398,
+      "portfolio_value_without_cost": 110616.10015737834,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.10477547916853976,
+      "total_return_without_cost": 0.10616100157378343
+    },
+    {
+      "cash": 68148.25404103471,
+      "date": "2024-06-17T00:00:00",
+      "portfolio_value": 110334.54626217786,
+      "portfolio_value_without_cost": 110473.09850270221,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.10334546262177857,
+      "total_return_without_cost": 0.1047309850270221
+    },
+    {
+      "cash": 86233.00286192534,
+      "date": "2024-06-18T00:00:00",
+      "portfolio_value": 110038.4724132411,
+      "portfolio_value_without_cost": 110213.24847808326,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.10038472413241106,
+      "total_return_without_cost": 0.1021324847808326
+    },
+    {
+      "cash": 86233.00286192534,
+      "date": "2024-06-19T00:00:00",
+      "portfolio_value": 109896.4743569911,
+      "portfolio_value_without_cost": 110071.25042183325,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.09896474356991093,
+      "total_return_without_cost": 0.10071250421833247
+    },
+    {
+      "cash": 86233.00286192534,
+      "date": "2024-06-20T00:00:00",
+      "portfolio_value": 109687.59046946785,
+      "portfolio_value_without_cost": 109862.36653431,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.09687590469467847,
+      "total_return_without_cost": 0.0986236653431
+    },
+    {
+      "cash": 109371.26363299736,
+      "date": "2024-06-21T00:00:00",
+      "portfolio_value": 109371.26363299736,
+      "portfolio_value_without_cost": 109592.38572683284,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0937126363299736,
+      "total_return_without_cost": 0.09592385726832843
+    },
+    {
+      "cash": 109371.26363299736,
+      "date": "2024-06-24T00:00:00",
+      "portfolio_value": 109371.26363299736,
+      "portfolio_value_without_cost": 109592.38572683284,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0937126363299736,
+      "total_return_without_cost": 0.09592385726832843
+    },
+    {
+      "cash": 109371.26363299736,
+      "date": "2024-06-25T00:00:00",
+      "portfolio_value": 109371.26363299736,
+      "portfolio_value_without_cost": 109592.38572683284,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0937126363299736,
+      "total_return_without_cost": 0.09592385726832843
+    },
+    {
+      "cash": 109371.26363299736,
+      "date": "2024-06-26T00:00:00",
+      "portfolio_value": 109371.26363299736,
+      "portfolio_value_without_cost": 109592.38572683284,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0937126363299736,
+      "total_return_without_cost": 0.09592385726832843
+    },
+    {
+      "cash": 109371.26363299736,
+      "date": "2024-06-27T00:00:00",
+      "portfolio_value": 109371.26363299736,
+      "portfolio_value_without_cost": 109592.38572683284,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0937126363299736,
+      "total_return_without_cost": 0.09592385726832843
+    },
+    {
+      "cash": 109371.26363299736,
+      "date": "2024-06-28T00:00:00",
+      "portfolio_value": 109371.26363299736,
+      "portfolio_value_without_cost": 109592.38572683284,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0937126363299736,
+      "total_return_without_cost": 0.09592385726832843
+    }
+  ],
+  "positive_months": 3,
+  "profit_factor": Infinity,
+  "sharpe_ratio": 2.987179020168566,
+  "start_date": "2024-01-01T00:00:00",
+  "stock_codes": [
+    "000001.SZ",
+    "000002.SZ",
+    "600000.SH"
+  ],
+  "stock_performance_detail": [
+    {
+      "avg_pnl_per_trade": 1863.98431385394,
+      "stock_code": "000002.SZ",
+      "total_pnl": 3727.96862770788,
+      "trade_count": 2
+    },
+    {
+      "avg_pnl_per_trade": 1404.6963775921859,
+      "stock_code": "000001.SZ",
+      "total_pnl": 2809.3927551843717,
+      "trade_count": 2
+    },
+    {
+      "avg_pnl_per_trade": 1442.2197327628446,
+      "stock_code": "600000.SH",
+      "total_pnl": 2884.4394655256892,
+      "trade_count": 2
+    }
+  ],
+  "stocks_traded": 3,
+  "strategy_name": "moving_average",
+  "total_return": 0.0937126363299736,
+  "total_signals": 11,
+  "total_trades": 6,
+  "trade_history": [
+    {
+      "action": "BUY",
+      "commission": 19.410292143364135,
+      "pnl": 0.0,
+      "price": 11.417818907861257,
+      "quantity": 1700,
+      "slippage_cost": 19.390901242122016,
+      "stock_code": "000002.SZ",
+      "trade_id": "T000001"
+    },
+    {
+      "action": "BUY",
+      "commission": 15.926613921849688,
+      "pnl": 0.0,
+      "price": 7.963306960924844,
+      "quantity": 2000,
+      "slippage_cost": 15.91070321863106,
+      "stock_code": "000001.SZ",
+      "trade_id": "T000002"
+    },
+    {
+      "action": "SELL",
+      "commission": 18.75476143847253,
+      "pnl": 2809.3927551843717,
+      "price": 9.377380719236266,
+      "quantity": 2000,
+      "slippage_cost": 18.77353497344598,
+      "stock_code": "000001.SZ",
+      "trade_id": "T000003"
+    },
+    {
+      "action": "BUY",
+      "commission": 15.200309355364947,
+      "pnl": 0.0,
+      "price": 15.200309355364947,
+      "quantity": 1000,
+      "slippage_cost": 15.185124231133814,
+      "stock_code": "600000.SH",
+      "trade_id": "T000004"
+    },
+    {
+      "action": "SELL",
+      "commission": 18.1028516725632,
+      "pnl": 2884.4394655256892,
+      "price": 18.1028516725632,
+      "quantity": 1000,
+      "slippage_cost": 18.120972645208408,
+      "stock_code": "600000.SH",
+      "trade_id": "T000005"
+    },
+    {
+      "action": "SELL",
+      "commission": 23.16142219326528,
+      "pnl": 3727.96862770788,
+      "price": 13.6243659960384,
+      "quantity": 1700,
+      "slippage_cost": 23.184606800065342,
+      "stock_code": "000002.SZ",
+      "trade_id": "T000006"
+    }
+  ],
+  "trade_pnl_mean": 1570.3001414029902,
+  "trade_pnl_median": 1404.6963775921859,
+  "trade_pnl_std": 1750.1641961711607,
+  "trading_days": 130,
+  "volatility": 0.06708839742249283,
+  "win_rate": 1.0,
+  "winning_trades": 3,
+  "worst_month": -0.08871392074113726,
+  "worst_performing_stock": {
+    "avg_pnl_per_trade": 1404.6963775921859,
+    "stock_code": "000001.SZ",
+    "total_pnl": 2809.3927551843717,
+    "trade_count": 2
+  }
+}

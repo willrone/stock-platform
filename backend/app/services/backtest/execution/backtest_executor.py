@@ -1102,6 +1102,77 @@ class BacktestExecutor:
             "signal": signal,
         }
 
+    @staticmethod
+    def _get_position_codes_fast(portfolio_manager: Any) -> List[str]:
+        """Return holding codes without forcing full Position object materialization."""
+        getter = getattr(portfolio_manager, "get_position_codes", None)
+        if callable(getter):
+            return list(getter())
+        positions = getattr(portfolio_manager, "positions", {})
+        try:
+            return list(positions.keys())
+        except Exception:
+            return []
+
+    @staticmethod
+    def _get_position_count_fast(portfolio_manager: Any) -> int:
+        """Return holding count without forcing full Position object materialization."""
+        getter = getattr(portfolio_manager, "get_position_count", None)
+        if callable(getter):
+            return int(getter())
+        positions = getattr(portfolio_manager, "positions", {})
+        try:
+            return len(positions)
+        except Exception:
+            return 0
+
+    @staticmethod
+    def _has_position_fast(portfolio_manager: Any, stock_code: str) -> bool:
+        """Return whether a position exists without building a full positions dict."""
+        getter = getattr(portfolio_manager, "has_position", None)
+        if callable(getter):
+            return bool(getter(stock_code))
+        positions = getattr(portfolio_manager, "positions", {})
+        return stock_code in positions
+
+    @staticmethod
+    def _get_single_position_dict_fast(
+        portfolio_manager: Any, stock_code: str, current_prices: Dict[str, float]
+    ) -> Dict[str, Any]:
+        """Build a one-position dict for BaseStrategy.validate_signal.
+
+        BaseStrategy only checks the current signal's position on BUY. Passing a
+        one-entry mapping preserves that behavior while avoiding full portfolio
+        materialization for array-backed managers.
+        """
+        getter = getattr(portfolio_manager, "get_position", None)
+        if callable(getter):
+            try:
+                position = getter(stock_code, current_prices.get(stock_code))
+            except TypeError:
+                position = getter(stock_code)
+            return {stock_code: position} if position is not None else {}
+
+        positions = getattr(portfolio_manager, "positions", {})
+        position = positions.get(stock_code) if hasattr(positions, "get") else None
+        return {stock_code: position} if position is not None else {}
+
+    def _validate_signal_fast(
+        self,
+        *,
+        strategy: BaseStrategy,
+        signal: TradingSignal,
+        portfolio_manager: Any,
+        current_prices: Dict[str, float],
+    ) -> Tuple[bool, Optional[str]]:
+        return strategy.validate_signal(
+            signal,
+            portfolio_manager.get_portfolio_value(current_prices),
+            self._get_single_position_dict_fast(
+                portfolio_manager, signal.stock_code, current_prices
+            ),
+        )
+
     def _determine_price_lookup_codes(
         self,
         *,
@@ -1116,12 +1187,10 @@ class BacktestExecutor:
         after the portfolio already holds topk names; otherwise new entrants never
         receive prices and cannot compete into the ranking.
         """
-        from .vectorized_loop import get_portfolio_stocks
-
         codes = aligned_arrays.get("stock_codes") or []
         sig_mat = aligned_arrays.get("signal")
 
-        need_codes = set(get_portfolio_stocks(portfolio_manager))
+        need_codes = set(self._get_position_codes_fast(portfolio_manager))
         if isinstance(sig_mat, np.ndarray):
             sig_idx = np.nonzero(sig_mat[:, date_index])[0]
             for j in sig_idx.tolist():
@@ -1865,7 +1934,8 @@ class BacktestExecutor:
                         ):
                             logger.info(
                                 f"[trade_exec][topk_buffer] date={current_date.strftime('%Y-%m-%d')} trades_this_day={trades_this_day} "
-                                f"executed={len(executed_trade_signals)} unexecuted={len(unexecuted_signals)} holdings_after={len(portfolio_manager.positions)}"
+                                f"executed={len(executed_trade_signals)} unexecuted={len(unexecuted_signals)} "
+                                f"holdings_after={self._get_position_count_fast(portfolio_manager)}"
                             )
                     except Exception:
                         pass
@@ -1873,10 +1943,11 @@ class BacktestExecutor:
                 else:
                     for signal in all_signals:
                         # 验证信号
-                        is_valid, validation_reason = strategy.validate_signal(
-                            signal,
-                            portfolio_manager.get_portfolio_value(current_prices),
-                            portfolio_manager.positions,
+                        is_valid, validation_reason = self._validate_signal_fast(
+                            strategy=strategy,
+                            signal=signal,
+                            portfolio_manager=portfolio_manager,
+                            current_prices=current_prices,
                         )
 
                         if not is_valid:
@@ -2031,7 +2102,9 @@ class BacktestExecutor:
                         k_limit = None
 
                     if tm == "topk_buffer" and k_limit is not None:
-                        current_holdings = list(portfolio_manager.positions.keys())
+                        current_holdings = self._get_position_codes_fast(
+                            portfolio_manager
+                        )
                         if len(current_holdings) > int(k_limit):
                             logger.error(
                                 f"[topk_buffer][sanity] positions_count={len(current_holdings)} > topk={k_limit} "
@@ -2278,7 +2351,7 @@ class BacktestExecutor:
         buffer_list = [c for c, _ in ranked[: max(topk, topk + buffer_n)]]
         buffer_set = set(buffer_list)
 
-        holdings = list(portfolio_manager.positions.keys())
+        holdings = self._get_position_codes_fast(portfolio_manager)
         set(holdings)
 
         # Keep holdings inside buffer zone
@@ -2345,10 +2418,11 @@ class BacktestExecutor:
                 metadata={"trade_mode": "topk_buffer"},
             )
             if strategy is not None:
-                is_valid, validation_reason = strategy.validate_signal(
-                    sig,
-                    portfolio_manager.get_portfolio_value(current_prices),
-                    portfolio_manager.positions,
+                is_valid, validation_reason = self._validate_signal_fast(
+                    strategy=strategy,
+                    signal=sig,
+                    portfolio_manager=portfolio_manager,
+                    current_prices=current_prices,
                 )
                 if not is_valid:
                     unexecuted_signals.append(
@@ -2388,7 +2462,7 @@ class BacktestExecutor:
         # Guardrails:
         # 1) replacement 模式下：只允许用「成功卖出」换入，避免卖失败仍买导致持仓膨胀
         # 2) 任何情况下都不允许持仓数超过 topk
-        current_positions_n = len(portfolio_manager.positions)
+        current_positions_n = self._get_position_count_fast(portfolio_manager)
         remaining_capacity = max(0, topk - current_positions_n)
 
         if current_n >= topk:
@@ -2402,7 +2476,7 @@ class BacktestExecutor:
 
         for code in to_buy:
             # Hard cap: never allow positions to exceed topk (even if earlier logic misbehaves)
-            if len(portfolio_manager.positions) >= topk:
+            if self._get_position_count_fast(portfolio_manager) >= topk:
                 unexecuted_signals.append(
                     {
                         "stock_code": code,
@@ -2423,10 +2497,11 @@ class BacktestExecutor:
                 metadata={"trade_mode": "topk_buffer"},
             )
             if strategy is not None:
-                is_valid, validation_reason = strategy.validate_signal(
-                    sig,
-                    portfolio_manager.get_portfolio_value(current_prices),
-                    portfolio_manager.positions,
+                is_valid, validation_reason = self._validate_signal_fast(
+                    strategy=strategy,
+                    signal=sig,
+                    portfolio_manager=portfolio_manager,
+                    current_prices=current_prices,
                 )
                 if not is_valid:
                     unexecuted_signals.append(

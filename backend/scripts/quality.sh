@@ -145,8 +145,12 @@ main() {
       ensure_venv
       run_strict_baseline
       ;;
+    backtest-guard|backtest-golden)
+      ensure_venv
+      exec "$ROOT_DIR/scripts/backtest_optimization_guard.sh"
+      ;;
     *)
-      echo "用法: $0 [install|pytest|flake8|mypy|snapshot|baseline]" >&2
+      echo "用法: $0 [install|pytest|flake8|mypy|snapshot|baseline|backtest-guard]" >&2
       exit 2
       ;;
   esac
