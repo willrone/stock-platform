@@ -30,7 +30,7 @@ ensure_venv() {
 
 ensure_quality_deps() {
   log "安装/校验质量依赖"
-  "$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel
+  "$VENV_DIR/bin/python" -m pip install --upgrade pip "setuptools<82" wheel
   "$VENV_DIR/bin/python" -m pip install -r "$ROOT_DIR/requirements-quality.txt"
 }
 
@@ -47,12 +47,18 @@ run_and_capture() {
   return "$status"
 }
 
+run_pytest_target() {
+  local -a pytest_targets
+  read -r -a pytest_targets <<< "$PYTEST_TARGET"
+  "$VENV_DIR/bin/python" -m pytest "${pytest_targets[@]}" -q
+}
+
 run_snapshot() {
   local pytest_status=0
   local flake8_status=0
   local mypy_status=0
 
-  run_and_capture pytest "$VENV_DIR/bin/python" -m pytest "$PYTEST_TARGET" -q || pytest_status=$?
+  run_and_capture pytest run_pytest_target || pytest_status=$?
   run_and_capture flake8 "$VENV_DIR/bin/python" -m flake8 app tests || flake8_status=$?
   run_and_capture mypy "$VENV_DIR/bin/python" -m mypy app --ignore-missing-imports || mypy_status=$?
 
@@ -124,7 +130,7 @@ main() {
     pytest)
       ensure_venv
       ensure_quality_deps
-      exec "$VENV_DIR/bin/python" -m pytest "$PYTEST_TARGET" -q
+      run_pytest_target
       ;;
     flake8)
       ensure_venv
