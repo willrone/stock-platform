@@ -60,11 +60,14 @@ class QlibTrainingOrchestrator:
                 training_metrics,
                 validation_metrics,
                 signal_quality,
+                segment_evaluation,
+                test_samples,
             ) = await self._run_evaluation_stage(
                 request,
                 model,
                 train_dataset,
                 val_dataset,
+                dataset,
                 training_history,
             )
             feature_importance = await self._run_feature_importance_stage(
@@ -91,9 +94,11 @@ class QlibTrainingOrchestrator:
                 training_duration=training_duration,
                 train_samples=len(train_dataset),
                 validation_samples=len(val_dataset),
+                test_samples=test_samples,
                 feature_correlation=feature_correlation,
                 early_stopping_info=early_stopping_info,
                 signal_quality=signal_quality,
+                segment_evaluation=segment_evaluation,
             )
             self._log_training_success(
                 model_id=request.model_id,
@@ -216,18 +221,22 @@ class QlibTrainingOrchestrator:
         model: Any,
         train_dataset: Any,
         val_dataset: Any,
+        source_dataset: Any,
         training_history: Any,
-    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any], int]:
         await self._notify_progress(request, 85.0, "evaluating", "评估模型性能")
         self.engine.performance_monitor.start_stage("evaluate_model")
+        test_dataset = self.pipeline.prepare_test_dataset(source_dataset)
         (
             training_metrics,
             validation_metrics,
             signal_quality,
+            segment_evaluation,
         ) = await self.pipeline.evaluate(
             model,
             train_dataset,
             val_dataset,
+            test_dataset,
             request.model_id,
         )
         self.engine.performance_monitor.end_stage("evaluate_model")
@@ -245,9 +254,16 @@ class QlibTrainingOrchestrator:
                 "validation_metrics": validation_metrics,
                 "training_metrics": training_metrics,
                 "signal_quality": signal_quality,
+                "segment_evaluation": segment_evaluation,
             },
         )
-        return training_metrics, validation_metrics, signal_quality
+        return (
+            training_metrics,
+            validation_metrics,
+            signal_quality,
+            segment_evaluation,
+            len(test_dataset) if hasattr(test_dataset, "__len__") else 0,
+        )
 
     async def _run_feature_importance_stage(
         self, request: TrainingRequest, model: Any

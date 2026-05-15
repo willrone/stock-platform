@@ -24,6 +24,7 @@ v1_package = ModuleType("app.api.v1")
 v1_package.__path__ = [str(BACKEND_ROOT / "app" / "api" / "v1")]
 fake_torch = ModuleType("torch")
 fake_torch.Tensor = type("Tensor", (), {})
+fake_torch.device = lambda name: SimpleNamespace(type=name)
 sys.modules.setdefault("app.api", api_package)
 sys.modules.setdefault("app.api.v1", v1_package)
 

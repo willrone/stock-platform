@@ -99,6 +99,11 @@ class OfficialDatasetAdapter:
             primary_segment=segment,
         )
 
+    def prepare(self, segments: Any = None, *args: Any, **kwargs: Any) -> Any:
+        if segments is None:
+            segments = self.primary_segment
+        return self.dataset.prepare(segments, *args, **kwargs)
+
     def __getattr__(self, item: str) -> Any:
         return getattr(self.dataset, item)
 
@@ -232,7 +237,12 @@ def create_official_dataset_adapter(
             from qlib.config import REG_CN
 
             def qlib_initializer(uri: Union[str, Path]) -> None:
-                qlib.init(provider_uri=str(uri), region=REG_CN, auto_mount=False)
+                qlib.init(
+                    provider_uri=str(uri),
+                    region=REG_CN,
+                    auto_mount=False,
+                    joblib_backend="threading",
+                )
 
         qlib_initializer(provider_uri)
 

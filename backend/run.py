@@ -2,8 +2,13 @@
 开发服务器启动脚本
 """
 
-import uvicorn
 from pathlib import Path
+
+from app.services.qlib.native_env import ensure_libomp_env_before_lightgbm_import
+
+ensure_libomp_env_before_lightgbm_import()
+
+import uvicorn
 
 from app.core.config import settings
 
@@ -14,7 +19,7 @@ if __name__ == "__main__":
         # 只监控app目录下的代码文件，排除数据目录
         backend_dir = Path(__file__).parent
         reload_dirs = [str(backend_dir / "app")]
-    
+
     uvicorn.run(
         "app.main:app",
         host=settings.HOST,

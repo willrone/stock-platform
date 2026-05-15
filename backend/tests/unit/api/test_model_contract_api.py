@@ -21,8 +21,13 @@ v1_package = ModuleType("app.api.v1")
 v1_package.__path__ = [str(BACKEND_ROOT / "app" / "api" / "v1")]
 fake_torch = ModuleType("torch")
 fake_torch.Tensor = type("Tensor", (), {})
+fake_torch.device = lambda name: SimpleNamespace(type=name)
 sys.modules.setdefault("app.api", api_package)
 sys.modules.setdefault("app.api.v1", v1_package)
+# Other unit modules may import real app.api.v1.models during collection. Force
+# this contract test to bind routes to the patched module instance below.
+sys.modules.pop("app.api.v1.models", None)
+sys.modules.pop("app.api.v1.training_progress", None)
 
 with patch.dict(
     "sys.modules",
@@ -37,8 +42,11 @@ with patch.dict(
         "torch": fake_torch,
     },
 ):
-    from app.api.v1.models import router as models_router
-    from app.api.v1.training_progress import router as training_router
+    import app.api.v1.models as models_module
+    import app.api.v1.training_progress as training_progress_module
+
+models_router = models_module.router
+training_router = training_progress_module.router
 
 
 FIXED_NOW = datetime(2026, 4, 8, 12, 0, 0)
@@ -86,7 +94,7 @@ def model_record() -> SimpleNamespace:
 class TestModelAndTrainingContractAPI:
     """模型/训练 contract tests。"""
 
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "SessionLocal")
     def test_list_models_contract(self, mock_session_local, client, model_record):
         """/models 列表返回稳定 DTO 字段。"""
         mock_session = MagicMock()
@@ -108,8 +116,8 @@ class TestModelAndTrainingContractAPI:
         assert first["training_stage"] == "training"
         assert first["accuracy"] == 0.88
 
-    @patch("app.api.v1.models.ModelInfoRepository")
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "ModelInfoRepository")
+    @patch.object(models_module, "SessionLocal")
     def test_model_detail_contract(
         self,
         mock_session_local,
@@ -134,7 +142,7 @@ class TestModelAndTrainingContractAPI:
         assert payload["training_info"]["hyperparameters"]["learning_rate"] == 0.1
         assert payload["status"] == "training"
 
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "SessionLocal")
     def test_evaluation_report_contract_supports_json_string(
         self,
         mock_session_local,
@@ -164,7 +172,7 @@ class TestModelAndTrainingContractAPI:
         assert payload["performance_metrics"]["accuracy"] == 0.9
         assert payload["training_data_info"]["stock_codes"] == ["000001.SZ"]
 
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "SessionLocal")
     def test_evaluation_report_contract_backfills_legacy_fields(
         self,
         mock_session_local,
@@ -230,8 +238,8 @@ class TestModelAndTrainingContractAPI:
         assert payload["segment_evaluation"]["validation"]["dataset_samples"] == 193
         assert payload["segment_evaluation"]["test"]["dataset_samples"] == 0
 
-    @patch("app.api.v1.training_progress.SessionLocal")
-    @patch("app.api.v1.training_progress._get_task_manager")
+    @patch.object(training_progress_module, "SessionLocal")
+    @patch.object(training_progress_module, "_get_task_manager")
     def test_training_progress_contract_fallback_to_model(
         self,
         mock_get_task_manager,
@@ -258,8 +266,8 @@ class TestModelAndTrainingContractAPI:
         assert payload["progress_percentage"] == 42.5
         assert payload["stage"] == "training"
 
-    @patch("app.api.v1.models.get_train_executor")
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "get_train_executor")
+    @patch.object(models_module, "SessionLocal")
     def test_train_contract_propagates_official_workflow_preset(
         self,
         mock_session_local,
@@ -294,6 +302,7 @@ class TestModelAndTrainingContractAPI:
                 "workflow_mode": "official_replication",
                 "official_dataset": "alpha158",
                 "official_market": "csi300",
+                "official_max_stocks": 25,
             },
         )
 
@@ -306,9 +315,10 @@ class TestModelAndTrainingContractAPI:
         assert added_model.hyperparameters["workflow_mode"] == "official_replication"
         assert added_model.hyperparameters["official_dataset"] == "alpha158"
         assert added_model.hyperparameters["official_market"] == "csi300"
+        assert added_model.hyperparameters["official_max_stocks"] == 25
 
-    @patch("app.api.v1.models.get_train_executor")
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "get_train_executor")
+    @patch.object(models_module, "SessionLocal")
     def test_train_contract_persists_alpha360_official_market_defaults(
         self,
         mock_session_local,
@@ -336,7 +346,7 @@ class TestModelAndTrainingContractAPI:
             json={
                 "model_name": "official-alpha360-smoke",
                 "model_type": "lightgbm",
-                "stock_codes": ["600036.SH", "601288.SH", "601398.SH"],
+                "stock_codes": [],
                 "start_date": "2024-01-01",
                 "end_date": "2024-12-31",
                 "hyperparameters": {"learning_rate": 0.05},
@@ -362,9 +372,10 @@ class TestModelAndTrainingContractAPI:
             "valid": ["2015-01-01", "2016-12-31"],
             "test": ["2017-01-01", "2020-08-01"],
         }
+        assert added_model.hyperparameters["official_stock_pool"] == "csi500"
 
-    @patch("app.api.v1.models.notify_model_training_progress", new_callable=MagicMock)
-    @patch("app.api.v1.models.SessionLocal")
+    @patch.object(models_module, "notify_model_training_progress", new_callable=MagicMock)
+    @patch.object(models_module, "SessionLocal")
     def test_cancel_training_contract_marks_model_cancelled(
         self,
         mock_session_local,
@@ -383,8 +394,6 @@ class TestModelAndTrainingContractAPI:
         mock_session.query.return_value = mock_query
 
         pending_future = Future()
-
-        from app.api.v1 import models as models_module
 
         models_module._active_training_jobs[model_record.model_id] = {
             "future": pending_future,

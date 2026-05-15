@@ -423,24 +423,29 @@ class TestLossFunctionOptimization:
     """测试损失函数优化"""
 
     def test_lightgbm_adapter_huber_loss(self):
-        """测试LightGBM适配器使用Huber损失"""
+        """测试LightGBM适配器用官方兼容 loss + LightGBM objective 表达 Huber。"""
         adapter = LightGBMAdapter()
 
         hyperparameters = {
             "learning_rate": 0.1,
             "num_leaves": 31,
+            "loss": "huber",
             "huber_delta": 0.1,
         }
 
         config = adapter.create_qlib_config(hyperparameters)
 
-        # 验证使用Huber损失
-        assert config["kwargs"]["loss"] == "huber", "应该使用Huber损失"
-        assert "huber_delta" in config["kwargs"], "应该包含huber_delta参数"
-        assert config["kwargs"]["huber_delta"] == 0.1, "huber_delta应该正确设置"
+        # Qlib LGBModel only accepts mse/binary for loss; Huber must be passed
+        # to LightGBM as objective/alpha instead of qlib loss.
+        assert config["class"] == "StockPlatformLGBModel"
+        assert config["module_path"] == "app.services.qlib.official_lgbm_model"
+        assert config["kwargs"]["loss"] == "mse"
+        assert config["kwargs"]["objective"] == "huber"
+        assert config["kwargs"]["alpha"] == 0.1
+        assert config["kwargs"]["num_threads"] == 1
 
-    def test_lightgbm_adapter_default_huber_delta(self):
-        """测试LightGBM适配器的默认huber_delta"""
+    def test_lightgbm_adapter_default_loss_is_mse(self):
+        """测试LightGBM适配器默认使用 Qlib 官方支持的 mse loss。"""
         adapter = LightGBMAdapter()
 
         hyperparameters = {
@@ -449,9 +454,9 @@ class TestLossFunctionOptimization:
 
         config = adapter.create_qlib_config(hyperparameters)
 
-        # 验证默认huber_delta
-        assert config["kwargs"]["loss"] == "huber", "应该使用Huber损失"
-        assert config["kwargs"]["huber_delta"] == 0.1, "默认huber_delta应该是0.1"
+        assert config["kwargs"]["loss"] == "mse"
+        assert "objective" not in config["kwargs"]
+        assert config["kwargs"]["num_threads"] == 1
 
     @pytest.mark.asyncio
     async def test_enhanced_provider_huber_loss(self):

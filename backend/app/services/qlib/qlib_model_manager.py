@@ -200,10 +200,10 @@ class LightGBMAdapter(BaseModelAdapter):
         ]
 
     def create_qlib_config(self, hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
+        requested_loss = str(hyperparameters.get("loss", "mse")).lower()
+        qlib_supported_loss = requested_loss if requested_loss in {"mse", "binary"} else "mse"
         kwargs: Dict[str, Any] = {
-            # 使用 Huber 损失提高对异常标签的鲁棒性。
-            "loss": "huber",
-            "huber_delta": 0.1,
+            "loss": qlib_supported_loss,
             "learning_rate": hyperparameters.get("learning_rate", 0.1),
             "num_leaves": hyperparameters.get("num_leaves", 31),
             "max_depth": hyperparameters.get("max_depth", -1),
@@ -212,12 +212,15 @@ class LightGBMAdapter(BaseModelAdapter):
             "bagging_fraction": hyperparameters.get("bagging_fraction", 0.8),
             "lambda_l1": hyperparameters.get("lambda_l1", 0.0),
             "lambda_l2": hyperparameters.get("lambda_l2", 0.0),
-            "num_threads": 20,
+            "num_threads": hyperparameters.get("num_threads", 1),
             "verbose": -1,  # 禁用LightGBM的默认输出，但保留训练历史
         }
+        if requested_loss == "huber":
+            kwargs["objective"] = "huber"
+            kwargs["alpha"] = hyperparameters.get("huber_delta", 0.1)
         config: Dict[str, Any] = {
-            "class": "LGBModel",
-            "module_path": "qlib.contrib.model.gbdt",
+            "class": "StockPlatformLGBModel",
+            "module_path": "app.services.qlib.official_lgbm_model",
             "kwargs": kwargs,
         }
 

@@ -85,14 +85,20 @@ class QlibTrainingPipeline:
         """准备 Qlib 数据集。"""
         if self._is_official_replication(request.config):
             builder = OfficialQlibDataBuilder()
-            build_result = builder.prepare_stocks(request.stock_codes)
+            stock_codes = list(request.stock_codes or [])
+            if not stock_codes:
+                max_stocks = getattr(request.config, "official_max_stocks", None)
+                stock_codes = builder.discover_available_stock_codes(max_stocks)
+                request.stock_codes[:] = stock_codes
+            request.config.resolved_stock_codes = stock_codes
+            build_result = builder.prepare_stocks(stock_codes)
             if not build_result.get("success"):
                 raise ValueError("官方Qlib复刻数据构建失败，未生成任何可用股票数据")
 
             workflow = self._build_official_workflow(request.config)
             return create_official_dataset_adapter(
                 workflow,
-                stock_codes=request.stock_codes,
+                stock_codes=stock_codes,
                 provider_uri=builder.official_qlib_data_path,
             )
 
@@ -111,6 +117,18 @@ class QlibTrainingPipeline:
         logger.info(f"数据集形状: {dataset.shape}")
         logger.info(f"样本数: {dataset.shape[0]}")
         logger.info(f"特征数: {dataset.shape[1] if len(dataset.shape) > 1 else 0}")
+        if not isinstance(dataset, pd.DataFrame):
+            logger.info(f"数据集类型: {type(dataset).__name__}")
+            if hasattr(dataset, "segment_lengths"):
+                logger.info(f"分段样本数: {dataset.segment_lengths}")
+            if hasattr(dataset, "workflow_config"):
+                workflow = dataset.workflow_config
+                logger.info(
+                    f"官方数据集: {workflow.handler_class}, label={workflow.label_expression}"
+                )
+            logger.info("=====================================")
+            return
+
         logger.info(f"数据维度数: {dataset.ndim}")
         if len(dataset.columns) > 0:
             logger.info(f"特征列数: {len(dataset.columns)}")
@@ -177,15 +195,17 @@ class QlibTrainingPipeline:
         model: Any,
         train_dataset: Any,
         val_dataset: Any,
+        test_dataset: Any,
         model_id: str,
-    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """评估训练后模型。"""
         return cast(
-            Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]],
+            Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]],
             await self.engine._evaluate_model(
                 model,
                 train_dataset,
                 val_dataset,
+                test_dataset,
                 model_id,
             ),
         )

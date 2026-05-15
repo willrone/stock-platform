@@ -141,8 +141,8 @@ class QlibTrainingResult:
 
     model_path: str
     model_config: Dict[str, Any]
-    training_metrics: Dict[str, float]
-    validation_metrics: Dict[str, float]
+    training_metrics: Dict[str, Any]
+    validation_metrics: Dict[str, Any]
     feature_importance: Optional[Dict[str, float]]
     training_history: List[Dict[str, Any]]
     training_duration: float
@@ -1362,7 +1362,28 @@ class UnifiedQlibTrainingEngine:
                 fit_kwargs["evals_result"] = evals_result
 
             logger.info(f"按Qlib官方接口调用 model.fit，参数: {fit_kwargs}")
-            model.fit(dataset_to_fit, **fit_kwargs)
+            log_metrics_patched = False
+            original_log_metrics = None
+            try:
+                from qlib.workflow import R
+
+                original_log_metrics = getattr(R, "log_metrics", None)
+                if callable(original_log_metrics):
+                    R.log_metrics = lambda *args, **kwargs: None  # type: ignore[method-assign]
+                    log_metrics_patched = True
+            except Exception as e:
+                logger.debug(f"禁用 Qlib workflow metric logging 失败，继续训练: {e}")
+
+            try:
+                model.fit(dataset_to_fit, **fit_kwargs)
+            finally:
+                if log_metrics_patched and original_log_metrics is not None:
+                    try:
+                        from qlib.workflow import R
+
+                        R.log_metrics = original_log_metrics  # type: ignore[method-assign]
+                    except Exception:
+                        logger.debug("恢复 Qlib workflow metric logging 失败", exc_info=True)
 
             # 优先使用官方 evals_result 重建训练历史
             try:
@@ -1552,8 +1573,9 @@ class UnifiedQlibTrainingEngine:
         model: Any,
         train_dataset: pd.DataFrame,
         val_dataset: pd.DataFrame,
+        test_dataset: Any = None,
         model_id: Optional[str] = None,
-    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """评估模型性能并计算详细指标"""
         try:
             # 记录数据集信息
@@ -1604,28 +1626,124 @@ class UnifiedQlibTrainingEngine:
                 val_dataset, val_pred, "验证集"
             )
 
-            logger.info(
-                f"模型评估完成 - 训练准确率: {training_metrics.get('accuracy', 0.0):.4f}, 验证准确率: {validation_metrics.get('accuracy', 0.0):.4f}, RankIC: {validation_signal_quality.get('rank_ic')}"
+            test_metrics = self._get_default_metrics()
+            test_signal_quality = {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "test",
+            }
+            if test_dataset is not None:
+                try:
+                    test_pred = model.predict(test_dataset, segment="test")
+                    test_shape = (
+                        test_pred.shape
+                        if hasattr(test_pred, "shape")
+                        else len(test_pred)
+                        if hasattr(test_pred, "__len__")
+                        else "N/A"
+                    )
+                    logger.info(f"测试集预测结果: 类型={type(test_pred)}, 形状={test_shape}")
+                    test_metrics = self._calculate_metrics(
+                        test_dataset, test_pred, "测试集", model_id
+                    )
+                    test_signal_quality = self._calculate_signal_quality(
+                        test_dataset, test_pred, "测试集"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"测试集评估失败，保留默认测试指标: {e}", exc_info=True
+                    )
+
+            train_samples = len(train_dataset) if hasattr(train_dataset, "__len__") else 0
+            validation_samples = len(val_dataset) if hasattr(val_dataset, "__len__") else 0
+            test_samples = (
+                len(test_dataset)
+                if test_dataset is not None and hasattr(test_dataset, "__len__")
+                else 0
             )
-            return training_metrics, validation_metrics, validation_signal_quality
+
+            segment_evaluation = {
+                "train": {
+                    "dataset_samples": train_samples,
+                    "evaluated_samples": int(training_metrics.get("sample_count", 0) or 0),
+                    "performance_metrics": training_metrics,
+                    "signal_quality": self._calculate_signal_quality(
+                        train_dataset, train_pred, "训练集"
+                    ),
+                },
+                "validation": {
+                    "dataset_samples": validation_samples,
+                    "evaluated_samples": int(validation_metrics.get("sample_count", 0) or 0),
+                    "performance_metrics": validation_metrics,
+                    "signal_quality": validation_signal_quality,
+                },
+                "test": {
+                    "dataset_samples": test_samples,
+                    "evaluated_samples": int(test_metrics.get("sample_count", 0) or 0),
+                    "performance_metrics": test_metrics,
+                    "signal_quality": test_signal_quality,
+                },
+            }
+
+            logger.info(
+                "模型评估完成 - "
+                f"训练准确率: {training_metrics.get('accuracy', 0.0):.4f}, "
+                f"验证准确率: {validation_metrics.get('accuracy', 0.0):.4f}, "
+                f"RankIC: {validation_signal_quality.get('rank_ic')}"
+            )
+            return (
+                training_metrics,
+                validation_metrics,
+                validation_signal_quality,
+                segment_evaluation,
+            )
 
         except Exception as e:
             logger.error(f"模型评估失败: {e}", exc_info=True)
             # 返回默认指标
+            default_metrics = self._get_default_metrics()
+            default_signal_quality = {
+                "ic": None,
+                "icir": None,
+                "rank_ic": None,
+                "rank_icir": None,
+                "long_short_ann_return": None,
+                "long_short_ann_sharpe": None,
+                "long_avg_ann_return": None,
+                "long_avg_ann_sharpe": None,
+                "sample_count": 0,
+                "analysis_scope": "validation",
+            }
             return (
-                self._get_default_metrics(),
-                self._get_default_metrics(),
+                default_metrics,
+                default_metrics,
+                default_signal_quality,
                 {
-                    "ic": None,
-                    "icir": None,
-                    "rank_ic": None,
-                    "rank_icir": None,
-                    "long_short_ann_return": None,
-                    "long_short_ann_sharpe": None,
-                    "long_avg_ann_return": None,
-                    "long_avg_ann_sharpe": None,
-                    "sample_count": 0,
-                    "analysis_scope": "validation",
+                    "train": {
+                        "dataset_samples": 0,
+                        "evaluated_samples": 0,
+                        "performance_metrics": default_metrics,
+                        "signal_quality": {**default_signal_quality, "analysis_scope": "train"},
+                    },
+                    "validation": {
+                        "dataset_samples": 0,
+                        "evaluated_samples": 0,
+                        "performance_metrics": default_metrics,
+                        "signal_quality": default_signal_quality,
+                    },
+                    "test": {
+                        "dataset_samples": 0,
+                        "evaluated_samples": 0,
+                        "performance_metrics": default_metrics,
+                        "signal_quality": {**default_signal_quality, "analysis_scope": "test"},
+                    },
                 },
             )
 
@@ -1931,7 +2049,7 @@ class UnifiedQlibTrainingEngine:
         predictions: Any,
         dataset_name: str,
         model_id: Optional[str] = None,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """计算真实的评估指标，基于预测值和真实标签"""
         try:
             import numpy as np
@@ -2109,6 +2227,7 @@ class UnifiedQlibTrainingEngine:
                 "win_rate": max(0.0, min(1.0, win_rate)),
                 "information_ratio": information_ratio,
                 "calmar_ratio": calmar_ratio,
+                "sample_count": int(len(y_true)),
             }
 
             logger.info(
@@ -2120,7 +2239,7 @@ class UnifiedQlibTrainingEngine:
             logger.error(f"计算真实指标失败: {e}", exc_info=True)
             return self._get_default_metrics()
 
-    def _get_default_metrics(self) -> Dict[str, float]:
+    def _get_default_metrics(self) -> Dict[str, Any]:
         """返回默认指标（当无法计算真实指标时使用）"""
         return {
             "accuracy": 0.5,
@@ -2137,6 +2256,7 @@ class UnifiedQlibTrainingEngine:
             "win_rate": 0.5,
             "information_ratio": 0.0,
             "calmar_ratio": 0.0,
+            "sample_count": 0,
         }
 
     async def _extract_feature_importance(
@@ -2167,6 +2287,14 @@ class UnifiedQlibTrainingEngine:
     def _analyze_feature_correlations(self, dataset: pd.DataFrame) -> Dict[str, Any]:
         """分析特征与标签的相关性"""
         try:
+            if hasattr(dataset, "for_segment"):
+                return {
+                    "skipped": True,
+                    "reason": (
+                        "official DatasetH adapter uses qlib handlers; "
+                        "skip pandas-only correlation analysis"
+                    ),
+                }
             if dataset.empty:
                 return {"error": "数据集为空"}
 

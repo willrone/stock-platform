@@ -4,6 +4,7 @@
 
 import asyncio
 import threading
+import traceback
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
@@ -165,6 +166,38 @@ def _safe_json_dict(value: Any) -> Dict[str, Any]:
 
 def _number_or_default(value: Optional[float], default: float) -> float:
     return default if value is None else value
+
+
+def _notify_on_loop(
+    main_loop: Optional[asyncio.AbstractEventLoop], coro: Any, description: str
+) -> None:
+    """Best-effort cross-loop notification without failing the training task."""
+    if main_loop is None or main_loop.is_closed():
+        logger.debug(f"跳过{description}: 主事件循环不可用或已关闭")
+        try:
+            coro.close()
+        except Exception:
+            pass
+        return
+
+    try:
+        asyncio.run_coroutine_threadsafe(coro, main_loop)
+    except RuntimeError as exc:
+        logger.warning(f"跳过{description}: {exc}")
+        try:
+            coro.close()
+        except Exception:
+            pass
+
+
+def _build_training_failure_payload(error: Exception) -> Dict[str, Any]:
+    return {
+        "error": str(error),
+        "error_type": type(error).__name__,
+        "traceback": traceback.format_exc(),
+        "status": "failed",
+        "failed_at": datetime.utcnow().isoformat(),
+    }
 
 
 def _format_feature_importance_for_report(
@@ -335,12 +368,11 @@ async def train_model_task(
         if not model_info:
             logger.error(f"模型不存在: {model_id}")
             # 如果提供了主事件循环，在主循环中发送通知
-            if main_loop:
-                asyncio.run_coroutine_threadsafe(
-                    notify_model_training_failed(model_id, "模型不存在"), main_loop
-                )
-            else:
-                await notify_model_training_failed(model_id, "模型不存在")
+            _notify_on_loop(
+                main_loop,
+                notify_model_training_failed(model_id, "模型不存在"),
+                "模型不存在通知",
+            )
             return
 
         try:
@@ -366,17 +398,13 @@ async def train_model_task(
                     raise TrainingCancelledError("训练已取消")
 
                 # 如果提供了主事件循环，在主循环中发送 WebSocket 通知
-                if main_loop:
-                    asyncio.run_coroutine_threadsafe(
-                        notify_model_training_progress(
-                            model_id, progress, stage, message, metrics or {}
-                        ),
-                        main_loop,
-                    )
-                else:
-                    await notify_model_training_progress(
+                _notify_on_loop(
+                    main_loop,
+                    notify_model_training_progress(
                         model_id, progress, stage, message, metrics or {}
-                    )
+                    ),
+                    "模型训练进度通知",
+                )
 
                 # 更新数据库（在当前事件循环中执行）
                 model_info.training_stage = stage
@@ -643,7 +671,19 @@ async def train_model_task(
                 use_alpha_factors=True,
                 cache_features=True,
                 selected_features=selected_features,  # 传递用户选择的特征
+                label_normalization=final_hyperparameters.get("label_normalization"),
+                label_definition=final_hyperparameters.get("label_definition"),
             )
+            config.workflow_mode = workflow_mode or final_hyperparameters.get(
+                "workflow_mode"
+            )
+            config.official_dataset = official_dataset or final_hyperparameters.get(
+                "official_dataset"
+            )
+            config.official_market = official_market or final_hyperparameters.get(
+                "official_market"
+            )
+            config.official_max_stocks = final_hyperparameters.get("official_max_stocks")
 
             # 使用统一Qlib训练引擎训练模型
             result = await training_engine.train_model(
@@ -705,7 +745,7 @@ async def train_model_task(
                 training_history=result.training_history,
                 hyperparameters=final_hyperparameters,
                 training_data_info={
-                    "stock_codes": stock_codes,
+                    "stock_codes": getattr(config, "resolved_stock_codes", stock_codes),
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
                     "total_samples": total_samples,
@@ -724,6 +764,7 @@ async def train_model_task(
                     ),
                 },
                 signal_quality=getattr(result, "signal_quality", None),
+                segment_evaluation=getattr(result, "segment_evaluation", None),
             )
 
             # 更新模型信息
@@ -746,16 +787,21 @@ async def train_model_task(
             model_info.performance_metrics = performance_metrics
             model_info.evaluation_report = report_generator.to_dict(report)
             model_info.hyperparameters = final_hyperparameters
+            if config.resolved_stock_codes:
+                resolved_stock_codes = config.resolved_stock_codes
+                model_info.hyperparameters = {
+                    **final_hyperparameters,
+                    "resolved_stock_count": len(resolved_stock_codes),
+                    "resolved_stock_codes_preview": resolved_stock_codes[:20],
+                }
             session.commit()
 
             # 发送完成通知
-            if main_loop:
-                asyncio.run_coroutine_threadsafe(
-                    notify_model_training_completed(model_id, performance_metrics),
-                    main_loop,
-                )
-            else:
-                await notify_model_training_completed(model_id, performance_metrics)
+            _notify_on_loop(
+                main_loop,
+                notify_model_training_completed(model_id, performance_metrics),
+                "模型训练完成通知",
+            )
             logger.info(f"统一Qlib模型训练完成: {model_id}")
 
         except TrainingCancelledError as e:
@@ -767,34 +813,68 @@ async def train_model_task(
                 "message": str(e),
             }
             session.commit()
-            if main_loop:
-                asyncio.run_coroutine_threadsafe(
-                    notify_model_training_cancelled(model_id, str(e)), main_loop
-                )
-            else:
-                await notify_model_training_cancelled(model_id, str(e))
+            _notify_on_loop(
+                main_loop,
+                notify_model_training_cancelled(model_id, str(e)),
+                "模型训练取消通知",
+            )
         except Exception as e:
             logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
             model_info.status = "failed"
             model_info.training_stage = "failed"
-            model_info.performance_metrics = {"error": str(e), "status": "failed"}
+            model_info.performance_metrics = _build_training_failure_payload(e)
+            model_info.evaluation_report = {
+                "model_id": model_id,
+                "model_name": model_name,
+                "model_type": model_type,
+                "status": "failed",
+                "training_data_info": {
+                    "stock_codes": stock_codes,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                },
+                "hyperparameters": final_hyperparameters,
+                "error": model_info.performance_metrics,
+            }
             session.commit()
-            if main_loop:
-                asyncio.run_coroutine_threadsafe(
-                    notify_model_training_failed(model_id, str(e)), main_loop
-                )
-            else:
-                await notify_model_training_failed(model_id, str(e))
+            _notify_on_loop(
+                main_loop,
+                notify_model_training_failed(model_id, str(e)),
+                "模型训练失败通知",
+            )
 
     except Exception as e:
         logger.error(f"训练任务执行失败: {e}", exc_info=True)
         session.rollback()
-        if main_loop:
-            asyncio.run_coroutine_threadsafe(
-                notify_model_training_failed(model_id, str(e)), main_loop
+        try:
+            model_info = (
+                session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
             )
-        else:
-            await notify_model_training_failed(model_id, str(e))
+            if model_info:
+                model_info.status = "failed"
+                model_info.training_stage = "failed"
+                model_info.performance_metrics = _build_training_failure_payload(e)
+                model_info.evaluation_report = {
+                    "model_id": model_id,
+                    "model_name": model_name,
+                    "model_type": model_type,
+                    "status": "failed",
+                    "training_data_info": {
+                        "stock_codes": stock_codes,
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                    },
+                    "hyperparameters": hyperparameters,
+                    "error": model_info.performance_metrics,
+                }
+                session.commit()
+        except Exception:
+            logger.error("记录训练任务外层失败信息失败", exc_info=True)
+        _notify_on_loop(
+            main_loop,
+            notify_model_training_failed(model_id, str(e)),
+            "训练任务外层失败通知",
+        )
     finally:
         _pop_training_job(model_id)
         session.close()
@@ -1381,6 +1461,8 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
             hyperparameters["official_dataset"] = request.official_dataset
         if request.official_market:
             hyperparameters["official_market"] = request.official_market
+        if request.official_max_stocks:
+            hyperparameters["official_max_stocks"] = request.official_max_stocks
         if request.workflow_mode == "official_replication":
             from app.services.qlib.official_workflow import (
                 OfficialDataset,
@@ -1414,6 +1496,8 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
             hyperparameters.setdefault("open_cost", official_config.open_cost)
             hyperparameters.setdefault("close_cost", official_config.close_cost)
             hyperparameters.setdefault("min_cost", official_config.min_cost)
+            if not request.stock_codes and not request.official_max_stocks:
+                hyperparameters.setdefault("official_stock_pool", official_config.market)
 
         # 创建模型记录
         model_info = ModelInfo(

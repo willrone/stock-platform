@@ -24,6 +24,9 @@ export PORT="$BACKEND_PORT"
 export DEBUG="${DEBUG:-true}"
 export METRICS_PORT="$METRICS_PORT"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT}}"
+if [[ -d /opt/homebrew/opt/libomp/lib ]]; then
+  export DYLD_LIBRARY_PATH="/opt/homebrew/opt/libomp/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+fi
 
 log_info "启动 backend: http://${BACKEND_HOST}:${BACKEND_PORT}"
 log_info "API 文档: http://${BACKEND_HOST}:${BACKEND_PORT}/api/v1/docs"

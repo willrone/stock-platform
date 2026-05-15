@@ -32,6 +32,26 @@ class OfficialQlibDataBuilder:
         self.data_loader = data_loader or StockDataLoader()
         self.bin_converter = bin_converter or QlibBinConverter()
 
+    def discover_available_stock_codes(self, limit: Optional[int] = None) -> List[str]:
+        """Discover locally available OHLCV parquet stock codes."""
+        stock_data_dir = self.data_loader.data_root / "parquet" / "stock_data"
+        if not stock_data_dir.exists():
+            logger.warning(f"官方Qlib构建股票数据目录不存在: {stock_data_dir}")
+            return []
+
+        codes: List[str] = []
+        for file_path in sorted(stock_data_dir.glob("*.parquet")):
+            stem = file_path.stem
+            if "_" not in stem:
+                continue
+            code, market = stem.rsplit("_", 1)
+            market = market.upper()
+            if market in {"SZ", "SH", "BJ"}:
+                codes.append(f"{code}.{market}")
+            if limit is not None and len(codes) >= limit:
+                break
+        return codes
+
     def prepare_stocks(self, stock_codes: List[str]) -> Dict[str, List[str]]:
         success: List[str] = []
         failed: List[str] = []

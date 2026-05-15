@@ -141,6 +141,10 @@ async def test_pipeline_prepare_dataset_uses_official_replication_path(
         def __init__(self):
             self.official_qlib_data_path = "/tmp/qlib-official"
 
+        def discover_available_stock_codes(self, limit=None):
+            built["discover_limit"] = limit
+            return ["600036.SH"]
+
         def prepare_stocks(self, stock_codes):
             built["stock_codes"] = stock_codes
             return {"success": stock_codes, "failed": []}
@@ -168,6 +172,66 @@ async def test_pipeline_prepare_dataset_uses_official_replication_path(
     assert built["stock_codes"] == ["600036.SH"]
     assert built["adapter_stock_codes"] == ["600036.SH"]
     assert built["provider_uri"] == "/tmp/qlib-official"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_prepare_dataset_can_auto_discover_official_stock_pool(
+    monkeypatch,
+) -> None:
+    engine = SimpleNamespace(
+        data_provider=SimpleNamespace(prepare_qlib_dataset=AsyncMock())
+    )
+    pipeline = QlibTrainingPipeline(engine)
+    request = TrainingRequest(
+        model_id="model-1",
+        model_name="official-baseline",
+        stock_codes=[],
+        start_date=None,
+        end_date=None,
+        config=SimpleNamespace(
+            workflow_mode="official_replication",
+            official_dataset="alpha158",
+            official_market="csi300",
+            official_max_stocks=2,
+            use_alpha_factors=True,
+            cache_features=True,
+        ),
+    )
+
+    sentinel = MagicMock(name="official-dataset-adapter")
+    built = {}
+
+    from app.services.qlib.training_engine import pipeline as pipeline_module
+
+    class DummyBuilder:
+        def __init__(self):
+            self.official_qlib_data_path = "/tmp/qlib-official"
+
+        def discover_available_stock_codes(self, limit=None):
+            built["discover_limit"] = limit
+            return ["600036.SH", "601288.SH"]
+
+        def prepare_stocks(self, stock_codes):
+            built["stock_codes"] = stock_codes
+            return {"success": stock_codes, "failed": []}
+
+    monkeypatch.setattr(pipeline_module, "OfficialQlibDataBuilder", DummyBuilder)
+    monkeypatch.setattr(
+        pipeline_module,
+        "create_official_dataset_adapter",
+        lambda workflow, stock_codes=None, provider_uri=None: built.update(
+            {"adapter_stock_codes": stock_codes, "provider_uri": provider_uri}
+        )
+        or sentinel,
+    )
+
+    dataset = await pipeline.prepare_dataset(request)
+
+    assert dataset is sentinel
+    assert built["discover_limit"] == 2
+    assert built["stock_codes"] == ["600036.SH", "601288.SH"]
+    assert request.stock_codes == ["600036.SH", "601288.SH"]
+    assert request.config.resolved_stock_codes == ["600036.SH", "601288.SH"]
 
 
 @pytest.mark.asyncio

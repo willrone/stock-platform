@@ -6,8 +6,9 @@ from app.services.data.official_qlib_data_builder import OfficialQlibDataBuilder
 
 
 class _FakeLoader:
-    def __init__(self):
+    def __init__(self, data_root=None):
         self.calls = []
+        self.data_root = Path(data_root) if data_root else None
 
     def _load_base_data(self, stock_code: str):
         self.calls.append(stock_code)
@@ -36,6 +37,23 @@ class _FakeConverter:
             / stock_code.replace(".", "_").lower()
             / "close.day.bin"
         )
+
+
+def test_discover_available_stock_codes_from_local_parquet(tmp_path) -> None:
+    stock_data = tmp_path / "parquet" / "stock_data"
+    stock_data.mkdir(parents=True)
+    (stock_data / "600036_SH.parquet").touch()
+    (stock_data / "000001_SZ.parquet").touch()
+    (stock_data / "README.txt").touch()
+
+    builder = OfficialQlibDataBuilder(
+        official_qlib_data_path=tmp_path / "qlib_official_data",
+        data_loader=_FakeLoader(data_root=tmp_path),
+        bin_converter=_FakeConverter(),
+    )
+
+    assert builder.discover_available_stock_codes() == ["000001.SZ", "600036.SH"]
+    assert builder.discover_available_stock_codes(limit=1) == ["000001.SZ"]
 
 
 def test_prepare_stocks_builds_clean_official_qlib_bins(tmp_path) -> None:
