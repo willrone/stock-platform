@@ -5,13 +5,19 @@
 
 # mypy: disable-error-code="untyped-decorator"
 
+import asyncio
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.api.v1.schemas import StandardResponse
+from app.core.config import settings
+from app.core.container import ServiceContainer, get_container
+from app.services.data.parquet_manager import ParquetManager
+from app.services.infrastructure.monitoring_service import DataMonitoringService
 from app.services.monitoring.drift_detector import drift_detector
 from app.services.monitoring.performance_monitor import (
     alert_manager,
@@ -40,15 +46,388 @@ class AlertUpdateRequest(BaseModel):
     description: Optional[str] = None
 
 
+_data_monitoring_service: Optional[DataMonitoringService] = None
+
+
+def _resolve_data_root() -> Path:
+    """解析 DATA_ROOT_PATH，兼容相对 backend 目录和绝对路径。"""
+    data_root = Path(settings.DATA_ROOT_PATH)
+    if data_root.is_absolute():
+        return data_root
+    backend_dir = Path(__file__).resolve().parents[3]
+    return (backend_dir / data_root).resolve()
+
+
+def _candidate_parquet_roots() -> List[Path]:
+    data_root = _resolve_data_root()
+    backend_dir = Path(__file__).resolve().parents[3]
+    return [
+        data_root / "parquet" / "stock_data",
+        data_root / "parquet" / "daily",
+        data_root / "parquet",
+        data_root / "stocks" / "daily",
+        backend_dir / "data" / "parquet" / "stock_data",
+        backend_dir / "data" / "parquet",
+        Path("data") / "parquet" / "stock_data",
+        Path("data") / "parquet",
+    ]
+
+
+def _find_fast_parquet_root() -> Optional[Path]:
+    for candidate in _candidate_parquet_roots():
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        if resolved.exists() and resolved.is_dir():
+            return resolved
+    return None
+
+
+def _stock_code_from_file(file_path: Path) -> str:
+    stem = file_path.stem
+    if "_" in stem:
+        parts = stem.split("_")
+        if len(parts) >= 2 and parts[0].isdigit():
+            market = parts[1].upper()
+            if market in {"SZ", "SH", "BJ"}:
+                return f"{parts[0]}.{market}"
+    if "." in stem:
+        return stem
+
+    for parent in file_path.parents:
+        name = parent.name
+        if "." in name or ("_" in name and name.split("_")[0].isdigit()):
+            return name.replace("_", ".")
+    return stem
+
+
+def _get_fast_storage_overview() -> Dict[str, Any]:
+    """快速统计 parquet 文件，不读取文件内容。"""
+    root = _find_fast_parquet_root()
+    if root is None:
+        return {
+            "root": None,
+            "total_files": 0,
+            "total_size": 0,
+            "stock_count": 0,
+            "last_modified": None,
+        }
+
+    total_size = 0
+    last_modified_ts: Optional[float] = None
+    stock_codes: set[str] = set()
+    total_files = 0
+
+    for file_path in root.rglob("*.parquet"):
+        try:
+            stat = file_path.stat()
+        except OSError:
+            continue
+        total_files += 1
+        total_size += stat.st_size
+        stock_codes.add(_stock_code_from_file(file_path))
+        if last_modified_ts is None or stat.st_mtime > last_modified_ts:
+            last_modified_ts = stat.st_mtime
+
+    return {
+        "root": str(root),
+        "total_files": total_files,
+        "total_size": total_size,
+        "stock_count": len(stock_codes),
+        "last_modified": (
+            datetime.fromtimestamp(last_modified_ts).isoformat()
+            if last_modified_ts is not None
+            else None
+        ),
+    }
+
+
+def _build_parquet_manager() -> ParquetManager:
+    """构建用于监控接口的本地 parquet 管理器。"""
+    parquet_root = _find_fast_parquet_root()
+    return ParquetManager(str(parquet_root or _resolve_data_root()))
+
+
+async def get_data_monitoring_service(
+    container: ServiceContainer = Depends(get_container),
+) -> DataMonitoringService:
+    """按需创建数据监控服务，供前端兼容接口复用。"""
+    global _data_monitoring_service
+    if _data_monitoring_service is None:
+        _data_monitoring_service = DataMonitoringService(
+            data_service=container.data_service,
+            indicators_service=container.indicators_service,
+            parquet_manager=_build_parquet_manager(),
+        )
+    return _data_monitoring_service
+
+
+def _service_health_to_dict(status: Any) -> Dict[str, Any]:
+    return {
+        "healthy": bool(status.is_healthy),
+        "response_time_ms": round(float(status.response_time_ms), 2),
+        "last_check": status.last_check.isoformat(),
+        "error_message": status.error_message,
+    }
+
+
+def _empty_performance_payload() -> Dict[str, Any]:
+    return {
+        "services": {},
+        "summary": {
+            "total_services": 0,
+            "avg_response_time": 0,
+            "total_requests": 0,
+            "total_errors": 0,
+        },
+    }
+
+
+def _build_fast_quality_report(storage: Dict[str, Any]) -> Dict[str, Any]:
+    """基于文件系统元信息构建快速数据质量报告。"""
+    total_files = int(storage.get("total_files", 0) or 0)
+    stock_count = int(storage.get("stock_count", 0) or 0)
+    total_size = int(storage.get("total_size", 0) or 0)
+    last_modified = storage.get("last_modified")
+
+    checks: Dict[str, Any] = {}
+    issues: List[str] = []
+    recommendations: List[str] = []
+
+    checks["data_completeness"] = {
+        "score": 1.0 if total_files > 0 else 0.0,
+        "status": "pass" if total_files > 0 else "fail",
+        "message": (
+            f"发现 {total_files} 个数据文件" if total_files > 0 else "未发现数据文件"
+        ),
+    }
+    if total_files == 0:
+        issues.append("系统中没有数据文件")
+        recommendations.append("执行数据同步以获取股票数据")
+
+    days_old: Optional[int] = None
+    freshness_score = 0.0
+    freshness_status = "unknown"
+    if isinstance(last_modified, str):
+        modified_at = datetime.fromisoformat(last_modified)
+        days_old = (datetime.now() - modified_at).days
+        if days_old <= 1:
+            freshness_score = 1.0
+            freshness_status = "excellent"
+        elif days_old <= 7:
+            freshness_score = 0.8
+            freshness_status = "good"
+        elif days_old <= 30:
+            freshness_score = 0.6
+            freshness_status = "fair"
+        else:
+            freshness_score = 0.3
+            freshness_status = "poor"
+            issues.append(f"数据文件已 {days_old} 天未更新")
+            recommendations.append("同步或刷新本地数据文件")
+
+    checks["data_freshness"] = {
+        "score": freshness_score,
+        "status": freshness_status,
+        "message": (
+            f"数据文件最后更新于 {days_old} 天前"
+            if days_old is not None
+            else "无法确定数据新鲜度"
+        ),
+        "days_old": days_old,
+    }
+
+    checks["storage_coverage"] = {
+        "score": 1.0 if total_size > 0 else 0.0,
+        "status": "pass" if total_size > 0 else "unknown",
+        "message": f"本地数据总大小 {round(total_size / 1024 / 1024, 2)} MB",
+        "total_size": total_size,
+    }
+
+    if stock_count >= 100:
+        coverage_score = 1.0
+        coverage_status = "excellent"
+    elif stock_count >= 50:
+        coverage_score = 0.8
+        coverage_status = "good"
+    elif stock_count >= 10:
+        coverage_score = 0.6
+        coverage_status = "fair"
+    elif stock_count > 0:
+        coverage_score = 0.4
+        coverage_status = "poor"
+    else:
+        coverage_score = 0.0
+        coverage_status = "fail"
+
+    checks["stock_coverage"] = {
+        "score": coverage_score,
+        "status": coverage_status,
+        "message": f"覆盖 {stock_count} 只股票",
+        "stock_count": stock_count,
+    }
+    if stock_count < 50:
+        issues.append("股票覆盖度较低")
+        recommendations.append("增加更多股票的数据同步")
+
+    scores = [float(check["score"]) for check in checks.values()]
+    return {
+        "overall_score": round(sum(scores) / len(scores), 2) if scores else 0.0,
+        "checks": checks,
+        "issues": issues,
+        "recommendations": recommendations,
+        "storage": storage,
+    }
+
+
+@router.get("/health", response_model=StandardResponse, summary="获取系统健康状态")
+async def get_system_health(
+    container: ServiceContainer = Depends(get_container),
+) -> Any:
+    """获取前端监控页需要的系统健康状态。"""
+    try:
+        services: Dict[str, Any] = {}
+
+        data_start = datetime.now()
+        try:
+            data_status = await asyncio.wait_for(
+                container.data_service.check_remote_service_status(), timeout=2.0
+            )
+            data_response_ms = (datetime.now() - data_start).total_seconds() * 1000
+            services["remote_data_service"] = {
+                "healthy": bool(data_status.is_available),
+                "response_time_ms": round(min(data_response_ms, 2000.0), 2),
+                "last_check": data_status.last_check.isoformat(),
+                "error_message": data_status.error_message,
+                "service_url": data_status.service_url,
+                "core": False,
+                "optional": True,
+                "status_label": "正常" if data_status.is_available else "未连接",
+            }
+        except asyncio.TimeoutError:
+            services["remote_data_service"] = {
+                "healthy": False,
+                "response_time_ms": 2000.0,
+                "last_check": data_start.isoformat(),
+                "error_message": "远端数据服务健康检查超时",
+                "core": False,
+                "optional": True,
+                "status_label": "未连接",
+            }
+        except Exception as e:
+            data_response_ms = (datetime.now() - data_start).total_seconds() * 1000
+            services["remote_data_service"] = {
+                "healthy": False,
+                "response_time_ms": round(min(data_response_ms, 2000.0), 2),
+                "last_check": data_start.isoformat(),
+                "error_message": f"远端数据服务健康检查失败: {str(e)}",
+                "core": False,
+                "optional": True,
+                "status_label": "未连接",
+            }
+
+        indicators_start = datetime.now()
+        services["indicators_service"] = {
+            "healthy": container.indicators_service is not None,
+            "response_time_ms": round(
+                (datetime.now() - indicators_start).total_seconds() * 1000, 2
+            ),
+            "last_check": indicators_start.isoformat(),
+            "error_message": None,
+            "core": True,
+            "optional": False,
+            "status_label": "正常",
+        }
+
+        storage_start = datetime.now()
+        storage = _get_fast_storage_overview()
+        storage_has_files = int(storage.get("total_files", 0)) > 0
+        services["parquet_manager"] = {
+            "healthy": storage_has_files,
+            "response_time_ms": round(
+                (datetime.now() - storage_start).total_seconds() * 1000, 2
+            ),
+            "last_check": storage_start.isoformat(),
+            "error_message": (
+                None if storage_has_files else "未发现本地 parquet 数据文件"
+            ),
+            "core": True,
+            "optional": False,
+            "status_label": "正常" if storage_has_files else "异常",
+        }
+
+        core_services = [
+            service for service in services.values() if bool(service.get("core", True))
+        ]
+        overall_healthy = all(
+            bool(service.get("healthy", False)) for service in core_services
+        )
+        payload = {
+            "overall_healthy": overall_healthy,
+            "services": services,
+            "check_time": datetime.now().isoformat(),
+        }
+
+        return StandardResponse(
+            success=True, message="成功获取系统健康状态", data=payload
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取系统健康状态失败: {str(e)}")
+
+
 @router.get("/metrics", response_model=StandardResponse, summary="获取监控指标")
 async def get_monitoring_metrics(
+    request: Request,
     metric_type: Optional[str] = Query(None, description="指标类型过滤"),
     model_id: Optional[str] = Query(None, description="模型ID过滤"),
     time_range: str = Query("1h", description="时间范围: 1h, 6h, 1d, 7d, 30d"),
     limit: int = Query(100, description="返回数量限制"),
+    service_name: Optional[str] = Query(None, description="服务名称过滤"),
+    monitor: DataMonitoringService = Depends(get_data_monitoring_service),
 ) -> Any:
     """获取监控指标数据"""
     try:
+        if service_name is not None or len(request.query_params) == 0:
+            service_names = (
+                [service_name]
+                if service_name
+                else ["data_service", "indicators_service", "parquet_manager"]
+            )
+            services: Dict[str, Any] = {}
+            for name in service_names:
+                metrics = monitor.get_performance_metrics(name)
+                if metrics:
+                    services[name] = metrics.to_dict()
+
+            if services:
+                total_requests = sum(
+                    int(service.get("request_count", 0))
+                    for service in services.values()
+                )
+                total_errors = sum(
+                    int(service.get("error_count", 0)) for service in services.values()
+                )
+                avg_response_time = sum(
+                    float(service.get("avg_response_time", 0))
+                    for service in services.values()
+                ) / len(services)
+                metrics_payload = {
+                    "services": services,
+                    "summary": {
+                        "total_services": len(services),
+                        "avg_response_time": round(avg_response_time, 2),
+                        "total_requests": total_requests,
+                        "total_errors": total_errors,
+                    },
+                }
+            else:
+                metrics_payload = _empty_performance_payload()
+
+            return StandardResponse(
+                success=True, message="成功获取性能指标", data=metrics_payload
+            )
+
         # 解析时间范围
         time_ranges = {
             "1h": timedelta(hours=1),
@@ -106,6 +485,109 @@ async def get_monitoring_metrics(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取监控指标失败: {str(e)}")
+
+
+@router.get("/overview", response_model=StandardResponse, summary="获取系统概览")
+async def get_system_overview() -> Any:
+    """获取数据监控系统概览。"""
+    try:
+        storage = _get_fast_storage_overview()
+        overview = {
+            "timestamp": datetime.now().isoformat(),
+            "services": {},
+            "overall_health": int(storage.get("total_files", 0)) > 0,
+            "total_requests": 0,
+            "total_errors": 0,
+            "storage_stats": storage,
+            "data_quality": _build_fast_quality_report(storage),
+        }
+        return StandardResponse(success=True, message="成功获取系统概览", data=overview)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取系统概览失败: {str(e)}")
+
+
+@router.get("/errors", response_model=StandardResponse, summary="获取错误统计")
+async def get_error_statistics(
+    hours: int = Query(24, ge=1, le=168, description="统计时间范围（小时）"),
+    monitor: DataMonitoringService = Depends(get_data_monitoring_service),
+) -> Any:
+    """获取前端监控页需要的错误统计。"""
+    try:
+        statistics = monitor.get_error_statistics(hours)
+        error_statistics: List[Dict[str, Any]] = []
+        total_errors = 0
+        for stat in statistics:
+            total_errors += stat.count
+            error_statistics.append(
+                {
+                    "error_type": stat.error_type,
+                    "count": stat.count,
+                    "last_occurrence": stat.last_occurrence.isoformat(),
+                    "sample_message": stat.sample_message,
+                }
+            )
+        payload = {
+            "time_range_hours": hours,
+            "total_error_types": len(error_statistics),
+            "total_errors": total_errors,
+            "error_statistics": error_statistics,
+        }
+        return StandardResponse(success=True, message="成功获取错误统计", data=payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取错误统计失败: {str(e)}")
+
+
+@router.get("/quality", response_model=StandardResponse, summary="获取数据质量检查")
+async def get_data_quality() -> Any:
+    """获取前端监控页需要的数据质量检查结果。"""
+    try:
+        quality = _build_fast_quality_report(_get_fast_storage_overview())
+        return StandardResponse(
+            success=True, message="成功获取数据质量检查", data=quality
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取数据质量检查失败: {str(e)}")
+
+
+@router.get("/anomalies", response_model=StandardResponse, summary="获取异常检测结果")
+async def get_anomalies(
+    monitor: DataMonitoringService = Depends(get_data_monitoring_service),
+) -> Any:
+    """获取前端监控页需要的异常检测结果。"""
+    try:
+        raw_anomalies = monitor.detect_anomalies()
+        anomalies = [
+            {
+                "type": anomaly.get("type", "unknown"),
+                "severity": anomaly.get("severity", "low"),
+                "description": anomaly.get("description")
+                or anomaly.get("message")
+                or "检测到异常",
+                "detected_at": anomaly.get("detected_at", datetime.now().isoformat()),
+                "affected_component": anomaly.get("affected_component")
+                or anomaly.get("service")
+                or "unknown",
+            }
+            for anomaly in raw_anomalies
+        ]
+        by_severity = {"high": 0, "medium": 0, "low": 0}
+        for anomaly in anomalies:
+            severity = str(anomaly.get("severity", "low"))
+            if severity not in by_severity:
+                severity = "low"
+            by_severity[severity] += 1
+
+        payload = {
+            "total_anomalies": len(anomalies),
+            "by_severity": by_severity,
+            "anomalies": anomalies,
+            "detection_time": datetime.now().isoformat(),
+        }
+        return StandardResponse(
+            success=True, message="成功获取异常检测结果", data=payload
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取异常检测结果失败: {str(e)}")
 
 
 @router.get(

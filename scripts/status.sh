@@ -4,6 +4,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
 BACKEND_PORT="${STOCK_PLATFORM_BACKEND_PORT:-$DEFAULT_DEV_BACKEND_PORT}"
 FRONTEND_PORT="${STOCK_PLATFORM_FRONTEND_PORT:-$DEFAULT_DEV_FRONTEND_PORT}"
+DATA_API_PORT="${STOCK_PLATFORM_DATA_API_PORT:-$DEFAULT_DEV_DATA_API_PORT}"
 
 if tmux_session_exists; then
   log_success "tmux 会话运行中: $DEV_SESSION_NAME"
@@ -13,7 +14,7 @@ else
 fi
 
 echo ""
-for entry in backend:$BACKEND_PORT frontend:$FRONTEND_PORT; do
+for entry in backend:$BACKEND_PORT frontend:$FRONTEND_PORT data-api:$DATA_API_PORT; do
   name="${entry%%:*}"
   port="${entry##*:}"
   if is_port_in_use "$port"; then
@@ -31,9 +32,16 @@ if command_exists curl; then
   else
     log_warning "backend 健康检查未通过"
   fi
+
+  if curl -fsS "http://127.0.0.1:${DATA_API_PORT}/api/data/health" >/dev/null 2>&1; then
+    log_success "data-api 健康检查通过"
+  else
+    log_warning "data-api 健康检查未通过"
+  fi
 fi
 
 echo "访问地址:"
 echo "  Frontend: http://127.0.0.1:${FRONTEND_PORT}"
 echo "  Backend:  http://127.0.0.1:${BACKEND_PORT}"
+echo "  Data API: http://127.0.0.1:${DATA_API_PORT}/api/data/health"
 echo "  API Docs: http://127.0.0.1:${BACKEND_PORT}/api/v1/docs"

@@ -64,6 +64,7 @@ fi
 
 # 解析命令行参数
 SERVICE_TYPE="${1:-all}"
+DATA_API_PORT="${DATA_API_PORT:-5002}"
 
 # 设置环境变量，确保使用虚拟环境的Python
 export PATH="$SCRIPT_DIR/venv/bin:$PATH"
@@ -83,7 +84,7 @@ case "$SERVICE_TYPE" in
     "api")
         echo "🚀 启动Parquet数据API服务..."
         echo "📋 日志文件: $SCRIPT_DIR/logs/data_api.log"
-        echo "🌐 API服务地址: http://localhost:5002"
+        echo "🌐 API服务地址: http://localhost:$DATA_API_PORT"
         echo "🐍 使用Python: $VENV_PYTHON"
         echo ""
         # 使用虚拟环境的Python，并设置工作目录
@@ -94,7 +95,7 @@ case "$SERVICE_TYPE" in
         echo "🚀 启动Parquet数据服务（数据获取 + API）..."
         echo "📋 数据服务日志: $SCRIPT_DIR/logs/data_service.log"
         echo "📋 API服务日志: $SCRIPT_DIR/logs/data_api.log"
-        echo "🌐 API服务地址: http://localhost:5002"
+        echo "🌐 API服务地址: http://localhost:$DATA_API_PORT"
         echo "🐍 使用Python: $VENV_PYTHON"
         echo ""
         

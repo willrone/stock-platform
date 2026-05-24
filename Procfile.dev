@@ -1,3 +1,4 @@
 backend: bash scripts/dev-backend.sh
 frontend: bash scripts/dev-frontend.sh
+data-api: bash scripts/dev-data-api.sh
 worker: bash scripts/dev-worker.sh

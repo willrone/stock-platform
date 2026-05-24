@@ -30,6 +30,10 @@ interface ServiceHealth {
   response_time_ms: number;
   last_check: string;
   error_message: string | null;
+  service_url?: string;
+  core?: boolean;
+  optional?: boolean;
+  status_label?: string;
 }
 
 interface SystemHealthData {
@@ -64,20 +68,31 @@ export function SystemHealthCard() {
     return () => clearInterval(interval);
   }, []);
 
-  const getServiceIcon = (service: ServiceHealth) => {
+  const isExternalDependency = (serviceName: string, service: ServiceHealth) =>
+    service.optional || service.core === false || ['data_service', 'remote_data_service'].includes(serviceName);
+
+  const getServiceIcon = (serviceName: string, service: ServiceHealth) => {
     if (service.healthy) {
       return <CheckCircle size={16} color="#2e7d32" />;
-    } else {
-      return <XCircle size={16} color="#d32f2f" />;
     }
+
+    if (isExternalDependency(serviceName, service)) {
+      return <AlertTriangle size={16} color="#ed6c02" />;
+    }
+
+    return <XCircle size={16} color="#d32f2f" />;
   };
 
-  const getServiceStatus = (service: ServiceHealth) => {
+  const getServiceStatus = (serviceName: string, service: ServiceHealth) => {
     if (service.healthy) {
       return { color: 'success' as const, text: '正常' };
-    } else {
-      return { color: 'error' as const, text: '异常' };
     }
+
+    if (isExternalDependency(serviceName, service)) {
+      return { color: 'warning' as const, text: service.status_label || '未连接' };
+    }
+
+    return { color: 'error' as const, text: service.status_label || '异常' };
   };
 
   const getResponseTimeColor = (responseTime: number): string => {
@@ -92,7 +107,8 @@ export function SystemHealthCard() {
 
   const formatServiceName = (serviceName: string) => {
     const nameMap: Record<string, string> = {
-      data_service: '数据服务',
+      data_service: '远端数据服务',
+      remote_data_service: '远端数据服务',
       indicators_service: '指标服务',
       parquet_manager: '文件管理',
       sync_engine: '同步引擎',
@@ -124,7 +140,7 @@ export function SystemHealthCard() {
         action={
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Chip
-              label={healthData?.overall_healthy ? '系统正常' : '系统异常'}
+              label={healthData?.overall_healthy ? '核心系统正常' : '核心系统异常'}
               color={healthData?.overall_healthy ? 'success' : 'error'}
               size="small"
               icon={
@@ -153,10 +169,10 @@ export function SystemHealthCard() {
                 p: 1.5,
                 bgcolor: 'grey.50',
                 borderRadius: 1,
-              }}
-            >
+                }}
+              >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                {getServiceIcon(service)}
+                {getServiceIcon(serviceName, service)}
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {formatServiceName(serviceName)}
@@ -191,8 +207,8 @@ export function SystemHealthCard() {
                 </Box>
 
                 <Chip
-                  label={getServiceStatus(service).text}
-                  color={getServiceStatus(service).color}
+                  label={getServiceStatus(serviceName, service).text}
+                  color={getServiceStatus(serviceName, service).color}
                   size="small"
                 />
               </Box>

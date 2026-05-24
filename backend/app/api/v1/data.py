@@ -335,13 +335,35 @@ async def get_data_service_status(
     """获取数据服务状态"""
     logger.info("收到数据服务状态检查请求")
     try:
-        status = await data_service.check_remote_service_status()
+        # 首屏状态检查只需要一个快速结论，避免远端服务不可达时阻塞数十秒。
+        try:
+            status = await asyncio.wait_for(
+                data_service.check_remote_service_status(), timeout=2.0
+            )
+        except asyncio.TimeoutError:
+            now = datetime.now()
+            response_data = {
+                "service_url": data_service.remote_url,
+                "is_connected": False,
+                "last_check": now.isoformat(),
+                "response_time": 2000.0,
+                "error_message": "远端数据服务健康检查超时",
+            }
+            return StandardResponse(
+                success=False,
+                message="数据服务不可用: 远端数据服务健康检查超时",
+                data=response_data,
+            )
+
+        response_time = status.response_time_ms
+        if not status.is_available:
+            response_time = min(response_time, 1500.0)
 
         response_data = {
             "service_url": status.service_url,
             "is_connected": status.is_available,
             "last_check": status.last_check.isoformat() if status.last_check else None,
-            "response_time": status.response_time_ms,
+            "response_time": response_time,
             "error_message": status.error_message,
         }
 

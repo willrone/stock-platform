@@ -17,6 +17,7 @@ fi
 
 : > "$BACKEND_RUNTIME_LOG"
 : > "$FRONTEND_RUNTIME_LOG"
+: > "$DATA_API_RUNTIME_LOG"
 : > "$WORKER_RUNTIME_LOG"
 
 log_info "先执行环境体检..."
@@ -26,6 +27,7 @@ log_info "创建 tmux 开发会话: $DEV_SESSION_NAME"
 
 tmux new-session -d -s "$DEV_SESSION_NAME" -n backend "cd '$PROJECT_ROOT' && bash '$PROJECT_ROOT/scripts/dev-backend.sh' 2>&1 | tee -a '$BACKEND_RUNTIME_LOG'"
 tmux new-window -t "$DEV_SESSION_NAME" -n frontend "cd '$PROJECT_ROOT' && bash '$PROJECT_ROOT/scripts/dev-frontend.sh' 2>&1 | tee -a '$FRONTEND_RUNTIME_LOG'"
+tmux new-window -t "$DEV_SESSION_NAME" -n data-api "cd '$PROJECT_ROOT' && bash '$PROJECT_ROOT/scripts/dev-data-api.sh' 2>&1 | tee -a '$DATA_API_RUNTIME_LOG'"
 tmux new-window -t "$DEV_SESSION_NAME" -n worker "cd '$PROJECT_ROOT' && bash '$PROJECT_ROOT/scripts/dev-worker.sh' 2>&1 | tee -a '$WORKER_RUNTIME_LOG'"
 
 sleep 2
@@ -35,6 +37,7 @@ echo ""
 echo "  tmux 会话: $DEV_SESSION_NAME"
 echo "  backend 日志: $BACKEND_RUNTIME_LOG"
 echo "  frontend 日志: $FRONTEND_RUNTIME_LOG"
+echo "  data-api 日志: $DATA_API_RUNTIME_LOG"
 echo "  worker 日志: $WORKER_RUNTIME_LOG"
 echo ""
 echo "常用命令:"

@@ -80,7 +80,11 @@ def main():
         signal.signal(signal.SIGTERM, signal_handler)
 
         # 检查端口是否可用
-        port = 5002
+        port = int(
+            os.getenv("DATA_API_PORT")
+            or os.getenv("STOCK_PLATFORM_DATA_API_PORT")
+            or "5002"
+        )
         if not check_port_available('0.0.0.0', port):
             logger.warning(f"端口 {port} 已被占用，尝试查找可用端口...")
             available_port = find_available_port(port)

@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./data/app.db"
 
     # 远端数据服务配置
-    REMOTE_DATA_SERVICE_URL: str = "http://192.168.3.62:5002"
+    REMOTE_DATA_SERVICE_URL: str = "http://127.0.0.1:5002"
     REMOTE_DATA_SERVICE_TIMEOUT: int = 30
 
     # 数据同步（SFTP）配置（用于分布式部署：从数据服务器拉取parquet到本机）

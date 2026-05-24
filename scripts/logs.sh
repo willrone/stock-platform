@@ -24,17 +24,20 @@ show_log() {
 case "$service" in
   backend) show_log "$BACKEND_RUNTIME_LOG" backend ;;
   frontend) show_log "$FRONTEND_RUNTIME_LOG" frontend ;;
+  data-api) show_log "$DATA_API_RUNTIME_LOG" data-api ;;
   worker) show_log "$WORKER_RUNTIME_LOG" worker ;;
   all)
     show_log "$BACKEND_RUNTIME_LOG" backend
     echo
     show_log "$FRONTEND_RUNTIME_LOG" frontend
     echo
+    show_log "$DATA_API_RUNTIME_LOG" data-api
+    echo
     show_log "$WORKER_RUNTIME_LOG" worker
     ;;
   *)
     log_error "未知服务: $service"
-    echo "用法: $0 [backend|frontend|worker|all] [-f]"
+    echo "用法: $0 [backend|frontend|data-api|worker|all] [-f]"
     exit 1
     ;;
 esac

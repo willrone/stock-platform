@@ -104,6 +104,8 @@ export default function DataManagementPage() {
   const [serviceLog, setServiceLog] = useState<RemoteServiceLogResponse | null>(null);
   const [remoteStocks, setRemoteStocks] = useState<RemoteStock[]>([]);
   const [localStocks, setLocalStocks] = useState<LocalStock[]>([]);
+  const [remoteStocksLoading, setRemoteStocksLoading] = useState(false);
+  const [localStocksLoading, setLocalStocksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('remote');
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
@@ -225,22 +227,28 @@ export default function DataManagementPage() {
   // 加载远端股票列表
   const loadRemoteStocks = async () => {
     try {
+      setRemoteStocksLoading(true);
       const result = await DataService.getRemoteStockList();
       setRemoteStocks(result.stocks || []);
     } catch (error) {
       console.error('加载远端股票列表失败:', error);
       setRemoteStocks([]);
+    } finally {
+      setRemoteStocksLoading(false);
     }
   };
 
   // 加载本地股票列表
   const loadLocalStocks = async () => {
     try {
-      const result = await DataService.getLocalStockListDetailed();
+      setLocalStocksLoading(true);
+      const result = await DataService.getLocalStockList();
       setLocalStocks(result.stocks || []);
     } catch (error) {
       console.error('加载本地股票列表失败:', error);
       setLocalStocks([]);
+    } finally {
+      setLocalStocksLoading(false);
     }
   };
 
@@ -248,8 +256,10 @@ export default function DataManagementPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([checkServiceStatus(), loadRemoteStocks(), loadLocalStocks()]);
+      await loadLocalStocks();
       setLoading(false);
+      void checkServiceStatus();
+      void loadRemoteStocks();
     };
 
     loadData();
@@ -265,8 +275,10 @@ export default function DataManagementPage() {
   // 刷新数据
   const handleRefresh = async () => {
     setLoading(true);
-    await Promise.all([checkServiceStatus(), loadRemoteStocks(), loadLocalStocks()]);
+    await loadLocalStocks();
     setLoading(false);
+    void checkServiceStatus();
+    void loadRemoteStocks();
   };
 
   // 同步远端数据
@@ -905,7 +917,12 @@ export default function DataManagementPage() {
         <CardContent>
           <Tabs
             value={activeTab}
-            onChange={(e, newValue) => setActiveTab(newValue)}
+            onChange={(e, newValue) => {
+              setActiveTab(newValue);
+              if (newValue === 'remote' && remoteStocks.length === 0 && !remoteStocksLoading) {
+                void loadRemoteStocks();
+              }
+            }}
             aria-label="股票列表页签"
           >
             <Tab
@@ -931,7 +948,11 @@ export default function DataManagementPage() {
           <Box sx={{ mt: 2 }}>
             {activeTab === 'remote' && (
               <Box>
-                {remoteStocks.length === 0 ? (
+                {remoteStocksLoading ? (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <LoadingSpinner text="加载远端股票列表..." />
+                  </Box>
+                ) : remoteStocks.length === 0 ? (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="body2" color="text.secondary">
                       暂无股票数据
@@ -1021,7 +1042,11 @@ export default function DataManagementPage() {
 
             {activeTab === 'local' && (
               <Box>
-                {localStocks.length === 0 ? (
+                {localStocksLoading ? (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <LoadingSpinner text="加载本地股票列表..." />
+                  </Box>
+                ) : localStocks.length === 0 ? (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="body2" color="text.secondary">
                       暂无本地股票数据

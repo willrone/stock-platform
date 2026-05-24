@@ -3,7 +3,9 @@
 import pandas as pd
 
 from app.services.backtest.models import SignalType
-from app.services.backtest.strategies.technical.basic_strategies import MovingAverageStrategy
+from app.services.backtest.strategies.technical.basic_strategies import (
+    MovingAverageStrategy,
+)
 
 
 def test_moving_average_precompute_uses_close_not_qlib_ma_feature_columns() -> None:
