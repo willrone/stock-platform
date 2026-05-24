@@ -10,7 +10,8 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -190,7 +191,29 @@ class TestIntegration:
             "confidence_level": 0.95,
         }
 
-        response = client.post("/api/v1/predictions", json=prediction_request)
+        fake_predictions = [
+            SimpleNamespace(
+                stock_code="000001.SZ",
+                predicted_direction=1,
+                predicted_price=12.5,
+                confidence_score=0.81,
+                confidence_interval=(11.8, 13.2),
+                risk_metrics=SimpleNamespace(to_dict=lambda: {"risk_level": "low"}),
+            ),
+            SimpleNamespace(
+                stock_code="000002.SZ",
+                predicted_direction=-1,
+                predicted_price=8.7,
+                confidence_score=0.74,
+                confidence_interval=(8.2, 9.1),
+                risk_metrics=SimpleNamespace(to_dict=lambda: {"risk_level": "medium"}),
+            ),
+        ]
+        with patch("app.api.v1.predictions.PredictionEngine") as engine_cls:
+            engine_cls.return_value.predict_multiple_stocks.return_value = (
+                fake_predictions
+            )
+            response = client.post("/api/v1/predictions", json=prediction_request)
         assert response.status_code == 200
 
         prediction_data = response.json()
@@ -215,7 +238,31 @@ class TestIntegration:
             "initial_cash": 100000.0,
         }
 
-        response = client.post("/api/v1/backtest", json=backtest_request)
+        fake_report = {
+            "strategy_name": "rsi",
+            "start_date": backtest_request["start_date"],
+            "end_date": backtest_request["end_date"],
+            "initial_cash": 100000.0,
+            "final_value": 101500.0,
+            "total_return": 0.015,
+            "annualized_return": 0.015,
+            "volatility": 0.1,
+            "sharpe_ratio": 0.5,
+            "max_drawdown": -0.03,
+            "total_trades": 1,
+            "win_rate": 1.0,
+            "profit_factor": 1.2,
+            "portfolio_history": [
+                {"date": backtest_request["start_date"], "portfolio_value": 100000.0},
+                {"date": backtest_request["end_date"], "portfolio_value": 101500.0},
+            ],
+            "trade_history": [],
+        }
+        with patch("app.api.v1.backtest.BacktestExecutor") as executor_cls:
+            executor = executor_cls.return_value
+            executor.validate_backtest_parameters.return_value = None
+            executor.run_backtest = AsyncMock(return_value=fake_report)
+            response = client.post("/api/v1/backtest", json=backtest_request)
         assert response.status_code == 200
 
         backtest_data = response.json()

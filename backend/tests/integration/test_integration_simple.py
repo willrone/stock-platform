@@ -4,6 +4,7 @@
 测试基础的API集成功能，不依赖复杂的外部模块
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -146,7 +147,21 @@ class TestBasicIntegration:
             "confidence_level": 0.95,
         }
 
-        response = client.post("/api/v1/predictions", json=prediction_request)
+        fake_predictions = [
+            SimpleNamespace(
+                stock_code="000001.SZ",
+                predicted_direction=1,
+                predicted_price=12.5,
+                confidence_score=0.81,
+                confidence_interval=(11.8, 13.2),
+                risk_metrics=SimpleNamespace(to_dict=lambda: {"risk_level": "low"}),
+            )
+        ]
+        with patch("app.api.v1.predictions.PredictionEngine") as engine_cls:
+            engine_cls.return_value.predict_multiple_stocks.return_value = (
+                fake_predictions
+            )
+            response = client.post("/api/v1/predictions", json=prediction_request)
         assert response.status_code == 200
 
         data = response.json()

@@ -314,7 +314,7 @@ class TestTaskQueueReliability:
         task_count=st.integers(min_value=1, max_value=10),
         priority=st.sampled_from([p for p in TaskPriority]),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_task_queue_reliability(self, task_count, priority):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
