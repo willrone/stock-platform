@@ -135,7 +135,10 @@ export default function MonitoringPage() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box
+      data-testid="monitoring-route-smoke"
+      sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+    >
       {/* 页面标题 */}
       <Box
         sx={{

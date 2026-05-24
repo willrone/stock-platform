@@ -19,6 +19,7 @@
     "quality:fix": "npm run lint:fix && npm run format",
     "pre-commit": "npm run quality:check && npm run test:ci",
     "build:check": "NEXT_DIST_DIR=.next-build-check next build",
+    "smoke:critical": "jest --runTestsByPath src/app/__tests__/critical-routes-smoke.test.tsx --runInBand",
     "smoke:pages": "node scripts/smoke-pages.js",
     "smoke:browser": "node scripts/smoke-browser.js"
   },
