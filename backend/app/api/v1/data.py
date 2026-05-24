@@ -356,7 +356,7 @@ async def get_data_service_status(
             )
 
         response_time = status.response_time_ms
-        if not status.is_available:
+        if not status.is_available and response_time is not None:
             response_time = min(response_time, 1500.0)
 
         response_data = {

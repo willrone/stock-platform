@@ -69,7 +69,9 @@ export function SystemHealthCard() {
   }, []);
 
   const isExternalDependency = (serviceName: string, service: ServiceHealth) =>
-    service.optional || service.core === false || ['data_service', 'remote_data_service'].includes(serviceName);
+    service.optional ||
+    service.core === false ||
+    ['data_service', 'remote_data_service'].includes(serviceName);
 
   const getServiceIcon = (serviceName: string, service: ServiceHealth) => {
     if (service.healthy) {
@@ -169,8 +171,8 @@ export function SystemHealthCard() {
                 p: 1.5,
                 bgcolor: 'grey.50',
                 borderRadius: 1,
-                }}
-              >
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 {getServiceIcon(serviceName, service)}
                 <Box>
