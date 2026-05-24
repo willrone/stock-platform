@@ -1,6 +1,7 @@
 # stock-platform 启动方式总览
 
 这是当前仓库的统一启动入口说明。目标只有两个：
+
 - 本地开发：优先用 tmux + 原生进程
 - 本机常驻：优先用 systemd
 
@@ -9,15 +10,20 @@
 ## 1. 开发态（默认）
 
 适用场景：
+
 - 本地开发
 - 联调
 - 查日志
 - 临时重启 backend / frontend
 
 默认端口：
+
 - backend: 127.0.0.1:18082
 - frontend: 127.0.0.1:13000
+- data-api: 127.0.0.1:5002
 - metrics: 127.0.0.1:19090
+
+四服务拓扑、健康检查和常见问题见：`docs/guides/LOCAL_DEVELOPMENT_SERVICES.md`。
 
 推荐命令：
 
@@ -34,17 +40,21 @@ make dev
 ```bash
 ./scripts/logs.sh backend
 ./scripts/logs.sh frontend
+./scripts/logs.sh data-api
+./scripts/logs.sh worker
 ./scripts/logs.sh all
 ```
 
 ## 2. 生产态（当前推荐的常驻托管路径）
 
 适用场景：
+
 - 这台机器本地常驻运行
 - 需要开机自启
 - 希望通过 systemctl 统一管理
 
 前提：
+
 - backend/.venv 已准备好
 - frontend 依赖已安装
 - systemd 可用
@@ -69,6 +79,7 @@ make prod-status
 ```
 
 说明：
+
 - backend 服务读取 `backend/.env`
 - frontend 服务读取 `frontend/.env.local`
 - frontend systemd 运行的是 `npm run start`，所以在 `prod-up` 前要先完成 `prod-build`
@@ -87,6 +98,7 @@ make prod-status
 - `scripts/stop.sh`
 
 它们现在只作为兼容层：
+
 - 老的开发入口会转发到新的 `./start.sh` / `./stop.sh`
 - 老的生产入口会提示改用 `prod-build` / `install-systemd.sh` / `prod-up.sh`
 
@@ -103,11 +115,13 @@ make prod-status
 ## 5. 当前不推荐的路径
 
 以下不是当前默认方案：
+
 - 旧 Docker compose 启动链路
 - 杀端口式“万能启动脚本”
 - 默认回退到 8000 / 3000
 
 原因：
+
 - 这台机器是多项目并存环境
 - 8000/3000 容易撞别的服务
 - 原生进程 + tmux / systemd 更容易定位问题

@@ -15,6 +15,7 @@
 ## 🏗️ 技术架构
 
 ### 后端技术栈
+
 - **框架**: FastAPI + SQLAlchemy
 - **数据库**: SQLite (开发) / PostgreSQL (生产)
 - **机器学习**: Qlib + PyTorch + XGBoost
@@ -23,6 +24,7 @@
 - **API文档**: 自动生成的OpenAPI文档
 
 ### 前端技术栈
+
 - **框架**: Next.js 14 (App Router)
 - **UI库**: Ant Design Pro
 - **状态管理**: Zustand
@@ -31,6 +33,7 @@
 - **类型安全**: TypeScript
 
 ### 机器学习模型
+
 - **传统模型**: XGBoost, LSTM
 - **现代模型**: Transformer, TimesNet, PatchTST, Informer
 - **集成学习**: 模型ensemble和在线学习
@@ -80,9 +83,13 @@ stock-prediction-platform/
 统一入口说明见：`STARTUP.md`
 
 默认开发端口：
+
 - **Backend**: `127.0.0.1:18082`
 - **Frontend**: `127.0.0.1:13000`
+- **Data API**: `127.0.0.1:5002`
 - **Metrics**: `127.0.0.1:19090`
+
+四服务拓扑、健康检查和常见问题见：`docs/guides/LOCAL_DEVELOPMENT_SERVICES.md`。
 
 推荐命令：
 
@@ -109,17 +116,21 @@ make dev
 ```
 
 说明：
+
 - `make dev` / `./start.sh` 会创建 tmux 会话 `stock-platform-dev`
-- backend / frontend / worker 会拆到独立 tmux window
+- backend / frontend / data-api / worker 会拆到独立 tmux window
+- 当前 worker 仍是占位窗口，任务调度随 backend 生命周期运行
 - 不会自动 kill 8000/3000 等其他项目端口
 - 如果目标端口被占用，脚本会直接报错并显示占用者
 
 ### 📱 访问应用
 
 启动成功后访问：
+
 - **前端界面**: http://127.0.0.1:13000
 - **API文档**: http://127.0.0.1:18082/api/v1/docs
 - **API管理**: http://127.0.0.1:18082/api/v1/redoc
+- **数据服务健康检查**: http://127.0.0.1:5002/api/data/health
 
 ### 🧰 常用开发命令
 
@@ -144,6 +155,8 @@ make dev-frontend
 # 查看日志
 ./scripts/logs.sh backend
 ./scripts/logs.sh frontend
+./scripts/logs.sh data-api
+./scripts/logs.sh worker
 ./scripts/logs.sh all
 
 # 停止开发环境
@@ -178,6 +191,7 @@ sudo ./scripts/install-systemd.sh
 ```
 
 说明：
+
 - backend 使用 `backend/.env`
 - frontend 使用 `frontend/.env.local`
 - frontend 的 systemd 服务运行 `npm run start`，所以 `prod-up` 前要先 `prod-build`
@@ -188,6 +202,7 @@ sudo ./scripts/install-systemd.sh
 仓库里仍保留一些历史 Docker/简单启动脚本，但它们已经 deprecated，只作为兼容层存在，不再是推荐的开发或维护路径。
 
 请优先使用：
+
 - 开发态：`make dev`
 - 生产态：`make prod-build` + `./scripts/install-systemd.sh` + `./scripts/prod-up.sh`
 
@@ -229,6 +244,7 @@ npm run dev -- --hostname 127.0.0.1 --port 13000
 ### ⚠️ 历史脚本说明
 
 以下脚本仍在仓库中，但已经被降级为兼容层：
+
 - `scripts/simple-start.sh`
 - `scripts/stop-simple.sh`
 - `scripts/quick-start.sh`
@@ -365,28 +381,34 @@ cd frontend && npm test
 ---
 
 **注意**: 本项目仅用于学习和研究目的，不构成投资建议。投资有风险，入市需谨慎。
+
 ## 📂 项目目录规范
 
 **为了保持项目整洁，请严格遵守以下目录存放规则：**
 
 ### 1. 文档归档 (`docs/`)
+
 - 所有项目相关的 `.md` 文档必须归档至 `docs/` 下的对应分类子目录中。
 - `docs/README.md` 是所有文档的索引。
 - 分类包括：`guides/` (指南), `mobile/` (移动端优化), `backtest/` (回测), `qlib/` (模型算法), `mlops/` (运维管理), `quality/` (质量规范), `reports/` (阶段总结), `fixes/` (修复记录)。
 
 ### 2. 测试与工具脚本 (`tests/`)
+
 - 严禁在根目录存放临时的 `.py`, `.js`, `.sh` 等脚本。
 - `tests/integration/`: 用于集成测试和数据验证。
 - `tests/scripts/`: 用于任务管理、状态修复等实用工具。
 - `tests/manual/`: 用于手动验证 API 或通信的工具。
 
 ### 3. 核心开发目录
+
 - `backend/`: FastAPI 后端代码。
 - `frontend/`: Next.js 前端代码。
 - `back_test_data_service/`: 独立回测数据服务。
 
 ### 4. 系统环境与配置
+
 - `nginx/`, `monitoring/`, `systemd/`, `scripts/`: 分别存放代理、监控、服务和系统安装脚本。
 
 ---
-*以后新增任何文件，请根据上述规则放入对应目录。*
+
+_以后新增任何文件，请根据上述规则放入对应目录。_
