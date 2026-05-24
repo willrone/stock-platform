@@ -62,6 +62,14 @@ make dev
 # 或 make status
 ```
 
+真实运行态 smoke：
+
+```bash
+make smoke-local
+# 检查 frontend /data /monitoring、backend health/data/monitoring、Data API、metrics
+# 如 :19090 未单独监听，会自动回退检查 backend /metrics
+```
+
 查看日志：
 
 ```bash
@@ -109,6 +117,21 @@ curl -fsS http://127.0.0.1:5002/api/data/health
 ```bash
 ./status.sh
 ```
+
+如果要验证真实运行链路，使用：
+
+```bash
+make smoke-local
+```
+
+`make smoke-local` 会检查：
+
+- frontend `/`、`/data`、`/monitoring` 返回 2xx 且无明显 Next/React fatal marker
+- backend `/api/v1/health`
+- backend `/api/v1/data/status` 中 `data.is_connected=true`
+- backend `/api/v1/monitoring/health` 中 `data.overall_healthy=true`
+- Data API `/api/data/health` 中 `storage_available=true`
+- metrics：优先 `:19090/metrics`，失败时回退到 backend `/metrics`
 
 ## 环境覆盖
 
@@ -203,4 +226,4 @@ npm run type-check
 npm run format:check
 ```
 
-提交前至少运行与改动范围相关的最小验证；涉及启动链路时，优先再跑 `./status.sh` 和两个 health curl。
+提交前至少运行与改动范围相关的最小验证；涉及启动链路时，优先再跑 `./status.sh` 和 `make smoke-local`。

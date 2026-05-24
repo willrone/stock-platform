@@ -32,6 +32,7 @@ make doctor
 make setup
 make dev
 ./status.sh
+make smoke-local
 ./stop.sh
 ```
 
@@ -106,6 +107,7 @@ make prod-status
 
 - 我要开发：`make dev`
 - 我要看状态：`./status.sh`
+- 我要跑真实本地 smoke：`make smoke-local`
 - 我要停开发环境：`./stop.sh`
 - 我要准备常驻运行：`make prod-build`
 - 我要安装 systemd：`sudo ./scripts/install-systemd.sh`
