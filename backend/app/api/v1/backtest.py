@@ -190,8 +190,8 @@ async def get_available_strategies() -> Any:
                     },
                     "signal_threshold": {
                         "type": "float",
-                        "default": 0.02,
-                        "description": "信号阈值",
+                        "default": 0.005,
+                        "description": "信号阈值，默认 0.5%；历史 2% 阈值会过滤大部分实际金叉/死叉信号",
                         "min": 0.001,
                         "max": 0.1,
                     },
