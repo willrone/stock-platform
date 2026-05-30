@@ -1,4 +1,4 @@
-.PHONY: doctor setup setup-backend setup-frontend dev dev-backend dev-frontend stop status smoke-local logs prod-build prod-up prod-down prod-status install-systemd
+.PHONY: doctor setup setup-backend setup-frontend dev dev-backend dev-frontend stop status smoke-local smoke-backtest logs prod-build prod-up prod-down prod-status install-systemd
 
 doctor:
 	./scripts/doctor.sh
@@ -28,6 +28,9 @@ status:
 
 smoke-local:
 	./scripts/smoke-local.js
+
+smoke-backtest:
+	./scripts/smoke-backtest.js
 
 logs:
 	./scripts/logs.sh all

@@ -33,6 +33,7 @@ make setup
 make dev
 ./status.sh
 make smoke-local
+make smoke-backtest
 ./stop.sh
 ```
 
@@ -108,6 +109,7 @@ make prod-status
 - 我要开发：`make dev`
 - 我要看状态：`./status.sh`
 - 我要跑真实本地 smoke：`make smoke-local`
+- 我要跑回测链路 smoke：`make smoke-backtest`（检查策略列表、策略配置接口，以及 30 天 moving_average 同步回测；若短样本 0 交易只输出“短样本仅验证链路，不评价策略收益”警告，不作为失败）
 - 我要停开发环境：`./stop.sh`
 - 我要准备常驻运行：`make prod-build`
 - 我要安装 systemd：`sudo ./scripts/install-systemd.sh`

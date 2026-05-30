@@ -2687,9 +2687,14 @@ class BacktestExecutor:
     ) -> bool:
         """验证回测参数"""
         try:
-            # 验证策略名称
+            # 验证策略名称。Portfolio 是 StrategyFactory 的特殊组合策略入口，
+            # 不在基础策略列表中，但 create_strategy("portfolio", ...) 支持。
             available_strategies = StrategyFactory.get_available_strategies()
-            if strategy_name.lower() not in available_strategies:
+            normalized_strategy_name = strategy_name.lower()
+            is_portfolio_strategy = normalized_strategy_name == "portfolio" or (
+                isinstance(strategy_config, dict) and "strategies" in strategy_config
+            )
+            if not is_portfolio_strategy and normalized_strategy_name not in available_strategies:
                 raise TaskError(
                     message=f"不支持的策略: {strategy_name}，可用策略: {available_strategies}",
                     severity=ErrorSeverity.MEDIUM,
