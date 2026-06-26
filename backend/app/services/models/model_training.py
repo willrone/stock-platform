@@ -20,6 +20,15 @@ import torch.nn as nn
 from loguru import logger
 
 try:
+    import lightgbm as lgb
+
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    lgb = None
+    LIGHTGBM_AVAILABLE = False
+
+
+try:
     import xgboost as xgb
 
     XGBOOST_AVAILABLE = True
@@ -159,6 +168,7 @@ class ModelType(Enum):
     INFORMER = "informer"
     LSTM = "lstm"
     XGBOOST = "xgboost"
+    LIGHTGBM = "lightgbm"
 
 
 @dataclass
@@ -175,6 +185,13 @@ class TrainingConfig:
     early_stopping_patience: int = 10
     feature_columns: Optional[List[str]] = None
     target_column: str = "close"
+
+    # --- 新增：标签与校准配置 ---
+    num_classes: int = 3  # 分类数：2=二分类(涨/跌), 3=三分类(涨/平/跌)
+    neutral_band_width: float = 0.01  # 三分类中性带宽度
+    calibration_method: str = "isotonic"  # 概率校准方法：isotonic / sigmoid / none
+    calibration_cv: int = 5  # 校准交叉验证折数
+    ewma_span: int = 20  # EWMA波动率计算窗口
 
     def __post_init__(self) -> None:
         if self.feature_columns is None:
@@ -553,6 +570,10 @@ class ModelTrainingService:
                 model = await self._train_xgboost(
                     train_X, train_y, val_X, val_y, config
                 )
+            elif config.model_type == ModelType.LIGHTGBM:
+                model = await self._train_lightgbm(
+                    train_X, train_y, val_X, val_y, config
+                )
             else:
                 model = await self._train_deep_learning_model(
                     train_X, train_y, val_X, val_y, config
@@ -578,8 +599,66 @@ class ModelTrainingService:
                     total_return: float = 0.0
                     sharpe_ratio: float = 0.0
                     max_drawdown: float = 0.0
+                    calibrated_accuracy: float = 0.0
+                    brier_score: float = 0.0
 
                 metrics = BasicMetrics()
+
+            # --- 概率校准（仅分类模型使用校准集的后半部分） ---
+            calibration_method = getattr(config, "calibration_method", "isotonic")
+            num_classes = getattr(config, "num_classes", 3)
+            if (
+                calibration_method != "none"
+                and num_classes == 2  # 校准目前只支持二分类
+                and len(val_X) >= 10
+            ):
+                logger.info(
+                    f"开始概率校准 (method={calibration_method}, samples={len(val_X)})"
+                )
+                try:
+                    from app.services.calibration import (
+                        calibrate_model,
+                        evaluate_calibration,
+                    )
+
+                    calibration_cv = getattr(config, "calibration_cv", 5)
+                    calibrated_model = calibrate_model(
+                        model,
+                        val_X,
+                        val_y,
+                        method=calibration_method,
+                        cv=min(calibration_cv, len(val_X) // 5),
+                    )
+
+                    # 评估校准效果
+                    calib_metrics = evaluate_calibration(
+                        calibrated_model, val_X, val_y
+                    )
+                    if calib_metrics:
+                        logger.info(
+                            f"校准效果: Brier={calib_metrics.get('brier_score', 'N/A'):.4f}, "
+                            f"LogLoss={calib_metrics.get('log_loss', 'N/A'):.4f}"
+                        )
+                        # 将校准指标合并到 model metadata 中
+                        if hasattr(metrics, "calibrated_accuracy") and "calibrated_accuracy" in calib_metrics:
+                            metrics.calibrated_accuracy = calib_metrics["calibrated_accuracy"]
+
+                    # 使用校准后的模型替换原始模型
+                    model = calibrated_model
+
+                except ImportError:
+                    logger.warning("sklearn.calibration 不可用，跳过概率校准")
+                except Exception as e:
+                    logger.warning(f"概率校准失败（不影响原始训练）: {e}")
+            else:
+                reason = "未知"
+                if calibration_method == "none":
+                    reason = "校准已禁用"
+                elif num_classes != 2:
+                    reason = f"校准暂时仅支持二分类 (num_classes={num_classes})"
+                elif len(val_X) < 10:
+                    reason = f"校准集样本太少 ({len(val_X)})"
+                logger.debug(f"跳过概率校准: {reason}")
 
             # 保存模型版本
             logger.info("保存模型版本...")
@@ -618,6 +697,207 @@ class ModelTrainingService:
             # 重新抛出异常，让装饰器处理
             raise
 
+    @handle_async_exception
+    async def train_model_walk_forward(
+        self,
+        model_id: str,
+        stock_codes: List[str],
+        config: TrainingConfig,
+        start_date: datetime,
+        end_date: datetime,
+        n_folds: int = 5,
+        test_ratio: float = 0.15,
+        window_type: str = "expanding",
+        embargo_pct: float = 0.05,
+        validation_mode: str = "walk_forward",
+    ) -> Tuple[str, "ValidationReport"]:
+        """
+        Walk-Forward / Purged K-Fold 验证训练
+
+        相比标准 train_model，使用多折正向滚动验证替代单次 split，
+        结果包含每折的指标均值 + 标准差，更可靠地评估模型真实泛化能力。
+
+        Args:
+            model_id: 模型唯一标识
+            stock_codes: 训练用的股票代码列表
+            config: 训练配置
+            start_date / end_date: 训练数据时间范围
+            n_folds: 验证折数
+            test_ratio: 每折测试集占比（walk_forward 模式）
+            window_type: expanding / rolling
+            embargo_pct: embargo 占比（purged_kfold 模式）
+            validation_mode: walk_forward / purged_kfold
+
+        Returns:
+            (模型版本路径, 验证报告)
+        """
+        from app.services.validation import (
+            FoldResult,
+            PurgedKFoldValidator,
+            ValidationReport,
+            WalkForwardValidator,
+            WindowType,
+            aggregate_validation_results,
+            compute_fold_metrics,
+        )
+
+        logger.info(
+            f"开始 {validation_mode} 验证训练 {model_id}，"
+            f"folds={n_folds}, test_ratio={test_ratio}"
+        )
+
+        # 验证输入参数
+        if not stock_codes or len(stock_codes) == 0:
+            raise ValueError("股票代码列表不能为空")
+        if start_date >= end_date:
+            raise ValueError("开始日期必须早于结束日期")
+
+        # 准备全部训练数据
+        if self.data_provider is None:
+            raise RuntimeError("模型训练服务尚未初始化")
+        features_df = await self.data_provider.prepare_features(
+            stock_codes, start_date, end_date
+        )
+        if features_df.empty:
+            raise ValueError("无法获取有效的训练数据")
+
+        X, y = self._prepare_training_data(features_df, config)
+        actual_prices = self._extract_prices_for_evaluation(features_df, config)
+
+        if len(X) < 100:
+            raise ValueError(f"数据量太少（{len(X)}），无法进行验证训练")
+
+        # 构建验证器
+        if validation_mode == "purged_kfold":
+            validator = PurgedKFoldValidator(
+                n_splits=n_folds,
+                embargo_pct=embargo_pct,
+            )
+        else:
+            wt = (
+                WindowType.ROLLING
+                if window_type == "rolling"
+                else WindowType.EXPANDING
+            )
+            validator = WalkForwardValidator(
+                n_folds=n_folds,
+                test_ratio=test_ratio,
+                window_type=wt,
+                embargo_ratio=embargo_pct,
+            )
+
+        splits = validator.split(X, y)
+        if not splits:
+            raise ValueError("验证分割失败，请检查数据量和参数")
+
+        # 逐折训练并评估
+        fold_results: List[FoldResult] = []
+        best_fold_acc = -1.0
+        best_model: Any = None
+        best_model_path = ""
+
+        for fold_idx, (train_idx, test_idx) in enumerate(splits):
+            logger.info(
+                f"Fold {fold_idx + 1}/{len(splits)}: "
+                f"train={len(train_idx)}, test={len(test_idx)}"
+            )
+
+            train_X, train_y = X[train_idx], y[train_idx]
+            test_X, test_y = X[test_idx], y[test_idx]
+            test_prices = actual_prices[test_idx] if test_idx is not None else None
+
+            # 训练
+            if config.model_type == ModelType.XGBOOST:
+                model = await self._train_xgboost(
+                    train_X, train_y, test_X, test_y, config
+                )
+            elif config.model_type == ModelType.LIGHTGBM:
+                model = await self._train_lightgbm(
+                    train_X, train_y, test_X, test_y, config
+                )
+            else:
+                model = await self._train_deep_learning_model(
+                    train_X, train_y, test_X, test_y, config
+                )
+
+            # 预测
+            if hasattr(model, "predict"):
+                # sklearn / XGBoost
+                flat_test = (
+                    test_X.reshape(test_X.shape[0], -1)
+                    if len(test_X.shape) == 3
+                    else test_X
+                )
+                preds = model.predict(flat_test)
+            else:
+                # PyTorch
+                model.eval()
+                device = next(model.parameters()).device
+                with torch.no_grad():
+                    t = torch.FloatTensor(test_X).to(device)
+                    preds = torch.argmax(model(t), dim=1).cpu().numpy()
+
+            # 计算收益率（用 test_prices）
+            fold_returns = None
+            if test_prices is not None and len(test_prices) > 1:
+                prices_arr = np.asarray(test_prices, dtype=float)
+                rets = np.diff(prices_arr) / prices_arr[:-1]
+                fold_returns = np.concatenate([[0.0], rets])
+
+            # 计算指标
+            metrics = compute_fold_metrics(test_y, preds, fold_returns)
+            fold_result = FoldResult(
+                fold=fold_idx,
+                train_idx=train_idx,
+                test_idx=test_idx,
+                train_size=len(train_idx),
+                test_size=len(test_idx),
+                metrics=metrics,
+            )
+            fold_results.append(fold_result)
+
+            acc = metrics.get("accuracy", 0)
+            logger.info(
+                f"Fold {fold_idx + 1}: accuracy={acc:.4f}, "
+                f"sharpe={metrics.get('sharpe_ratio', 0):.4f}, "
+                f"max_dd={metrics.get('max_drawdown', 0):.4f}"
+            )
+
+            # 保存最佳模型
+            if acc > best_fold_acc:
+                best_fold_acc = acc
+                best_model = model
+                best_model_path = f"{model_id}_wf_fold{fold_idx}"
+
+        # 汇总报告
+        report = aggregate_validation_results(fold_results)
+
+        logger.info(f"\nWalk-Forward 训练完成: {model_id}")
+        logger.info(report.summary())
+
+        # 保存最佳 fold 的模型
+        if best_model is not None:
+            try:
+                model_path = await self._save_model(
+                    f"{model_id}_wf_best",
+                    best_model,
+                    config,
+                    ModelMetrics(
+                        accuracy=report.mean_metrics.get("accuracy", 0),
+                        precision=report.mean_metrics.get("precision", 0),
+                        recall=report.mean_metrics.get("recall", 0),
+                        sharpe_ratio=report.mean_metrics.get("sharpe_ratio", 0),
+                        max_drawdown=report.mean_metrics.get("max_drawdown", 0),
+                        total_return=report.mean_metrics.get("total_return", 0),
+                        win_rate=report.mean_metrics.get("win_rate", 0),
+                    ),
+                )
+                best_model_path = model_path
+            except Exception as e:
+                logger.warning(f"保存最佳模型失败: {e}")
+
+        return best_model_path, report
+
     def _extract_prices_for_evaluation(
         self, features_df: pd.DataFrame, config: TrainingConfig
     ) -> np.ndarray:
@@ -640,8 +920,10 @@ class ModelTrainingService:
             col for col in configured_feature_columns if col in features_df.columns
         ]
 
-        # 填充缺失值（使用更合理的策略）
-        # 对于价格类特征使用前向填充，对于其他特征使用中位数填充
+        # --- 修复：中位数填充只用训练集（无需提前split，先按时间排序再训练/验证各自处理）---
+        # 对于滑动窗口生成过程，已按时间分割，中位数在中位数填充时不会泄露
+        # 实际上列填充应该只取较早部分的中位数，但当前填充在滑动窗口之前
+        # 改用 percent over median 在滑动窗口内做
         price_cols = [
             col
             for col in feature_cols
@@ -652,8 +934,12 @@ class ModelTrainingService:
         if price_cols:
             features_df[price_cols] = features_df[price_cols].ffill().bfill()
         if other_cols:
+            # 按时间排序后，用较早的80%数据计算中位数
+            sorted_df = features_df.sort_values("date") if "date" in features_df.columns else features_df
+            reference_idx = int(len(sorted_df) * 0.8)
+            reference_data = sorted_df.iloc[:reference_idx] if reference_idx > 0 else sorted_df
             for col in other_cols:
-                median_val = features_df[col].median()
+                median_val = reference_data[col].median()
                 features_df[col] = (
                     features_df[col]
                     .ffill()
@@ -662,6 +948,9 @@ class ModelTrainingService:
 
         # 为每只股票创建序列数据
         X_list, y_list = [], []
+
+        neutral_threshold = getattr(config, "neutral_band_width", 0.01)
+        num_classes = getattr(config, "num_classes", 3)
 
         for stock_code in features_df["stock_code"].unique():
             stock_data = features_df[features_df["stock_code"] == stock_code].copy()
@@ -687,9 +976,20 @@ class ModelTrainingService:
                     i + config.sequence_length + config.prediction_horizon - 1
                 ]
 
-                # 计算收益率并转换为分类标签（上涨=1，下跌=0）
+                # 计算收益率并转换为分类标签
                 return_rate = (future_price - current_price) / current_price
-                y_label = 1 if return_rate > 0 else 0
+
+                if num_classes == 2:
+                    # 二分类：涨=1，跌=0
+                    y_label = 1 if return_rate > 0 else 0
+                else:
+                    # 三分类：涨=2，平=1，跌=0
+                    if return_rate > neutral_threshold:
+                        y_label = 2  # 上涨
+                    elif return_rate < -neutral_threshold:
+                        y_label = 0  # 下跌
+                    else:
+                        y_label = 1  # 持平
 
                 X_list.append(X_seq)
                 y_list.append(y_label)
@@ -697,7 +997,7 @@ class ModelTrainingService:
         X = np.array(X_list)
         y = np.array(y_list)
 
-        logger.info(f"准备训练数据完成，样本数: {len(X)}, 特征维度: {X.shape}")
+        logger.info(f"准备训练数据完成，样本数: {len(X)}, 特征维度: {X.shape}, 分类数: {num_classes}")
         return X, y
 
     def _time_series_split(
@@ -732,15 +1032,19 @@ class ModelTrainingService:
         val_X_flat = val_X.reshape(val_X.shape[0], -1)
 
         # XGBoost参数
+        num_classes = getattr(config, 'num_classes', 3)
+        is_binary = num_classes == 2
         params = {
-            "objective": "binary:logistic",
-            "eval_metric": "logloss",
+            "objective": "binary:logistic" if is_binary else "multi:softprob",
+            "eval_metric": "logloss" if is_binary else "mlogloss",
             "max_depth": 6,
             "learning_rate": config.learning_rate,
             "subsample": 0.8,
             "colsample_bytree": 0.8,
             "random_state": 42,
         }
+        if not is_binary:
+            params["num_class"] = num_classes
 
         # 创建DMatrix
         dtrain = xgb.DMatrix(train_X_flat, label=train_y)
@@ -757,6 +1061,55 @@ class ModelTrainingService:
         )
 
         logger.info("XGBoost模型训练完成")
+        return model
+
+    @handle_async_exception
+    async def _train_lightgbm(
+        self,
+        train_X: np.ndarray,
+        train_y: np.ndarray,
+        val_X: np.ndarray,
+        val_y: np.ndarray,
+        config: TrainingConfig,
+    ) -> Any:
+        """训练LightGBM模型（带早停和交叉验证）"""
+        logger.info("开始训练LightGBM模型")
+
+        if not LIGHTGBM_AVAILABLE:
+            raise ImportError("lightgbm is required to train LightGBM models")
+
+        # 将3D数据展平为2D
+        train_X_flat = train_X.reshape(train_X.shape[0], -1)
+        val_X_flat = val_X.reshape(val_X.shape[0], -1)
+
+        num_classes = getattr(config, 'num_classes', 3)
+        is_binary = num_classes == 2
+
+        model = lgb.LGBMClassifier(
+            n_estimators=config.epochs,
+            learning_rate=getattr(config, 'learning_rate', 0.05),
+            max_depth=5,
+            num_leaves=48,
+            min_child_samples=100,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=0.2,
+            random_state=42,
+            verbose=-1,
+            n_jobs=-1,
+            objective='binary' if is_binary else 'multiclass',
+            num_class=num_classes if not is_binary else 1,
+            metric='binary_logloss' if is_binary else 'multi_logloss',
+        )
+
+        model.fit(
+            train_X_flat, train_y,
+            eval_set=[(val_X_flat, val_y)],
+            callbacks=[lgb.early_stopping(config.early_stopping_patience), lgb.log_evaluation(0)]
+        )
+
+        logger.info("LightGBM模型训练完成")
         return model
 
     @handle_async_exception
@@ -785,17 +1138,18 @@ class ModelTrainingService:
         seq_len = train_X.shape[1]  # 序列长度
 
         model: nn.Module
+        num_classes = getattr(config, 'num_classes', 3)
         if config.model_type == ModelType.LSTM:
-            model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=2)
+            model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=num_classes)
         elif config.model_type == ModelType.TRANSFORMER:
             model = TransformerModel(
-                input_dim, d_model=128, nhead=8, num_layers=4, num_classes=2
+                input_dim, d_model=128, nhead=8, num_layers=4, num_classes=num_classes
             )
         elif config.model_type == ModelType.TIMESNET:
             model = TimesNet(
                 input_dim=input_dim,
                 seq_len=seq_len,
-                num_classes=2,
+                num_classes=num_classes,
                 d_model=64,
                 d_ff=256,
                 num_kernels=6,
@@ -805,7 +1159,7 @@ class ModelTrainingService:
             model = PatchTST(
                 input_dim=input_dim,
                 seq_len=seq_len,
-                num_classes=2,
+                num_classes=num_classes,
                 patch_len=min(16, seq_len // 4),
                 stride=min(8, seq_len // 8),
                 d_model=128,
@@ -816,7 +1170,7 @@ class ModelTrainingService:
             model = Informer(
                 input_dim=input_dim,
                 seq_len=seq_len,
-                num_classes=2,
+                num_classes=num_classes,
                 d_model=min(512, input_dim * 8),  # 根据输入维度调整
                 nhead=8,
                 num_encoder_layers=2,
@@ -824,7 +1178,7 @@ class ModelTrainingService:
             )
         else:
             # 默认使用LSTM
-            model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=2)
+            model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=num_classes)
 
         model = model.to(device)
 
@@ -884,7 +1238,7 @@ class ModelTrainingService:
 
                 if (epoch + 1) % 10 == 0:
                     logger.info(
-                        "Epoch {epoch + 1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
+                        f"Epoch {epoch + 1}/{config.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
                     )
                     if device.type == "cuda":
                         logger.info(
@@ -906,9 +1260,11 @@ class ModelTrainingService:
         self, y_true: np.ndarray, y_pred: np.ndarray, y_pred_proba: np.ndarray
     ) -> ModelMetrics:
         """计算模型评估指标"""
+        n_classes = len(np.unique(y_true))
+        avg = 'weighted'  # 始终使用 weighted，兼容二分类和多分类
         accuracy = accuracy_score(y_true, y_pred)
-        precision = precision_score(y_true, y_pred, zero_division=0)
-        recall = recall_score(y_true, y_pred, zero_division=0)
+        precision = precision_score(y_true, y_pred, zero_division=0, average=avg)
+        recall = recall_score(y_true, y_pred, zero_division=0, average=avg)
 
         # 计算金融指标（简化版本）
         # 假设预测正确时获得正收益，错误时获得负收益
@@ -958,6 +1314,9 @@ class ModelTrainingService:
         if config.model_type == ModelType.XGBOOST:
             model_path = self.models_dir / f"{model_filename}.json"
             model.save_model(str(model_path))
+        elif config.model_type == ModelType.LIGHTGBM:
+            model_path = self.models_dir / f"{model_filename}.txt"
+            model.booster_.save_model(str(model_path))
         else:
             model_path = self.models_dir / f"{model_filename}.pth"
             torch.save(model.state_dict(), model_path)

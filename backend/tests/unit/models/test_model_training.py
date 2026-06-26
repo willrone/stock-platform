@@ -36,6 +36,7 @@ class TestModelTrainingService:
             batch_size=16,
             epochs=10,
             learning_rate=0.001,
+            num_classes=2,  # 二分类保持向后兼容
         )
 
     @pytest.fixture
@@ -325,3 +326,68 @@ async def test_model_training_integration():
         assert model_path == "/path/to/model.json"
         assert 0 <= metrics.accuracy <= 1
         assert metrics.max_drawdown <= 0
+
+
+async def test_walk_forward_training_integration():
+    """集成测试：Walk-Forward 验证训练"""
+    import subprocess
+
+    service = ModelTrainingService()
+
+    mock_data_provider = Mock()
+    mock_features_df = pd.DataFrame(
+        {
+            "date": pd.date_range("2023-01-01", periods=200),
+            "stock_code": ["000001.SZ"] * 200,
+            "open": np.random.rand(200) * 10 + 10,
+            "high": np.random.rand(200) * 10 + 12,
+            "low": np.random.rand(200) * 10 + 8,
+            "close": np.random.rand(200) * 10 + 10,
+            "volume": np.random.randint(1000000, 5000000, 200),
+            "ma_5": np.random.rand(200) * 10 + 10,
+            "ma_10": np.random.rand(200) * 10 + 10,
+            "ma_20": np.random.rand(200) * 10 + 10,
+            "ma_60": np.random.rand(200) * 10 + 10,
+            "rsi": np.random.rand(200) * 100,
+            "macd": np.random.rand(200) * 0.2 - 0.1,
+            "macd_signal": np.random.rand(200) * 0.2 - 0.1,
+            "bb_upper": np.random.rand(200) * 10 + 12,
+            "bb_lower": np.random.rand(200) * 10 + 8,
+        }
+    )
+
+    mock_data_provider.prepare_features = AsyncMock(return_value=mock_features_df)
+    service.data_provider = mock_data_provider
+    service.version_manager = None
+
+    config = TrainingConfig(
+        model_type=ModelType.XGBOOST,
+        sequence_length=20,
+        epochs=5,
+        num_classes=2,
+    )
+    service._save_model = AsyncMock(return_value="/path/to/model.json")
+
+    with patch("app.services.models.model_training.xgb") as mock_xgb:
+        mock_model = Mock()
+        mock_model.predict.side_effect = lambda x: (np.arange(len(x)) % 2).astype(int)
+        mock_xgb.train.return_value = mock_model
+        mock_xgb.DMatrix = Mock()
+
+        model_path, report = await service.train_model_walk_forward(
+            model_id="test_wf",
+            stock_codes=["000001.SZ"],
+            config=config,
+            start_date=datetime(2023, 1, 1),
+            end_date=datetime(2023, 12, 31),
+            n_folds=3,
+            test_ratio=0.15,
+        )
+
+        # 验证结果
+        assert isinstance(model_path, str)
+        assert len(report.folds) > 0
+        assert "accuracy" in report.mean_metrics
+        assert "sharpe_ratio" in report.mean_metrics
+        assert 0 <= report.mean_metrics.get("accuracy", -1) <= 1
+        print(f"Walk-Forward 报告:\n{report.summary()}")

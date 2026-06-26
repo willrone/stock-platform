@@ -446,10 +446,12 @@ class EnsembleModelManager:
         self, y_true: np.ndarray, y_pred: np.ndarray
     ) -> Dict[str, float]:
         """计算集成模型指标"""
+        n_classes = len(np.unique(y_true))
+        avg = 'weighted'  # 始终使用 weighted，兼容二分类和多分类
         return {
             "accuracy": accuracy_score(y_true, y_pred),
-            "precision": precision_score(y_true, y_pred, zero_division=0),
-            "recall": recall_score(y_true, y_pred, zero_division=0),
+            "precision": precision_score(y_true, y_pred, zero_division=0, average=avg),
+            "recall": recall_score(y_true, y_pred, zero_division=0, average=avg),
         }
 
 
@@ -662,8 +664,9 @@ class OnlineLearningManager:
                 return {"accuracy": 0.0, "error": "unsupported_model_type"}
 
             accuracy = accuracy_score(y, y_pred)
-            precision = precision_score(y, y_pred, zero_division=0)
-            recall = recall_score(y, y_pred, zero_division=0)
+            avg = 'weighted'  # 始终使用 weighted，兼容二分类和多分类
+            precision = precision_score(y, y_pred, zero_division=0, average=avg)
+            recall = recall_score(y, y_pred, zero_division=0, average=avg)
 
             return {
                 "accuracy": float(accuracy),

@@ -790,20 +790,49 @@ class PredictionEngine:
             else:
                 predicted_direction = 0  # 持平
 
-            # 计算置信度
+            # 计算置信度 — 使用校准后的概率
             model_confidence = model_metadata.get("performance_metrics", {}).get(
-                "accuracy", 0.5
+                "calibrated_accuracy",
+                model_metadata.get("performance_metrics", {}).get(
+                    "accuracy", 0.5
+                ),
             )
-            confidence_score = min(0.95, max(0.1, model_confidence))
+            # 如果模型有 calibrated 概率输出，优先使用
+            if hasattr(model, "predict_proba"):
+                try:
+                    proba = model.predict_proba(latest_features)[0]
+                    predicted_class = np.argmax(proba)
+                    confidence_score = float(proba[max(predicted_class, len(proba) - 1)])
+                    confidence_score = min(0.95, max(0.1, confidence_score))
+                except Exception:
+                    confidence_score = min(0.95, max(0.1, model_confidence))
+            else:
+                confidence_score = min(0.95, max(0.1, model_confidence))
 
-            # 计算置信区间
-            volatility = 0.02  # 默认波动率
-            if "volatility_20d" in features.columns:
+            # 计算波动率 — 使用 EWMA 替代硬编码
+            ewma_span = getattr(config, "ewma_span", 20)
+            if "close" in features.columns:
+                close_prices = features["close"].dropna()
+                if len(close_prices) > 1:
+                    log_returns = np.log(close_prices / close_prices.shift(1)).dropna()
+                    if len(log_returns) > 1:
+                        # EWMA 波动率
+                        ewma = pd.Series(log_returns).ewm(span=ewma_span, adjust=False)
+                        volatility = float(ewma.std().iloc[-1])
+                        # 年化（假设 252 交易日）
+                        volatility *= np.sqrt(252)
+                    else:
+                        volatility = 0.02
+                else:
+                    volatility = 0.02
+            elif "volatility_20d" in features.columns:
                 volatility = (
                     features["volatility_20d"].iloc[-1]
                     if not pd.isna(features["volatility_20d"].iloc[-1])
                     else 0.02
                 )
+            else:
+                volatility = 0.02
 
             confidence_interval = self._calculate_confidence_interval(
                 predicted_price, volatility, config.confidence_level
