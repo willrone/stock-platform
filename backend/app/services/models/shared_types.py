@@ -64,6 +64,13 @@ class TrainingConfig:
     feature_columns: Optional[List[str]] = None
     target_column: str = "close"
 
+    # --- 新增：标签与校准配置 ---
+    num_classes: int = 3  # 分类数：2=二分类(涨/跌), 3=三分类(涨/平/跌)
+    neutral_band_width: float = 0.01  # 三分类中性带宽度（收益率在此区间内判为"平"）
+    calibration_method: str = "isotonic"  # 概率校准方法：isotonic / sigmoid / none
+    calibration_cv: int = 5  # 校准交叉验证折数
+    ewma_span: int = 20  # EWMA波动率计算窗口
+
     def __post_init__(self) -> None:
         if self.feature_columns is None:
             self.feature_columns = [

@@ -339,18 +339,20 @@ class ModelEvaluator:
         all_true_labels_array = np.array(all_true_labels)
         all_returns_array = np.array(all_returns, dtype=float)
 
-        # 计算分类指标
+        # 计算分类指标（使用 weighted average 兼容二分类和多分类）
+        # 始终使用 'weighted' 避免因某个 fold 缺失类别导致 binary 检测失败
+        avg = 'weighted'
         accuracy = float(accuracy_score(all_true_labels_array, all_predictions_array))
         precision = float(
             precision_score(
-                all_true_labels_array, all_predictions_array, zero_division=0
+                all_true_labels_array, all_predictions_array, zero_division=0, average=avg
             )
         )
         recall = float(
-            recall_score(all_true_labels_array, all_predictions_array, zero_division=0)
+            recall_score(all_true_labels_array, all_predictions_array, zero_division=0, average=avg)
         )
         f1 = float(
-            f1_score(all_true_labels_array, all_predictions_array, zero_division=0)
+            f1_score(all_true_labels_array, all_predictions_array, zero_division=0, average=avg)
         )
 
         # 计算金融指标
