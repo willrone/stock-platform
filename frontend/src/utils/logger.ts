@@ -1,22 +1,18 @@
-type LogArgs = unknown[];
+// 前端日志工具 - 生产环境下可关闭的 console 封装
 
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 export const logger = {
-  debug: (...args: LogArgs) => {
-    if (isDevelopment) {
-      globalThis.console.log(...args);
-    }
+  debug: (...args: unknown[]) => {
+    if (!IS_PROD) console.debug('[DEBUG]', ...args);
   },
-  info: (...args: LogArgs) => {
-    if (isDevelopment) {
-      globalThis.console.info(...args);
-    }
+  info: (...args: unknown[]) => {
+    if (!IS_PROD) console.info('[INFO]', ...args);
   },
-  warn: (...args: LogArgs) => {
-    globalThis.console.warn(...args);
+  warn: (...args: unknown[]) => {
+    console.warn('[WARN]', ...args);
   },
-  error: (...args: LogArgs) => {
-    globalThis.console.error(...args);
+  error: (...args: unknown[]) => {
+    console.error('[ERROR]', ...args);
   },
 };
