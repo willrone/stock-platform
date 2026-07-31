@@ -3,6 +3,7 @@
 """
 
 from pathlib import Path
+import secrets
 from typing import List, Optional
 
 from pydantic import model_validator
@@ -81,6 +82,27 @@ class Settings(BaseSettings):
     BACKTEST_MAX_WORKERS: int = 10  # 回测并行化工作线程数（建议为CPU核心数）
 
     # API 配置
+    # JWT 配置
+    JWT_SECRET: str = ""
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Stripe 配置（可选；未配置时计费模块仍可导入和查看套餐）
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+
+    # SMTP 邮件配置（可选；未配置时邮件降级为日志输出）
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
+    SMTP_FROM_EMAIL: str = "noreply@stock-prediction.com"
+    SMTP_FROM_NAME: str = "股票预测平台"
+
+    # API 配置
     API_V1_PREFIX: str = "/api/v1"
     CORS_ORIGINS: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://192.168.3.62:3000"
@@ -104,6 +126,13 @@ class Settings(BaseSettings):
         # PostgreSQL: asyncpg -> psycopg2
         url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
         return url
+
+    @model_validator(mode="after")
+    def check_jwt_secret(self) -> "Settings":
+        """没有显式配置密钥时生成随机密钥。"""
+        if not self.JWT_SECRET or self.JWT_SECRET == "dev-secret-change-in-production":
+            object.__setattr__(self, "JWT_SECRET", secrets.token_hex(32))
+        return self
 
     @model_validator(mode="after")
     def resolve_relative_paths(self) -> "Settings":
