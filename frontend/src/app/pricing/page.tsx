@@ -2,7 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Card, Col, Divider, List, Row, Space, Tag, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Divider,
+  List,
+  Row,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import { Check, Crown, Building2, Sparkles } from 'lucide-react';
 import { apiRequest } from '@/services/api';
 
@@ -112,7 +124,9 @@ export default function PricingPage() {
       {contextHolder}
       <Space direction="vertical" size={4} style={{ marginBottom: 28 }}>
         <Text type="secondary">PLANS / 订阅方案</Text>
-        <Title level={1} style={{ margin: 0 }}>选择适合你的研究节奏</Title>
+        <Title level={1} style={{ margin: 0 }}>
+          选择适合你的研究节奏
+        </Title>
         <Paragraph type="secondary" style={{ maxWidth: 660, margin: 0 }}>
           从小规模策略验证到团队级研究协作，按需升级资源配额。所有方案都包含安全的数据访问和可复现的回测报告。
         </Paragraph>
@@ -122,8 +136,16 @@ export default function PricingPage() {
         <Alert
           showIcon
           type="info"
-          message={<>当前套餐：<strong>{currentTier.toUpperCase()}</strong></>}
-          action={<Button type="link" onClick={() => router.push('/settings/subscription')}>管理订阅</Button>}
+          message={
+            <>
+              当前套餐：<strong>{currentTier.toUpperCase()}</strong>
+            </>
+          }
+          action={
+            <Button type="link" onClick={() => router.push('/settings/subscription')}>
+              管理订阅
+            </Button>
+          }
           style={{ marginBottom: 20 }}
         />
       )}
@@ -135,19 +157,42 @@ export default function PricingPage() {
           return (
             <Col xs={24} md={8} key={plan.id} style={{ display: 'flex' }}>
               <Card
-                title={<Space><Icon size={19} color={plan.accent} /><span>{plan.name}</span>{plan.id === 'pro' && <Tag color="blue">推荐</Tag>}</Space>}
+                title={
+                  <Space>
+                    <Icon size={19} color={plan.accent} />
+                    <span>{plan.name}</span>
+                    {plan.id === 'pro' && <Tag color="blue">推荐</Tag>}
+                  </Space>
+                }
                 style={{ width: '100%', borderTop: `3px solid ${plan.accent}` }}
                 styles={{ body: { display: 'flex', flexDirection: 'column', height: '100%' } }}
               >
-                <Title level={2} style={{ marginTop: 0 }}>{plan.price}</Title>
-                <Paragraph type="secondary" style={{ minHeight: 48 }}>{plan.description}</Paragraph>
+                <Title level={2} style={{ marginTop: 0 }}>
+                  {plan.price}
+                </Title>
+                <Paragraph type="secondary" style={{ minHeight: 48 }}>
+                  {plan.description}
+                </Paragraph>
                 <Divider style={{ margin: '8px 0 16px' }} />
                 <Space direction="vertical" size={10} style={{ flex: 1 }}>
-                  {plan.features.map(feature => <Text key={feature}><Check size={15} color="#16a34a" style={{ verticalAlign: 'text-bottom', marginRight: 8 }} />{feature}</Text>)}
+                  {plan.features.map(feature => (
+                    <Text key={feature}>
+                      <Check
+                        size={15}
+                        color="#16a34a"
+                        style={{ verticalAlign: 'text-bottom', marginRight: 8 }}
+                      />
+                      {feature}
+                    </Text>
+                  ))}
                 </Space>
                 <Divider style={{ margin: '20px 0 14px' }} />
                 <Space direction="vertical" size={6} style={{ marginBottom: 18 }}>
-                  {plan.limits.map(limit => <Text type="secondary" key={limit}>{limit}</Text>)}
+                  {plan.limits.map(limit => (
+                    <Text type="secondary" key={limit}>
+                      {limit}
+                    </Text>
+                  ))}
                 </Space>
                 <Button
                   type={plan.id === 'pro' ? 'primary' : 'default'}
@@ -156,7 +201,13 @@ export default function PricingPage() {
                   loading={loadingPlan === plan.id}
                   onClick={() => choosePlan(plan)}
                 >
-                  {isCurrent ? '当前套餐' : loggedIn ? (plan.id === 'enterprise' ? '联系销售' : '升级方案') : '开始使用'}
+                  {isCurrent
+                    ? '当前套餐'
+                    : loggedIn
+                      ? plan.id === 'enterprise'
+                        ? '联系销售'
+                        : '升级方案'
+                      : '开始使用'}
                 </Button>
               </Card>
             </Col>

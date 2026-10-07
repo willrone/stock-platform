@@ -8,12 +8,7 @@
  * - 请求重试
  */
 
-import axios, {
-  AxiosInstance,
-  AxiosResponse,
-  AxiosError,
-  InternalAxiosRequestConfig,
-} from 'axios';
+import axios, { AxiosInstance, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // 标准响应格式
 export interface ApiResponse<T = unknown> {

@@ -147,7 +147,7 @@ const strategyTemplates = [
 export default function TemplatesPage() {
   const router = useRouter();
 
-  const handleUseTemplate = (template: typeof strategyTemplates[0]) => {
+  const handleUseTemplate = (template: (typeof strategyTemplates)[0]) => {
     // 跳转到创建回测任务页面，并预填参数
     const params = new URLSearchParams();
     params.set('templateId', template.id);
@@ -186,7 +186,7 @@ export default function TemplatesPage() {
 
       {/* 策略模板列表 */}
       <Grid container spacing={3}>
-        {strategyTemplates.map((template) => {
+        {strategyTemplates.map(template => {
           const Icon = template.icon;
           const preview = template.backtestPreview;
 
@@ -257,7 +257,7 @@ export default function TemplatesPage() {
 
                   {/* 标签 */}
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                    {template.tags.map((tag) => (
+                    {template.tags.map(tag => (
                       <Chip
                         key={tag}
                         label={tag}
@@ -271,7 +271,11 @@ export default function TemplatesPage() {
 
                 {/* 描述 */}
                 <CardContent sx={{ pt: 2, pb: 1, flexGrow: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ lineHeight: 1.7, mb: 2 }}
+                  >
                     {template.description}
                   </Typography>
 
@@ -295,10 +299,7 @@ export default function TemplatesPage() {
                         >
                           总收益
                         </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 700, color: 'success.main' }}
-                        >
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
                           {preview.totalReturn}
                         </Typography>
                       </Box>
@@ -326,10 +327,7 @@ export default function TemplatesPage() {
                         >
                           最大回撤
                         </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 700, color: 'warning.main' }}
-                        >
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: 'warning.main' }}>
                           {preview.maxDrawdown}
                         </Typography>
                       </Box>
@@ -343,10 +341,7 @@ export default function TemplatesPage() {
                         >
                           年化收益
                         </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 700, color: 'success.main' }}
-                        >
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
                           {preview.annualizedReturn}
                         </Typography>
                       </Box>

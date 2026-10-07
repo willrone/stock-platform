@@ -99,11 +99,7 @@ function ConfigSnapshotCard({
               {JSON.stringify(configSnapshot, null, 2)}
             </Box>
           ) : (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ py: 2, textAlign: 'center' }}
-            >
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
               暂无配置快照
             </Typography>
           )}

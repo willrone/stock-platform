@@ -87,14 +87,16 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#f0f2f5',
-      padding: '20px',
-    }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f0f2f5',
+        padding: '20px',
+      }}
+    >
       <Card style={{ width: '100%', maxWidth: 420, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <KeyRound size={48} style={{ color: '#1890ff', marginBottom: 12 }} />
@@ -109,16 +111,29 @@ export default function ResetPasswordPage() {
         {success ? (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <CheckCircle size={64} style={{ color: '#52c41a', marginBottom: 16 }} />
-            <Title level={4} style={{ color: '#52c41a' }}>密码重置成功！</Title>
+            <Title level={4} style={{ color: '#52c41a' }}>
+              密码重置成功！
+            </Title>
             <Text type="secondary">正在跳转到登录页面...</Text>
           </div>
         ) : isResetMode ? (
           <Form onFinish={handleResetPassword} layout="vertical">
             {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
-            <Form.Item name="password" label="新密码" rules={[{ required: true, message: '请输入新密码' }, { min: 6, message: '密码至少 6 位' }]}>
+            <Form.Item
+              name="password"
+              label="新密码"
+              rules={[
+                { required: true, message: '请输入新密码' },
+                { min: 6, message: '密码至少 6 位' },
+              ]}
+            >
               <Input.Password placeholder="至少 6 位" />
             </Form.Item>
-            <Form.Item name="confirmPassword" label="确认密码" rules={[{ required: true, message: '请再次输入密码' }]}>
+            <Form.Item
+              name="confirmPassword"
+              label="确认密码"
+              rules={[{ required: true, message: '请再次输入密码' }]}
+            >
               <Input.Password placeholder="再次输入新密码" />
             </Form.Item>
             <Button type="primary" htmlType="submit" block loading={loading}>
@@ -135,8 +150,14 @@ export default function ResetPasswordPage() {
           />
         ) : (
           <Form onFinish={handleRequestReset} layout="vertical">
-            {requestError && <Alert message={requestError} type="error" showIcon style={{ marginBottom: 16 }} />}
-            <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+            {requestError && (
+              <Alert message={requestError} type="error" showIcon style={{ marginBottom: 16 }} />
+            )}
+            <Form.Item
+              name="email"
+              label="邮箱"
+              rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}
+            >
               <Input placeholder="your@email.com" />
             </Form.Item>
             <Button type="primary" htmlType="submit" block loading={requestLoading}>

@@ -37,14 +37,7 @@ import {
   TableRow,
   Paper,
 } from '@mui/material';
-import {
-  ArrowLeft,
-  ChevronDown,
-  Play,
-  Eye,
-  CheckCircle,
-  AlertCircle,
-} from 'lucide-react';
+import { ArrowLeft, ChevronDown, Play, Eye, CheckCircle, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiRequest } from '@/services/api';
 
@@ -114,7 +107,7 @@ function formatValue(v: unknown): string {
     return '—';
   }
   if (Array.isArray(v)) {
-    if (v.every((x) => typeof x === 'string')) return v.join(', ');
+    if (v.every(x => typeof x === 'string')) return v.join(', ');
     return JSON.stringify(v);
   }
   if (typeof v === 'object') return JSON.stringify(v);
@@ -122,10 +115,7 @@ function formatValue(v: unknown): string {
 }
 
 /** Flatten nested object into dot-path keys */
-function flattenObject(
-  obj: Record<string, unknown>,
-  prefix = '',
-): Record<string, unknown> {
+function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
     const path = prefix ? `${prefix}.${k}` : k;
@@ -176,18 +166,15 @@ export default function TuningPage() {
   useEffect(() => {
     let cancelled = false;
     setTasksLoading(true);
-    apiRequest.get<TaskBrief[]>('/api/v1/tasks?limit=200&status=completed')
-      .then((data) => {
+    apiRequest
+      .get<TaskBrief[]>('/api/v1/tasks?limit=200&status=completed')
+      .then(data => {
         if (cancelled) return;
         // data 可能是 {tasks, total, ...} 结构，按两种形态归一为列表
         const list: TaskBrief[] = Array.isArray(data)
           ? data
           : ((data as Record<string, unknown>).tasks as TaskBrief[]) || [];
-        setTasks(
-          list.filter(
-            (t) => t.status === 'completed' || t.status === 'success',
-          ),
-        );
+        setTasks(list.filter(t => t.status === 'completed' || t.status === 'success'));
       })
       .catch(() => {
         // fallback: 可能是列表响应变成了分页结构
@@ -209,7 +196,7 @@ export default function TuningPage() {
     setNewTaskName('');
     try {
       const resp = await apiRequest.get<Record<string, unknown>>(
-        `/api/v1/tasks/${task.task_id}/config`,
+        `/api/v1/tasks/${task.task_id}/config`
       );
       const snapshot = resp;
       if (snapshot && typeof snapshot === 'object') {
@@ -244,7 +231,7 @@ export default function TuningPage() {
 
   /* ── Handle override input change ──────────────────────────── */
   const handleOverrideChange = (path: string, value: string) => {
-    setOverrides((prev) => {
+    setOverrides(prev => {
       const next = { ...prev };
       if (value === '' || value === formatValue(flatConfig[path])) {
         delete next[path];
@@ -277,13 +264,10 @@ export default function TuningPage() {
     }
 
     try {
-      const resp = await apiRequest.post<PreviewResponse>(
-        '/api/v1/tasks/tuning/preview-config',
-        {
-          base_task_id: selectedTask.task_id,
-          overrides: typedOverrides,
-        },
-      );
+      const resp = await apiRequest.post<PreviewResponse>('/api/v1/tasks/tuning/preview-config', {
+        base_task_id: selectedTask.task_id,
+        overrides: typedOverrides,
+      });
       setPreview(resp);
       if (!newTaskName) {
         setNewTaskName(`调优-${selectedTask.task_name}`);
@@ -318,14 +302,11 @@ export default function TuningPage() {
     }
 
     try {
-      const resp = await apiRequest.post<SubmitResponse>(
-        '/api/v1/tasks/tuning/submit',
-        {
-          base_task_id: selectedTask.task_id,
-          task_name: newTaskName,
-          overrides: typedOverrides,
-        },
-      );
+      const resp = await apiRequest.post<SubmitResponse>('/api/v1/tasks/tuning/submit', {
+        base_task_id: selectedTask.task_id,
+        task_name: newTaskName,
+        overrides: typedOverrides,
+      });
       setSubmitResult(resp);
       setSnackbar({
         open: true,
@@ -347,12 +328,13 @@ export default function TuningPage() {
   const fieldsWithOverrides = React.useMemo(() => {
     const entries = Object.entries(flatConfig);
     // filter out internal keys
-    const filtered = entries.filter(
-      ([k]) => !k.startsWith('_') && k !== 'task_name',
-    );
+    const filtered = entries.filter(([k]) => !k.startsWith('_') && k !== 'task_name');
 
     // group by prefix
-    const groups: Record<string, Array<{ path: string; orig: unknown; newVal: string | null }>> = {};
+    const groups: Record<
+      string,
+      Array<{ path: string; orig: unknown; newVal: string | null }>
+    > = {};
     for (const [path, orig] of filtered) {
       const group = getFieldGroup(path);
       if (!groups[group]) groups[group] = [];
@@ -391,10 +373,8 @@ export default function TuningPage() {
             loading={tasksLoading}
             value={selectedTask}
             onChange={handleTaskChange}
-            getOptionLabel={(opt) =>
-              `${opt.task_name} (${opt.task_id.slice(0, 8)}...)`
-            }
-            renderInput={(params) => (
+            getOptionLabel={opt => `${opt.task_name} (${opt.task_id.slice(0, 8)}...)`}
+            renderInput={params => (
               <TextField
                 {...params}
                 label="选择已完成回测任务"
@@ -404,9 +384,7 @@ export default function TuningPage() {
                     ...params.InputProps,
                     endAdornment: (
                       <>
-                        {tasksLoading ? (
-                          <CircularProgress size={20} />
-                        ) : null}
+                        {tasksLoading ? <CircularProgress size={20} /> : null}
                         {params.InputProps.endAdornment}
                       </>
                     ),
@@ -414,9 +392,7 @@ export default function TuningPage() {
                 }}
               />
             )}
-            isOptionEqualToValue={(opt, val) =>
-              opt.task_id === val.task_id
-            }
+            isOptionEqualToValue={(opt, val) => opt.task_id === val.task_id}
             fullWidth
             size="small"
           />
@@ -443,9 +419,7 @@ export default function TuningPage() {
                 <CircularProgress />
               </Box>
             ) : Object.keys(fieldsWithOverrides).length === 0 ? (
-              <Typography color="text.secondary">
-                该任务没有可编辑的配置参数
-              </Typography>
+              <Typography color="text.secondary">该任务没有可编辑的配置参数</Typography>
             ) : (
               Object.entries(fieldsWithOverrides).map(
                 ([group, fields]) =>
@@ -454,15 +428,11 @@ export default function TuningPage() {
                       <AccordionSummary expandIcon={<ChevronDown size={18} />}>
                         <Typography variant="subtitle2" fontWeight={600}>
                           {group}
-                          <Chip
-                            label={`${fields.length} 项`}
-                            size="small"
-                            sx={{ ml: 1 }}
-                          />
+                          <Chip label={`${fields.length} 项`} size="small" sx={{ ml: 1 }} />
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails>
-                        {fields.map((f) => (
+                        {fields.map(f => (
                           <Box
                             key={f.path}
                             sx={{
@@ -503,9 +473,7 @@ export default function TuningPage() {
                               variant="outlined"
                               placeholder={formatValue(f.orig)}
                               value={f.newVal ?? ''}
-                              onChange={(e) =>
-                                handleOverrideChange(f.path, e.target.value)
-                              }
+                              onChange={e => handleOverrideChange(f.path, e.target.value)}
                               sx={{ flex: 1, minWidth: 160 }}
                               slotProps={{
                                 input: {
@@ -517,7 +485,7 @@ export default function TuningPage() {
                         ))}
                       </AccordionDetails>
                     </Accordion>
-                  ),
+                  )
               )
             )}
           </CardContent>
@@ -535,7 +503,7 @@ export default function TuningPage() {
             <TextField
               label="新任务名称"
               value={newTaskName}
-              onChange={(e) => setNewTaskName(e.target.value)}
+              onChange={e => setNewTaskName(e.target.value)}
               fullWidth
               size="small"
               sx={{ mb: 2 }}
@@ -544,17 +512,9 @@ export default function TuningPage() {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="outlined"
-                startIcon={
-                  previewLoading ? (
-                    <CircularProgress size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )
-                }
+                startIcon={previewLoading ? <CircularProgress size={16} /> : <Eye size={16} />}
                 onClick={handlePreview}
-                disabled={
-                  !selectedTask || previewLoading || submitLoading
-                }
+                disabled={!selectedTask || previewLoading || submitLoading}
               >
                 {previewLoading ? '生成中...' : '预览配置'}
               </Button>
@@ -569,9 +529,7 @@ export default function TuningPage() {
                   )
                 }
                 onClick={handleSubmit}
-                disabled={
-                  !preview || submitLoading || !newTaskName.trim()
-                }
+                disabled={!preview || submitLoading || !newTaskName.trim()}
               >
                 {submitLoading ? '提交中...' : '提交新回测'}
               </Button>
@@ -604,11 +562,8 @@ export default function TuningPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {preview.changes.map((c) => (
-                      <TableRow
-                        key={c.path}
-                        sx={{ '&:hover': { bgcolor: 'action.hover' } }}
-                      >
+                    {preview.changes.map(c => (
+                      <TableRow key={c.path} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
                         <TableCell
                           sx={{
                             fontFamily: 'monospace',
@@ -648,9 +603,7 @@ export default function TuningPage() {
 
             <Accordion>
               <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                <Typography variant="subtitle2">
-                  完整解析配置
-                </Typography>
+                <Typography variant="subtitle2">完整解析配置</Typography>
               </AccordionSummary>
               <AccordionDetails>
                 <Box
@@ -690,17 +643,13 @@ export default function TuningPage() {
           />
           <CardContent>
             <Typography>
-              新任务{' '}
-              <strong>{submitResult.task_name}</strong>{' '}
-              已创建并提交执行。
+              新任务 <strong>{submitResult.task_name}</strong> 已创建并提交执行。
             </Typography>
             <Button
               variant="text"
               size="small"
               sx={{ mt: 1 }}
-              onClick={() =>
-                router.push(`/tasks/${submitResult.task_id}`)
-              }
+              onClick={() => router.push(`/tasks/${submitResult.task_id}`)}
             >
               查看任务详情
             </Button>
@@ -726,12 +675,12 @@ export default function TuningPage() {
       <Snackbar
         open={snackbar.open}
         autoHideDuration={5000}
-        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        onClose={() => setSnackbar(s => ({ ...s, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           severity={snackbar.severity}
-          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          onClose={() => setSnackbar(s => ({ ...s, open: false }))}
         >
           {snackbar.message}
         </Alert>

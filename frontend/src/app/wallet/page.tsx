@@ -2,7 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Card, Col, Form, Input, message, Progress, Row, Statistic, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  message,
+  Progress,
+  Row,
+  Statistic,
+  Tag,
+  Typography,
+} from 'antd';
 import { RefreshCw, CreditCard, Wallet, TrendingDown, History } from 'lucide-react';
 import { apiRequest } from '@/services/api';
 
@@ -146,12 +159,7 @@ export default function WalletPage() {
     <div className="max-w-6xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <Title level={2}>钱包中心</Title>
-        <Button
-          icon={<RefreshCw size={14} />}
-          onClick={handleRefresh}
-          loading={refreshing}
-          ghost
-        >
+        <Button icon={<RefreshCw size={14} />} onClick={handleRefresh} loading={refreshing} ghost>
           刷新
         </Button>
       </div>
@@ -168,14 +176,14 @@ export default function WalletPage() {
               prefix={<Wallet size={20} />}
             />
             <Progress
-              percent={balance ? (balance.balance_cents / 100) / 100 * 100 : 0}
+              percent={balance ? (balance.balance_cents / 100 / 100) * 100 : 0}
               size="small"
               style={{ marginTop: 8 }}
               strokeColor="#1890ff"
             />
           </Card>
         </Col>
-        
+
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
@@ -190,7 +198,7 @@ export default function WalletPage() {
             </Text>
           </Card>
         </Col>
-        
+
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
@@ -225,7 +233,9 @@ export default function WalletPage() {
               <div key={type} className="border rounded p-3">
                 <div className="flex justify-between items-center mb-2">
                   <Text strong>{formatEventName(type)}</Text>
-                  <Tag>{data.count} 次 / ¥{data.total_cost_yuan.toFixed(2)}</Tag>
+                  <Tag>
+                    {data.count} 次 / ¥{data.total_cost_yuan.toFixed(2)}
+                  </Tag>
                 </div>
                 <Progress
                   percent={Math.min(100, (data.count / 1000) * 100)}
@@ -241,10 +251,17 @@ export default function WalletPage() {
       </Card>
 
       {/* 账单历史 */}
-      <Card title="账单历史" extra={<Button type="link" onClick={() => router.push('/commerce/billing/history')}>查看全部</Button>}>
+      <Card
+        title="账单历史"
+        extra={
+          <Button type="link" onClick={() => router.push('/commerce/billing/history')}>
+            查看全部
+          </Button>
+        }
+      >
         {billingHistory.length > 0 ? (
           <div className="space-y-3">
-            {billingHistory.slice(0, 5).map((record) => (
+            {billingHistory.slice(0, 5).map(record => (
               <div key={record.id} className="border rounded p-3 flex justify-between items-center">
                 <div>
                   <Text strong>{record.amount_cents / 100} 元</Text>
@@ -268,7 +285,12 @@ export default function WalletPage() {
       </Card>
 
       {/* 充值弹窗 */}
-      <Form id="deposit-form" onFinish={handleDeposit} layout="vertical" style={{ display: 'none' }}>
+      <Form
+        id="deposit-form"
+        onFinish={handleDeposit}
+        layout="vertical"
+        style={{ display: 'none' }}
+      >
         <Form.Item
           name="amount"
           label="充值金额（元）"
@@ -277,7 +299,12 @@ export default function WalletPage() {
           <Input type="number" min={10} step={10} placeholder="例如：100" addonAfter="元" />
         </Form.Item>
         <Form.Item>
-          <Button type="primary" htmlType="submit" loading={depositLoading} icon={<CreditCard size={16} />}>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={depositLoading}
+            icon={<CreditCard size={16} />}
+          >
             确认充值
           </Button>
         </Form.Item>

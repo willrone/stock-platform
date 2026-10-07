@@ -70,7 +70,11 @@ export default function DashboardPage() {
         const [tasksResult, statsResult, healthResult] = await Promise.all([
           TaskService.getTasks(undefined, 5, 0),
           TaskService.getTaskStats(),
-          apiRequest.get<{ data?: { services?: Record<string, string>; uptime?: number } }>('/monitoring/health').catch(() => null),
+          apiRequest
+            .get<{ data?: { services?: Record<string, string>; uptime?: number } }>(
+              '/monitoring/health'
+            )
+            .catch(() => null),
         ]);
 
         setRecentTasks(tasksResult.tasks);
@@ -163,34 +167,38 @@ export default function DashboardPage() {
           variant="filled"
           sx={{ borderRadius: 2 }}
           action={
-            <Button color="inherit" size="small" onClick={() => {
-              setLoadError(null);
-              setLoading(true);
-              const loadDashboard = async () => {
-                try {
-                  const [tasksResult, statsResult] = await Promise.all([
-                    TaskService.getTasks(undefined, 5, 0),
-                    TaskService.getTaskStats(),
-                  ]);
-                  setRecentTasks(tasksResult.tasks);
-                  setSystemStats({
-                    totalTasks: statsResult.total,
-                    runningTasks: statsResult.running,
-                    completedTasks: statsResult.completed,
-                    failedTasks: statsResult.failed,
-                    dataFiles: 156,
-                    systemHealth: 'good' as const,
-                  });
-                } catch (e) {
-                  const msg = e instanceof Error ? e.message : '加载失败';
-                  setLoadError(msg);
-                  showSnackbar.showError(msg);
-                } finally {
-                  setLoading(false);
-                }
-              };
-              loadDashboard();
-            }}>
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                setLoadError(null);
+                setLoading(true);
+                const loadDashboard = async () => {
+                  try {
+                    const [tasksResult, statsResult] = await Promise.all([
+                      TaskService.getTasks(undefined, 5, 0),
+                      TaskService.getTaskStats(),
+                    ]);
+                    setRecentTasks(tasksResult.tasks);
+                    setSystemStats({
+                      totalTasks: statsResult.total,
+                      runningTasks: statsResult.running,
+                      completedTasks: statsResult.completed,
+                      failedTasks: statsResult.failed,
+                      dataFiles: 156,
+                      systemHealth: 'good' as const,
+                    });
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : '加载失败';
+                    setLoadError(msg);
+                    showSnackbar.showError(msg);
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                loadDashboard();
+              }}
+            >
               重试
             </Button>
           }
@@ -198,12 +206,16 @@ export default function DashboardPage() {
           <Typography variant="body2" sx={{ fontWeight: 500 }}>
             加载失败
           </Typography>
-          <Typography variant="caption">
-            {loadError}
-          </Typography>
+          <Typography variant="caption">{loadError}</Typography>
         </Alert>
         {/* 骨架屏：错误时显示占位 */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+            gap: 2,
+          }}
+        >
           {[1, 2, 3, 4].map(i => (
             <Card key={i}>
               <CardContent>

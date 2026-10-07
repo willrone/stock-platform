@@ -11,13 +11,7 @@
  */
 
 import React from 'react';
-import {
-  Snackbar,
-  Alert,
-  Box,
-  Typography,
-  IconButton,
-} from '@mui/material';
+import { Snackbar, Alert, Box, Typography, IconButton } from '@mui/material';
 import { X } from 'lucide-react';
 import { useSnackbarStore } from '../../stores/useSnackbarStore';
 
@@ -86,11 +80,7 @@ export const GlobalSnackbar: React.FC = () => {
                 },
               }}
               action={
-                <IconButton
-                  size="small"
-                  color="inherit"
-                  onClick={() => removeMessage(message.id)}
-                >
+                <IconButton size="small" color="inherit" onClick={() => removeMessage(message.id)}>
                   <X size={16} />
                 </IconButton>
               }
