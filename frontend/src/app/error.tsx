@@ -14,18 +14,18 @@ export default function Error({
   }, [error]);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '60vh',
-      padding: 32,
-      textAlign: 'center',
-    }}>
-      <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8, color: '#d32f2f' }}>
-        出错了
-      </h1>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        padding: 32,
+        textAlign: 'center',
+      }}
+    >
+      <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8, color: '#d32f2f' }}>出错了</h1>
       <p style={{ fontSize: 14, color: '#666', marginBottom: 24, maxWidth: 400 }}>
         {error.message || '页面加载时遇到错误'}
       </p>

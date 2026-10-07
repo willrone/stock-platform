@@ -9,16 +9,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Box,
-  Typography,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Grid,
-  Chip,
-} from '@mui/material';
+import { Box, Typography, Button, Card, CardContent, Container, Grid, Chip } from '@mui/material';
 import {
   TrendingUp,
   BarChart3,
@@ -267,7 +258,8 @@ export default function Home() {
                   width: 320,
                   height: 320,
                   borderRadius: 4,
-                  background: 'linear-gradient(135deg, rgba(25,118,210,0.12), rgba(124,58,237,0.12))',
+                  background:
+                    'linear-gradient(135deg, rgba(25,118,210,0.12), rgba(124,58,237,0.12))',
                   border: '1px solid rgba(255,255,255,0.08)',
                   display: 'flex',
                   alignItems: 'center',
@@ -309,7 +301,7 @@ export default function Home() {
       >
         <Container maxWidth="lg">
           <Grid container spacing={3} justifyContent="center">
-            {highlights.map((item) => {
+            {highlights.map(item => {
               const Icon = item.icon;
               return (
                 <Grid size={{ xs: 6, sm: 3 }} key={item.label}>
@@ -319,10 +311,7 @@ export default function Home() {
                       py: 1,
                     }}
                   >
-                    <Icon
-                      size={28}
-                      style={{ color: '#1976d2', marginBottom: 8 }}
-                    />
+                    <Icon size={28} style={{ color: '#1976d2', marginBottom: 8 }} />
                     <Typography
                       variant="h4"
                       sx={{ fontWeight: 700, color: 'text.primary', mb: 0.5 }}
@@ -364,7 +353,7 @@ export default function Home() {
           </Box>
 
           <Grid container spacing={3}>
-            {features.map((feature) => {
+            {features.map(feature => {
               const Icon = feature.icon;
               return (
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={feature.title}>
@@ -383,7 +372,9 @@ export default function Home() {
                       borderRadius: 3,
                     }}
                   >
-                    <CardContent sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                    <CardContent
+                      sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column' }}
+                    >
                       <Box
                         sx={{
                           width: 56,
@@ -446,8 +437,7 @@ export default function Home() {
             variant="body1"
             sx={{ color: 'rgba(255,255,255,0.7)', mb: 4, lineHeight: 1.7 }}
           >
-            立即注册，免费体验 AI 驱动的量化研究工具。
-            从策略构思到绩效分析，一站式完成。
+            立即注册，免费体验 AI 驱动的量化研究工具。 从策略构思到绩效分析，一站式完成。
           </Typography>
           <Button
             variant="contained"
@@ -483,9 +473,7 @@ export default function Home() {
         }}
       >
         <Container maxWidth="lg">
-          <Typography variant="body2">
-            股票预测平台 © 2025 — 基于 AI 的智能投资决策系统
-          </Typography>
+          <Typography variant="body2">股票预测平台 © 2025 — 基于 AI 的智能投资决策系统</Typography>
         </Container>
       </Box>
     </Box>

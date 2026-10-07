@@ -6,11 +6,11 @@
  */
 
 import { apiRequest } from '@/services/api';
-import type { 
-  BalanceResponse, 
-  UsageSummaryResponse, 
-  BillingRecord, 
-  UsageRecordResponse 
+import type {
+  BalanceResponse,
+  UsageSummaryResponse,
+  BillingRecord,
+  UsageRecordResponse,
 } from '@/services/api/commerce';
 
 export class CommerceService {
@@ -23,7 +23,11 @@ export class CommerceService {
    * @param metadata - 额外元数据
    * @returns 用量记录响应
    */
-  async recordUsage(event_type: string, quantity = 1, metadata?: Record<string, any>): Promise<UsageRecordResponse> {
+  async recordUsage(
+    event_type: string,
+    quantity = 1,
+    metadata?: Record<string, any>
+  ): Promise<UsageRecordResponse> {
     return apiRequest.post<UsageRecordResponse>(`${this.baseURL}/usage`, {
       event_type,
       quantity,
@@ -103,7 +107,9 @@ export class CommerceService {
    * 检查是否可以执行操作
    * @param event_type - 事件类型
    */
-  async checkCanExecute(event_type: string): Promise<{ can_proceed: boolean; message: string; estimated_cost_yuan: number }> {
+  async checkCanExecute(
+    event_type: string
+  ): Promise<{ can_proceed: boolean; message: string; estimated_cost_yuan: number }> {
     return apiRequest.get(`${this.baseURL}/check/${encodeURIComponent(event_type)}`);
   }
 }

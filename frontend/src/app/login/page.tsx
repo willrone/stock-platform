@@ -5,15 +5,23 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAppStore } from '@/stores/useAppStore';
 import {
-  Box, Card, TextField, Button, Typography, Tabs, Tab, Alert,
-  CircularProgress, Stack
+  Box,
+  Card,
+  TextField,
+  Button,
+  Typography,
+  Tabs,
+  Tab,
+  Alert,
+  CircularProgress,
+  Stack,
 } from '@mui/material';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function LoginPage() {
   const router = useRouter();
-  const setUser = useAppStore((s) => s.setUser);
+  const setUser = useAppStore(s => s.setUser);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState(0);
   const [error, setError] = useState('');
@@ -80,13 +88,15 @@ export default function LoginPage() {
   };
 
   return (
-    <Box sx={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      bgcolor: '#f0f2f5',
-    }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: '#f0f2f5',
+      }}
+    >
       <Card sx={{ width: 420, p: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <Typography variant="h5" textAlign="center" gutterBottom>
           📈 量化研究平台
@@ -95,18 +105,37 @@ export default function LoginPage() {
           AI 驱动的量化回测与因子分析工具
         </Typography>
 
-        <Tabs value={tab} onChange={(_, v) => { setTab(v); setError(''); }} centered sx={{ mb: 3 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => {
+            setTab(v);
+            setError('');
+          }}
+          centered
+          sx={{ mb: 3 }}
+        >
           <Tab label="登录" />
           <Tab label="注册" />
         </Tabs>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {tab === 0 ? (
           <Box component="form" onSubmit={handleLogin}>
             <Stack spacing={2.5}>
               <TextField name="email" label="邮箱" type="email" required fullWidth size="small" />
-              <TextField name="password" label="密码" type="password" required fullWidth size="small" />
+              <TextField
+                name="password"
+                label="密码"
+                type="password"
+                required
+                fullWidth
+                size="small"
+              />
               <Button type="submit" variant="contained" fullWidth disabled={loading}>
                 {loading ? <CircularProgress size={24} /> : '登录'}
               </Button>
@@ -125,7 +154,15 @@ export default function LoginPage() {
             <Stack spacing={2.5}>
               <TextField name="email" label="邮箱" type="email" required fullWidth size="small" />
               <TextField name="username" label="用户名" required fullWidth size="small" />
-              <TextField name="password" label="密码" type="password" required fullWidth size="small" inputProps={{ minLength: 6 }} />
+              <TextField
+                name="password"
+                label="密码"
+                type="password"
+                required
+                fullWidth
+                size="small"
+                inputProps={{ minLength: 6 }}
+              />
               <Button type="submit" variant="contained" fullWidth disabled={loading}>
                 {loading ? <CircularProgress size={24} /> : '注册'}
               </Button>

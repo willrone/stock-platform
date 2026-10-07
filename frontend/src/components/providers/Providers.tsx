@@ -21,9 +21,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <MUIThemeProvider>
       <ErrorBoundary>
-        <AppLayout>
-          {children}
-        </AppLayout>
+        <AppLayout>{children}</AppLayout>
         <GlobalSnackbar />
       </ErrorBoundary>
     </MUIThemeProvider>

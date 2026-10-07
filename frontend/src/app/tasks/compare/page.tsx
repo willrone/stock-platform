@@ -168,7 +168,7 @@ export default function ComparePage() {
         });
         if (!cancelled) {
           const backtestTasks = (result?.tasks ?? []).filter(
-            (t: Task) => t.task_type === 'backtest',
+            (t: Task) => t.task_type === 'backtest'
           );
           setAllBacktestTasks(backtestTasks);
         }
@@ -274,9 +274,7 @@ export default function ComparePage() {
             getOptionLabel={option => option.task_name}
             isOptionEqualToValue={(o, v) => o.task_id === v.task_id}
             filterSelectedOptions
-            noOptionsText={
-              loadingTasks ? '加载中…' : '没有符合条件的已完成回测任务'
-            }
+            noOptionsText={loadingTasks ? '加载中…' : '没有符合条件的已完成回测任务'}
             renderInput={params => (
               <TextField
                 {...params}
@@ -410,12 +408,7 @@ export default function ComparePage() {
               个存在差异
             </Typography>
 
-            <ToggleButtonGroup
-              value={mode}
-              exclusive
-              onChange={handleModeChange}
-              size="small"
-            >
+            <ToggleButtonGroup value={mode} exclusive onChange={handleModeChange} size="small">
               <ToggleButton value="diff">仅差异</ToggleButton>
               <ToggleButton value="full">全部</ToggleButton>
             </ToggleButtonGroup>
@@ -439,10 +432,7 @@ export default function ComparePage() {
                     参数名
                   </TableCell>
                   {compareResult.tasks.map(task => (
-                    <TableCell
-                      key={task.task_id}
-                      sx={{ fontWeight: 700, minWidth: 160 }}
-                    >
+                    <TableCell key={task.task_id} sx={{ fontWeight: 700, minWidth: 160 }}>
                       {task.task_name}
                     </TableCell>
                   ))}
@@ -457,9 +447,7 @@ export default function ComparePage() {
                       sx={{ py: 4 }}
                     >
                       <Typography variant="body2" color="text.secondary">
-                        {mode === 'diff'
-                          ? '所有参数均相同，无差异'
-                          : '暂无可显示的参数'}
+                        {mode === 'diff' ? '所有参数均相同，无差异' : '暂无可显示的参数'}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -499,9 +487,7 @@ export default function ComparePage() {
                           </Typography>
                         </TableCell>
                         {compareResult.tasks.map(task => {
-                          const pv = param.values.find(
-                            v => v.task_id === task.task_id,
-                          );
+                          const pv = param.values.find(v => v.task_id === task.task_id);
                           const cellIsMinority = minorityIds.has(task.task_id);
                           const displayVal = formatValue(pv?.value);
 
@@ -509,12 +495,8 @@ export default function ComparePage() {
                             <TableCell
                               key={task.task_id}
                               sx={{
-                                bgcolor: cellIsMinority
-                                  ? 'error.light'
-                                  : undefined,
-                                color: cellIsMinority
-                                  ? 'error.contrastText'
-                                  : undefined,
+                                bgcolor: cellIsMinority ? 'error.light' : undefined,
+                                color: cellIsMinority ? 'error.contrastText' : undefined,
                               }}
                             >
                               <Typography

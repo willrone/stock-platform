@@ -40,17 +40,17 @@ const generateId = () => `snackbar-${++messageCounter}-${Date.now()}`;
 export const useSnackbarStore = create<SnackbarState>((set, get) => ({
   messages: [],
 
-  addMessage: (message) => {
+  addMessage: message => {
     const id = generateId();
-    set((state) => ({
+    set(state => ({
       messages: [...state.messages, { ...message, id }],
     }));
     return id;
   },
 
-  removeMessage: (id) => {
-    set((state) => ({
-      messages: state.messages.filter((m) => m.id !== id),
+  removeMessage: id => {
+    set(state => ({
+      messages: state.messages.filter(m => m.id !== id),
     }));
   },
 

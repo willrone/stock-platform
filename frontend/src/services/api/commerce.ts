@@ -1,6 +1,6 @@
 /**
  * 按使用量计费 API 服务
- * 
+ *
  * 提供计费事件记录、余额查询、充值、账单历史等接口调用
  */
 
@@ -18,11 +18,14 @@ export interface UsageSummaryResponse {
   year: number;
   total_spent_cents: number;
   total_spent_yuan: number;
-  events: Record<string, {
-    count: number;
-    total_cost: number;
-    total_cost_yuan: number;
-  }>;
+  events: Record<
+    string,
+    {
+      count: number;
+      total_cost: number;
+      total_cost_yuan: number;
+    }
+  >;
 }
 
 export interface BillingRecord {
@@ -47,28 +50,34 @@ export interface UsageRecordResponse {
 
 export interface CommerceAPI {
   // 记录用量（扣费）
-  recordUsage: (event_type: string, quantity?: number, metadata?: Record<string, any>) => Promise<UsageRecordResponse>;
-  
+  recordUsage: (
+    event_type: string,
+    quantity?: number,
+    metadata?: Record<string, any>
+  ) => Promise<UsageRecordResponse>;
+
   // 余额查询
   getBalance: () => Promise<BalanceResponse>;
-  
+
   // 充值
   deposit: (amount: number, remark?: string) => Promise<void>;
-  
+
   // 退款
   refund: (billing_record_id: string, amount: number) => Promise<void>;
-  
+
   // 用量汇总
   getUsageSummary: (month?: number, year?: number) => Promise<UsageSummaryResponse>;
-  
+
   // 账单历史
   getBillingHistory: (limit?: number, offset?: number) => Promise<BillingRecord[]>;
-  
+
   // 计费规则
   getPricingRules: (event_type?: string) => Promise<any[]>;
-  
+
   // 检查是否可以执行
-  checkCanExecute: (event_type: string) => Promise<{ can_proceed: boolean; message: string; estimated_cost_yuan: number }>;
+  checkCanExecute: (
+    event_type: string
+  ) => Promise<{ can_proceed: boolean; message: string; estimated_cost_yuan: number }>;
 }
 
 // 事件类型常量

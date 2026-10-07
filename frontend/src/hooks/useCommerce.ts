@@ -6,10 +6,10 @@ import { commerceService } from '@/services/commerce/commerce.service';
 
 /**
  * 自定义 Hook：用于在组件中进行计费检查和记录
- * 
+ *
  * 使用方式：
  * const { canProceed, showCost, recordUsage, balance } = useCommerce();
- * 
+ *
  * if (canProceed) {
  *   // 执行业务逻辑
  *   await recordUsage(EVENT_TYPES.BACKTEST_BASIC);
@@ -19,7 +19,11 @@ export function useCommerce() {
   const router = useRouter();
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [checkResult, setCheckResult] = useState<{ can_proceed: boolean; message: string; estimated_cost_yuan: number } | null>(null);
+  const [checkResult, setCheckResult] = useState<{
+    can_proceed: boolean;
+    message: string;
+    estimated_cost_yuan: number;
+  } | null>(null);
 
   // 初始化：查询余额
   const initialize = useCallback(async () => {
@@ -47,33 +51,32 @@ export function useCommerce() {
   }, []);
 
   // 记录用量并扣费
-  const recordUsage = useCallback(async (
-    event_type: string, 
-    quantity = 1, 
-    metadata?: Record<string, any>
-  ) => {
-    try {
-      // 先检查权限
-      const check = await checkCanExecute(event_type);
-      if (!check.can_proceed) {
-        throw new Error(check.message);
-      }
+  const recordUsage = useCallback(
+    async (event_type: string, quantity = 1, metadata?: Record<string, any>) => {
+      try {
+        // 先检查权限
+        const check = await checkCanExecute(event_type);
+        if (!check.can_proceed) {
+          throw new Error(check.message);
+        }
 
-      // 记录用量
-      const result = await commerceService.recordUsage(event_type, quantity, metadata);
-      
-      // 更新余额（扣除费用）
-      if (balance !== null) {
-        setBalance(balance - result.total_cost);
-      }
+        // 记录用量
+        const result = await commerceService.recordUsage(event_type, quantity, metadata);
 
-      message.success(`本次操作花费 ¥${result.total_cost.toFixed(2)}`);
-      return result;
-    } catch (e: any) {
-      message.error(e.message || '操作失败');
-      throw e;
-    }
-  }, [balance, checkCanExecute]);
+        // 更新余额（扣除费用）
+        if (balance !== null) {
+          setBalance(balance - result.total_cost);
+        }
+
+        message.success(`本次操作花费 ¥${result.total_cost.toFixed(2)}`);
+        return result;
+      } catch (e: any) {
+        message.error(e.message || '操作失败');
+        throw e;
+      }
+    },
+    [balance, checkCanExecute]
+  );
 
   // 充值
   const deposit = useCallback(async (amount: number) => {
@@ -101,13 +104,13 @@ export function useCommerce() {
   // 自动初始化
   // 注意：这里使用 useEffect 会导致在服务器端执行，在客户端生效
   // 实际项目中应该在组件内部调用 initialize()
-  
+
   return {
     // 状态
     balance,
     loading,
     checkResult,
-    
+
     // 方法
     initialize,
     checkCanExecute,
