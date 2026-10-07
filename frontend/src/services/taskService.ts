@@ -152,4 +152,21 @@ export class TaskService {
   ): Promise<Task> {
     return apiRequest.post<Task>(`/tasks/${taskId}/rebuild`, params);
   }
+
+  /**
+   * 获取任务创建时的完整配置快照
+   * 从 GET /api/v1/tasks/{taskId}/config 获取
+   * 用于在任务详情页展示参数快照面板
+   */
+  static async getTaskConfig(taskId: string): Promise<Record<string, any>> {
+    try {
+      return await apiRequest.get<Record<string, any>>(`/tasks/${taskId}/config`);
+    } catch (error: any) {
+      // 旧任务可能没有保存快照，返回 404 时静默处理
+      if (error?.status === 404) {
+        return {};
+      }
+      throw error;
+    }
+  }
 }

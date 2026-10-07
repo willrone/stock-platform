@@ -96,6 +96,16 @@ const menuItems = [
     label: '策略回测',
   },
   {
+    key: '/templates',
+    icon: Sparkles,
+    label: '策略模板',
+  },
+  {
+    key: '/tasks/tuning',
+    icon: Sparkles,
+    label: '参数调优',
+  },
+  {
     key: '/signals',
     icon: Signal,
     label: '策略信号',

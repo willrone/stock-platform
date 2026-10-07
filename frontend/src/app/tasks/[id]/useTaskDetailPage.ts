@@ -45,6 +45,8 @@ export function useTaskDetailPage(): TaskDetailPageModel {
   const [selectedPredictionTab, setSelectedPredictionTab] = useState('chart');
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaveConfigOpen, setIsSaveConfigOpen] = useState(false);
+  const [configSnapshot, setConfigSnapshot] = useState<Record<string, any>>({});
+  const [configSnapshotLoading, setConfigSnapshotLoading] = useState(false);
   const [deleteForce, setDeleteForce] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [selectedStocksPage, setSelectedStocksPage] = useState(1);
@@ -97,10 +99,26 @@ export function useTaskDetailPage(): TaskDetailPageModel {
           await loadBacktestDetailedData(true);
         }
       }
+
+      // 同步加载配置快照
+      loadConfigSnapshot();
     } catch (_error) {
       // noop
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadConfigSnapshot = async (): Promise<void> => {
+    setConfigSnapshotLoading(true);
+    try {
+      const snapshot = await TaskService.getTaskConfig(taskId);
+      setConfigSnapshot(snapshot || {});
+    } catch (_error) {
+      // 静默处理，旧任务可能没有保存快照
+      setConfigSnapshot({});
+    } finally {
+      setConfigSnapshotLoading(false);
     }
   };
 
@@ -320,6 +338,8 @@ export function useTaskDetailPage(): TaskDetailPageModel {
     selectedStocksPage,
     setSelectedStocksPage,
     strategyConfigInfo,
+    configSnapshot,
+    configSnapshotLoading,
     loadBacktestDetailedData,
     loadTaskDetail,
     handleRefresh,

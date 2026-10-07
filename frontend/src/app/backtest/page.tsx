@@ -28,6 +28,8 @@ import {
   DialogTitle,
   DialogActions,
   LinearProgress,
+  Alert,
+  Skeleton,
 } from '@mui/material';
 import {
   Plus,
@@ -46,11 +48,14 @@ import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { MobileBacktestCard } from '../../components/mobile/MobileBacktestCard';
+import { useSnackbarStore } from '../../stores/useSnackbarStore';
 
 export default function BacktestPage() {
   const router = useRouter();
+  const showSnackbar = useSnackbarStore();
   const { tasks, setTasks, updateTask } = useTaskStore();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -92,7 +97,10 @@ export default function BacktestPage() {
       // 使用setTasks更新整个任务列表
       setTasks(result.tasks, result.total);
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : '加载回测任务失败';
       console.error('加载回测任务失败:', error);
+      setLoadError(errMsg);
+      showSnackbar.showError(errMsg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -187,8 +195,9 @@ export default function BacktestPage() {
       setSelectedTask(null);
       loadTasks();
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : '删除任务失败';
       console.error('删除任务失败:', error);
-      alert('删除任务失败: ' + (error instanceof Error ? error.message : String(error)));
+      showSnackbar.showError(errMsg);
     }
   };
 
@@ -214,6 +223,62 @@ export default function BacktestPage() {
 
   if (loading) {
     return <LoadingSpinner text="加载回测任务..." />;
+  }
+
+  if (loadError && backtestTasks.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* 页面标题和操作 */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Activity size={32} />
+            <Box>
+              <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+                策略回测
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                管理和查看回测任务
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        <Alert
+          severity="error"
+          variant="filled"
+          sx={{ borderRadius: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={loadTasks}>
+              重试
+            </Button>
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            加载失败
+          </Typography>
+          <Typography variant="caption">{loadError}</Typography>
+        </Alert>
+
+        {/* 骨架屏 */}
+        <Card>
+          <CardHeader title="回测任务" />
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {[1, 2, 3].map(i => (
+                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
+                  <Skeleton variant="circular" width={32} height={32} />
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="text" width="40%" />
+                    <Skeleton variant="text" width="25%" />
+                  </Box>
+                  <Skeleton variant="rounded" width={80} height={24} />
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    );
   }
 
   return (

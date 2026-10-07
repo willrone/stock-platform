@@ -377,6 +377,14 @@ export default function TasksPage() {
               </Button>
               <Button
                 variant="outlined"
+                color="secondary"
+                startIcon={<BarChart3 size={16} />}
+                onClick={() => router.push('/tasks/tuning')}
+              >
+                参数调优
+              </Button>
+              <Button
+                variant="outlined"
                 startIcon={<RefreshCw size={16} />}
                 onClick={handleRefresh}
                 disabled={loading}

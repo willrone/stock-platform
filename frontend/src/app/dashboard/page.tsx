@@ -21,6 +21,8 @@ import {
   Box,
   Typography,
   LinearProgress,
+  Alert,
+  Skeleton,
 } from '@mui/material';
 import {
   Bot,
@@ -38,11 +40,16 @@ import { useRouter } from 'next/navigation';
 
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TaskService } from '../../services/taskService';
+import { apiRequest } from '../../services/api';
+import { useSnackbarStore } from '../../stores/useSnackbarStore';
 
 export default function DashboardPage() {
   const router = useRouter();
 
+  const showSnackbar = useSnackbarStore();
+
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
   const [systemStats, setSystemStats] = useState({
     totalTasks: 0,
@@ -59,25 +66,33 @@ export default function DashboardPage() {
       try {
         setLoading(true);
 
-        // 并行请求：最近任务 + 统计数据
-        const [tasksResult, statsResult] = await Promise.all([
+        // 并行请求：最近任务 + 统计数据 + 系统健康状态
+        const [tasksResult, statsResult, healthResult] = await Promise.all([
           TaskService.getTasks(undefined, 5, 0),
           TaskService.getTaskStats(),
+          apiRequest.get<{ data?: { services?: Record<string, string>; uptime?: number } }>('/monitoring/health').catch(() => null),
         ]);
 
         setRecentTasks(tasksResult.tasks);
 
-        // 使用后端统计接口的数据
+        // 从后端获取真实系统健康状态
+        const services = healthResult?.data?.services || {};
+        const hasError = Object.values(services).some(s => s === 'unhealthy' || s === 'error');
+        const hasWarning = Object.values(services).some(s => s === 'degraded' || s === 'warning');
+
         setSystemStats({
           totalTasks: statsResult.total,
           runningTasks: statsResult.running,
           completedTasks: statsResult.completed,
           failedTasks: statsResult.failed,
-          dataFiles: 156, // 模拟数据
-          systemHealth: 'good' as const,
+          dataFiles: 0,
+          systemHealth: hasError ? 'error' : hasWarning ? 'warning' : 'good',
         });
       } catch (error) {
+        const errMsg = error instanceof Error ? error.message : '加载仪表板数据失败';
         console.error('加载仪表板数据失败:', error);
+        setLoadError(errMsg);
+        showSnackbar.showError(errMsg);
       } finally {
         setLoading(false);
       }
@@ -130,6 +145,77 @@ export default function DashboardPage() {
 
   if (loading) {
     return <LoadingSpinner text="加载仪表板数据..." />;
+  }
+
+  if (loadError) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
+            仪表板
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            系统概览和快速操作
+          </Typography>
+        </Box>
+        <Alert
+          severity="error"
+          variant="filled"
+          sx={{ borderRadius: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => {
+              setLoadError(null);
+              setLoading(true);
+              const loadDashboard = async () => {
+                try {
+                  const [tasksResult, statsResult] = await Promise.all([
+                    TaskService.getTasks(undefined, 5, 0),
+                    TaskService.getTaskStats(),
+                  ]);
+                  setRecentTasks(tasksResult.tasks);
+                  setSystemStats({
+                    totalTasks: statsResult.total,
+                    runningTasks: statsResult.running,
+                    completedTasks: statsResult.completed,
+                    failedTasks: statsResult.failed,
+                    dataFiles: 156,
+                    systemHealth: 'good' as const,
+                  });
+                } catch (e) {
+                  const msg = e instanceof Error ? e.message : '加载失败';
+                  setLoadError(msg);
+                  showSnackbar.showError(msg);
+                } finally {
+                  setLoading(false);
+                }
+              };
+              loadDashboard();
+            }}>
+              重试
+            </Button>
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            加载失败
+          </Typography>
+          <Typography variant="caption">
+            {loadError}
+          </Typography>
+        </Alert>
+        {/* 骨架屏：错误时显示占位 */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+          {[1, 2, 3, 4].map(i => (
+            <Card key={i}>
+              <CardContent>
+                <Skeleton variant="circular" width={40} height={40} />
+                <Skeleton variant="text" width="60%" sx={{ mt: 1 }} />
+                <Skeleton variant="text" width="40%" />
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      </Box>
+    );
   }
 
   return (

@@ -38,6 +38,8 @@ export interface TaskDetailPageModel {
   selectedStocksPage: number;
   setSelectedStocksPage: React.Dispatch<React.SetStateAction<number>>;
   strategyConfigInfo: StrategyConfigInfo | null;
+  configSnapshot: Record<string, any>;
+  configSnapshotLoading: boolean;
   loadBacktestDetailedData: (force?: boolean) => Promise<void>;
   loadTaskDetail: () => Promise<void>;
   handleRefresh: () => Promise<void>;
