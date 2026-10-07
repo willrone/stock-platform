@@ -24,6 +24,7 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  Grid,
   Select,
   MenuItem,
   Box,
@@ -578,15 +579,38 @@ export default function MonitoringPage() {
             <Card>
               <CardHeader title="数据质量检查" />
               <CardContent>
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Database size={48} color="#ccc" style={{ margin: '0 auto 16px' }} />
-                  <Typography variant="body1" color="text.secondary">
-                    数据质量检查功能开发中...
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    将包括数据完整性、准确性、一致性等指标
-                  </Typography>
-                </Box>
+                {dataQuality ? (
+                  <Grid container spacing={2}>
+                    {Object.entries(dataQuality).map(([key, value]) => (
+                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={key}>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                              {key.replace(/_/g, ' ')}
+                            </Typography>
+                            <Typography variant="h6">
+                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                    {Object.keys(dataQuality).length === 0 && (
+                      <Grid size={{ xs: 12 }}>
+                        <Typography color="text.secondary" textAlign="center" py={4}>
+                          暂无数据质量数据
+                        </Typography>
+                      </Grid>
+                    )}
+                  </Grid>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Database size={48} color="#ccc" style={{ margin: '0 auto 16px' }} />
+                    <Typography variant="body1" color="text.secondary">
+                      正在加载数据质量检查...
+                    </Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Box>

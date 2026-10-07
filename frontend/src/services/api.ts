@@ -8,7 +8,12 @@
  * - 请求重试
  */
 
-import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
+import axios, {
+  AxiosInstance,
+  AxiosResponse,
+  AxiosError,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
 // 标准响应格式
 export interface ApiResponse<T = unknown> {
@@ -25,6 +30,84 @@ type LooseApiPayload = any;
 type EnhancedError = Error & {
   status?: number;
   response?: AxiosError['response'];
+};
+
+type RetryableRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+type RefreshResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  data?: {
+    access_token?: string;
+    refresh_token?: string;
+  };
+};
+
+type QueuedRequest = {
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+};
+
+let isRefreshing = false;
+let refreshQueue: QueuedRequest[] = [];
+
+const getStoredToken = (key: string): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window.localStorage.getItem(key);
+};
+
+const clearStoredAuth = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.removeItem('access_token');
+  window.localStorage.removeItem('refresh_token');
+  window.localStorage.removeItem('user_info');
+};
+
+const redirectToLogin = (): void => {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.assign('/login');
+  }
+};
+
+const flushRefreshQueue = (error: unknown, token?: string): void => {
+  refreshQueue.forEach(({ resolve, reject }) => {
+    if (token) {
+      resolve(token);
+    } else {
+      reject(error);
+    }
+  });
+  refreshQueue = [];
+};
+
+const refreshAccessToken = async (): Promise<string> => {
+  const refreshToken = getStoredToken('refresh_token');
+  if (!refreshToken) {
+    throw new Error('缺少 refresh token');
+  }
+
+  // Use the bare axios client so a failed refresh cannot recursively trigger
+  // this response interceptor.
+  const response = await axios.post<RefreshResponse>('/api/v1/auth/refresh', {
+    refresh_token: refreshToken,
+  });
+  const payload = response.data?.data || response.data;
+  const accessToken = payload?.access_token;
+  if (!accessToken) {
+    throw new Error('刷新 token 响应无效');
+  }
+
+  localStorage.setItem('access_token', accessToken);
+  if (payload.refresh_token) {
+    localStorage.setItem('refresh_token', payload.refresh_token);
+  }
+  return accessToken;
 };
 
 const apiLogger = {
@@ -83,7 +166,7 @@ const createApiInstance = (): AxiosInstance => {
   instance.interceptors.request.use(
     config => {
       // 添加认证token（如果有）
-      const token = localStorage.getItem('auth_token');
+      const token = getStoredToken('access_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -121,7 +204,7 @@ const createApiInstance = (): AxiosInstance => {
 
       return response;
     },
-    (error: AxiosError) => {
+    async (error: AxiosError) => {
       apiLogger.error('[API] 响应错误详情:', {
         message: error.message,
         code: error.code,
@@ -144,6 +227,39 @@ const createApiInstance = (): AxiosInstance => {
         const data = error.response.data;
         const errorMessage = extractErrorMessage(data);
 
+        const originalRequest = error.config as RetryableRequestConfig | undefined;
+        const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh');
+        if (status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest) {
+          originalRequest._retry = true;
+
+          if (isRefreshing) {
+            try {
+              const token = await new Promise<string>((resolve, reject) => {
+                refreshQueue.push({ resolve, reject });
+              });
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return instance(originalRequest);
+            } catch (refreshError) {
+              return Promise.reject(refreshError);
+            }
+          }
+
+          isRefreshing = true;
+          try {
+            const token = await refreshAccessToken();
+            flushRefreshQueue(undefined, token);
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return instance(originalRequest);
+          } catch (refreshError) {
+            flushRefreshQueue(refreshError);
+            clearStoredAuth();
+            redirectToLogin();
+            return Promise.reject(refreshError);
+          } finally {
+            isRefreshing = false;
+          }
+        }
+
         switch (status) {
           case 400:
             apiLogger.error('请求参数错误:', errorMessage || '请求参数错误');
@@ -151,8 +267,8 @@ const createApiInstance = (): AxiosInstance => {
           case 401:
             apiLogger.error('未授权访问，请重新登录');
             // 清除token并跳转到登录页
-            localStorage.removeItem('auth_token');
-            window.location.href = '/login';
+            clearStoredAuth();
+            redirectToLogin();
             break;
           case 403:
             apiLogger.error('权限不足');

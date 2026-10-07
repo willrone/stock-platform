@@ -18,6 +18,7 @@ import {
   CardHeader,
   Chip,
   Divider,
+  Skeleton,
   Stack,
   Tab,
   Table,
@@ -39,6 +40,7 @@ import {
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { wsService } from '../../services/websocket';
 import { MobileStockCard } from '../../components/mobile/MobileStockCard';
+import { useSnackbarStore } from '../../stores/useSnackbarStore';
 
 interface ServiceStatus {
   service_url: string;
@@ -80,6 +82,7 @@ interface DailyQueryForm {
 }
 
 export default function DataManagementPage() {
+  const showSnackbar = useSnackbarStore();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [precomputing, setPrecomputing] = useState(false);
@@ -231,7 +234,9 @@ export default function DataManagementPage() {
       const result = await DataService.getRemoteStockList();
       setRemoteStocks(result.stocks || []);
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : '加载远端股票列表失败';
       console.error('加载远端股票列表失败:', error);
+      showSnackbar.showError(errMsg);
       setRemoteStocks([]);
     } finally {
       setRemoteStocksLoading(false);
@@ -245,7 +250,9 @@ export default function DataManagementPage() {
       const result = await DataService.getLocalStockList();
       setLocalStocks(result.stocks || []);
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : '加载本地股票列表失败';
       console.error('加载本地股票列表失败:', error);
+      showSnackbar.showError(errMsg);
       setLocalStocks([]);
     } finally {
       setLocalStocksLoading(false);
@@ -407,7 +414,35 @@ export default function DataManagementPage() {
   }, [precomputeTask]);
 
   if (loading) {
-    return <LoadingSpinner text="加载数据信息..." />;
+    return (
+      <Box data-testid="data-route-smoke" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* 骨架屏加载 */}
+        <Skeleton variant="text" width={180} height={48} />
+        <Skeleton variant="text" width={280} />
+
+        <Card>
+          <CardContent>
+            <Skeleton variant="rectangular" height={160} sx={{ borderRadius: 1 }} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader
+            avatar={<Skeleton variant="circular" width={24} height={24} />}
+            title={<Skeleton variant="text" width={140} />}
+          />
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Skeleton variant="rounded" width={160} height={32} />
+                <Skeleton variant="rounded" width={120} height={32} />
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    );
   }
 
   return (

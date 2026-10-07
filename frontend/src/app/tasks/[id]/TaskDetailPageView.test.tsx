@@ -54,6 +54,8 @@ function createModel(overrides: Partial<TaskDetailPageModel> = {}): TaskDetailPa
     selectedStocksPage: 1,
     setSelectedStocksPage: jest.fn(),
     strategyConfigInfo: null,
+    configSnapshot: {},
+    configSnapshotLoading: false,
     loadBacktestDetailedData: jest.fn(async () => undefined),
     loadTaskDetail: jest.fn(async () => undefined),
     handleRefresh: jest.fn(async () => undefined),
