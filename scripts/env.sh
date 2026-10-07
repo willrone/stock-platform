@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 隔离宿主机 PYTHONPATH：agent/IDE 等环境会注入自己的 venv 路径
+# （如 py3.14 site-packages），泄漏进项目 py3.13 venv 会直接炸 pydantic_core。
+unset PYTHONPATH
+
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="$PROJECT_ROOT/runtime"
 RUNTIME_LOG_DIR="$RUNTIME_DIR/logs"
