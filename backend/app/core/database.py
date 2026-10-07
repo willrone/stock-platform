@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -126,6 +127,33 @@ def ensure_sqlite_task_updated_at_column_sync(connection: Connection) -> None:
             """))
 
 
+def ensure_sqlite_user_auth_columns_sync(connection: Connection) -> None:
+    """为已有 SQLite users 表补充认证字段。"""
+    if connection.dialect.name != "sqlite":
+        return
+
+    table_exists = connection.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    columns = {
+        row[1]
+        for row in connection.exec_driver_sql("PRAGMA table_info(users)").fetchall()
+    }
+    additions = {
+        "reset_token": "VARCHAR(255)",
+        "reset_token_expires_at": "DATETIME",
+        "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
+        "avatar_url": "VARCHAR(500)",
+        "last_login_at": "DATETIME",
+    }
+    for column, definition in additions.items():
+        if column not in columns:
+            connection.exec_driver_sql(
+                f"ALTER TABLE users ADD COLUMN {column} {definition}"
+            )
 # 会话工厂
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
@@ -337,6 +365,56 @@ def _seed_ci_smoke_models_sync(connection: Connection) -> None:
     )
 
 
+def _seed_default_plans_sync(connection: Connection) -> None:
+    """初始化默认套餐，已存在的套餐由运营配置保留不覆盖。"""
+    import uuid
+
+    from app.models.subscription_models import DEFAULT_PLANS
+
+    if connection.dialect.name != "sqlite":
+        # PostgreSQL 等数据库同样支持下面的标准 SQL；这里不限制方言，
+        # 仅保留显式的方言判断位置，方便未来加入数据库专用 upsert。
+        pass
+
+    for plan in DEFAULT_PLANS:
+        exists = connection.execute(
+            text("SELECT id FROM subscription_plans WHERE name = :name"),
+            {"name": plan["name"]},
+        ).first()
+        if exists is not None:
+            continue
+
+        values = dict(plan)
+        values["id"] = str(uuid.uuid4())
+        connection.execute(
+            text(
+                """
+                INSERT INTO subscription_plans (
+                    id, name, display_name, description, monthly_price_cents,
+                    yearly_price_cents, monthly_backtest_limit, max_strategies,
+                    max_concurrent_tasks, max_data_points, stripe_product_id,
+                    stripe_monthly_price_id, stripe_yearly_price_id, features,
+                    is_active, sort_order, created_at, updated_at
+                ) VALUES (
+                    :id, :name, :display_name, :description, :monthly_price_cents,
+                    :yearly_price_cents, :monthly_backtest_limit, :max_strategies,
+                    :max_concurrent_tasks, :max_data_points, :stripe_product_id,
+                    :stripe_monthly_price_id, :stripe_yearly_price_id, :features,
+                    :is_active, :sort_order, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                **values,
+                "stripe_product_id": values.get("stripe_product_id"),
+                "stripe_monthly_price_id": values.get("stripe_monthly_price_id"),
+                "stripe_yearly_price_id": values.get("stripe_yearly_price_id"),
+                "features": json.dumps(values.get("features", []), ensure_ascii=False),
+                "is_active": values.get("is_active", True),
+            },
+        )
+
+
 async def init_db() -> None:
     """初始化数据库"""
     # 确保数据目录存在
@@ -349,14 +427,19 @@ async def init_db() -> None:
 
     # 导入所有模型以确保它们被注册到Base.metadata
     from app.models import backtest_detailed_models  # noqa: F401
+    from app.models import commerce_models  # noqa: F401  # 按量计费模型
     from app.models import strategy_config_models  # noqa: F401
+    from app.models import subscription_models  # noqa: F401
     from app.models import task_models  # noqa: F401
+    from app.models import user_models  # noqa: F401
 
     # 创建所有表
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_sqlite_task_updated_at_column_sync)
+        await conn.run_sync(ensure_sqlite_user_auth_columns_sync)
         await conn.run_sync(_seed_ci_smoke_models_sync)
+        await conn.run_sync(_seed_default_plans_sync)
 
         # SQLite PRAGMA settings are applied by connection event hooks.
         # Re-applying journal/synchronous pragmas inside this transactional

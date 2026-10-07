@@ -80,8 +80,8 @@ def test_execute_backtest_task_injects_top_level_model_id_into_strategy_config()
     )
 
     with (
-        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
-        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.tasks.task_executors.SessionLocal", return_value=_DummySession()),
+        patch("app.services.tasks.task_executors.TaskRepository", return_value=repository),
         patch("app.services.backtest.BacktestExecutor", return_value=executor),
         patch(
             "app.services.backtest.BacktestConfig",
@@ -140,8 +140,8 @@ def test_execute_backtest_task_normalizes_model_topk_dropout_alias() -> None:
     )
 
     with (
-        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
-        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.tasks.task_executors.SessionLocal", return_value=_DummySession()),
+        patch("app.services.tasks.task_executors.TaskRepository", return_value=repository),
         patch("app.services.backtest.BacktestExecutor", return_value=executor),
         patch(
             "app.services.backtest.BacktestConfig",
@@ -202,8 +202,8 @@ def test_execute_backtest_task_propagates_runtime_portfolio_constraints() -> Non
     )
 
     with (
-        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
-        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.tasks.task_executors.SessionLocal", return_value=_DummySession()),
+        patch("app.services.tasks.task_executors.TaskRepository", return_value=repository),
         patch("app.services.backtest.BacktestExecutor", return_value=executor),
         patch(
             "app.services.backtest.BacktestConfig",
@@ -265,8 +265,8 @@ def test_execute_backtest_task_propagates_official_style_cost_fields() -> None:
     )
 
     with (
-        patch("app.api.v1.dependencies.SessionLocal", return_value=_DummySession()),
-        patch("app.api.v1.dependencies.TaskRepository", return_value=repository),
+        patch("app.services.tasks.task_executors.SessionLocal", return_value=_DummySession()),
+        patch("app.services.tasks.task_executors.TaskRepository", return_value=repository),
         patch("app.services.backtest.BacktestExecutor", return_value=executor),
         patch(
             "app.services.backtest.BacktestConfig",

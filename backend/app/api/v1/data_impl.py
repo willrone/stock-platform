@@ -3,6 +3,20 @@
 只提供连接状态检查和数据获取功能
 """
 
+# ============================================================
+# data.py - 数据管理路由（1295 行）
+# 导航：
+#   1-42:    导入 + 模块文档
+#   43-209:  辅助函数
+#   210-325: Qlib预计算
+#   326-398: 数据服务状态
+#   399-514: 本地数据（文件列表/统计）
+#   515-724: 远程数据
+#   725-1096: 本地股票列表
+#   1097-1295: 同步与事件管理
+# TODO: 此文件超过 1000 行，后续应拆分为 data/ 包下的子模块
+# ============================================================
+
 import asyncio
 import inspect
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +52,9 @@ from app.services.events.data_sync_events import (
 router = APIRouter(prefix="/data", tags=["数据管理"])
 
 
+# ────────────────────────────────────────
+# 功能区：辅助函数
+# ────────────────────────────────────────
 def _resolve_data_root() -> Path:
     """解析 DATA_ROOT_PATH，兼容相对 backend 目录和绝对路径。"""
     data_root = Path(settings.DATA_ROOT_PATH)
@@ -206,7 +223,9 @@ def _mark_task_failed_after_submit_error(
         )
 
 
-# Qlib预计算相关接口
+# ────────────────────────────────────────
+# 功能区：Qlib 预计算
+# ────────────────────────────────────────
 @router.post(
     "/qlib/precompute",
     response_model=StandardResponse,
@@ -323,6 +342,10 @@ async def trigger_qlib_precompute(
         session.close()
 
 
+
+# ────────────────────────────────────────
+# 功能区：数据服务状态
+# ────────────────────────────────────────
 @router.get(
     "/status",
     response_model=StandardResponse,
@@ -396,6 +419,10 @@ async def get_data_service_status(
         )
 
 
+
+# ────────────────────────────────────────
+# 功能区：本地数据
+# ────────────────────────────────────────
 @router.get(
     "/files",
     response_model=StandardResponse,
@@ -512,6 +539,10 @@ async def get_local_data_statistics() -> Any:
         raise HTTPException(status_code=500, detail=f"获取本地数据统计失败: {str(e)}")
 
 
+
+# ────────────────────────────────────────
+# 功能区：远程数据
+# ────────────────────────────────────────
 @router.get(
     "/remote/stocks",
     response_model=StandardResponse,
@@ -722,6 +753,10 @@ async def get_remote_service_logs(
         )
 
 
+
+# ────────────────────────────────────────
+# 功能区：本地股票列表
+# ────────────────────────────────────────
 @router.get(
     "/local/stocks",
     response_model=StandardResponse,
@@ -1094,6 +1129,10 @@ async def get_local_stock_list_simple() -> Any:
         )
 
 
+
+# ────────────────────────────────────────
+# 功能区：同步与事件管理
+# ────────────────────────────────────────
 @router.post(
     "/sync/remote",
     response_model=StandardResponse,

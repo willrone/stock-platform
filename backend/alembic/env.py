@@ -28,6 +28,7 @@ import app.models.backtest_detailed_models  # backtest_results, backtest_detaile
 import app.models.strategy_config_models    # strategy_configs
 import app.models.sync_models          # portfolio_snapshots, trade_records, signal_records
 import app.models.file_management      # (file-related tables, if any)
+import app.models.commerce_models      # 计费相关模型（按使用量付费）
 
 # Alembic Config 对象
 config = context.config

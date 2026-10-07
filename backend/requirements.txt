@@ -78,3 +78,8 @@ GPUtil==1.4.0  # GPU监控库
 
 # 图论和数据分析
 networkx>=3.0  # 用于数据血缘追踪
+# 用户认证
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
+PyJWT==2.8.0
+

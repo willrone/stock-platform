@@ -41,7 +41,7 @@ with patch.dict(
         "torch": fake_torch,
     },
 ):
-    from app.api.v1.dependencies import get_current_user
+    from app.api.v1.dependencies import get_current_user, require_current_user
     from app.api.v1.tasks import router
 
 
@@ -55,6 +55,10 @@ def app():
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: "test-user"
+    # 重构后 create_task 走 require_current_user（查真实 users 表），旁路为轻量对象
+    app.dependency_overrides[require_current_user] = lambda: SimpleNamespace(
+        id="test-user", is_admin=False, is_active=True, subscription_tier="free"
+    )
     return app
 
 

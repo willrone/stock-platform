@@ -6,13 +6,16 @@ import json
 import uuid
 from typing import Any, Dict, Optional, cast
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 
 from app.api.v1.schemas import StandardResponse
 from app.core.database import AsyncSessionLocal
+from app.api.v1.dependencies import require_current_user
+from app.middleware.rbac import enforce_quota
+from app.models.user_models import User
 from app.models.strategy_config_models import StrategyConfig
 
 router = APIRouter(prefix="/strategy-configs", tags=["策略配置"])
@@ -132,7 +135,10 @@ async def get_strategy_config(config_id: str) -> Any:
 
 
 @router.post("", response_model=StandardResponse)
-async def create_strategy_config(request: StrategyConfigCreate) -> Any:
+async def create_strategy_config(
+    request: StrategyConfigCreate,
+    current_user: User | None = Depends(require_current_user),
+) -> Any:
     """保存新配置"""
     try:
         logger.info(
@@ -162,6 +168,14 @@ async def create_strategy_config(request: StrategyConfigCreate) -> Any:
 
         async with AsyncSessionLocal() as session:
             try:
+                owner_id = (
+                    current_user.id
+                    if isinstance(current_user, User)
+                    else request.user_id
+                )
+                if isinstance(current_user, User):
+                    await enforce_quota(current_user, "max_strategies")
+
                 # 检查同一策略下是否已有同名配置
                 existing = await session.execute(
                     select(StrategyConfig).where(
@@ -188,7 +202,7 @@ async def create_strategy_config(request: StrategyConfigCreate) -> Any:
                     strategy_name=request.strategy_name,
                     parameters=cleaned_parameters,
                     description=request.description,
-                    user_id=request.user_id,
+                    user_id=owner_id,
                 )
 
                 logger.debug(

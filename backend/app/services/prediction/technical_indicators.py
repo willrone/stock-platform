@@ -20,7 +20,7 @@ class TechnicalIndicatorResult:
 
     stock_code: str
     date: datetime
-    indicators: Dict[str, float | None]
+    indicators: Dict[str, Optional[float]]
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""

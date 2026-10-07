@@ -272,6 +272,39 @@ class RebuildTaskRequest(BaseModel):
     )
 
 
+class CompareConfigsRequest(BaseModel):
+    """配置对比请求"""
+
+    task_ids: List[str] = Field(
+        ..., description="要对比的任务ID列表", min_length=2, max_length=5
+    )
+    config_override: Optional[Dict[str, Any]] = Field(
+        None, description="配置覆盖，深度合并到原 config"
+    )
+
+
+class TuningPreviewRequest(BaseModel):
+    """参数调优预览请求"""
+
+    base_task_id: str = Field(..., description="源任务ID")
+    overrides: Dict[str, Any] = Field(
+        ..., description="覆盖参数，键为点号路径（如 backtest_config.strategy_name），值为新值"
+    )
+
+
+class TuningSubmitRequest(BaseModel):
+    """参数调优提交请求"""
+
+    base_task_id: str = Field(..., description="源任务ID")
+    task_name: str = Field(..., description="新任务名称")
+    overrides: Dict[str, Any] = Field(
+        ..., description="覆盖参数，键为点号路径（如 backtest_config.strategy_name），值为新值"
+    )
+    stock_codes: Optional[List[str]] = Field(
+        default=None, description="股票代码列表，不传则沿用原任务"
+    )
+
+
 class TaskPredictionDTO(BaseModel):
     """任务预测结果 DTO"""
 
@@ -309,6 +342,13 @@ class TaskSummaryDTO(BaseModel):
     error_message: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     original_task_id: Optional[str] = None
+    result_summary: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "关键指标摘要（年化收益率、夏普比率、最大回撤、总收益率、交易次数）。"
+            "从 task.result 或 BacktestResult 表中提取。"
+        ),
+    )
 
 
 class TaskDetailDTO(TaskSummaryDTO):
@@ -331,6 +371,55 @@ class TaskListDTO(BaseModel):
 
 class TaskMutationDTO(TaskSummaryDTO):
     """任务变更 DTO"""
+
+
+def extract_result_summary(task: Any) -> Optional[Dict[str, Any]]:
+    """从 task.result 中提取关键指标摘要。
+
+    回测任务的 result 是包含以下字段的字典：
+    - total_return, annualized_return, sharpe_ratio, max_drawdown, total_trades, win_rate
+
+    预测任务等无需返回指标时返回 None。
+    """
+    raw_result = getattr(task, "result", None)
+    if not raw_result:
+        return None
+    if isinstance(raw_result, str):
+        import json
+
+        try:
+            raw_result = json.loads(raw_result)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(raw_result, dict):
+        return None
+
+    # 从 result 顶层或 result.metrics / result.portfolio 中提取
+    sources = [raw_result, raw_result.get("metrics", {}), raw_result.get("portfolio", {})]
+    summary = {}
+    field_map = {
+        "annualized_return": ("annualized_return", "annual_return"),
+        "sharpe_ratio": ("sharpe_ratio",),
+        "max_drawdown": ("max_drawdown", "max_draw_down"),
+        "total_return": ("total_return",),
+        "total_trades": ("total_trades", "trade_count"),
+        "win_rate": ("win_rate",),
+        "volatility": ("volatility",),
+        "profit_factor": ("profit_factor",),
+        "final_value": ("final_value",),
+    }
+    for target_key, possible_keys in field_map.items():
+        for source in sources:
+            if isinstance(source, dict):
+                for key in possible_keys:
+                    val = source.get(key)
+                    if val is not None:
+                        summary[target_key] = val
+                        break
+            if target_key in summary:
+                break
+
+    return summary if summary else None
 
 
 def normalize_api_value(value: Any) -> Any:
@@ -358,11 +447,17 @@ def build_task_summary_dto(
     model_id: str = "",
     stock_codes: Optional[List[str]] = None,
     original_task_id: Optional[str] = None,
+    include_result_summary: bool = True,
 ) -> TaskSummaryDTO:
     """构建任务摘要 DTO。"""
 
     task_config = config if config is not None else getattr(task, "config", None)
     normalized_stock_codes = stock_codes if isinstance(stock_codes, list) else []
+
+    result_summary = None
+    if include_result_summary:
+        result_summary = extract_result_summary(task)
+
     return TaskSummaryDTO(
         task_id=str(getattr(task, "task_id", "")),
         task_name=str(getattr(task, "task_name", "")),
@@ -378,6 +473,7 @@ def build_task_summary_dto(
         error_message=getattr(task, "error_message", None),
         config=task_config,
         original_task_id=original_task_id,
+        result_summary=result_summary,
     )
 
 
