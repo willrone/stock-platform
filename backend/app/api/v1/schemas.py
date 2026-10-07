@@ -288,7 +288,8 @@ class TuningPreviewRequest(BaseModel):
 
     base_task_id: str = Field(..., description="源任务ID")
     overrides: Dict[str, Any] = Field(
-        ..., description="覆盖参数，键为点号路径（如 backtest_config.strategy_name），值为新值"
+        ...,
+        description="覆盖参数，键为点号路径（如 backtest_config.strategy_name），值为新值",
     )
 
 
@@ -298,7 +299,8 @@ class TuningSubmitRequest(BaseModel):
     base_task_id: str = Field(..., description="源任务ID")
     task_name: str = Field(..., description="新任务名称")
     overrides: Dict[str, Any] = Field(
-        ..., description="覆盖参数，键为点号路径（如 backtest_config.strategy_name），值为新值"
+        ...,
+        description="覆盖参数，键为点号路径（如 backtest_config.strategy_name），值为新值",
     )
     stock_codes: Optional[List[str]] = Field(
         default=None, description="股票代码列表，不传则沿用原任务"
@@ -395,7 +397,11 @@ def extract_result_summary(task: Any) -> Optional[Dict[str, Any]]:
         return None
 
     # 从 result 顶层或 result.metrics / result.portfolio 中提取
-    sources = [raw_result, raw_result.get("metrics", {}), raw_result.get("portfolio", {})]
+    sources = [
+        raw_result,
+        raw_result.get("metrics", {}),
+        raw_result.get("portfolio", {}),
+    ]
     summary = {}
     field_map = {
         "annualized_return": ("annualized_return", "annual_return"),

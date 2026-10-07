@@ -453,7 +453,9 @@ class PortfolioManagerArray:
                         # 用 current_prices 更新当前价格和市值
                         cur_price = current_prices.get(code, 0.0)
                         mkt_val = qty * cur_price
-                        unrealized = mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
+                        unrealized = (
+                            mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
+                        )
                         positions_payload[code] = {
                             "quantity": qty,
                             "avg_cost": avg_cost,
@@ -489,7 +491,9 @@ class PortfolioManagerArray:
                         avg_cost = float(self.avg_costs_without_cost[idx])
                         cur_price = current_prices.get(code, 0.0)
                         mkt_val = qty * cur_price
-                        unrealized = mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
+                        unrealized = (
+                            mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
+                        )
                         positions_payload_nc[code] = {
                             "quantity": qty,
                             "avg_cost": avg_cost,

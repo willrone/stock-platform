@@ -793,16 +793,16 @@ class PredictionEngine:
             # 计算置信度 — 使用校准后的概率
             model_confidence = model_metadata.get("performance_metrics", {}).get(
                 "calibrated_accuracy",
-                model_metadata.get("performance_metrics", {}).get(
-                    "accuracy", 0.5
-                ),
+                model_metadata.get("performance_metrics", {}).get("accuracy", 0.5),
             )
             # 如果模型有 calibrated 概率输出，优先使用
             if hasattr(model, "predict_proba"):
                 try:
                     proba = model.predict_proba(latest_features)[0]
                     predicted_class = np.argmax(proba)
-                    confidence_score = float(proba[max(predicted_class, len(proba) - 1)])
+                    confidence_score = float(
+                        proba[max(predicted_class, len(proba) - 1)]
+                    )
                     confidence_score = min(0.95, max(0.1, confidence_score))
                 except Exception:
                     confidence_score = min(0.95, max(0.1, model_confidence))

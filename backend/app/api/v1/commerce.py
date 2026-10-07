@@ -11,7 +11,6 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.api.v1.dependencies import get_current_user
@@ -135,7 +134,7 @@ async def record_usage(
     user_id: str = Depends(get_current_user),
 ) -> UsageRecordResponse:
     """记录一次用量事件并从用户余额扣费。
-    
+
     - 回测：每次 ¥0.5 ~ ¥2
     - API 调用：每次 ¥0.01
     - 数据下载：每次 ¥0.05
@@ -148,10 +147,14 @@ async def record_usage(
         quantity=request.quantity,
         metadata=request.metadata,
     )
-    
+
     billing_status = billing.charge_status if billing else "skipped"
-    message = "扣费成功" if billing and billing.charge_status == "charged" else "余额不足，待充值"
-    
+    message = (
+        "扣费成功"
+        if billing and billing.charge_status == "charged"
+        else "余额不足，待充值"
+    )
+
     return UsageRecordResponse(
         event_id=event.id,
         event_type=event.event_type,
@@ -170,12 +173,12 @@ async def get_balance(
     """查询用户当前余额。"""
     service = CommerceService()
     balance = await service.get_balance(user_id)
-    
+
     if balance is None:
         balance = await service._get_or_create_balance(
             await AsyncSessionLocal().__aenter__(), user_id
         )
-    
+
     return BalanceResponse(
         user_id=balance.user_id,
         balance_cents=balance.balance_cents,
@@ -198,7 +201,7 @@ async def deposit(
         amount_cents=request.amount_cents,
         remark=request.remark,
     )
-    
+
     return DepositResponse(
         balance_cents=balance.balance_cents,
         balance_yuan=balance.balance_cents / 100.0,
@@ -219,10 +222,10 @@ async def refund(
         billing_record_id=request.billing_record_id,
         amount_cents=request.amount_cents,
     )
-    
+
     if record is None:
         raise HTTPException(status_code=404, detail="退款记录创建失败")
-    
+
     return {
         "refund_record_id": record.id,
         "amount_yuan": record.amount_cents / 100.0,
@@ -258,7 +261,9 @@ async def billing_history(
     return [r.to_dict() for r in records]
 
 
-@router.get("/pricing/rules", response_model=List[PricingRuleResponse], summary="计费规则列表")
+@router.get(
+    "/pricing/rules", response_model=List[PricingRuleResponse], summary="计费规则列表"
+)
 async def get_pricing_rules(
     event_type: Optional[str] = Query(None, description="事件类型筛选"),
 ) -> List[PricingRuleResponse]:
@@ -292,11 +297,11 @@ async def check_can_execute(
 ) -> Dict[str, Any]:
     """检查用户余额是否足够执行指定操作。"""
     can_proceed, message = await check_can_proceed(user_id, event_type)
-    
+
     service = CommerceService()
     pricing = await service._get_pricing_rule(event_type)
     cost_yuan = pricing.base_price_cents / 100.0 if pricing else 0
-    
+
     return {
         "can_proceed": can_proceed,
         "message": message,

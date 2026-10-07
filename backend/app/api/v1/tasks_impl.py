@@ -54,9 +54,9 @@ from app.core.error_handler import (
     log_best_effort_failure,
     log_structured_exception,
 )
+from app.middleware.rbac import enforce_quota
 from app.models.task_models import TaskStatus, TaskType
 from app.models.user_models import User
-from app.middleware.rbac import enforce_quota
 from app.repositories.task_repository import PredictionResultRepository, TaskRepository
 from app.services.data.stock_data_loader import StockDataLoader
 from app.services.prediction.prediction_engine import PredictionConfig, PredictionEngine
@@ -712,7 +712,9 @@ async def compare_backtest_results(request: BacktestCompareRequest) -> Any:
 @router.post("/compare-configs", response_model=StandardResponse)
 async def compare_task_configs(
     request: CompareConfigsRequest,
-    mode: str = Query("diff", description="对比模式: diff (仅差异字段) 或 full (全部字段)"),
+    mode: str = Query(
+        "diff", description="对比模式: diff (仅差异字段) 或 full (全部字段)"
+    ),
 ) -> Any:
     """对比多个任务的配置快照"""
     if mode not in ("diff", "full"):
@@ -741,12 +743,16 @@ async def compare_task_configs(
                 {
                     "task_id": task.task_id,
                     "task_name": task.task_name,
-                    "created_at": task.created_at.isoformat()
-                    if hasattr(task.created_at, "isoformat")
-                    else str(task.created_at),
-                    "status": task.status.value
-                    if hasattr(task.status, "value")
-                    else str(task.status),
+                    "created_at": (
+                        task.created_at.isoformat()
+                        if hasattr(task.created_at, "isoformat")
+                        else str(task.created_at)
+                    ),
+                    "status": (
+                        task.status.value
+                        if hasattr(task.status, "value")
+                        else str(task.status)
+                    ),
                 }
             )
             snapshots.append(_flatten_dict(snapshot))

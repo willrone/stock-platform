@@ -11,7 +11,7 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -21,8 +21,8 @@ from app.api.v1.dependencies import get_current_user
 from app.api.v1.schemas import StandardResponse
 from app.core.database import AsyncSessionLocal
 from app.models.strategy_config_models import StrategyConfig
-from app.models.user_models import User
 from app.models.task_models import Task, TaskStatus, TaskType
+from app.models.user_models import User
 from app.repositories.task_repository import TaskRepository
 
 router = APIRouter(prefix="/dashboard", tags=["用量统计"])
@@ -52,22 +52,18 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user)) -> Any:
             # 2. 本月回测次数（自然月）
             now = datetime.utcnow()
             month_start = datetime(now.year, now.month, 1)
-            backtest_count_stmt = (
-                select(func.count(Task.task_id))
-                .where(
-                    and_(
-                        Task.user_id == user_id,
-                        Task.task_type == TaskType.BACKTEST.value,
-                        Task.created_at >= month_start,
-                    )
+            backtest_count_stmt = select(func.count(Task.task_id)).where(
+                and_(
+                    Task.user_id == user_id,
+                    Task.task_type == TaskType.BACKTEST.value,
+                    Task.created_at >= month_start,
                 )
             )
             backtest_count = (await session.execute(backtest_count_stmt)).scalar() or 0
 
             # 3. 策略配置数
-            strategy_count_stmt = (
-                select(func.count(StrategyConfig.config_id))
-                .where(StrategyConfig.user_id == user_id)
+            strategy_count_stmt = select(func.count(StrategyConfig.config_id)).where(
+                StrategyConfig.user_id == user_id
             )
             strategy_count = (await session.execute(strategy_count_stmt)).scalar() or 0
 
@@ -159,9 +155,7 @@ async def get_dashboard_requests_today(
                 .group_by(func.date(Task.created_at))
                 .order_by(func.date(Task.created_at))
             )
-            series = [
-                {"date": str(row.day), "count": int(row.count)} for row in rows
-            ]
+            series = [{"date": str(row.day), "count": int(row.count)} for row in rows]
 
         return StandardResponse(
             success=True,

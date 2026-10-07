@@ -9,14 +9,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-import lightgbm as lgb
 import joblib
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
 from app.core.config import settings
 from app.services.backtest.models import SignalType, TradingSignal
-from app.services.backtest.strategies.model_prediction_base import BaseModelPredictionStrategy
+from app.services.backtest.strategies.model_prediction_base import (
+    BaseModelPredictionStrategy,
+)
 
 
 class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
@@ -56,15 +58,15 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
         self._model = lgb.Booster(model_file=str(model_path))
 
         # 加载特征名
-        meta_path = model_path.with_suffix(".pkl") if model_path.suffix == ".txt" else None
+        meta_path = (
+            model_path.with_suffix(".pkl") if model_path.suffix == ".txt" else None
+        )
         if meta_path and meta_path.exists():
             meta = joblib.load(str(meta_path))
             self._feature_cols = meta.get("features", [])
 
         if not self._feature_cols:
-            self._feature_cols = [
-                f for f in _DEFAULT_FEATURES
-            ]
+            self._feature_cols = [f for f in _DEFAULT_FEATURES]
 
     def _compute_features(self, data: pd.DataFrame) -> np.ndarray:
         """从原始数据计算 LightGBM 所需的全部特征。
@@ -75,45 +77,45 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
             return np.zeros((0, len(self._feature_cols)))
 
         result = pd.DataFrame(index=data.index)
-        c = data['close']
-        v = data['volume']
-        h = data['high']
-        l = data['low']
+        c = data["close"]
+        v = data["volume"]
         ret = c.pct_change()
 
         for w in [5, 10, 20, 60, 120]:
             ma = c.rolling(w).mean()
-            result[f'ma_{w}_ratio'] = c / ma - 1
+            result[f"ma_{w}_ratio"] = c / ma - 1
 
         for w in [1, 5, 10, 20, 60]:
-            result[f'mom_{w}d'] = c.pct_change(w)
+            result[f"mom_{w}d"] = c.pct_change(w)
 
         for w in [5, 10, 20, 60]:
-            result[f'vol_{w}d'] = ret.rolling(w).std()
+            result[f"vol_{w}d"] = ret.rolling(w).std()
 
-        result['vol_ratio'] = v / v.rolling(5).mean()
+        result["vol_ratio"] = v / v.rolling(5).mean()
 
         gains = ret.clip(0)
         losses = (-ret).clip(0)
         for per in [6, 14]:
-            result[f'rsi_{per}'] = 100 - 100 / (1 + gains.rolling(per).mean() / losses.rolling(per).mean().clip(0.001))
+            result[f"rsi_{per}"] = 100 - 100 / (
+                1 + gains.rolling(per).mean() / losses.rolling(per).mean().clip(0.001)
+            )
 
         ema12 = c.ewm(span=12).mean()
         ema26 = c.ewm(span=26).mean()
-        result['macd'] = ema12 - ema26
-        macd_ema = result['macd'].ewm(span=9).mean()
-        result['macd_hist'] = result['macd'] - macd_ema
+        result["macd"] = ema12 - ema26
+        macd_ema = result["macd"].ewm(span=9).mean()
+        result["macd_hist"] = result["macd"] - macd_ema
 
         # 截面特征（单股票层面用当前行的值）
-        for col in ['mom_5d', 'mom_10d', 'mom_20d', 'vol_20d', 'macd', 'vol_ratio']:
+        for col in ["mom_5d", "mom_10d", "mom_20d", "vol_20d", "macd", "vol_ratio"]:
             if col in result.columns:
-                result[f'{col}_rank'] = result[col].rank(pct=True)
+                result[f"{col}_rank"] = result[col].rank(pct=True)
                 mean = result[col].mean()
                 std = result[col].std()
-                result[f'{col}_zscore'] = (result[col] - mean) / max(std, 1e-8)
+                result[f"{col}_zscore"] = (result[col] - mean) / max(std, 1e-8)
 
-        result['mkt_close'] = data['close'].mean()
-        result['rel_ma5'] = result['ma_5_ratio'].fillna(0) * 0
+        result["mkt_close"] = data["close"].mean()
+        result["rel_ma5"] = result["ma_5_ratio"].fillna(0) * 0
 
         # 确保全部特征列存在且顺序正确
         for col in self._feature_cols:
@@ -193,17 +195,37 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
 
 # 训练时使用的所有特征列（用于 fallback 时的对齐）
 _DEFAULT_FEATURES = [
-    "ma_5_ratio", "ma_10_ratio", "ma_20_ratio", "ma_60_ratio", "ma_120_ratio",
-    "mom_1d", "mom_5d", "mom_10d", "mom_20d", "mom_60d",
-    "vol_5d", "vol_10d", "vol_20d", "vol_60d",
+    "ma_5_ratio",
+    "ma_10_ratio",
+    "ma_20_ratio",
+    "ma_60_ratio",
+    "ma_120_ratio",
+    "mom_1d",
+    "mom_5d",
+    "mom_10d",
+    "mom_20d",
+    "mom_60d",
+    "vol_5d",
+    "vol_10d",
+    "vol_20d",
+    "vol_60d",
     "vol_ratio",
-    "rsi_6", "rsi_14",
-    "macd", "macd_hist",
-    "mom_5d_rank", "mom_5d_zscore",
-    "mom_10d_rank", "mom_10d_zscore",
-    "mom_20d_rank", "mom_20d_zscore",
-    "vol_20d_rank", "vol_20d_zscore",
-    "macd_rank", "macd_zscore",
-    "vol_ratio_rank", "vol_ratio_zscore",
-    "mkt_close", "rel_ma5",
+    "rsi_6",
+    "rsi_14",
+    "macd",
+    "macd_hist",
+    "mom_5d_rank",
+    "mom_5d_zscore",
+    "mom_10d_rank",
+    "mom_10d_zscore",
+    "mom_20d_rank",
+    "mom_20d_zscore",
+    "vol_20d_rank",
+    "vol_20d_zscore",
+    "macd_rank",
+    "macd_zscore",
+    "vol_ratio_rank",
+    "vol_ratio_zscore",
+    "mkt_close",
+    "rel_ma5",
 ]

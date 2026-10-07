@@ -7,7 +7,6 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -300,13 +299,6 @@ def create_application() -> FastAPI:
 
         response = StandardResponse(success=False, message="服务器内部错误", data=None)
         return JSONResponse(status_code=500, content=response.model_dump(mode="json"))
-
-    # 注册 OpenAPI 安全方案（让 Swagger UI 显示 Authorize 按钮）
-    security_scheme = HTTPBearer(
-        scheme_name="Bearer Authentication",
-        description="输入 JWT Token（格式: Bearer <token>）",
-        auto_error=False,
-    )
 
     original_openapi = app.openapi
 

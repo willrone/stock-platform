@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class FoldResult:
     """单折验证结果"""
+
     fold: int
     train_idx: np.ndarray
     test_idx: np.ndarray
@@ -45,6 +46,7 @@ class FoldResult:
 @dataclass(frozen=True)
 class ValidationReport:
     """验证报告"""
+
     folds: List[FoldResult]
     mean_metrics: Dict[str, float]
     std_metrics: Dict[str, float]
@@ -71,7 +73,7 @@ class ValidationReport:
 
 class WindowType(Enum):
     EXPANDING = "expanding"  # 训练集从起点开始，不断扩大
-    ROLLING = "rolling"      # 训练集固定大小，向前滚动
+    ROLLING = "rolling"  # 训练集固定大小，向前滚动
 
 
 class WalkForwardValidator:
@@ -145,9 +147,7 @@ class WalkForwardValidator:
             test_start = test_end - test_size
 
             if test_start <= 0:
-                logger.debug(
-                    f"Fold {fold}: 跳过（测试集起始位置 <= 0）"
-                )
+                logger.debug(f"Fold {fold}: 跳过（测试集起始位置 <= 0）")
                 continue
 
             # 训练集位置
@@ -301,7 +301,7 @@ class PurgedKFoldValidator:
 
         logger.info(
             f"Purged K-Fold 分割: {len(splits)} 折, "
-            f"embargo={embargo_size} ({self.embargo_pct*100:.1f}%), "
+            f"embargo={embargo_size} ({self.embargo_pct * 100:.1f}%), "
             f"purge={purge}"
         )
         return splits
@@ -330,12 +330,13 @@ def compute_fold_metrics(
     """
     from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-    n_classes = len(np.unique(y_true))
     avg = "weighted"  # 统一用 weighted，兼容二分类和多分类
 
     metrics: Dict[str, float] = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred, zero_division=0, average=avg)),
+        "precision": float(
+            precision_score(y_true, y_pred, zero_division=0, average=avg)
+        ),
         "recall": float(recall_score(y_true, y_pred, zero_division=0, average=avg)),
         "f1": float(f1_score(y_true, y_pred, zero_division=0, average=avg)),
     }

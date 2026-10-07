@@ -2,26 +2,37 @@
 数据模型
 """
 
-# 导入所有模型以确保它们在 SQLAlchemy 的 Base.metadata 中注册
-from app.models.user_models import User
-from app.models.strategy_config_models import StrategyConfig
-from app.models.task_models import Task, PredictionResult, BacktestResult, ModelInfo, ModelLifecycleEvent
-from app.models.subscription_models import SubscriptionPlan, UserSubscription, UsageRecord
 from app.models.backtest_detailed_models import (
-    BacktestDetailedResult,
-    BacktestChartCache,
-    PortfolioSnapshot,
-    TradeRecord,
-    SignalRecord,
     BacktestBenchmark,
+    BacktestChartCache,
+    BacktestDetailedResult,
     BacktestStatistics,
+    PortfolioSnapshot,
+    SignalRecord,
+    TradeRecord,
 )
 from app.models.commerce_models import (
-    UserBalance,
-    UsageEvent,
     BillingRecord,
     CommercePricingRule,
+    UsageEvent,
+    UserBalance,
 )
+from app.models.strategy_config_models import StrategyConfig
+from app.models.subscription_models import (
+    SubscriptionPlan,
+    UsageRecord,
+    UserSubscription,
+)
+from app.models.task_models import (
+    BacktestResult,
+    ModelInfo,
+    ModelLifecycleEvent,
+    PredictionResult,
+    Task,
+)
+
+# 导入所有模型以确保它们在 SQLAlchemy 的 Base.metadata 中注册
+from app.models.user_models import User
 
 __all__ = [
     # User models

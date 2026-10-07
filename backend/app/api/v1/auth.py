@@ -21,10 +21,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user_models import User
-from app.services.billing.email_service import (
-    send_password_reset_email,
-    send_welcome_email,
-)
+from app.services.billing.email_service import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -327,7 +324,9 @@ async def get_current_user_from_auth(
         raise HTTPException(status_code=401, detail="缺少 Authorization 请求头")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
-        raise HTTPException(status_code=401, detail="Authorization 格式应为 Bearer <token>")
+        raise HTTPException(
+            status_code=401, detail="Authorization 格式应为 Bearer <token>"
+        )
     try:
         payload = decode_access_token(token.strip())
         return str(payload["sub"])

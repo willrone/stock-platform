@@ -342,7 +342,6 @@ async def trigger_qlib_precompute(
         session.close()
 
 
-
 # ────────────────────────────────────────
 # 功能区：数据服务状态
 # ────────────────────────────────────────
@@ -417,7 +416,6 @@ async def get_data_service_status(
                 "error_message": str(e),
             },
         )
-
 
 
 # ────────────────────────────────────────
@@ -537,7 +535,6 @@ async def get_local_data_statistics() -> Any:
     except Exception as e:
         logger.error(f"获取本地数据统计失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取本地数据统计失败: {str(e)}")
-
 
 
 # ────────────────────────────────────────
@@ -751,7 +748,6 @@ async def get_remote_service_logs(
             message=f"获取数据服务日志失败: {str(e)}",
             data=None,
         )
-
 
 
 # ────────────────────────────────────────
@@ -1127,7 +1123,6 @@ async def get_local_stock_list_simple() -> Any:
             message=f"获取本地股票列表失败: {str(e)}",
             data={"stocks": [], "stock_codes": [], "total_stocks": 0},
         )
-
 
 
 # ────────────────────────────────────────

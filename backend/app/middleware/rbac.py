@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable
 
 from fastapi import Depends, HTTPException, status
 from loguru import logger
@@ -126,7 +126,9 @@ def require_tier(min_tier: Role | str) -> Callable[..., Awaitable[User]]:
     """创建最低套餐等级依赖。"""
     required = min_tier if isinstance(min_tier, Role) else Role(str(min_tier).lower())
 
-    async def dependency(user: User = Depends(require_current_user)) -> User:
+    async def dependency(
+        user: User = Depends(require_current_user),  # noqa: B008
+    ) -> User:
         if _ROLE_ORDER[_user_role(user)] < _ROLE_ORDER[required]:
             raise HTTPException(status_code=403, detail="当前套餐不支持该功能")
         return user
@@ -137,7 +139,9 @@ def require_tier(min_tier: Role | str) -> Callable[..., Awaitable[User]]:
 def check_quota(quota_type: str) -> Callable[..., Awaitable[User]]:
     """创建运行时配额检查依赖。"""
 
-    async def dependency(user: User = Depends(require_current_user)) -> User:
+    async def dependency(
+        user: User = Depends(require_current_user),  # noqa: B008
+    ) -> User:
         return await enforce_quota(user, quota_type)
 
     return dependency

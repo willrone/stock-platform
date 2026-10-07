@@ -154,6 +154,8 @@ def ensure_sqlite_user_auth_columns_sync(connection: Connection) -> None:
             connection.exec_driver_sql(
                 f"ALTER TABLE users ADD COLUMN {column} {definition}"
             )
+
+
 # 会话工厂
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
@@ -387,8 +389,7 @@ def _seed_default_plans_sync(connection: Connection) -> None:
         values = dict(plan)
         values["id"] = str(uuid.uuid4())
         connection.execute(
-            text(
-                """
+            text("""
                 INSERT INTO subscription_plans (
                     id, name, display_name, description, monthly_price_cents,
                     yearly_price_cents, monthly_backtest_limit, max_strategies,
@@ -402,8 +403,7 @@ def _seed_default_plans_sync(connection: Connection) -> None:
                     :stripe_monthly_price_id, :stripe_yearly_price_id, :features,
                     :is_active, :sort_order, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
-                """
-            ),
+                """),
             {
                 **values,
                 "stripe_product_id": values.get("stripe_product_id"),

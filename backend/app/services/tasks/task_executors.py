@@ -21,7 +21,6 @@ from app.services.backtest.utils.official_style_params import (
     apply_official_style_topk_dropout_params,
 )
 
-
 # ═══════════════════════════════════════════════════════════════
 # 工具函数
 # ═══════════════════════════════════════════════════════════════
