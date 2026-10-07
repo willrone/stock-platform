@@ -35,6 +35,7 @@ from app.core.config import settings
 from app.services.backtest import BacktestExecutor
 from app.services.backtest.models import BacktestConfig
 from scripts.backtest_result_compare import compare_results
+from scripts.verify_signal_integrity import verify_result
 
 try:
     from loguru import logger as _logger
@@ -162,6 +163,122 @@ CASES: dict[str, GoldenCase] = {
         },
         prediction_source="synthetic_rank_rotation",
     ),
+    "rsi_small": GoldenCase(
+        name="rsi_small",
+        description="RSI strategy guard: trend reversal pattern triggering overbought/oversold signals.",
+        strategy_name="rsi",
+        stock_codes=["SYNTH_1001.SZ", "SYNTH_1002.SZ", "SYNTH_1003.SZ"],
+        start="2024-01-02",
+        end="2024-04-30",
+        strategy_config={
+            "rsi_period": 14,
+            "oversold_threshold": 30,
+            "overbought_threshold": 70,
+        },
+        backtest_config={
+            "initial_cash": 100000.0,
+            "commission_rate": 0.001,
+            "slippage_rate": 0.001,
+            "open_cost": 0.0,
+            "close_cost": 0.0,
+            "min_cost": 0.0,
+            "max_position_size": 0.25,
+            "cash_reserve_ratio": 0.05,
+            "board_lot_size": 100,
+            "record_portfolio_history": True,
+            "portfolio_history_stride": 1,
+            "record_positions_in_history": True,
+        },
+    ),
+    "macd_small": GoldenCase(
+        name="macd_small",
+        description="MACD strategy guard: oscillating market generating golden cross / death cross signals.",
+        strategy_name="macd",
+        stock_codes=["SYNTH_2001.SZ", "SYNTH_2002.SZ", "SYNTH_2003.SZ"],
+        start="2024-01-02",
+        end="2024-07-31",
+        strategy_config={
+            "fast_period": 12,
+            "slow_period": 26,
+            "signal_period": 9,
+        },
+        backtest_config={
+            "initial_cash": 100000.0,
+            "commission_rate": 0.001,
+            "slippage_rate": 0.001,
+            "open_cost": 0.0,
+            "close_cost": 0.0,
+            "min_cost": 0.0,
+            "max_position_size": 0.25,
+            "cash_reserve_ratio": 0.05,
+            "board_lot_size": 100,
+            "record_portfolio_history": True,
+            "portfolio_history_stride": 1,
+            "record_positions_in_history": True,
+        },
+    ),
+    "multi_factor_small": GoldenCase(
+        name="multi_factor_small",
+        description="Multi-factor strategy guard: factor combination scoring with zero-cross signals.",
+        strategy_name="multi_factor",
+        stock_codes=["SYNTH_3001.SZ", "SYNTH_3002.SZ", "SYNTH_3003.SZ"],
+        start="2024-01-02",
+        end="2024-12-31",
+        strategy_config={
+            "factors": ["value", "momentum", "low_volatility"],
+            "factor_weights": [0.34, 0.33, 0.33],
+            "weighting_method": "equal",
+        },
+        backtest_config={
+            "initial_cash": 200000.0,
+            "commission_rate": 0.001,
+            "slippage_rate": 0.001,
+            "open_cost": 0.0,
+            "close_cost": 0.0,
+            "min_cost": 0.0,
+            "max_position_size": 0.15,
+            "cash_reserve_ratio": 0.05,
+            "board_lot_size": 100,
+            "record_portfolio_history": True,
+            "portfolio_history_stride": 1,
+            "record_positions_in_history": True,
+        },
+    ),
+    "model_topk_dropout_medium": GoldenCase(
+        name="model_topk_dropout_medium",
+        description="Medium TopK/Dropout ranking guard: more stocks and longer date range.",
+        strategy_name="model_topk_dropout",
+        stock_codes=[
+            "SYNTH_4001.SZ", "SYNTH_4002.SZ", "SYNTH_4003.SZ",
+            "SYNTH_4004.SZ", "SYNTH_4005.SZ", "SYNTH_4006.SZ",
+            "SYNTH_4007.SZ", "SYNTH_4008.SZ", "SYNTH_4009.SZ",
+            "SYNTH_4010.SZ",
+        ],
+        start="2024-01-02",
+        end="2024-06-28",
+        strategy_config={
+            "model_id": "golden_synthetic_model",
+            "topk": 3,
+            "n_drop": 2,
+            "hold_thresh": 1,
+            "score_scale": 20.0,
+        },
+        backtest_config={
+            "initial_cash": 500000.0,
+            "commission_rate": 0.001,
+            "slippage_rate": 0.001,
+            "open_cost": 0.0,
+            "close_cost": 0.0,
+            "min_cost": 0.0,
+            "max_position_size": 0.3,
+            "cash_reserve_ratio": 0.02,
+            "board_lot_size": 100,
+            "record_portfolio_history": True,
+            "portfolio_history_stride": 1,
+            "record_positions_in_history": True,
+        },
+        prediction_source="synthetic_rank_rotation",
+    ),
 }
 
 
@@ -274,24 +391,182 @@ def _synthetic_prediction_series(
     return pd.Series(values, index=dates)
 
 
+def _rsi_trend_frame(
+    *,
+    code: str,
+    dates: pd.DatetimeIndex,
+    base: float,
+    amplitude: float,
+) -> pd.DataFrame:
+    """Deterministic price with a clear trend-reversal pattern for RSI strategy.
+
+    Phase 1 (0-40%): moderate decline to push RSI below oversold (30)
+    Phase 2 (40-70%): strong rise to push RSI above overbought (70), triggering BUY
+    Phase 3 (70-100%): decline to push RSI back below overbought (70), triggering SELL
+    """
+    n = len(dates)
+    x = np.arange(n, dtype=np.float64)
+    mid1 = int(n * 0.4)
+    mid2 = int(n * 0.7)
+    close = np.empty(n, dtype=np.float64)
+    # Phase 1: decline
+    close[:mid1] = base * (1.0 - 0.20 * x[:mid1] / mid1)
+    # Phase 2: strong recovery
+    t2 = (x[mid1:mid2] - mid1) / (mid2 - mid1)
+    close[mid1:mid2] = close[mid1 - 1] * (1.0 + 0.30 * t2)
+    # Phase 3: decline again
+    t3 = (x[mid2:] - mid2) / (n - mid2)
+    close[mid2:] = close[mid2 - 1] * (1.0 - 0.15 * t3)
+    # Add small sine noise for variation
+    noise = amplitude * 0.3 * np.sin(x / 5.0 + float(len(code)))
+    close = close + noise
+    close = np.maximum(close, base * 0.3)
+    open_ = close * (1.0 + 0.002 * np.cos(x / 5.0))
+    high = np.maximum(open_, close) * 1.01
+    low = np.minimum(open_, close) * 0.99
+    volume = (1_000_000 + (x.astype(np.int64) * 137 + len(code) * 997) % 200_000).astype(np.int64)
+    return pd.DataFrame(
+        {"open": open_, "high": high, "low": low, "close": close, "volume": volume},
+        index=dates,
+    )
+
+
+def _macd_oscillation_frame(
+    *,
+    code: str,
+    dates: pd.DatetimeIndex,
+    base: float,
+    amplitude: float,
+    drift: float,
+    phase: float,
+) -> pd.DataFrame:
+    """Deterministic oscillating price for MACD golden/death cross generation.
+
+    Uses two superimposed sine waves to create clear MACD crossovers.
+    """
+    x = np.arange(len(dates), dtype=np.float64)
+    close = (
+        base
+        + drift * x
+        + amplitude * np.sin((x + phase) / 8.0)
+        + 0.5 * amplitude * np.sin((x + phase) / 15.0)
+    )
+    open_ = close * (1.0 + 0.002 * np.cos((x + phase) / 5.0))
+    high = np.maximum(open_, close) * 1.01
+    low = np.minimum(open_, close) * 0.99
+    volume = (1_000_000 + (x.astype(np.int64) * 137 + len(code) * 997) % 200_000).astype(np.int64)
+    return pd.DataFrame(
+        {"open": open_, "high": high, "low": low, "close": close, "volume": volume},
+        index=dates,
+    )
+
+
+def _multi_factor_frame(
+    *,
+    code: str,
+    dates: pd.DatetimeIndex,
+    base: float,
+    _amplitude: float,  # unused; kept for API compatibility
+    drift: float,
+    phase: float,
+) -> pd.DataFrame:
+    """Deterministic price series for MultiFactor strategy.
+
+    Creates a flat-low-volatility pattern, followed by a sharp +30% jump,
+    then a -30% crash. The abrupt changes force combined_score zero-crossings
+    with non-trivial strength after the 130-day warmup.
+    """
+    n = len(dates)
+    x = np.arange(n, dtype=np.float64)
+    close = np.full(n, base, dtype=np.float64)
+    # Tiny noise throughout for determinism
+    noise = 0.05 * np.sin(x / 3.0 + phase)
+    close = close + noise
+    # Days ≈ 60-64: spike +30% over 5 days
+    spike_start = 60
+    spike_end = min(spike_start + 5, n)
+    close_spike_pre = close[spike_end - 1] if spike_end <= n else base
+    for i in range(spike_start, spike_end):
+        t = (i - spike_start) / 5.0
+        close[i] = close[spike_start - 1] * (1.0 + 0.30 * t)
+    # Days 65–164: hold elevated, small drift
+    hold_start = spike_end
+    hold_end = min(hold_start + 100, n)
+    if hold_end > hold_start:
+        hold_val = close[hold_start - 1] if hold_start > 0 else base
+        for i in range(hold_start, hold_end):
+            close[i] = hold_val + drift * (i - hold_start) + 0.1 * np.sin(i / 5.0 + phase)
+    # Days ≈ 165-169: crash -30% over 5 days
+    crash_start = hold_end
+    crash_end = min(crash_start + 5, n)
+    if crash_end > crash_start:
+        for i in range(crash_start, crash_end):
+            t = (i - crash_start) / 5.0
+            close[i] = close[crash_start - 1] * (1.0 - 0.30 * t)
+    # Remaining days: low drift
+    for i in range(crash_end, n):
+        close[i] = close[i - 1] + drift * 0.5
+    close = np.maximum(close, base * 0.2)
+    open_ = close * (1.0 + 0.002 * np.cos((x + phase) / 5.0))
+    high = np.maximum(open_, close) * 1.015
+    low = np.minimum(open_, close) * 0.985
+    volume = (1_000_000 + (x.astype(np.int64) * 137 + len(code) * 997) % 200_000).astype(np.int64)
+    return pd.DataFrame(
+        {"open": open_, "high": high, "low": low, "close": close, "volume": volume},
+        index=dates,
+    )
+    open_ = close * (1.0 + 0.002 * np.cos((x + phase) / 5.0))
+    high = np.maximum(open_, close) * 1.01
+    low = np.minimum(open_, close) * 0.99
+    volume = (1_000_000 + (x.astype(np.int64) * 137 + len(code) * 997) % 200_000).astype(np.int64)
+    return pd.DataFrame(
+        {"open": open_, "high": high, "low": low, "close": close, "volume": volume},
+        index=dates,
+    )
+
+
 def _synthetic_stock_data(case: GoldenCase) -> dict[str, pd.DataFrame]:
     dates = pd.bdate_range(case.start, case.end)
     stock_data: dict[str, pd.DataFrame] = {}
+
+    if case.name == "rsi_small":
+        for i, code in enumerate(case.stock_codes):
+            frame = _rsi_trend_frame(
+                code=code, dates=dates, base=10.0 + i * 2.0, amplitude=1.5 + (i % 3) * 0.5,
+            )
+            frame.attrs["stock_code"] = code
+            stock_data[code] = frame
+        return stock_data
+
+    if case.name == "macd_small":
+        for i, code in enumerate(case.stock_codes):
+            frame = _macd_oscillation_frame(
+                code=code, dates=dates, base=10.0 + i * 3.0, amplitude=1.5 + (i % 3) * 0.4,
+                drift=0.005 * ((i % 2) * 2 - 1), phase=float(i * 2),
+            )
+            frame.attrs["stock_code"] = code
+            stock_data[code] = frame
+        return stock_data
+
+    if case.name == "multi_factor_small":
+        for i, code in enumerate(case.stock_codes):
+            frame = _multi_factor_frame(
+                code=code, dates=dates, base=10.0 + i * 3.0, _amplitude=0.5,
+                drift=0.002 * ((i % 3) - 1), phase=float(i * 4),
+            )
+            frame.attrs["stock_code"] = code
+            stock_data[code] = frame
+        return stock_data
+
     for i, code in enumerate(case.stock_codes):
         frame = _synthetic_stock_frame(
-            code=code,
-            dates=dates,
-            base=9.0 + i * 3.5,
-            amplitude=1.2 + (i % 4) * 0.35,
-            drift=0.006 * ((i % 3) - 1),
-            phase=float(i * 3),
+            code=code, dates=dates, base=9.0 + i * 3.5, amplitude=1.2 + (i % 4) * 0.35,
+            drift=0.006 * ((i % 3) - 1), phase=float(i * 3),
         )
         frame.attrs["stock_code"] = code
         if case.prediction_source == "synthetic_rank_rotation":
             cache = frame.attrs.setdefault("_model_prediction_returns", {})
-            cache["ModelTopkDropout"] = _synthetic_prediction_series(
-                code_index=i, dates=dates
-            )
+            cache["ModelTopkDropout"] = _synthetic_prediction_series(code_index=i, dates=dates)
         stock_data[code] = frame
     return stock_data
 
@@ -366,25 +641,40 @@ async def _verify(case: GoldenCase, baseline_dir: Path, *, keep_candidate: bool)
         print("Run generate first.")
         return 2
 
-    baseline = _load_json(baseline_path)
     candidate = await _run_case(case)
+
+    # Step 1: Baseline comparison (existing guard)
+    baseline = _load_json(baseline_path)
     diffs = compare_results(baseline, candidate)
 
-    if keep_candidate or diffs:
+    if diffs:
+        print(f"FAIL: {case.name} differs from baseline ({len(diffs)} diffs)")
+        for diff in diffs[:50]:
+            print(diff.format())
+        if len(diffs) > 50:
+            print(f"... truncated {len(diffs) - 50} more differences")
+
+    # Step 2: Signal integrity verification (new intermediate-data guard)
+    integrity_report = verify_result(candidate)
+    integrity_ok = integrity_report.get("passed", False)
+    if not integrity_ok:
+        print(f"FAIL: {case.name} signal integrity check failed")
+
+    # Save candidate for debugging if anything failed
+    if diffs or not integrity_ok:
         candidate_path = _candidate_path(case.name, baseline_dir)
         _stable_json_dump(candidate_path, candidate)
-        print(f"Candidate saved: {candidate_path}")
+        if keep_candidate:
+            print(f"Candidate saved: {candidate_path}")
+        elif not integrity_ok:
+            print(f"Candidate saved for debugging: {candidate_path}")
 
-    if not diffs:
+    if not diffs and integrity_ok:
         print(f"PASS: {case.name} matches baseline")
+        print(f"INTEGRITY: signal integrity check passed")
         _print_summary(candidate)
         return 0
 
-    print(f"FAIL: {case.name} differs from baseline ({len(diffs)} diffs)")
-    for diff in diffs[:50]:
-        print(diff.format())
-    if len(diffs) > 50:
-        print(f"... truncated {len(diffs) - 50} more differences")
     return 1
 
 

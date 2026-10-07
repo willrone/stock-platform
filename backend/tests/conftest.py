@@ -23,6 +23,29 @@ def temp_dir() -> Generator[Path, None, None]:
         yield Path(temp_dir)
 
 
+def install_auth_overrides(app: object) -> None:
+    """为存量契约/属性测试提供认证旁路。
+
+    重构后业务路由要求 JWT + 真实 User（``require_current_user`` 会查库），旧测试
+    只 stub 了 ``get_current_user``。这里通过 FastAPI 官方 ``dependency_overrides``
+    把两个依赖都替换为轻量替身，不落真实 users 表；仅对显式传入的测试 app 生效，
+    不改变生产行为。调用方应在用例结束后 ``pop`` 还原（共享 app 时）。
+    """
+    from types import SimpleNamespace
+
+    from app.api.v1.dependencies import get_current_user, require_current_user
+
+    app.dependency_overrides[get_current_user] = lambda: "test-user"  # type: ignore[attr-defined]
+    app.dependency_overrides[require_current_user] = lambda: SimpleNamespace(  # type: ignore[attr-defined]
+        id="test-user",
+        is_admin=False,
+        is_active=True,
+        subscription_tier="free",
+        username="test-user",
+        email="test-user@example.com",
+    )
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Prepare the legacy full-test CI database before modules import app.main.
 

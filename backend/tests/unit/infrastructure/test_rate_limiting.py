@@ -7,6 +7,9 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+from app.api.v1.dependencies import get_current_user, require_current_user
+from tests.conftest import install_auth_overrides
+
 
 # 创建不带测试环境标识的客户端，用于实际测试限流功能
 class NonTestClient(TestClient):
@@ -20,6 +23,15 @@ class NonTestClient(TestClient):
 
 
 client = NonTestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _auth_overrides():
+    """用例内安装认证旁路，结束后还原共享 app 的 overrides。"""
+    install_auth_overrides(app)
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_current_user, None)
 
 
 class TestRateLimiting:

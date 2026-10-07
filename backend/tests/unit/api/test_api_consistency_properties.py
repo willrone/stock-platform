@@ -18,8 +18,20 @@ from hypothesis import strategies as st
 
 from app.main import app
 
+from app.api.v1.dependencies import get_current_user, require_current_user
+from tests.conftest import install_auth_overrides
+
 # 测试客户端
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _auth_overrides():
+    """用例内安装认证旁路，结束后还原共享 app 的 overrides。"""
+    install_auth_overrides(app)
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_current_user, None)
 
 
 # 数据生成策略

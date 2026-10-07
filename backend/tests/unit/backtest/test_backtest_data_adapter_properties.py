@@ -442,11 +442,19 @@ class TestBacktestDataAdapterProperties:
                 # 这是因为月度重采样可能导致小的数值差异
 
         # 验证最终累积收益与组合价值的一致性
-        final_portfolio_value = portfolio_history[-1]["portfolio_value"]
-        final_cumulative_return = monthly_returns[-1].cumulative_return
-        expected_final_return = (final_portfolio_value - initial_cash) / initial_cash
+        # 月度桶按真实日历月聚合，而生成序列用"30 天伪月份"推进，最后一个日度快照
+        # 可能落在最后一个完整月桶之后（桶数也可能少于 num_months）。期望值取
+        # 「最后一个月桶所在年月」的最后一个快照，与月度桶同锚点对比——原实现直接
+        # 对比最终快照，尾部天数的收益会混进误差，随机数据下偶发超过 0.05。
+        last_month = monthly_returns[-1]
+        anchor_value = initial_cash
+        for snapshot in portfolio_history:
+            snapshot_date = datetime.fromisoformat(snapshot["date"])
+            if snapshot_date.year == last_month.year and snapshot_date.month == last_month.month:
+                anchor_value = snapshot["portfolio_value"]
+        expected_final_return = (anchor_value - initial_cash) / initial_cash
 
-        return_error = abs(final_cumulative_return - expected_final_return)
+        return_error = abs(last_month.cumulative_return - expected_final_return)
         assert return_error < 0.05, f"最终累积收益与组合收益不一致: {return_error}"
 
     @given(

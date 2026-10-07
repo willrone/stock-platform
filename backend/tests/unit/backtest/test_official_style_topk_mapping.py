@@ -18,7 +18,7 @@ sys.modules.setdefault("app.api", api_package)
 sys.modules.setdefault("app.api.v1", v1_package)
 
 from app.api.v1.backtest import _normalize_backtest_strategy_request
-from app.api.v1.dependencies import _normalize_task_backtest_strategy_config
+from app.services.tasks.task_executors import _normalize_task_backtest_strategy_config
 from app.api.v1.schemas import BacktestRequest
 from app.services.backtest.utils.official_style_params import (
     apply_official_style_topk_dropout_params,

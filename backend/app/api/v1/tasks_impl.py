@@ -2,8 +2,23 @@
 任务管理路由
 """
 
-from datetime import timedelta
-from typing import Any, Dict, Optional, cast
+# ============================================================
+# tasks.py - 任务管理路由（1670 行）
+# 导航：
+#   1-51:    导入 + 模块文档
+#   52-102:  辅助函数
+#   103-350: 任务创建与列表
+#   351-601: 任务查询与分析
+#   602-785: 回测分析与配置对比
+#   787-1032: 调参与导出
+#   1033-1382: 任务重建与详情
+#   1383-1563: 任务维护操作（配置/删除/停止/重试）
+#   1564-1670: 任务监控
+# TODO: 此文件超过 1000 行，后续应拆分为 tasks/ 包下的子模块
+# ============================================================
+
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,13 +29,17 @@ from app.api.v1.dependencies import (
     execute_prediction_task_simple,
     execute_qlib_precompute_task_simple,
     get_current_user,
+    require_current_user,
 )
 from app.api.v1.schemas import (
     BacktestCompareRequest,
     BacktestExportRequest,
+    CompareConfigsRequest,
     RebuildTaskRequest,
     StandardResponse,
     TaskCreateRequest,
+    TuningPreviewRequest,
+    TuningSubmitRequest,
     build_task_detail_dto,
     build_task_list_dto,
     build_task_mutation_dto,
@@ -36,6 +55,8 @@ from app.core.error_handler import (
     log_structured_exception,
 )
 from app.models.task_models import TaskStatus, TaskType
+from app.models.user_models import User
+from app.middleware.rbac import enforce_quota
 from app.repositories.task_repository import PredictionResultRepository, TaskRepository
 from app.services.data.stock_data_loader import StockDataLoader
 from app.services.prediction.prediction_engine import PredictionConfig, PredictionEngine
@@ -46,6 +67,9 @@ from app.utils.dict_merge import deep_merge
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
 
+# ────────────────────────────────────────
+# 功能区：辅助函数
+# ────────────────────────────────────────
 def _build_route_error_context(
     *,
     user_id: Optional[str] = None,
@@ -97,9 +121,14 @@ def _mark_task_failed_after_submit_error(
         )
 
 
+# ────────────────────────────────────────
+# 功能区：任务创建与列表
+# ────────────────────────────────────────
 @router.post("", response_model=StandardResponse)
 async def create_task(
-    request: TaskCreateRequest, user_id: str = Depends(get_current_user)
+    request: TaskCreateRequest,
+    user_id: str = Depends(get_current_user),
+    current_user: User | None = Depends(require_current_user),
 ) -> Any:
     """创建任务（支持预测和回测）"""
     session = SessionLocal()
@@ -113,7 +142,23 @@ async def create_task(
         else:
             task_type = TaskType.PREDICTION
 
-        # 构建任务配置
+        if isinstance(current_user, User):
+            await enforce_quota(current_user, "max_concurrent_tasks")
+            if task_type == TaskType.BACKTEST:
+                await enforce_quota(current_user, "monthly_backtest_limit")
+
+        # ── 捕获完整参数快照（不可变 JSON，用于后续查配置溯源） ──
+        config_snapshot = {
+            "task_name": request.task_name,
+            "task_type": task_type.value,
+            "stock_codes": list(request.stock_codes) if request.stock_codes else [],
+            "model_id": request.model_id,
+            "prediction_config": request.prediction_config,
+            "backtest_config": request.backtest_config,
+            "_snapshot_created_at": datetime.utcnow().isoformat(),
+        }
+
+        # 构建任务配置（保持向后兼容：flat keys 供 executor 直接读取）
         if task_type == TaskType.PREDICTION:
             if not request.model_id:
                 raise HTTPException(status_code=400, detail="预测任务需要提供model_id")
@@ -149,6 +194,9 @@ async def create_task(
                 backtest_config["strategy_config"] = backtest_config["strategy_params"]
 
             config = {"stock_codes": request.stock_codes, **backtest_config}
+
+        # 将完整快照嵌入 config（作为嵌套键，不影响 executor 读取 flat key）
+        config["_snapshot"] = config_snapshot
 
         # 创建任务
         task = task_repository.create_task(
@@ -331,6 +379,9 @@ async def list_tasks(
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：任务查询与分析
+# ────────────────────────────────────────
 @router.get("/{task_id}/detailed", response_model=StandardResponse)
 async def get_task_detailed_result(task_id: str) -> Any:
     """获取任务的详细回测结果（用于可视化）"""
@@ -582,6 +633,9 @@ async def get_chart_data(task_id: str, chart_type: str) -> Any:
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：回测分析与配置对比
+# ────────────────────────────────────────
 @router.post("/compare", response_model=StandardResponse)
 async def compare_backtest_results(request: BacktestCompareRequest) -> Any:
     """对比多个回测结果"""
@@ -655,6 +709,304 @@ async def compare_backtest_results(request: BacktestCompareRequest) -> Any:
         session.close()
 
 
+@router.post("/compare-configs", response_model=StandardResponse)
+async def compare_task_configs(
+    request: CompareConfigsRequest,
+    mode: str = Query("diff", description="对比模式: diff (仅差异字段) 或 full (全部字段)"),
+) -> Any:
+    """对比多个任务的配置快照"""
+    if mode not in ("diff", "full"):
+        raise HTTPException(status_code=400, detail="mode 必须是 diff 或 full")
+
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        tasks_info = []
+        snapshots = []
+
+        for task_id in request.task_ids:
+            task = task_repository.get_task_by_id(task_id)
+            if not task:
+                raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+
+            config: Any = task.config or {}
+            snapshot = config.get("_snapshot")
+            if not snapshot:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"任务 {task_id} 没有配置快照（旧任务不支持）",
+                )
+
+            tasks_info.append(
+                {
+                    "task_id": task.task_id,
+                    "task_name": task.task_name,
+                    "created_at": task.created_at.isoformat()
+                    if hasattr(task.created_at, "isoformat")
+                    else str(task.created_at),
+                    "status": task.status.value
+                    if hasattr(task.status, "value")
+                    else str(task.status),
+                }
+            )
+            snapshots.append(_flatten_dict(snapshot))
+
+        # 取所有字段的并集
+        all_keys: set = set()
+        for s in snapshots:
+            all_keys.update(s.keys())
+        all_keys = sorted(all_keys)
+
+        # 逐字段对比
+        fields = {}
+        diff_count = 0
+
+        for key in all_keys:
+            values = [s.get(key) for s in snapshots]
+
+            is_diff = _values_differ(values)
+
+            if is_diff:
+                diff_count += 1
+
+            if mode == "diff" and not is_diff:
+                continue
+
+            fields[key] = {
+                "values": values,
+                "diff": is_diff,
+            }
+
+        return StandardResponse(
+            success=True,
+            message="配置对比完成",
+            data={
+                "tasks": tasks_info,
+                "fields": fields,
+                "diff_count": diff_count,
+                "total_fields": len(all_keys),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"对比配置快照失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"对比配置快照失败: {str(e)}")
+    finally:
+        session.close()
+
+
+# ── 参数调优 API ──────────────────────────────────────────────────────
+
+
+def _set_nested_value(d: dict, path: str, value: Any, sep: str = ".") -> None:
+    """按点号路径在嵌套字典中设置值（原地修改）
+
+    例: _set_nested_value(config, "backtest_config.strategy_name", "rsi")
+    等价于 config["backtest_config"]["strategy_name"] = "rsi"
+    """
+    keys = path.split(sep)
+    current = d
+    for key in keys[:-1]:
+        if not isinstance(current, dict):
+            raise ValueError(f"路径 {path}: 无法遍历非字典值 {key}")
+        if key not in current:
+            current[key] = {}
+        current = current[key]
+    last_key = keys[-1]
+    if isinstance(current, dict):
+        current[last_key] = value
+    else:
+        raise ValueError(f"路径 {path}: 无法在非字典上设置值")
+
+
+# ────────────────────────────────────────
+# 功能区：调参与导出
+# ────────────────────────────────────────
+@router.post("/tuning/preview-config", response_model=StandardResponse)
+async def preview_tuning_config(
+    request: TuningPreviewRequest,
+) -> Any:
+    """基于历史任务配置快照 + 覆盖参数，生成预览配置（不创建任务）"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        task = task_repository.get_task_by_id(request.base_task_id)
+        if not task:
+            raise HTTPException(
+                status_code=404, detail=f"任务不存在: {request.base_task_id}"
+            )
+
+        config: dict = task.config or {}
+        snapshot = config.get("_snapshot")
+        if not snapshot:
+            raise HTTPException(
+                status_code=400,
+                detail="任务没有配置快照（旧任务不支持调优预览）",
+            )
+
+        # 深拷贝基准配置，在其上应用覆盖
+        import copy
+
+        resolved = copy.deepcopy(snapshot)
+
+        # 展平基准配置用于获取旧值
+        flat_snapshot = _flatten_dict(snapshot)
+
+        changes = []
+        for path, new_value in request.overrides.items():
+            old_value = flat_snapshot.get(path)
+            _set_nested_value(resolved, path, new_value)
+            changes.append(
+                {
+                    "path": path,
+                    "old": old_value,
+                    "new": new_value,
+                }
+            )
+
+        return StandardResponse(
+            success=True,
+            message="配置预览生成完成",
+            data={
+                "base_task": {
+                    "task_id": task.task_id,
+                    "task_name": task.task_name,
+                },
+                "resolved_config": resolved,
+                "changes": changes,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"配置预览失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"配置预览失败: {str(e)}")
+    finally:
+        session.close()
+
+
+@router.post("/tuning/submit", response_model=StandardResponse)
+async def submit_tuning_task(
+    request: TuningSubmitRequest,
+    user_id: str = Depends(get_current_user),
+) -> Any:
+    """基于预览提交实际新回测任务"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+        original_task = task_repository.get_task_by_id(request.base_task_id)
+        if not original_task:
+            raise HTTPException(
+                status_code=404, detail=f"原任务不存在: {request.base_task_id}"
+            )
+
+        original_config: dict = original_task.config or {}
+        original_snapshot = original_config.get("_snapshot")
+        if not original_snapshot:
+            raise HTTPException(
+                status_code=400,
+                detail="原任务没有配置快照（旧任务不支持调优）",
+            )
+
+        # 深拷贝快照并应用覆盖
+        import copy
+
+        modified_snapshot = copy.deepcopy(original_snapshot)
+        for path, value in request.overrides.items():
+            _set_nested_value(modified_snapshot, path, value)
+
+        # 确定股票代码
+        stock_codes = (
+            request.stock_codes
+            if request.stock_codes is not None
+            else modified_snapshot.get("stock_codes", [])
+        )
+
+        # 更新快照中的名称和新时间戳
+        modified_snapshot["task_name"] = request.task_name
+        modified_snapshot["_snapshot_created_at"] = datetime.utcnow().isoformat()
+
+        # 从修改后的快照重建回测 config（遵循 create_task 的模式）
+        backtest_config = dict(modified_snapshot.get("backtest_config") or {})
+        # 兼容旧版字段映射
+        if (
+            "strategy_type" in backtest_config
+            and "strategy_name" not in backtest_config
+        ):
+            backtest_config["strategy_name"] = backtest_config["strategy_type"]
+        if (
+            "strategy_params" in backtest_config
+            and "strategy_config" not in backtest_config
+        ):
+            backtest_config["strategy_config"] = backtest_config["strategy_params"]
+
+        config = {
+            "stock_codes": stock_codes,
+            **backtest_config,
+        }
+        config["_snapshot"] = modified_snapshot
+
+        # 创建新任务
+        new_task = task_repository.create_task(
+            task_name=request.task_name,
+            task_type=TaskType.BACKTEST,
+            user_id=user_id,
+            config=config,
+        )
+
+        new_task_id_value = cast(str, new_task.task_id)
+
+        # 提交到进程池执行
+        try:
+            process_executor = get_process_executor()
+            process_executor.submit(execute_backtest_task_simple, new_task_id_value)
+            logger.info(f"调优任务已提交到进程池: {new_task_id_value}")
+        except RuntimeError as submit_runtime_error:
+            log_structured_exception(
+                "调优任务提交到进程池时出错",
+                error=submit_runtime_error,
+                error_type=ErrorType.TASK_ERROR,
+                severity=ErrorSeverity.HIGH,
+                context=_build_route_error_context(
+                    user_id=user_id,
+                    task_id=new_task_id_value,
+                    operation="tuning_submit",
+                    route="submit_tuning_task",
+                ),
+            )
+            _mark_task_failed_after_submit_error(
+                task_repository,
+                task_id=new_task_id_value,
+                submit_error=submit_runtime_error,
+                context=_build_route_error_context(
+                    user_id=user_id,
+                    task_id=new_task_id_value,
+                    operation="tuning_submit",
+                    route="submit_tuning_task",
+                ),
+            )
+
+        return StandardResponse(
+            success=True,
+            message="调优任务创建成功",
+            data={
+                "task_id": new_task.task_id,
+                "task_name": new_task.task_name,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"提交调优任务失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"提交调优任务失败: {str(e)}")
+    finally:
+        session.close()
+
+
 @router.post("/{task_id}/export", response_model=StandardResponse)
 async def export_backtest_report(
     task_id: str, export_request: BacktestExportRequest
@@ -718,6 +1070,9 @@ async def export_backtest_report(
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：任务重建与详情
+# ────────────────────────────────────────
 @router.get("/stats", response_model=StandardResponse)
 async def get_task_stats(user_id: str = Depends(get_current_user)) -> Any:
     """获取任务统计信息"""
@@ -1068,6 +1423,44 @@ async def get_task_detail(task_id: str) -> Any:
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：任务维护操作
+# ────────────────────────────────────────
+@router.get("/{task_id}/config", response_model=StandardResponse)
+async def get_task_config(task_id: str) -> Any:
+    """获取任务配置快照"""
+    session = SessionLocal()
+    try:
+        task_repository = TaskRepository(session)
+
+        # 获取任务
+        task = task_repository.get_task_by_id(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+
+        # 从 config 中提取 _snapshot
+        config: Any = task.config or {}
+        snapshot = config.get("_snapshot")
+        if not snapshot:
+            raise HTTPException(
+                status_code=404,
+                detail="该任务没有配置快照（旧任务不支持）",
+            )
+
+        return StandardResponse(
+            success=True,
+            message="配置快照获取成功",
+            data=snapshot,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取任务配置快照失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取任务配置快照失败: {str(e)}")
+    finally:
+        session.close()
+
+
 @router.delete("/{task_id}", response_model=StandardResponse)
 async def delete_task(
     task_id: str,
@@ -1214,6 +1607,9 @@ async def retry_task(task_id: str) -> Any:
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：任务监控
+# ────────────────────────────────────────
 @router.get("/monitor/stuck", response_model=StandardResponse)
 async def get_stuck_tasks(timeout_minutes: int = 30) -> Any:
     """获取卡住的任务"""
@@ -1288,3 +1684,36 @@ async def get_task_monitor_statistics() -> Any:
     except Exception as e:
         logger.error(f"获取监控统计失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取监控统计失败: {str(e)}")
+
+
+def _flatten_dict(d: Any, parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
+    """递归展平嵌套字典为点号路径格式"""
+    items: Dict[str, Any] = {}
+    if isinstance(d, dict):
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else str(k)
+            if isinstance(v, dict):
+                items.update(_flatten_dict(v, new_key, sep=sep))
+            elif isinstance(v, list):
+                for i, item in enumerate(v):
+                    list_key = f"{new_key}[{i}]"
+                    if isinstance(item, dict):
+                        items.update(_flatten_dict(item, list_key, sep=sep))
+                    else:
+                        items[list_key] = item
+            else:
+                items[new_key] = v
+    else:
+        items[parent_key] = d
+    return items
+
+
+def _values_differ(values: List[Any]) -> bool:
+    """判断一组值是否不完全相同（处理不可哈希类型）"""
+    if len(values) <= 1:
+        return False
+    first = values[0]
+    for v in values[1:]:
+        if v != first:
+            return True
+    return False

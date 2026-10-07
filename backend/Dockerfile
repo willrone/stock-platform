@@ -1,71 +1,61 @@
-# 使用Python 3.13作为基础镜像
-FROM python:3.13-slim
+# 后端服务 Dockerfile
+# 多阶段构建：分离依赖安装和应用代码，利用 Docker 缓存加速构建
 
-# 设置工作目录
+# ========== 构建阶段 ==========
+FROM python:3.13-slim AS builder
+
+WORKDIR /build
+
+# 最小系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 只复制 requirements.txt 以缓存 pip install 层
+COPY requirements.txt .
+
+# 换国内源，pip 缓存到本地
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
+    pip install --upgrade pip
+
+# 安装依赖到 /install 目录，用于运行时阶段复制
+RUN pip install --user -r requirements.txt
+
+# 单独安装 Qlib（从 GitHub，需要编译）
+RUN pip install --user git+https://github.com/microsoft/qlib.git
+
+# ========== 运行时阶段 ==========
+FROM python:3.13-slim AS runner
+
 WORKDIR /app
 
-# 设置环境变量
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# 系统运行时依赖（最小集）
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制requirements文件
-COPY requirements.txt .
-
-# 配置pip使用国内源并分步安装依赖（优化缓存）
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ && \
-    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
-    pip install --upgrade pip
-
-# 先安装基础依赖（较小的包）
-RUN pip install --no-deps \
-    fastapi==0.104.1 \
-    uvicorn==0.24.0 \
-    python-multipart==0.0.6 \
-    websockets==12.0 \
-    sqlalchemy==2.0.23 \
-    alembic==1.12.1 \
-    aiosqlite==0.19.0 \
-    pydantic==2.5.0 \
-    pydantic-settings==2.1.0 \
-    python-dotenv==1.0.0 \
-    loguru==0.7.2 \
-    prometheus-client==0.19.0 \
-    httpx==0.25.2
-
-# 安装数据处理包
-RUN pip install --no-deps \
-    numpy>=1.26.0 \
-    pandas>=2.2.0 \
-    pyarrow==14.0.1
-
-# 最后安装大型包（PyTorch等）
-RUN pip install --no-deps \
-    torch>=2.1.0 --index-url https://download.pytorch.org/whl/cpu
-
-# 安装剩余依赖
-RUN pip install -r requirements.txt
+# 从 builder 复制已安装的包
+COPY --from=builder /root/.local /root/.local
 
 # 复制应用代码
 COPY . .
 
-# 创建数据目录
+# 创建运行时目录
 RUN mkdir -p /app/data/stocks /app/data/models /app/data/logs
 
-# 暴露端口
 EXPOSE 8000
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# 启动命令
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

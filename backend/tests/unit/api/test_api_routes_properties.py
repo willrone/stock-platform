@@ -77,6 +77,11 @@ class TestAPIRoutesProperties:
             if "RateLimitMiddleware" not in str(middleware.cls)
         ]
 
+        # 重构后业务路由要求 JWT + 真实 User，属性测试装认证旁路（app 每例新建，无需还原）
+        from tests.conftest import install_auth_overrides
+
+        install_auth_overrides(test_app)
+
         self.client = TestClient(test_app)
 
     @pytest.mark.asyncio

@@ -1,0 +1,3201 @@
+{
+  "annualized_return": 0.8272425471121743,
+  "backtest_config": {
+    "close_cost": 0.0,
+    "commission_rate": 0.001,
+    "end_date": "2024-07-31T00:00:00",
+    "initial_cash": 100000.0,
+    "max_position_size": 0.25,
+    "min_cost": 0.0,
+    "open_cost": 0.0,
+    "slippage_rate": 0.001,
+    "start_date": "2024-01-02T00:00:00",
+    "strategy_config": {
+      "fast_period": 12,
+      "signal_period": 9,
+      "slow_period": 26
+    },
+    "strategy_name": "macd"
+  },
+  "best_month": 0.23354790068396092,
+  "best_performing_stock": {
+    "avg_pnl_per_trade": 2783.439753524601,
+    "stock_code": "SYNTH_2003.SZ",
+    "total_pnl": 13917.198767623006,
+    "trade_count": 5
+  },
+  "cost_statistics": {
+    "cost_ratio": 0.0068797263338602485,
+    "total_commission": 344.0074838594455,
+    "total_cost": 687.9726333860249,
+    "total_slippage": 343.96514952657947
+  },
+  "end_date": "2024-07-31T00:00:00",
+  "excess_return_with_cost": {
+    "annualized_return": 0.8272425471121743,
+    "information_ratio": null,
+    "max_drawdown": -0.023118480077521826,
+    "mean": null,
+    "std": null
+  },
+  "excess_return_without_cost": {
+    "annualized_return": 0.0,
+    "information_ratio": 0.0,
+    "max_drawdown": 0.0,
+    "mean": 0.0,
+    "std": 0.0
+  },
+  "final_value": 141690.1697571944,
+  "golden_case": {
+    "backtest_config": {
+      "board_lot_size": 100,
+      "cash_reserve_ratio": 0.05,
+      "close_cost": 0.0,
+      "commission_rate": 0.001,
+      "initial_cash": 100000.0,
+      "max_position_size": 0.25,
+      "min_cost": 0.0,
+      "open_cost": 0.0,
+      "portfolio_history_stride": 1,
+      "record_portfolio_history": true,
+      "record_positions_in_history": true,
+      "slippage_rate": 0.001
+    },
+    "data_source": "synthetic",
+    "description": "MACD strategy guard: oscillating market generating golden cross / death cross signals.",
+    "end": "2024-07-31",
+    "name": "macd_small",
+    "prediction_source": null,
+    "start": "2024-01-02",
+    "stock_codes": [
+      "SYNTH_2001.SZ",
+      "SYNTH_2002.SZ",
+      "SYNTH_2003.SZ"
+    ],
+    "strategy_config": {
+      "fast_period": 12,
+      "signal_period": 9,
+      "slow_period": 26
+    },
+    "strategy_name": "macd"
+  },
+  "initial_cash": 100000.0,
+  "losing_trades": 0,
+  "max_drawdown": -0.023118480077521826,
+  "metrics": {
+    "annualized_return": 0.8272425471121743,
+    "max_drawdown": -0.023118480077521826,
+    "profit_factor": Infinity,
+    "sharpe_ratio": 12.079162734020466,
+    "total_return": 0.4169016975719441,
+    "total_trades": 15,
+    "volatility": 0.06848509001226381,
+    "win_rate": 1.0
+  },
+  "monthly_return_mean": 0.06305808486521843,
+  "monthly_return_std": 0.093585778124591,
+  "monthly_returns_detail": [
+    {
+      "month": "2024-02",
+      "return": 0.006004634699597444
+    },
+    {
+      "month": "2024-03",
+      "return": 0.09017432968402495
+    },
+    {
+      "month": "2024-04",
+      "return": -0.01476238004885766
+    },
+    {
+      "month": "2024-05",
+      "return": 0.23354790068396092
+    },
+    {
+      "month": "2024-06",
+      "return": -0.00512265432910497
+    },
+    {
+      "month": "2024-07",
+      "return": 0.0685066785016899
+    }
+  ],
+  "negative_months": 2,
+  "official_portfolio_analysis": {
+    "benchmark": null,
+    "excess_return_with_cost": {
+      "annualized_return": 0.8272425471121743,
+      "information_ratio": null,
+      "max_drawdown": -0.023118480077521826,
+      "mean": null,
+      "std": null
+    },
+    "excess_return_without_cost": {
+      "annualized_return": 0.0,
+      "information_ratio": 0.0,
+      "max_drawdown": 0.0,
+      "mean": 0.0,
+      "std": 0.0
+    }
+  },
+  "portfolio_history": [
+    {
+      "cash": 100000.0,
+      "date": "2024-01-02T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-03T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-04T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-05T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-08T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-09T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-10T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-11T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-12T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-15T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-16T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-17T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-18T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-19T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-22T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-23T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-24T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-25T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-26T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-29T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-30T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-01-31T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-01T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-02T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-05T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-06T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-07T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-08T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-09T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-12T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-13T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-14T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-15T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-16T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-19T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-20T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-21T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-22T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 100000.0,
+      "date": "2024-02-23T00:00:00",
+      "portfolio_value": 100000.0,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.0,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 75634.70715131465,
+      "date": "2024-02-26T00:00:00",
+      "portfolio_value": 99951.34241284168,
+      "portfolio_value_without_cost": 100000.0,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 14.303903095015903,
+          "market_value": 24316.635261527033,
+          "quantity": 1700,
+          "unrealized_pnl": -24.316635261526244
+        }
+      },
+      "positions_count": 1,
+      "total_return": -0.00048657587158319076,
+      "total_return_without_cost": 0.0
+    },
+    {
+      "cash": 75634.70715131465,
+      "date": "2024-02-27T00:00:00",
+      "portfolio_value": 100140.2546993331,
+      "portfolio_value_without_cost": 100188.91228649142,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 14.415027969422615,
+          "market_value": 24505.547548018447,
+          "quantity": 1700,
+          "unrealized_pnl": 164.59565122988715
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.0014025469933310524,
+      "total_return_without_cost": 0.0018891228649142431
+    },
+    {
+      "cash": 75634.70715131465,
+      "date": "2024-02-28T00:00:00",
+      "portfolio_value": 100370.4191695747,
+      "portfolio_value_without_cost": 100419.07675673302,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 14.550418834270614,
+          "market_value": 24735.712018260045,
+          "quantity": 1700,
+          "unrealized_pnl": 394.76012147148504
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.0037041916957469946,
+      "total_return_without_cost": 0.004190767567330185
+    },
+    {
+      "cash": 57499.65236887557,
+      "date": "2024-02-29T00:00:00",
+      "portfolio_value": 100600.46346995974,
+      "portfolio_value_without_cost": 100685.33683396826,
+      "positions": {
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.065892670392596,
+          "market_value": 18098.839005588896,
+          "quantity": 1500,
+          "unrealized_pnl": -18.098839005586342
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 14.707042409114871,
+          "market_value": 25001.972095495283,
+          "quantity": 1700,
+          "unrealized_pnl": 661.020198706723
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.006004634699597373,
+      "total_return_without_cost": 0.006853368339682638
+    },
+    {
+      "cash": 57499.65236887557,
+      "date": "2024-03-01T00:00:00",
+      "portfolio_value": 101078.54822961018,
+      "portfolio_value_without_cost": 101163.42159361868,
+      "positions": {
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.186867732658333,
+          "market_value": 18280.3015989875,
+          "quantity": 1500,
+          "unrealized_pnl": 163.36375439301628
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 14.881526036321832,
+          "market_value": 25298.594261747116,
+          "quantity": 1700,
+          "unrealized_pnl": 957.6423649585558
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.010785482296101837,
+      "total_return_without_cost": 0.01163421593618681
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-04T00:00:00",
+      "portfolio_value": 101578.67078367207,
+      "portfolio_value_without_cost": 101691.96397408075,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 8.876757371362574,
+          "market_value": 14202.81179418012,
+          "quantity": 1600,
+          "unrealized_pnl": -14.20281179417725
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.325382859703591,
+          "market_value": 18488.07428955539,
+          "quantity": 1500,
+          "unrealized_pnl": 371.1364449609064
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 15.070214089200753,
+          "market_value": 25619.36395164128,
+          "quantity": 1700,
+          "unrealized_pnl": 1278.4120548527208
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.015786707836720742,
+      "total_return_without_cost": 0.01691963974080747
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-05T00:00:00",
+      "portfolio_value": 102285.39425759712,
+      "portfolio_value_without_cost": 102398.68744800579,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 8.963316631046053,
+          "market_value": 14341.306609673686,
+          "quantity": 1600,
+          "unrealized_pnl": 124.29200369938917
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.478651943048469,
+          "market_value": 18717.977914572704,
+          "quantity": 1500,
+          "unrealized_pnl": 601.0400699782222
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 15.269228814738488,
+          "market_value": 25957.68898505543,
+          "quantity": 1700,
+          "unrealized_pnl": 1616.7370882668693
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.02285394257597116,
+      "total_return_without_cost": 0.023986874480057888
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-06T00:00:00",
+      "portfolio_value": 103042.56961638923,
+      "portfolio_value_without_cost": 103155.86280679789,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.063723310292309,
+          "market_value": 14501.957296467694,
+          "quantity": 1600,
+          "unrealized_pnl": 284.9426904933971
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.64365511716584,
+          "market_value": 18965.48267574876,
+          "quantity": 1500,
+          "unrealized_pnl": 848.5448311542787
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 15.474534644633811,
+          "market_value": 26306.70889587748,
+          "quantity": 1700,
+          "unrealized_pnl": 1965.7569990889206
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.03042569616389228,
+      "total_return_without_cost": 0.031558628067978864
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-07T00:00:00",
+      "portfolio_value": 103834.85726137599,
+      "portfolio_value_without_cost": 103948.15045178466,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.175777849775109,
+          "market_value": 14681.244559640174,
+          "quantity": 1600,
+          "unrealized_pnl": 464.2299536658775
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.817189020870924,
+          "market_value": 19225.783531306384,
+          "quantity": 1500,
+          "unrealized_pnl": 1108.845686711902
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 15.682004954196552,
+          "market_value": 26659.40842213414,
+          "quantity": 1700,
+          "unrealized_pnl": 2318.4565253455803
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.038348572613759895,
+      "total_return_without_cost": 0.03948150451784663
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-08T00:00:00",
+      "portfolio_value": 104646.38782417198,
+      "portfolio_value_without_cost": 104759.68101458064,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.297096145130926,
+          "market_value": 14875.353832209481,
+          "quantity": 1600,
+          "unrealized_pnl": 658.3392262351845
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 12.995919923827932,
+          "market_value": 19493.8798857419,
+          "quantity": 1500,
+          "unrealized_pnl": 1376.9420411474166
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 15.88749021054429,
+          "market_value": 27008.73335792529,
+          "quantity": 1700,
+          "unrealized_pnl": 2667.781461136732
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.0464638782417198,
+      "total_return_without_cost": 0.04759681014580638
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-11T00:00:00",
+      "portfolio_value": 105461.024755293,
+      "portfolio_value_without_cost": 105574.31794570165,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.425149227003363,
+          "market_value": 15080.238763205381,
+          "quantity": 1600,
+          "unrealized_pnl": 863.224157231085
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 13.176438875205847,
+          "market_value": 19764.65831280877,
+          "quantity": 1500,
+          "unrealized_pnl": 1647.7204682142874
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.086886429990322,
+          "market_value": 27347.706930983546,
+          "quantity": 1700,
+          "unrealized_pnl": 3006.7550341949864
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.05461024755292994,
+      "total_return_without_cost": 0.05574317945701652
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-12T00:00:00",
+      "portfolio_value": 106262.63093499363,
+      "portfolio_value_without_cost": 106375.92412540228,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.55730520302205,
+          "market_value": 15291.68832483528,
+          "quantity": 1600,
+          "unrealized_pnl": 1074.673718860984
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 13.355318000014847,
+          "market_value": 20032.97700002227,
+          "quantity": 1500,
+          "unrealized_pnl": 1916.0391554277885
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.27620285990634,
+          "market_value": 27669.54486184078,
+          "quantity": 1700,
+          "unrealized_pnl": 3328.5929650522194
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.06262630934993635,
+      "total_return_without_cost": 0.06375924125402278
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-13T00:00:00",
+      "portfolio_value": 107035.33508017725,
+      "portfolio_value_without_cost": 107148.6282705859,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.690872796215142,
+          "market_value": 15505.396473944227,
+          "quantity": 1600,
+          "unrealized_pnl": 1288.3818679699307
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 13.529167050861572,
+          "market_value": 20293.750576292357,
+          "quantity": 1500,
+          "unrealized_pnl": 2176.8127316978753
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.451627812732568,
+          "market_value": 27967.767281645363,
+          "quantity": 1700,
+          "unrealized_pnl": 3626.8153848568036
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.07035335080177246,
+      "total_return_without_cost": 0.07148628270585905
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-14T00:00:00",
+      "portfolio_value": 107763.79372535655,
+      "portfolio_value_without_cost": 107877.0869157652,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.823145789485405,
+          "market_value": 15717.033263176649,
+          "quantity": 1600,
+          "unrealized_pnl": 1500.0186572023522
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 13.694689319053063,
+          "market_value": 20542.033978579595,
+          "quantity": 1500,
+          "unrealized_pnl": 2425.096133985113
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.60959160900294,
+          "market_value": 28236.305735305,
+          "quantity": 1700,
+          "unrealized_pnl": 3895.3538385164393
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.07763793725356546,
+      "total_return_without_cost": 0.07877086915765205
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-15T00:00:00",
+      "portfolio_value": 108433.44462594077,
+      "portfolio_value_without_cost": 108546.73781634943,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 9.951447671732819,
+          "market_value": 15922.31627477251,
+          "quantity": 1600,
+          "unrealized_pnl": 1705.3016687982126
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 13.84873601921386,
+          "market_value": 20773.104028820788,
+          "quantity": 1500,
+          "unrealized_pnl": 2656.1661842263056
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.746825631795392,
+          "market_value": 28469.603574052166,
+          "quantity": 1700,
+          "unrealized_pnl": 4128.651677263606
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.08433444625940771,
+      "total_return_without_cost": 0.08546737816349428
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-18T00:00:00",
+      "portfolio_value": 109030.74756749421,
+      "portfolio_value_without_cost": 109144.04075790287,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.073175778199786,
+          "market_value": 16117.081245119658,
+          "quantity": 1600,
+          "unrealized_pnl": 1900.0666391453615
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 13.98835828569808,
+          "market_value": 20982.53742854712,
+          "quantity": 1500,
+          "unrealized_pnl": 2865.5995839526367
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.860416556195375,
+          "market_value": 28662.70814553214,
+          "quantity": 1700,
+          "unrealized_pnl": 4321.756248743579
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.0903074756749421,
+      "total_return_without_cost": 0.09144040757902869
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-19T00:00:00",
+      "portfolio_value": 109543.40876292784,
+      "portfolio_value_without_cost": 109656.7019533365,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.185844225695151,
+          "market_value": 16297.350761112242,
+          "quantity": 1600,
+          "unrealized_pnl": 2080.3361551379458
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.110855956700544,
+          "market_value": 21166.283935050815,
+          "quantity": 1500,
+          "unrealized_pnl": 3049.3460904563326
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.94785489321734,
+          "market_value": 28811.35331846948,
+          "quantity": 1700,
+          "unrealized_pnl": 4470.401421680919
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.09543408762927837,
+      "total_return_without_cost": 0.09656701953336494
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-20T00:00:00",
+      "portfolio_value": 109960.58527775054,
+      "portfolio_value_without_cost": 110073.87846815918,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.287124962393223,
+          "market_value": 16459.399939829156,
+          "quantity": 1600,
+          "unrealized_pnl": 2242.3853338548597
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.213822372509222,
+          "market_value": 21320.733558763834,
+          "quantity": 1500,
+          "unrealized_pnl": 3203.7957141693514
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 17.007077076977783,
+          "market_value": 28912.031030862232,
+          "quantity": 1700,
+          "unrealized_pnl": 4571.079134073672
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.09960585277750535,
+      "total_return_without_cost": 0.10073878468159178
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-21T00:00:00",
+      "portfolio_value": 110273.06623748073,
+      "portfolio_value_without_cost": 110386.3594278894,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.374886281605692,
+          "market_value": 16599.818050569105,
+          "quantity": 1600,
+          "unrealized_pnl": 2382.8034445948088
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.295184477005627,
+          "market_value": 21442.77671550844,
+          "quantity": 1500,
+          "unrealized_pnl": 3325.838870913958
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 17.036500425357577,
+          "market_value": 28962.05072310788,
+          "quantity": 1700,
+          "unrealized_pnl": 4621.098826319321
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.10273066237480728,
+      "total_return_without_cost": 0.10386359427889402
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-22T00:00:00",
+      "portfolio_value": 110473.42793619228,
+      "portfolio_value_without_cost": 110586.72112660095,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.44722818882307,
+          "market_value": 16715.56510211691,
+          "quantity": 1600,
+          "unrealized_pnl": 2498.550496142614
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.353237585329472,
+          "market_value": 21529.85637799421,
+          "quantity": 1500,
+          "unrealized_pnl": 3412.9185333997266
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 17.035050416344635,
+          "market_value": 28959.58570778588,
+          "quantity": 1700,
+          "unrealized_pnl": 4618.6338109973185
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.10473427936192282,
+      "total_return_without_cost": 0.10586721126600955
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-25T00:00:00",
+      "portfolio_value": 110556.16037523665,
+      "portfolio_value_without_cost": 110669.45356564532,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.502514060793915,
+          "market_value": 16804.022497270264,
+          "quantity": 1600,
+          "unrealized_pnl": 2587.007891295967
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.386674264425826,
+          "market_value": 21580.01139663874,
+          "quantity": 1500,
+          "unrealized_pnl": 3463.0735520442577
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 17.002179842960206,
+          "market_value": 28903.70573303235,
+          "quantity": 1700,
+          "unrealized_pnl": 4562.753836243792
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.1055616037523665,
+      "total_return_without_cost": 0.10669453565645323
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-26T00:00:00",
+      "portfolio_value": 110517.76321003443,
+      "portfolio_value_without_cost": 110631.05640044308,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.53939809368116,
+          "market_value": 16863.036949889858,
+          "quantity": 1600,
+          "unrealized_pnl": 2646.0223439155616
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.394606865676003,
+          "market_value": 21591.910298514005,
+          "quantity": 1500,
+          "unrealized_pnl": 3474.972453919523
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.937879537256038,
+          "market_value": 28794.395213335265,
+          "quantity": 1700,
+          "unrealized_pnl": 4453.443316546705
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.10517763210034435,
+      "total_return_without_cost": 0.10631056400443079
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-27T00:00:00",
+      "portfolio_value": 110356.80956344593,
+      "portfolio_value_without_cost": 110470.1027538546,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.556848103494074,
+          "market_value": 16890.956965590518,
+          "quantity": 1600,
+          "unrealized_pnl": 2673.9423596162214
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.376583348532344,
+          "market_value": 21564.87502279852,
+          "quantity": 1500,
+          "unrealized_pnl": 3447.937178204036
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.842680486330355,
+          "market_value": 28632.556826761604,
+          "quantity": 1700,
+          "unrealized_pnl": 4291.604929973044
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.10356809563445932,
+      "total_return_without_cost": 0.10470102753854604
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-28T00:00:00",
+      "portfolio_value": 110073.9766690975,
+      "portfolio_value_without_cost": 110187.26985950614,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.554163315007369,
+          "market_value": 16886.661304011788,
+          "quantity": 1600,
+          "unrealized_pnl": 2669.6466980374917
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.33259613947238,
+          "market_value": 21498.89420920857,
+          "quantity": 1500,
+          "unrealized_pnl": 3381.9563646140887
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.71764729857754,
+          "market_value": 28420.000407581818,
+          "quantity": 1700,
+          "unrealized_pnl": 4079.048510793258
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.10073976669097494,
+      "total_return_without_cost": 0.10187269859506137
+    },
+    {
+      "cash": 43268.4207482953,
+      "date": "2024-03-29T00:00:00",
+      "portfolio_value": 109672.0428292656,
+      "portfolio_value_without_cost": 109785.33601967426,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.530986854104484,
+          "market_value": 16849.578966567173,
+          "quantity": 1600,
+          "unrealized_pnl": 2632.5643605928763
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.263083880012033,
+          "market_value": 21394.62582001805,
+          "quantity": 1500,
+          "unrealized_pnl": 3277.687975423567
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 14.318206998110917,
+          "current_price": 16.56436311434416,
+          "market_value": 28159.417294385075,
+          "quantity": 1700,
+          "unrealized_pnl": 3818.4653975965157
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.096720428292656,
+      "total_return_without_cost": 0.09785336019674258
+    },
+    {
+      "cash": 71067.08044405853,
+      "date": "2024-04-01T00:00:00",
+      "portfolio_value": 109100.16987465005,
+      "portfolio_value_without_cost": 109269.14389176312,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.487312741688722,
+          "market_value": 16779.700386701956,
+          "quantity": 1600,
+          "unrealized_pnl": 2562.685780727659
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.168926029259707,
+          "market_value": 21253.38904388956,
+          "quantity": 1500,
+          "unrealized_pnl": 3136.4511992950793
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.09100169874650048,
+      "total_return_without_cost": 0.09269143891763117
+    },
+    {
+      "cash": 71067.08044405853,
+      "date": "2024-04-02T00:00:00",
+      "portfolio_value": 108821.80568017754,
+      "portfolio_value_without_cost": 108990.7796972906,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.423487273693711,
+          "market_value": 16677.579637909937,
+          "quantity": 1600,
+          "unrealized_pnl": 2460.565031935641
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.077958563062987,
+          "current_price": 14.051430398806046,
+          "market_value": 21077.14559820907,
+          "quantity": 1500,
+          "unrealized_pnl": 2960.207753614588
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.08821805680177539,
+      "total_return_without_cost": 0.08990779697290607
+    },
+    {
+      "cash": 91893.83508441025,
+      "date": "2024-04-03T00:00:00",
+      "portfolio_value": 108438.16270031725,
+      "portfolio_value_without_cost": 108648.85279038623,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.340204759941873,
+          "market_value": 16544.327615906997,
+          "quantity": 1600,
+          "unrealized_pnl": 2327.313009932701
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.08438162700317248,
+      "total_return_without_cost": 0.08648852790386227
+    },
+    {
+      "cash": 91893.83508441025,
+      "date": "2024-04-04T00:00:00",
+      "portfolio_value": 108275.43137763895,
+      "portfolio_value_without_cost": 108486.12146770793,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.885634128733935,
+          "current_price": 10.23849768326793,
+          "market_value": 16381.596293228688,
+          "quantity": 1600,
+          "unrealized_pnl": 2164.581687254391
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.08275431377638946,
+      "total_return_without_cost": 0.08486121467707926
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-05T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-08T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-09T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-10T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-11T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-12T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-15T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-16T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-17T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-18T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-19T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-22T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-23T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-24T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-25T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-26T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-29T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-04-30T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 108053.02245228538,
+      "date": "2024-05-01T00:00:00",
+      "portfolio_value": 108053.02245228538,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.08053022452285383,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 81637.21744495217,
+      "date": "2024-05-02T00:00:00",
+      "portfolio_value": 108000.26998415444,
+      "portfolio_value_without_cost": 108296.07945936987,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 13.181526269601132,
+          "market_value": 26363.052539202265,
+          "quantity": 2000,
+          "unrealized_pnl": -26.363052539199998
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.08000269984154439,
+      "total_return_without_cost": 0.08296079459369866
+    },
+    {
+      "cash": 81637.21744495217,
+      "date": "2024-05-03T00:00:00",
+      "portfolio_value": 108386.7663776136,
+      "portfolio_value_without_cost": 108682.57585282903,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 13.374774466330715,
+          "market_value": 26749.54893266143,
+          "quantity": 2000,
+          "unrealized_pnl": 360.1333409199651
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.08386766377613604,
+      "total_return_without_cost": 0.08682575852829032
+    },
+    {
+      "cash": 62088.90553980299,
+      "date": "2024-05-06T00:00:00",
+      "portfolio_value": 108798.59147914709,
+      "portfolio_value_without_cost": 109133.43901133271,
+      "positions": {
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 11.476043440105283,
+          "market_value": 19509.273848178982,
+          "quantity": 1700,
+          "unrealized_pnl": -19.509273848176235
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 13.600206045582555,
+          "market_value": 27200.412091165108,
+          "quantity": 2000,
+          "unrealized_pnl": 810.9964994236434
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.08798591479147086,
+      "total_return_without_cost": 0.0913343901133271
+    },
+    {
+      "cash": 62088.90553980299,
+      "date": "2024-05-07T00:00:00",
+      "portfolio_value": 109595.23877790052,
+      "portfolio_value_without_cost": 109930.08631008613,
+      "positions": {
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 11.644813689577546,
+          "market_value": 19796.18327228183,
+          "quantity": 1700,
+          "unrealized_pnl": 267.40015025467073
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 13.855074982907844,
+          "market_value": 27710.14996581569,
+          "quantity": 2000,
+          "unrealized_pnl": 1320.7343740742253
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.09595238777900522,
+      "total_return_without_cost": 0.09930086310086132
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-08T00:00:00",
+      "portfolio_value": 110459.1768514587,
+      "portfolio_value_without_cost": 110824.40369602981,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 7.9905606106094345,
+          "market_value": 15182.065160157925,
+          "quantity": 1900,
+          "unrealized_pnl": -15.182065160157435
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 11.840170211568195,
+          "market_value": 20128.28935966593,
+          "quantity": 1700,
+          "unrealized_pnl": 599.5062376387723
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 14.136180632187632,
+          "market_value": 28272.361264375264,
+          "quantity": 2000,
+          "unrealized_pnl": 1882.9456726337994
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.10459176851458701,
+      "total_return_without_cost": 0.1082440369602981
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-09T00:00:00",
+      "portfolio_value": 111676.24508684626,
+      "portfolio_value_without_cost": 112041.47193141739,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 8.114852912824377,
+          "market_value": 15418.220534366315,
+          "quantity": 1900,
+          "unrealized_pnl": 220.9733090482332
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 12.059844551097784,
+          "market_value": 20501.735736866234,
+          "quantity": 1700,
+          "unrealized_pnl": 972.952614839076
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 14.439913874177067,
+          "market_value": 28879.827748354135,
+          "quantity": 2000,
+          "unrealized_pnl": 2490.4121566126705
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.11676245086846262,
+      "total_return_without_cost": 0.12041471931417386
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-10T00:00:00",
+      "portfolio_value": 113007.36323797758,
+      "portfolio_value_without_cost": 113372.59008254868,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 8.26013437755384,
+          "market_value": 15694.255317352296,
+          "quantity": 1900,
+          "unrealized_pnl": 497.0080920342134
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 12.301192696154999,
+          "market_value": 20912.0275834635,
+          "quantity": 1700,
+          "unrealized_pnl": 1383.2444614363412
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 14.762309634951102,
+          "market_value": 29524.619269902203,
+          "quantity": 2000,
+          "unrealized_pnl": 3135.2036781607385
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.13007363237977582,
+      "total_return_without_cost": 0.13372590082548674
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-13T00:00:00",
+      "portfolio_value": 114435.53427780715,
+      "portfolio_value_without_cost": 114800.76112237824,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 8.424614119287723,
+          "market_value": 16006.766826646674,
+          "quantity": 1900,
+          "unrealized_pnl": 809.5196013285913
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 12.561233200407145,
+          "market_value": 21354.096440692145,
+          "quantity": 1700,
+          "unrealized_pnl": 1825.3133186649866
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 15.099104971604369,
+          "market_value": 30198.209943208738,
+          "quantity": 2000,
+          "unrealized_pnl": 3808.7943514672734
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.1443553427780715,
+      "total_return_without_cost": 0.14800761122378245
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-14T00:00:00",
+      "portfolio_value": 115942.2277483503,
+      "portfolio_value_without_cost": 116307.4545929214,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 8.606204760122369,
+          "market_value": 16351.7890442325,
+          "quantity": 1900,
+          "unrealized_pnl": 1154.5418189144184
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 12.836690568003082,
+          "market_value": 21822.37396560524,
+          "quantity": 1700,
+          "unrealized_pnl": 2293.5908435780802
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 15.445801835626485,
+          "market_value": 30891.60367125297,
+          "quantity": 2000,
+          "unrealized_pnl": 4502.188079511507
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.159422277483503,
+      "total_return_without_cost": 0.16307454592921392
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-15T00:00:00",
+      "portfolio_value": 117507.6514739695,
+      "portfolio_value_without_cost": 117872.8783185406,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 8.802552526637216,
+          "market_value": 16724.84980061071,
+          "quantity": 1900,
+          "unrealized_pnl": 1527.602575292629
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 13.124043237412307,
+          "market_value": 22310.87350360092,
+          "quantity": 1700,
+          "unrealized_pnl": 2782.090381573762
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 15.797733551249141,
+          "market_value": 31595.46710249828,
+          "quantity": 2000,
+          "unrealized_pnl": 5206.051510756817
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.175076514739695,
+      "total_return_without_cost": 0.17872878318540605
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-16T00:00:00",
+      "portfolio_value": 119111.04312506664,
+      "portfolio_value_without_cost": 119476.26996963774,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 9.011071501055067,
+          "market_value": 17121.03585200463,
+          "quantity": 1900,
+          "unrealized_pnl": 1923.7886266865462
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 13.419575429430575,
+          "market_value": 22813.278230031978,
+          "quantity": 1700,
+          "unrealized_pnl": 3284.4951080048195
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 16.150133987885223,
+          "market_value": 32300.267975770446,
+          "quantity": 2000,
+          "unrealized_pnl": 5910.852384028982
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.19111043125066643,
+      "total_return_without_cost": 0.19476269969637738
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-17T00:00:00",
+      "portfolio_value": 120730.9771592282,
+      "portfolio_value_without_cost": 121096.2040037993,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 9.228981503220242,
+          "market_value": 17535.06485611846,
+          "quantity": 1900,
+          "unrealized_pnl": 2337.8176308003785
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 13.719432064075377,
+          "market_value": 23323.03450892814,
+          "quantity": 1700,
+          "unrealized_pnl": 3794.2513869009817
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 16.498208363461007,
+          "market_value": 32996.41672692201,
+          "quantity": 2000,
+          "unrealized_pnl": 6607.001135180548
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.20730977159228206,
+      "total_return_without_cost": 0.210962040037993
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-20T00:00:00",
+      "portfolio_value": 122345.68242585071,
+      "portfolio_value_without_cost": 122710.9092704218,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 9.453349023234665,
+          "market_value": 17961.363144145864,
+          "quantity": 1900,
+          "unrealized_pnl": 2764.1159188277816
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 14.019675903035617,
+          "market_value": 23833.44903516055,
+          "quantity": 1700,
+          "unrealized_pnl": 4304.665913133391
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 16.837204589642354,
+          "market_value": 33674.40917928471,
+          "quantity": 2000,
+          "unrealized_pnl": 7284.993587543246
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.2234568242585071,
+      "total_return_without_cost": 0.22710909270421806
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-21T00:00:00",
+      "portfolio_value": 123933.36555247707,
+      "portfolio_value_without_cost": 124298.59239704817,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 9.681130576901614,
+          "market_value": 18394.148096113066,
+          "quantity": 1900,
+          "unrealized_pnl": 3196.9008707949833
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 14.316346039380832,
+          "market_value": 24337.788266947413,
+          "quantity": 1700,
+          "unrealized_pnl": 4809.005144920255
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 17.1624840610785,
+          "market_value": 34324.968122157006,
+          "quantity": 2000,
+          "unrealized_pnl": 7935.552530415542
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.23933365552477073,
+      "total_return_without_cost": 0.24298592397048166
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-22T00:00:00",
+      "portfolio_value": 125472.53513912688,
+      "portfolio_value_without_cost": 125837.76198369797,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 9.909217818186015,
+          "market_value": 18827.51385455343,
+          "quantity": 1900,
+          "unrealized_pnl": 3630.266629235346
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 14.605516834921946,
+          "market_value": 24829.378619367308,
+          "quantity": 1700,
+          "unrealized_pnl": 5300.595497340149
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 17.469590798973275,
+          "market_value": 34939.181597946554,
+          "quantity": 2000,
+          "unrealized_pnl": 8549.766006205089
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.2547253513912688,
+      "total_return_without_cost": 0.2583776198369797
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-23T00:00:00",
+      "portfolio_value": 126942.32177224559,
+      "portfolio_value_without_cost": 127307.54861681668,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 10.134483715300657,
+          "market_value": 19255.51905907125,
+          "quantity": 1900,
+          "unrealized_pnl": 4058.271833753166
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 14.883356398282242,
+          "market_value": 25301.70587707981,
+          "quantity": 1700,
+          "unrealized_pnl": 5772.922755052652
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 17.75431788441747,
+          "market_value": 35508.635768834945,
+          "quantity": 2000,
+          "unrealized_pnl": 9119.22017709348
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.26942321772245587,
+      "total_return_without_cost": 0.27307548616816685
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-24T00:00:00",
+      "portfolio_value": 128322.78893276869,
+      "portfolio_value_without_cost": 128688.01577733978,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 10.353829080201535,
+          "market_value": 19672.27525238292,
+          "quantity": 1900,
+          "unrealized_pnl": 4475.028027064836
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 15.146183703499664,
+          "market_value": 25748.51229594943,
+          "quantity": 1700,
+          "unrealized_pnl": 6219.729173922271
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.012770158588367,
+          "market_value": 36025.54031717673,
+          "quantity": 2000,
+          "unrealized_pnl": 9636.124725435267
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.2832278893276869,
+      "total_return_without_cost": 0.2868801577733978
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-27T00:00:00",
+      "portfolio_value": 129595.23001222497,
+      "portfolio_value_without_cost": 129960.45685679607,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 10.56422873548598,
+          "market_value": 20072.03459742336,
+          "quantity": 1900,
+          "unrealized_pnl": 4874.787372105278
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 15.390523469736175,
+          "market_value": 26163.889898551497,
+          "quantity": 1700,
+          "unrealized_pnl": 6635.106776524339
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.241422224495256,
+          "market_value": 36482.844448990516,
+          "quantity": 2000,
+          "unrealized_pnl": 10093.428857249051
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.2959523001222497,
+      "total_return_without_cost": 0.2996045685679607
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-28T00:00:00",
+      "portfolio_value": 130742.44686462654,
+      "portfolio_value_without_cost": 131107.67370919764,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 10.76277660802605,
+          "market_value": 20449.275555249493,
+          "quantity": 1900,
+          "unrealized_pnl": 5252.028329931411
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 15.613157957094739,
+          "market_value": 26542.368527061055,
+          "quantity": 1700,
+          "unrealized_pnl": 7013.585405033897
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.4371708575282,
+          "market_value": 36874.341715056406,
+          "quantity": 2000,
+          "unrealized_pnl": 10484.926123314941
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.30742446864626544,
+      "total_return_without_cost": 0.3110767370919764
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-29T00:00:00",
+      "portfolio_value": 131749.0056067849,
+      "portfolio_value_without_cost": 132114.23245135602,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 10.946729055054876,
+          "market_value": 20798.785204604264,
+          "quantity": 1900,
+          "unrealized_pnl": 5601.537979286182
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 15.811174881104774,
+          "market_value": 26878.997297878115,
+          "quantity": 1700,
+          "unrealized_pnl": 7350.214175850957
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.597381018521467,
+          "market_value": 37194.762037042936,
+          "quantity": 2000,
+          "unrealized_pnl": 10805.346445301471
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.3174900560678489,
+      "total_return_without_cost": 0.3211423245135602
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-30T00:00:00",
+      "portfolio_value": 132601.4657312254,
+      "portfolio_value_without_cost": 132966.69257579654,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.113545755601109,
+          "market_value": 21115.736935642108,
+          "quantity": 1900,
+          "unrealized_pnl": 5918.4897103240255
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 15.982010708392863,
+          "market_value": 27169.418204267866,
+          "quantity": 1700,
+          "unrealized_pnl": 7640.635082240708
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.71992476202793,
+          "market_value": 37439.84952405586,
+          "quantity": 2000,
+          "unrealized_pnl": 11050.433932314398
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.32601465731225415,
+      "total_return_without_cost": 0.32966692575796536
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-05-31T00:00:00",
+      "portfolio_value": 133288.57900857352,
+      "portfolio_value_without_cost": 133653.80585314461,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.260927537714297,
+          "market_value": 21395.762321657163,
+          "quantity": 1900,
+          "unrealized_pnl": 6198.515096339081
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.123488667474255,
+          "market_value": 27409.930734706235,
+          "quantity": 1700,
+          "unrealized_pnl": 7881.147612679077
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.803212442475274,
+          "market_value": 37606.424884950546,
+          "quantity": 2000,
+          "unrealized_pnl": 11217.009293209081
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.3328857900857352,
+      "total_return_without_cost": 0.33653805853144614
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-06-03T00:00:00",
+      "portfolio_value": 133801.4551237328,
+      "portfolio_value_without_cost": 134166.68196830392,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.386850559257523,
+          "market_value": 21635.016062589293,
+          "quantity": 1900,
+          "unrealized_pnl": 6437.768837271211
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.2338508903709,
+          "market_value": 27597.54651363053,
+          "quantity": 1700,
+          "unrealized_pnl": 8068.76339160337
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.8462157401267,
+          "market_value": 37692.4314802534,
+          "quantity": 2000,
+          "unrealized_pnl": 11303.015888511934
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.338014551237328,
+      "total_return_without_cost": 0.3416668196830392
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-06-04T00:00:00",
+      "portfolio_value": 134133.69150509112,
+      "portfolio_value_without_cost": 134498.9183496622,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.489596316427045,
+          "market_value": 21830.233001211385,
+          "quantity": 1900,
+          "unrealized_pnl": 6632.985775893303
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.31178419161001,
+          "market_value": 27730.033125737016,
+          "quantity": 1700,
+          "unrealized_pnl": 8201.250003709858
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.848482155441562,
+          "market_value": 37696.96431088312,
+          "quantity": 2000,
+          "unrealized_pnl": 11307.548719141658
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.3413369150509112,
+      "total_return_without_cost": 0.3449891834966221
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-06-05T00:00:00",
+      "portfolio_value": 134281.4653603598,
+      "portfolio_value_without_cost": 134646.6922049309,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.567777018713869,
+          "market_value": 21978.77633555635,
+          "quantity": 1900,
+          "unrealized_pnl": 6781.529110238269
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.35643908966988,
+          "market_value": 27805.946452438795,
+          "quantity": 1700,
+          "unrealized_pnl": 8277.163330411637
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.810140752552535,
+          "market_value": 37620.28150510507,
+          "quantity": 2000,
+          "unrealized_pnl": 11230.865913363607
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.34281465360359814,
+      "total_return_without_cost": 0.34646692204930907
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-06-06T00:00:00",
+      "portfolio_value": 134243.58651784062,
+      "portfolio_value_without_cost": 134608.81336241175,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.620355940744744,
+          "market_value": 22078.676287415015,
+          "quantity": 1900,
+          "unrealized_pnl": 6881.429062096933
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.367441780582162,
+          "market_value": 27824.651026989675,
+          "quantity": 1700,
+          "unrealized_pnl": 8295.867904962517
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.73189906808817,
+          "market_value": 37463.79813617634,
+          "quantity": 2000,
+          "unrealized_pnl": 11074.382544434873
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.34243586517840624,
+      "total_return_without_cost": 0.3460881336241175
+    },
+    {
+      "cash": 46876.46106725959,
+      "date": "2024-06-07T00:00:00",
+      "portfolio_value": 134021.51027881497,
+      "portfolio_value_without_cost": 134386.73712338606,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.646662439213065,
+          "market_value": 22128.658634504824,
+          "quantity": 1900,
+          "unrealized_pnl": 6931.411409186741
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.344898882543397,
+          "market_value": 27786.328100323775,
+          "quantity": 1700,
+          "unrealized_pnl": 8257.544978296617
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.194707795870732,
+          "current_price": 18.615031238363386,
+          "market_value": 37230.06247672677,
+          "quantity": 2000,
+          "unrealized_pnl": 10840.646884985308
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.34021510278814965,
+      "total_return_without_cost": 0.34386737123386063
+    },
+    {
+      "cash": 83725.36762764938,
+      "date": "2024-06-10T00:00:00",
+      "portfolio_value": 133545.5015984899,
+      "portfolio_value_without_cost": 133984.53695048156,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.64640140572276,
+          "market_value": 22128.162670873244,
+          "quantity": 1900,
+          "unrealized_pnl": 6930.915445555162
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.289394882333703,
+          "market_value": 27691.971299967296,
+          "quantity": 1700,
+          "unrealized_pnl": 8163.188177940137
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.3354550159848991,
+      "total_return_without_cost": 0.3398453695048156
+    },
+    {
+      "cash": 83725.36762764938,
+      "date": "2024-06-11T00:00:00",
+      "portfolio_value": 133346.0859079487,
+      "portfolio_value_without_cost": 133785.12125994032,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.61965701253426,
+          "market_value": 22077.348323815095,
+          "quantity": 1900,
+          "unrealized_pnl": 6880.101098497013
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 11.487519483545388,
+          "current_price": 16.201982327343664,
+          "market_value": 27543.369956484228,
+          "quantity": 1700,
+          "unrealized_pnl": 8014.58683445707
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.33346085907948697,
+      "total_return_without_cost": 0.3378512125994032
+    },
+    {
+      "cash": 111013.78917283611,
+      "date": "2024-06-12T00:00:00",
+      "portfolio_value": 132990.88149633666,
+      "portfolio_value_without_cost": 133484.57566597362,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.56689069657924,
+          "market_value": 21977.092323500554,
+          "quantity": 1900,
+          "unrealized_pnl": 6779.845098182472
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.3299088149633666,
+      "total_return_without_cost": 0.3348457566597362
+    },
+    {
+      "cash": 111013.78917283611,
+      "date": "2024-06-13T00:00:00",
+      "portfolio_value": 132842.7626638516,
+      "portfolio_value_without_cost": 133336.45683348854,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 7.998551171220043,
+          "current_price": 11.488933416323945,
+          "market_value": 21828.973491015495,
+          "quantity": 1900,
+          "unrealized_pnl": 6631.726265697413
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.3284276266385161,
+      "total_return_without_cost": 0.3333645683348854
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-14T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-17T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-18T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-19T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-20T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-21T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-24T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-25T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-26T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-27T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-06-28T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-01T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-02T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-03T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-04T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-05T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-08T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-09T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-10T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-11T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-12T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-15T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 132605.787692295,
+      "date": "2024-07-16T00:00:00",
+      "portfolio_value": 132605.787692295,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {},
+      "positions_count": 0,
+      "total_return": 0.3260578769229501,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 100152.77286205132,
+      "date": "2024-07-17T00:00:00",
+      "portfolio_value": 132540.97889202903,
+      "portfolio_value_without_cost": 133142.7307214425,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 13.495085845824047,
+          "market_value": 32388.20602997771,
+          "quantity": 2400,
+          "unrealized_pnl": -32.388206029972935
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.3254097889202903,
+      "total_return_without_cost": 0.3314273072144249
+    },
+    {
+      "cash": 100152.77286205132,
+      "date": "2024-07-18T00:00:00",
+      "portfolio_value": 132895.80603032373,
+      "portfolio_value_without_cost": 133497.5578597372,
+      "positions": {
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 13.642930486780172,
+          "market_value": 32743.03316827241,
+          "quantity": 2400,
+          "unrealized_pnl": 322.43893226472574
+        }
+      },
+      "positions_count": 1,
+      "total_return": 0.32895806030323727,
+      "total_return_without_cost": 0.3349755785973719
+    },
+    {
+      "cash": 75647.60715949227,
+      "date": "2024-07-19T00:00:00",
+      "portfolio_value": 133254.02550683756,
+      "portfolio_value_without_cost": 133904.7142500573,
+      "positions": {
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 12.228114394376385,
+          "market_value": 24456.22878875277,
+          "quantity": 2000,
+          "unrealized_pnl": -24.456228788749286
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 13.812578982746874,
+          "market_value": 33150.1895585925,
+          "quantity": 2400,
+          "unrealized_pnl": 729.595322584817
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.33254025506837553,
+      "total_return_without_cost": 0.33904714250057294
+    },
+    {
+      "cash": 75647.60715949227,
+      "date": "2024-07-22T00:00:00",
+      "portfolio_value": 133967.56172379036,
+      "portfolio_value_without_cost": 134618.2504670101,
+      "positions": {
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 12.35937735864449,
+          "market_value": 24718.75471728898,
+          "quantity": 2000,
+          "unrealized_pnl": 238.0696997474588
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 14.000499936253796,
+          "market_value": 33601.19984700911,
+          "quantity": 2400,
+          "unrealized_pnl": 1180.6056110014288
+        }
+      },
+      "positions_count": 2,
+      "total_return": 0.3396756172379036,
+      "total_return_without_cost": 0.34618250467010103
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-23T00:00:00",
+      "portfolio_value": 134714.5821891224,
+      "portfolio_value_without_cost": 135402.5548225084,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.101142942928726,
+          "market_value": 18632.62876873607,
+          "quantity": 2300,
+          "unrealized_pnl": -18.63262876873705
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 12.508652203138723,
+          "market_value": 25017.304406277446,
+          "quantity": 2000,
+          "unrealized_pnl": 536.6193887359259
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 14.202897713966223,
+          "market_value": 34086.95451351893,
+          "quantity": 2400,
+          "unrealized_pnl": 1666.3602775112486
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.3471458218912239,
+      "total_return_without_cost": 0.3540255482250839
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-24T00:00:00",
+      "portfolio_value": 135771.99399876496,
+      "portfolio_value_without_cost": 136459.96663215093,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.195824230508808,
+          "market_value": 18850.39573017026,
+          "quantity": 2300,
+          "unrealized_pnl": 199.13433266545326
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 12.673021686470529,
+          "market_value": 25346.043372941058,
+          "quantity": 2000,
+          "unrealized_pnl": 865.3583553995377
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 14.415775164609874,
+          "market_value": 34597.8603950637,
+          "quantity": 2400,
+          "unrealized_pnl": 2177.266159056013
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.35771993998764956,
+      "total_return_without_cost": 0.3645996663215093
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-25T00:00:00",
+      "portfolio_value": 136901.2620412058,
+      "portfolio_value_without_cost": 137589.23467459177,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.30472542353057,
+          "market_value": 19100.86847412031,
+          "quantity": 2300,
+          "unrealized_pnl": 449.6070766155026
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 12.849350285450356,
+          "market_value": 25698.700570900714,
+          "quantity": 2000,
+          "unrealized_pnl": 1218.0155533591933
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 14.63499937316451,
+          "market_value": 35123.998495594824,
+          "quantity": 2400,
+          "unrealized_pnl": 2703.4042595871397
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.369012620412058,
+      "total_return_without_cost": 0.37589234674591776
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-26T00:00:00",
+      "portfolio_value": 138080.40300063533,
+      "portfolio_value_without_cost": 138768.37563402133,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.425543436687258,
+          "market_value": 19378.749904380693,
+          "quantity": 2300,
+          "unrealized_pnl": 727.4885068758849
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 13.034336005547287,
+          "market_value": 26068.672011094575,
+          "quantity": 2000,
+          "unrealized_pnl": 1587.986993553055
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 14.856369410237544,
+          "market_value": 35655.28658457011,
+          "quantity": 2400,
+          "unrealized_pnl": 3234.6923485624247
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.38080403000635327,
+      "total_return_without_cost": 0.3876837563402133
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-29T00:00:00",
+      "portfolio_value": 139286.81448254356,
+      "portfolio_value_without_cost": 139974.78711592953,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.555802856934493,
+          "market_value": 19678.346570949336,
+          "quantity": 2300,
+          "unrealized_pnl": 1027.0851734445278
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 13.22456469957068,
+          "market_value": 26449.12939914136,
+          "quantity": 2000,
+          "unrealized_pnl": 1968.4443815998384
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 15.075685004942882,
+          "market_value": 36181.64401186292,
+          "quantity": 2400,
+          "unrealized_pnl": 3761.0497758552337
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.3928681448254356,
+      "total_return_without_cost": 0.39974787115929533
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-30T00:00:00",
+      "portfolio_value": 140497.6454505405,
+      "portfolio_value_without_cost": 141185.61808392647,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.6928968464847,
+          "market_value": 19993.66274691481,
+          "quantity": 2300,
+          "unrealized_pnl": 1342.4013494100036
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 13.41656603454406,
+          "market_value": 26833.13206908812,
+          "quantity": 2000,
+          "unrealized_pnl": 2352.4470515465982
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 15.28881505581151,
+          "market_value": 36693.156133947625,
+          "quantity": 2400,
+          "unrealized_pnl": 4272.5618979399405
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.404976454505405,
+      "total_return_without_cost": 0.41185618083926473
+    },
+    {
+      "cash": 56977.694500589954,
+      "date": "2024-07-31T00:00:00",
+      "portfolio_value": 141690.1697571944,
+      "portfolio_value_without_cost": 142378.14239058038,
+      "positions": {
+        "SYNTH_2001.SZ": {
+          "avg_cost": 8.109244085871655,
+          "current_price": 8.834130025976853,
+          "market_value": 20318.499059746762,
+          "quantity": 2300,
+          "unrealized_pnl": 1667.2376622419542
+        },
+        "SYNTH_2002.SZ": {
+          "avg_cost": 12.24034250877076,
+          "current_price": 13.606870221474553,
+          "market_value": 27213.740442949107,
+          "quantity": 2000,
+          "unrealized_pnl": 2733.055425407587
+        },
+        "SYNTH_2003.SZ": {
+          "avg_cost": 13.508580931669869,
+          "current_price": 15.491764897461902,
+          "market_value": 37180.235753908564,
+          "quantity": 2400,
+          "unrealized_pnl": 4759.64151790088
+        }
+      },
+      "positions_count": 3,
+      "total_return": 0.4169016975719441,
+      "total_return_without_cost": 0.4237814239058038
+    }
+  ],
+  "positive_months": 4,
+  "profit_factor": Infinity,
+  "sharpe_ratio": 12.079162734020466,
+  "start_date": "2024-01-02T00:00:00",
+  "stock_codes": [
+    "SYNTH_2001.SZ",
+    "SYNTH_2002.SZ",
+    "SYNTH_2003.SZ"
+  ],
+  "stock_performance_detail": [
+    {
+      "avg_pnl_per_trade": 2783.439753524601,
+      "stock_code": "SYNTH_2003.SZ",
+      "total_pnl": 13917.198767623006,
+      "trade_count": 5
+    },
+    {
+      "avg_pnl_per_trade": 2093.8910437833633,
+      "stock_code": "SYNTH_2002.SZ",
+      "total_pnl": 10469.455218916817,
+      "trade_count": 5
+    },
+    {
+      "avg_pnl_per_trade": 1667.3848112083294,
+      "stock_code": "SYNTH_2001.SZ",
+      "total_pnl": 8336.924056041647,
+      "trade_count": 5
+    }
+  ],
+  "stocks_traded": 3,
+  "strategy_name": "macd",
+  "total_return": 0.4169016975719441,
+  "total_signals": 15,
+  "total_trades": 15,
+  "trade_history": [
+    {
+      "action": "BUY",
+      "commission": 24.34095189678856,
+      "pnl": 0.0,
+      "price": 14.318206998110917,
+      "quantity": 1700,
+      "slippage_cost": 24.316635261527036,
+      "stock_code": "SYNTH_2003.SZ",
+      "trade_id": "T000001"
+    },
+    {
+      "action": "BUY",
+      "commission": 18.11693784459448,
+      "pnl": 0.0,
+      "price": 12.077958563062987,
+      "quantity": 1500,
+      "slippage_cost": 18.098839005588896,
+      "stock_code": "SYNTH_2002.SZ",
+      "trade_id": "T000002"
+    },
+    {
+      "action": "BUY",
+      "commission": 14.217014605974297,
+      "pnl": 0.0,
+      "price": 8.885634128733935,
+      "quantity": 1600,
+      "slippage_cost": 14.202811794180118,
+      "stock_code": "SYNTH_2001.SZ",
+      "trade_id": "T000003"
+    },
+    {
+      "action": "SELL",
+      "commission": 27.826486181945185,
+      "pnl": 3457.7077989746795,
+      "price": 16.368521283497167,
+      "quantity": 1700,
+      "slippage_cost": 27.854340522467645,
+      "stock_code": "SYNTH_2003.SZ",
+      "trade_id": "T000004"
+    },
+    {
+      "action": "SELL",
+      "commission": 20.847602242594313,
+      "pnl": 2709.816795757237,
+      "price": 13.898401495062876,
+      "quantity": 1500,
+      "slippage_cost": 20.868470713307623,
+      "stock_code": "SYNTH_2002.SZ",
+      "trade_id": "T000005"
+    },
+    {
+      "action": "SELL",
+      "commission": 16.17536273060574,
+      "pnl": 1942.172761900838,
+      "price": 10.109601706628588,
+      "quantity": 1600,
+      "slippage_cost": 16.191554284890632,
+      "stock_code": "SYNTH_2001.SZ",
+      "trade_id": "T000006"
+    },
+    {
+      "action": "BUY",
+      "commission": 26.389415591741464,
+      "pnl": 0.0,
+      "price": 13.194707795870732,
+      "quantity": 2000,
+      "slippage_cost": 26.363052539202265,
+      "stock_code": "SYNTH_2003.SZ",
+      "trade_id": "T000007"
+    },
+    {
+      "action": "BUY",
+      "commission": 19.528783122027157,
+      "pnl": 0.0,
+      "price": 11.487519483545388,
+      "quantity": 1700,
+      "slippage_cost": 19.509273848178978,
+      "stock_code": "SYNTH_2002.SZ",
+      "trade_id": "T000008"
+    },
+    {
+      "action": "BUY",
+      "commission": 15.197247225318083,
+      "pnl": 0.0,
+      "price": 7.998551171220043,
+      "quantity": 1900,
+      "slippage_cost": 15.182065160157928,
+      "stock_code": "SYNTH_2001.SZ",
+      "trade_id": "T000009"
+    },
+    {
+      "action": "SELL",
+      "commission": 36.885792352742534,
+      "pnl": 10459.490968648326,
+      "price": 18.442896176371264,
+      "quantity": 2000,
+      "slippage_cost": 36.92271506781034,
+      "stock_code": "SYNTH_2003.SZ",
+      "trade_id": "T000010"
+    },
+    {
+      "action": "SELL",
+      "commission": 27.315737282469208,
+      "pnl": 7759.63842315958,
+      "price": 16.06808075439365,
+      "quantity": 1700,
+      "slippage_cost": 27.34308036283204,
+      "stock_code": "SYNTH_2002.SZ",
+      "trade_id": "T000011"
+    },
+    {
+      "action": "SELL",
+      "commission": 21.613612131590482,
+      "pnl": 6394.7512941408095,
+      "price": 11.375585332416042,
+      "quantity": 1900,
+      "slippage_cost": 21.63524737896945,
+      "stock_code": "SYNTH_2001.SZ",
+      "trade_id": "T000012"
+    },
+    {
+      "action": "BUY",
+      "commission": 32.42059423600769,
+      "pnl": 0.0,
+      "price": 13.508580931669869,
+      "quantity": 2400,
+      "slippage_cost": 32.38820602997771,
+      "stock_code": "SYNTH_2003.SZ",
+      "trade_id": "T000013"
+    },
+    {
+      "action": "BUY",
+      "commission": 24.48068501754152,
+      "pnl": 0.0,
+      "price": 12.24034250877076,
+      "quantity": 2000,
+      "slippage_cost": 24.45622878875277,
+      "stock_code": "SYNTH_2002.SZ",
+      "trade_id": "T000014"
+    },
+    {
+      "action": "BUY",
+      "commission": 18.651261397504808,
+      "pnl": 0.0,
+      "price": 8.109244085871655,
+      "quantity": 2300,
+      "slippage_cost": 18.632628768736073,
+      "stock_code": "SYNTH_2001.SZ",
+      "trade_id": "T000015"
+    }
+  ],
+  "trade_pnl_mean": 2181.5718695054316,
+  "trade_pnl_median": 0.0,
+  "trade_pnl_std": 3403.6517353193353,
+  "trading_days": 152,
+  "volatility": 0.06848509001226381,
+  "win_rate": 1.0,
+  "winning_trades": 6,
+  "worst_month": -0.01476238004885766,
+  "worst_performing_stock": {
+    "avg_pnl_per_trade": 1667.3848112083294,
+    "stock_code": "SYNTH_2001.SZ",
+    "total_pnl": 8336.924056041647,
+    "trade_count": 5
+  }
+}

@@ -585,3 +585,19 @@ def handle_async_exception(func: Any) -> Any:
             raise system_error
 
     return wrapper
+
+
+# ── 兼容性别名（errors.py 过渡）───────────────────────────
+# 以下类来自已弃用的 app.core.errors，仅用于过渡期兼容。
+# 新代码请直接使用 error_handler 中的原生异常类。
+import warnings as _compat_warnings
+
+with _compat_warnings.catch_warnings():
+    # 抑制 errors.py 自身的弃用警告，避免每次 import error_handler 都触发
+    _compat_warnings.simplefilter("ignore", DeprecationWarning)
+    from app.core.errors import (  # noqa: F401
+        AppError as AppError,
+        DomainError as DomainError,
+        InfraError as InfraError,
+        UserFacingError as UserFacingError,
+    )

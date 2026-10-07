@@ -13,6 +13,13 @@ from typing import Any, Callable, Dict, List, Optional, TypeVar, cast
 import psutil
 from loguru import logger
 
+# 模块级共享清理线程：LRUCache 实例会注册进来，统一由一个线程轮询清理。
+# 避免每个实例各起一个 daemon 线程 —— 测试中反复实例化会累积数百个线程，
+# 在 macOS 上曾直接段错误。
+_cache_registry: List["LRUCache"] = []
+_registry_lock = threading.Lock()
+_cleanup_thread: Optional[threading.Thread] = None
+
 
 class CachePolicy(Enum):
     """缓存策略"""
@@ -64,6 +71,21 @@ class CacheStats:
         self.hit_rate = self.hits / total if total > 0 else 0.0
 
 
+def _shared_cleanup_loop() -> None:
+    """模块级共享清理循环：轮询注册表里的所有缓存实例。"""
+    while True:
+        try:
+            with _registry_lock:
+                caches = list(_cache_registry)
+            for cache in caches:
+                cache._cleanup_expired()
+                cache._check_memory_usage()
+            time.sleep(60)  # 每分钟清理一次
+        except Exception as e:  # pragma: no cover
+            logger.error(f"缓存清理任务失败: {e}")
+            time.sleep(10)
+
+
 class LRUCache:
     """LRU缓存实现"""
 
@@ -85,25 +107,18 @@ class LRUCache:
         self._memory_usage = 0
         self._cleanup_threshold = 0.8  # 80%内存使用率时开始清理
 
-        # 启动后台清理任务
-        self._cleanup_task = None
-        self._start_cleanup_task()
+        self._register_shared_cleanup()
 
-    def _start_cleanup_task(self) -> None:
-        """启动后台清理任务"""
-
-        def cleanup_loop() -> None:
-            while True:
-                try:
-                    self._cleanup_expired()
-                    self._check_memory_usage()
-                    time.sleep(60)  # 每分钟清理一次
-                except Exception as e:
-                    logger.error(f"缓存清理任务失败: {e}")
-                    time.sleep(10)
-
-        cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
-        cleanup_thread.start()
+    def _register_shared_cleanup(self) -> None:
+        """注册到模块级共享清理线程（全部实例共用一个 daemon 线程）。"""
+        global _cleanup_thread
+        with _registry_lock:
+            _cache_registry.append(self)
+            if _cleanup_thread is None or not _cleanup_thread.is_alive():
+                _cleanup_thread = threading.Thread(
+                    target=_shared_cleanup_loop, daemon=True
+                )
+                _cleanup_thread.start()
 
     def _estimate_size(self, obj: Any) -> int:
         """估算对象大小"""

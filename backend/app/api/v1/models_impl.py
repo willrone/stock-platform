@@ -2,6 +2,20 @@
 模型管理路由
 """
 
+# ============================================================
+# models.py - 模型管理路由（1945 行）
+# 导航：
+#   1-86:    导入 + 模块文档
+#   87-281:  辅助类与工具函数
+#   283-881: 模型训练（train_model_task）
+#   885-1022: 模型版本与评估报告
+#   1023-1288: 模型列表与可用特征
+#   1289-1576: CRUD 与训练控制（详情/删除/取消/创建训练）
+#   1577-1765: 生命周期管理（生命周期/血缘/依赖/状态转换/性能历史）
+#   1766-1945: 模型搜索与标签管理
+# TODO: 此文件超过 1000 行，后续应拆分为 models/ 包下的子模块
+# ============================================================
+
 import asyncio
 import threading
 import traceback
@@ -84,6 +98,9 @@ _ml_training_service: Any | None = None
 _model_storage: Any | None = None
 
 
+# ────────────────────────────────────────
+# 功能区：辅助类与工具函数
+# ────────────────────────────────────────
 class TrainingCancelledError(Exception):
     """训练任务被用户取消。"""
 
@@ -278,6 +295,9 @@ def _normalize_performance_metrics_for_report(metrics: Any) -> Dict[str, Any]:
     return normalized_metrics
 
 
+# ────────────────────────────────────────
+# 功能区：模型训练
+# ────────────────────────────────────────
 def _run_train_model_task_sync(
     model_id: str,
     model_name: str,
@@ -882,6 +902,9 @@ async def train_model_task(
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：模型版本与评估报告
+# ────────────────────────────────────────
 @router.get("/{model_id}/versions", response_model=StandardResponse)
 async def get_model_versions(model_id: str) -> StandardResponse:
     """获取模型的所有版本"""
@@ -1020,6 +1043,9 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：模型列表与可用特征
+# ────────────────────────────────────────
 @router.get("", response_model=StandardResponse)
 async def list_models() -> StandardResponse:
     """获取模型列表"""
@@ -1286,6 +1312,9 @@ async def get_available_features(
         raise HTTPException(status_code=500, detail=f"获取可用特征列表失败: {str(e)}")
 
 
+# ────────────────────────────────────────
+# 功能区：CRUD 与训练控制
+# ────────────────────────────────────────
 @router.get("/{model_id}", response_model=StandardResponse)
 async def get_model_detail(model_id: str) -> StandardResponse:
     """获取模型详情"""
@@ -1574,6 +1603,9 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
         session.close()
 
 
+# ────────────────────────────────────────
+# 功能区：生命周期管理
+# ────────────────────────────────────────
 @router.get("/{model_id}/lifecycle", response_model=StandardResponse)
 async def get_model_lifecycle(model_id: str) -> StandardResponse:
     """获取模型生命周期信息"""
@@ -1763,6 +1795,9 @@ async def get_model_performance_history(
         raise HTTPException(status_code=500, detail=f"获取模型性能历史失败: {str(e)}")
 
 
+# ────────────────────────────────────────
+# 功能区：模型搜索与标签管理
+# ────────────────────────────────────────
 @router.get("/search", response_model=StandardResponse)
 async def search_models(
     query: Optional[str] = None,

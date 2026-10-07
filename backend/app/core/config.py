@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     ENABLE_METRICS: bool = True
     METRICS_PORT: int = 9090
 
+    # Laya 决策模型配置
+    LAYA_ENABLED: bool = False  # 是否启用 Laya 决策模型
+    LAYA_MODEL_NAME: str = "convaiinnovations/laya"
+    LAYA_AUTO_LOAD: bool = True  # 启动时自动加载模型
+    LAYA_MAX_BATCH_SIZE: int = 10  # 最大批量查询大小
+    
     @property
     def database_url_sync(self) -> str:
         """同步数据库URL"""

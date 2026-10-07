@@ -7,11 +7,13 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.api import api_router
+from app.api.v1.health import router as health_router
 from app.core.config import settings
 from app.core.container import cleanup_container, get_container
 from app.core.database import init_db
@@ -252,6 +254,7 @@ def create_application() -> FastAPI:
     # 包含路由
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
     app.include_router(ws_router)  # WebSocket路由不需要前缀
+    app.include_router(health_router)  # Health check at root (no auth required)
 
     # 添加指标端点
     app.get("/metrics")(metrics_endpoint)
@@ -297,6 +300,33 @@ def create_application() -> FastAPI:
 
         response = StandardResponse(success=False, message="服务器内部错误", data=None)
         return JSONResponse(status_code=500, content=response.model_dump(mode="json"))
+
+    # 注册 OpenAPI 安全方案（让 Swagger UI 显示 Authorize 按钮）
+    security_scheme = HTTPBearer(
+        scheme_name="Bearer Authentication",
+        description="输入 JWT Token（格式: Bearer <token>）",
+        auto_error=False,
+    )
+
+    original_openapi = app.openapi
+
+    def _custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = original_openapi()
+        schema.setdefault("components", {}).setdefault("securitySchemes", {})[
+            "Bearer Authentication"
+        ] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "输入 JWT Token（格式: Bearer <token>）",
+        }
+        schema.setdefault("security", []).append({"Bearer Authentication": []})
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = _custom_openapi
 
     return app
 

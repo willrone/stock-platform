@@ -1,6 +1,19 @@
 """
 应用层基础错误定义
+
+.. deprecated::
+    此模块已弃用，请使用 :mod:`app.core.error_handler` 中的异常类。
+    将在未来版本移除。
 """
+
+import warnings
+
+warnings.warn(
+    "errors.py 已弃用，请使用 app.core.error_handler 中的异常类。"
+    "此模块将在未来版本移除。",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from datetime import datetime
 from enum import Enum

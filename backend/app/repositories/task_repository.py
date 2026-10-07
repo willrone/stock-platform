@@ -252,6 +252,30 @@ class TaskRepository:
                 original_exception=e,
             )
 
+    def get_tasks_by_type(
+        self,
+        task_type: TaskType,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> List[Task]:
+        """根据任务类型获取所有任务（不限制用户，用于全量搜索）。"""
+        try:
+            tasks = (
+                self.db.query(Task)
+                .filter(Task.task_type == task_type.value)
+                .order_by(desc(Task.created_at))
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
+            return cast(List[Task], tasks)
+        except Exception as e:
+            raise TaskError(
+                message=f"获取任务列表失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
+                original_exception=e,
+            )
+
     def update_task_status(
         self,
         task_id: str,

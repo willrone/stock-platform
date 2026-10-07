@@ -442,17 +442,72 @@ class PortfolioManagerArray:
         if getattr(self.config, "record_portfolio_history", True):
             stride = int(getattr(self.config, "portfolio_history_stride", 1) or 1)
             if stride <= 1 or (self._snapshot_counter % stride == 0):
+                if getattr(self.config, "record_positions_in_history", True):
+                    # 从数组中提取持仓明细
+                    positions_payload = {}
+                    for i in np.nonzero(self.quantities > 0)[0]:
+                        idx = int(i)
+                        code = self.stock_codes[idx]
+                        qty = int(self.quantities[idx])
+                        avg_cost = float(self.avg_costs[idx])
+                        # 用 current_prices 更新当前价格和市值
+                        cur_price = current_prices.get(code, 0.0)
+                        mkt_val = qty * cur_price
+                        unrealized = mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
+                        positions_payload[code] = {
+                            "quantity": qty,
+                            "avg_cost": avg_cost,
+                            "current_price": cur_price,
+                            "market_value": mkt_val,
+                            "unrealized_pnl": unrealized,
+                        }
+                else:
+                    positions_payload = {}
+
                 snapshot = {
                     "date": date,
                     "cash": self.cash,
                     "portfolio_value": portfolio_value,
                     "portfolio_value_without_cost": portfolio_value_without_cost,
-                    "positions": {},  # 简化版本，不记录详细持仓
+                    "positions": positions_payload,
                     "total_trades": len(self.trades),
                     "total_commission": self.total_commission,
                     "total_slippage": self.total_slippage,
                 }
                 self.portfolio_history.append(snapshot)
+
+        # 记录无成本组合快照
+        if getattr(self.config, "record_portfolio_history", True):
+            stride = int(getattr(self.config, "portfolio_history_stride", 1) or 1)
+            if stride <= 1 or (self._snapshot_counter % stride == 0):
+                if getattr(self.config, "record_positions_in_history", True):
+                    positions_payload_nc = {}
+                    for i in np.nonzero(self.quantities_without_cost > 0)[0]:
+                        idx = int(i)
+                        code = self.stock_codes[idx]
+                        qty = int(self.quantities_without_cost[idx])
+                        avg_cost = float(self.avg_costs_without_cost[idx])
+                        cur_price = current_prices.get(code, 0.0)
+                        mkt_val = qty * cur_price
+                        unrealized = mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
+                        positions_payload_nc[code] = {
+                            "quantity": qty,
+                            "avg_cost": avg_cost,
+                            "current_price": cur_price,
+                            "market_value": mkt_val,
+                            "unrealized_pnl": unrealized,
+                        }
+                else:
+                    positions_payload_nc = {}
+
+                snapshot_without_cost = {
+                    "date": date,
+                    "cash": self.cash_without_cost,
+                    "portfolio_value": portfolio_value_without_cost,
+                    "positions": positions_payload_nc,
+                    "total_trades": len(self.trades),
+                }
+                self.portfolio_history_without_cost.append(snapshot_without_cost)
 
     def get_performance_metrics(self) -> Dict[str, float]:
         """计算绩效指标（含成本）"""
