@@ -595,9 +595,7 @@ import warnings as _compat_warnings
 with _compat_warnings.catch_warnings():
     # 抑制 errors.py 自身的弃用警告，避免每次 import error_handler 都触发
     _compat_warnings.simplefilter("ignore", DeprecationWarning)
-    from app.core.errors import (  # noqa: F401
-        AppError as AppError,
-        DomainError as DomainError,
-        InfraError as InfraError,
-        UserFacingError as UserFacingError,
-    )
+    from app.core.errors import AppError as AppError  # noqa: F401
+    from app.core.errors import DomainError as DomainError  # noqa: F401
+    from app.core.errors import InfraError as InfraError  # noqa: F401
+    from app.core.errors import UserFacingError as UserFacingError  # noqa: F401

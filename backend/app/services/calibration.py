@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
@@ -53,9 +53,7 @@ def calibrate_model(
     if not hasattr(base_model, "predict") and not hasattr(
         base_model, "decision_function"
     ):
-        logger.warning(
-            "模型不支持 predict 或 decision_function，无法校准"
-        )
+        logger.warning("模型不支持 predict 或 decision_function，无法校准")
         return base_model
 
     if len(X_calibration) < cv:
@@ -168,7 +166,9 @@ class _PlattCalibrator:
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         base_proba = self.base_model.predict_proba(X)
-        sigmoid_input = base_proba[:, 1:2] if base_proba.shape[1] >= 2 else base_proba[:, 0:1]
+        sigmoid_input = (
+            base_proba[:, 1:2] if base_proba.shape[1] >= 2 else base_proba[:, 0:1]
+        )
         calibrated = self.platt_model.predict_proba(sigmoid_input)
         return calibrated
 

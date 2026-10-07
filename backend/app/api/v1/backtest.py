@@ -6,16 +6,14 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, cast
-
-from app.api.v1.dependencies import get_current_user, require_current_user
-from app.middleware.rbac import enforce_quota
+from typing import Any, Dict, List, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.params import Depends as DependsSentinel
 from loguru import logger
 from pydantic import BaseModel
 
+from app.api.v1.dependencies import require_current_user
 from app.api.v1.schemas import BacktestRequest, StandardResponse, extract_result_summary
 from app.core.config import settings
 from app.core.error_handler import (
@@ -24,11 +22,12 @@ from app.core.error_handler import (
     ErrorType,
     log_structured_exception,
 )
+from app.middleware.rbac import enforce_quota
 from app.services.backtest import BacktestConfig, BacktestExecutor
-from app.services.commerce.commission_service import CommerceService
 from app.services.backtest.utils.official_style_params import (
     apply_official_style_topk_dropout_params,
 )
+from app.services.commerce.commission_service import CommerceService
 
 router = APIRouter(prefix="/backtest", tags=["回测服务"])
 
@@ -982,7 +981,7 @@ async def run_backtest(
                 result["risk_metrics"]["sharpe_ratio"],
             )
         )
-        
+
         # ── 记录计费用量 ─────────────────────────────
         # 根据策略类型确定计费事件
         event_type = "backtest_basic"
@@ -990,7 +989,7 @@ async def run_backtest(
             event_type = "backtest_advanced"
         elif request.strategy_name and "realtime" in request.strategy_name.lower():
             event_type = "backtest_realtime"
-        
+
         try:
             commerce_service = CommerceService()
             if current_user is not None:
@@ -1009,43 +1008,60 @@ async def run_backtest(
         except Exception as commerce_err:
             # 计费失败不影响回测结果返回，仅记录日志
             logger.warning(f"回测计费失败：{commerce_err}")
-        
+
         # ── 可选：Laya 信号增强 ─────────────────────
         # 根据配置决定是否启用 Laya 决策模型
         if settings.LAYA_ENABLED:
             try:
                 from app.services.laya import LayaService, TradingState
-        
+
                 laya_svc = LayaService()
                 if laya_svc.is_ready:
                     # 构建交易状态
                     market_state = TradingState(
                         symbol=request.stock_codes[0] if request.stock_codes else "",
-                        current_price=result.get("portfolio", {}).get("current_price", 0),
+                        current_price=result.get("portfolio", {}).get(
+                            "current_price", 0
+                        ),
                         rsi=result.get("risk_metrics", {}).get("rsi", 50),
-                        position_size=result.get("portfolio", {}).get("position_size", 0),
-                        market_regime="trending" if result.get("portfolio", {}).get("total_return", 0) > 0 else "ranging",
+                        position_size=result.get("portfolio", {}).get(
+                            "position_size", 0
+                        ),
+                        market_regime=(
+                            "trending"
+                            if result.get("portfolio", {}).get("total_return", 0) > 0
+                            else "ranging"
+                        ),
                     )
-            
+
                     # 获取决策
                     decision = await laya_svc.analyze(
                         state=market_state,
                         question_types=["action", "confidence"],
-                        user_id=str(current_user.id) if current_user is not None else None
+                        user_id=(
+                            str(current_user.id) if current_user is not None else None
+                        ),
                     )
-            
+
                     if decision:
                         # 添加 Laya 增强信息到结果中
                         result["laya_enhanced"] = {
                             "action": decision.action,
                             "confidence": decision.confidence,
-                            "recommendation": "buy" if decision.confidence >= 0.6 and decision.action == "buy" else "hold"
+                            "recommendation": (
+                                "buy"
+                                if decision.confidence >= 0.6
+                                and decision.action == "buy"
+                                else "hold"
+                            ),
                         }
-                        logger.debug(f"Laya 信号增强: {decision.action} (conf={decision.confidence:.2f})")
+                        logger.debug(
+                            f"Laya 信号增强: {decision.action} (conf={decision.confidence:.2f})"
+                        )
             except Exception as laya_err:
                 logger.warning(f"Laya 信号增强失败（非关键）: {laya_err}")
         # ────────────────────────────────────────────────
-        
+
         return StandardResponse(success=True, message="回测执行成功", data=result)
 
     except Exception as e:
@@ -1108,9 +1124,7 @@ async def find_same_config(request: FindSameConfigRequest) -> Any:
                     snapshot = task.config.get("_snapshot")
 
                 if snapshot is not None:
-                    task_json = json.dumps(
-                        snapshot, sort_keys=True, default=str
-                    )
+                    task_json = json.dumps(snapshot, sort_keys=True, default=str)
                     if task_json == input_json:
                         result_summary = extract_result_summary(task)
                         matches.append(
@@ -1127,9 +1141,7 @@ async def find_same_config(request: FindSameConfigRequest) -> Any:
                         )
 
             # 按创建时间降序，取前 20
-            matches.sort(
-                key=lambda x: cast(str, x["created_at"] or ""), reverse=True
-            )
+            matches.sort(key=lambda x: cast(str, x["created_at"] or ""), reverse=True)
             matches = matches[:20]
 
             return StandardResponse(
@@ -1144,9 +1156,7 @@ async def find_same_config(request: FindSameConfigRequest) -> Any:
             db.close()
     except Exception as e:
         logger.error(f"查找相同配置失败: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"查找相同配置失败: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"查找相同配置失败: {str(e)}")
 
 
 @router.get("/portfolio-templates", response_model=StandardResponse)

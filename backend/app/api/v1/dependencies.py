@@ -18,7 +18,10 @@ from app.repositories.task_repository import (
     TaskRepository,
 )
 from app.services.tasks import TaskQueueManager
-from app.services.tasks.task_executors import (
+
+# Re-export 给 app/api/v1/tasks_impl.py 使用（`from app.api.v1.dependencies import ...`），
+# 故本文件内直接使用为 0，属刻意保留的模块级再导出。
+from app.services.tasks.task_executors import (  # noqa: F401
     execute_backtest_task_simple,
     execute_prediction_task_simple,
     execute_qlib_precompute_task_simple,
@@ -47,12 +50,13 @@ async def get_current_user(
     # 解析 JWT token 获取用户 ID
     try:
         from app.core.security import decode_access_token
+
         payload = decode_access_token(token)
         user_id = payload.get("sub")
         if user_id:
             logger.debug("使用 Bearer token 认证: {}", user_id)
             return str(user_id)
-    except (PermissionError, Exception) as exc:
+    except Exception as exc:
         logger.warning("Bearer token 认证失败: {}", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -94,6 +98,7 @@ async def require_admin_user(
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="需要管理员权限")
     return user
+
 
 task_queue_manager = TaskQueueManager()
 

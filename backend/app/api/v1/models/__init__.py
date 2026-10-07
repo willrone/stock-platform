@@ -24,7 +24,6 @@
 
 import importlib as _importlib
 import sys as _sys
-
 from types import ModuleType as _ModuleType
 
 _impl = _importlib.import_module("app.api.v1.models_impl")
@@ -41,7 +40,7 @@ del _impl_items
 _parent = _sys.modules.get("app.api.v1")
 if _parent is not None and getattr(_parent, "models", None) is not _impl:
     try:
-        setattr(_parent, "models", _impl)
+        setattr(_parent, "models", _impl)  # noqa: B010
     except Exception:  # pragma: no cover - 只读父模块时退化
         pass
 
@@ -49,5 +48,7 @@ if _parent is not None and getattr(_parent, "models", None) is not _impl:
 _sys.modules[__name__] = _impl
 
 __all__ = ["router"] + [
-    n for n in list(globals()) if not n.startswith("_") and not isinstance(globals()[n], _ModuleType)
+    n
+    for n in list(globals())
+    if not n.startswith("_") and not isinstance(globals()[n], _ModuleType)
 ]

@@ -4,10 +4,10 @@
 不会阻断业务流程。
 """
 
-from typing import Optional
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import smtplib
+from typing import Optional
 
 from loguru import logger
 
@@ -16,7 +16,9 @@ from app.core.config import settings
 
 def _smtp_configured() -> bool:
     """检查 SMTP 是否已配置。"""
-    return bool(settings.SMTP_HOST and settings.SMTP_USERNAME and settings.SMTP_PASSWORD)
+    return bool(
+        settings.SMTP_HOST and settings.SMTP_USERNAME and settings.SMTP_PASSWORD
+    )
 
 
 def send_email(

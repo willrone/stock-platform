@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypeAlias, cast
 
 import numpy as np
 import pandas as pd
@@ -36,6 +36,9 @@ except ImportError:
     xgb = None
     XGBOOST_AVAILABLE = False
 from sklearn.metrics import accuracy_score, precision_score, recall_score
+
+if TYPE_CHECKING:
+    from app.services.validation import ValidationReport
 
 
 # 检测可用的计算设备
@@ -631,17 +634,20 @@ class ModelTrainingService:
                     )
 
                     # 评估校准效果
-                    calib_metrics = evaluate_calibration(
-                        calibrated_model, val_X, val_y
-                    )
+                    calib_metrics = evaluate_calibration(calibrated_model, val_X, val_y)
                     if calib_metrics:
                         logger.info(
                             f"校准效果: Brier={calib_metrics.get('brier_score', 'N/A'):.4f}, "
                             f"LogLoss={calib_metrics.get('log_loss', 'N/A'):.4f}"
                         )
                         # 将校准指标合并到 model metadata 中
-                        if hasattr(metrics, "calibrated_accuracy") and "calibrated_accuracy" in calib_metrics:
-                            metrics.calibrated_accuracy = calib_metrics["calibrated_accuracy"]
+                        if (
+                            hasattr(metrics, "calibrated_accuracy")
+                            and "calibrated_accuracy" in calib_metrics
+                        ):
+                            metrics.calibrated_accuracy = calib_metrics[
+                                "calibrated_accuracy"
+                            ]
 
                     # 使用校准后的模型替换原始模型
                     model = calibrated_model
@@ -734,7 +740,6 @@ class ModelTrainingService:
         from app.services.validation import (
             FoldResult,
             PurgedKFoldValidator,
-            ValidationReport,
             WalkForwardValidator,
             WindowType,
             aggregate_validation_results,
@@ -775,9 +780,7 @@ class ModelTrainingService:
             )
         else:
             wt = (
-                WindowType.ROLLING
-                if window_type == "rolling"
-                else WindowType.EXPANDING
+                WindowType.ROLLING if window_type == "rolling" else WindowType.EXPANDING
             )
             validator = WalkForwardValidator(
                 n_folds=n_folds,
@@ -935,9 +938,15 @@ class ModelTrainingService:
             features_df[price_cols] = features_df[price_cols].ffill().bfill()
         if other_cols:
             # 按时间排序后，用较早的80%数据计算中位数
-            sorted_df = features_df.sort_values("date") if "date" in features_df.columns else features_df
+            sorted_df = (
+                features_df.sort_values("date")
+                if "date" in features_df.columns
+                else features_df
+            )
             reference_idx = int(len(sorted_df) * 0.8)
-            reference_data = sorted_df.iloc[:reference_idx] if reference_idx > 0 else sorted_df
+            reference_data = (
+                sorted_df.iloc[:reference_idx] if reference_idx > 0 else sorted_df
+            )
             for col in other_cols:
                 median_val = reference_data[col].median()
                 features_df[col] = (
@@ -997,7 +1006,9 @@ class ModelTrainingService:
         X = np.array(X_list)
         y = np.array(y_list)
 
-        logger.info(f"准备训练数据完成，样本数: {len(X)}, 特征维度: {X.shape}, 分类数: {num_classes}")
+        logger.info(
+            f"准备训练数据完成，样本数: {len(X)}, 特征维度: {X.shape}, 分类数: {num_classes}"
+        )
         return X, y
 
     def _time_series_split(
@@ -1032,7 +1043,7 @@ class ModelTrainingService:
         val_X_flat = val_X.reshape(val_X.shape[0], -1)
 
         # XGBoost参数
-        num_classes = getattr(config, 'num_classes', 3)
+        num_classes = getattr(config, "num_classes", 3)
         is_binary = num_classes == 2
         params = {
             "objective": "binary:logistic" if is_binary else "multi:softprob",
@@ -1082,12 +1093,12 @@ class ModelTrainingService:
         train_X_flat = train_X.reshape(train_X.shape[0], -1)
         val_X_flat = val_X.reshape(val_X.shape[0], -1)
 
-        num_classes = getattr(config, 'num_classes', 3)
+        num_classes = getattr(config, "num_classes", 3)
         is_binary = num_classes == 2
 
         model = lgb.LGBMClassifier(
             n_estimators=config.epochs,
-            learning_rate=getattr(config, 'learning_rate', 0.05),
+            learning_rate=getattr(config, "learning_rate", 0.05),
             max_depth=5,
             num_leaves=48,
             min_child_samples=100,
@@ -1098,15 +1109,19 @@ class ModelTrainingService:
             random_state=42,
             verbose=-1,
             n_jobs=-1,
-            objective='binary' if is_binary else 'multiclass',
+            objective="binary" if is_binary else "multiclass",
             num_class=num_classes if not is_binary else 1,
-            metric='binary_logloss' if is_binary else 'multi_logloss',
+            metric="binary_logloss" if is_binary else "multi_logloss",
         )
 
         model.fit(
-            train_X_flat, train_y,
+            train_X_flat,
+            train_y,
             eval_set=[(val_X_flat, val_y)],
-            callbacks=[lgb.early_stopping(config.early_stopping_patience), lgb.log_evaluation(0)]
+            callbacks=[
+                lgb.early_stopping(config.early_stopping_patience),
+                lgb.log_evaluation(0),
+            ],
         )
 
         logger.info("LightGBM模型训练完成")
@@ -1138,9 +1153,11 @@ class ModelTrainingService:
         seq_len = train_X.shape[1]  # 序列长度
 
         model: nn.Module
-        num_classes = getattr(config, 'num_classes', 3)
+        num_classes = getattr(config, "num_classes", 3)
         if config.model_type == ModelType.LSTM:
-            model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=num_classes)
+            model = LSTMModel(
+                input_dim, hidden_dim=128, num_layers=2, num_classes=num_classes
+            )
         elif config.model_type == ModelType.TRANSFORMER:
             model = TransformerModel(
                 input_dim, d_model=128, nhead=8, num_layers=4, num_classes=num_classes
@@ -1178,7 +1195,9 @@ class ModelTrainingService:
             )
         else:
             # 默认使用LSTM
-            model = LSTMModel(input_dim, hidden_dim=128, num_layers=2, num_classes=num_classes)
+            model = LSTMModel(
+                input_dim, hidden_dim=128, num_layers=2, num_classes=num_classes
+            )
 
         model = model.to(device)
 
@@ -1260,8 +1279,7 @@ class ModelTrainingService:
         self, y_true: np.ndarray, y_pred: np.ndarray, y_pred_proba: np.ndarray
     ) -> ModelMetrics:
         """计算模型评估指标"""
-        n_classes = len(np.unique(y_true))
-        avg = 'weighted'  # 始终使用 weighted，兼容二分类和多分类
+        avg = "weighted"  # 始终使用 weighted，兼容二分类和多分类
         accuracy = accuracy_score(y_true, y_pred)
         precision = precision_score(y_true, y_pred, zero_division=0, average=avg)
         recall = recall_score(y_true, y_pred, zero_division=0, average=avg)

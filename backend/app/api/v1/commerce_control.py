@@ -11,10 +11,9 @@
 
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.commerce.commission_service import seed_default_pricing_rules
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/commerce", tags=["计费控制"])
 
@@ -30,44 +29,46 @@ def is_commerce_enabled() -> bool:
 
 
 async def set_commerce_enabled(
-    enabled: bool, 
+    enabled: bool,
     reason: str = "系统管理员操作",
     background_tasks: Optional[BackgroundTasks] = None,
-    db_session: Optional[AsyncSession] = None
+    db_session: Optional[AsyncSession] = None,
 ) -> Dict[str, Any]:
     """启用或禁用计费功能
-    
+
     Args:
         enabled: 是否启用功能
         reason: 启用原因/理由
         background_tasks: 后台任务
         db_session: 数据库会话
-        
+
     Returns:
         操作结果
     """
     global _COMMERCE_ENABLED, _COMMERCE_ENABLE_TIME, _ENABLE_REASON
-    
+
     old_status = _COMMERCE_ENABLED
     _COMMERCE_ENABLED = enabled
     _COMMERCE_ENABLE_TIME = datetime.now(timezone.utc).replace(tzinfo=None)
     _ENABLE_REASON = reason
-    
+
     result: Dict[str, Any] = {
         "success": True,
         "old_status": old_status,
         "new_status": enabled,
         "reason": reason,
-        "timestamp": _COMMERCE_ENABLE_TIME.isoformat() if _COMMERCE_ENABLE_TIME else None,
+        "timestamp": (
+            _COMMERCE_ENABLE_TIME.isoformat() if _COMMERCE_ENABLE_TIME else None
+        ),
     }
-    
+
     if enabled:
         # 启用计费功能，重新加载默认规则
         result["message"] = "计费功能已启用"
     else:
         # 禁用计费功能
         result["message"] = "计费功能已禁用，所有计费操作将被忽略"
-    
+
     return result
 
 
@@ -76,7 +77,9 @@ async def get_commerce_status() -> Dict[str, Any]:
     """获取当前计费功能状态"""
     return {
         "enabled": is_commerce_enabled(),
-        "enable_time": _COMMERCE_ENABLE_TIME.isoformat() if _COMMERCE_ENABLE_TIME else None,
+        "enable_time": (
+            _COMMERCE_ENABLE_TIME.isoformat() if _COMMERCE_ENABLE_TIME else None
+        ),
         "reason": _ENABLE_REASON,
     }
 
@@ -86,7 +89,7 @@ async def toggle_commerce(
     request: Dict[str, Any],
 ) -> Dict[str, Any]:
     """启用或禁用计费功能
-    
+
     请求体示例:
     {
         "enabled": true,      # true=启用，false=禁用
@@ -95,10 +98,10 @@ async def toggle_commerce(
     """
     enabled = request.get("enabled", False)
     reason = request.get("reason", "系统管理员操作")
-    
+
     if not isinstance(enabled, bool):
         raise HTTPException(status_code=400, detail="enabled 必须是布尔值")
-    
+
     return await set_commerce_enabled(enabled, reason)
 
 
@@ -126,14 +129,14 @@ async def reset_commerce(
 ) -> Dict[str, Any]:
     """重置计费功能到默认启用状态"""
     reason = request.get("reason", "系统重启，恢复默认设置")
-    
+
     global _COMMERCE_ENABLED, _COMMERCE_ENABLE_TIME, _ENABLE_REASON
-    
+
     old_status = _COMMERCE_ENABLED
     _COMMERCE_ENABLED = True
     _COMMERCE_ENABLE_TIME = datetime.now(timezone.utc).replace(tzinfo=None)
     _ENABLE_REASON = reason
-    
+
     return {
         "success": True,
         "old_status": old_status,

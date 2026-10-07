@@ -1,8 +1,7 @@
 """
 密码哈希和 JWT 工具
 """
-import hashlib
-import os
+
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -65,8 +64,7 @@ def create_access_token(
         "iat": now,
         "exp": now
         + (
-            expires_delta
-            or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+            expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         ),
         "jti": str(uuid.uuid4()),
     }
@@ -102,10 +100,7 @@ def create_refresh_token(
         "token_type": "refresh",
         "iat": now,
         "exp": now
-        + (
-            expires_delta
-            or timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-        ),
+        + (expires_delta or timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)),
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")

@@ -11,8 +11,6 @@ API v1 路由聚合器
 
 from fastapi import APIRouter, Depends
 
-from app.api.v1.dependencies import get_current_user
-
 # 导入各个模块的路由
 from app.api.v1 import (
     auth,
@@ -41,6 +39,7 @@ from app.api.v1 import (
     tasks,
     training_progress,
 )
+from app.api.v1.dependencies import get_current_user
 
 # 创建API v1路由器（顶层，不含全局认证依赖）
 api_router = APIRouter()

@@ -2694,7 +2694,10 @@ class BacktestExecutor:
             is_portfolio_strategy = normalized_strategy_name == "portfolio" or (
                 isinstance(strategy_config, dict) and "strategies" in strategy_config
             )
-            if not is_portfolio_strategy and normalized_strategy_name not in available_strategies:
+            if (
+                not is_portfolio_strategy
+                and normalized_strategy_name not in available_strategies
+            ):
                 raise TaskError(
                     message=f"不支持的策略: {strategy_name}，可用策略: {available_strategies}",
                     severity=ErrorSeverity.MEDIUM,

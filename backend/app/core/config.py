@@ -2,8 +2,8 @@
 应用程序配置管理
 """
 
-from pathlib import Path
 import secrets
+from pathlib import Path
 from typing import List, Optional
 
 from pydantic import model_validator
@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     LAYA_MODEL_NAME: str = "convaiinnovations/laya"
     LAYA_AUTO_LOAD: bool = True  # 启动时自动加载模型
     LAYA_MAX_BATCH_SIZE: int = 10  # 最大批量查询大小
-    
+
     @property
     def database_url_sync(self) -> str:
         """同步数据库URL"""
