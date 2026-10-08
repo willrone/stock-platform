@@ -206,6 +206,7 @@ class PortfolioManagerArray:
                     current_price,
                     slippage_cost_per_share,
                     signal,
+                    current_prices,
                 )
             elif signal.signal_type == SignalType.SELL:
                 return self._execute_sell(
@@ -231,10 +232,13 @@ class PortfolioManagerArray:
         original_price: float,
         slippage_cost_per_share: float,
         signal: TradingSignal,
+        current_prices: Dict[str, float],
     ) -> tuple[Optional[Trade], Optional[str]]:
         """执行买入 - 数组优化版本"""
-        # 计算可买数量
-        portfolio_value = self.get_portfolio_value({stock_code: price})
+        # 计算可买数量（用当日全市场价格计算组合市值；只传单只要买的股票会让
+        # 其它持仓按 0 计价，单仓上限被低估为 max_position_size × 现金，
+        # 导致资金无法充分部署——TopK 等受限仓位策略受影响最大）
+        portfolio_value = self.get_portfolio_value(current_prices)
         max_position_value = portfolio_value * self.config.max_position_size
         board_lot_size = max(1, int(getattr(self.config, "board_lot_size", 100) or 100))
         cash_reserve_ratio = float(
