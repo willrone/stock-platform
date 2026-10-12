@@ -103,20 +103,26 @@ stochastic 腿切向波动更低的腿，吃到了 2024 的行情。2025/2026 �
    真实 1 天滞后
 5. **确定性**：PYTHONHASHSEED=0 + 输入序重建 `stock_data`（`test_determinism` 回归通过）
 
-## 引擎口径 bug（附带发现，待修）
+## 引擎口径 bug（已修复）
 
-终审交叉验证时发现 `portfolio_manager.py:487` 的夏普公式**非标准**：
+`portfolio_manager.py:487` 等 3 处（+ `enhanced_metrics_calculator.py` Sharpe/Sortino）夏普公式**非标准**：
 
 ```python
-# 引擎现状（非标准）
+# 修复前（非标准: 复利口径 AR/σ, 被 σ²/2 拖累项压低, 30只探针 0.004 vs 标准 0.125）
 sharpe_ratio = annualized_return / volatility   # 年化(几何,365d) / (日波动*√252)
-# 标准定义
-sharpe = mean(daily_r) / std(daily_r) * √252
+# 修复后（标准定义: 日收益 μ/σ 年化 √252）
+sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252)
 ```
 
-差异 = 波动拖累项 σ²/2（低仓位时放大数十倍；30 只探针：0.004 vs 0.125），
-且分子用 365 天、分母用 252 天，口径不一致。影响所有 16 策略基线榜的夏普列。
-**本报告全部夏普/DSR 均用曲线自算（标准定义）规避此 bug。** 引擎修复会改变基线榜数字，单独立项。
+修复后验证（30 只真实数据）：引擎 sharpe 0.1254 = 曲线自算 0.1254，差 0.0000 ✓
+单测影响面：修复前后均仅 1 个预存失败（test_monthly_returns_analysis_consistency），无新增。
+
+**注意（遗留问题，另立项）**：修复前 golden 基线（`backtest_golden` fixtures）在干净 HEAD 上已 stale
+——`ma_tiny` 825 diffs 含 `trade_history.length`/`final_value` 等**交易语义**层面不一致，
+超出夏普改动能解释的范围，是引擎交易逻辑的独立回归。未刷新 golden（避免盖住该回归），
+需先定位交易漂移根因再统一刷新。
+
+本报告全部夏普/DSR 均用曲线自算（标准定义），不受引擎修复影响（数值一致，仅消除双口径）。
 
 ## 交付物
 
