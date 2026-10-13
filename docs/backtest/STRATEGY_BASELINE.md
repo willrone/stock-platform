@@ -97,6 +97,9 @@ mean_reversion）实际是 0.7-0.9 级别的夏普**，此前被低估；stochas
    **方向 D 追加（2026-10-13）**：质量加权 + regime 门 6 变体全跑输等权（最好 Q60 0.477 < R0
    0.638，PBO 0.81）——组合层条件配权（逆波动/质量/regime 门）已穷尽，3 腿池内等权即天花板。
    详见 `QUALITY_WEIGHT_10Y.md`。
+   **扩腿追加（2026-10-13）**：3 腿→5 腿（+mean_reversion/momentum）夏普 +0.08 但 DSR 0.132
+   未过线、PBO 0.71；5→7 腿反稀释 → **扩腿证伪，组合层 4 类杠杆（择时/包装/条件配权/扩腿）
+   全部挖穷**。详见 `EXPANDED_LEGS_10Y.md`。
 
 ## 不可用策略（已登记）
 
@@ -110,3 +113,8 @@ mean_reversion）实际是 0.7-0.9 级别的夏普**，此前被低估；stochas
 - **golden fixtures stale**：`backtest_golden` 基线在干净 HEAD 上已 825 diffs（含 `trade_history.length`/
   `final_value` 交易语义层不一致），是比夏普更早的引擎交易逻辑回归。未刷新 golden（避免盖住回归），
   需先定位交易漂移根因再统一刷新。
+- **串行路径停牌估值缺陷**（2026-10-13，扩腿实验发现）：`enable_parallel=False` 时
+  `current_prices` 漏掉停牌持仓 → `get_portfolio_value` 按 0 计价 → 净值假崩次日假复。
+  影响所有**串行**回测的夏普类统计（总收益不受影响）；并行路径（`close_mat` ffill）无此问题。
+  3 年基线（并行 + qlib 完整日历）不受影响；10 年串行研究的绝对数字已勘误（`RISK_PARITY_10Y.md`）。
+  正确行为 = 持仓停牌日沿用上次已知价；修复方案见 `EXPANDED_LEGS_10Y.md` §5。
