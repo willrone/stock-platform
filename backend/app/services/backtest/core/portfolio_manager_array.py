@@ -51,6 +51,9 @@ class PortfolioManagerArray:
         self.equity_curve: List[Tuple[datetime, float]] = []
         self.trade_counter = 0
 
+        # 最近已知有效价（停牌/缺数据日估值回退用，2026-10-13 修复）
+        self.last_prices: Dict[str, float] = {}
+
         # 内部计数
         self._snapshot_counter = 0
 
@@ -74,28 +77,43 @@ class PortfolioManagerArray:
         self.portfolio_history: List[Dict[str, Any]] = []
         self.portfolio_history_without_cost: List[Dict[str, Any]] = []
 
+    def _valuation_price(
+        self, stock_code: str, current_prices: Dict[str, float]
+    ) -> float:
+        """持仓估值价：优先当日价；停牌/缺数据/无效价(NaN/非正)回退最近已知价。"""
+        price = current_prices.get(stock_code)
+        if price is not None and price == price and price > 0:
+            return float(price)
+        return float(self.last_prices.get(stock_code, 0.0))
+
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
-        """计算组合总价值（含成本）- 向量化版本"""
+        """计算组合总价值（含成本）
+
+        估值语义（2026-10-13 修复）：持仓股当日无有效价（停牌/数据缺行）时
+        沿用 last_prices 最近已知有效价，而非按 0 计价——旧行为导致停牌日
+        净值假崩、复牌日假复（单腿 ±79%/+369% 假毛刺，污染夏普/回撤/DSR）。
+        """
         total_value = self.cash
 
-        # 向量化计算持仓市值
-        for code, price in current_prices.items():
-            idx = self.code_to_idx.get(code)
-            if idx is not None and self.quantities[idx] > 0:
-                total_value += self.quantities[idx] * price
+        for i in np.nonzero(self.quantities > 0)[0]:
+            idx = int(i)
+            price = self._valuation_price(self.stock_codes[idx], current_prices)
+            if price > 0:
+                total_value += float(self.quantities[idx]) * price
 
         return float(total_value)
 
     def get_portfolio_value_without_cost(
         self, current_prices: Dict[str, float]
     ) -> float:
-        """计算组合总价值（无成本）- 向量化版本"""
+        """计算组合总价值（无成本）- 停牌回退语义同 get_portfolio_value"""
         total_value = self.cash_without_cost
 
-        for code, price in current_prices.items():
-            idx = self.code_to_idx.get(code)
-            if idx is not None and self.quantities_without_cost[idx] > 0:
-                total_value += self.quantities_without_cost[idx] * price
+        for i in np.nonzero(self.quantities_without_cost > 0)[0]:
+            idx = int(i)
+            price = self._valuation_price(self.stock_codes[idx], current_prices)
+            if price > 0:
+                total_value += float(self.quantities_without_cost[idx]) * price
 
         return float(total_value)
 
@@ -433,6 +451,10 @@ class PortfolioManagerArray:
         self, date: datetime, current_prices: Dict[str, float]
     ) -> None:
         """记录组合快照"""
+        # 先合并当日有效价进缓存（供停牌回退估值）
+        for _code, _price in current_prices.items():
+            if _price is not None and _price == _price and _price > 0:
+                self.last_prices[_code] = float(_price)
         portfolio_value = self.get_portfolio_value(current_prices)
         portfolio_value_without_cost = self.get_portfolio_value_without_cost(
             current_prices
@@ -454,8 +476,8 @@ class PortfolioManagerArray:
                         code = self.stock_codes[idx]
                         qty = int(self.quantities[idx])
                         avg_cost = float(self.avg_costs[idx])
-                        # 用 current_prices 更新当前价格和市值
-                        cur_price = current_prices.get(code, 0.0)
+                        # 当日无价（停牌）时回退最近已知价
+                        cur_price = self._valuation_price(code, current_prices)
                         mkt_val = qty * cur_price
                         unrealized = (
                             mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0
@@ -493,7 +515,7 @@ class PortfolioManagerArray:
                         code = self.stock_codes[idx]
                         qty = int(self.quantities_without_cost[idx])
                         avg_cost = float(self.avg_costs_without_cost[idx])
-                        cur_price = current_prices.get(code, 0.0)
+                        cur_price = self._valuation_price(code, current_prices)
                         mkt_val = qty * cur_price
                         unrealized = (
                             mkt_val - (qty * avg_cost) if cur_price > 0 else 0.0

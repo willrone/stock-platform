@@ -108,13 +108,19 @@ mean_reversion）实际是 0.7-0.9 级别的夏普**，此前被低估；stochas
 - `model_signal`: 依赖 official-baseline 预测引擎，pkl 加载段错误 + 域不匹配 + 前视
 - `model_topk_dropout`: 依赖 official-baseline 预测引擎，pkl 加载段错误 + 域不匹配 + 前视
 
-## 已知遗留（另立项）
+## 已知遗留（已全部清偿，2026-10-13）
 
-- **golden fixtures stale**：`backtest_golden` 基线在干净 HEAD 上已 825 diffs（含 `trade_history.length`/
-  `final_value` 交易语义层不一致），是比夏普更早的引擎交易逻辑回归。未刷新 golden（避免盖住回归），
-  需先定位交易漂移根因再统一刷新。
-- **串行路径停牌估值缺陷**（2026-10-13，扩腿实验发现）：`enable_parallel=False` 时
-  `current_prices` 漏掉停牌持仓 → `get_portfolio_value` 按 0 计价 → 净值假崩次日假复。
-  影响所有**串行**回测的夏普类统计（总收益不受影响）；并行路径（`close_mat` ffill）无此问题。
-  3 年基线（并行 + qlib 完整日历）不受影响；10 年串行研究的绝对数字已勘误（`RISK_PARITY_10Y.md`）。
-  正确行为 = 持仓停牌日沿用上次已知价；修复方案见 `EXPANDED_LEGS_10Y.md` §5。
+- ~~**golden fixtures stale**~~ → **已定位 + 已刷新**。825 diffs 根因 = `a4a36707`（10-08，
+  单仓上限按现金计价 bug 修复）改变了买入数量语义（如 ma_tiny trade[10] qty 5200→8200），
+  `e58662f9`（10-12，夏普公式改标准定义）叠加 sharpe/metric 层 diff；两处均为**有意语义变更**，
+  非引擎交易逻辑回归。证据：`git worktree` 逐 commit bisect —— fixtures 生成 commit `51dfa8cb`
+  上 verify 全 PASS，diff 首现于 `a4a36707`（数量/成本/equity 层），sharpe-only diff 首现于
+  `e58662f9`（multi_factor_small 仅 2 diffs）。7 个 baseline 已按 README 政策统一刷新，
+  `backtest_optimization_guard.sh` 全 PASS。
+- ~~**串行路径停牌估值缺陷**~~ → **已在引擎层修复**（2026-10-13）。
+  `PortfolioManager(Array)` 增加 `last_prices` 缓存：`record_portfolio_snapshot` 顶部合并当日
+  有效价，`get_portfolio_value(_without_cost)` 与 positions payload 对停牌/缺价/NaN/非正价持仓
+  回退最近已知价（`_valuation_price`）。30 只 mr 10 年复验：|r|>24% 假毛刺 0 个（修复前 46 对）。
+  单测 `test_portfolio_manager_suspension_valuation.py`（7 例 × classic/array 双实现）。
+  3 年基线（并行 + qlib 完整日历）不受影响；10 年串行研究的绝对数字勘误维持
+  （`RISK_PARITY_10Y.md`），研究结论方向不变。

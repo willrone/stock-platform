@@ -102,7 +102,7 @@
     "annualized_return": -0.0002924231151615331,
     "max_drawdown": -0.00029162207277111385,
     "profit_factor": Infinity,
-    "sharpe_ratio": -1.0185391115527287,
+    "sharpe_ratio": -0.9844951849708409,
     "total_return": -0.00029162207277113337,
     "total_trades": 1,
     "volatility": 0.0002871005264743775,
@@ -3028,7 +3028,7 @@
   ],
   "positive_months": 0,
   "profit_factor": Infinity,
-  "sharpe_ratio": -1.0185391115527287,
+  "sharpe_ratio": -0.9844951849708409,
   "start_date": "2024-01-02T00:00:00",
   "stock_codes": [
     "SYNTH_3001.SZ",

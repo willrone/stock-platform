@@ -93,11 +93,18 @@ cci/obv 与旧 3 腿相关 0.60-0.73（同技术域，无分散价值）→ 解�
 （qlib 是完整交易日历 dump，停牌日有 NaN 行而非缺行）→ 3 年结论（1.24 = 幸运窗口、
 DSR 12/12 fail、PBO 0.64）全部有效。
 
-**遗留（另立项）**：引擎串行路径停牌估值漏计持仓——`portfolio_manager_array.py`
-`get_portfolio_value` 对 `current_prices` 缺失的持仓按 0 计价。正确行为 = 沿用上次已知价。
-并行路径无此问题，但串行路径是 `enable_parallel=False` 时的默认行为，影响所有串行回测。
+> **✅ 已在引擎层修复（2026-10-13）**：`PortfolioManager(Array)` 增加 `last_prices` 缓存，
+> `record_portfolio_snapshot` 顶部合并当日有效价，`get_portfolio_value(_without_cost)` 与
+> positions payload 对停牌/缺价持仓回退最近已知价（`_valuation_price`）。
+> 本实验脚本内的 monkey-patch（`install_stash`）保留为实验可复现性的一部分，但引擎修复后
+> 已冗余。复验：30 只 mr 10 年全程 |r|>24% 毛刺 = **0**（修复前 46 对）；
+> 单测 `tests/unit/backtest/test_portfolio_manager_suspension_valuation.py`。
 
-### 修复方式（本实验内，脚本层，零引擎改动）
+**（原遗留，已修复——见上方 ✅ 注）**：引擎串行路径停牌估值漏计持仓——
+`get_portfolio_value` 对 `current_prices` 缺失的持仓按 0 计价。并行路径无此问题，
+但串行路径是 `enable_parallel=False` 时的默认行为，影响所有串行回测。
+
+### 修复方式（本实验内，脚本层，零引擎改动；引擎级修复已另行落地）
 
 1. **估值源头**：monkey-patch `record_portfolio_snapshot`——持仓停牌日用上次已知价补齐
    `current_prices`（交易在快照之前，无行为影响）。
