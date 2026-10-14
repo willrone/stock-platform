@@ -162,10 +162,15 @@ async def run_cell(name, lag, extra=None):
         _orig_snap(self, date, current_prices)
     m.pma_module.PortfolioManagerArray.record_portfolio_snapshot = patched
     try:
+        # 单仓上限须与 topk 一致: topk × max_position_size ≈ (1 - cash_reserve),
+        # 否则 topk>50 时 topk×0.019>95% → 现金不够 → 买单失败 → 组合冻结.
+        # 等权目标 = (1 - 0.05) / topk, 保证所有 cell 同口径 (95% 可投现金).
+        topk_val = (extra or {}).get("topk", 50)
         cfg = BacktestConfig(
             initial_cash=1_000_000.0, commission_rate=0.0003, slippage_rate=0.0001,
-            max_position_size=0.019, cash_reserve_ratio=0.05, board_lot_size=100,
-            stop_loss_pct=0.0, take_profit_pct=0.0, rebalance_frequency="daily",
+            max_position_size=round(0.95 / topk_val, 6), cash_reserve_ratio=0.05,
+            board_lot_size=100, stop_loss_pct=0.0, take_profit_pct=0.0,
+            rebalance_frequency="daily",
         )
         await ex.run_backtest(strategy_name="factor_ranking",
                               stock_codes=codes, start_date=START, end_date=END,
