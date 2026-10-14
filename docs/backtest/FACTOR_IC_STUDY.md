@@ -62,15 +62,30 @@ lag1 执行也救不回 (信号仍由当日 high/low 构造)。
 不是信号衰减); 且 0.63 量级在本弧 ~40 次尝试的多重检验下 DSR 大概率不过线。诚实结论:
 信号层存在真实但温和的横截面信息 (OOS 0.575 一致), 幅度约为等权基线 (0.435) 的 1.4×, 远小于头条 1.75。
 
-## 引擎级发现: factor_ranking 旧三因子 zscore NaN 传播缺陷
+## 引擎级发现: factor_ranking 旧三因子 zscore NaN 传播缺陷（已修复 2026-10-14）
 
-`factor_ranking_strategy.py` 非 vwap 分支用 `np.where(valid,matrix,np.nan).mean()/std()`
+`factor_ranking_strategy.py` 非 vwap 分支曾用 `np.where(valid,matrix,np.nan).mean()/std()`
 (ndarray 语义, **NaN 传播**), vwap_below 已在 PR#16 修为 nan-aware。
 后果: 全宇宙 (4329 只) 任一票任一天停牌 → 该日整个截面分数全 NaN → 全市场停打分。
 停牌密度 2021-2023 高 → 官方三因子对照组在这三年**零交易零收益** (实测 valid-score 仅 2024 起),
-对照组 "5y Sharpe 0.518" 实为 ~2.3 年结果。官方历史基线的名义窗口 vs 实际暴露窗口存在同源偏差。
-**修复需改官方语义 → 需用户审批 + golden 刷新** (方案: 全因子改 np.nanmean/np.nanstd,
-与 vwap_below 对齐; 影响 factor_ranking 全部历史对照数字)。
+对照组 "5y Sharpe 0.518" 实为 ~2.3 年结果。
+
+**修复（用户批准方案 A）**: 全因子统一 nanmean/nanstd, 与 vwap_below 对齐。
+回归测试 `tests/unit/backtest/test_factor_ranking_nan_scoring.py` (3 例: 停牌票不杀截面 /
+分数=手算 nan-aware zscore / 全 NaN 行仍无分数)。
+验证: golden 7/7 PASS + guard PASS (golden 无 factor_ranking 用例, 预期不变);
+backtest 单测 37/38 (唯一红为已知 hypothesis flaky)。
+
+**修复后重跑的官方数字**:
+- 3 年全市场 (2023-05→2026-05, 5513): +30.5% / 夏普 **0.72** / 回撤 -15.2% / 5054 笔
+  (旧 +38.5% / 0.98 / -10.6% / 3326 笔作废; 隐性挑日交易消失 → 笔数 +52%, 夏普 -0.26)
+- 5 年对照 (2021-05→2026-05, point-in-time 4329): 夏普 **-0.238** / -17.1% / 7800 笔
+  (旧 "0.518" 作废; 2021-2023 不再是零交易而是亏损: 2021 -4.3 / 2022 -23.0 / 2023 -13.7)
+- 修复后分数覆盖 2021-2026 全年份 (对照组逐年 200/200 有效票)
+
+**榜内影响**: factor_ranking 3 年风险调整排名 第 1 → 第 8; STRATEGY_BASELINE.md 已同步。
+10 年 DSR 终审结论不受影响 (0.72 < 0.98, 只会更低)。IC 复合对比基线相应更新:
+诚实复合 lag0 0.629 (10y) vs 官方三因子 -0.238 (5y 同窗同宇宙), 优势从 0.11 扩大到 ~0.87。
 
 ## 其他工程教训
 

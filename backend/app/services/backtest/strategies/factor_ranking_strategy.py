@@ -161,16 +161,13 @@ class FactorRankingStrategy(BaseStrategy):
                 continue
             valid = np.isfinite(matrix)
             counts = valid.sum(axis=1, keepdims=True)
-            if name == "vwap_below":
-                # vwap 必须 nan-aware: np.where(...).mean()/std() 会把任一 NaN 传播到
-                # 整行 → std=NaN → vwap 因 volume 0.18% 内部空洞整行 usable=0,
-                # 权重开关完全失效 (旧三因子保持原口径, 保证基线与 PR#16 可比)
-                with np.errstate(invalid="ignore"):
-                    mean = np.nanmean(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
-                    std = np.nanstd(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
-            else:
-                mean = np.where(valid, matrix, np.nan).mean(axis=1, keepdims=True)
-                std = np.where(valid, matrix, np.nan).std(axis=1, keepdims=True)
+            # 全因子 nan-aware 截面统计 (2026-10-14): 旧三因子曾用
+            # np.where(...).mean()/std() (ndarray NaN 传播), 全宇宙任一票停牌
+            # 即让该日整个截面分数全 NaN → 全市场停打分 (实测官方对照组
+            # 2021-2023 零交易)。vwap_below 早在 PR#16 修为 nan-aware, 此处对齐。
+            with np.errstate(invalid="ignore"):
+                mean = np.nanmean(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
+                std = np.nanstd(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
             with np.errstate(invalid="ignore", divide="ignore"):
                 zscore = (matrix - mean) / np.where(std > 1e-12, std, np.nan)
             zscore = np.where(counts >= min_cross, zscore, np.nan)
