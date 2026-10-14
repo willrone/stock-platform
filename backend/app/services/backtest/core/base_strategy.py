@@ -8,9 +8,13 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, cast
 
+import logging
+
 import pandas as pd
 
 from ..models import Position, SignalType, TradingSignal
+
+logger = logging.getLogger(__name__)
 
 
 class BaseStrategy(ABC):
@@ -141,6 +145,23 @@ class BaseStrategy(ABC):
         indicators = {}
         for strategy_name, precomputed_name in indicator_mapping.items():
             indicators[strategy_name] = data[precomputed_name]
+
+        # 回归防护：映射到的预计算列整列为 NaN 时视为"不可用"，返回 None 让策略
+        # fallback 到现场计算。否则（如 qlib 特征文件存在点/下划线双 stock_code
+        # 条目、列覆盖互补的情况）策略会拿到全 NaN 指标，percent_b/zscore 等衍生
+        # 量全 NaN → 静默 0 信号，回测结果看似"无交易"而非报错。
+        for strategy_name, precomputed_name in indicator_mapping.items():
+            series = indicators.get(strategy_name)
+            if (
+                isinstance(series, pd.Series)
+                and series.notna().sum() == 0
+                and len(series) > 0
+            ):
+                logger.warning(
+                    f"预计算指标列 {precomputed_name} 全为 NaN，"
+                    f"回退到现场计算（策略: {self.name}）"
+                )
+                return None
 
         # 确保基础数据也在indicators中
         if "close" in data.columns:

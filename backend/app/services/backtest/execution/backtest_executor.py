@@ -325,6 +325,16 @@ class BacktestExecutor:
                 required_columns=required_data_columns,
             )
 
+            # 确定性修复：并行加载用 as_completed 收集，dict 插入顺序受线程
+            # 完成时序影响（非确定），而下游按 stock_data 顺序迭代股票生成/
+            # 执行信号，同日多信号的执行顺序与资金分配路径随之分叉。
+            # 按输入 stock_codes 顺序重建（与串行路径一致），使任意加载路径
+            # 顺序固定可复现。
+            if stock_data:
+                stock_data = {
+                    c: stock_data[c] for c in stock_codes if c in stock_data
+                }
+
             if self.enable_performance_profiling:
                 self._profiler().end_stage(
                     "data_loading",

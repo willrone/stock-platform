@@ -41,13 +41,31 @@ class PortfolioManager:
         self.total_commission = 0.0
         self.total_slippage = 0.0
 
+        # 最近已知有效价（停牌/缺数据日估值回退用，2026-10-13 修复）
+        self.last_prices: Dict[str, float] = {}
+
+    def _valuation_price(
+        self, stock_code: str, current_prices: Dict[str, float]
+    ) -> float:
+        """持仓估值价：优先当日价；停牌/缺数据/无效价(NaN/非正)回退最近已知价。"""
+        price = current_prices.get(stock_code)
+        if price is not None and price == price and price > 0:
+            return float(price)
+        return float(self.last_prices.get(stock_code, 0.0))
+
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
-        """计算组合总价值（含成本）"""
+        """计算组合总价值（含成本）
+
+        估值语义（2026-10-13 修复）：持仓股当日无有效价（停牌/数据缺行）时
+        沿用 last_prices 最近已知有效价，而非跳过不计——旧行为导致停牌日
+        净值假崩、复牌日假复（假毛刺污染夏普/回撤/DSR）。
+        """
         total_value = self.cash
 
         for stock_code, position in self.positions.items():
-            if stock_code in current_prices:
-                position.current_price = current_prices[stock_code]
+            price = self._valuation_price(stock_code, current_prices)
+            if price > 0:
+                position.current_price = price
                 position.market_value = position.quantity * position.current_price
                 position.unrealized_pnl = position.market_value - (
                     position.quantity * position.avg_cost
@@ -59,12 +77,13 @@ class PortfolioManager:
     def get_portfolio_value_without_cost(
         self, current_prices: Dict[str, float]
     ) -> float:
-        """计算组合总价值（无成本）"""
+        """计算组合总价值（无成本）- 停牌回退语义同 get_portfolio_value"""
         total_value = self.cash_without_cost
 
         for stock_code, position in self.positions_without_cost.items():
-            if stock_code in current_prices:
-                position.current_price = current_prices[stock_code]
+            price = self._valuation_price(stock_code, current_prices)
+            if price > 0:
+                position.current_price = price
                 position.market_value = position.quantity * position.current_price
                 position.unrealized_pnl = position.market_value - (
                     position.quantity * position.avg_cost
@@ -364,6 +383,10 @@ class PortfolioManager:
         self, date: datetime, current_prices: Dict[str, float]
     ) -> None:
         """记录组合快照"""
+        # 先合并当日有效价进缓存（供停牌回退估值）
+        for _code, _price in current_prices.items():
+            if _price is not None and _price == _price and _price > 0:
+                self.last_prices[_code] = float(_price)
         portfolio_value = self.get_portfolio_value(current_prices)
         portfolio_value_without_cost = self.get_portfolio_value_without_cost(
             current_prices
@@ -483,8 +506,13 @@ class PortfolioManager:
         # 波动率
         volatility = returns.std() * np.sqrt(252)
 
-        # 夏普比率
-        sharpe_ratio = annualized_return / volatility if volatility > 0 else 0
+        # 夏普比率(标准定义: 日收益 μ/σ 年化 √252; 旧实现 年化收益/波动 复利口径已修正。
+        # 注意: 用日波动 returns.std() 而非已年化的 volatility, 否则 √252 被抵消成日夏普)
+        sharpe_ratio = (
+            returns.mean() / returns.std() * np.sqrt(252)
+            if returns.std() > 0
+            else 0
+        )
 
         # 最大回撤
         cumulative_returns = (1 + returns).cumprod()

@@ -5,10 +5,18 @@
 （持有 topk 只、每日换出排名掉出的最差 n_drop 只）由执行端
 ``TopkDropoutTradeModeExecutor`` 完成——即 qlib 官方 TopkDropout 范式。
 
-复合因子 = 加权平均( z(动量), z(低波动), z(低振幅) )，按日期横截面 Z-Score：
+复合因子 = 加权平均( z(动量), z(低波动), z(低振幅), z(跌破成本) )，按日期横截面 Z-Score：
   - 动量:   close[t-20] / close[t-146] - 1   （126 日收益，跳过最近 20 日，避开短期反转）
   - 低波动: -std(日收益率, 60)
   - 低振幅: -mean((high-low)/close, 10)
+  - 跌破成本 vwap_below（实验因子, opt-in）: -(close/vwap_n - 1)
+      vwap_n = sum(((H+L+C)/3)*volume, n) / sum(volume, n)  （n 日成交额加权均价，机构成本代理）
+      IC 为负（现价高于成本越多未来越差）→ 取负号：跌破主力成本越深分越高。
+      单因子有效: 2023-05→2026-05 全市场 rank IC dev60 -0.072（ICIR -0.48），
+      五分位单调，与原三因子截面相关 |rho|<0.25。
+      但等权进 topk 复合后 A/B 全面劣化（权重 0.1/0.25/0.5/1.0 的夏普
+      0.67/0.44/0.11/0.49 均低于基线 0.92，回撤最深 -34.6%）——
+      默认关闭，仅通过 weights 显式配置开启供实验。
 
 打分在 ``prepare_backtest_data`` 阶段一次性完成（全市场矩阵化），回测主循环
 逐股查表，零额外计算开销。
@@ -42,11 +50,14 @@ class FactorRankingStrategy(BaseStrategy):
         self.momentum_skip = int(config.get("momentum_skip", 20))
         self.vol_window = int(config.get("vol_window", 60))
         self.amp_window = int(config.get("amp_window", 10))
+        self.vwap_window = int(config.get("vwap_window", 60))
         self.score_scale = float(config.get("score_scale", 10.0))
         weights = config.get("weights")
+        # 默认 = 原三因子; vwap_below 为实验因子, 必须 weights 里显式给权重才开启
         self.weights: Dict[str, float] = dict(
             weights or {"momentum": 1.0, "low_vol": 1.0, "low_amp": 1.0}
         )
+        logger.info(f"factor_ranking weights={self.weights} vwap_window={self.vwap_window}")
         if self.topk <= 0:
             raise ValueError("factor_ranking 策略要求 topk > 0")
         if self.n_drop <= 0:
@@ -105,6 +116,7 @@ class FactorRankingStrategy(BaseStrategy):
         close = pd.DataFrame(to_matrix("close"), **frame_opts)
         high = pd.DataFrame(to_matrix("high"), **frame_opts)
         low = pd.DataFrame(to_matrix("low"), **frame_opts)
+        volume = pd.DataFrame(to_matrix("volume"), **frame_opts)
 
         with np.errstate(divide="ignore", invalid="ignore"):
             momentum = (
@@ -121,24 +133,41 @@ class FactorRankingStrategy(BaseStrategy):
             low_amp = -amplitude.rolling(
                 self.amp_window, min_periods=self.amp_window
             ).mean()
+            # 主力成本代理: n 日成交额加权均价; IC 为负 → 取负号, 跌破成本越深分越高
+            typical = (high + low + close) / 3.0
+            vwap_n = (
+                (typical * volume)
+                .rolling(self.vwap_window, min_periods=self.vwap_window)
+                .sum()
+                / volume.rolling(self.vwap_window, min_periods=self.vwap_window).sum()
+            )
+            vwap_below = -(close / vwap_n - 1.0)
 
         factors = {
             "momentum": momentum.to_numpy(),
             "low_vol": low_vol.to_numpy(),
             "low_amp": low_amp.to_numpy(),
+            "vwap_below": vwap_below.to_numpy(),
         }
         min_cross = min(30, max(2, n_stocks // 10))
         weighted_sum = np.zeros((n_dates, n_stocks), dtype=np.float64)
         weight_count = np.zeros((n_dates, n_stocks), dtype=np.float64)
 
         for name, matrix in factors.items():
-            weight = float(self.weights.get(name, 1.0))
+            # 未在 weights 中配置的因子默认关闭 (缺 key ≠ 1.0, 否则显式三因子
+            # 配置会静默激活 vwap_below)
+            weight = float(self.weights.get(name, 0.0))
             if weight == 0.0:
                 continue
             valid = np.isfinite(matrix)
             counts = valid.sum(axis=1, keepdims=True)
-            mean = np.where(valid, matrix, np.nan).mean(axis=1, keepdims=True)
-            std = np.where(valid, matrix, np.nan).std(axis=1, keepdims=True)
+            # 全因子 nan-aware 截面统计 (2026-10-14): 旧三因子曾用
+            # np.where(...).mean()/std() (ndarray NaN 传播), 全宇宙任一票停牌
+            # 即让该日整个截面分数全 NaN → 全市场停打分 (实测官方对照组
+            # 2021-2023 零交易)。vwap_below 早在 PR#16 修为 nan-aware, 此处对齐。
+            with np.errstate(invalid="ignore"):
+                mean = np.nanmean(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
+                std = np.nanstd(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
             with np.errstate(invalid="ignore", divide="ignore"):
                 zscore = (matrix - mean) / np.where(std > 1e-12, std, np.nan)
             zscore = np.where(counts >= min_cross, zscore, np.nan)
@@ -165,7 +194,8 @@ class FactorRankingStrategy(BaseStrategy):
             stored += len(score_map)
         logger.info(
             f"factor_ranking 横截面打分完成: 股票={n_stocks}, 日期={n_dates}, "
-            f"有效分数={stored}, 最小截面要求={min_cross}"
+            f"有效分数={stored}, 最小截面要求={min_cross}, "
+            f"weights={self.weights}"
         )
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:

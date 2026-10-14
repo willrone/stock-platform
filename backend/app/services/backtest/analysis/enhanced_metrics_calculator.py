@@ -138,20 +138,20 @@ class EnhancedMetricsCalculator:
     ) -> Dict[str, float]:
         """计算风险调整收益指标"""
 
-        # 夏普比率
-        volatility = returns.std() * np.sqrt(252)
+        # 夏普比率(标准定义: 日收益 μ/σ 年化, 减无风险利率; 旧实现 年化收益/波动 复利口径已修正)
+        rf_daily = self.risk_free_rate / 252
         sharpe_ratio = (
-            (annualized_return - self.risk_free_rate) / volatility
-            if volatility > 0
+            (returns - rf_daily).mean() * np.sqrt(252) / returns.std()
+            if returns.std() > 0
             else 0
         )
 
-        # Sortino比率
+        # Sortino比率(标准定义: 日收益 μ/下行σ 年化; 旧实现 年化收益/下行σ 复利口径已修正)
         downside_returns = returns[returns < 0]
         if len(downside_returns) > 0:
             downside_deviation = downside_returns.std() * np.sqrt(252)
             sortino_ratio = (
-                (annualized_return - self.risk_free_rate) / downside_deviation
+                (returns - rf_daily).mean() * np.sqrt(252) / downside_deviation
                 if downside_deviation > 0
                 else 0
             )
