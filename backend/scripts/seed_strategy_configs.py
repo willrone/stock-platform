@@ -115,6 +115,23 @@ DEFAULT_STRATEGY_CONFIG_PRESETS: list[dict[str, Any]] = [
         "description": "技术指标加权投票 research 配置，用于后续优化和 walk-forward 对照。",
     },
     {
+        "config_name": "benchmark/honest_composite_topk60",
+        "strategy_name": "honest_composite",
+        "parameters": {
+            "preset_layer": "benchmark",
+            "topk": 60,
+            "n_drop": 6,
+            "hold_thresh": 0,
+            "lag": 0,
+            "limit_up": 0.095,
+            "max_position_size": 0.015833,
+            "cash_reserve_ratio": 0.05,
+            "commission_rate": 0.0003,
+            "slippage_rate": 0.0001,
+        },
+        "description": "25 诚实因子等权复合 (MIN/MAX/STD/CORR/CORD) + TopK-Dropout top60/drop6。剔除内盘 OHLC 因子 + 涨停掩码，max_position_size 等权=(1-0.05)/60，防现金耗尽冻结。",
+    },
+    {
         "config_name": "model/topk_dropout_k10_drop2",
         "strategy_name": "model_topk_dropout",
         "parameters": {

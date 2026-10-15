@@ -15,7 +15,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import SessionLocal
+from app.core.database import AsyncSessionLocal
 from app.models.commerce_models import (
     DEFAULT_PRICING_RULES,
     BillingRecord,
@@ -124,8 +124,10 @@ class CommerceService:
         if amount_cents <= 0:
             return None
 
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
+            # 把用量事件本身写入会话（调用方只拿到对象，不会自己 add）
+            db.add(event)
             # 查询用户余额
             balance = await self._get_or_create_balance(db, user_id)
 
@@ -170,9 +172,9 @@ class CommerceService:
             event.billing_record_id = billing_record.id
             await db.flush()
 
-            # 余额充足时才提交扣减
-            if charge_status == "charged":
-                await db.flush()
+            # 余额充足时才提交扣减（owned session 的 flush 不持久化，必须 commit，
+            # 否则 db.close() 时 usage_event / billing_record / balance 全回滚丢失）
+            await db.commit()
 
             logger.info(
                 f"计费记录创建: user_id={user_id}, "
@@ -219,7 +221,7 @@ class CommerceService:
 
     async def _get_pricing_rule(self, event_type: str) -> Optional[CommercePricingRule]:
         """获取指定事件类型的计费规则。"""
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             result = await db.execute(
                 select(CommercePricingRule)
@@ -236,7 +238,7 @@ class CommerceService:
         self, event_type: Optional[str] = None
     ) -> List[CommercePricingRule]:
         """查询计费规则列表。"""
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             query = select(CommercePricingRule).where(
                 CommercePricingRule.is_active.is_(True)
@@ -255,7 +257,7 @@ class CommerceService:
 
     async def get_balance(self, user_id: str) -> Optional[UserBalance]:
         """查询用户余额。"""
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             result = await db.execute(
                 select(UserBalance).where(UserBalance.user_id == user_id)
@@ -278,7 +280,7 @@ class CommerceService:
         Returns:
             (更新后的余额, 充值账单记录)
         """
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             balance = await self._get_or_create_balance(db, user_id)
 
@@ -318,7 +320,7 @@ class CommerceService:
         Returns:
             退款账单记录
         """
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             balance = await self._get_or_create_balance(db, user_id)
 
@@ -365,7 +367,7 @@ class CommerceService:
                 }
             }
         """
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             now = datetime.now(timezone.utc)
             target_month = month or now.month
@@ -427,7 +429,7 @@ class CommerceService:
         self, user_id: str, limit: int = 50, offset: int = 0
     ) -> List[BillingRecord]:
         """查询用户账单历史。"""
-        db = self.db or SessionLocal()
+        db = self.db or AsyncSessionLocal()
         try:
             result = await db.execute(
                 select(BillingRecord)

@@ -39,6 +39,7 @@ curl -s http://127.0.0.1:18082/api/v1/strategy-configs | python -m json.tool
 | `benchmark/macd_default` | `macd` | `fast_period=12`, `slow_period=26`, `signal_period=9` | 经典 MACD benchmark。 |
 | `benchmark/bollinger_20_2` | `bollinger` | `period=20`, `std_dev=2` | 经典布林带 benchmark。 |
 | `research/portfolio_technical_vote_v1` | `portfolio` | MA / RSI / MACD 加权投票 | 技术指标组合 research 候选，用于后续优化和 walk-forward 对照。 |
+| `benchmark/honest_composite_topk60` | `honest_composite` | `topk=60`, `n_drop=6`, `lag=0`, `limit_up=0.095`, `max_position_size=0.015833` | 25 诚实因子等权复合 (MIN/MAX/STD/CORR/CORD，剔内盘 OHLC + 涨停掩码)，TopK-Dropout 执行。等权单仓上限防现金耗尽。 |
 | `model/topk_dropout_k10_drop2` | `model_topk_dropout` | `topk=10`, `n_drop=2`, `trade_mode=topk_dropout` | 模型排序类默认配置。 |
 
 ## 注意
