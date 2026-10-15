@@ -9,14 +9,17 @@
   2. 涨停掩码: 当日涨幅 >= 9.5% 的票分数置 NaN (当日不可在收盘买入)
   3. 保留 close/volume 族 (MIN/STD/CORR/CORD/MAX), MAX 亦被掩码约束
 
-因子池 = 25 个诚实因子 (23 个唯一公式) + 18 个 Alpha158 面板因子 = 43：
+因子池 = 25 个诚实因子 (23 个唯一公式) + 17 个 Alpha158 面板因子 = 42：
   基础 23 公式: MIN/MAX/STD/CORR/CORD，n ∈ {5,10,20,30,60}
     MIN:  +1  (低于窗口最低价越深越好 → 正 IC)
     MAX/STD/CORR/CORD: -1
   Alpha158 面板因子 (读自 panel_dir/，MultiIndex 转 date)：
-    9 族 × 2 窗口 (5,10): VSUMP/VSUMN/VSUMD/QTLD/IMAX/IMIN/WVMA/VMA/VSTD
-    符号取自 5y IC study fwd1 IC 符号 (IMIN5 负、IMIN10 正)
-  面板数据从 2021-05-11 起，此前 18 个因子为 NaN，复合自动退化为 23 公式版。
+    4 族 × 3 窗 (5,10,20): VSUMP (-1) / VSUMN (+1) / VSUMD (-1) / QTLD (+1)
+    5 族 × 1 窗 (5): IMAX5 (-1) / IMIN5 (-1) / WVMA5 (-1) / VMA5 (+1) / VSTD5 (-1)
+    符号取自 5y IC study fwd1 IC 符号
+  面板数据从 2021-05-11 起，此前 17 个因子为 NaN，复合自动退化为 23 公式版。
+  窗口选择依据 (ic_composite_10y_expand2 五格对比): 42f 全面优于 43f (9族×2窗) 和
+  47f (4族×3窗+5族×2窗) — 其余族的 10 日窗是负贡献，不应纳入。
 
 复合 = 等权平均( sign(z(因子)) )，nan-aware 截面 Z-Score（有效票数 ≥ min_cross）。
 涨停掩码: 当日涨幅 ≥ limit_up 的票 composite = NaN。
@@ -52,18 +55,17 @@ for _n in (5, 10, 20, 30, 60):
     _HONEST_FORMULAS[f"CORR{_n}"] = -1.0
     _HONEST_FORMULAS[f"CORD{_n}"] = -1.0
 
-# 18 个 Alpha158 面板因子（来自 qlib_data/features/day/，MultiIndex 已转 date 列）
-# 9 族 × 2 窗口 (5, 10)。符号取自 5y IC study fwd1 IC 符号
+# 17 个 Alpha158 面板因子（来自 qlib_data/features/day/，MultiIndex 已转 date 列）
+# 4 族×3 窗 (5,10,20) + 5 族×1 窗 (5)。符号取自 5y IC study fwd1 IC 符号
+# 42f 五格全面优于 43f/47f (2026-10-15 ic_composite_10y_expand2 对比):
+#   IMAX/IMIN/WVMA/VMA/VSTD 的 10 日窗是负贡献，VSUMP/VSUMN/VSUMD/QTLD 的 20 日窗是正贡献
 _ALPHAPANEL_FACTORS: Dict[str, float] = {
-    "VSUMP5": -1.0, "VSUMP10": -1.0,
-    "VSUMN5": 1.0, "VSUMN10": 1.0,
-    "VSUMD5": -1.0, "VSUMD10": -1.0,
-    "QTLD5": 1.0, "QTLD10": 1.0,
-    "IMAX5": -1.0, "IMAX10": -1.0,
-    "IMIN5": -1.0, "IMIN10": 1.0,
-    "WVMA5": -1.0, "WVMA10": -1.0,
-    "VMA5": 1.0, "VMA10": 1.0,
-    "VSTD5": -1.0, "VSTD10": -1.0,
+    "VSUMP5": -1.0, "VSUMP10": -1.0, "VSUMP20": -1.0,
+    "VSUMN5": 1.0, "VSUMN10": 1.0, "VSUMN20": 1.0,
+    "VSUMD5": -1.0, "VSUMD10": -1.0, "VSUMD20": -1.0,
+    "QTLD5": 1.0, "QTLD10": 1.0, "QTLD20": 1.0,
+    "IMAX5": -1.0, "IMIN5": -1.0, "WVMA5": -1.0,
+    "VMA5": 1.0, "VSTD5": -1.0,
 }
 
 
