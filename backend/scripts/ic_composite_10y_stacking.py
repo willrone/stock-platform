@@ -192,10 +192,10 @@ def make_feat_block(k0, k1):
 def stack_run(model_kind):
     comp = np.full((n_d, n_s), np.nan)
     for mi, (k0, ts0) in enumerate(month_starts):
+        k1 = month_starts[mi + 1][0] if mi + 1 < len(month_starts) else n_d
         if mi < warm:
-            comp[k0:month_starts[mi + 1][0]] = comp_eq[k0:month_starts[mi + 1][0]]
+            comp[k0:k1] = comp_eq[k0:k1]
             continue
-        k1 = month_starts[mi + 1][0]
         Xtr, ytr = make_feat_block(0, k0)
         if len(Xtr) < 500:
             comp[k0:k1] = comp_eq[k0:k1]
