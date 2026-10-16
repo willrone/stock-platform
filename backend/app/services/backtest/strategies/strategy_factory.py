@@ -12,6 +12,7 @@ from ..core.base_strategy import BaseStrategy
 from ..core.strategy_portfolio import StrategyPortfolio
 from .factor_ranking_strategy import FactorRankingStrategy
 from .honest_composite_strategy import HonestCompositeStrategy
+from .gbm_voltgt_strategy import GbmVoltgtStrategy
 from .lightgbm_strategy import LightGBMPredictionStrategy
 from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
 from .model_prediction_strategy import ModelPredictionStrategy
@@ -62,6 +63,7 @@ class StrategyFactory:
         # 横截面因子排名 + TopK/Dropout 组合管理
         "factor_ranking": FactorRankingStrategy,
         "honest_composite": HonestCompositeStrategy,
+        "gbm_voltgt": GbmVoltgtStrategy,
         # ML 集成策略
         "ml_ensemble_lgb_xgb_riskctl": MLEnsembleLgbXgbRiskCtlStrategy,
         # LightGBM 模型策略

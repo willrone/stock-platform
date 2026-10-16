@@ -989,6 +989,8 @@ async def run_backtest(
             event_type = "backtest_advanced"
         elif request.strategy_name and "realtime" in request.strategy_name.lower():
             event_type = "backtest_realtime"
+        elif request.strategy_name and request.strategy_name.lower() in ("gbm_voltgt",):
+            event_type = "backtest_advanced"
 
         try:
             commerce_service = CommerceService()
