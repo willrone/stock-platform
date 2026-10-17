@@ -62,6 +62,10 @@ function CreateTaskPageContent() {
       key: string;
       name: string;
       description: string;
+      tier?: 'standard' | 'advanced' | 'basic';
+      price?: string;
+      est_seconds?: number;
+      sharpe_10y?: number;
       parameters?: Record<string, StrategyParameter>;
     }>
   >([]);
@@ -647,13 +651,45 @@ function CreateTaskPageContent() {
                       >
                         {availableStrategies.map(strategy => (
                           <MenuItem key={strategy.key} value={strategy.key}>
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {strategy.name}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {strategy.description}
-                              </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {strategy.tier === 'advanced' && (
+                                <Chip
+                                  label="高级"
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{ fontWeight: 600 }}
+                                />
+                              )}
+                              {strategy.tier === 'standard' && (
+                                <Chip
+                                  label="标准"
+                                  size="small"
+                                  color="success"
+                                  variant="outlined"
+                                  sx={{ fontWeight: 600 }}
+                                />
+                              )}
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {strategy.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {strategy.description}
+                                </Typography>
+                                {strategy.price && (
+                                  <Typography
+                                    variant="caption"
+                                    color={strategy.tier === 'advanced' ? 'warning.main' : 'text.secondary'}
+                                    sx={{ fontWeight: 600 }}
+                                  >
+                                    {strategy.price}
+                                    {strategy.sharpe_10y != null && ` · 10年夏普 ${strategy.sharpe_10y.toFixed(3)}`}
+                                    {strategy.est_seconds != null &&
+                                      ` · ${strategy.est_seconds >= 60 ? `${Math.round(strategy.est_seconds / 60)} 分钟` : `${strategy.est_seconds} 秒`}`}
+                                  </Typography>
+                                )}
+                              </Box>
                             </Box>
                           </MenuItem>
                         ))}

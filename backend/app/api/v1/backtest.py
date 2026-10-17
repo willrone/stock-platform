@@ -649,6 +649,84 @@ async def get_available_strategies() -> Any:
                     },
                 },
             },
+            # ── 横截面复合因子排名 (免费快速版 vs 付费进阶版) ──
+            "honest_composite": {
+                "name": "复合因子排名 · 标准",
+                "description": (
+                    "42 因子等权复合横截面排名 + TopK/Dropout 组合管理。"
+                    "10 年夏普 0.976，10 秒出结果。免费快速版。"
+                ),
+                "category": "factor_composite",
+                "tier": "standard",
+                "price": "免费",
+                "est_seconds": 10,
+                "sharpe_10y": 0.976,
+                "parameters": {
+                    "topk": {
+                        "type": "int",
+                        "default": 60,
+                        "description": "TopK 持仓数（默认 60）",
+                        "min": 20,
+                        "max": 100,
+                    },
+                    "n_drop": {
+                        "type": "int",
+                        "default": 5,
+                        "description": "每日换仓只数（默认 5）",
+                        "min": 1,
+                        "max": 30,
+                    },
+                },
+            },
+            "gbm_voltgt": {
+                "name": "GBM 元模型 + 波动率目标 · 高级",
+                "description": (
+                    "LightGBM 元模型月度滚动重训 + 波动率目标仓位。"
+                    "10 年夏普 1.155 / 627% 收益 / -40.9% 回撤，约 14 分钟重训。付费进阶版。"
+                ),
+                "category": "factor_composite",
+                "tier": "advanced",
+                "price": "¥1.00/次",
+                "est_seconds": 840,
+                "sharpe_10y": 1.155,
+                "parameters": {
+                    "topk": {
+                        "type": "int",
+                        "default": 60,
+                        "description": "TopK 持仓数（默认 60）",
+                        "min": 20,
+                        "max": 100,
+                    },
+                    "n_drop": {
+                        "type": "int",
+                        "default": 5,
+                        "description": "每日换仓只数（默认 5）",
+                        "min": 1,
+                        "max": 30,
+                    },
+                    "n_estimators": {
+                        "type": "int",
+                        "default": 100,
+                        "description": "GBM 树数（默认 100，重训耗时随此增长）",
+                        "min": 50,
+                        "max": 300,
+                    },
+                    "max_depth": {
+                        "type": "int",
+                        "default": 3,
+                        "description": "GBM 最大深度（默认 3）",
+                        "min": 2,
+                        "max": 8,
+                    },
+                    "target_vol": {
+                        "type": "float",
+                        "default": 0.20,
+                        "description": "目标年化波动率（默认 20%）",
+                        "min": 0.10,
+                        "max": 0.40,
+                    },
+                },
+            },
         }
 
         result: List[Dict[str, Any]] = []
@@ -673,7 +751,8 @@ async def get_available_strategies() -> Any:
             "technical": 0,
             "statistical_arbitrage": 1,
             "factor_investment": 2,
-            "other": 3,
+            "factor_composite": 3,
+            "other": 4,
         }
         result.sort(
             key=lambda x: (
