@@ -24,6 +24,7 @@ import argparse
 import os
 import sys
 from collections import defaultdict
+from datetime import datetime
 from typing import Dict, List
 
 import pandas as pd
@@ -79,19 +80,20 @@ def load_new_rows(start: str, end: str) -> pd.DataFrame:
     return out
 
 
-def merge(dry_run: bool = True, start: str = "2026-05-09", end: str = "2026-10-16",
+def merge(dry_run: bool = True, start: str = "2026-05-09", end: str | None = None,
           backup: bool = True) -> Dict[str, int]:
     """把增量合并进 stock_data 各 parquet。
 
     Args:
         dry_run: 只统计不写盘
         start:   起始日
-        end:     结束日
+        end:     结束日（默认今天；不要硬编码，否则新日期会被静默跳过）
         backup:  写盘前备份原文件到 .bak
 
     Returns:
         {"updated": N, "created": N, "skipped": N, "rows_added": N}
     """
+    end = end or datetime.now().strftime("%Y-%m-%d")
     new = load_new_rows(start, end)
     if len(new) == 0:
         print("无新数据")
@@ -142,9 +144,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="合并通达信增量到 stock_data")
     ap.add_argument("--dry-run", action="store_true", help="只统计不写盘")
     ap.add_argument("--start", default="2026-05-09")
-    ap.add_argument("--end", default="2026-10-16")
+    ap.add_argument("--end", default=None, help="默认今天")
     ap.add_argument("--no-backup", action="store_true")
     args = ap.parse_args()
+    args.end = args.end or datetime.now().strftime("%Y-%m-%d")
 
     print(f"模式: {'DRY-RUN（不写盘）' if args.dry_run else '实际写盘'}")
     print(f"区间: {args.start} → {args.end}")
