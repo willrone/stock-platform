@@ -288,6 +288,16 @@ def main() -> None:
     with open(snap_path, "w") as fh:
         json.dump(snapshot, fh, ensure_ascii=False, indent=1)
 
+    # 同步给前端 /paper-signal 页面（Next static public JSON）
+    try:
+        frontend_public = os.path.join(ROOT, "frontend", "public")
+        os.makedirs(frontend_public, exist_ok=True)
+        with open(os.path.join(frontend_public, "paper-signal.json"), "w") as fh:
+            json.dump(snapshot, fh, ensure_ascii=False, indent=1)
+        print(f"[frontend] {os.path.join(frontend_public, 'paper-signal.json')}", flush=True)
+    except Exception as exc:
+        print(f"[frontend] 同步失败: {exc}", flush=True)
+
     print(f"\n{'='*60}", flush=True)
     print(f"周频信号 {latest.date()} (周五) → 下周一执行", flush=True)
     print(f"组合总值 ¥{end_value:,.0f} | 现金 ¥{cash:,.0f} | "

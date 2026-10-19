@@ -111,6 +111,11 @@ const menuItems = [
     label: '策略信号',
   },
   {
+    key: '/paper-signal',
+    icon: Signal,
+    label: '纸面信号',
+  },
+  {
     key: '/optimization',
     icon: Sparkles,
     label: '超参优化',
