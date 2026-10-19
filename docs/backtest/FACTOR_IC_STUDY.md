@@ -5,6 +5,8 @@
 · 结果 `data/strategy_baseline/{factor_ic_study_5y,ic_composite_panel5y,ic_composite_panel5y_cells,
 ic_composite_10y_v2,ic_composite_10y_cells,ic_composite_10y_honest,ic_composite_10y_honest_cells}.json`
 
+> ⚠️ **2026-10-19 更正**：本文引用的 42f topk60 Sharpe **0.976 不可复现**。注册版 42f 的真实 10y Sharpe = **0.8193**（PIT 4329，topk60/ndrop5）；0.976 来自已丢失的 `/tmp/factor_formula_map.json`（31 因子临时映射）。2026-10-19 的执行层/池子卫生/walk-forward 结论见 [RESEARCH_REPORT_2026-10-19.md](RESEARCH_REPORT_2026-10-19.md)。**引用 0.976 前必读该报告。**
+
 ## 背景与决策
 
 组合层 4 类杠杆 (择时/包装/条件配权/扩腿) 10 年 DSR 全灭后 (见 EXPANDED_LEGS_10Y.md),
