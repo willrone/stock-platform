@@ -38,7 +38,7 @@ import importlib.util
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Tuple
 
 import numpy as np
@@ -382,6 +382,13 @@ def main() -> None:
     names = load_name_map()
 
     # ── 选调仓日 ─────────────────────────────────────────────────────
+    # 2026-10-25 修正（关键 bug）：
+    #   原逻辑只看 master（数据）最后一天是不是周五，从不核对**真实日期**。
+    #   叠加 TDX 当日日线包 17:00 后才发布，16:05 跑时数据最新日永远是周四
+    #   → 每周五都判成「不是周五」→ 周频调仓整整两周没跑过（信号停在 10-16）。
+    #   现在：真实日期决定「该不该调仓」，数据决定「用哪天调仓」，
+    #   两者必须对齐 —— 数据没到本周五就明确报错，绝不静默用旧周五。
+    #
     # 规则（按优先级）：
     #   1. master 最后一天恰好是周五 → 用它（正常周五收盘后的情况）
     #   2. 否则用 master 里最后一个周五（数据还没更新到本周五）
@@ -390,6 +397,12 @@ def main() -> None:
     #   否则用 --force 建仓（用了 master[-1]）后再自动跑（用更早的周五）
     #   会拿过去的分数调仓 = 时间倒流。
     latest_all = master[-1]
+    today = pd.Timestamp(date.today())
+
+    # 真实今天（或之前）最近的周五
+    days_since_friday = (today.dayofweek - 4) % 7
+    expected_friday = today - pd.Timedelta(days=days_since_friday)
+
     fridays = [d for d in master if d.dayofweek == 4]
     if latest_all.dayofweek == 4:
         rebalance_day = latest_all
@@ -397,6 +410,19 @@ def main() -> None:
         rebalance_day = fridays[-1]
     else:
         rebalance_day = latest_all
+
+    # 数据新鲜度硬校验：真实日期已过本周五，但数据还没到 → 报错退出，不静默用旧周五
+    if today.dayofweek == 4 and not args.force and latest_all < expected_friday:
+        print(
+            f"❌ 数据陈旧：真实今天是 {today.date()}（周五），"
+            f"但数据最新只到 {latest_all.date()}。\n"
+            f"   TDX 当日日线包通常 17:00 后发布，请确认拉取是否成功"
+            f"（scripts/daily_tdx_update.sh）。\n"
+            f"   不会用旧的 {rebalance_day.date()} 冒充本周信号。",
+            flush=True,
+        )
+        sys.exit(2)
+
     if args.force and latest_all > rebalance_day:
         rebalance_day = latest_all
 

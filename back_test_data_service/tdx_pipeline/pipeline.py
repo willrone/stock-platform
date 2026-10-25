@@ -26,6 +26,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from .tdx_parser import TdxBar, fetch_daily, is_trading_day
+from .trading_calendar import is_trading_day as cal_is_trading_day
 
 # 项目根目录（本文件在 back_test_data_service/tdx_pipeline/ 下）
 PROJECT_ROOT = os.path.abspath(
@@ -192,7 +193,8 @@ def run_incremental(
     if max_days is not None:
         candidates = candidates[:max_days]
 
-    stats: Dict[str, float] = {"fetched": 0, "skipped": 0, "failed": 0, "non_trading": 0}
+    stats: Dict[str, float] = {"fetched": 0, "skipped": 0, "failed": 0, "non_trading": 0,
+                                "missing_package": 0}
     t0 = time.time()
 
     for i, day in enumerate(candidates):
@@ -208,13 +210,23 @@ def run_incremental(
                 print(f"  [{i+1}/{len(candidates)}] {day}: {n} 行  "
                       f"(累计耗时 {time.time()-t0:.0f}s)")
         except FileNotFoundError as e:
-            # 非交易日/包未发布 — 正常情况，不算失败
-            stats["non_trading"] += 1
-            if verbose and "非交易日" in str(e):
-                pass  # 静默跳过节假日
-            else:
+            # 2026-10-25 修正：原来「非交易日」和「包未发布」都记为 non_trading
+            # 静默跳过 —— 导致 2026-10-23（周五）16:05 拉取时因 TDX 包尚未
+            # 发布而被静默丢弃，之后周频调仓整整两周没跑。
+            # 现在用独立交易日历区分：确定是交易日却拿不到包 = 真失败，必须重试。
+            is_td = cal_is_trading_day(day)
+            if is_td is True:
+                stats["failed"] += 1
+                stats["missing_package"] = stats.get("missing_package", 0) + 1
+                state.mark_failed(day, f"包未发布: {type(e).__name__}")
                 if verbose:
-                    print(f"  [{i+1}/{len(candidates)}] {day}: 非交易日/未发布")
+                    print(f"  [{i+1}/{len(candidates)}] {day}: ⚠️ 交易日但盘后包未发布"
+                          f"（TDX 通常 17:00 后发布）")
+            else:
+                stats["non_trading"] += 1
+                if verbose:
+                    label = "非交易日" if is_td is False else "非交易日(超出日历范围,粗筛)"
+                    print(f"  [{i+1}/{len(candidates)}] {day}: {label}")
         except Exception as e:
             stats["failed"] += 1
             state.mark_failed(day, f"{type(e).__name__}: {e}")
@@ -233,6 +245,7 @@ def run_incremental(
     if verbose:
         print(f"\n完成: 拉取 {stats['fetched']} 天, 跳过 {stats['skipped']} 天, "
               f"失败 {stats['failed']} 天, 非交易日 {stats['non_trading']} 天, "
+              f"包未发布 {stats.get('missing_package', 0)} 天, "
               f"耗时 {stats['elapsed_s']}s")
     return stats
 

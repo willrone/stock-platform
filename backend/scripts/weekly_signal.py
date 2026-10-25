@@ -26,7 +26,7 @@ import importlib.util
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
@@ -150,8 +150,26 @@ def main() -> None:
     comp = compute_composite_22f(frames, master)
     latest = comp.index[-1]
 
-    if latest.dayofweek != 4 and not args.force:
-        print(f"今天 {latest.date()} 不是周五 (dayofweek={latest.dayofweek})，不调仓。"
+    # 2026-10-25 修正（关键 bug）：
+    #   原来用 latest（= 数据最新日）判断「今天是不是周五」。TDX 当日日线包
+    #   17:00 后才发布，16:05 跑时数据最新日永远停在周四 → 每周五都判成
+    #   「不是周五」→ 周频信号整整两周没更新过。
+    #   现在用**真实日期**判断周五，并校验数据是否已到本周五。
+    today = pd.Timestamp(date.today())
+    days_since_friday = (today.dayofweek - 4) % 7
+    expected_friday = today - pd.Timedelta(days=days_since_friday)
+
+    if today.dayofweek == 4 and not args.force and latest < expected_friday:
+        print(
+            f"❌ 数据陈旧：真实今天是 {today.date()}（周五），但数据最新只到 "
+            f"{latest.date()}。TDX 当日日线包通常 17:00 后发布。\n"
+            f"   不会用旧的 {latest.date()} 冒充本周信号。",
+            flush=True,
+        )
+        sys.exit(2)
+
+    if today.dayofweek != 4 and not args.force:
+        print(f"今天 {today.date()} 不是周五 (dayofweek={today.dayofweek})，不调仓。"
               f"加 --force 可强制跑。", flush=True)
         return
 

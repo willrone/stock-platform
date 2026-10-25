@@ -112,6 +112,11 @@ const menuItems = [
     label: '策略信号',
   },
   {
+    key: '/today-signal',
+    icon: Signal,
+    label: '今日信号',
+  },
+  {
     key: '/paper-signal',
     icon: Signal,
     label: '纸面信号',

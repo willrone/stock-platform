@@ -24,8 +24,15 @@ print(run_incremental())
 
   echo "=== $(date '+%Y-%m-%d %H:%M:%S') data done ==="
 
-  # 3) 周五收盘后自动跑多策略纸面盘（4 条线各自 100 万独立记账）
+  # 3) 数据新鲜度校验（2026-10-25 新增）
+  #    交易日过了 17:30 还没拿到当天数据 = 真失败 → 非零退出码，cron 报警到微信
+  #    （原来 16:05 拉不到当天包被静默跳过，导致周频调仓两周没跑）
+  env -u PYTHONPATH backend/.venv-py313/bin/python3 \
+    backend/scripts/check_data_freshness.py --fail-if-stale
+
+  # 4) 周五收盘后自动跑多策略纸面盘（4 条线各自 100 万独立记账）
   #    22f / honest_42f / rsi_71421 / factor_ranking
+  #    判「周五」用真实日期，不用数据最新日
   if [ "$(date +%u)" = "5" ]; then
     echo "=== Friday: multi-strategy paper portfolio ==="
     env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/paper_portfolio.py

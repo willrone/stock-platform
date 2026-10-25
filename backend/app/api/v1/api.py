@@ -33,6 +33,7 @@ from app.api.v1 import (
     predictions,
     qlib,
     signals,
+    trading,
     stocks,
     strategy_configs,
     system,
@@ -73,6 +74,7 @@ protected_router.include_router(files.router)
 protected_router.include_router(strategy_configs.router)
 protected_router.include_router(optimization.router)
 protected_router.include_router(signals.router)
+protected_router.include_router(trading.router)
 protected_router.include_router(dashboard.router)
 protected_router.include_router(billing.router)
 protected_router.include_router(commerce.router)
