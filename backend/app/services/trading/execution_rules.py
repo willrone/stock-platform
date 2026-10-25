@@ -90,6 +90,7 @@ def check_tradability(
     is_st: Optional[int] = None,
     participation_rate: float = DEFAULT_PARTICIPATION_RATE,
     min_turnover: float = DEFAULT_MIN_TURNOVER,
+    pct_reliable: bool = True,
 ) -> Tradability:
     """判定一个标的在某日的可成交性。
 
@@ -106,6 +107,9 @@ def check_tradability(
         amount: 成交额（元）
         trade_status: 1=正常交易，0=停牌
         is_st: 1=ST
+        pct_reliable: 涨跌幅是否可靠。False = 由未复权 close/prev_close 推导，
+            可能含**除权跳空**（实测可达 ±50%），此时涨跌停判定要用宽松阈值，
+            否则会把送转除权误判成涨跌停。
     """
     is_st_flag = bool(is_st) if is_st is not None else (
         "ST" in (name or "").upper()
@@ -167,16 +171,31 @@ def check_tradability(
     can_sell = True
     blocked = ""
 
+    if pc is not None and not pct_reliable and abs(pc) > lp * 1.5:
+        # 涨跌幅不可靠（由未复权 close/prev_close 推导）且幅度明显超出
+        # 涨跌停上限 → 无法区分「真涨跌停」和「除权跳空」（实测除权可达 -50%）。
+        # 此时**回避该标的**：既不买也不卖，避免记下实际不存在的成交。
+        return Tradability(
+            can_buy=False, can_sell=False,
+            reason=f"涨跌幅异常 {pc*100:.1f}%（疑似除权跳空），本日回避",
+            max_buy_amount=max_buy,
+            blocked_reason=(
+                f"涨跌幅 {pc*100:.1f}% 明显超出涨跌停上限，无法区分涨停与除权跳空"
+            ),
+        )
+
     if pc is not None:
-        if pc >= lp - 0.001:
+        thr = lp - 0.001
+        if pc >= thr:
             can_buy = False
             blocked = f"涨停 {pc*100:.1f}%（上限 {lp*100:.0f}%），买不进"
-        elif pc <= -lp + 0.001:
+        elif pc <= -thr:
             can_sell = False
             blocked = f"跌停 {pc*100:.1f}%，卖不出"
 
     # ── 6. 一字板：开盘即涨停价且全天没波动 ──
-    if can_buy and pc is not None and pc >= lp - 0.001:
+    _thr = lp - 0.001
+    if can_buy and pc is not None and pc >= _thr:
         if (
             open_price is not None and high is not None and low is not None
             and _finite(open_price) and _finite(high) and _finite(low)
@@ -186,7 +205,7 @@ def check_tradability(
             blocked = "一字涨停，全天封死"
 
     # ── 7. 一字跌停：卖不出 ──
-    if can_sell and pc is not None and pc <= -lp + 0.001:
+    if can_sell and pc is not None and pc <= -_thr:
         if (
             open_price is not None and high is not None and low is not None
             and _finite(open_price) and _finite(high) and _finite(low)

@@ -19,6 +19,8 @@ import os
 import time
 from datetime import datetime
 
+from typing import Dict, Optional
+
 import numpy as np
 import pandas as pd
 
@@ -136,8 +138,22 @@ def to_panel_mat(panel: dict, master: pd.DatetimeIndex, col: str) -> np.ndarray:
     return out
 
 
+#: 最近一次 compute_composite 在 explain_date 上的因子 z 值分解
+#: {factor_name: 1d array(n_stocks)}，供「为什么买它」归因使用
+_LAST_FACTOR_Z: Dict[str, np.ndarray] = {}
+
+
 def zscore_add(acc: np.ndarray, wsum: np.ndarray, mat: np.ndarray,
-               sign: float, min_cross: int) -> None:
+               sign: float, min_cross: int,
+               collect: Optional[Dict[str, np.ndarray]] = None,
+               collect_row: int = -1,
+               factor_name: str = "") -> None:
+    """把 sign*zscore 累加进 acc。
+
+    collect / collect_row（2026-10-25 新增）：可选地把**某一行**的 z 值
+    收集起来，用于「为什么买它」的因子归因。只存一行 → 42 个因子
+    仅多占 42×5544×8 ≈ 1.9 MB，不需要第二遍全量计算。
+    """
     ok = np.isfinite(mat)
     cnt = ok.sum(axis=1, keepdims=True)
     with np.errstate(invalid="ignore"):
@@ -149,9 +165,13 @@ def zscore_add(acc: np.ndarray, wsum: np.ndarray, mat: np.ndarray,
     good = np.isfinite(z)
     acc[good] += np.nan_to_num(z)[good]
     wsum[good] += 1
+    if collect is not None and factor_name:
+        collect[factor_name] = z[collect_row].copy()
 
 
-def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex) -> pd.DataFrame:
+def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex,
+                      explain_date: Optional[pd.Timestamp] = None,
+                      ) -> pd.DataFrame:
     """返回 composite DataFrame (index=date, columns=code), 已应用涨停掩码。"""
     n_d, n_s = len(master), len(frames)
     close = to_mat(frames, master, "close")
@@ -169,12 +189,26 @@ def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex) -> pd
 
     acc = np.zeros((n_d, n_s))
     wsum = np.zeros((n_d, n_s))
+    # 因子归因：只收集 explain_date 那一行的 z 值（内存 +1.9MB）
+    collect: Optional[Dict[str, np.ndarray]] = None
+    collect_row = -1
+    if explain_date is not None:
+        collect_row = int(master.get_indexer([pd.Timestamp(explain_date)])[0])
+        if collect_row < 0:
+            collect = None
+        else:
+            collect = {}
     for fname, sign in _HONEST_FORMULAS.items():
-        zscore_add(acc, wsum, cands[fname].to_numpy(), sign, MIN_CROSS)
+        zscore_add(acc, wsum, cands[fname].to_numpy(), sign, MIN_CROSS,
+                   collect=collect, collect_row=collect_row, factor_name=fname)
     for fname, sign in _ALPHAPANEL_FACTORS.items():
-        zscore_add(acc, wsum, to_panel_mat(panel, master, fname), sign, MIN_CROSS)
+        zscore_add(acc, wsum, to_panel_mat(panel, master, fname), sign, MIN_CROSS,
+                   collect=collect, collect_row=collect_row, factor_name=fname)
 
     composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
+    if collect is not None:
+        _LAST_FACTOR_Z.clear()
+        _LAST_FACTOR_Z.update(collect)
     limit_up = close.pct_change(fill_method=None).to_numpy() >= LIMIT_UP
     composite[limit_up] = np.nan  # 涨停掩码: 当日不可买
     return pd.DataFrame(composite, index=master, columns=list(frames))

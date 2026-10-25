@@ -128,6 +128,37 @@ def main() -> int:
     )
     check("除权日(pct_chg=0) → 正常可交易", t.can_buy and t.can_sell)
 
+    print("\n=== 涨跌幅不可靠时（回退路径含除权跳空）===")
+    # 回退路径：未复权 close/prev_close 推出 -50%（10 送 10）
+    # 无法区分「真跌停」和「除权跳空」→ 回避该标的，不记下虚假成交
+    t = check_tradability(
+        "600000.SH", **base(close=5.0, open_price=5.0, high=5.05, low=4.98,
+                            pct_chg=-0.5, pct_reliable=False)
+    )
+    check("除权 -50% 不可靠路径 → 回避（不买不卖）",
+          not t.can_buy and not t.can_sell)
+    t = check_tradability(
+        "600000.SH", **base(pct_chg=0.0999, pct_reliable=False)
+    )
+    check("正向接近涨停不可靠 → 仍拦（除权只向下，正向跳空必是真涨停）",
+          not t.can_buy and t.can_sell)
+    t = check_tradability(
+        "600000.SH", **base(pct_chg=0.02, pct_reliable=False)
+    )
+    check("幅度正常(2%)不可靠 → 正常放行", t.can_buy and t.can_sell)
+    t = check_tradability(
+        "600000.SH", **base(pct_chg=-0.02, pct_reliable=False)
+    )
+    check("小幅下跌不可靠 → 正常放行", t.can_buy and t.can_sell)
+    t = check_tradability(
+        "600000.SH", **base(pct_chg=0.0999, pct_reliable=True)
+    )
+    check("真实涨停 + 可靠路径 → 拦下", not t.can_buy)
+    t = check_tradability(
+        "600000.SH", **base(pct_chg=-0.0999, pct_reliable=True)
+    )
+    check("真实跌停 + 可靠路径 → 拦下卖出", not t.can_sell)
+
     print()
     if FAILURES:
         print(f"❌ {len(FAILURES)} 项失败: {FAILURES}")

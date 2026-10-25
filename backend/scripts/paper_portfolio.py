@@ -90,11 +90,11 @@ def score_22f(frames, master, panel=None) -> pd.DataFrame:
     return ws.compute_composite_22f(frames, master)
 
 
-def score_42f(frames, master, panel=None) -> pd.DataFrame:
+def score_42f(frames, master, panel=None, explain_date=None) -> pd.DataFrame:
     """42 因子等权复合（注册策略 honest_composite 同源）。"""
     if panel is None:
         panel = {}
-    return ds.compute_composite(frames, panel, master)
+    return ds.compute_composite(frames, panel, master, explain_date=explain_date)
 
 
 def score_rsi_71421(frames, master, panel=None) -> pd.DataFrame:
@@ -333,6 +333,8 @@ def _tradability(code, date, names, extras, *, close, open_price, high, low,
             return None
 
     pct = _get("pct_chg")
+    # pct 来自交易所口径 = 可靠；由未复权 close/prev_close 推导 = 可能含除权跳空
+    pct_reliable = pct is not None
     if pct is None:
         c = _num(close, code)
         prev = _num(close_prev, code)
@@ -354,7 +356,40 @@ def _tradability(code, date, names, extras, *, close, open_price, high, low,
         amount=amt,
         trade_status=int(ts) if ts is not None else None,
         is_st=int(st) if st is not None else None,
+        pct_reliable=pct_reliable,
     )
+
+
+
+def _explain_factors(code: str, columns, n_top: int = 4) -> list:
+    """取该股票在调仓日的因子贡献分解（42f 专用）。
+
+    返回 [{factor, contribution, direction}]，按贡献绝对值排序。
+    contribution = 该因子的 sign*z 值（已含方向修正：正值=该因子看多）。
+
+    columns 必须是 comp.columns —— z 值矩阵的列序与之一致。
+    """
+    zmap = getattr(ds, "_LAST_FACTOR_Z", None) or {}
+    if not zmap or columns is None:
+        return []
+    try:
+        col = list(columns).index(code)
+    except ValueError:
+        return []
+    items = []
+    for fname, row in zmap.items():
+        if col >= len(row):
+            continue
+        v = float(row[col])
+        if v != v:   # NaN
+            continue
+        items.append({
+            "factor": fname,
+            "contribution": round(v, 4),
+            "direction": "看多" if v > 0 else "看空",
+        })
+    items.sort(key=lambda x: -abs(x["contribution"]))
+    return items[:n_top]
 
 
 def run_line(
@@ -373,6 +408,9 @@ def run_line(
     # gbm_voltgt 额外需要 rebalance_day（单模型模式的切点）
     if spec["score"] is score_gbm_voltgt:
         comp = spec["score"](frames, master, panel, rebalance_day=rebalance_day)
+    elif spec["score"] is score_42f:
+        # 42f 顺便收集当日因子 z 值 → 用于「为什么买它」归因
+        comp = spec["score"](frames, master, panel, explain_date=rebalance_day)
     else:
         comp = spec["score"](frames, master, panel)
     latest = pd.Timestamp(rebalance_day)
@@ -459,7 +497,8 @@ def run_line(
                       "stamp_tax": round(stamp, 2), "slippage": round(slip, 2),
                       "net": round(gross - commission - stamp - slip, 2),
                       "score": round(float(rank.get(c, np.nan)), 4)
-                      if c in rank else ""})
+                      if c in rank else "",
+                      "factors": _explain_factors(c, comp.columns)})
         del positions[c]
 
     # ── 买入: 首次建仓买满 topk；之后每次只买 ndrop 只 ──
@@ -503,7 +542,8 @@ def run_line(
                      "shares": shares, "amount": round(gross, 2),
                      "commission": round(commission, 2), "stamp_tax": 0.0,
                      "slippage": round(slip, 2), "total_cost": round(cost, 2),
-                     "score": round(float(rank.get(c, np.nan)), 4)})
+                     "score": round(float(rank.get(c, np.nan)), 4),
+                     "factors": _explain_factors(c, comp.columns)})
 
     end_value = cash + sum(
         float(positions[c].get("shares", 0)) * float(close.get(c, np.nan))

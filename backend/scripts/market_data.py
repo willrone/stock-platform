@@ -144,3 +144,81 @@ def get_extra(
     if np.isnan(fv):
         return None
     return fv
+
+
+def load_adjusted_close(
+    codes: List[str],
+    master: pd.DatetimeIndex,
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """用交易所口径涨跌幅合成**后复权**收盘价矩阵。
+
+    adj[t] = adj[t-1] × (1 + pct_chg[t]/100)
+
+    为什么不用现成的 close：
+      - `stock_data` 是未复权真实价 → 除权日跳空 ±30%，收益被系统性低估
+      - baostock 的 `close`（不复权）同样有这个问题
+      - 但它的 `pct_chg` 是**交易所口径**（已做除权除息调整）→ 累积即得连续序列
+
+    后复权（基准固定在数据起点）而不是前复权：前复权会随每天新增数据变化，
+    导致回测结果不可复现。
+
+    Returns:
+        DataFrame(索引=master, 列=codes)，无数据的为 NaN
+    """
+    t0 = time.time()
+    n_dates, n_codes = len(master), len(codes)
+    out = np.full((n_dates, n_codes), np.nan, dtype=np.float64)
+    pos_of_date = {ts: i for i, ts in enumerate(master)}
+
+    for j, code in enumerate(codes):
+        path = os.path.join(BAOSTOCK_DIR, f"{code.replace('.', '_')}.parquet")
+        if not os.path.exists(path):
+            continue
+        try:
+            df = pd.read_parquet(path, columns=["date", "close", "pct_chg"])
+        except Exception:
+            continue
+        if df is None or len(df) == 0:
+            continue
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df = df[df["date"].isin(set(master))]
+        if len(df) == 0:
+            continue
+        idx = df["date"].map(pos_of_date)
+        keep = idx.notna()
+        if not keep.any():
+            continue
+        idx = idx[keep].astype(int).to_numpy()
+        raw = pd.to_numeric(df.loc[keep, "close"], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        pc = pd.to_numeric(df.loc[keep, "pct_chg"], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        # 逐日累积（按日期升序）
+        order = np.argsort(idx)
+        idx, raw, pc = idx[order], raw[order], pc[order]
+        adj = np.empty(len(idx), dtype=np.float64)
+        prev = None
+        for k in range(len(idx)):
+            r = raw[k]
+            p = pc[k]
+            if prev is None:
+                adj[k] = r
+            elif np.isfinite(p) and np.isfinite(prev) and prev != 0:
+                adj[k] = prev * (1.0 + p / 100.0)
+            else:
+                adj[k] = r
+            if np.isfinite(adj[k]):
+                prev = adj[k]
+        out[idx, j] = adj
+
+    if verbose:
+        print(
+            f"[adj] 后复权价格合成: {n_codes} 只 × {n_dates} 天 "
+            f"{time.time() - t0:.0f}s",
+            flush=True,
+        )
+    return pd.DataFrame(out, index=pd.DatetimeIndex(master), columns=codes)

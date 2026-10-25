@@ -49,6 +49,8 @@ type Trade = {
   net?: number;
   score?: number | string;
   limit_pct?: number;
+  /** 因子归因：为什么买它（42f 专用） */
+  factors?: { factor: string; contribution: number; direction: string }[];
 };
 
 type Hold = {
@@ -360,6 +362,7 @@ export default function TodaySignalPage() {
                         {hasDetail && <TableCell align="right">金额</TableCell>}
                         {hasDetail && <TableCell align="right">费用</TableCell>}
                         <TableCell align="right">分数</TableCell>
+                        <TableCell>为什么买它</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -379,6 +382,34 @@ export default function TodaySignalPage() {
                             {b.score !== undefined && b.score !== null && b.score !== ''
                               ? Number(b.score).toFixed(3)
                               : '—'}
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 320 }}>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {(b.factors ?? []).map(f => (
+                                <Tooltip
+                                  key={f.factor}
+                                  title={`${f.factor} 贡献 ${f.contribution > 0 ? '+' : ''}${f.contribution}`}
+                                >
+                                  <Chip
+                                    size="small"
+                                    label={f.factor}
+                                    variant="outlined"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: 11,
+                                      color: f.contribution > 0 ? 'success.main' : 'error.main',
+                                      borderColor:
+                                        f.contribution > 0 ? 'success.light' : 'error.light',
+                                    }}
+                                  />
+                                </Tooltip>
+                              ))}
+                              {(!b.factors || b.factors.length === 0) && (
+                                <Typography variant="caption" color="text.secondary">
+                                  —
+                                </Typography>
+                              )}
+                            </Stack>
                           </TableCell>
                         </TableRow>
                       ))}
