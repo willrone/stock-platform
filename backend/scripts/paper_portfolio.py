@@ -220,11 +220,15 @@ def run_line(
     master: pd.DatetimeIndex,
     names: Dict[str, str],
     capital: float,
+    rebalance_day: pd.Timestamp,
 ) -> Dict[str, Any]:
     """跑一条线的调仓（周频：周五收盘打分 → 记纸面成交）。"""
     comp = spec["score"](frames, master, panel) if spec["score"] is score_42f \
         else spec["score"](frames, master)
-    latest = comp.index[-1]
+    latest = pd.Timestamp(rebalance_day)
+    if latest not in comp.index:
+        # 调仓日不在打分矩阵里（数据窗口未覆盖）→ 用矩阵里最后一天
+        latest = comp.index[-1]
     close = ds.to_mat(frames, master, "close").loc[latest]
     vol = ds.to_mat(frames, master, "volume").loc[latest]
     close_prev = ds.to_mat(frames, master, "close").shift(1).loc[latest]
@@ -377,22 +381,54 @@ def main() -> None:
     frames, panel, master = ds.load_data(codes)
     names = load_name_map()
 
-    # 找最近的调仓日（周五）
+    # ── 选调仓日 ─────────────────────────────────────────────────────
+    # 规则（按优先级）：
+    #   1. master 最后一天恰好是周五 → 用它（正常周五收盘后的情况）
+    #   2. 否则用 master 里最后一个周五（数据还没更新到本周五）
+    #   3. --force → 用 master 最后一天（人工指定，但只能向前）
+    # 关键约束：**调仓日不得早于组合已记录的 last_signal**。
+    #   否则用 --force 建仓（用了 master[-1]）后再自动跑（用更早的周五）
+    #   会拿过去的分数调仓 = 时间倒流。
     latest_all = master[-1]
-    if latest_all.dayofweek != 4 and not args.force:
-        fridays = [d for d in master if d.dayofweek == 4]
-        if not fridays:
-            print(f"今天 {latest_all.date()} 不是周五，且无历史周五。", flush=True)
+    fridays = [d for d in master if d.dayofweek == 4]
+    if latest_all.dayofweek == 4:
+        rebalance_day = latest_all
+    elif fridays:
+        rebalance_day = fridays[-1]
+    else:
+        rebalance_day = latest_all
+    if args.force and latest_all > rebalance_day:
+        rebalance_day = latest_all
+
+    # 已有持仓的线：调仓日不得早于上次调仓日
+    existing_signals = []
+    for s in args.strategies:
+        h = load_holdings(s, args.capital)
+        if h.get("last_signal"):
+            existing_signals.append(pd.Timestamp(h["last_signal"]))
+    if existing_signals:
+        last_used = max(existing_signals)
+        if rebalance_day < last_used:
+            print(
+                f"跳过：调仓日 {rebalance_day.date()} 早于已记录的 "
+                f"{last_used.date()}（时间倒流）。"
+                f"如需强制用更早日期请先清空对应线的持仓文件。",
+                flush=True,
+            )
             return
-        latest_all = fridays[-1]
-        print(f"今天不是周五，用最近的周五 {latest_all.date()}（--force 可强制用今天）",
-              flush=True)
+    if latest_all.dayofweek != 4 and not args.force:
+        print(
+            f"数据最新只到 {latest_all.date()}（非周五），"
+            f"用最近的调仓日 {rebalance_day.date()}",
+            flush=True,
+        )
 
     results = []
     for s in args.strategies:
         spec = STRATEGIES[s]
         print(f"\n{'='*60}\n[{s}] {spec['desc']}", flush=True)
-        r = run_line(s, spec, frames, panel, master, names, args.capital)
+        r = run_line(s, spec, frames, panel, master, names, args.capital,
+                     rebalance_day)
         results.append(r)
         print(f"  组合总值 ¥{r['value']:,.0f} | 现金 ¥{r['cash']:,.0f} | "
               f"{r['n_positions']} 只 | 买 {len(r['buys'])} 卖 {len(r['sells'])}",
@@ -400,7 +436,8 @@ def main() -> None:
 
     summary = {
         "meta": {
-            "date": str(latest_all.date()),
+            "date": str(rebalance_day.date()),
+            "data_latest": str(latest_all.date()),
             "capital_per_line": args.capital,
             "costs": {"commission": COMMISSION, "stamp_tax": STAMP_TAX,
                       "slippage": SLIPPAGE, "cash_reserve": CASH_RESERVE},
