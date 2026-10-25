@@ -17,7 +17,8 @@ import {
   Stack,
 } from '@mui/material';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// 用相对路径，走 Next.js rewrites 代理到后端（服务端代理，远程客户端可用）
+const API_BASE = '';
 
 export default function LoginPage() {
   const router = useRouter();

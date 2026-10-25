@@ -8,7 +8,8 @@ import { ArrowLeft, UserPlus } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 
 const { Title, Paragraph, Text } = Typography;
-const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+// 用相对路径，走 Next.js rewrites 代理到后端（服务端代理，远程客户端可用）
+const apiBase = '';
 const authBase = apiBase.endsWith('/api') ? `${apiBase}/v1/auth` : `${apiBase}/api/v1/auth`;
 
 type RegisterValues = {
