@@ -116,6 +116,11 @@ const menuItems = [
     label: '纸面信号',
   },
   {
+    key: '/paper-portfolio',
+    icon: Signal,
+    label: '多策略纸面盘',
+  },
+  {
     key: '/optimization',
     icon: Sparkles,
     label: '超参优化',
