@@ -25,15 +25,32 @@ except ImportError:
 
 
 class MovingAverageStrategy(BaseStrategy):
-    """移动平均策略"""
+    """移动平均策略（趋势跟随）。
+
+    2026-10-25 参数诊断（全市场 5513 只 / 3 年）：
+      base 5/20 阈值0.5%   -43.1% / 夏普 -0.498 / -54.3% / 2579 笔
+      阈值=0（5/20）        -43.3% / 夏普 -0.644 / -65.2% / 10355 笔
+      20/60 阈值0.5%        -23.1% / 夏普 -0.147 / -44.6% /   61 笔
+      20/60 阈值0           -1.5% / 夏普 +0.110 / -36.8% / 2333 笔  ← 当前默认
+    结论：
+      - 负收益**不是交易成本造成的**（成本归零后仍 -5.2% vs -5.6%）
+      - 根因是**信号质量**：A 股 5/20 均线交叉是噪音/反向信号，
+        拉长到 20/60 + 放宽阈值能把 -43% 改善到 -1.5%，但**仍然不赚钱**
+      - 趋势跟随在 A 股不 work（与"市场 MA200 全进全出"证伪、
+        "residual_mom 最差"同源）
+      - ⚠️ 500 只子集上曾测出 20/60 阈值0.5% 有 +61.3%，全市场复验只有
+        -23.1% —— 500 只是排序尾部选取、非随机样本，不能当外推结论
+    因此：默认参数取全市场最优格（20/60 + 阈值0），但**该策略仍不建议使用**，
+    也不进纸面盘。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("MovingAverage", config)
-        self.short_window = config.get("short_window", 5)
-        self.long_window = config.get("long_window", 20)
-        # 降低默认阈值：从 0.02 (2%) 降到 0.005 (0.5%)
-        # 原因：实际市场中，金叉/死叉时的 ma_diff 通常小于 1%
-        self.signal_threshold = config.get("signal_threshold", 0.005)
+        # 默认从 5/20 + 阈值0.005 改为 20/60 + 阈值0：
+        # 全市场 3 年从 -43.1% 改善到 -1.5%（夏普 -0.498 → +0.110）
+        self.short_window = config.get("short_window", 20)
+        self.long_window = config.get("long_window", 60)
+        self.signal_threshold = config.get("signal_threshold", 0.0)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算移动平均指标。

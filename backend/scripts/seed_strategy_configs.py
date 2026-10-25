@@ -33,7 +33,20 @@ DEFAULT_STRATEGY_CONFIG_PRESETS: list[dict[str, Any]] = [
             "commission_rate": 0.0003,
             "slippage_rate": 0.0001,
         },
-        "description": "固定 5/20 均线、0.5% 阈值的 MA 基准配置，用于标准横向比较。",
+        "description": "旧版 MA 基准（5/20 + 0.5% 阈值）。全市场 3 年 -43.1%/夏普 -0.498 —— 保留仅作历史对比，当前不建议使用。",
+    },
+    {
+        "config_name": "benchmark/moving_average_20_60",
+        "strategy_name": "moving_average",
+        "parameters": {
+            "preset_layer": "benchmark",
+            "short_window": 20,
+            "long_window": 60,
+            "signal_threshold": 0.0,
+            "commission_rate": 0.0003,
+            "slippage_rate": 0.0001,
+        },
+        "description": "MA 修复版（20/60 + 无阈值），全市场 3 年 -1.5%/夏普 0.110/回撤 -36.8%。已从旧版 -43.1% 大幅改善，但仍然不赚钱 —— 趋势跟随在 A 股不 work，不进纸面盘。",
     },
     {
         "config_name": "benchmark/rsi_optimized_default",
