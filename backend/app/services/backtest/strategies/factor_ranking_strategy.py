@@ -45,6 +45,11 @@ class FactorRankingStrategy(BaseStrategy):
         self.topk = int(config.get("topk", 50))
         self.n_drop = int(config.get("n_drop", 5))
         self.hold_thresh = int(config.get("hold_thresh", 0))
+        # 调仓日掩码: weekly → 只在周五出分（周频），daily → 每日出分。
+        # 引擎不消费 BacktestConfig.rebalance_frequency，周频必须在策略侧
+        # 把非调仓日分数置 NaN，执行器自然不换仓。
+        self.rebalance_days = str(config.get("rebalance_days", "daily")).lower()
+        self.rebalance_weekday = int(config.get("rebalance_weekday", 4))  # 4=周五
         self.deal_price = str(config.get("deal_price", "close"))
         self.momentum_window = int(config.get("momentum_window", 126))
         self.momentum_skip = int(config.get("momentum_skip", 20))
@@ -52,6 +57,12 @@ class FactorRankingStrategy(BaseStrategy):
         self.amp_window = int(config.get("amp_window", 10))
         self.vwap_window = int(config.get("vwap_window", 60))
         self.score_scale = float(config.get("score_scale", 10.0))
+        # 等权单仓上限：与 topk 匹配，否则引擎默认 0.2 会把现金一次耗尽、
+        # 组合冻结（topk=50 时只买到 9 只，见 backend 陷阱 21）。
+        cash_reserve = float(config.get("cash_reserve_ratio", 0.05))
+        self.max_position_size = float(
+            config.get("max_position_size", (1.0 - cash_reserve) / self.topk)
+        )
         weights = config.get("weights")
         # 默认 = 原三因子; vwap_below 为实验因子, 必须 weights 里显式给权重才开启
         self.weights: Dict[str, float] = dict(
@@ -74,6 +85,10 @@ class FactorRankingStrategy(BaseStrategy):
             "hold_thresh": self.hold_thresh,
             "deal_price": self.deal_price,
         }
+
+    def get_position_size_hint(self) -> Optional[float]:
+        """等权上限 = (1-现金预留)/topk，与 TopK 持仓数匹配。"""
+        return self.max_position_size
 
     # ── 全市场横截面打分（回测准备阶段一次性完成） ─────────────────────
     async def prepare_backtest_data(
@@ -181,6 +196,13 @@ class FactorRankingStrategy(BaseStrategy):
                 weighted_sum / np.where(weight_count > 0, weight_count, 1.0),
                 np.nan,
             )
+
+        # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
+        # 引擎不消费 BacktestConfig.rebalance_frequency, 周频必须在策略侧实现。
+        if self.rebalance_days == "weekly":
+            composite[master.dayofweek != self.rebalance_weekday] = np.nan
+        elif self.rebalance_days == "monthly":
+            composite[master.day != 1] = np.nan
 
         stored = 0
         for j, code in enumerate(codes):

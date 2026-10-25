@@ -28,6 +28,10 @@ from app.core.error_handler import ErrorSeverity, TaskError
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
 
+# 因子策略横截面打分缓存键（低波动/多因子）
+_LV_SCORES_ATTR = "_low_volatility_scores"
+_MF_SCORES_ATTR = "_multi_factor_scores"
+
 
 class BollingerBandStrategy(BaseStrategy):
     """布林带策略"""
@@ -39,23 +43,20 @@ class BollingerBandStrategy(BaseStrategy):
         self.entry_threshold = config.get("entry_threshold", 0.02)
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算布林带指标（优先复用 DataLoader 预计算列，避免重复 rolling）"""
+        """计算布林带指标。
+
+        2026-10-25 修复：**不再复用 qlib 预计算的 MA*/STD* 列**。
+        qlib 的 ``MA20``/``STD20`` 是**归一化因子值**（量级 ~1.0 / ~0.05），
+        不是价格均线/标准差 —— 实测 000001.SZ: qlib MA20=1.07 vs 真实
+        MA20=45.49（相关系数仅 0.087），STD20=0.047 vs 真实 1.99。
+        用它们算布林带 = 用垃圾指标，且 95% 的股票是部分填充
+        （有的走预计算、有的走 fallback），行为不一致。
+        现统一用真实 close 计算，代价是每票多一次 rolling（可接受）。
+        """
         close_prices = data["close"]
 
-        # 尝试从预计算数据提取
-        pre = self._extract_indicators_from_precomputed(
-            data,
-            {
-                "sma": f"MA{self.period}",
-                "std": f"STD{self.period}",
-            },
-        )
-        if pre is not None and "sma" in pre and "std" in pre:
-            sma = pre["sma"]
-            std = pre["std"]
-        else:
-            sma = close_prices.rolling(window=self.period).mean()
-            std = close_prices.rolling(window=self.period).std()
+        sma = close_prices.rolling(window=self.period).mean()
+        std = close_prices.rolling(window=self.period).std()
 
         upper_band = sma + (std * self.std_dev)
         lower_band = sma - (std * self.std_dev)
@@ -1099,7 +1100,12 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
             return None
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """计算协整指标（优先复用 DataLoader 预计算列，避免重复 rolling）"""
+        """计算协整指标。
+
+        2026-10-25 修复：同 Bollinger —— qlib 的 MA*/STD* 是归一化因子值，
+        不是价格均线/标准差（实测 000001.SZ: qlib MA20=1.07 vs 真实 45.49，
+        相关系数 0.087），用它算 z-score 等于用垃圾指标。统一用真实 close。
+        """
         close_prices = data["close"]
 
         # PERF: numpy diff 比 pandas pct_change().dropna() 快 ~3x
@@ -1108,19 +1114,8 @@ class CointegrationStrategy(StatisticalArbitrageStrategy):
         returns = pd.Series(returns_arr, index=close_prices.index[1:])
         half_life = self._estimate_half_life(returns_arr)
 
-        pre = self._extract_indicators_from_precomputed(
-            data,
-            {
-                "sma": f"MA{self.lookback_period}",
-                "std": f"STD{self.lookback_period}",
-            },
-        )
-        if pre is not None and "sma" in pre and "std" in pre:
-            sma = pre["sma"]
-            std = pre["std"]
-        else:
-            sma = close_prices.rolling(window=self.lookback_period).mean()
-            std = close_prices.rolling(window=self.lookback_period).std()
+        sma = close_prices.rolling(window=self.lookback_period).mean()
+        std = close_prices.rolling(window=self.lookback_period).std()
 
         zscore = (close_prices - sma) / (std + 0.001)
 
@@ -1598,12 +1593,53 @@ class MomentumFactorStrategy(FactorStrategy):
 
 
 class LowVolatilityStrategy(FactorStrategy):
-    """低波动因子策略"""
+    """低波动因子策略（横截面排序 + TopK/Dropout）。
+
+    2026-10-25 修复：旧版**只生成 BUY、从不生成 SELL**，且触发条件是
+    "风险调整收益为正"（不看波动率高低）—— 3 年全市场只成交 8 笔
+    （7 只票各买一次后现金耗尽，组合永久冻结），夏普 0.579 是 7 只股票
+    满仓躺 3 年的结果，不是策略表现。
+    现改为：全市场横截面 z-score（低波动 = 高分）→ TopK 等权持仓 →
+    掉出 TopK 的按 n_drop 卖出 → 与 honest_composite / factor_ranking
+    同一套执行语义。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("LowVolatility", config)
-        self.volatility_period = config.get("volatility_period", 21)
-        self.volatility_window = config.get("volatility_window", 63)
+        self.volatility_period = int(config.get("volatility_period", 21))
+        self.volatility_window = int(config.get("volatility_window", 63))
+        self.topk = int(config.get("topk", 30))
+        self.n_drop = int(config.get("n_drop", config.get("ndrop", 3)))
+        self.hold_thresh = int(config.get("hold_thresh", 0))
+        self.lag = int(config.get("lag", 0))
+        self.limit_up = float(config.get("limit_up", 0.095))
+        self.score_scale = float(config.get("score_scale", 10.0))
+        # 调仓日掩码：weekly → 只在周五出分（周频），daily → 每日出分。
+        # 引擎不消费 BacktestConfig.rebalance_frequency，周频必须在策略侧实现。
+        self.rebalance_days = str(config.get("rebalance_days", "daily")).lower()
+        self.rebalance_weekday = int(config.get("rebalance_weekday", 4))
+        cash_reserve = float(config.get("cash_reserve_ratio", 0.05))
+        self.max_position_size = float(
+            config.get("max_position_size", (1.0 - cash_reserve) / max(self.topk, 1))
+        )
+        if self.topk <= 0 or self.n_drop <= 0:
+            raise ValueError("low_volatility 策略要求 topk > 0 且 n_drop > 0")
+
+    # ── TopK/Dropout 执行契约 ──────────────────────────────────────────
+    def get_trade_mode(self) -> str:
+        return "topk_dropout"
+
+    def get_trade_mode_config(self) -> Dict[str, object]:
+        return {
+            "topk": self.topk,
+            "n_drop": self.n_drop,
+            "hold_thresh": self.hold_thresh,
+            "deal_price": "close",
+        }
+
+    def get_position_size_hint(self) -> Optional[float]:
+        """等权上限 = (1-现金预留)/topk，与 TopK 持仓数匹配。"""
+        return self.max_position_size
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算低波动因子指标"""
@@ -1624,56 +1660,183 @@ class LowVolatilityStrategy(FactorStrategy):
             "price": close_prices,
         }
 
+    async def prepare_backtest_data(
+        self,
+        stock_data: Dict[str, pd.DataFrame],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> None:
+        """全市场横截面打分（低波动 + 低风险调整收益波动 → z-score）。"""
+        codes = [
+            c for c, df in stock_data.items()
+            if df is not None and not df.empty
+            and "close" in df.columns and "volume" in df.columns
+        ]
+        if not codes:
+            logger.warning("low_volatility: 无可用股票数据，跳过打分")
+            return
+
+        indexes = [pd.DatetimeIndex(stock_data[c].index) for c in codes]
+        master = indexes[0].append(indexes[1:]) if len(indexes) > 1 else indexes[0]
+        master = master.unique().sort_values()
+        n_dates, n_stocks = len(master), len(codes)
+
+        def to_matrix(column: str) -> np.ndarray:
+            out = np.full((n_dates, n_stocks), np.nan, dtype=np.float64)
+            for j, code in enumerate(codes):
+                df = stock_data[code]
+                positions = master.get_indexer(pd.DatetimeIndex(df.index))
+                ok = positions >= 0
+                values = pd.to_numeric(df[column], errors="coerce").to_numpy(
+                    dtype=np.float64, na_value=np.nan
+                )
+                out[positions[ok], j] = values[ok]
+            return out
+
+        frame_opts = {"index": master, "dtype": np.float64}
+        close = pd.DataFrame(to_matrix("close"), **frame_opts)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ret = close.pct_change(fill_method=None)
+            vol = ret.rolling(self.volatility_window).std() * np.sqrt(252)
+            rar = (
+                ret.rolling(self.volatility_period).mean()
+                / (ret.rolling(self.volatility_period).std() + 1e-8)
+            )
+
+        day_ret = close.pct_change(fill_method=None).to_numpy()
+        limit_up_mask = day_ret >= self.limit_up
+
+        min_cross = max(2, min(30, n_stocks // 10))
+        acc = np.zeros((n_dates, n_stocks), dtype=np.float64)
+        wsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
+
+        def zscore_add(mat: np.ndarray, sign: float) -> None:
+            ok = np.isfinite(mat)
+            cnt = ok.sum(axis=1, keepdims=True)
+            with np.errstate(invalid="ignore"):
+                mu = np.nanmean(np.where(ok, mat, np.nan), axis=1, keepdims=True)
+                sd = np.nanstd(np.where(ok, mat, np.nan), axis=1, keepdims=True)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                z = (mat - mu) / np.where(sd > 1e-12, sd, np.nan) * sign
+            z = np.where(cnt >= min_cross, z, np.nan)
+            good = np.isfinite(z)
+            acc[good] += np.nan_to_num(z)[good]
+            wsum[good] += 1
+
+        # 低波动 = 高分（sign -1）；低风险调整收益的波动 = 高分（sign -1）
+        zscore_add(vol.to_numpy(dtype=np.float64), -1.0)
+        zscore_add(rar.to_numpy(dtype=np.float64), -1.0)
+
+        composite = np.where(
+            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
+        )
+        composite[limit_up_mask] = np.nan
+
+        # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
+        if self.rebalance_days == "weekly":
+            composite[master.dayofweek != self.rebalance_weekday] = np.nan
+        elif self.rebalance_days == "monthly":
+            composite[master.day != 1] = np.nan
+
+        if self.lag > 0:
+            lagged = np.full_like(composite, np.nan)
+            if self.lag < n_dates:
+                lagged[self.lag:] = composite[: n_dates - self.lag]
+            composite = lagged
+
+        stored = 0
+        for j, code in enumerate(codes):
+            column = composite[:, j]
+            score_map: Dict[datetime, float] = {}
+            for k in range(n_dates):
+                value = column[k]
+                if np.isfinite(value):
+                    score_map[master[k].to_pydatetime()] = float(value)
+            stock_data[code].attrs[_LV_SCORES_ATTR] = score_map
+            stored += len(score_map)
+        logger.info(
+            f"low_volatility 横截面打分完成: 股票={n_stocks}, 日期={n_dates}, "
+            f"有效分数={stored}, topk={self.topk}, n_drop={self.n_drop}, "
+            f"rebalance_days={self.rebalance_days}"
+        )
+
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        return None
+
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
-        """低波动因子信号生成"""
-        signals: List[TradingSignal] = []
-
-        try:
-            indicators = self.get_cached_indicators(data)
-
-            current_idx = self._get_current_idx(data, current_date)
-            if current_idx < self.volatility_window:
-                return signals
-
-            current_price = indicators["price"].iloc[current_idx]
-            current_vol = indicators["volatility"].iloc[current_idx]
-            current_rar = indicators["risk_adjusted_return"].iloc[current_idx]
-
-            stock_code = data.attrs.get("stock_code", "UNKNOWN")
-
-            if current_rar > 0:
-                strength = min(1.0, current_rar / 5)
-                signal = TradingSignal(
-                    timestamp=current_date,
-                    stock_code=stock_code,
-                    signal_type=SignalType.BUY,
-                    strength=strength,
-                    price=current_price,
-                    reason=f"低波动高收益，波动率: {current_vol:.2%}",
-                    metadata={
-                        "volatility": current_vol,
-                        "risk_adjusted_return": current_rar,
-                    },
-                )
-                signals.append(signal)
-
-            return signals
-
-        except Exception as e:
-            logger.error(f"低波动因子策略信号生成失败: {e}")
+        scores = data.attrs.get(_LV_SCORES_ATTR)
+        if not scores:
             return []
+        score = scores.get(current_date)
+        if score is None or not np.isfinite(score):
+            return []
+
+        current_idx = self._get_current_idx(data, current_date)
+        if current_idx < 0:
+            return []
+        price = float(data["close"].iloc[current_idx])
+        if not np.isfinite(price) or price <= 0:
+            return []
+        stock_code = data.attrs.get("stock_code", "UNKNOWN")
+
+        return [
+            TradingSignal(
+                timestamp=current_date,
+                stock_code=stock_code,
+                signal_type=SignalType.BUY,
+                strength=min(1.0, abs(score) / self.score_scale),
+                price=price,
+                reason=(
+                    f"低波动横截面排名分 {score:.4f} "
+                    f"(TopK={self.topk}, n_drop={self.n_drop}, lag={self.lag})"
+                ),
+                metadata={
+                    "ranking_score": score,
+                    "signal_role": "ranking_score",
+                    "trade_mode": self.get_trade_mode(),
+                    "topk": self.topk,
+                    "n_drop": self.n_drop,
+                    "hold_thresh": self.hold_thresh,
+                    "deal_price": "close",
+                },
+            )
+        ]
 
 
 class MultiFactorStrategy(FactorStrategy):
-    """多因子组合策略"""
+    """多因子组合策略（横截面排序 + TopK/Dropout）。
+
+    2026-10-25 修复：旧版用**时序**标准化（个股自身 60/252 日滚动分位），
+    再按"综合分转正/转负"发信号 —— 绝大多数股票长期为正 → 持续 BUY、
+    几乎不 SELL。3 年全市场只 117 笔成交（BUY 78 / SELL 39），
+    持仓中位数 15，是"现金耗尽后冻结"而不是策略表现。
+    现改为：value / momentum / low_volatility 三因子**横截面** z-score
+    等权合成 → TopK 等权持仓 → 掉出 TopK 的按 n_drop 卖出。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__("MultiFactor", config)
         self.factors = config.get("factors", ["value", "momentum", "low_volatility"])
         self.factor_weights = config.get("factor_weights", [0.33, 0.33, 0.34])
         self.weighting_method = config.get("weighting_method", "equal")
+        self.topk = int(config.get("topk", 30))
+        self.n_drop = int(config.get("n_drop", config.get("ndrop", 3)))
+        self.hold_thresh = int(config.get("hold_thresh", 0))
+        self.lag = int(config.get("lag", 0))
+        self.limit_up = float(config.get("limit_up", 0.095))
+        self.score_scale = float(config.get("score_scale", 10.0))
+        # 调仓日掩码：weekly → 只在周五出分（周频），daily → 每日出分。
+        self.rebalance_days = str(config.get("rebalance_days", "daily")).lower()
+        self.rebalance_weekday = int(config.get("rebalance_weekday", 4))
+        cash_reserve = float(config.get("cash_reserve_ratio", 0.05))
+        self.max_position_size = float(
+            config.get("max_position_size", (1.0 - cash_reserve) / max(self.topk, 1))
+        )
+        if self.topk <= 0 or self.n_drop <= 0:
+            raise ValueError("multi_factor 策略要求 topk > 0 且 n_drop > 0")
 
         # PERF: indicators are expensive (rolling windows). In backtest we call generate_signals
         # every day; without caching this becomes O(T^2). Cache per-stock dataframe.
@@ -1681,6 +1844,142 @@ class MultiFactorStrategy(FactorStrategy):
 
         self._indicator_cache: Dict[tuple, Dict[str, pd.Series]] = {}
         self._indicator_cache_lock = threading.Lock()
+
+    # ── TopK/Dropout 执行契约 ──────────────────────────────────────────
+    def get_trade_mode(self) -> str:
+        return "topk_dropout"
+
+    def get_trade_mode_config(self) -> Dict[str, object]:
+        return {
+            "topk": self.topk,
+            "n_drop": self.n_drop,
+            "hold_thresh": self.hold_thresh,
+            "deal_price": "close",
+        }
+
+    def get_position_size_hint(self) -> Optional[float]:
+        """等权上限 = (1-现金预留)/topk，与 TopK 持仓数匹配。"""
+        return self.max_position_size
+
+    async def prepare_backtest_data(
+        self,
+        stock_data: Dict[str, pd.DataFrame],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> None:
+        """全市场横截面打分（value / momentum / low_volatility 等权 z-score）。"""
+        codes = [
+            c for c, df in stock_data.items()
+            if df is not None and not df.empty
+            and "close" in df.columns and "volume" in df.columns
+        ]
+        if not codes:
+            logger.warning("multi_factor: 无可用股票数据，跳过打分")
+            return
+
+        indexes = [pd.DatetimeIndex(stock_data[c].index) for c in codes]
+        master = indexes[0].append(indexes[1:]) if len(indexes) > 1 else indexes[0]
+        master = master.unique().sort_values()
+        n_dates, n_stocks = len(master), len(codes)
+
+        def to_matrix(column: str) -> np.ndarray:
+            out = np.full((n_dates, n_stocks), np.nan, dtype=np.float64)
+            for j, code in enumerate(codes):
+                df = stock_data[code]
+                positions = master.get_indexer(pd.DatetimeIndex(df.index))
+                ok = positions >= 0
+                values = pd.to_numeric(df[column], errors="coerce").to_numpy(
+                    dtype=np.float64, na_value=np.nan
+                )
+                out[positions[ok], j] = values[ok]
+            return out
+
+        frame_opts = {"index": master, "dtype": np.float64}
+        close = pd.DataFrame(to_matrix("close"), **frame_opts)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            returns = close.pct_change(fill_method=None)
+            volatility = returns.rolling(21).std() * np.sqrt(252)
+            momentum_1m = close / close.shift(21) - 1
+            momentum_3m = close / close.shift(63) - 1
+            momentum_6m = close / close.shift(126) - 1
+            momentum_combined = momentum_1m * 0.2 + momentum_3m * 0.3 + momentum_6m * 0.5
+            price_to_ma20 = close / close.rolling(20).mean() - 1
+            price_to_ma60 = close / close.rolling(60).mean() - 1
+
+        day_ret = close.pct_change(fill_method=None).to_numpy()
+        limit_up_mask = day_ret >= self.limit_up
+
+        # 三因子原始值（方向：值越大越好 → 全部 sign +1）
+        factor_mats: Dict[str, np.ndarray] = {
+            # value: 价格低于均线越多越"便宜" → 取负号使低分变高分
+            "value": -(price_to_ma20 * 0.6 + price_to_ma60 * 0.4),
+            "momentum": momentum_combined,
+            "low_volatility": -volatility,
+        }
+        weights = {"value": 0.33, "momentum": 0.33, "low_volatility": 0.34}
+        for i, fname in enumerate(self.factors):
+            if fname in weights and i < len(self.factor_weights):
+                weights[fname] = float(self.factor_weights[i])
+
+        min_cross = max(2, min(30, n_stocks // 10))
+        acc = np.zeros((n_dates, n_stocks), dtype=np.float64)
+        wsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
+
+        def zscore_add(mat: np.ndarray, sign: float, weight: float) -> None:
+            ok = np.isfinite(mat)
+            cnt = ok.sum(axis=1, keepdims=True)
+            with np.errstate(invalid="ignore"):
+                mu = np.nanmean(np.where(ok, mat, np.nan), axis=1, keepdims=True)
+                sd = np.nanstd(np.where(ok, mat, np.nan), axis=1, keepdims=True)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                z = (mat - mu) / np.where(sd > 1e-12, sd, np.nan) * sign
+            z = np.where(cnt >= min_cross, z, np.nan)
+            good = np.isfinite(z)
+            acc[good] += weight * np.nan_to_num(z)[good]
+            wsum[good] += weight
+
+        for fname in self.factors:
+            mat = factor_mats.get(fname)
+            if mat is None:
+                continue
+            zscore_add(np.asarray(mat, dtype=np.float64), 1.0, weights.get(fname, 0.33))
+
+        composite = np.where(
+            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
+        )
+        composite[limit_up_mask] = np.nan
+
+        # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
+        if self.rebalance_days == "weekly":
+            composite[master.dayofweek != self.rebalance_weekday] = np.nan
+        elif self.rebalance_days == "monthly":
+            composite[master.day != 1] = np.nan
+
+        if self.lag > 0:
+            lagged = np.full_like(composite, np.nan)
+            if self.lag < n_dates:
+                lagged[self.lag:] = composite[: n_dates - self.lag]
+            composite = lagged
+
+        stored = 0
+        for j, code in enumerate(codes):
+            column = composite[:, j]
+            score_map: Dict[datetime, float] = {}
+            for k in range(n_dates):
+                value = column[k]
+                if np.isfinite(value):
+                    score_map[master[k].to_pydatetime()] = float(value)
+            stock_data[code].attrs[_MF_SCORES_ATTR] = score_map
+            stored += len(score_map)
+        logger.info(
+            f"multi_factor 横截面打分完成: 股票={n_stocks}, 日期={n_dates}, "
+            f"有效分数={stored}, factors={self.factors}, topk={self.topk}, "
+            f"rebalance_days={self.rebalance_days}"
+        )
+
+    def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
+        return None
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         """计算多因子综合指标
@@ -1760,84 +2059,44 @@ class MultiFactorStrategy(FactorStrategy):
     def generate_signals(
         self, data: pd.DataFrame, current_date: datetime
     ) -> List[TradingSignal]:
-        """多因子策略信号生成"""
-        signals: List[TradingSignal] = []
-
-        try:
-            indicators = self.get_cached_indicators(data)
-
-            current_idx = self._get_current_idx(data, current_date)
-            if current_idx < 130:
-                return signals
-
-            current_price = float(indicators["price"].iloc[current_idx])
-            current_score = float(indicators["combined_score"].iloc[current_idx])
-            prev_score = float(indicators["combined_score"].iloc[current_idx - 1])
-
-            if pd.isna(current_score) or pd.isna(prev_score):
-                return signals
-
-            stock_code = data.attrs.get("stock_code", "UNKNOWN")
-
-            if prev_score <= 0 and current_score > 0:
-                strength = min(1.0, abs(current_score))
-                signal = TradingSignal(
-                    timestamp=current_date,
-                    stock_code=stock_code,
-                    signal_type=SignalType.BUY,
-                    strength=strength,
-                    price=current_price,
-                    reason=f"多因子综合评分转正: {current_score:.3f}",
-                    metadata={
-                        "combined_score": current_score,
-                        "value_score": (
-                            float(indicators["value_score"].iloc[current_idx])
-                            if not pd.isna(indicators["value_score"].iloc[current_idx])
-                            else 0
-                        ),
-                        "momentum_score": (
-                            float(indicators["momentum_score"].iloc[current_idx])
-                            if not pd.isna(
-                                indicators["momentum_score"].iloc[current_idx]
-                            )
-                            else 0
-                        ),
-                    },
-                )
-                signals.append(signal)
-
-            elif prev_score >= 0 and current_score < 0:
-                strength = min(1.0, abs(current_score))
-                signal = TradingSignal(
-                    timestamp=current_date,
-                    stock_code=stock_code,
-                    signal_type=SignalType.SELL,
-                    strength=strength,
-                    price=current_price,
-                    reason=f"多因子综合评分转负: {current_score:.3f}",
-                    metadata={
-                        "combined_score": current_score,
-                        "value_score": (
-                            float(indicators["value_score"].iloc[current_idx])
-                            if not pd.isna(indicators["value_score"].iloc[current_idx])
-                            else 0
-                        ),
-                        "momentum_score": (
-                            float(indicators["momentum_score"].iloc[current_idx])
-                            if not pd.isna(
-                                indicators["momentum_score"].iloc[current_idx]
-                            )
-                            else 0
-                        ),
-                    },
-                )
-                signals.append(signal)
-
-            return signals
-
-        except Exception as e:
-            logger.error(f"多因子策略信号生成失败: {e}")
+        """多因子策略信号生成（横截面排名分，TopK/Dropout 执行）。"""
+        scores = data.attrs.get(_MF_SCORES_ATTR)
+        if not scores:
             return []
+        score = scores.get(current_date)
+        if score is None or not np.isfinite(score):
+            return []
+
+        current_idx = self._get_current_idx(data, current_date)
+        if current_idx < 0:
+            return []
+        price = float(data["close"].iloc[current_idx])
+        if not np.isfinite(price) or price <= 0:
+            return []
+        stock_code = data.attrs.get("stock_code", "UNKNOWN")
+
+        return [
+            TradingSignal(
+                timestamp=current_date,
+                stock_code=stock_code,
+                signal_type=SignalType.BUY,
+                strength=min(1.0, abs(score) / self.score_scale),
+                price=price,
+                reason=(
+                    f"多因子横截面排名分 {score:.4f} "
+                    f"(TopK={self.topk}, n_drop={self.n_drop}, lag={self.lag})"
+                ),
+                metadata={
+                    "ranking_score": score,
+                    "signal_role": "ranking_score",
+                    "trade_mode": self.get_trade_mode(),
+                    "topk": self.topk,
+                    "n_drop": self.n_drop,
+                    "hold_thresh": self.hold_thresh,
+                    "deal_price": "close",
+                },
+            )
+        ]
 
 
 class AdvancedStrategyFactory:

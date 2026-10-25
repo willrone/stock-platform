@@ -2423,10 +2423,12 @@ class UnifiedQlibTrainingEngine:
     async def load_qlib_model(self, model_path: str) -> Tuple[Any, Dict[str, Any]]:
         """加载Qlib模型"""
         try:
-            import pickle
+            from app.core.model_loader import safe_pickle_load
 
-            with open(model_path, "rb") as f:
-                model_data = pickle.load(f)
+            # numpy 2.x 兼容加载：裸 pickle.load 在本机会段错误 rc=139)
+            model_data = safe_pickle_load(model_path)
+            if model_data is None:
+                raise ValueError(f"Qlib模型加载失败(numpy 兼容加载器): {model_path}")
 
             model = model_data["model"]
             config = model_data["config"]

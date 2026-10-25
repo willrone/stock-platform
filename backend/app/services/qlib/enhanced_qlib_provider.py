@@ -2682,6 +2682,22 @@ class EnhancedQlibDataProvider:
                     # 合并Alpha因子
                     qlib_data = pd.concat([qlib_data, alpha_factors], axis=1)
                     logger.info(f"成功添加 {len(alpha_factors.columns)} 个Alpha因子")
+
+                    # Alpha158 handler 按 qlib 日历展开（含节假日行），而
+                    # qlib_data 的价格只在真实交易日有值 → merge 后 OHLCV
+                    # 出现大量 NaN（实测 51.9%）。这些行没有价格，不能作为
+                    # 特征样本（特征提取器会因"缺失值过多"直接报错），
+                    # 必须剔除。
+                    price_cols = [c for c in ("open", "close", "volume") if c in qlib_data.columns]
+                    if price_cols:
+                        before = len(qlib_data)
+                        qlib_data = qlib_data.dropna(subset=price_cols)
+                        dropped = before - len(qlib_data)
+                        if dropped:
+                            logger.info(
+                                f"剔除无价格行(节假日/非交易日): {dropped} 行, "
+                                f"剩余 {len(qlib_data)} 行"
+                            )
             except Exception as e:
                 logger.error(f"Alpha因子计算失败: {e}")
 

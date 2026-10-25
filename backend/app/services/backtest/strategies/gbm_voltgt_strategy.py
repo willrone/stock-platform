@@ -1,8 +1,9 @@
 """LightGBM 元模型 + 波动率目标仓位（正式策略 gbm_voltgt）。
 
 与 HonestCompositeStrategy (等权 42f) 的差别:
-  1. 复合分数不是等权平均 z, 而是 LightGBM 回归预测 fwd5 收益
+  1. 复合分数不是等权平均 z, 而是 LightGBM 回归预测 fwd1 收益
      (40 因子 z 分数 + presence 哑变量, 月度滚动重训, 无前视)
+     标签周期 = 1 天 (对齐日频换仓, 2026-10-20 赛马验证: 1天夏普1.247 > 5天1.071)
   2. 波动率目标仓位: 市场等权指数 20 日年化波动率做门,
      scale = min(1, 0.20/mv), 高波动日只保留 top round(60*scale) 只
      (其余置 NaN → 自动降仓位 → 降回撤)
@@ -57,8 +58,15 @@ class GbmVoltgtStrategy(BaseStrategy):
         self.topk = int(config.get("topk", 60))
         self.n_drop = int(config.get("n_drop", config.get("ndrop", 5)))
         self.hold_thresh = int(config.get("hold_thresh", 0))
+        # 调仓日掩码: weekly → 只在周五出分（周频），daily → 每日出分。
+        # 引擎不消费 BacktestConfig.rebalance_frequency，周频必须在策略侧
+        # 把非调仓日分数置 NaN，执行器自然不换仓。
+        self.rebalance_days = str(config.get("rebalance_days", "daily")).lower()
+        self.rebalance_weekday = int(config.get("rebalance_weekday", 4))  # 4=周五
         self.limit_up = float(config.get("limit_up", 0.095))
         self.score_scale = float(config.get("score_scale", 10.0))
+        self.top_n_factors = int(config.get("top_n_factors", 0))  # 0=默认42因子, >0=按IC选topN
+        self.horizon = int(config.get("horizon", 1))  # 标签周期(天), 1=对齐日频换仓
         self.panel_dir = config.get(
             "panel_dir", "../data/qlib_data/features/day"
         )
@@ -101,6 +109,10 @@ class GbmVoltgtStrategy(BaseStrategy):
             "hold_thresh": self.hold_thresh,
             "deal_price": "close",
         }
+
+    def get_position_size_hint(self) -> Optional[float]:
+        """等权上限 = (1-现金预留)/topk，与 TopK 持仓数匹配。"""
+        return self.max_position_size
 
     # ── 全市场横截面打分 ───────────────────────────────────────────────
     async def prepare_backtest_data(
@@ -151,7 +163,7 @@ class GbmVoltgtStrategy(BaseStrategy):
 
         day_ret = close.pct_change(fill_method=None).to_numpy()
         limit_up_mask = day_ret >= self.limit_up
-        fwd_ret = (close.shift(-5) / close - 1.0).to_numpy()
+        fwd_ret = (close.shift(-self.horizon) / close - 1.0).to_numpy()  # 周期=horizon天
 
         # 面板因子矩阵
         def to_panel_mat(factor_name: str) -> np.ndarray:
@@ -175,11 +187,54 @@ class GbmVoltgtStrategy(BaseStrategy):
 
         # 截面 z 分数
         seen: Dict[str, List[str]] = {}
-        # 用 IC study 符号 (fallback 到 _HONEST_FORMULAS/_ALPHAPANEL_FACTORS)
-        for fname, feats in self._build_formula_map().items():
-            seen[fname] = feats
-        for fname in _ALPHAPANEL_FACTORS:
-            seen[fname] = [fname]
+        if self.top_n_factors > 0:
+            # 按 IC 排序选 topN 因子
+            all_avail = list(_HONEST_FORMULAS.keys()) + [
+                "RET1","RET5","RET10","RET20","KMID","KLEN","KMID2","KUP","KUP2","KLOW","KLOW2",
+                "ROC5","ROC10","ROC20","ROC30","ROC60","MA5","MA10","MA20","MA30","MA60",
+                "STD5","STD10","STD20","STD30","STD60","BETA5","BETA10","BETA20","BETA30","BETA60",
+                "RSQR5","RSQR10","RSQR20","RSQR30","RSQR60","RESI5","RESI10","RESI20","RESI30","RESI60",
+                "MAX5","MAX10","MAX20","MAX30","MAX60","MIN5","MIN10","MIN20","MIN30","MIN60",
+                "QTLU5","QTLU10","QTLU20","QTLU30","QTLU60","QTLD5","QTLD10","QTLD20","QTLD30","QTLD60",
+                "RANK5","RANK10","RANK20","RANK30","RANK60","RSV5","RSV10","RSV20","RSV30","RSV60",
+                "IMAX5","IMAX10","IMAX20","IMAX30","IMAX60","IMIN5","IMIN10","IMIN20","IMIN30","IMIN60",
+                "IMXD5","IMXD10","IMXD20","IMXD30","IMXD60","CORR5","CORR10","CORR20","CORR30","CORR60",
+                "CORD5","CORD10","CORD20","CORD30","CORD60","CNTP5","CNTP10","CNTP20","CNTP30","CNTP60",
+                "CNTN5","CNTN10","CNTN20","CNTN30","CNTN60","CNTD5","CNTD10","CNTD20","CNTD30","CNTD60",
+                "SUMP5","SUMP10","SUMP20","SUMP30","SUMP60","SUMN5","SUMN10","SUMN20","SUMN30","SUMN60",
+                "SUMD5","SUMD10","SUMD20","SUMD30","SUMD60","VMA5","VMA10","VMA20","VMA30","VMA60",
+                "VSTD5","VSTD10","VSTD20","VSTD30","VSTD60","WVMA5","WVMA10","WVMA20","WVMA30","WVMA60",
+                "VSUMP5","VSUMP10","VSUMP20","VSUMP30","VSUMP60","VSUMN5","VSUMN10","VSUMN20","VSUMN30","VSUMN60",
+                "VSUMD5","VSUMD10","VSUMD20","VSUMD30","VSUMD60","ATR14","BOLLINGER_LOWER","BOLLINGER_MIDDLE",
+                "BOLLINGER_UPPER","KDJ_D","KDJ_K","MA50","MACD","MACD_HIST","MACD_SIGNAL","RSI14",
+                "price_change","price_change_5d","price_change_20d","volume_change","volume_ma_ratio",
+                "volatility_5d","volatility_20d","price_position"]
+            # 去重 + 只保留有数据的
+            all_avail = list(dict.fromkeys(all_avail))
+            fwd_arr = fwd_ret
+            ic = {}
+            for fname in all_avail:
+                if fname in _HONEST_FORMULAS:
+                    mat = cands[fname].to_numpy(dtype=np.float64)
+                else:
+                    mat = to_panel_mat(fname)
+                ics = []
+                for t in range(n_dates - self.horizon):
+                    a = mat[t]; b = fwd_arr[t]
+                    ok = np.isfinite(a) & np.isfinite(b)
+                    if ok.sum() < 50: continue
+                    ics.append(np.corrcoef(np.argsort(np.argsort(a[ok])), np.argsort(np.argsort(b[ok])))[0,1])
+                if ics: ic[fname] = abs(np.mean(ics))
+            top = [f for f,_ in sorted(ic.items(), key=lambda x:-x[1])[:self.top_n_factors]]
+            for fname in top:
+                seen[fname] = [fname]
+            logger.info(f"gbm_voltgt IC选因子: top{self.top_n_factors} = {top[:10]}...")
+        else:
+            # 默认 42 因子 (25 honest + 17 panel)
+            for fname, feats in self._build_formula_map().items():
+                seen[fname] = feats
+            for fname in _ALPHAPANEL_FACTORS:
+                seen[fname] = [fname]
 
         raw: List[np.ndarray] = []
         for fname in seen:
@@ -258,6 +313,13 @@ class GbmVoltgtStrategy(BaseStrategy):
                 Xk = np.column_stack([z_all[k], pre_all[k]])
                 comp[k] = mdl.predict(Xk)
         comp[limit_up_mask] = np.nan
+
+        # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
+        # 引擎不消费 BacktestConfig.rebalance_frequency, 周频必须在策略侧实现。
+        if self.rebalance_days == "weekly":
+            comp[master.dayofweek != self.rebalance_weekday] = np.nan
+        elif self.rebalance_days == "monthly":
+            comp[master.day != 1] = np.nan
 
         # 波动率目标仓位: 高波动日只保留 top round(topk*scale) 只
         for k in range(n_dates):

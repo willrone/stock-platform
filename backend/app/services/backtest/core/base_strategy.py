@@ -113,6 +113,18 @@ class BaseStrategy(ABC):
         """返回策略自带的交易执行模式默认配置。"""
         return {}
 
+    def get_position_size_hint(self) -> Optional[float]:
+        """返回策略建议的单仓上限（占组合市值比例）。
+
+        引擎的 ``BacktestConfig.max_position_size`` 默认 0.2，对 TopK 等权类策略
+        是错的：``topk × 0.2`` 远超可投现金，组合建仓到现金耗尽后被迫冻结
+        （实测 topk=60 时只买到 9 只、559 笔交易塌成 9 笔）。
+
+        策略在这里给出与自身持仓数匹配的等权上限，executor 在调用方**未显式**
+        指定 max_position_size 时采用它。调用方显式传值时以调用方为准。
+        """
+        return None
+
     def _extract_indicators_from_precomputed(
         self, data: pd.DataFrame, indicator_mapping: Dict[str, str]
     ) -> Optional[Dict[str, pd.Series]]:

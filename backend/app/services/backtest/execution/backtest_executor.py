@@ -274,7 +274,25 @@ class BacktestExecutor:
                     task_id, "strategy_setup", progress=100, status="completed"
                 )
 
-            # 创建组合管理器
+            # 单仓上限对齐策略建议值（TopK 等权类）。
+            # 引擎默认 max_position_size=0.2，对 topk=30/50/60 的等权组合是错的：
+            # topk × 0.2 远超可投现金 → 建仓到现金耗尽 → 组合冻结
+            # （实测 topk=60 时只买到 9 只、559 笔交易塌成 9 笔）。
+            # 策略已按 (1-cash_reserve)/topk 自算出等权上限；仅当调用方
+            # **没有**显式指定 max_position_size 时才采用策略建议值，
+            # 显式传值一律以调用方为准。
+            if "max_position_size" not in (strategy_config or {}):
+                try:
+                    _hint = strategy.get_position_size_hint()
+                except Exception:
+                    _hint = None
+                if _hint is not None and _hint > 0:
+                    logger.info(
+                        f"单仓上限采用策略建议值: {_hint:.6f} "
+                        f"(topk 类策略等权口径, 原本 {backtest_config.max_position_size})"
+                    )
+                    backtest_config.max_position_size = float(_hint)
+
             # Phase 1: 数据加载后再创建（需要 stock_codes）
             portfolio_manager: Any = None
 

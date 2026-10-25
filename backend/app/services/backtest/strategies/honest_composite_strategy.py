@@ -78,6 +78,13 @@ class HonestCompositeStrategy(BaseStrategy):
         self.n_drop = int(config.get("n_drop", config.get("ndrop", 5)))
         self.hold_thresh = int(config.get("hold_thresh", 0))
         self.lag = int(config.get("lag", 0))
+        # 调仓日掩码：rebalance_days="weekly" → 只在周五出分（周频），
+        # "daily" → 每日出分。引擎不消费 BacktestConfig.rebalance_frequency，
+        # 周频必须在这里把非调仓日的分数置 NaN，执行器自然不换仓。
+        # 周频能把换手降 4~5 倍（实盘成本 0.03%+0.05%印花+0.1%滑点/单边），
+        # 是 A 股日频 TopK 策略在真实成本下能否落地的决定性变量。
+        self.rebalance_days = str(config.get("rebalance_days", "daily")).lower()
+        self.rebalance_weekday = int(config.get("rebalance_weekday", 4))  # 4=周五
         self.limit_up = float(config.get("limit_up", 0.095))
         self.score_scale = float(config.get("score_scale", 10.0))
         self.panel_dir = config.get(
@@ -111,6 +118,14 @@ class HonestCompositeStrategy(BaseStrategy):
             "hold_thresh": self.hold_thresh,
             "deal_price": "close",
         }
+
+    def get_position_size_hint(self) -> Optional[float]:
+        """等权上限 = (1-现金预留)/topk，与 TopK 持仓数匹配。
+
+        不设这个上限时引擎默认 0.2，topk=60 会把现金一次性耗尽、组合冻结
+        （实测只买到 9 只）。
+        """
+        return self.max_position_size
 
     # ── 全市场横截面打分（回测准备阶段一次性完成） ─────────────────────
     async def prepare_backtest_data(
@@ -216,6 +231,13 @@ class HonestCompositeStrategy(BaseStrategy):
             wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
         )
         composite[limit_up_mask] = np.nan  # 涨停掩码: 当日不可买
+
+        # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
+        if self.rebalance_days == "weekly":
+            weekday = master.dayofweek  # 0=周一 … 4=周五
+            composite[weekday != self.rebalance_weekday] = np.nan
+        elif self.rebalance_days == "monthly":
+            composite[master.day != 1] = np.nan
 
         # lag: 0 = 当日分数，1 = 前一日分数
         if self.lag > 0:

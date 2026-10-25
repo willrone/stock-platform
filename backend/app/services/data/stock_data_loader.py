@@ -178,6 +178,27 @@ class StockDataLoader:
             df = df.sort_index()
             df = df[~df.index.duplicated(keep="first")]
 
+            # 5. 剔除无价格行
+            #    qlib 预计算 parquet 是两段拼接：block1 = 交易日 OHLCV +
+            #    传统指标，block2 = Alpha158（含节假日行，无价格）。
+            #    直接返回会让 open/close/volume 有 ~58% 是 NaN
+            #    （实测 600000.SH 2024Q1: 37/64 行无价格），
+            #    下游特征提取器直接因"缺失值过多"报错。
+            #    这些行不是交易日，必须剔除。
+            if not df.empty:
+                price_cols = [
+                    c for c in ("open", "close", "volume") if c in df.columns
+                ]
+                if price_cols:
+                    n_before = len(df)
+                    df = df.dropna(subset=price_cols)
+                    n_dropped = n_before - len(df)
+                    if n_dropped:
+                        logger.info(
+                            f"🧹 剔除无价格行(qlib 节假日行): {stock_code} "
+                            f"{n_dropped}/{n_before} 行"
+                        )
+
             return df
 
         except Exception as e:
