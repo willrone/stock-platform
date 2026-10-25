@@ -48,7 +48,16 @@ export default function LoginPage() {
         localStorage.setItem('refresh_token', data.refresh_token);
       }
       localStorage.setItem('user_info', JSON.stringify(data.user));
-      setUser(data.user);
+      // store 的 User 用 name 字段；后端返回 username —— 映射并带上 is_admin
+      // （管理端入口如「充值订单」按 is_admin 显示）
+      setUser({
+        id: data.user?.id || '',
+        name: data.user?.username || data.user?.name || data.user?.email || '',
+        email: data.user?.email || '',
+        role: data.user?.subscription_tier || 'free',
+        is_admin: Boolean(data.user?.is_admin),
+        subscription_tier: data.user?.subscription_tier,
+      });
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message);

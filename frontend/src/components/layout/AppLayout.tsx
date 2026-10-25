@@ -49,6 +49,7 @@ import {
   Brain,
   Sparkles,
   Signal,
+  CreditCard,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore } from '../../stores/useAppStore';
@@ -129,6 +130,12 @@ const menuItems = [
     key: '/settings',
     icon: Settings,
     label: '系统设置',
+  },
+  {
+    key: '/admin/payments',
+    icon: CreditCard,
+    label: '充值订单',
+    adminOnly: true,
   },
 ];
 
@@ -238,7 +245,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               justifyContent: 'center',
             }}
           >
-            {menuItems.map(item => {
+            {menuItems
+              .filter(item => !item.adminOnly || user?.is_admin)
+              .map(item => {
               const Icon = item.icon;
               const isActive = pathname === item.key;
               return (
@@ -340,7 +349,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           </Box>
 
           <List>
-            {menuItems.map(item => {
+            {menuItems
+              .filter(item => !item.adminOnly || user?.is_admin)
+              .map(item => {
               const Icon = item.icon;
               const isActive = pathname === item.key;
               return (

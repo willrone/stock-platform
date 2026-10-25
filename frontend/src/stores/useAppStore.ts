@@ -17,6 +17,9 @@ interface User {
   email: string;
   role: string;
   avatar?: string;
+  /** 2026-10-25：管理端入口（充值订单确认到账）按此字段显示 */
+  is_admin?: boolean;
+  subscription_tier?: string;
 }
 
 interface SystemConfig {

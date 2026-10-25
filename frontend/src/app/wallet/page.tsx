@@ -7,12 +7,16 @@ import {
   Button,
   Card,
   Col,
+  Descriptions,
   Form,
   Input,
   message,
+  Modal,
   Progress,
   Row,
+  Space,
   Statistic,
+  Table,
   Tag,
   Typography,
 } from 'antd';
@@ -54,6 +58,39 @@ type UsageSummary = {
   events: Record<string, UsageEvent>;
 };
 
+type PaymentConfig = {
+  method_name: string;
+  payee_account: string;
+  qr_image_url: string;
+  instructions: string;
+  is_enabled: boolean;
+  min_deposit_cents?: number;
+  max_deposit_cents?: number;
+};
+
+type PaymentOrder = {
+  order_no: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+};
+
+type DepositResult = {
+  order_no?: string;
+  order_status?: string;
+  amount_cents?: number;
+  payee_account?: string;
+  qr_image_url?: string;
+  instructions?: string;
+};
+
+const ORDER_STATUS_LABEL: Record<string, { text: string; color: string }> = {
+  pending: { text: '待确认到账', color: 'gold' },
+  paid: { text: '已到账', color: 'green' },
+  cancelled: { text: '已取消', color: 'default' },
+  refunded: { text: '已退款', color: 'red' },
+};
+
 export default function WalletPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -62,6 +99,11 @@ export default function WalletPage() {
   const [billingHistory, setBillingHistory] = useState<BillingRecord[]>([]);
   const [depositLoading, setDepositLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // 充值订单制（2026-10-25）：下单 → 展示收款指引 → 等待管理员确认到账
+  const [payConfig, setPayConfig] = useState<PaymentConfig | null>(null);
+  const [orders, setOrders] = useState<PaymentOrder[]>([]);
+  const [pendingOrder, setPendingOrder] = useState<PaymentOrder | null>(null);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   useEffect(() => {
     const token = window.localStorage.getItem('access_token');
@@ -83,6 +125,7 @@ export default function WalletPage() {
       setBalance(balanceRes);
       setUsageSummary(usageRes);
       setBillingHistory(historyRes);
+      await Promise.all([loadOrders(), loadPayConfig()]);
     } catch (e) {
       message.error('加载数据失败');
     } finally {
@@ -99,16 +142,42 @@ export default function WalletPage() {
   const handleDeposit = async (values: { amount: number }) => {
     setDepositLoading(true);
     try {
-      await apiRequest.post('/commerce/deposit', {
-        amount_cents: values.amount * 100,
+      const res = await apiRequest.post<DepositResult>('/commerce/deposit', {
+        amount_cents: Math.round(values.amount * 100),
         remark: '用户充值',
       });
-      message.success('充值成功！');
-      await loadData();
-    } catch (e) {
-      message.error('充值失败');
+      setPendingOrder({
+        order_no: res.order_no || '',
+        amount_cents: res.amount_cents || 0,
+        status: res.order_status || 'pending',
+        created_at: new Date().toISOString(),
+      });
+      setOrderModalOpen(true);
+      message.success('订单已创建，请按指引付款后等待确认到账');
+      await loadOrders();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '下单失败';
+      message.error(msg);
     } finally {
       setDepositLoading(false);
+    }
+  };
+
+  const loadOrders = async () => {
+    try {
+      const res = await apiRequest.get<{ orders: PaymentOrder[] }>('/commerce/payment/orders');
+      setOrders(res.orders || []);
+    } catch {
+      /* 订单列表失败不阻塞钱包主流程 */
+    }
+  };
+
+  const loadPayConfig = async () => {
+    try {
+      const cfg = await apiRequest.get<PaymentConfig>('/commerce/payment/config');
+      setPayConfig(cfg);
+    } catch {
+      /* 收款配置拿不到时降级为「请联系客服」 */
     }
   };
 
@@ -284,7 +353,7 @@ export default function WalletPage() {
         )}
       </Card>
 
-      {/* 充值弹窗 */}
+      {/* 充值弹窗：下单（不立即加分，管理员确认到账后才入账） */}
       <Form
         id="deposit-form"
         onFinish={handleDeposit}
@@ -294,7 +363,17 @@ export default function WalletPage() {
         <Form.Item
           name="amount"
           label="充值金额（元）"
-          rules={[{ required: true, message: '请输入充值金额' }]}
+          rules={[
+            { required: true, message: '请输入充值金额' },
+            {
+              type: 'number',
+              min: (payConfig?.min_deposit_cents ?? 1000) / 100,
+              max: (payConfig?.max_deposit_cents ?? 500000) / 100,
+              message: `充值范围 ¥${(payConfig?.min_deposit_cents ?? 1000) / 100} ~ ¥${
+                (payConfig?.max_deposit_cents ?? 500000) / 100
+              }`,
+            },
+          ]}
         >
           <Input type="number" min={10} step={10} placeholder="例如：100" addonAfter="元" />
         </Form.Item>
@@ -305,10 +384,139 @@ export default function WalletPage() {
             loading={depositLoading}
             icon={<CreditCard size={16} />}
           >
-            确认充值
+            创建充值订单
           </Button>
         </Form.Item>
       </Form>
+
+      {/* 订单详情弹窗：展示收款指引 */}
+      <Modal
+        open={orderModalOpen}
+        onCancel={() => setOrderModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setOrderModalOpen(false)}>
+            关闭
+          </Button>,
+          <Button
+            key="refresh"
+            type="primary"
+            onClick={async () => {
+              await loadOrders();
+              const found = orders.find((o) => o.order_no === pendingOrder?.order_no);
+              if (found?.status === 'paid') {
+                message.success('已确认到账，余额已更新');
+                setOrderModalOpen(false);
+                await loadData();
+              } else {
+                message.info('尚未确认到账，请稍后刷新或联系客服');
+              }
+            }}
+          >
+            刷新状态
+          </Button>,
+        ]}
+        title="充值订单"
+        width={480}
+      >
+        {pendingOrder && (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert
+              type={pendingOrder.status === 'paid' ? 'success' : 'info'}
+              showIcon
+              message={
+                pendingOrder.status === 'paid'
+                  ? '该订单已确认到账'
+                  : '请按下方方式付款，客服确认后余额自动到账'
+              }
+            />
+            <Descriptions
+              column={1}
+              size="small"
+              bordered
+              items={[
+                { key: 'no', label: '订单号', children: pendingOrder.order_no },
+                {
+                  key: 'amt',
+                  label: '充值金额',
+                  children: `¥${(pendingOrder.amount_cents / 100).toFixed(2)}`,
+                },
+                {
+                  key: 'st',
+                  label: '状态',
+                  children: (
+                    <Tag color={ORDER_STATUS_LABEL[pendingOrder.status]?.color || 'default'}>
+                      {ORDER_STATUS_LABEL[pendingOrder.status]?.text || pendingOrder.status}
+                    </Tag>
+                  ),
+                },
+                {
+                  key: 'method',
+                  label: '收款方式',
+                  children: payConfig?.method_name || '请联系客服',
+                },
+                {
+                  key: 'acc',
+                  label: '收款账号',
+                  children: payConfig?.payee_account || '—',
+                },
+              ]}
+            />
+            {payConfig?.qr_image_url && (
+              <div style={{ textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                  扫码支付
+                </Text>
+                <img
+                  src={payConfig.qr_image_url}
+                  alt="收款码"
+                  style={{ maxWidth: 220, width: '100%', borderRadius: 4 }}
+                />
+              </div>
+            )}
+            {payConfig?.instructions && (
+              <Alert type="warning" message={payConfig.instructions} />
+            )}
+          </Space>
+        )}
+      </Modal>
+
+      {/* 充值订单记录 */}
+      {orders.length > 0 && (
+        <Card style={{ marginTop: 24 }}>
+          <div style={{ padding: 24 }}>
+            <Title level={5} style={{ marginTop: 0 }}>
+              充值订单
+            </Title>
+            <Table size="small" pagination={false}>
+              <Table.Column title="订单号" dataIndex="order_no" key="order_no" />
+              <Table.Column
+                title="金额"
+                dataIndex="amount_cents"
+                key="amount_cents"
+                align="right"
+                render={(v: number) => `¥${(v / 100).toFixed(2)}`}
+              />
+              <Table.Column
+                title="下单时间"
+                dataIndex="created_at"
+                key="created_at"
+                align="right"
+                render={(v: string) => (v ? new Date(v).toLocaleString('zh-CN') : '—')}
+              />
+              <Table.Column
+                title="状态"
+                dataIndex="status"
+                key="status"
+                render={(v: string) => (
+                  <Tag color={ORDER_STATUS_LABEL[v]?.color || 'default'}>
+                    {ORDER_STATUS_LABEL[v]?.text || v}
+                  </Tag>
+                )}
+              />
+            </Table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

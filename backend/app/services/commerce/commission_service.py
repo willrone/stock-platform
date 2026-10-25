@@ -215,6 +215,24 @@ class CommerceService:
 
         return balance
 
+    async def get_or_create_balance(self, user_id: str) -> UserBalance:
+        """获取用户余额，不存在则创建（初始赠送 ¥10）。
+
+        2026-10-25 新增公开方法：原先只有私有 ``_get_or_create_balance(db, ...)``，
+        调用方为了拿到「必定存在」的余额只能自己开 session， 导致
+        ``/commerce/balance`` 里出现 ``AsyncSessionLocal().__aenter__()``
+        这种永不关闭的 session 泄漏。本方法自己管 session 生命周期。
+        """
+        db = self.db or AsyncSessionLocal()
+        try:
+            balance = await self._get_or_create_balance(db, user_id)
+            if not self.db:
+                await db.commit()
+            return balance
+        finally:
+            if not self.db:
+                await db.close()
+
     # ──────────────────────────────────────────────────────
     # 计费规则
     # ──────────────────────────────────────────────────────

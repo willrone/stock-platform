@@ -71,6 +71,8 @@ class UserInfo(BaseModel):
     email_verified: bool = False
     avatar_url: Optional[str] = None
     last_login_at: Optional[datetime] = None
+    # 2026-10-25：前端需要按角色显示管理端入口（如「充值订单」确认到账）
+    is_admin: bool = False
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -97,6 +99,8 @@ def _user_payload(user: User) -> dict:
         "email": user.email,
         "username": user.username,
         "subscription_tier": user.subscription_tier,
+        # 2026-10-25：前端按角色显示管理端入口（充值订单确认到账）
+        "is_admin": bool(getattr(user, "is_admin", False)),
     }
 
 
@@ -305,6 +309,7 @@ def update_profile(
             email_verified=user.email_verified,
             avatar_url=user.avatar_url,
             last_login_at=user.last_login_at,
+            is_admin=bool(getattr(user, "is_admin", False)),
         )
     except HTTPException:
         raise
@@ -351,6 +356,7 @@ def get_profile(user_id: str = Depends(get_current_user_from_auth)):
             email_verified=user.email_verified,
             avatar_url=user.avatar_url,
             last_login_at=user.last_login_at,
+            is_admin=bool(getattr(user, "is_admin", False)),
         )
     except HTTPException:
         raise

@@ -280,6 +280,133 @@ class CommercePricingRule(Base):
         }
 
 
+class PaymentOrderStatus(str, Enum):
+    """充值订单状态。"""
+
+    PENDING = "pending"        # 待支付（已下单，未确认到账）
+    PAID = "paid"              # 已到账（管理员确认或支付回调）
+    CANCELLED = "cancelled"    # 已取消
+    REFUNDED = "refunded"      # 已退款
+
+
+class PaymentOrder(Base):
+    """充值订单表。
+
+    2026-10-25 新增。背景：原 ``POST /api/v1/commerce/deposit`` 直接给调用方
+    加余额、无任何支付验证 —— 任何注册用户都能给自己充无限余额。
+    对外收费前这是致命的收入漏洞。
+
+    改为**两段式订单制**：
+      1. 用户下单 → 订单 ``pending``，返回订单号 + 收款指引
+      2. 管理员确认到账（或接了支付渠道后由回调确认）→ 订单 ``paid``，
+         此时才写入 ``user_balances.balance_cents`` 并生成 ``billing_records``
+
+    没有自动支付渠道时（Stripe key 为空），走人工对账：
+    用户转账后把订单号发给管理员，管理员在后台点"确认到账"即可。
+    """
+
+    __tablename__ = "payment_orders"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    order_no = Column(String(32), nullable=False, unique=True, index=True)
+
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # 充值金额（分）
+    amount_cents = Column(Integer, nullable=False)
+
+    # 订单状态：pending / paid / cancelled / refunded
+    status = Column(
+        String(20), default=PaymentOrderStatus.PENDING.value, nullable=False
+    )
+
+    # 支付渠道：manual_wechat / manual_alipay / stripe / ...
+    payment_method = Column(String(50), default="manual", nullable=False)
+
+    # 用户备注（如"已微信转账"）
+    user_remark = Column(Text, nullable=True)
+
+    # 管理员备注 / 到账凭证说明
+    admin_remark = Column(Text, nullable=True)
+
+    # 管理员操作信息
+    confirmed_at = Column(DateTime, nullable=True)
+    confirmed_by = Column(String(64), nullable=True)
+
+    # 关联的充值账单（到账后生成的 billing_records.id）
+    billing_record_id = Column(String(36), nullable=True)
+
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    user = relationship("User")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为 API 可直接返回的字典。"""
+        return {
+            "id": self.id,
+            "order_no": self.order_no,
+            "user_id": self.user_id,
+            "amount_cents": self.amount_cents,
+            "amount_yuan": self.amount_cents / 100.0,
+            "status": self.status,
+            "payment_method": self.payment_method,
+            "user_remark": self.user_remark,
+            "admin_remark": self.admin_remark,
+            "billing_record_id": self.billing_record_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "confirmed_at": (
+                self.confirmed_at.isoformat() if self.confirmed_at else None
+            ),
+        }
+
+
+class PaymentConfig(Base):
+    """收款配置（单行表，id 固定为 'default'）。
+
+    2026-10-25 新增。没有自动支付渠道时，管理员在这里填自己的收款码 /
+    收款账号，前端充值页展示给用户，用户转账后填订单号，管理员确认到账。
+    """
+
+    __tablename__ = "payment_configs"
+
+    id = Column(String(36), primary_key=True, default="default")
+
+    # 收款方式名称，如"微信转账"
+    method_name = Column(String(50), default="", nullable=False)
+
+    # 收款账号（微信号 / 支付宝账号）
+    payee_account = Column(String(100), default="", nullable=False)
+
+    # 收款二维码图片 URL（前端展示，用户扫码）
+    qr_image_url = Column(String(500), default="", nullable=False)
+
+    # 支付说明
+    instructions = Column(Text, nullable=True)
+
+    # 是否开启在线充值（关闭时前端只显示"请联系客服"）
+    is_enabled = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为 API 可直接返回的字典。"""
+        return {
+            "method_name": self.method_name,
+            "payee_account": self.payee_account,
+            "qr_image_url": self.qr_image_url,
+            "instructions": self.instructions,
+            "is_enabled": self.is_enabled,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 # ──────────────────────────────────────────────────────────────
 # 默认计费规则（MVP 版本）
 # ──────────────────────────────────────────────────────────────

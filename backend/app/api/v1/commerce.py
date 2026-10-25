@@ -13,12 +13,17 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.api.v1.dependencies import get_current_user
+from app.api.v1.dependencies import get_current_user, require_admin_user
 from app.core.database import AsyncSessionLocal
 from app.services.commerce.commission_service import (
     CommerceService,
     check_can_proceed,
     seed_default_pricing_rules,
+)
+from app.services.commerce.payment_service import (
+    MAX_DEPOSIT_CENTS,
+    MIN_DEPOSIT_CENTS,
+    PaymentService,
 )
 
 router = APIRouter(prefix="/commerce", tags=["按量计费"])
@@ -57,12 +62,21 @@ class DepositRequest(BaseModel):
 
 
 class DepositResponse(BaseModel):
-    """充值响应。"""
+    """充值响应（2026-10-25 起为订单制，不立即加分）。"""
 
     balance_cents: int
     balance_yuan: float
     credited_cents: int
-    billing_record_id: str
+    billing_record_id: Optional[str] = Field(
+        None, description="到账后才有的账单 ID（订单制下为 None）"
+    )
+    order_no: Optional[str] = Field(None, description="充值订单号")
+    order_status: Optional[str] = Field(None, description="订单状态：pending/paid")
+    amount_cents: Optional[int] = Field(None, description="本次充值金额（分）")
+    payment_method: Optional[str] = Field(None, description="支付方式")
+    payee_account: Optional[str] = Field(None, description="收款账号")
+    qr_image_url: Optional[str] = Field(None, description="收款码图片 URL")
+    instructions: Optional[str] = Field(None, description="支付说明")
 
 
 class RefundRequest(BaseModel):
@@ -172,12 +186,9 @@ async def get_balance(
 ) -> BalanceResponse:
     """查询用户当前余额。"""
     service = CommerceService()
-    balance = await service.get_balance(user_id)
-
-    if balance is None:
-        balance = await service._get_or_create_balance(
-            await AsyncSessionLocal().__aenter__(), user_id
-        )
+    # get_or_create_balance 自己管 session 生命周期
+    # （旧写法 AsyncSessionLocal().__aenter__() 从不关闭 → session 泄漏）
+    balance = await service.get_or_create_balance(user_id)
 
     return BalanceResponse(
         user_id=balance.user_id,
@@ -189,25 +200,147 @@ async def get_balance(
     )
 
 
-@router.post("/deposit", response_model=DepositResponse, summary="用户充值")
+@router.post(
+    "/deposit",
+    response_model=DepositResponse,
+    summary="创建充值订单（两段式）",
+)
 async def deposit(
     request: DepositRequest,
     user_id: str = Depends(get_current_user),
 ) -> DepositResponse:
-    """用户充值到余额。"""
-    service = CommerceService()
-    balance, record = await service.deposit(
-        user_id=user_id,
-        amount_cents=request.amount_cents,
-        remark=request.remark,
+    """创建充值订单。
+
+    ⚠️ 2026-10-25 语义变更：此接口**不再直接给余额加分**。
+    原实现无任何支付验证 → 任何注册用户可自助充值无限余额（收入漏洞）。
+    现改为两段式订单制：
+      1. 本接口创建订单（pending），返回订单号 + 收款指引
+      2. 管理员确认到账后余额才增加（见 /payment/orders/{order_no}/confirm）
+    没有自动支付渠道时走人工对账：用户转账 → 报订单号 → 管理员确认。
+    """
+    service = PaymentService()
+    try:
+        order = await service.create_order(
+            user_id=user_id,
+            amount_cents=request.amount_cents,
+            remark=request.remark or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    config = await service.get_config()
+    commerce = CommerceService()
+    balance = await commerce.get_or_create_balance(user_id)
+    balance_cents = int(getattr(balance, "balance_cents", 0) or 0)
+    credited_cents = int(getattr(balance, "credited_cents", 0) or 0)
+    return DepositResponse(
+        balance_cents=balance_cents,
+        balance_yuan=balance_cents / 100.0,
+        credited_cents=credited_cents,
+        billing_record_id=None,
+        order_no=order.order_no,
+        order_status=order.status,
+        amount_cents=order.amount_cents,
+        payment_method=order.payment_method,
+        payee_account=config.get("payee_account", ""),
+        qr_image_url=config.get("qr_image_url", ""),
+        instructions=config.get("instructions", ""),
     )
 
-    return DepositResponse(
-        balance_cents=balance.balance_cents,
-        balance_yuan=balance.balance_cents / 100.0,
-        credited_cents=balance.credited_cents,
-        billing_record_id=record.id,
+
+# ──────────────────────────────────────────────────────────
+# 充值订单（用户侧 / 管理侧）
+# ──────────────────────────────────────────────────────────
+
+
+@router.get("/payment/orders", summary="我的充值订单")
+async def list_my_orders(
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=200),
+) -> Dict[str, Any]:
+    """列出当前用户的充值订单。"""
+    orders = await PaymentService().list_orders(user_id=user_id, limit=limit)
+    return {"orders": orders, "count": len(orders)}
+
+
+@router.get("/payment/config", summary="收款方式配置（公开）")
+async def get_payment_config() -> Dict[str, Any]:
+    """获取收款指引（用户充值页要显示的收款码/账号）。"""
+    config = await PaymentService().get_config()
+    config["min_deposit_cents"] = MIN_DEPOSIT_CENTS
+    config["max_deposit_cents"] = MAX_DEPOSIT_CENTS
+    return config
+
+
+@router.get("/admin/payment/orders", summary="全部充值订单（管理员）")
+async def admin_list_orders(
+    admin: Any = Depends(require_admin_user),
+    status: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+) -> Dict[str, Any]:
+    """管理员查看全部充值订单。"""
+    orders = await PaymentService().list_orders(user_id=None, status=status, limit=limit)
+    return {"orders": orders, "count": len(orders)}
+
+
+@router.post(
+    "/admin/payment/orders/{order_no}/confirm",
+    summary="确认订单到账（管理员）",
+)
+async def admin_confirm_order(
+    order_no: str,
+    admin: Any = Depends(require_admin_user),
+    remark: str = Query("", description="管理员备注"),
+) -> Dict[str, Any]:
+    """确认充值订单已到账 → 余额入账。"""
+    order, err = await PaymentService().confirm_order(
+        order_no, admin_id=str(getattr(admin, "id", "")), admin_remark=remark
     )
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"order": order.to_dict(), "message": "已确认到账，余额已入账"}
+
+
+@router.post(
+    "/admin/payment/orders/{order_no}/cancel",
+    summary="取消充值订单（管理员）",
+)
+async def admin_cancel_order(
+    order_no: str,
+    admin: Any = Depends(require_admin_user),
+    remark: str = Query("", description="管理员备注"),
+) -> Dict[str, Any]:
+    """取消充值订单。"""
+    order, err = await PaymentService().cancel_order(order_no, admin_remark=remark)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"order": order.to_dict(), "message": "订单已取消"}
+
+
+class PaymentConfigRequest(BaseModel):
+    """收款配置更新请求（JSON body，避免中文 query 编码问题）。"""
+
+    method_name: str = Field(..., description="收款方式名称，如 微信转账")
+    payee_account: str = Field(..., description="收款账号")
+    qr_image_url: str = Field("", description="收款码图片 URL")
+    instructions: str = Field("", description="支付说明")
+    is_enabled: bool = Field(True, description="是否开启在线充值")
+
+
+@router.post("/admin/payment/config", summary="设置收款方式（管理员）")
+async def admin_update_payment_config(
+    request: PaymentConfigRequest,
+    admin: Any = Depends(require_admin_user),
+) -> Dict[str, Any]:
+    """设置收款方式（人工收款场景下替代 Stripe）。"""
+    config = await PaymentService().update_config(
+        method_name=request.method_name,
+        payee_account=request.payee_account,
+        qr_image_url=request.qr_image_url,
+        instructions=request.instructions,
+        is_enabled=request.is_enabled,
+    )
+    return {"config": config, "message": "收款配置已更新"}
 
 
 @router.post("/refund", summary="退款")
