@@ -59,8 +59,21 @@ def _load(name: str, path: str):
 ds = _load("ds", os.path.join(BACKEND_ROOT, "scripts", "daily_signal.py"))
 ws = _load("ws", os.path.join(BACKEND_ROOT, "scripts", "weekly_signal.py"))
 
+# 实盘可成交性规则引擎（2026-10-25）—— 与回测 / 对外信号共用同一份实现
+from app.services.trading.execution_rules import (  # noqa: E402
+    DEFAULT_MIN_TURNOVER,
+    DEFAULT_PARTICIPATION_RATE,
+    check_tradability,
+)
+from scripts.market_data import get_extra, load_market_extras  # noqa: E402
+
 PAPER_DIR = os.path.join(ROOT, "data", "paper")
 RAW_DIR = os.path.join(ROOT, "data", "tdx_daily", "raw")
+
+#: 是否有 baostock 附加数据可用（可成交性精确判定）
+BAOSTOCK_READY = os.path.isdir(
+    os.path.join(ROOT, "data", "parquet", "baostock_daily")
+)
 
 COMMISSION = 0.0003
 MIN_COMMISSION = 5.0
@@ -288,6 +301,62 @@ def limit_pct(code: str) -> float:
     return 0.10
 
 
+def _num(series, code):
+    """从 Series 里取数值，取不到或非有限返回 None。"""
+    try:
+        v = series.get(code)
+    except AttributeError:
+        return None
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if np.isfinite(f) else None
+
+
+def _tradability(code, date, names, extras, *, close, open_price, high, low,
+                  volume, close_prev):
+    """调用统一的可成交性规则引擎，组装所需字段。
+
+    优先用 baostock 的交易所口径字段（pct_chg / trade_status / is_st / amount），
+    没有时退回本地 close/prev_close 推导（此时涨跌幅可能含除权跳空，
+    规则引擎按保守处理，不会把除权误判成涨跌停）。
+    """
+    def _get(field):
+        if not extras:
+            return None
+        try:
+            return get_extra(extras, field, code, date)
+        except Exception:
+            return None
+
+    pct = _get("pct_chg")
+    if pct is None:
+        c = _num(close, code)
+        prev = _num(close_prev, code)
+        pct = (c / prev - 1.0) if (c and prev and prev > 0) else None
+
+    ts = _get("trade_status")
+    st = _get("is_st")
+    amt = _get("amount")
+
+    return check_tradability(
+        code,
+        name=names.get(code, ""),
+        close=_num(close, code),
+        open_price=_num(open_price, code),
+        high=_num(high, code),
+        low=_num(low, code),
+        pct_chg=pct,
+        volume=_num(volume, code),
+        amount=amt,
+        trade_status=int(ts) if ts is not None else None,
+        is_st=int(st) if st is not None else None,
+    )
+
+
 def run_line(
     strategy: str,
     spec: Dict[str, Any],
@@ -297,6 +366,7 @@ def run_line(
     names: Dict[str, str],
     capital: float,
     rebalance_day: pd.Timestamp,
+    extras: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """跑一条线的调仓（周频：周五收盘打分 → 记纸面成交）。"""
     # 所有 score 函数统一签名 (frames, master, panel=None)
@@ -309,10 +379,17 @@ def run_line(
     if latest not in comp.index:
         # 调仓日不在打分矩阵里（数据窗口未覆盖）→ 用矩阵里最后一天
         latest = comp.index[-1]
-    close = ds.to_mat(frames, master, "close").loc[latest]
+    close_mat = ds.to_mat(frames, master, "close")
+    close = close_mat.loc[latest]
     vol = ds.to_mat(frames, master, "volume").loc[latest]
-    close_prev = ds.to_mat(frames, master, "close").shift(1).loc[latest]
+    open_price = ds.to_mat(frames, master, "open").loc[latest]
+    high = ds.to_mat(frames, master, "high").loc[latest]
+    low = ds.to_mat(frames, master, "low").loc[latest]
+    close_prev = close_mat.shift(1).loc[latest]
     day_ret = close / close_prev - 1.0
+    # 本次调仓因可成交性被拦下的标的（写进结果，让用户知道「为什么没买」）
+    blocked_buys: List[Dict[str, Any]] = []
+    blocked_sells: List[Dict[str, Any]] = []
 
     paper = load_holdings(strategy, capital)
     positions = paper.get("positions", {})
@@ -360,10 +437,14 @@ def run_line(
         p = px(c)
         if not np.isfinite(p) or p <= 0:
             continue
-        if float(vol.get(c, 0) or 0) <= 0:
-            continue  # 停牌
-        if float(day_ret.get(c, 0) or 0) <= -limit_pct(c) + 1e-4:
-            continue  # 跌停不可卖
+        # ── 可成交性判定（统一规则引擎）──
+        tr = _tradability(c, latest, names, extras, close=close,
+                          open_price=open_price, high=high, low=low,
+                          volume=vol, close_prev=close_prev)
+        if not tr.can_sell:
+            blocked_sells.append({"code": c, "name": names.get(c, ""),
+                                  "reason": tr.blocked_reason or tr.reason})
+            continue
         shares = int(positions[c].get("shares", 0))
         if shares <= 0:
             continue
@@ -391,14 +472,21 @@ def run_line(
         p = px(c)
         if not np.isfinite(p) or p <= 0:
             continue
-        if float(vol.get(c, 0) or 0) <= 0:
+        # ── 可成交性判定（统一规则引擎）──
+        tr = _tradability(c, latest, names, extras, close=close,
+                          open_price=open_price, high=high, low=low,
+                          volume=vol, close_prev=close_prev)
+        if not tr.can_buy:
+            blocked_buys.append({"code": c, "name": names.get(c, ""),
+                                 "reason": tr.blocked_reason or tr.reason})
             continue
-        if float(day_ret.get(c, 0) or 0) >= limit_pct(c) - 1e-4:
-            continue  # 涨停买不进
         budget = min(
             total_value * target_weight,
             max(0.0, cash - total_value * CASH_RESERVE),
         )
+        # 流动性上限：买入金额不能超过该股当日成交额的参与率
+        if tr.max_buy_amount is not None:
+            budget = min(budget, tr.max_buy_amount)
         shares = int(budget / p / BOARD_LOT) * BOARD_LOT
         if shares <= 0:
             continue
@@ -458,6 +546,10 @@ def run_line(
         "target_weight": round(target_weight, 6),
         "sells": sells,
         "buys": buys,
+        # 因可成交性被拦下的标的（涨停买不进 / 跌停卖不出 / 停牌 / 流动性不足）
+        # —— 写进结果是为了让用户知道「为什么信号里有它但没成交」
+        "blocked_buys": blocked_buys,
+        "blocked_sells": blocked_sells,
         "holds": [c for c in top if c in positions
                   and c not in {s["code"] for s in sells}],
     }
@@ -473,6 +565,12 @@ def main() -> None:
     codes = ds.list_universe()
     frames, panel, master = ds.load_data(codes)
     names = load_name_map()
+
+    # 2026-10-25：加载 baostock 附加字段（交易所口径涨跌幅 / 成交额 / 停牌 / ST）
+    # 用于可成交性判定 —— 避免除权跳空被误判成涨跌停
+    extras: Dict[str, Any] = {}
+    if BAOSTOCK_READY:
+        extras = load_market_extras(codes, master)
 
     # ── 选调仓日 ─────────────────────────────────────────────────────
     # 2026-10-25 修正（关键 bug）：
@@ -547,7 +645,7 @@ def main() -> None:
         spec = STRATEGIES[s]
         print(f"\n{'='*60}\n[{s}] {spec['desc']}", flush=True)
         r = run_line(s, spec, frames, panel, master, names, args.capital,
-                     rebalance_day)
+                     rebalance_day, extras=extras)
         results.append(r)
         print(f"  组合总值 ¥{r['value']:,.0f} | 现金 ¥{r['cash']:,.0f} | "
               f"{r['n_positions']} 只 | 买 {len(r['buys'])} 卖 {len(r['sells'])}",
