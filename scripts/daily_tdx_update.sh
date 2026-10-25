@@ -24,11 +24,12 @@ print(run_incremental())
 
   echo "=== $(date '+%Y-%m-%d %H:%M:%S') data done ==="
 
-  # 3) 周五收盘后自动跑周频信号（纸面盘）
+  # 3) 周五收盘后自动跑多策略纸面盘（4 条线各自 100 万独立记账）
+  #    22f / honest_42f / rsi_71421 / factor_ranking
   if [ "$(date +%u)" = "5" ]; then
-    echo "=== Friday: weekly signal ==="
-    env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/weekly_signal.py
-    echo "=== weekly signal done ==="
+    echo "=== Friday: multi-strategy paper portfolio ==="
+    env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/paper_portfolio.py
+    echo "=== paper portfolio done ==="
   fi
 
   echo "=== $(date '+%Y-%m-%d %H:%M:%S') all done ==="
