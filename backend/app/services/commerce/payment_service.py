@@ -119,8 +119,14 @@ class PaymentService:
         amount_cents: int,
         remark: str = "",
         payment_method: str = "manual",
+        plan_id: Optional[str] = None,
     ) -> PaymentOrder:
-        """创建充值订单（pending）。**不加分**。"""
+        """创建充值订单（pending）。**不加分**。
+
+        Args:
+            plan_id: 本次充值对应的套餐（free / pro / enterprise）。
+                管理员确认到账时会据此自动升级用户套餐。
+        """
         if amount_cents < MIN_DEPOSIT_CENTS:
             raise ValueError(f"充值金额不得低于 ¥{MIN_DEPOSIT_CENTS/100:.0f}")
         if amount_cents > MAX_DEPOSIT_CENTS:
@@ -144,6 +150,7 @@ class PaymentService:
                 amount_cents=amount_cents,
                 status=PaymentOrderStatus.PENDING.value,
                 payment_method=payment_method,
+                plan_id=plan_id or None,
                 user_remark=remark or None,
             )
             db.add(order)
@@ -151,7 +158,7 @@ class PaymentService:
             await db.refresh(order)
             logger.info(
                 f"创建充值订单 {order.order_no}: user={user_id} "
-                f"金额 ¥{amount_cents/100:.2f}"
+                f"金额 ¥{order.amount_cents/100:.2f} plan={plan_id or '-'}"
             )
             return order
         finally:
@@ -252,11 +259,38 @@ class PaymentService:
             order.admin_remark = admin_remark or None
             order.billing_record_id = record.id
 
+            # 2026-10-25 新增：确认到账时自动升级套餐
+            # 背景：原来确认到账只加余额，不改 subscription_tier → 出现
+            # 「收了钱但套餐没变」，用户付费了付费墙照样把他挡住。
+            upgraded_to = None
+            # 用 getattr 拿实例值（Pyright 把 order.plan_id 当类属性 Column 看待）
+            _plan_id = getattr(order, "plan_id", None)
+            if _plan_id:
+                from app.models.user_models import User
+
+                user = await db.get(User, order.user_id)
+                if user is not None:
+                    current = (user.subscription_tier or "free").lower()
+                    target = str(_plan_id).lower()
+                    # 只升不降（避免误操作把付费用户降级）
+                    _rank = {"free": 0, "pro": 1, "enterprise": 2}
+                    if _rank.get(target, 0) > _rank.get(current, 0):
+                        # setattr 绕过 Pyright 的 Column[str] 类型误报
+                        setattr(user, "subscription_tier", target)
+                        upgraded_to = target
+                        logger.info(
+                            f"用户 {user.id} 套餐升级: {current} → {target} "
+                            f"（订单 {order.order_no}）"
+                        )
+                    else:
+                        upgraded_to = current
+
             await db.commit()
             await db.refresh(order)
             logger.info(
                 f"充值订单 {order.order_no} 已确认: +¥{order.amount_cents/100:.2f} "
                 f"→ user={order.user_id} 余额 ¥{balance.balance_cents/100:.2f}"
+                + (f" 套餐→{upgraded_to}" if upgraded_to else "")
             )
             return order, None
         finally:

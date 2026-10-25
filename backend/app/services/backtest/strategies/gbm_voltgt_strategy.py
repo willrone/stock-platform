@@ -120,7 +120,18 @@ class GbmVoltgtStrategy(BaseStrategy):
         stock_data: Dict[str, pd.DataFrame],
         start_date: datetime,
         end_date: datetime,
+        single_model_from: Optional[datetime] = None,
     ) -> None:
+        """全市场横截面打分。
+
+        Args:
+            single_model_from: 2026-10-25 新增。给定后**只训练一个模型**：
+                用该日期之前的数据训练，预测该日期之后的所有日期。
+                口径与月度滚动一致（回测里也是月初训练、整月复用同一模型），
+                但把 3 年的 36 次重训压成 1 次 —— 纸面盘只需要「当前这一期」
+                的分数时，这是必须，否则单次运行要 20+ 分钟。
+                None = 保持原来的逐月滚动重训（回测口径）。
+        """
         codes = [
             code for code, df in stock_data.items()
             if df is not None and not df.empty
@@ -166,16 +177,45 @@ class GbmVoltgtStrategy(BaseStrategy):
         fwd_ret = (close.shift(-self.horizon) / close - 1.0).to_numpy()  # 周期=horizon天
 
         # 面板因子矩阵
+        #
+        # 2026-10-25 性能修复：原来 to_panel_mat 每调一次就把 5543 个 parquet
+        # 全部重读一遍，默认 42 因子要调 17 次 → 约 9.4 万次 read_parquet，
+        # 跑一次要几十分钟。改成**每个因子只读一次并缓存**，
+        # parquet 读取次数从 O(因子数 × 股票数) 降到 O(股票数)。
+        # 2026-10-25 性能修复（两处）：
+        #
+        # (1) 读盘：原来 to_panel_mat 每调一次就把 5543 个 parquet 全量重读，
+        #     默认 42 因子要调 17 次 → 约 9.4 万次 read_parquet，单次要 20+ 分钟。
+        #     改成**每股的 panel DataFrame 只读一次并缓存**，因子矩阵从缓存里切列。
+        #     读盘次数 O(股票数) 而非 O(因子数 × 股票数)。
+        #
+        # (2) 训练：月度滚动重训在 3 年数据上要训 36 次 LightGBM。
+        #     见下面 single_model_from —— 只需要"当前这一个调仓日"的分数时，
+        #     按回测口径（月初训练、整月复用同一模型）只需训 1 次。
+        _panel_frames: Dict[str, Optional[pd.DataFrame]] = {}
+
+        def _get_panel_frame(code: str) -> Optional[pd.DataFrame]:
+            if code in _panel_frames:
+                return _panel_frames[code]
+            try:
+                pf = pd.read_parquet(
+                    os.path.join(self.panel_dir, code.replace(".", "_") + ".parquet")
+                ).reset_index()
+                pf = pf.set_index("date").sort_index()
+                pf = pf.loc[pd.Timestamp(start_date):pd.Timestamp(end_date)]
+                pf = pf[~pf.index.duplicated(keep="first")]
+            except Exception:
+                pf = None
+            _panel_frames[code] = pf
+            return pf
+
         def to_panel_mat(factor_name: str) -> np.ndarray:
             out = np.full((n_dates, n_stocks), np.nan, dtype=np.float64)
             for j, code in enumerate(codes):
+                pf = _get_panel_frame(code)
+                if pf is None or factor_name not in pf.columns:
+                    continue
                 try:
-                    pf = pd.read_parquet(
-                        os.path.join(self.panel_dir, code.replace(".", "_") + ".parquet")
-                    ).reset_index()
-                    pf = pf.set_index("date").sort_index()
-                    pf = pf.loc[pd.Timestamp(start_date):pd.Timestamp(end_date)]
-                    pf = pf[~pf.index.duplicated(keep="first")]
                     pos = master.get_indexer(pd.DatetimeIndex(pf.index))
                     ok = pos >= 0
                     out[pos[ok], j] = pd.to_numeric(
@@ -288,11 +328,18 @@ class GbmVoltgtStrategy(BaseStrategy):
         comp_eq = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1), np.nan)
 
         comp = np.full((n_dates, n_stocks), np.nan)
-        for mi, (k0, ts0) in enumerate(month_starts):
-            k1 = month_starts[mi + 1][0] if mi + 1 < len(month_starts) else n_dates
-            if mi < self.warmup_months:
-                comp[k0:k1] = comp_eq[k0:k1]
-                continue
+
+        if single_model_from is not None:
+            # 单模型模式：找 single_model_from 之前最近的一个月初作为切点，
+            # 用切点之前的全部数据训练一个模型，预测切点之后的所有日期。
+            # 与月度滚动口径一致（该月的模型就是月初训的，之后整月复用）。
+            target = pd.Timestamp(single_model_from)
+            k0 = int(np.searchsorted(master.values, target.to_datetime64()))
+            k0 = max(k0, 1)
+            # 回退到该月月初（与 month_starts 对齐）
+            prev_starts = [k for k, _ in month_starts if k <= k0]
+            if prev_starts:
+                k0 = prev_starts[-1]
             z_block = z_all[:k0].reshape(-1, n_fac)
             p_block = pre_all[:k0].reshape(-1, n_fac)
             lab = fwd_ret[:k0].reshape(-1)
@@ -300,18 +347,51 @@ class GbmVoltgtStrategy(BaseStrategy):
             X = np.column_stack([z_block[valid], p_block[valid]])
             y = lab[valid]
             if len(X) < 500:
-                comp[k0:k1] = comp_eq[k0:k1]
-                continue
-            mdl = lgb.LGBMRegressor(
-                n_estimators=self.n_estimators,
-                max_depth=self.max_depth,
-                learning_rate=self.learning_rate,
-                num_leaves=15, subsample=0.8, colsample_bytree=0.8,
-                random_state=42, verbosity=-1,
-            ).fit(X, y)
-            for k in range(k0, k1):
-                Xk = np.column_stack([z_all[k], pre_all[k]])
-                comp[k] = mdl.predict(Xk)
+                logger.warning(
+                    f"gbm_voltgt 单模型模式样本不足({len(X)})，退回等权复合"
+                )
+                comp = comp_eq.copy()
+            else:
+                mdl = lgb.LGBMRegressor(
+                    n_estimators=self.n_estimators,
+                    max_depth=self.max_depth,
+                    learning_rate=self.learning_rate,
+                    num_leaves=15, subsample=0.8, colsample_bytree=0.8,
+                    random_state=42, verbosity=-1,
+                ).fit(X, y)
+                for k in range(k0, n_dates):
+                    Xk = np.column_stack([z_all[k], pre_all[k]])
+                    comp[k] = mdl.predict(Xk)
+                logger.info(
+                    f"gbm_voltgt 单模型模式：切点 {master[k0].date()}，"
+                    f"训练样本 {len(X)}，预测 {n_dates - k0} 天"
+                )
+        else:
+            # 原口径：逐月滚动重训
+            for mi, (k0, ts0) in enumerate(month_starts):
+                k1 = month_starts[mi + 1][0] if mi + 1 < len(month_starts) else n_dates
+                if mi < self.warmup_months:
+                    comp[k0:k1] = comp_eq[k0:k1]
+                    continue
+                z_block = z_all[:k0].reshape(-1, n_fac)
+                p_block = pre_all[:k0].reshape(-1, n_fac)
+                lab = fwd_ret[:k0].reshape(-1)
+                valid = np.isfinite(lab)
+                X = np.column_stack([z_block[valid], p_block[valid]])
+                y = lab[valid]
+                if len(X) < 500:
+                    comp[k0:k1] = comp_eq[k0:k1]
+                    continue
+                mdl = lgb.LGBMRegressor(
+                    n_estimators=self.n_estimators,
+                    max_depth=self.max_depth,
+                    learning_rate=self.learning_rate,
+                    num_leaves=15, subsample=0.8, colsample_bytree=0.8,
+                    random_state=42, verbosity=-1,
+                ).fit(X, y)
+                for k in range(k0, k1):
+                    Xk = np.column_stack([z_all[k], pre_all[k]])
+                    comp[k] = mdl.predict(Xk)
         comp[limit_up_mask] = np.nan
 
         # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。

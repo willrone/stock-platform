@@ -51,13 +51,31 @@ _ALPHAPANEL_FACTORS: dict[str, float] = {
 
 
 def list_universe() -> list[str]:
-    """所有有 stock_data parquet 的 A 股代码。"""
+    """所有有 stock_data parquet 的 A 股代码。
+
+    2026-10-25 修正：原来只判断 `.parquet` 后缀，把
+    `000001.parquet` / `000858.parquet` 这类**无交易所后缀的旧命名残留**
+    也收进了股票池（stock_data 里同时存在 `000001_SZ.parquet` 和
+    `000001.parquet` 两套命名）。后果：
+      - 股票池多出重复标的（同一只股票被算两次）
+      - 旧的 `000001.parquet` 数据只到 2023-06-30，之后全是 NaN
+      - 污染横截面统计（市场宽度、等权指数波动率 → 直接影响
+        gbm_voltgt 的波动率目标仓位）
+
+    现在只接受 `<code>_<SH|SZ|BJ>.parquet`，交易所后缀是硬要求。
+    """
     codes = []
     for f in sorted(os.listdir(STOCK_DATA_DIR)):
         if not f.endswith(".parquet"):
             continue
-        code = f[:-8].replace("_", ".")
-        codes.append(code)
+        stem = f[: -len(".parquet")]
+        # 必须是 <6位数字>_<SH|SZ|BJ> 形式
+        if "_" not in stem:
+            continue
+        code, _, market = stem.partition("_")
+        if market not in ("SH", "SZ", "BJ") or not code.isdigit():
+            continue
+        codes.append(f"{code}.{market}")
     return codes
 
 

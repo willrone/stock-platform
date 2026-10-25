@@ -59,6 +59,11 @@ class DepositRequest(BaseModel):
 
     amount_cents: int = Field(..., ge=1, description="充值金额（分）")
     remark: Optional[str] = Field(None, description="充值备注")
+    # 2026-10-25 新增：本次充值对应的套餐（free / pro / enterprise）。
+    # 管理员确认到账时据此自动升级用户套餐 —— 否则「收了钱但套餐没变」。
+    plan_id: Optional[str] = Field(
+        None, description="对应套餐：free / pro / enterprise"
+    )
 
 
 class DepositResponse(BaseModel):
@@ -224,6 +229,7 @@ async def deposit(
             user_id=user_id,
             amount_cents=request.amount_cents,
             remark=request.remark or "",
+            plan_id=request.plan_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -292,13 +298,33 @@ async def admin_confirm_order(
     admin: Any = Depends(require_admin_user),
     remark: str = Query("", description="管理员备注"),
 ) -> Dict[str, Any]:
-    """确认充值订单已到账 → 余额入账。"""
+    """确认充值订单已到账 → 余额入账（+ 自动升级套餐）。"""
     order, err = await PaymentService().confirm_order(
         order_no, admin_id=str(getattr(admin, "id", "")), admin_remark=remark
     )
-    if err:
-        raise HTTPException(status_code=400, detail=err)
-    return {"order": order.to_dict(), "message": "已确认到账，余额已入账"}
+    if err or order is None:
+        raise HTTPException(status_code=400, detail=err or "订单确认失败")
+
+    # 返回用户当前套餐，管理员能直接看到「已升级到 pro」
+    tier = None
+    try:
+        from app.models.user_models import User
+        from sqlalchemy import select
+
+        db = AsyncSessionLocal()
+        try:
+            u = await db.scalar(select(User).where(User.id == order.user_id))
+            tier = getattr(u, "subscription_tier", None)
+        finally:
+            await db.close()
+    except Exception:  # noqa: BLE001
+        tier = None
+
+    return {
+        "order": order.to_dict(),
+        "message": "已确认到账，余额已入账",
+        "subscription_tier": tier,
+    }
 
 
 @router.post(

@@ -328,6 +328,11 @@ class PaymentOrder(Base):
     # 支付渠道：manual_wechat / manual_alipay / stripe / ...
     payment_method = Column(String(50), default="manual", nullable=False)
 
+    # 2026-10-25 新增：本次充值对应的套餐（free / pro / enterprise）
+    # 管理员确认到账时据此自动升级 user.subscription_tier —— 否则出现
+    # 「收了钱但套餐没变」：用户付费了，付费墙照样把他挡在门外。
+    plan_id = Column(String(50), nullable=True)
+
     # 用户备注（如"已微信转账"）
     user_remark = Column(Text, nullable=True)
 
@@ -356,6 +361,7 @@ class PaymentOrder(Base):
             "amount_yuan": self.amount_cents / 100.0,
             "status": self.status,
             "payment_method": self.payment_method,
+            "plan_id": self.plan_id,
             "user_remark": self.user_remark,
             "admin_remark": self.admin_remark,
             "billing_record_id": self.billing_record_id,

@@ -86,6 +86,12 @@ type DailySignal = {
     board_lot: number;
   };
   fill_assumption?: string;
+  tier?: string;
+  tier_label?: string;
+  delay_days?: number;
+  delayed?: boolean;
+  upgrade_hint?: string;
+  execution_detail_locked?: boolean;
 };
 
 type StrategyInfo = {
@@ -98,6 +104,17 @@ type StrategyInfo = {
   n_positions: number;
   last_signal: string | null;
   last_value: number | null;
+  locked?: boolean;
+  delay_days?: number;
+};
+
+type StrategyListResponse = {
+  strategies: StrategyInfo[];
+  tier: string;
+  tier_label: string;
+  allowed_strategies: string[];
+  delay_days: number;
+  include_execution_detail: boolean;
 };
 
 const fmtMoney = (v?: number) =>
@@ -112,6 +129,10 @@ export default function TodaySignalPage() {
   const [signal, setSignal] = useState<DailySignal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tier, setTier] = useState('free');
+  const [tierLabel, setTierLabel] = useState('体验版');
+  const [delayDays, setDelayDays] = useState(0);
+  const [hasDetail, setHasDetail] = useState(true);
 
   useEffect(() => {
     const token = window.localStorage.getItem('access_token');
@@ -121,10 +142,15 @@ export default function TodaySignalPage() {
     }
     (async () => {
       try {
-        const res = await apiRequest.get<{ strategies: StrategyInfo[] }>('/trading/strategies');
+        const res = await apiRequest.get<StrategyListResponse>('/trading/strategies');
         setStrategies(res.strategies || []);
-        if (res.strategies?.length) {
-          const withPaper = res.strategies.find((s) => s.n_positions > 0) || res.strategies[0];
+        setTier(res.tier || 'free');
+        setTierLabel(res.tier_label || '体验版');
+        setDelayDays(res.delay_days ?? 0);
+        setHasDetail(res.include_execution_detail !== false);
+        const usable = (res.strategies || []).filter((s) => !s.locked);
+        if (usable.length) {
+          const withPaper = usable.find((s) => s.n_positions > 0) || usable[0];
           setActive(withPaper.key);
         }
       } catch (e) {
@@ -179,6 +205,35 @@ export default function TodaySignalPage() {
         </Alert>
       )}
 
+      {/* 订阅状态条 */}
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Chip size="small" color={tier === 'free' ? 'default' : 'primary'} label={`${tierLabel}`} />
+        {delayDays > 0 && (
+          <Chip
+            size="small"
+            color="warning"
+            variant="outlined"
+            label={`信号延迟 ${delayDays} 个交易日`}
+          />
+        )}
+        {tier === 'free' && (
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => router.push('/pricing')}
+            sx={{ ml: 'auto !important' }}
+          >
+            升级解锁全部信号线
+          </Button>
+        )}
+      </Stack>
+
+      {signal?.upgrade_hint && tier === 'free' && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {signal.upgrade_hint}
+        </Alert>
+      )}
+
       <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }}>
         <Typography variant="body2" color="text.secondary">
           策略
@@ -190,9 +245,16 @@ export default function TodaySignalPage() {
           sx={{ minWidth: 260 }}
         >
           {strategies.map((s) => (
-            <MenuItem key={s.key} value={s.key}>
-              {s.display_name}
-              {s.n_positions > 0 ? `（${s.n_positions} 只持仓）` : ''}
+            <MenuItem key={s.key} value={s.key} disabled={s.locked}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
+                <span>
+                  {s.display_name}
+                  {!s.locked && s.n_positions > 0 ? `（${s.n_positions} 只持仓）` : ''}
+                </span>
+                {s.locked && (
+                  <Chip size="small" label="需信号版" color="warning" variant="outlined" />
+                )}
+              </Stack>
             </MenuItem>
           ))}
         </Select>
@@ -294,9 +356,9 @@ export default function TodaySignalPage() {
                         <TableCell>代码</TableCell>
                         <TableCell>名称</TableCell>
                         <TableCell align="right">参考价</TableCell>
-                        <TableCell align="right">股数</TableCell>
-                        <TableCell align="right">金额</TableCell>
-                        <TableCell align="right">费用</TableCell>
+                        {hasDetail && <TableCell align="right">股数</TableCell>}
+                        {hasDetail && <TableCell align="right">金额</TableCell>}
+                        {hasDetail && <TableCell align="right">费用</TableCell>}
                         <TableCell align="right">分数</TableCell>
                       </TableRow>
                     </TableHead>
@@ -306,11 +368,13 @@ export default function TodaySignalPage() {
                           <TableCell sx={{ fontFamily: 'monospace' }}>{b.code}</TableCell>
                           <TableCell>{b.name}</TableCell>
                           <TableCell align="right">{b.price?.toFixed(2)}</TableCell>
-                          <TableCell align="right">{fmtShares(b.shares)}</TableCell>
-                          <TableCell align="right">{fmtMoney(b.amount)}</TableCell>
-                          <TableCell align="right">
-                            {((b.commission ?? 0) + (b.slippage ?? 0)).toFixed(2)}
-                          </TableCell>
+                          {hasDetail && <TableCell align="right">{fmtShares(b.shares)}</TableCell>}
+                          {hasDetail && <TableCell align="right">{fmtMoney(b.amount)}</TableCell>}
+                          {hasDetail && (
+                            <TableCell align="right">
+                              {((b.commission ?? 0) + (b.slippage ?? 0)).toFixed(2)}
+                            </TableCell>
+                          )}
                           <TableCell align="right">
                             {b.score !== undefined && b.score !== null && b.score !== ''
                               ? Number(b.score).toFixed(3)
@@ -341,9 +405,9 @@ export default function TodaySignalPage() {
                         <TableCell>代码</TableCell>
                         <TableCell>名称</TableCell>
                         <TableCell align="right">参考价</TableCell>
-                        <TableCell align="right">股数</TableCell>
-                        <TableCell align="right">金额</TableCell>
-                        <TableCell align="right">费用</TableCell>
+                        {hasDetail && <TableCell align="right">股数</TableCell>}
+                        {hasDetail && <TableCell align="right">金额</TableCell>}
+                        {hasDetail && <TableCell align="right">费用</TableCell>}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -352,11 +416,13 @@ export default function TodaySignalPage() {
                           <TableCell sx={{ fontFamily: 'monospace' }}>{s.code}</TableCell>
                           <TableCell>{s.name}</TableCell>
                           <TableCell align="right">{s.price?.toFixed(2)}</TableCell>
-                          <TableCell align="right">{fmtShares(s.shares)}</TableCell>
-                          <TableCell align="right">{fmtMoney(s.amount)}</TableCell>
-                          <TableCell align="right">
-                            {((s.commission ?? 0) + (s.stamp_tax ?? 0) + (s.slippage ?? 0)).toFixed(2)}
-                          </TableCell>
+                          {hasDetail && <TableCell align="right">{fmtShares(s.shares)}</TableCell>}
+                          {hasDetail && <TableCell align="right">{fmtMoney(s.amount)}</TableCell>}
+                          {hasDetail && (
+                            <TableCell align="right">
+                              {((s.commission ?? 0) + (s.stamp_tax ?? 0) + (s.slippage ?? 0)).toFixed(2)}
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -376,9 +442,9 @@ export default function TodaySignalPage() {
                     <TableRow>
                       <TableCell>代码</TableCell>
                       <TableCell>名称</TableCell>
-                      <TableCell align="right">股数</TableCell>
+                      {hasDetail && <TableCell align="right">股数</TableCell>}
                       <TableCell align="right">成本价</TableCell>
-                      <TableCell align="right">成本金额</TableCell>
+                      {hasDetail && <TableCell align="right">成本金额</TableCell>}
                       <TableCell align="right">买入日</TableCell>
                     </TableRow>
                   </TableHead>
@@ -387,9 +453,9 @@ export default function TodaySignalPage() {
                       <TableRow key={h.code}>
                         <TableCell sx={{ fontFamily: 'monospace' }}>{h.code}</TableCell>
                         <TableCell>{h.name}</TableCell>
-                        <TableCell align="right">{fmtShares(h.shares)}</TableCell>
+                        {hasDetail && <TableCell align="right">{fmtShares(h.shares)}</TableCell>}
                         <TableCell align="right">{h.cost?.toFixed(2)}</TableCell>
-                        <TableCell align="right">{fmtMoney(h.cost_amount)}</TableCell>
+                        {hasDetail && <TableCell align="right">{fmtMoney(h.cost_amount)}</TableCell>}
                         <TableCell align="right">{h.buy_date}</TableCell>
                       </TableRow>
                     ))}

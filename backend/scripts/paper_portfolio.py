@@ -72,7 +72,7 @@ LIMIT_UP = 0.095
 
 
 # ── 打分函数：每条线一个复合分（越大越该买） ──────────────────────────
-def score_22f(frames, master) -> pd.DataFrame:
+def score_22f(frames, master, panel=None) -> pd.DataFrame:
     """22 因子等权（与 rolling walk-forward 选出的符号一致）。"""
     return ws.compute_composite_22f(frames, master)
 
@@ -84,7 +84,7 @@ def score_42f(frames, master, panel=None) -> pd.DataFrame:
     return ds.compute_composite(frames, panel, master)
 
 
-def score_rsi_71421(frames, master) -> pd.DataFrame:
+def score_rsi_71421(frames, master, panel=None) -> pd.DataFrame:
     """RSI 7/14/21 + 低波动 + 量价等权复合（与注册策略 rsi_71421 同源）。"""
     close = ds.to_mat(frames, master, "close")
     vol = ds.to_mat(frames, master, "volume")
@@ -111,7 +111,79 @@ def score_rsi_71421(frames, master) -> pd.DataFrame:
     return pd.DataFrame(comp, index=master, columns=list(frames))
 
 
-def score_factor_ranking(frames, master) -> pd.DataFrame:
+def score_gbm_voltgt(frames, master, panel=None, rebalance_day=None) -> pd.DataFrame:
+    """LightGBM 元模型 + 波动率目标（复用注册策略 GbmVoltgtStrategy）。
+
+    2026-10-25 新增：补齐策略赛马第 4 条线 —— 审计报告
+    (docs/backtest/FULL_STRATEGY_AUDIT_2026-10-25.md) 入选的 4 条是
+    honest_42f / gbm_voltgt / rsi_71421 / factor_ranking，但纸面盘里
+    gbm_voltgt 被 22f 顶替了 —— 跑了两个月的纸面账本少了一条进攻线。
+
+    这里**不重写**策略逻辑，直接调注册策略的 prepare_backtest_data，
+    分数从 stock_data[code].attrs['_gbm_voltgt_scores'] 取回，
+    保证纸面盘与回测/线上永远是同一份代码。
+    """
+    import asyncio
+
+    from app.services.backtest.strategies.gbm_voltgt_strategy import (
+        GbmVoltgtStrategy,
+    )
+
+    strategy = GbmVoltgtStrategy({
+        "topk": 60,
+        "n_drop": 5,
+        "rebalance_days": "weekly",
+        "rebalance_weekday": 4,   # 周五
+        "horizon": 1,
+        "limit_up": LIMIT_UP,
+        "panel_dir": os.path.join(ROOT, "data", "qlib_data", "features", "day"),
+        "n_estimators": 100,
+        "max_depth": 3,
+        "learning_rate": 0.05,
+        "warmup_months": 2,
+        "target_vol": 0.20,
+        "vt_window": 20,
+        "cash_reserve_ratio": CASH_RESERVE,
+    })
+
+    start = master[0].to_pydatetime()
+    end = master[-1].to_pydatetime()
+    # 单模型模式：只用调仓日之前的数据训一个模型，预测调仓日当天。
+    # 口径与月度滚动一致（该月模型就是月初训的、整月复用），但把 36 次
+    # 重训压成 1 次 —— 否则单次纸面盘运行要 20+ 分钟，进不了 cron。
+    single_from = None
+    if rebalance_day is not None:
+        single_from = pd.Timestamp(rebalance_day).to_pydatetime()
+    print(
+        f"  [gbm_voltgt] 训练元模型（42 因子，单模型模式，"
+        f"切点 {single_from}）…",
+        flush=True,
+    )
+    asyncio.run(
+        strategy.prepare_backtest_data(
+            frames, start, end, single_model_from=single_from
+        )
+    )
+
+    codes = list(frames)
+    out = pd.DataFrame(
+        np.nan, index=pd.DatetimeIndex(master), columns=codes, dtype="float64"
+    )
+    for code in codes:
+        score_map = (frames[code].attrs or {}).get("_gbm_voltgt_scores") or {}
+        if not score_map:
+            continue
+        ser = pd.Series(score_map, dtype="float64")
+        ser.index = pd.DatetimeIndex(ser.index)
+        out[code] = ser.reindex(out.index)
+    print(
+        f"  [gbm_voltgt] 打分完成，有效分数 {int(np.isfinite(out.to_numpy()).sum())}",
+        flush=True,
+    )
+    return out
+
+
+def score_factor_ranking(frames, master, panel=None) -> pd.DataFrame:
     """动量(126d 跳 20d) / 低波动(60d) / 低振幅(10d) 等权 z（注册策略同源）。"""
     close = ds.to_mat(frames, master, "close")
     high = ds.to_mat(frames, master, "high")
@@ -149,6 +221,10 @@ STRATEGIES: Dict[str, Dict[str, Any]] = {
     "factor_ranking": {
         "score": score_factor_ranking, "topk": 50, "ndrop": 5,
         "desc": "动量(126d 跳 20d)/低波动(60d)/低振幅(10d) 等权 z",
+    },
+    "gbm_voltgt": {
+        "score": score_gbm_voltgt, "topk": 60, "ndrop": 5,
+        "desc": "LightGBM 元模型 + 波动率目标（42 因子，月度滚动重训）",
     },
 }
 
@@ -223,8 +299,12 @@ def run_line(
     rebalance_day: pd.Timestamp,
 ) -> Dict[str, Any]:
     """跑一条线的调仓（周频：周五收盘打分 → 记纸面成交）。"""
-    comp = spec["score"](frames, master, panel) if spec["score"] is score_42f \
-        else spec["score"](frames, master)
+    # 所有 score 函数统一签名 (frames, master, panel=None)
+    # gbm_voltgt 额外需要 rebalance_day（单模型模式的切点）
+    if spec["score"] is score_gbm_voltgt:
+        comp = spec["score"](frames, master, panel, rebalance_day=rebalance_day)
+    else:
+        comp = spec["score"](frames, master, panel)
     latest = pd.Timestamp(rebalance_day)
     if latest not in comp.index:
         # 调仓日不在打分矩阵里（数据窗口未覆盖）→ 用矩阵里最后一天
@@ -239,10 +319,23 @@ def run_line(
     cash = float(paper.get("cash", capital))
 
     rank = comp.loc[latest].dropna().sort_values(ascending=False)
-    # 实盘安全过滤: 剔除 ST（5% 涨跌停 + 退市风险）
+    # 实盘安全过滤（2026-10-25 补退市股）：
+    #   ST  —— 5% 涨跌停 + 退市风险，9.5% 涨停掩码对它们失效
+    #   退  —— 名称含「退」= 已进入退市整理期 / 已退市，根本买不进
+    #   （实测踩到过：002731.SZ 萃华退 被选进买入清单）
     st_codes = {c for c in rank.index if "ST" in names.get(c, "").upper()}
-    if st_codes:
-        rank = rank.drop(index=[c for c in st_codes if c in rank.index])
+    delist_codes = {
+        c for c in rank.index
+        if "退" in names.get(c, "") and "退市" not in names.get(c, "")
+    }
+    # 名称里「退市」是说明性后缀（如「退市整理」），只有裸「退」字结尾才算退市整理期
+    delist_codes = {
+        c for c in rank.index
+        if names.get(c, "").endswith("退")
+    }
+    unsafe = (st_codes | delist_codes)
+    if unsafe:
+        rank = rank.drop(index=[c for c in unsafe if c in rank.index])
     rank_index = {c: i for i, c in enumerate(rank.index)}
     topk = int(spec["topk"])
     ndrop = int(spec["ndrop"])
@@ -460,6 +553,26 @@ def main() -> None:
               f"{r['n_positions']} 只 | 买 {len(r['buys'])} 卖 {len(r['sells'])}",
               flush=True)
 
+    os.makedirs(PAPER_DIR, exist_ok=True)
+    portfolio_path = os.path.join(PAPER_DIR, "portfolio.json")
+
+    # 2026-10-25 修正：原来直接覆盖整个 portfolio.json，
+    # 用 --strategies 跑单条线时会把其他线的信号全清掉
+    # （实测跑 gbm_voltgt 后 4 条线消失）。改成**合并写入**：
+    # 本次跑到的线覆盖，其余线保留上一次的结果。
+    existing = {}
+    if os.path.exists(portfolio_path):
+        try:
+            with open(portfolio_path) as fh:
+                existing = json.load(fh) or {}
+        except Exception:
+            existing = {}
+
+    prev_meta = existing.get("meta") or {}
+    merged_lines = dict(existing.get("lines") or {})
+    for r in results:
+        merged_lines[r["strategy"]] = r
+
     summary = {
         "meta": {
             "date": str(rebalance_day.date()),
@@ -469,11 +582,11 @@ def main() -> None:
                       "slippage": SLIPPAGE, "cash_reserve": CASH_RESERVE},
             "fill_assumption": "Friday close (周一执行以周一收盘价重记)",
             "generated_at": datetime.now().isoformat(),
+            "lines_updated": [r["strategy"] for r in results],
         },
-        "lines": {r["strategy"]: r for r in results},
+        "lines": merged_lines,
     }
-    os.makedirs(PAPER_DIR, exist_ok=True)
-    with open(os.path.join(PAPER_DIR, "portfolio.json"), "w") as fh:
+    with open(portfolio_path, "w") as fh:
         json.dump(summary, fh, ensure_ascii=False, indent=1)
 
     frontend_public = os.path.join(ROOT, "frontend", "public")
