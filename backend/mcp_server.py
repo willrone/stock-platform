@@ -40,9 +40,17 @@ PY313 = os.path.join(BACKEND, ".venv-py313", "bin", "python3")
 
 # 策略说明 (给 MCP 调用方看的)
 _STRATEGY_NOTES: Dict[str, str] = {
-    "honest_composite": "42f 等权复合, 免费档主力 (10年夏普 0.976, ~10s 出结果)",
-    "gbm_voltgt": "GBM + 波动率目标, 付费档 (10年夏普 1.16, 需 ~14 分钟重训)",
-    "factor_ranking": "横截面复合因子 + TopK-Dropout (新, 10年诚实夏普 0.680)",
+    # 2026-10-25 全部换成实测口径（3 年全市场 5513 / 周频调仓）
+    "honest_composite": "42f 等权复合, 免费档主力 (3年周频夏普 0.965, 回撤 -17.6%, 交易 1390 笔)",
+    "gbm_voltgt": "GBM + 波动率目标, 付费档 (3年周频夏普 0.835, 回撤 -29.8%, 交易 620 笔)",
+    "factor_ranking": "横截面复合因子 + TopK-Dropout (3年周频夏普 0.768, 回撤 -14.2%)",
+    "rsi_71421": "RSI 7/14/21 均值回归 (3年周频夏普 0.803, 回撤 -16.3%, 收益 +37.8%)",
+    "low_volatility": "低波动横截面 (3年周频夏普 0.835, 2026-10-25 修复只买不卖缺陷)",
+    "multi_factor": "value/momentum/low_vol 横截面 (3年周频夏普 0.411, 表现偏弱)",
+    "moving_average": "MA 趋势跟随 (3年全市场 -1.5%, 夏普 0.110 —— 不赚钱, 不建议使用)",
+    "lightgbm": "LightGBM 模型 (2026-10-25 修复 pkl 段错误; 3年全市场 +27.1%/0.430)",
+    "model_signal": "模型预测信号 (段错误已修; 500只 +1.6%/0.184, 交易仅 8 笔)",
+    "model_topk_dropout": "模型排序 TopK (段错误已修; 500只 +82.3%/0.647, 交易仅 8 笔)",
 }
 
 
@@ -139,11 +147,64 @@ def stock_quote(code: str, days: int = 10) -> str:
 
 
 @mcp.tool()
-def paper_portfolio() -> str:
-    """22f 纸面组合: 现金 + 持仓, 按最新收盘价 mark-to-market。"""
+def paper_portfolio(strategy: str = "") -> str:
+    """多策略纸面盘: 每条线独立 100 万, 返回各线汇总 + 明细。
+
+    2026-10-25 起默认读多策略盘（data/paper/portfolio.json，由
+    backend/scripts/paper_portfolio.py 生成，4 条线：22f / honest_42f /
+    rsi_71421 / factor_ranking）。
+    传 strategy=<名称> 只返回该条线的持仓明细。
+    """
+    import os as _os
+
+    portfolio_path = _os.path.join(DATA, "paper", "portfolio.json")
+    if _os.path.exists(portfolio_path):
+        with open(portfolio_path) as fh:
+            portfolio = json.load(fh)
+        lines = portfolio.get("lines", {})
+        summary = {
+            "date": portfolio.get("meta", {}).get("date"),
+            "data_latest": portfolio.get("meta", {}).get("data_latest"),
+            "capital_per_line": portfolio.get("meta", {}).get("capital_per_line"),
+            "lines": {
+                name: {
+                    "value": ln.get("value"),
+                    "cash": ln.get("cash"),
+                    "n_positions": ln.get("n_positions"),
+                    "pnl_pct": round(
+                        (float(ln.get("value", 0))
+                         / float(portfolio.get("meta", {}).get("capital_per_line", 1))
+                         - 1) * 100, 2),
+                    "desc": ln.get("desc"),
+                }
+                for name, ln in lines.items()
+            },
+        }
+        if not strategy:
+            return json.dumps(summary, ensure_ascii=False, indent=1)
+        if strategy not in lines:
+            raise ValueError(
+                f"未知策略 {strategy}，可选: {list(lines)}"
+            )
+        ln = lines[strategy]
+        summary["detail"] = {
+            "strategy": strategy,
+            "date": ln.get("date"),
+            "cash": ln.get("cash"),
+            "value": ln.get("value"),
+            "n_positions": ln.get("n_positions"),
+            "buys": ln.get("buys"),
+            "sells": ln.get("sells"),
+            "holds": ln.get("holds"),
+        }
+        return json.dumps(summary, ensure_ascii=False, indent=1)
+
+    # 回落到旧的单策略 22f 组合
     pfile = os.path.join(SIGNAL_DIR, "paper_holdings.json")
     if not os.path.exists(pfile):
-        raise FileNotFoundError("纸面组合不存在 (还没跑过 weekly_signal)")
+        raise FileNotFoundError(
+            "纸面组合不存在 (还没跑过 paper_portfolio.py 或 weekly_signal.py)"
+        )
     with open(pfile) as fh:
         p = json.load(fh)
     cash = float(p.get("cash", 0.0))
@@ -153,7 +214,6 @@ def paper_portfolio() -> str:
         try:
             df = _load_parquet(code)
             close = float(df.iloc[-1]["close"])
-            date = str(df.iloc[-1]["date"])[:10]
         except FileNotFoundError:
             continue
         shares = float(pos.get("shares", 0))
@@ -169,6 +229,7 @@ def paper_portfolio() -> str:
     holdings.sort(key=lambda h: h["market_value"], reverse=True)
     total = cash + total_mv
     return json.dumps({
+        "note": "旧版单策略 22f 组合（多策略盘尚未生成）",
         "cash": round(cash, 2),
         "market_value": round(total_mv, 2),
         "total_value": round(total, 2),
