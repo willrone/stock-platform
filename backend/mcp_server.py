@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""股票平台 MCP server (stdio).
+
+暴露的工具:
+  list_strategies   - 列出所有可用策略
+  stock_quote       - 单只股票最近行情 (不复权)
+  paper_portfolio   - 22f 纸面组合持仓 + 按最新价 mark-to-market
+  latest_signals    - 最新一次 22f 周频信号快照 (只读)
+  daily_signal      - 跑 42f 日频信号 (Top60 买/卖/留, 只读)
+  weekly_rebalance  - 跑 22f 周频调仓 (会更新纸面账本!)
+  run_backtest      - 用任意策略跑回测 (直驱 BacktestExecutor)
+
+运行:
+  cd backend && env -u PYTHONPATH -u PYTHONHOME .venv/bin/python3 mcp_server.py
+"""
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BACKEND = os.path.join(ROOT, "backend")
+DATA = os.path.join(ROOT, "data")
+STOCK_DIR = os.path.join(DATA, "parquet", "stock_data")
+SIGNAL_DIR = os.path.join(DATA, "signals")
+sys.path.insert(0, BACKEND)
+
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("stock-platform")
+
+PY313 = os.path.join(BACKEND, ".venv-py313", "bin", "python3")
+
+# 策略说明 (给 MCP 调用方看的)
+_STRATEGY_NOTES: Dict[str, str] = {
+    "honest_composite": "42f 等权复合, 免费档主力 (10年夏普 0.976, ~10s 出结果)",
+    "gbm_voltgt": "GBM + 波动率目标, 付费档 (10年夏普 1.16, 需 ~14 分钟重训)",
+    "factor_ranking": "横截面复合因子 + TopK-Dropout (新, 10年诚实夏普 0.680)",
+}
+
+
+def _clean_env() -> Dict[str, str]:
+    return {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
+
+
+@contextlib.contextmanager
+def _app_quiet():
+    """导入/调用 app.* 时把其 stdout 日志赶到 stderr，避免污染 MCP 的 JSON-RPC 流。"""
+    old = sys.stdout
+    sys.stdout = sys.stderr
+    try:
+        yield
+    finally:
+        sys.stdout = old
+
+
+def _run_signal_script(script: str, *args: str) -> str:
+    """跑 daily/weekly_signal 脚本, 返回 stdout。"""
+    r = subprocess.run(
+        [PY313, os.path.join(BACKEND, "scripts", script), *args],
+        capture_output=True, text=True, cwd=BACKEND, env=_clean_env(), timeout=900,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"{script} failed rc={r.returncode}\n{r.stderr[-1000:]}")
+    return r.stdout
+
+
+def _load_parquet(code: str):
+    import pandas as pd
+
+    c = code.split(".")[0]
+    # 优先带交易所后缀的 (真数据), 裸代码的可能是旧桩 (如 600000.parquet 止于 2023)
+    for suffix in ("_SH", "_SZ", ""):
+        p = os.path.join(STOCK_DIR, f"{c}{suffix}.parquet")
+        if os.path.exists(p):
+            return pd.read_parquet(p).sort_values("date").reset_index(drop=True)
+    raise FileNotFoundError(f"找不到 {code} 的 parquet (试了 {c}_SH, {c}_SZ, {c})")
+
+
+def _norm_code(code: str) -> str:
+    """600000 / 600000.SH / 600000_SH → 统一返回, 不做存在性检查。"""
+    return code.replace("_", ".").split(".")[0]
+
+
+def _list_universe() -> List[str]:
+    codes = []
+    for f in sorted(os.listdir(STOCK_DIR)):
+        if f.endswith(".parquet"):
+            codes.append(f[:-8].replace("_", "."))
+    return codes
+
+
+def _latest_signal_file() -> Optional[str]:
+    cands = [f for f in os.listdir(SIGNAL_DIR)
+             if f.startswith("signal_") and f.endswith(".json") and "_42f" not in f]
+    if not cands:
+        return None
+    return os.path.join(SIGNAL_DIR, sorted(cands)[-1])
+
+
+@mcp.tool()
+def list_strategies() -> str:
+    """列出所有可用策略及说明。正式三件套: honest_composite (免费), gbm_voltgt (付费), factor_ranking (新)。"""
+    with _app_quiet():
+        from app.services.backtest.strategies.strategy_factory import StrategyFactory
+        names = list(StrategyFactory._strategies.keys())
+    out = {
+        "strategies": [
+            {"name": n, "note": _STRATEGY_NOTES.get(n, "")} for n in names
+        ]
+    }
+    return json.dumps(out, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def stock_quote(code: str, days: int = 10) -> str:
+    """查单只股票最近 N 天行情 (不复权)。code 如 600000 或 600000.SH。"""
+    c = _norm_code(code)
+    df = _load_parquet(c)
+    tail = df.tail(max(1, days))[["date", "open", "high", "low", "close", "volume"]]
+    rows = [
+        {"date": str(r.date)[:10], "open": float(r.open), "high": float(r.high),
+         "low": float(r.low), "close": float(r.close), "volume": float(r.volume)}
+        for r in tail.itertuples(index=False)
+    ]
+    last = rows[-1]
+    return json.dumps({
+        "code": c, "rows": rows,
+        "latest_close": last["close"],
+        "data_through": last["date"],
+    }, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def paper_portfolio() -> str:
+    """22f 纸面组合: 现金 + 持仓, 按最新收盘价 mark-to-market。"""
+    pfile = os.path.join(SIGNAL_DIR, "paper_holdings.json")
+    if not os.path.exists(pfile):
+        raise FileNotFoundError("纸面组合不存在 (还没跑过 weekly_signal)")
+    with open(pfile) as fh:
+        p = json.load(fh)
+    cash = float(p.get("cash", 0.0))
+    positions = p.get("positions", {})
+    holdings, total_mv = [], 0.0
+    for code, pos in positions.items():
+        try:
+            df = _load_parquet(code)
+            close = float(df.iloc[-1]["close"])
+            date = str(df.iloc[-1]["date"])[:10]
+        except FileNotFoundError:
+            continue
+        shares = float(pos.get("shares", 0))
+        cost = float(pos.get("cost", 0.0))
+        mv = shares * close
+        total_mv += mv
+        holdings.append({
+            "code": code, "shares": int(shares), "close": close,
+            "cost": cost, "market_value": round(mv, 2),
+            "pnl_pct": round((close / cost - 1) * 100, 2) if cost else None,
+            "buy_date": pos.get("buy_date", ""),
+        })
+    holdings.sort(key=lambda h: h["market_value"], reverse=True)
+    total = cash + total_mv
+    return json.dumps({
+        "cash": round(cash, 2),
+        "market_value": round(total_mv, 2),
+        "total_value": round(total, 2),
+        "n_holdings": len(holdings),
+        "position_pct": round(total_mv / total * 100, 1) if total else 0,
+        "holdings": holdings,
+    }, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def latest_signals() -> str:
+    """最新一次 22f 周频信号快照 (买/卖/留, 只读, 不更新账本)。"""
+    f = _latest_signal_file()
+    if not f:
+        raise FileNotFoundError("没有信号快照, 先跑 weekly_rebalance 或 daily_signal")
+    with open(f) as fh:
+        snap = json.load(fh)
+    return json.dumps(snap, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def daily_signal() -> str:
+    """跑 42f 日频信号 (honest_composite 口径, Top60 买/卖/留)。只读, 约 30-60s。"""
+    stdout = _run_signal_script("daily_signal.py")
+    # 找输出文件
+    out_dir = os.path.join(DATA, "strategy_baseline")
+    today = datetime.now().strftime("%Y-%m-%d")
+    f = os.path.join(out_dir, f"daily_signal_{today}.json")
+    if not os.path.exists(f):
+        cands = [x for x in os.listdir(out_dir) if x.startswith("daily_signal_") and x.endswith(".json")]
+        if not cands:
+            raise RuntimeError(f"跑了但没找到输出文件, stdout 尾部: {stdout[-500:]}")
+        f = os.path.join(out_dir, sorted(cands)[-1])
+    with open(f) as fh:
+        snap = json.load(fh)
+    return json.dumps(snap, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def weekly_rebalance(topk: int = 30, ndrop: int = 3) -> str:
+    """跑 22f 周频调仓 (买/卖/留 + 记账)。注意: 会更新纸面账本 (ledger.csv + paper_holdings.json)!"""
+    _run_signal_script("weekly_signal.py", "--force", "--topk", str(topk), "--ndrop", str(ndrop))
+    f = _latest_signal_file()
+    with open(f) as fh:
+        snap = json.load(fh)
+    return json.dumps(snap, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def run_backtest(
+    strategy: str = "honest_composite",
+    codes: Optional[List[str]] = None,
+    start_date: str = "2021-08-16",
+    end_date: Optional[str] = None,
+    initial_cash: float = 1_000_000.0,
+    strategy_config: Optional[Dict[str, Any]] = None,
+) -> str:
+    """跑回测 (直驱 BacktestExecutor, 不走 API 的 1000 只上限)。
+
+    strategy: honest_composite | factor_ranking | gbm_voltgt | moving_average | ...
+    codes:    股票代码列表, 默认全市场 (5595 只)
+    strategy_config: 如 {"topk": 60, "n_drop": 5}
+    返回核心指标 (总收益/年化/夏普/最大回撤/交易次数) + 权益曲线采样点。
+    """
+    with _app_quiet():
+        from app.services.backtest.execution.backtest_executor import BacktestExecutor
+        from app.services.backtest.models.data_models import BacktestConfig
+
+        if codes is None:
+            codes = _list_universe()
+        codes = [_norm_code(c) for c in codes]
+
+        executor = BacktestExecutor(data_dir=DATA, enable_performance_profiling=False)
+        cfg = BacktestConfig(initial_cash=initial_cash)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.now()
+
+        report = asyncio.run(executor.run_backtest(
+            strategy_name=strategy,
+            stock_codes=codes,
+            start_date=datetime.strptime(start_date, "%Y-%m-%d"),
+            end_date=end_dt,
+            strategy_config=strategy_config or {},
+            backtest_config=cfg,
+        ))
+
+    pm = report.get("performance_metrics", report)
+    metrics = {k: pm[k] for k in (
+        "total_return", "annualized_return", "sharpe_ratio", "max_drawdown",
+        "win_rate", "total_trades", "volatility", "sortino_ratio",
+    ) if k in pm}
+    # 权益曲线采样 (最多 30 点)
+    eq = report.get("equity_curve") or []
+    if isinstance(eq, list) and len(eq) > 30:
+        step = len(eq) // 30
+        eq = [eq[0]] + eq[::step] + [eq[-1]]
+    return json.dumps({
+        "strategy": strategy,
+        "n_stocks": len(codes),
+        "start": start_date, "end": str(end_dt)[:10],
+        "initial_cash": initial_cash,
+        "metrics": metrics,
+        "equity_curve_sample": [
+            {"date": str(e.get("date", e.get("index", "")))[:10],
+             "value": e.get("value", e.get("close", e.get("equity")))}
+            for e in eq
+        ] if eq else [],
+        "raw_keys": [k for k in report.keys()],
+    }, ensure_ascii=False, indent=1, default=str)
+
+
+if __name__ == "__main__":
+    mcp.run()
