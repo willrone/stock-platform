@@ -74,6 +74,11 @@ class GbmVoltgtStrategy(BaseStrategy):
     def __init__(self, config: Dict[str, Any]):
         super().__init__("GbmVoltgt", config)
         self.topk = int(config.get("topk", 60))
+        # ⚠️ 2026-10-27：补上 **lag**（此前本策略完全没有 lag 实现 → 一直是
+        # 「信号日收盘价成交」= lag0 = **实盘做不到**）。
+        #   lag=0 → 当日分数当日成交（不可实现，仅用于与历史数字对比）
+        #   lag=1 → 用前一交易日分数在当日成交（可实现，与纸面盘口径一致）
+        self.lag = int(config.get("lag", 0))
         self.n_drop = int(config.get("n_drop", config.get("ndrop", 5)))
         self.hold_thresh = int(config.get("hold_thresh", 0))
         # 调仓日掩码: weekly → 只在周五出分（周频），daily → 每日出分。
@@ -482,12 +487,22 @@ class GbmVoltgtStrategy(BaseStrategy):
         scores = data.attrs.get(_SCORES_ATTR)
         if not scores:
             return []
-        score = scores.get(current_date)
-        if score is None or not np.isfinite(score):
-            return []
 
         current_idx = self._get_current_idx(data, current_date)
         if current_idx < 0:
+            return []
+
+        # ⚠️ 2026-10-27：lag 偏移 —— 用 lag 个交易日**之前**的分数。
+        #    与 honest_composite_strategy 的 lagged[t] = composite[t - lag] 同语义。
+        score_ts = current_date
+        if self.lag > 0:
+            j = current_idx - self.lag
+            if j < 0:
+                return []
+            score_ts = pd.Timestamp(data.index[j]).to_pydatetime()
+
+        score = scores.get(score_ts)
+        if score is None or not np.isfinite(score):
             return []
         price = float(data["close"].iloc[current_idx])
         if not np.isfinite(price) or price <= 0:

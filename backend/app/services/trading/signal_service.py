@@ -372,6 +372,62 @@ class TradingSignalService:
             for p in positions.values()
         )
 
+        # ── 风险指标（夏普 / 最大回撤 / 逐笔胜率）──────────────────
+        # 2026-10-27：付费用户此前只能看到累计收益，**看不到回撤** ——
+        # 低回撤幻觉会让用户以为低风险。必须把真实风险摆出来。
+        # 数据源：ledger.csv 的 portfolio_value 列（每日快照，同日多笔取最后一条）
+        nav: List[float] = []
+        nav_dates: List[str] = []
+        for t in trades:
+            pv = t.get("portfolio_value")
+            if not pv:
+                continue
+            try:
+                v = float(pv)
+            except (TypeError, ValueError):
+                continue
+            d = str(t.get("date") or "")
+            if nav_dates and nav_dates[-1] == d:
+                nav[-1] = v
+            else:
+                nav.append(v)
+                nav_dates.append(d)
+        sharpe = None
+        max_dd = None
+        win_rate = None
+        if len(nav) >= 3:
+            rets = []
+            for i in range(1, len(nav)):
+                if nav[i - 1] > 0:
+                    rets.append(nav[i] / nav[i - 1] - 1.0)
+            if len(rets) >= 2:
+                import statistics
+                mu = statistics.fmean(rets)
+                sd = statistics.pstdev(rets) or (statistics.stdev(rets) if len(rets) > 1 else 0)
+                if sd > 0:
+                    sharpe = round(mu / sd * (252 ** 0.5), 4)
+            peak = nav[0]
+            worst = 0.0
+            for v in nav:
+                if v > peak:
+                    peak = v
+                if peak > 0:
+                    dd = v / peak - 1.0
+                    if dd < worst:
+                        worst = dd
+            max_dd = round(worst * 100, 3)
+        if sells:
+            # 逐笔胜率 = 卖出笔数中盈利的比例（用已实现盈亏近似）
+            wins = 0
+            for t in sells:
+                try:
+                    if float(t.get("realized_pnl", 0) or 0) > 0:
+                        wins += 1
+                except (TypeError, ValueError):
+                    continue
+            if any(t.get("realized_pnl") for t in sells):
+                win_rate = round(wins / len(sells) * 100, 2)
+
         return {
             "strategy": strategy,
             "display_name": SIGNAL_STRATEGIES[strategy].display_name,
@@ -384,6 +440,16 @@ class TradingSignalService:
             "total_return_pct": round((value / capital - 1) * 100, 3) if capital else 0.0,
             "n_positions": len(positions),
             "n_trades": len(trades),
+            # 风险指标（2026-10-27 新增）—— 付费用户必须看到真实风险
+            "sharpe_ratio": sharpe,
+            "max_drawdown_pct": max_dd,
+            "trade_win_rate_pct": win_rate,
+            "nav_points": len(nav),
+            # ⚠️ 口径披露：纸面盘是周频调仓 → 净值点只在调仓日有
+            # → **回撤会被低估**（持仓期内的回撤抓不到）。必须说清楚。
+            "nav_basis": "调仓日净值点（周频）",
+            "nav_start": nav_dates[0] if nav_dates else None,
+            "nav_end": nav_dates[-1] if nav_dates else None,
             "n_buys": len(buys),
             "n_sells": len(sells),
             "realized_pnl": round(realized, 2),

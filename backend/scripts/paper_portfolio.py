@@ -631,9 +631,14 @@ def run_line(
         stamp = gross * STAMP_TAX
         slip = gross * SLIPPAGE
         cash += gross - commission - stamp - slip
+        # 已实现盈亏（总回报口径，扣费用）—— 用于算逐笔胜率
+        _cost_amt = float(positions[c].get("cost", 0) or 0) * shares
+        _realized = gross - commission - stamp - slip - _cost_amt
         sells.append({"code": c, "name": names.get(c, ""), "price": p,
                       "shares": shares, "amount": round(gross, 2),
                       "real_amount": round(real_gross, 2),
+                      "cost_amount": round(_cost_amt, 2),
+                      "realized_pnl": round(_realized, 2),
                       "commission": round(commission, 2),
                       "stamp_tax": round(stamp, 2), "slippage": round(slip, 2),
                       "net": round(gross - commission - stamp - slip, 2),
@@ -728,6 +733,8 @@ def run_line(
                      "shares": s["shares"], "amount": s["amount"],
                      "commission": s["commission"], "stamp_tax": s["stamp_tax"],
                      "slippage": s["slippage"], "score": s["score"],
+                     "cost_amount": s.get("cost_amount", 0.0),
+                     "realized_pnl": s.get("realized_pnl", 0.0),
                      "cash_after": round(cash, 2),
                      "portfolio_value": round(end_value, 2)})
     for b in buys:

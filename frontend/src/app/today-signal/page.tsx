@@ -77,6 +77,13 @@ type DailySignal = {
   value: number;
   capital: number;
   total_return_pct: number;
+  sharpe_ratio?: number | null;
+  max_drawdown_pct?: number | null;
+  trade_win_rate_pct?: number | null;
+  nav_points?: number;
+  nav_basis?: string;
+  nav_start?: string | null;
+  nav_end?: string | null;
   n_positions: number;
   buys: Trade[];
   sells: Trade[];
@@ -329,6 +336,48 @@ export default function TodaySignalPage() {
                 >
                   {signal.total_return_pct >= 0 ? '+' : ''}
                   {signal.total_return_pct?.toFixed(2)}%
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ minWidth: 165 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  最大回撤
+                </Typography>
+                <Typography
+                  variant="h6"
+                  color={
+                    signal.max_drawdown_pct != null && signal.max_drawdown_pct < -20
+                      ? 'error.main'
+                      : 'text.primary'
+                  }
+                >
+                  {signal.max_drawdown_pct != null
+                    ? `${signal.max_drawdown_pct.toFixed(2)}%`
+                    : '—'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {signal.nav_points
+                    ? `${signal.nav_basis || '纸面盘'} ${signal.nav_points} 点`
+                    : '净值样本不足'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  周频调仓口径，回撤会被低估
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ minWidth: 150 }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  年化夏普
+                </Typography>
+                <Typography variant="h6">
+                  {signal.sharpe_ratio != null ? signal.sharpe_ratio.toFixed(2) : '—'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {signal.trade_win_rate_pct != null
+                    ? `逐笔胜率 ${signal.trade_win_rate_pct.toFixed(0)}%`
+                    : '逐笔胜率待积累'}
                 </Typography>
               </CardContent>
             </Card>
