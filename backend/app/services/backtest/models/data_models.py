@@ -72,6 +72,19 @@ class BacktestConfig:
     # → 紧止损对周频横截面选股是净负面（砍掉反弹），需要时显式开启。
     stop_loss_pct: float = 0.0  # 个股止损比例，0=关闭
     take_profit_pct: float = 0.0  # 个股止盈比例，0=关闭
+    # ── 可成交性（2026-10-26 下沉到回测引擎）─────────────────────
+    # True = 涨停买不进、跌停卖不出、停牌不可交易、流动性不足不建仓。
+    # 口径与纸面盘（paper_portfolio.py）和对外信号共用
+    # app/services/trading/execution_rules.py。
+    # 关掉它 = 回到旧口径（回测能买涨停卖跌停，夏普虚高）。
+    enable_tradability: bool = True
+    #: 单日买入额占该股当日成交额的最大比例（0.5%）
+    participation_rate: float = 0.005
+    #: 当日成交额门槛（元），低于此值视为流动性太差
+    min_turnover: float = 5_000_000.0
+    # P0-3：跌停/停牌卖不出时**挂起**卖单等解封（而不是丢弃信号）
+    # True = 更贴近实盘（跑不掉就是跑不掉）；关掉则卖单直接作废。
+    enable_pending_sells: bool = True
     rebalance_frequency: str = "daily"  # 调仓频率
 
     # 性能：大规模回测默认不需要每天的完整组合快照；

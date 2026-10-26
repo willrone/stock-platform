@@ -396,3 +396,59 @@ def zscore_with_industry(
         z = industry_demean(z, ind_ids, n_ind)
         z = industry_renorm(z, ind_ids, n_ind)
     return z
+
+
+# ── ST / 退市名单（2026-10-26）──────────────────────────────────────
+# P0-2 的关键：ST 股涨停只有 **5%**，用 10% 阈值就拦不住（买入即亏损）；
+# 反过来 20% 板（创业板/科创板）用 10% 阈值会把 9.5%~20% 的正常涨幅
+# 误判成涨停剔除 → 砍掉 alpha。
+#
+# 数据源：`data/stocks/st_names.json`（backend/scripts/fetch_st_names.py
+# 用 baostock query_stock_basic 抓取，实测 9022 只里 375 只 ST、
+# 94 只退市整理）。qlib 官方的 instruments/all.txt 只有 symbol/start/end
+# 三列没有名称，判不了 ST。
+_ST_NAMES_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))))),
+    "data", "stocks", "st_names.json",
+)
+
+_ST_CACHE: Optional[dict] = None
+
+
+def load_st_names() -> dict:
+    """{code: {"name": str, "is_st": bool, "is_delisting": bool}}；读不到返回 {}"""
+    global _ST_CACHE
+    if _ST_CACHE is not None:
+        return _ST_CACHE
+    import json
+
+    out: dict = {}
+    if os.path.exists(_ST_NAMES_PATH):
+        try:
+            with open(_ST_NAMES_PATH) as fh:
+                out = json.load(fh)
+        except Exception:
+            out = {}
+    _ST_CACHE = out
+    return out
+
+
+def load_st_flags(codes) -> "np.ndarray":
+    """返回 (n_stocks,) 的 ST 标记数组（1 = ST 或退市整理期）。"""
+    names = load_st_names()
+    out = np.zeros(len(codes), dtype=np.float64)
+    if not names:
+        return out
+    for i, code in enumerate(codes):
+        info = names.get(str(code))
+        if not info:
+            # 允许带/不带后缀
+            bare = str(code).split(".")[0]
+            for k, v in names.items():
+                if k.split(".")[0] == bare:
+                    info = v
+                    break
+        if info and (info.get("is_st") or info.get("is_delisting")):
+            out[i] = 1.0
+    return out

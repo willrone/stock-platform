@@ -385,6 +385,37 @@ class BacktestExecutor:
             # 获取交易日历
             trading_dates = self._get_trading_calendar(stock_data, start_date, end_date)
 
+            # ── 2026-10-26：可成交性矩阵（回测引擎下沉可成交性检查）──
+            # 回测引擎此前**没有任何**可成交性检查：能买涨停、能卖跌停，
+            # 回测夏普虚高，纸面盘跑出来的收益永远达不到回测预期。
+            # 口径与纸面盘/对外信号共用 app/services/trading/execution_rules.py。
+            if self.use_array_portfolio and getattr(
+                backtest_config, "enable_tradability", True
+            ):
+                try:
+                    from app.services.backtest.execution.tradability import (
+                        build_tradability,
+                    )
+                    _tm = build_tradability(
+                        stock_data,
+                        trading_dates,
+                        actual_stock_codes,
+                        participation_rate=float(
+                            getattr(backtest_config, "participation_rate", 0.005)
+                        ),
+                        min_turnover=float(
+                            getattr(backtest_config, "min_turnover", 5_000_000.0)
+                        ),
+                    )
+                    portfolio_manager.tradability = _tm
+                    logger.info(
+                        f"✅ 可成交性矩阵已启用：不可买 "
+                        f"{int((~_tm.can_buy).sum())} 格 / 不可卖 "
+                        f"{int((~_tm.can_sell).sum())} 格"
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"可成交性矩阵构建失败，回测按旧口径继续: {e}")
+
             # 预处理（日期索引 + 预计算信号 + 信号提取）
             _t0 = time.perf_counter()
 

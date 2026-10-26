@@ -46,6 +46,7 @@ from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
     industry_ids,
     limit_up_mask_matrix,
+    load_st_flags,
     load_industry_map,
     zscore_with_industry,
 )
@@ -211,7 +212,11 @@ class HonestCompositeStrategy(BaseStrategy):
         # 实测问题：182 只 20% 板（创业板/科创板）股票有 5380 个交易日涨幅落在
         # 9.5%~20%（并未涨停）却被误剔；ST 股触及 5% 涨停则完全没拦。
         # 改为逐票按板块判定（主板 10% / 创业板科创板 20% / 北交所 30%）。
-        limit_up_mask = limit_up_mask_matrix(day_ret, close.columns)
+        # 2026-10-26 再补：ST / 退市整理期按 5% 判定
+        # （数据源 data/stocks/st_names.json，375 只 ST + 94 只退市整理）。
+        limit_up_mask = limit_up_mask_matrix(
+            day_ret, close.columns, is_st=load_st_flags(list(close.columns))
+        )
 
         # nan-aware 等权复合 — 23 个诚实公式 + 18 个 Alpha158 面板因子
         min_cross = max(2, min(30, n_stocks // 10))

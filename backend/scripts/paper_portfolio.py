@@ -64,6 +64,8 @@ from app.services.trading.execution_rules import (  # noqa: E402
     DEFAULT_MIN_TURNOVER,
     DEFAULT_PARTICIPATION_RATE,
     check_tradability,
+    limit_up_mask_matrix,
+    load_st_flags,
 )
 from scripts.market_data import (  # noqa: E402
     get_extra,
@@ -85,7 +87,8 @@ STAMP_TAX = 0.0005
 SLIPPAGE = 0.001
 CASH_RESERVE = 0.05
 BOARD_LOT = 100
-LIMIT_UP = 0.095
+# 涨停阈值：2026-10-26 起按板块动态（见 execution_rules.limit_pct_array），
+# 主板 10% / 创业板科创板 20% / 北交所 30% / ST 5%。原来硬编码 0.095。
 
 
 # ── 打分函数：每条线一个复合分（越大越该买） ──────────────────────────
@@ -145,8 +148,15 @@ def score_rsi_71421(frames, master, panel=None) -> pd.DataFrame:
     for fname, mat in cands.items():
         ds.zscore_add(acc, wsum, mat.to_numpy(dtype=np.float64), 1.0, ds.MIN_CROSS)
     comp = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
-    lu = close.pct_change(fill_method=None).to_numpy() >= LIMIT_UP
-    comp[lu] = np.nan
+    # 涨停掩码：按板块动态阈值 + ST 5%（2026-10-26 P0-2）
+    # 原来硬编码 0.095：20% 板涨 9.5%~20% 被误剔（砍 alpha），
+    # ST 股 5% 涨停拦不住（买入即亏）。
+    _codes = list(frames)
+    _lu = limit_up_mask_matrix(
+        close.pct_change(fill_method=None).to_numpy(), _codes,
+        is_st=load_st_flags(_codes),
+    )
+    comp[_lu] = np.nan
     return pd.DataFrame(comp, index=master, columns=list(frames))
 
 
@@ -238,7 +248,15 @@ def score_factor_ranking(frames, master, panel=None) -> pd.DataFrame:
     for mat in (mom, vol, amp):
         ds.zscore_add(acc, wsum, mat.to_numpy(dtype=np.float64), -1.0, ds.MIN_CROSS)
     comp = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
-    lu = close.pct_change(fill_method=None).to_numpy() >= LIMIT_UP
+    # 涨停掩码：按板块动态阈值 + ST 5%（2026-10-26 P0-2）
+    # 原来硬编码 0.095：20% 板涨 9.5%~20% 被误剔（砍 alpha），
+    # ST 股 5% 涨停拦不住（买入即亏）。
+    _codes = list(frames)
+    _lu = limit_up_mask_matrix(
+        close.pct_change(fill_method=None).to_numpy(), _codes,
+        is_st=load_st_flags(_codes),
+    )
+    comp[_lu] = np.nan
     comp[lu] = np.nan
     return pd.DataFrame(comp, index=master, columns=list(frames))
 
@@ -320,15 +338,6 @@ def append_ledger(strategy: str, rows: List[Dict[str, Any]]) -> None:
         if not exists:
             w.writeheader()
         w.writerows(rows)
-
-
-def limit_pct(code: str) -> float:
-    c2 = code[:2]
-    if c2 in ("30", "68"):
-        return 0.20
-    if c2 in ("92", "83", "87"):
-        return 0.30
-    return 0.10
 
 
 def _num(series, code):

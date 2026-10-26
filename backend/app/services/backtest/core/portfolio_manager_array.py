@@ -17,7 +17,8 @@ from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
 class PortfolioManagerArray:
     """组合管理器 - 数组优化版本"""
 
-    def __init__(self, config: BacktestConfig, stock_codes: List[str]):
+    def __init__(self, config: BacktestConfig, stock_codes: List[str],
+                 tradability=None):
         """
         初始化组合管理器
 
@@ -77,6 +78,12 @@ class PortfolioManagerArray:
         self.portfolio_history: List[Dict[str, Any]] = []
         self.portfolio_history_without_cost: List[Dict[str, Any]] = []
 
+        # P0-3：跌停无法出场的挂起卖单 {code: {signal, reason, since}}
+        self._pending_sells: Dict[str, Dict[str, Any]] = {}
+        # 2026-10-26：可成交性矩阵（回测引擎下沉可成交性检查）
+        # None = 不启用（保持旧行为）；启用后涨停买不进、跌停卖不出、
+        # 停牌不可交易。口径与纸面盘/对外信号共用 execution_rules。
+        self.tradability = tradability
     def _valuation_price(
         self, stock_code: str, current_prices: Dict[str, float]
     ) -> float:
@@ -206,6 +213,32 @@ class PortfolioManagerArray:
             if idx is None:
                 return None, f"股票代码不在universe中: {stock_code}"
 
+            # ── 可成交性检查（2026-10-26）─────────────────────────
+            # 回测引擎此前**没有任何**可成交性检查：能买涨停、能卖跌停，
+            # 导致回测夏普虚高，纸面盘（paper_portfolio.py）跑出来的收益
+            # 永远达不到回测预期。这里下沉与纸面盘同一套规则。
+            _max_buy = None
+            if self.tradability is not None:
+                can_b, can_s, _mb, why = self.tradability.check(
+                    stock_code, signal.timestamp
+                )
+                if signal.signal_type == SignalType.BUY and not can_b:
+                    return None, f"不可买入：{why or '涨停/停牌/流动性不足'}"
+                if signal.signal_type == SignalType.BUY and _mb is not None:
+                    _max_buy = _mb
+                if signal.signal_type == SignalType.SELL and not can_s:
+                    # P0-3（2026-10-26）：跌停卖不出时**挂起**而不是丢弃。
+                    # A 股实盘里连续一字跌停的票，策略想跑却跑不掉 ——
+                    # 回测若直接丢弃，会低估「跑不掉」的真实风险；
+                    # 若直接成交，则完全虚假。挂起 = 等解封再卖。
+                    if getattr(self.config, "enable_pending_sells", False):
+                        self._pending_sells[stock_code] = {
+                            "signal": signal,
+                            "reason": why or "跌停",
+                            "since": signal.timestamp,
+                        }
+                    return None, f"不可卖出：{why or '跌停/停牌'}"
+
             current_price = current_prices.get(stock_code, signal.price)
 
             # 应用滑点
@@ -225,6 +258,7 @@ class PortfolioManagerArray:
                     slippage_cost_per_share,
                     signal,
                     current_prices,
+                    max_buy_amount=_max_buy,
                 )
             elif signal.signal_type == SignalType.SELL:
                 return self._execute_sell(
@@ -251,8 +285,13 @@ class PortfolioManagerArray:
         slippage_cost_per_share: float,
         signal: TradingSignal,
         current_prices: Dict[str, float],
+        max_buy_amount: Optional[float] = None,
     ) -> tuple[Optional[Trade], Optional[str]]:
-        """执行买入 - 数组优化版本"""
+        """执行买入 - 数组优化版本
+
+        max_buy_amount: 流动性上限（当日成交额 × 参与率）。超过的部分
+        实盘根本吃不到 → 按上限截断数量（而不是记成买满额）。
+        """
         # 计算可买数量（用当日全市场价格计算组合市值；只传单只要买的股票会让
         # 其它持仓按 0 计价，单仓上限被低估为 max_position_size × 现金，
         # 导致资金无法充分部署——TopK 等受限仓位策略受影响最大）
@@ -280,6 +319,11 @@ class PortfolioManagerArray:
                 return None, "已达到最大持仓限制"
             else:
                 return None, f"可用资金不足: 需要保留{reserve_pct}现金"
+
+        # 流动性上限：单笔买入额 ≤ 当日成交额 × 参与率。
+        # 超出部分实盘根本吃不到（滑点无穷大）→ 按上限截断数量。
+        if max_buy_amount is not None and max_buy_amount > 0:
+            available_cash_for_stock = min(available_cash_for_stock, max_buy_amount)
 
         # 计算购买数量（按配置的最小交易单位取整）
         quantity = (
@@ -367,6 +411,46 @@ class PortfolioManagerArray:
         )
 
         return trade, None
+
+    def flush_pending_sells(
+        self, current_date, current_prices: Dict[str, float]
+    ) -> List[Trade]:
+        """尝试执行之前因跌停/停牌被挂起的卖单（2026-10-26 P0-3）。
+
+        实盘里连续一字跌停的票，策略想跑却跑不掉。这里保持「挂着等解封」，
+        而不是丢弃信号（会低估风险）或直接成交（完全虚假）。
+        """
+        trades: List[Trade] = []
+        if not self._pending_sells:
+            return trades
+        still_pending: Dict[str, Dict[str, Any]] = {}
+        for code, item in self._pending_sells.items():
+            idx = self.code_to_idx.get(code)
+            if idx is None or self.quantities[idx] <= 0:
+                continue  # 已无持仓，丢弃
+            ok = True
+            if self.tradability is not None:
+                can_b, can_s, _mb, _why = self.tradability.check(code, current_date)
+                ok = can_s
+            if not ok:
+                still_pending[code] = item
+                continue
+            sig = item["signal"]
+            price = current_prices.get(code, sig.price)
+            if sig.signal_type == SignalType.BUY:
+                exec_price = price * (1 + self.config.slippage_rate)
+            else:
+                exec_price = price * (1 - self.config.slippage_rate)
+            slip = price * self.config.slippage_rate
+            trade, reason = self._execute_sell(
+                idx, code, exec_price, price, slip, sig
+            )
+            if trade is not None:
+                trades.append(trade)
+            else:
+                still_pending[code] = item
+        self._pending_sells = still_pending
+        return trades
 
     def _execute_sell(
         self,

@@ -118,6 +118,8 @@ def run_one(
     mps: float,
     start: datetime,
     end: datetime,
+    lag: Optional[int] = None,
+    enable_tradability: bool = True,
 ) -> Dict[str, Any]:
     executor = BacktestExecutor(
         data_dir=data_root,
@@ -134,8 +136,11 @@ def run_one(
                 stock_codes=codes,
                 start_date=start,
                 end_date=end,
-                strategy_config=dict(cfg),
+                strategy_config=(
+                    {**dict(cfg), "lag": lag} if lag is not None else dict(cfg)
+                ),
                 backtest_config=BacktestConfig(
+                    enable_tradability=enable_tradability,
                     initial_cash=1_000_000.0,
                     commission_rate=0.0003,
                     slippage_rate=0.0001,
@@ -209,6 +214,11 @@ def main() -> None:
     ap.add_argument("--neutral", action="store_true",
                     help="额外跑一遍 industry_neutral=True 的对照")
     ap.add_argument("--out", default="verify_10y_pit.json")
+    ap.add_argument("--lag", type=int, default=None,
+                    help="信号滞后交易日数。0=当日收盘信号当日收盘成交（实盘做不到）；"
+                         "1=收盘出信号、下一交易日收盘成交（可实现）")
+    ap.add_argument("--no-tradability", action="store_true",
+                    help="关闭回测可成交性检查（回到『能买涨停能卖跌停』的旧口径）")
     args = ap.parse_args()
 
     # 10 年：结束对齐 2026-05-08（官方数据的最后一天）
@@ -236,7 +246,8 @@ def main() -> None:
             print(f"[verify] 跳过未知策略 {name}", flush=True)
             continue
         print(f"\n[verify] === {name} ({spec['label']}) ===", flush=True)
-        r = run_one(data_root, codes, name, spec["cfg"], spec["mps"], start, end)
+        r = run_one(data_root, codes, name, spec["cfg"], spec["mps"], start, end,
+                    lag=args.lag, enable_tradability=not args.no_tradability)
         results[name] = r
         print(f"  基线: sharpe={r.get('sharpe_ratio')} ret={r.get('total_return')} "
               f"mdd={r.get('max_drawdown')} trades={r.get('total_trades')} "
@@ -245,7 +256,8 @@ def main() -> None:
         if args.neutral and name == "honest_composite":
             cfg_neu = dict(spec["cfg"])
             cfg_neu["industry_neutral"] = True
-            r2 = run_one(data_root, codes, name, cfg_neu, spec["mps"], start, end)
+            r2 = run_one(data_root, codes, name, cfg_neu, spec["mps"], start, end,
+                         lag=args.lag, enable_tradability=not args.no_tradability)
             results["honest_composite_neutral"] = r2
             print(f"  行业中性: sharpe={r2.get('sharpe_ratio')} "
                   f"ret={r2.get('total_return')} mdd={r2.get('max_drawdown')} "

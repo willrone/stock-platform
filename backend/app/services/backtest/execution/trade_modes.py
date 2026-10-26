@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
@@ -272,6 +275,25 @@ class TopkDropoutTradeModeExecutor:
                 ):
                     trades_this_day += 1
                     holdings_set.discard(_code)
+
+        # ── P0-3：先尝试执行之前因跌停/停牌被挂起的卖单 ──────────
+        # 连续一字跌停的票，策略想跑却跑不掉。挂起 = 等解封再卖。
+        _pm = context.portfolio_manager
+        _flush = getattr(_pm, "flush_pending_sells", None)
+        if _flush is not None:
+            try:
+                for _t in _flush(context.current_date, context.current_prices):
+                    executed_trade_signals.append(
+                        {
+                            "stock_code": _t.stock_code,
+                            "timestamp": _t.timestamp,
+                            "signal_type": _t.action,
+                            "reason": "挂起卖单解封后成交",
+                        }
+                    )
+                    trades_this_day += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"挂起卖单 flush 失败: {e}")
 
         rank_index = {code: idx for idx, (code, _) in enumerate(ranked)}
         held_sorted_best_to_worst = sorted(
