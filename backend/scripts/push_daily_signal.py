@@ -87,6 +87,18 @@ def build_line(key: str, portfolio: dict, names: dict) -> str | None:
         return None
 
     out = [f"【{DISPLAY.get(key, key)}】{lines.get('date','')}"]
+    # 该线的历史业绩 + 信号质量（可信度凭证）
+    _perf = load_json(os.path.join(PAPER_DIR, f"{key}_holdings.json")) or {}
+    _q = load_json(os.path.join(PAPER_DIR, f"{key}_signal_quality.json")) or {}
+    _cap = float(_perf.get("initial_capital") or 1_000_000)
+    _val = float(_perf.get("last_value") or 0)
+    if _val > 0:
+        out.append(f"  组合 ¥{_val:,.0f}（{(_val/_cap-1)*100:+.2f}%）· "
+                   f"{len(_perf.get('positions') or {})} 只")
+    _t5 = (_q.get("horizons") or {}).get("T+5")
+    if _t5:
+        out.append(f"  信号质量 T+5 胜率 {_t5['win_rate']*100:.0f}% · "
+                   f"平均超额 {_t5['avg_excess']*100:+.2f}%（{_t5['n']} 个历史信号）")
     if buys:
         out.append("买入：")
         for b in buys:
