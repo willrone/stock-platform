@@ -165,6 +165,7 @@ def build_tradability(
     participation_rate: float = DEFAULT_PARTICIPATION_RATE,
     min_turnover: float = DEFAULT_MIN_TURNOVER,
     st_codes: Optional[Dict[str, bool]] = None,
+    prev_close: Optional[Dict[str, float]] = None,
 ) -> TradabilityMatrix:
     """构建回测期的可成交性矩阵。
 
@@ -175,6 +176,11 @@ def build_tradability(
         participation_rate: 单日买入额占当日成交额的最大比例
         min_turnover: 当日成交额门槛
         st_codes: {code: bool} ST/退市标记；None 时自动读 instruments
+        prev_close: {code: 窗口前一日收盘价}。**必须提供** ——
+            回测的 stock_data 是按窗口裁剪的，窗口第一天的涨跌幅
+            `close.pct_change()` 是 NaN，早期版本直接 `continue` 跳过 →
+            **窗口首日的涨停股没被拦住**（实测 2025-04-03 这天
+            24 只买入判定分歧全部集中在这里）。
     """
     if codes is None:
         codes = list(stock_data.keys())
@@ -233,7 +239,16 @@ def build_tradability(
         idx = df.index
         if not isinstance(idx, pd.DatetimeIndex):
             idx = pd.DatetimeIndex(idx)
-        for t, (ts, r) in enumerate(zip(idx, ret.to_numpy())):
+        # 窗口首日的 ret 是 NaN（数据按窗口裁剪，没有前一行）→ 用 prev_close 补
+        _ret = ret.to_numpy()
+        if prev_close:
+            _pc = prev_close.get(str(code))
+            if _pc is not None and np.isfinite(_pc) and _pc > 0 and len(_ret):
+                if not np.isfinite(_ret[0]):
+                    _c0 = close.to_numpy()
+                    if np.isfinite(_c0[0]) and _c0[0] > 0:
+                        _ret[0] = _c0[0] / _pc - 1.0
+        for t, (ts, r) in enumerate(zip(idx, _ret)):
             row = date_pos.get(pd.Timestamp(ts).normalize())
             if row is None:
                 continue

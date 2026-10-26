@@ -4,7 +4,7 @@
 
 import time
 from concurrent.futures import as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
@@ -396,10 +396,17 @@ class BacktestExecutor:
                     from app.services.backtest.execution.tradability import (
                         build_tradability,
                     )
+                    # 窗口前一日收盘价：stock_data 按窗口裁剪 → 窗口首日
+                    # 的涨跌幅是 NaN，会让首日的涨停股漏拦（实测 24 只分歧
+                    # 全部集中在窗口首日）。这里单独取前 10 个日历日补上。
+                    _prev_close = await self._load_prev_close_map(
+                        actual_stock_codes, start_date
+                    )
                     _tm = build_tradability(
                         stock_data,
                         trading_dates,
                         actual_stock_codes,
+                        prev_close=_prev_close,
                         participation_rate=float(
                             getattr(backtest_config, "participation_rate", 0.005)
                         ),
@@ -730,6 +737,46 @@ class BacktestExecutor:
             raise TaskError(
                 message=error_msg, severity=ErrorSeverity.HIGH, original_exception=e
             )
+
+    async def _load_prev_close_map(
+        self, stock_codes: List[str], start_date: datetime
+    ) -> Dict[str, float]:
+        """取每只股票在窗口起始日之前的最后一个收盘价。
+
+        回测数据按窗口裁剪，窗口第一天的 `close.pct_change()` 是 NaN，
+        导致 tradability 矩阵跳过首行 → **窗口首日的涨停股没被拦住**。
+        这里额外加载窗口前 10 个日历日的数据，只取 close 列。
+        """
+        out: Dict[str, float] = {}
+        try:
+            pre_start = start_date - timedelta(days=10)
+            pre_end = start_date - timedelta(days=1)
+            for code in stock_codes:
+                try:
+                    df = await self.data_loader.load_stock_data_async(
+                        code, pre_start, pre_end
+                    ) if hasattr(
+                        self.data_loader, "load_stock_data_async"
+                    ) else self.data_loader.load_stock_data(
+                        code, pre_start, pre_end
+                    )
+                except Exception:
+                    continue
+                if df is None or df.empty:
+                    continue
+                close_col = None
+                for cand in ("$close", "close"):
+                    if cand in df.columns:
+                        close_col = cand
+                        break
+                if close_col is None:
+                    continue
+                ser = pd.to_numeric(df[close_col], errors="coerce").dropna()
+                if len(ser):
+                    out[str(code)] = float(ser.iloc[-1])
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"加载窗口前收盘价失败（首日涨跌停会漏判）: {e}")
+        return out
 
     def _get_trading_calendar(
         self,

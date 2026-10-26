@@ -148,20 +148,18 @@ def check_tradability(
         )
 
     # ── 4. 流动性上限（买入金额）──
+    # 2026-10-26 修正：原来「成交额过低」直接 return，
+    # **后面的涨跌停判定根本没执行** → 一只当天跌停的票会被判成
+    # 「can_sell=True」（因为流动性检查早退），实盘里根本卖不掉。
+    # 实测在对账里出现：000615.SZ 2025-12-29 跌停 -11.24%，
+    # 纸面侧因流动性早退而漏判跌停。
+    # 改成：只标记不可买，**继续走涨跌停判定**。
     max_buy: Optional[float] = None
+    low_turnover = False
     if amount is not None and _finite(amount) and float(amount) > 0:
         max_buy = float(amount) * participation_rate
-        # 成交额太小 → 流动性差，整只剔除
         if float(amount) < min_turnover:
-            return Tradability(
-                can_buy=False, can_sell=True,
-                reason=f"成交额过低（¥{float(amount)/1e4:.0f} 万 < 门槛）",
-                max_buy_amount=max_buy,
-                blocked_reason=(
-                    f"成交额 {float(amount)/1e4:.0f} 万，低于流动性门槛 "
-                    f"{min_turnover/1e4:.0f} 万"
-                ),
-            )
+            low_turnover = True
 
     # ── 5. 涨跌停判定（用交易所口径涨跌幅）──
     pc = float(pct_chg) if (pct_chg is not None and _finite(pct_chg)) else None
@@ -170,9 +168,11 @@ def check_tradability(
         # 保守起见不拦截（宁可放过也不要误杀）
         pc = None
 
-    can_buy = True
+    can_buy = not low_turnover
     can_sell = True
     blocked = ""
+    if low_turnover:
+        blocked = f"成交额过低（¥{float(amount)/1e4:.0f} 万 < 门槛）"
 
     if pc is not None and not pct_reliable and abs(pc) > lp * 1.5:
         # 涨跌幅不可靠（由未复权 close/prev_close 推导）且幅度明显超出
@@ -217,12 +217,19 @@ def check_tradability(
             can_sell = False
             blocked = "一字跌停，卖不出"
 
+    _blocked = blocked
+    if low_turnover:
+        _blocked = (
+            f"成交额 {float(amount)/1e4:.0f} 万，低于流动性门槛 "
+            f"{min_turnover/1e4:.0f} 万"
+            + (f"；{blocked}" if blocked else "")
+        )
     return Tradability(
         can_buy=can_buy,
         can_sell=can_sell,
         reason="" if (can_buy and can_sell) else blocked,
         max_buy_amount=max_buy,
-        blocked_reason=blocked,
+        blocked_reason=_blocked,
     )
 
 
