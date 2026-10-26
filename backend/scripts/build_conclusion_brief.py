@@ -195,19 +195,42 @@ def main() -> None:
             best_wr = wr
         if md is not None and (best_dd is None or md > best_dd):
             best_dd = md
-    A("| 目标 | 要求 | 当前最好 | 状态 |")
+    A("| 目标 | 要求 | **主线基线** | 状态 |")
     A("|---|---|---|---|")
-    if best is not None:
-        ok = "✅" if best >= GOALS["sharpe"] else "❌"
-        A(f"| 夏普 | ≥ {GOALS['sharpe']} | {best:.3f} | {ok} 差 {max(0, GOALS['sharpe']-best):.3f} |")
-    if best_wr is not None:
-        ok = "✅" if best_wr >= GOALS["win_rate"] else "❌"
-        A(f"| 逐笔胜率 | ≥ {GOALS['win_rate']*100:.0f}% | {best_wr*100:.1f}% | "
-          f"{ok} 差 {max(0, (GOALS['win_rate']-best_wr)*100):.1f}pp |")
-    if best_dd is not None:
-        ok = "✅" if abs(best_dd) <= GOALS["max_dd"] else "❌"
-        A(f"| 最大回撤 | ≤ {GOALS['max_dd']*100:.0f}% | {abs(best_dd)*100:.2f}% | {ok} |")
+    # 主线基线（不是扫描出来的最大值 —— 扫描值含子集/单段数字，会误导）
+    _main = {}
+    # baseline_final.json = 25 公式因子主线（2026-10-27 切换后）
+    for _fn in ("baseline_final.json", "ALL_real_lag1.json"):
+        _d = load(_fn)
+        if _d.get("results"):
+            for _k, _v in _d["results"].items():
+                if isinstance(_v, dict) and "error" not in _v:
+                    if _k == "honest_composite":
+                        _main = _v
+                        break
+        if _main:
+            break
+    if _main:
+        _sr = _main.get("sharpe_ratio") or 0
+        _wr = _main.get("win_rate") or 0
+        _md = _main.get("max_drawdown") or 0
+        _ok = "✅" if _sr >= GOALS["sharpe"] else "❌"
+        A(f"| 夏普 | ≥ {GOALS['sharpe']} | **{_sr:.3f}** | {_ok} 差 "
+          f"{max(0, GOALS['sharpe']-_sr):.3f} |")
+        _ok = "✅" if _wr >= GOALS["win_rate"] else "❌"
+        A(f"| 逐笔胜率 | ≥ {GOALS['win_rate']*100:.0f}% | **{_wr*100:.1f}%** | {_ok} 差 "
+          f"{max(0, (GOALS['win_rate']-_wr)*100):.1f}pp |")
+        _ok = "✅" if abs(_md) <= GOALS["max_dd"] else "❌"
+        A(f"| 最大回撤 | ≤ {GOALS['max_dd']*100:.0f}% | **{abs(_md)*100:.2f}%** | {_ok} |")
+        A("")
+        A("（以上是**主线** `honest_composite` 25 公式因子版的真实数字。"
+          "下面第三节里更高的夏普来自**因子子集 / 单段窗口 / 候选策略**，"
+          "不是主线，不能对外承诺。）")
     A("")
+    if best is not None:
+        A(f"> 本次全部实验里扫到的最高夏普是 **{best:.3f}**（来自因子子集 / "
+          f"候选策略 / 单段窗口），**不是主线水平**，不能对外承诺。")
+        A("")
 
     A("---")
     A("")

@@ -2090,6 +2090,7 @@ def main() -> None:
             "greedy2",
             "weights",
             "stability",
+            "oosval",
             "report",
             "summarize",
         ],
@@ -2113,6 +2114,7 @@ def main() -> None:
         "greedy2": stage_greedy2,
         "weights": stage_weights,
         "stability": stage_stability,
+        "oosval": stage_oosval,
         "report": stage_report,
         "summarize": stage_summarize,
     }[args.stage](args)
