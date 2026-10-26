@@ -103,6 +103,11 @@ def load_market_extras(
             vals = pd.to_numeric(df.loc[keep, f], errors="coerce").to_numpy(
                 dtype=np.float64
             )
+            if f == "pct_chg":
+                # baostock 的 pct_chg 单位是**百分数**（0.5155 = +0.5155%），
+                # 这里统一转成小数（0.005155），否则会被放大 100 倍，
+                # 所有股票都会被误判成涨跌停。
+                vals = vals / 100.0
             out[f][idx, j] = vals
         loaded += 1
 

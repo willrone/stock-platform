@@ -114,6 +114,17 @@ def build_line(key: str, portfolio: dict, names: dict) -> str | None:
     if holds and not buys and not sells:
         out.append(f"继续持有 {len(holds)} 只，无操作")
 
+    # 未成交的信号（实盘同样买不进/卖不出）—— 必须告诉用户，
+    # 否则他会以为平台漏单
+    blocked = (lines.get("blocked_buys") or []) + (lines.get("blocked_sells") or [])
+    if blocked:
+        out.append("未成交（实盘同样做不到）：")
+        for b in blocked[:6]:
+            kind = "买不进" if b.get("code") in {
+                x.get("code") for x in (lines.get("blocked_buys") or [])
+            } else "卖不出"
+            out.append(f"  {kind} {b.get('code')} {b.get('name','')} —— {b.get('reason','')}")
+
     val = holdings.get("last_value")
     cash = holdings.get("cash")
     cap = holdings.get("initial_capital") or 1_000_000

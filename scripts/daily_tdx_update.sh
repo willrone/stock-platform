@@ -37,6 +37,15 @@ print(run_incremental())
     echo "=== Friday: multi-strategy paper portfolio ==="
     env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/paper_portfolio.py
     echo "=== paper portfolio done ==="
+
+    # 4) 信号质量统计（2026-10-25 新增）
+    #    回答「这个信号到底准不准」：每个历史买入信号发出后
+    #    T+1/T+5/T+10/T+20 的超额收益与胜率。
+    #    同时把后复权价格与基准算好，供信号服务使用。
+    echo "=== signal quality ==="
+    env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/signal_quality.py || \
+      echo "signal_quality 失败（不影响主流程）"
+    echo "=== signal quality done ==="
   fi
 
   echo "=== $(date '+%Y-%m-%d %H:%M:%S') all done ==="
