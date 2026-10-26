@@ -517,15 +517,23 @@ def run_line(
     )
     target_weight = (1.0 - CASH_RESERVE) / topk
 
-    # ── 持仓估值（复权口径）─────────────────────────────────────────
+    # ── 持仓估值（总回报口径）───────────────────────────────────────
     # 关键：未复权价在除权日跳空（实测 -50%），用它算持仓市值会
     # **系统性低估收益**（实测 1193 只等权组合年化差 5.45 个百分点）。
     #
-    # 这里用「总回报」口径：
-    #   持仓市值 = 股数 × 当前未复权价 × (当前后复权价 / 买入日后复权价)
-    # 买入金额仍按**未复权真实价**算（用户照着这个金额下单，不含水分）；
-    # 卖出金额同口径（含分红/送转的再投资效应，与总回报指数一致）。
+    # 正确公式（标准总回报 / total-return 口径）：
+    #   持仓市值 = **买入金额** × (当前后复权价 / 买入日后复权价)
+    #
+    # 为什么不是「股数 × 当前未复权价 × 后复权比值」：
+    #   后复权比值里**已经包含了普通跌幅**（实测 adj_ratio 与真实未复权
+    #   价比几乎完全相等）。再乘一次当前未复权价 = 跌幅被算两次
+    #   （实测会让所有线的净值凭空少 1%）。
+    #   写成「买入金额 × 后复权比值」则：
+    #     - 无除权 → 后复权比值 = 真实跌幅 → 正确
+    #     - 有送转（10 送 10，价腰斩）→ 后复权比值 = 1.0（pct_chg 已调整）
+    #       → 市值不变 → 正确（送转后股数翻倍，总市值不变）
     def _adj_ratio(code: str) -> float:
+        """当前后复权价 / 买入日后复权价。"""
         if adj_close is None or code not in adj_close.columns:
             return 1.0
         try:
@@ -538,11 +546,13 @@ def run_line(
         return a_now / a_cost
 
     def _pos_value(code: str) -> float:
-        sh = float(positions.get(code, {}).get("shares", 0) or 0)
-        raw = float(close.get(code, np.nan))
-        if not np.isfinite(raw):
+        """总回报口径的持仓市值 = 买入金额 × 后复权比值。"""
+        p = positions.get(code) or {}
+        sh = float(p.get("shares", 0) or 0)
+        cost = float(p.get("cost", 0) or 0)
+        if sh <= 0 or cost <= 0:
             return 0.0
-        return sh * raw * _adj_ratio(code)
+        return sh * cost * _adj_ratio(code)
 
     def px(c: str) -> float:
         v = close.get(c, np.nan)
@@ -567,14 +577,17 @@ def run_line(
         shares = int(positions[c].get("shares", 0))
         if shares <= 0:
             continue
-        # 卖出金额用复权口径（含分红/送转再投资效应），与持仓估值同源
-        gross = shares * p * _adj_ratio(c)
+        # 卖出金额用总回报口径（与持仓估值同源，保证账本自洽）；
+        # real_gross 记录「按当前未复权价实际能拿到的钱」供用户参考。
+        real_gross = shares * p
+        gross = float(positions[c].get("cost", 0) or 0) * shares * _adj_ratio(c)
         commission = max(MIN_COMMISSION, gross * COMMISSION)
         stamp = gross * STAMP_TAX
         slip = gross * SLIPPAGE
         cash += gross - commission - stamp - slip
         sells.append({"code": c, "name": names.get(c, ""), "price": p,
                       "shares": shares, "amount": round(gross, 2),
+                      "real_amount": round(real_gross, 2),
                       "commission": round(commission, 2),
                       "stamp_tax": round(stamp, 2), "slippage": round(slip, 2),
                       "net": round(gross - commission - stamp - slip, 2),
