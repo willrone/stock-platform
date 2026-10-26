@@ -21,7 +21,8 @@ OUT = os.path.join(BT, "CONCLUSION_2026-10-27.md")
 GOALS = {"sharpe": 1.5, "win_rate": 0.75, "max_dd": 0.20}
 
 #: 已知基线（真实盘口径：lag1 + 可成交性 + 42 因子真生效 + 5238 只 / 3 年）
-BASELINE_FILE = "ALL_real_lag1.json"
+# 2026-10-27：v2 = 含 GBM lag 修复后的重跑结果（GBM 0.605 → 0.494）
+BASELINE_FILE = "ALL_real_lag1_v2.json"
 #: 25 因子版（panel 失效时）曾达到的数字，作为对照
 BASELINE_25F = {"sharpe_ratio": 0.880, "total_return": 0.3551,
                  "max_drawdown": -0.1337, "total_trades": 1190, "win_rate": 0.671}

@@ -82,6 +82,8 @@ type DailySignal = {
   trade_win_rate_pct?: number | null;
   nav_points?: number;
   nav_basis?: string;
+  nav_points_required?: number;
+  nav_insufficient?: boolean;
   nav_start?: string | null;
   nav_end?: string | null;
   n_positions: number;
@@ -357,9 +359,9 @@ export default function TodaySignalPage() {
                     : '—'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {signal.nav_points
-                    ? `${signal.nav_basis || '纸面盘'} ${signal.nav_points} 点`
-                    : '净值样本不足'}
+                  {signal.nav_insufficient
+                    ? `净值样本不足（${signal.nav_points ?? 0}/${signal.nav_points_required ?? 20} 点）`
+                    : `${signal.nav_basis || '纸面盘'} ${signal.nav_points} 点`}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   周频调仓口径，回撤会被低估

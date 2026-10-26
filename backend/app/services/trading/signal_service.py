@@ -395,7 +395,11 @@ class TradingSignalService:
         sharpe = None
         max_dd = None
         win_rate = None
-        if len(nav) >= 3:
+        # ⚠️ 净值点不足时**一律不返回**夏普/回撤 ——
+        # 3 个点算出来的夏普是 -16.98 这种荒谬值，展示出来比不展示更糟。
+        # 纸面盘是周频调仓 → 需要约 20 个调仓点（约 5 个月）才有意义。
+        MIN_NAV_POINTS = 20
+        if len(nav) >= MIN_NAV_POINTS:
             rets = []
             for i in range(1, len(nav)):
                 if nav[i - 1] > 0:
@@ -448,6 +452,8 @@ class TradingSignalService:
             # ⚠️ 口径披露：纸面盘是周频调仓 → 净值点只在调仓日有
             # → **回撤会被低估**（持仓期内的回撤抓不到）。必须说清楚。
             "nav_basis": "调仓日净值点（周频）",
+            "nav_points_required": 20,
+            "nav_insufficient": len(nav) < 20,
             "nav_start": nav_dates[0] if nav_dates else None,
             "nav_end": nav_dates[-1] if nav_dates else None,
             "n_buys": len(buys),
