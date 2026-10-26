@@ -557,7 +557,8 @@ def inverse_vol_weights(
     if n < 2:
         return None
     r = _trailing_returns(close, t, idx, lookback)
-    if r.shape[0] < 20:
+    # lookback 个价格 → lookback-1 个收益 → 要求至少一半样本有效
+    if r.shape[0] < max(10, lookback // 2):
         return None
     with np.errstate(invalid="ignore", divide="ignore"):
         sd = np.nanstd(r, axis=0)

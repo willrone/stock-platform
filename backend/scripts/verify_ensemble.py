@@ -2,29 +2,28 @@
 """多策略信号合成 —— 真实盘口径批量实验 + OOS 验证。
 
 ## 口径（与 verify_10y_pit.py --lag 1 逐项一致）
-  窗口 2023-05-08 → 2026-05-08 / 727 交易日
-  股票池 data/qlib_official_data/instruments/all.txt（5238 只有效）
+  窗口 2023-05-08 → 2026-05-08 / 727 交易日 / 5238 只 PIT 股票池
   lag=1 / enable_tradability=True / 佣金 0.03% + 滑点 0.01% / 整手 100 /
   现金预留 5% / 周频调仓（周五）
 
 ## 腿的分数从**真实策略类**抽（ensemble_legs.py）
-  42f   honest_composite 42 因子等权复合
-  rsi   rsi_71421  RSI(7/14/21) 均值回归
-  fr    factor_ranking 动量/低波动/低振幅
-  gbm   gbm_voltgt  LightGBM 元模型 + 波动率目标仓位
-  gbm_raw gbm 但关掉波动率目标截断（保留原始预测分）
-  mf    multi_factor value/momentum/low-vol
+  42f  honest_composite 42 因子等权复合      引擎基线 SR 0.7992
+  rsi  rsi_71421  RSI(7/14/21) 均值回归      引擎基线 SR 0.7716
+  fr   factor_ranking 动量/低波动/低振幅
+  gbm  gbm_voltgt  LightGBM 元模型 + 波动率目标仓位
+  gbm_raw  gbm 但关掉波动率目标截断（保留原始预测分）
+  mf   multi_factor value/momentum/low-vol
 
-## 合成方法（C 组）
-  1. 等权平均分数（三种预处理：原始分 / 截面 z / 截面 rank）
-  2. 滚动 RankICIR 加权（walk-forward，无前视，权重做时序平滑）
-  3. 相关性惩罚权重（w ∝ IR/(1+ρ)）与 逆协方差最小方差
-  4. 分层合成（按腿分桶，桶内选前 N，再在桶间分配名额）
-  5. 残差正交化（把每条腿对其它腿做截面回归取残差 → 构造低相关 alpha）
+## 合成方法
+  C1 等权（4 种预处理：raw / 截面 z / 截面 rank / winsorized z）
+  C2 滚动 RankICIR 加权（walk-forward，无前视，权重做时序平滑）
+  C3 相关性惩罚权重 w ∝ IR/(1+ρ)  与  逆协方差最小方差
+  C4 残差正交化（腿对其它腿做截面回归取残差 → 构造低相关 alpha）
+  C5 分层合成（每腿各取前 N 只，腿间轮流分配名额）
 
 ## 防过拟合
   IS = 2023-05→2025-05（选参）  OOS = 2025-05→2026-05（验证）
-  报告总尝试次数；OOS 只用 IS 选出的那一个配置。
+  报告总尝试次数；OOS 只用 IS 选出的那一组配置。
 
 ## 用法
   env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
@@ -49,53 +48,33 @@ sys.path.insert(0, os.path.join(BACKEND, "scripts"))
 
 import ensemble_lab as L  # noqa: E402
 import ensemble_legs as LEGS  # noqa: E402
+import ensemble_sim as S  # noqa: E402
 
 OOS_SPLIT = pd.Timestamp("2025-05-08")
-CACHE = LEGS.CACHE
-LEG_DIR = LEGS.LEG_DIR
 
-# 各腿在 verify_10y_pit.py 里的真实配置（topk / n_drop 各不相同）
-#
-# 重要：factor_ranking 与 gbm_voltgt **完全没有实现 lag**（源码里没有 self.lag），
-# 引擎给它们的 lag=1 配置被静默忽略 → 它们公布的基线（fr 0.727 / gbm 0.496）
-# 其实是 **lag=0**（当日收盘信号→当日收盘成交，实盘做不到）。
-# 这里单腿基线复现时用 lag=0 对齐引擎（parity），合成实验里所有腿统一 lag=1
-# （真实盘口径）。
-LEG_SIM_CFG: Dict[str, L.SimConfig] = {
-    "42f": L.SimConfig(topk=60, n_drop=5, lag=1, rebalance_days="weekly",
-                       max_position_size=0.015833),
-    "rsi": L.SimConfig(topk=30, n_drop=3, lag=1, rebalance_days="weekly",
-                       max_position_size=0.031667),
-    "fr": L.SimConfig(topk=50, n_drop=5, lag=0, rebalance_days="weekly",
-                      max_position_size=0.019),
-    "gbm": L.SimConfig(topk=60, n_drop=5, lag=0, rebalance_days="weekly",
-                       max_position_size=0.015833),
-    "gbm_raw": L.SimConfig(topk=60, n_drop=5, lag=0, rebalance_days="weekly",
-                            max_position_size=0.015833),
-    "mf": L.SimConfig(topk=30, n_drop=3, lag=1, rebalance_days="daily",
-                      max_position_size=0.031667),
-}
-
-# 引擎公布的基线口径（lag 语义各异，见上）
-ENGINE_LEG_LAG = {"42f": 1, "rsi": 1, "fr": 0, "gbm": 0, "gbm_raw": 0, "mf": 1}
-
+# 引擎实测基线（2026-10-27 用 verify_10y_pit.py --lag 1 重跑，仓库根目录）
 ENGINE_LEGS = {
-    "42f": {"sharpe_ratio": 0.7991795250472001, "total_return": 0.34779248262737783,
+    "42f": {"sharpe_ratio": 0.7991795250472001,
+            "total_return": 0.34779248262737783,
             "max_drawdown": -0.16460289642093642, "total_trades": 1080},
-    "rsi": {"sharpe_ratio": 1.0147284879698606, "total_return": 0.5190253848549126,
-            "max_drawdown": -0.16665780106518946, "total_trades": 822},
-    "fr": {"sharpe_ratio": 0.7269197037154874, "total_return": 0.3065268411849565,
+    "rsi": {"sharpe_ratio": 0.771559886815966,
+            "total_return": 0.35295059711506194,
+            "max_drawdown": -0.19887429856304242, "total_trades": 726},
+    "fr": {"sharpe_ratio": 0.7269197037154874,
+           "total_return": 0.3065268411849565,
            "max_drawdown": -0.1355705126634873, "total_trades": 1170},
-    "gbm": {"sharpe_ratio": 0.49570467646690825, "total_return": 0.28418470353380754,
+    "gbm": {"sharpe_ratio": 0.49570467646690825,
+            "total_return": 0.28418470353380754,
             "max_drawdown": -0.2976551851189215, "total_trades": 610},
-    "mf": {"sharpe_ratio": 0.9500139504937557, "total_return": 1.0347074684645836,
+    "mf": {"sharpe_ratio": 0.9500139504937557,
+           "total_return": 1.0347074684645836,
            "max_drawdown": -0.4653110633502326, "total_trades": 3520},
 }
 
 TRIALS: List[Dict[str, Any]] = []
 
 
-def record(name: str, group: str, res: Dict[str, Any], cfg: L.SimConfig,
+def record(name: str, group: str, res: Dict[str, Any], cfg: Any,
            note: str = "", **extra: Any) -> Dict[str, Any]:
     e: Dict[str, Any] = {
         "name": name,
@@ -116,7 +95,7 @@ def record(name: str, group: str, res: Dict[str, Any], cfg: L.SimConfig,
 
 
 def print_row(e: Dict[str, Any]) -> None:
-    print(f"  {e['name']:44s} SR={e['sharpe_ratio']:6.3f} "
+    print(f"  {e['name']:46s} SR={e['sharpe_ratio']:6.3f} "
           f"ret={e['total_return']:+7.2%} mdd={e['max_drawdown']:7.2%} "
           f"n={e['total_trades']:5d}", flush=True)
 
@@ -124,12 +103,7 @@ def print_row(e: Dict[str, Any]) -> None:
 # ══════════════════════════════════════════════════════════════════
 # 分数预处理
 # ══════════════════════════════════════════════════════════════════
-def cs_z(mat: np.ndarray, min_cross: int = 30) -> np.ndarray:
-    return L.cs_zscore(mat, min_cross)
-
-
 def cs_rank(mat: np.ndarray, min_cross: int = 30) -> np.ndarray:
-    """逐日截面 rank → [-0.5, 0.5] 均匀分布。"""
     df = pd.DataFrame(mat)
     cnt = df.notna().sum(axis=1)
     r = df.rank(axis=1, na_option="keep")
@@ -140,13 +114,13 @@ def cs_rank(mat: np.ndarray, min_cross: int = 30) -> np.ndarray:
 
 
 def cs_winsor_z(mat: np.ndarray, min_cross: int = 30, clip: float = 3.0) -> np.ndarray:
-    z = cs_z(mat, min_cross)
+    z = L.cs_zscore(mat, min_cross)
     return np.where(np.isfinite(z), np.clip(z, -clip, clip), np.nan)
 
 
 PREPROC: Dict[str, Any] = {
     "raw": lambda m: m,
-    "z": cs_z,
+    "z": lambda m: L.cs_zscore(m, 30),
     "rank": cs_rank,
     "winsor3": cs_winsor_z,
 }
@@ -157,7 +131,6 @@ PREPROC: Dict[str, Any] = {
 # ══════════════════════════════════════════════════════════════════
 def blend(legs: Dict[str, np.ndarray], weights: Dict[str, float],
           preproc: str = "z") -> np.ndarray:
-    """按权重线性合成（先各自按 preproc 标准化，再加权求和，nan-aware）。"""
     fn = PREPROC[preproc]
     total = None
     wsum = None
@@ -184,12 +157,7 @@ def fwd_returns(close: np.ndarray, horizon: int) -> np.ndarray:
 def rolling_icir(legs: Dict[str, np.ndarray], fwd: np.ndarray,
                  window: int = 120, min_periods: int = 40,
                  smooth: int = 20) -> Dict[str, np.ndarray]:
-    """每条腿的滚动 RankICIR（walk-forward）。
-
-    - IC 用横截面 RankIC（对 fwd 收益）
-    - 第 t 日的权重只用 [t-window, t-1] 的 IC（.shift(1)）
-    - smooth: 对 ICIR 序列再做一次滚动平均（时序动量平滑），进一步降噪
-    """
+    """每条腿的滚动 RankICIR（walk-forward，权重做时序平滑）。"""
     out: Dict[str, np.ndarray] = {}
     for name, sc in legs.items():
         ics = pd.Series(L.cs_rank_ic(sc, fwd))
@@ -205,7 +173,6 @@ def rolling_icir(legs: Dict[str, np.ndarray], fwd: np.ndarray,
 def icir_blend(legs: Dict[str, np.ndarray], icir: Dict[str, np.ndarray],
                names: Sequence[str], preproc: str = "z",
                power: float = 1.0) -> np.ndarray:
-    """按 |ICIR| 加权合成（逐日权重）。"""
     fn = PREPROC[preproc]
     total = None
     wsum = None
@@ -221,28 +188,23 @@ def icir_blend(legs: Dict[str, np.ndarray], icir: Dict[str, np.ndarray],
         return np.where(wsum > 0, total / np.where(wsum > 0, wsum, 1.0), np.nan)
 
 
-def corr_penalty_weights(corr: np.ndarray, ir: np.ndarray,
-                         names: Sequence[str]) -> np.ndarray:
-    """w ∝ IR / (1 + ρ̄)：IR 高的腿权重大，与其它腿高相关的腿权重被惩罚。"""
-    n = len(names)
-    rho = np.zeros(n)
-    for i in range(n):
-        others = [j for j in range(n) if j != i]
-        rho[i] = float(np.mean(corr[i, others])) if others else 0.0
-    w = np.asarray(ir, dtype=float) / (1.0 + np.clip(rho, 0.0, 0.99))
-    w = np.clip(w, 0.0, None)
+def corr_penalty_weights(corr: np.ndarray, ir: np.ndarray) -> np.ndarray:
+    """w ∝ IR / (1 + ρ̄)：IR 高的腿权重大，高相关的腿权重被惩罚。"""
+    n = len(ir)
+    rho = np.array([float(np.mean(corr[i, [j for j in range(n) if j != i]]))
+                    if n > 1 else 0.0 for i in range(n)])
+    w = np.clip(np.asarray(ir, dtype=float), 0.0, None) / (
+        1.0 + np.clip(rho, 0.0, 0.99))
     if w.sum() <= 0:
         return np.ones(n) / n
     return w / w.sum()
 
 
-def inv_cov_weights(corr: np.ndarray, ir: np.ndarray,
-                    names: Sequence[str]) -> np.ndarray:
-    """最小方差近似：w ∝ Σ⁻¹μ（Σ = 相关矩阵，μ = IR 向量）。"""
-    n = len(names)
-    Cm = np.array(corr, dtype=float).copy()
+def inv_cov_weights(corr: np.ndarray, ir: np.ndarray) -> np.ndarray:
+    """最小方差近似：w ∝ Σ⁻¹μ。"""
+    n = len(ir)
+    Cm = np.clip(np.array(corr, dtype=float).copy(), -0.99, 0.99)
     np.fill_diagonal(Cm, 1.0)
-    Cm = np.clip(Cm, -0.99, 0.99)
     mu = np.asarray(ir, dtype=float)
     try:
         w = np.linalg.solve(Cm + 0.15 * np.eye(n), mu)
@@ -276,14 +238,13 @@ def cs_resid_against(y: np.ndarray, Xs: Sequence[np.ndarray],
 # 分层合成选择器
 # ══════════════════════════════════════════════════════════════════
 class LayeredBlendSelector(L.Selector):
-    """分层合成：把股票按「在哪些腿里排前」分桶，每桶给固定名额。
+    """分层合成：每条腿各取自己的前 N 只，腿间轮流分配名额。
 
-    动机：等权平均分数 = 42f（相关性高时）。分层 = 「从每条腿自己的强票里
-    各取 N 只，再在腿之间分配名额」→ 强制组合里有多样化的来源，而不是
-    42f 的高相关邻居堆叠。
+    动机：等权平均分数在腿间高相关时 ≈ 单腿。分层 = 强制组合里有多样化的
+    来源，而不是把高相关的邻居堆叠在一起。
     """
 
-    def __init__(self, cfg: L.SimConfig, leg_scores: Dict[str, np.ndarray],
+    def __init__(self, cfg: Any, leg_scores: Dict[str, np.ndarray],
                  leg_names: Sequence[str], per_leg: int) -> None:
         self.cfg = cfg
         self.leg_scores = leg_scores
@@ -292,7 +253,6 @@ class LayeredBlendSelector(L.Selector):
         self.rebalance_to_targets = True
 
     def select(self, order, t, holdings, n_hold):
-        # 每个腿自己的 top per_leg 集合
         per: List[List[int]] = []
         for n in self.leg_names:
             sc = self.leg_scores[n][t]
@@ -302,28 +262,23 @@ class LayeredBlendSelector(L.Selector):
                 continue
             srt = ok[np.argsort(sc[ok])[::-1]][: self.per_leg]
             per.append([int(c) for c in srt])
-        # 轮转分配名额：每轮每腿取一只（按腿顺序），直到 topk 满
         keep: List[int] = []
         seen = set()
-        depth = 0
-        while len(keep) < self.cfg.topk and depth < self.per_leg:
-            progressed = False
+        max_depth = max((len(x) for x in per), default=0)
+        for depth in range(max_depth):
             for lst in per:
                 if depth < len(lst):
                     c = lst[depth]
                     if c not in seen:
                         seen.add(c)
                         keep.append(c)
-                        progressed = True
                     if len(keep) >= self.cfg.topk:
                         break
-            if not progressed and depth > max(len(x) for x in per):
+            if len(keep) >= self.cfg.topk:
                 break
-            depth += 1
         arr = np.array(keep, dtype=int)
         if len(arr) == 0:
             arr = order[: self.cfg.topk]
-        # 等权目标权重
         w = {int(c): (1 - self.cfg.cash_reserve) / len(arr) for c in arr}
         return arr, w, arr
 
@@ -335,8 +290,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="ensemble_results.json")
     ap.add_argument("--legs", nargs="*",
-                    default=["42f", "rsi", "fr", "gbm", "mf"])
-    ap.add_argument("--skip-grid", action="store_true")
+                    default=["42f", "rsi", "fr", "gbm", "gbm_raw", "mf"])
     args = ap.parse_args()
 
     t0 = time.time()
@@ -345,13 +299,13 @@ def main() -> None:
     print("=" * 78)
 
     mats = LEGS.cache_mats()
-    mats["stock_data"] = {}          # simulate 只用 close/codes/master
+    mats["stock_data"] = {}
     trad = LEGS.cache_trad(mats, {})
     legs: Dict[str, np.ndarray] = {}
     for name in args.legs:
-        p = os.path.join(LEG_DIR, f"{name}.npz")
+        p = os.path.join(LEGS.LEG_DIR, f"{name}.npz")
         if not os.path.exists(p):
-            print(f"!! 缺腿 {name}（先跑 ensemble_legs.py --legs {name}）")
+            print(f"!! 缺腿 {name}")
             continue
         legs[name] = np.load(p, allow_pickle=False)["score"]
     print(f"[setup] legs: {list(legs)}  ({time.time()-t0:.0f}s)", flush=True)
@@ -374,21 +328,37 @@ def main() -> None:
     is_rows, oos_rows = L.split_index(mats["master"], OOS_SPLIT)
     print(f"[setup] IS={len(is_rows)} 天, OOS={len(oos_rows)} 天", flush=True)
 
-    # ═══════ A. 腿基线复现（模拟器 vs 引擎）═══════
+    # ═══════ A. 腿基线复现 ═══════
     print("\n" + "=" * 78)
     print("A. 各腿基线：模拟器 vs 真实引擎（保真度验收）")
     print("=" * 78)
+    LEG_CFG = {
+        "42f": S.SimConfig(topk=60, n_drop=5, lag=1, rebalance_days="weekly",
+                           max_position_size=0.015833),
+        "rsi": S.SimConfig(topk=30, n_drop=3, lag=1, rebalance_days="weekly",
+                           max_position_size=0.031667),
+        "fr": S.SimConfig(topk=50, n_drop=5, lag=1, rebalance_days="weekly",
+                          max_position_size=0.019),
+        "gbm": S.SimConfig(topk=60, n_drop=5, lag=1, rebalance_days="weekly",
+                           max_position_size=0.015833),
+        "gbm_raw": S.SimConfig(topk=60, n_drop=5, lag=1, rebalance_days="weekly",
+                                max_position_size=0.015833),
+        "mf": S.SimConfig(topk=30, n_drop=3, lag=1, rebalance_days="daily",
+                          max_position_size=0.031667),
+    }
     gA = []
     for name, sc in legs.items():
-        cfg = LEG_SIM_CFG[name]
-        res = L.simulate(sc, mats, trad, cfg)
+        cfg = LEG_CFG[name]
+        res = S.simulate(sc, mats, trad, cfg)
         e = record(f"A_{name}", "A", res, cfg, note="单腿基线")
         e["engine_sharpe"] = ENGINE_LEGS.get(name, {}).get("sharpe_ratio")
+        e["engine_trades"] = ENGINE_LEGS.get(name, {}).get("total_trades")
         if e["engine_sharpe"] is not None:
             e["engine_diff"] = round(e["sharpe_ratio"] - e["engine_sharpe"], 4)
         gA.append(e)
         print_row(e)
-        print(f"    └─ 引擎 SR={e['engine_sharpe']}  diff={e.get('engine_diff')}")
+        print(f"    └─ 引擎 SR={e['engine_sharpe']} n={e['engine_trades']} "
+              f"diff={e.get('engine_diff')}")
     results["groups"]["A_leg_baselines"] = gA
 
     # ═══════ B. 横截面相关矩阵 ═══════
@@ -422,95 +392,89 @@ def main() -> None:
 
     # ═══════ C. 合成方法 ═══════
     print("\n" + "=" * 78)
-    print("C. 合成方法对比")
+    print("C. 合成方法对比（统一 topk=60 n_drop=5 周频 lag=1）")
     print("=" * 78)
     gC: List[Dict[str, Any]] = []
-    base_cfg = L.SimConfig(topk=60, n_drop=5, lag=1, rebalance_days="weekly",
+    base_cfg = S.SimConfig(topk=60, n_drop=5, lag=1, rebalance_days="weekly",
                            max_position_size=0.015833)
 
-    # C1 等权：所有腿子集 × 4 种预处理
     subsets = [
         ("42f+rsi", ["42f", "rsi"]),
         ("42f+fr", ["42f", "fr"]),
         ("42f+gbm", ["42f", "gbm"]),
+        ("42f+gbmraw", ["42f", "gbm_raw"]),
         ("42f+mf", ["42f", "mf"]),
         ("rsi+fr", ["rsi", "fr"]),
         ("rsi+gbm", ["rsi", "gbm"]),
         ("42f+rsi+fr", ["42f", "rsi", "fr"]),
         ("42f+rsi+gbm", ["42f", "rsi", "gbm"]),
+        ("42f+rsi+gbmraw", ["42f", "rsi", "gbm_raw"]),
         ("42f+rsi+fr+gbm", ["42f", "rsi", "fr", "gbm"]),
-        ("42f+rsi+fr+gbm+mf", ["42f", "rsi", "fr", "gbm", "mf"]),
+        ("all6", ["42f", "rsi", "fr", "gbm", "gbm_raw", "mf"]),
     ]
     subsets = [(n, [x for x in s if x in legs]) for n, s in subsets]
     subsets = [(n, s) for n, s in subsets if len(s) >= 2]
 
-    print("\n  -- C1 等权合成（4 种预处理 × 10 个子集）--")
+    print("\n  -- C1 等权合成（4 种预处理）--")
     eq_scores: Dict[str, np.ndarray] = {}
     for sname, sl in subsets:
         for prep in ("raw", "z", "rank", "winsor3"):
-            w = {x: 1.0 for x in sl}
-            sc = blend(legs, w, prep)
+            sc = blend(legs, {x: 1.0 for x in sl}, prep)
             key = f"{sname}|{prep}"
             eq_scores[key] = sc
-            res = L.simulate(sc, mats, trad, base_cfg)
+            res = S.simulate(sc, mats, trad, base_cfg)
             e = record(f"C1_eq_{sname}_{prep}", "C", res, base_cfg,
                        note=f"等权 {prep}")
             gC.append(e)
             print_row(e)
 
-    # C2 滚动 ICIR 加权
-    print("\n  -- C2 滚动 RankICIR 加权（walk-forward，无前视）--")
+    print("\n  -- C2 滚动 RankICIR 加权（walk-forward）--")
+    icir_scores: Dict[str, np.ndarray] = {}
     for win in (60, 120, 250):
         icir = rolling_icir(legs, fwd1, window=win, min_periods=40, smooth=20)
         for sname, sl in subsets:
-            if len(sl) < 2:
-                continue
             sc = icir_blend(legs, icir, sl, "z", power=1.0)
-            res = L.simulate(sc, mats, trad, base_cfg)
+            key = f"{sname}|icir{win}"
+            icir_scores[key] = sc
+            res = S.simulate(sc, mats, trad, base_cfg)
             e = record(f"C2_icir_w{win}_{sname}", "C", res, base_cfg,
                        note=f"滚动{win}日RankICIR加权")
             gC.append(e)
             print_row(e)
 
-    # C3 相关性惩罚 / 最小方差
-    print("\n  -- C3 相关性惩罚权重（w ∝ IR/(1+ρ)）与 逆协方差最小方差 --")
-    sl_all = [n for n in names]
-    ir_vec = np.array([leg_icir[n] for n in sl_all], dtype=float)
+    print("\n  -- C3 相关性惩罚权重 w∝IR/(1+ρ) 与 逆协方差最小方差 --")
+    corrpen_scores: Dict[str, np.ndarray] = {}
+    all_names = list(legs)
     for sname, sl in subsets:
-        if len(sl) < 2:
-            continue
-        idx = [sl_all.index(x) for x in sl]
+        idx = [all_names.index(x) for x in sl]
         sub_corr = corr_arr[np.ix_(idx, idx)]
-        sub_ir = ir_vec[idx]
-        w_corr = corr_penalty_weights(sub_corr, sub_ir, sl)
-        w_inv = inv_cov_weights(sub_corr, sub_ir, sl)
-        for tag, w in (("corrpen", w_corr), ("invcov", w_inv)):
+        sub_ir = np.array([leg_icir[x] for x in sl])
+        for tag, w in (("corrpen", corr_penalty_weights(sub_corr, sub_ir)),
+                       ("invcov", inv_cov_weights(sub_corr, sub_ir))):
             sc = blend(legs, dict(zip(sl, w)), "z")
-            res = L.simulate(sc, mats, trad, base_cfg)
+            corrpen_scores[f"{sname}|{tag}"] = sc
+            res = S.simulate(sc, mats, trad, base_cfg)
             e = record(f"C3_{tag}_{sname}", "C", res, base_cfg,
-                       note=f"{tag} 权重 " +
+                       note=f"{tag} " +
                             str({k: round(float(v), 3) for k, v in zip(sl, w)}))
             gC.append(e)
             print_row(e)
 
-    # C4 残差正交化（构造低相关 alpha）
-    print("\n  -- C4 残差正交化（腿对其它腿截面回归取残差）--")
-    orth_scores: Dict[str, np.ndarray] = {}
+    print("\n  -- C4 残差正交化（构造低相关 alpha）--")
+    ortho_scores: Dict[str, np.ndarray] = {}
     for sname, sl in subsets:
-        if len(sl) < 2:
-            continue
         base = sl[0]
-        zbase = cs_z(legs[base])
+        zbase = L.cs_zscore(legs[base], 30)
         resid: Dict[str, np.ndarray] = {}
         for other in sl[1:]:
-            r = cs_resid_against(cs_z(legs[other]), [zbase])
+            r = cs_resid_against(L.cs_zscore(legs[other], 30), [zbase])
             resid[other] = r
             c = float(np.nanmean(L.cs_rank_ic(r, zbase)))
             print(f"    {other} 对 {base} 残差后 RankIC 相关 = {c:+.3f}")
-        sc = blend({base: legs[base], **resid}, {base: 1.0, **{
-            k: 1.0 for k in resid}}, "z")
-        orth_scores[sname] = sc
-        res = L.simulate(sc, mats, trad, base_cfg)
+        sc = blend({base: legs[base], **resid},
+                   {base: 1.0, **{k: 1.0 for k in resid}}, "z")
+        ortho_scores[f"{sname}|ortho"] = sc
+        res = S.simulate(sc, mats, trad, base_cfg)
         e = record(f"C4_ortho_{sname}", "C", res, base_cfg, note="残差正交后等权")
         gC.append(e)
         print_row(e)
@@ -521,37 +485,33 @@ def main() -> None:
     print("D. 合成后 TopK 参数扫描")
     print("=" * 78)
     gD: List[Dict[str, Any]] = []
-    # 候选：各合成方法里全窗 SR 最高的几个 + 单腿最佳
-    cand_keys: List[str] = list(eq_scores.keys())
-    top_cand = sorted(gC, key=lambda e: -e["sharpe_ratio"])[:8]
-    for e in top_cand:
-        m = e["name"]
-        for sname, sl in subsets:
-            for prep in ("raw", "z", "rank", "winsor3"):
-                if m == f"C1_eq_{sname}_{prep}":
-                    cand_keys.append(f"{sname}|{prep}")
-    seen_c = set()
-    cand_keys = [k for k in cand_keys if not (k in seen_c or seen_c.add(k))]
-    for key in cand_keys:
-        if key not in eq_scores:
-            continue
-        sc = eq_scores[key]
-        row = []
+    # 候选 = C 组全窗 SR 最高的 10 个合成分数（按分数矩阵统一复算，避免索引错位）
+    all_scores = {**eq_scores, **icir_scores, **corrpen_scores, **ortho_scores}
+    cands: List[Tuple[float, str]] = []
+    for key, sc in all_scores.items():
+        res = S.simulate(sc, mats, trad, base_cfg)
+        cands.append((res["sharpe_ratio"], key))
+    cands = [k for _, k in sorted(cands, key=lambda x: -x[0])[:10]]
+    print(f"  候选合成分数: {cands}", flush=True)
+
+    for key in cands:
+        sc = all_scores[key]
+        best = None
         for topk in (20, 30, 40, 60, 80):
             for n_drop in (2, 3, 5, 10):
                 if n_drop >= topk:
                     continue
-                cfg = L.SimConfig(topk=topk, n_drop=n_drop, lag=1,
+                cfg = S.SimConfig(topk=topk, n_drop=n_drop, lag=1,
                                   rebalance_days="weekly",
                                   max_position_size=(1 - 0.05) / topk)
-                res = L.simulate(sc, mats, trad, cfg)
+                res = S.simulate(sc, mats, trad, cfg)
                 e = record(f"D_{key}_k{topk}_d{n_drop}", "D", res, cfg)
                 gD.append(e)
-                row.append((topk, n_drop, e["sharpe_ratio"]))
-        best = max(row, key=lambda r: r[2])
-        print(f"  {key:24s} best k={best[0]} d={best[1]} SR={best[2]:.3f} "
-              f"| " + " ".join(f"k{t}d{d}={sr:.2f}"
-                               for t, d, sr in row if t == best[0]))
+                if best is None or e["sharpe_ratio"] > best["sharpe_ratio"]:
+                    best = e
+        print(f"  {key:26s} best {best['name'].split('_k')[-1]:10s} "
+              f"SR={best['sharpe_ratio']:.3f} ret={best['total_return']:+.2%} "
+              f"mdd={best['max_drawdown']:.2%} n={best['total_trades']}")
     results["groups"]["D_topk_grid"] = gD
 
     # ═══════ E. OOS：IS 选参 → OOS 验证 ═══════
@@ -559,36 +519,32 @@ def main() -> None:
     print("E. OOS 切分（IS=2023-05→2025-05 选参, OOS=2025-05→2026-05 验证）")
     print("=" * 78)
     gE: List[Dict[str, Any]] = []
-    # 在 IS 上对每个 (合成方法, topk, n_drop) 组合打分
-    is_scores: List[Tuple[str, np.ndarray, L.SimConfig, str]] = []
-    for key, sc in eq_scores.items():
+    grid: List[Tuple[str, np.ndarray, Any]] = []
+    for key, sc in all_scores.items():
         for topk in (20, 30, 40, 60, 80):
             for n_drop in (2, 3, 5, 10):
                 if n_drop >= topk:
                     continue
-                cfg = L.SimConfig(topk=topk, n_drop=n_drop, lag=1,
+                cfg = S.SimConfig(topk=topk, n_drop=n_drop, lag=1,
                                   rebalance_days="weekly",
                                   max_position_size=(1 - 0.05) / topk)
-                is_scores.append((f"{key}", sc, cfg, "eq"))
-    for e in gC:
-        if e["name"].startswith(("C2_", "C3_", "C4_")):
-            continue
-    print(f"  IS 网格 {len(is_scores)} 个组合", flush=True)
-    is_rows_list = []
-    for key, sc, cfg, _ in is_scores:
-        isr = L.simulate_subset(sc, mats, trad, cfg, is_rows)
-        is_rows_list.append((key, sc, cfg, float(isr["sharpe_ratio"]),
-                             float(isr["total_return"]), isr))
-    is_rows_list.sort(key=lambda r: -r[3])
+                grid.append((key, sc, cfg))
+    print(f"  IS 网格 {len(grid)} 个组合（{len(all_scores)} 合成分数 × "
+          f"5 topk × 4 n_drop）", flush=True)
+    is_res_list = []
+    for key, sc, cfg in grid:
+        isr = S.simulate_subset(sc, mats, trad, cfg, is_rows)
+        is_res_list.append((key, sc, cfg, float(isr["sharpe_ratio"]),
+                            float(isr["total_return"]), isr))
+    is_res_list.sort(key=lambda r: -r[3])
     print("  IS Top10:")
-    for key, sc, cfg, sr, rt, isr in is_rows_list[:10]:
-        print(f"    {key:24s} k={cfg.topk:3d} d={cfg.n_drop:2d} "
-              f"IS SR={sr:.3f} ret={rt:+.2%} {isr.get('yearly')}")
+    for key, sc, cfg, sr, rt, isr in is_res_list[:10]:
+        print(f"    {key:26s} k={cfg.topk:3d} d={cfg.n_drop:2d} "
+              f"IS SR={sr:.3f} ret={rt:+.2%}")
 
-    # IS 最优 → OOS
-    best_key, best_sc, best_cfg, best_is_sr, best_is_rt, _ = is_rows_list[0]
-    oos = L.simulate_subset(best_sc, mats, trad, best_cfg, oos_rows)
-    full = L.simulate(best_sc, mats, trad, best_cfg)
+    best_key, best_sc, best_cfg, best_is_sr, best_is_rt, _ = is_res_list[0]
+    oos = S.simulate_subset(best_sc, mats, trad, best_cfg, oos_rows)
+    full = S.simulate(best_sc, mats, trad, best_cfg)
     e = record(f"E_ISbest_{best_key}_k{best_cfg.topk}_d{best_cfg.n_drop}",
                "E", full, best_cfg, note="IS 选出的配置")
     e["IS_sharpe"] = round(best_is_sr, 4)
@@ -606,21 +562,19 @@ def main() -> None:
     print(f"    全窗 SR={e['sharpe_ratio']:.3f} ret={e['total_return']:+.2%} "
           f"mdd={e['max_drawdown']:.2%}")
 
-    # 全部候选都跑 OOS（看分布，诚实报告）
     print("\n  -- IS Top15 的 OOS 表现（OOS 只作验证，不用于选参）--")
     oos_table = []
-    for key, sc, cfg, sr, rt, isr in is_rows_list[:15]:
-        o = L.simulate_subset(sc, mats, trad, cfg, oos_rows)
-        oos_table.append({
-            "key": key, "topk": cfg.topk, "n_drop": cfg.n_drop,
-            "IS_sharpe": round(sr, 4), "OOS_sharpe": round(float(o["sharpe_ratio"]), 4),
-            "OOS_return": round(float(o["total_return"]), 4),
-            "OOS_mdd": round(float(o["max_drawdown"]), 4),
-            "OOS_trades": int(o["total_trades"]),
-            "OOS_yearly": o.get("yearly", {}),
-        })
-        t = oos_table[-1]
-        print(f"    {key:24s} k={cfg.topk:3d} d={cfg.n_drop:2d} "
+    for key, sc, cfg, sr, rt, isr in is_res_list[:15]:
+        o = S.simulate_subset(sc, mats, trad, cfg, oos_rows)
+        t = {"key": key, "topk": cfg.topk, "n_drop": cfg.n_drop,
+             "IS_sharpe": round(sr, 4),
+             "OOS_sharpe": round(float(o["sharpe_ratio"]), 4),
+             "OOS_return": round(float(o["total_return"]), 4),
+             "OOS_mdd": round(float(o["max_drawdown"]), 4),
+             "OOS_trades": int(o["total_trades"]),
+             "OOS_yearly": o.get("yearly", {})}
+        oos_table.append(t)
+        print(f"    {key:26s} k={cfg.topk:3d} d={cfg.n_drop:2d} "
               f"IS={sr:6.3f} → OOS={t['OOS_sharpe']:6.3f} "
               f"ret={t['OOS_return']:+7.2%} mdd={t['OOS_mdd']:7.2%} "
               f"n={t['OOS_trades']}")
@@ -633,16 +587,14 @@ def main() -> None:
     print("=" * 78)
     gF: List[Dict[str, Any]] = []
     for sname, sl in subsets:
-        if len(sl) < 2:
-            continue
         for per_leg in (3, 5, 8):
             for topk in (30, 60):
-                cfg = L.SimConfig(topk=topk, n_drop=max(2, topk // 12), lag=1,
+                cfg = S.SimConfig(topk=topk, n_drop=max(2, topk // 12), lag=1,
                                   rebalance_days="weekly",
                                   max_position_size=(1 - 0.05) / topk)
                 sel = LayeredBlendSelector(cfg, legs, sl, per_leg=per_leg)
                 sc = blend(legs, {x: 1.0 for x in sl}, "z")
-                res = L.simulate(sc, mats, trad, cfg, selector=sel)
+                res = S.simulate(sc, mats, trad, cfg, selector=sel)
                 e = record(f"F_layer_{sname}_p{per_leg}_k{topk}", "F", res, cfg,
                            note=f"分层 每腿{per_leg}只")
                 gF.append(e)
@@ -653,14 +605,14 @@ def main() -> None:
     results["trials"] = TRIALS
     results["n_trials"] = len(TRIALS)
     ranked = sorted(TRIALS, key=lambda e: -e["sharpe_ratio"])
-    results["top10"] = ranked[:10]
+    results["top15"] = ranked[:15]
     print("\n" + "=" * 78)
-    print(f"共 {len(TRIALS)} 个变体。Top10（全窗夏普，含 IS/OOS 标注）：")
-    for e in ranked[:10]:
+    print(f"共 {len(TRIALS)} 个变体。Top15（全窗夏普）：")
+    for e in ranked[:15]:
         extra = ""
         if "OOS_sharpe" in e:
             extra = f"  [IS {e['IS_sharpe']:.3f} / OOS {e['OOS_sharpe']:.3f}]"
-        print(f"  {e['name']:46s} SR={e['sharpe_ratio']:6.3f} "
+        print(f"  {e['name']:48s} SR={e['sharpe_ratio']:6.3f} "
               f"ret={e['total_return']:+7.2%} mdd={e['max_drawdown']:7.2%} "
               f"n={e['total_trades']:5d}{extra}")
     print("=" * 78)

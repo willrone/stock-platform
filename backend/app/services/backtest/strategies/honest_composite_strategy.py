@@ -182,6 +182,15 @@ class HonestCompositeStrategy(BaseStrategy):
         self.factor_icir_file = config.get("factor_icir_file", "")
         self.factor_weight_power = float(config.get("factor_weight_power", 0.0))
         self.factor_weight_cap = float(config.get("factor_weight_cap", 3.0))
+        # 2026-10-27：**因子白名单**（因子减法）
+        # 动机：IC 拆解显示 22 个公式因子 IC 全部显著，但它们的 |ICIR| 差 4.5 倍
+        #   （CORR10 0.69 vs STD60 0.15），等权平均把强弱拉平。
+        #   而 ICIR 加权已被证伪（因子高度相关时加权反而更差）→ 正确做法是
+        #   **把弱因子直接去掉**，让强因子在等权下占更大比重。
+        # factor_allowlist: 只保留这些因子（None = 全部）
+        self.factor_allowlist = config.get("factor_allowlist", None)
+        if self.factor_allowlist is not None:
+            self.factor_allowlist = set(self.factor_allowlist)
         self._factor_weights: Dict[str, float] = {}
         if self.factor_icir_file and self.factor_weight_power > 0:
             self._factor_weights = _load_factor_weights(
@@ -322,12 +331,20 @@ class HonestCompositeStrategy(BaseStrategy):
             wsum[good] += weight
 
         # 23 个诚实公式（ICIR 加权时按因子名取权重）
+        _n_used = 0
         for formula, sign in _HONEST_FORMULAS.items():
+            if (self.factor_allowlist is not None
+                    and formula not in self.factor_allowlist):
+                continue
             zscore_add(cands[formula].to_numpy(dtype=np.float64), sign, min_cross,
                        self._factor_weights.get(formula, 1.0))
+            _n_used += 1
 
         # 18 个 Alpha158 面板因子 — 每个因子构建一次全截面矩阵
         for factor_name, sign in _ALPHAPANEL_FACTORS.items():
+            if (self.factor_allowlist is not None
+                    and factor_name not in self.factor_allowlist):
+                continue
             _pw = self._factor_weights.get(factor_name, 1.0)
             mat = np.full((n_dates, n_stocks), np.nan, dtype=np.float64)
             for j, code in enumerate(codes):
@@ -436,6 +453,11 @@ class HonestCompositeStrategy(BaseStrategy):
                     score_map[master[k].to_pydatetime()] = float(value)
             stock_data[code].attrs[_SCORES_ATTR] = score_map
             stored += len(score_map)
+        if self.factor_allowlist is not None:
+            logger.info(
+                f"honest_composite 因子白名单: 用 {_n_used} 个公式因子"
+                f"（全量 {len(_HONEST_FORMULAS)}）"
+            )
         logger.info(
             f"honest_composite 横截面打分完成: 股票={n_stocks}, 日期={n_dates}, "
             f"有效分数={stored}, 最小截面要求={min_cross}, "

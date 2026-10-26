@@ -246,6 +246,81 @@ def _build_matrices(stock_data: Dict[str, pd.DataFrame]):
     return codes, master, close, high, low, vol
 
 
+# ── 进程内缓存：master/close/high/low/vol 矩阵与可成交性矩阵都与"因子子集"无关，
+#    同一 worker 内复用，可把每次回测的固定开销从 ~45s 压到 ~20s。
+#
+# 注意：引擎每次 run_backtest 都会重建 stock_data 这个 dict（值对象相同），
+# 且代码字符串每次调用都是新对象 → 不能用 id() 做 key，
+# 一律用"内容 key"（数量 + 首尾代码 + 窗口端点）。
+_MATRIX_CACHE: Dict[Tuple, Tuple] = {}
+_TRADABILITY_CACHE: Dict[Tuple, Any] = {}
+
+
+def _content_key(items: Sequence[Any]) -> Tuple:
+    n = len(items)
+    if n == 0:
+        return (0,)
+    return (n, items[0], items[-1])
+
+
+def _cached_matrices(stock_data: Dict[str, pd.DataFrame]):
+    codes = list(stock_data.keys())
+    key = _content_key(codes)
+    hit = _MATRIX_CACHE.get(key)
+    if hit is None:
+        hit = _build_matrices(stock_data)
+        _MATRIX_CACHE.clear()
+        _MATRIX_CACHE[key] = hit
+    return hit
+
+
+def _patch_tradability_cache() -> None:
+    """把 build_tradability 换成带缓存的版本（输入相同 → 输出必然相同）。"""
+    from app.services.backtest.execution import tradability as _td
+
+    if getattr(_td.build_tradability, "_cached", False):
+        return
+    _orig = _td.build_tradability
+
+    def cached_build(
+        stock_data,
+        trading_dates,
+        codes=None,
+        participation_rate=_td.DEFAULT_PARTICIPATION_RATE,
+        min_turnover=_td.DEFAULT_MIN_TURNOVER,
+        st_codes=None,
+        prev_close=None,
+    ):
+        codelist = list(codes) if codes is not None else list(stock_data.keys())
+        key = (
+            _content_key(codelist),
+            len(trading_dates),
+            trading_dates[0] if len(trading_dates) else None,
+            trading_dates[-1] if len(trading_dates) else None,
+            float(participation_rate),
+            float(min_turnover),
+            id(st_codes),
+            id(prev_close),
+        )
+        hit = _TRADABILITY_CACHE.get(key)
+        if hit is None:
+            hit = _orig(
+                stock_data,
+                trading_dates,
+                codes=codes,
+                participation_rate=participation_rate,
+                min_turnover=min_turnover,
+                st_codes=st_codes,
+                prev_close=prev_close,
+            )
+            _TRADABILITY_CACHE.clear()
+            _TRADABILITY_CACHE[key] = hit
+        return hit
+
+    cached_build._cached = True  # type: ignore[attr-defined]
+    _td.build_tradability = cached_build
+
+
 # ─────────────────────────── 缓存构建 ───────────────────────────
 def _panel_factor_matrices(
     codes: Sequence[str],
@@ -526,7 +601,7 @@ def _register_variant_strategy() -> None:
                 load_st_flags,
             )
 
-            codes, master, close, high, low, vol = _build_matrices(stock_data)
+            codes, master, close, high, low, vol = _cached_matrices(stock_data)
             if not codes:
                 return
             n_dates, n_stocks = len(master), len(codes)
@@ -620,14 +695,15 @@ def _make_executor():
             super().__init__(*a, **kw)
             self.data_loader = _CachedLoader(self.data_loader.data_dir, max_workers=8)
             self._prev_close_cache: Dict[Tuple, Dict[str, float]] = {}
+            _patch_tradability_cache()
 
         def _get_required_data_columns(self, strategy_name, strategy_config):
             return list(OHLCV)
 
-        def _load_prev_close_map(self, stock_codes, start_date):
-            key = (tuple(stock_codes), start_date)
+        async def _load_prev_close_map(self, stock_codes, start_date):
+            key = (len(stock_codes), stock_codes[0], stock_codes[-1], start_date)
             if key not in self._prev_close_cache:
-                self._prev_close_cache[key] = super()._load_prev_close_map(
+                self._prev_close_cache[key] = await super()._load_prev_close_map(
                     stock_codes, start_date
                 )
             return self._prev_close_cache[key]
