@@ -24,13 +24,25 @@ print(run_incremental())
 
   echo "=== $(date '+%Y-%m-%d %H:%M:%S') data done ==="
 
-  # 3) 数据新鲜度校验（2026-10-25 新增）
+  # 3) 同步精确涨跌幅（2026-10-26 新增）
+  #    TDX raw 的 prev_close 是交易所口径前收盘（已除权除息调整），
+  #    close/prev_close-1 = 精确涨跌幅。
+  #    用途：
+  #      - 补上 baostock 拉不到的北交所（354 只）
+  #      - 每日给已有股票补当日行（比重拉 5240 只快两个数量级）
+  echo "=== sync pct_chg from TDX ==="
+  env -u PYTHONPATH backend/.venv-py313/bin/python3 \
+    backend/scripts/sync_pct_chg_from_tdx.py --since "$(date -v-7d +%Y%m%d)" || \
+    echo "sync_pct_chg 失败（不影响主流程）"
+  echo "=== sync pct_chg done ==="
+
+  # 4) 数据新鲜度校验（2026-10-25 新增）
   #    交易日过了 17:30 还没拿到当天数据 = 真失败 → 非零退出码，cron 报警到微信
   #    （原来 16:05 拉不到当天包被静默跳过，导致周频调仓两周没跑）
   env -u PYTHONPATH backend/.venv-py313/bin/python3 \
     backend/scripts/check_data_freshness.py --fail-if-stale
 
-  # 4) 周五收盘后自动跑多策略纸面盘（4 条线各自 100 万独立记账）
+  # 5) 周五收盘后自动跑多策略纸面盘（各线独立 100 万记账）
   #    22f / honest_42f / rsi_71421 / factor_ranking
   #    判「周五」用真实日期，不用数据最新日
   if [ "$(date +%u)" = "5" ]; then
@@ -38,7 +50,7 @@ print(run_incremental())
     env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/paper_portfolio.py
     echo "=== paper portfolio done ==="
 
-    # 4) 信号质量统计（2026-10-25 新增）
+    # 6) 信号质量统计（2026-10-25 新增）
     #    回答「这个信号到底准不准」：每个历史买入信号发出后
     #    T+1/T+5/T+10/T+20 的超额收益与胜率。
     #    同时把后复权价格与基准算好，供信号服务使用。
